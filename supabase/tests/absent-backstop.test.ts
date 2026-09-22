@@ -31,6 +31,16 @@ const COMPANY_B = '77777777-7777-7777-7777-777777777777'
 
 let db: PGlite
 
+/**
+ * "Today" as the sweep sees it: the studio's own date, not the database's.
+ * These studios have no location row, so the sweep falls back to
+ * Asia/Kolkata. Plain `current_date` is UTC, which made these tests fail
+ * every evening from 18:30 to midnight UTC, when India is already on the
+ * next day: the "present" row landed on yesterday and the sweep, rightly,
+ * marked today absent.
+ */
+const TODAY = `(now() at time zone 'Asia/Kolkata')::date`
+
 const sweep = async () => {
   const r = await db.query<{ n: number }>(`select mark_absent_backstop() as n;`)
   return Number(r.rows[0]!.n)
@@ -96,10 +106,10 @@ describe('mark_absent_backstop', () => {
     await db.exec(`delete from attendance;`)
     await db.exec(`
       insert into attendance (company_id, user_id, a_date, status)
-      values ('${COMPANY_A}', '${STAFF_A}', current_date, 'present');`)
+      values ('${COMPANY_A}', '${STAFF_A}', ${TODAY}, 'present');`)
     expect(await sweep()).toBe(3)
     const r = await db.query<{ status: string }>(
-      `select status from attendance where user_id = '${STAFF_A}' and a_date = current_date;`,
+      `select status from attendance where user_id = '${STAFF_A}' and a_date = ${TODAY};`,
     )
     expect(r.rows[0]!.status).toBe('present')
   })
@@ -109,10 +119,10 @@ describe('mark_absent_backstop', () => {
     await db.exec(`delete from attendance;`)
     await db.exec(`
       insert into attendance (company_id, user_id, a_date, status, check_in_at)
-      values ('${COMPANY_A}', '${STAFF_A}', current_date, 'late', now());`)
+      values ('${COMPANY_A}', '${STAFF_A}', ${TODAY}, 'late', now());`)
     await sweep()
     const r = await db.query<{ status: string }>(
-      `select status from attendance where user_id = '${STAFF_A}' and a_date = current_date;`,
+      `select status from attendance where user_id = '${STAFF_A}' and a_date = ${TODAY};`,
     )
     expect(r.rows[0]!.status).toBe('late')
   })
