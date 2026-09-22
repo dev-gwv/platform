@@ -69,7 +69,7 @@ export function QuoteAcceptPage() {
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
       <CameraBackdrop />
       <Card className="relative z-10 w-full max-w-2xl">
-        <CardContent className="flex flex-col gap-5 p-6">
+        <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <FileText className="size-5" />
@@ -96,14 +96,14 @@ export function QuoteAcceptPage() {
           ) : !quote ? (
             <Skeleton className="h-40" />
           ) : done === 'accepted' || quote.status === 'accepted' ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
               <CheckCircle2 className="size-10 text-success" />
               <p className="font-medium">Thank you — this quote is accepted.</p>
               <p className="text-sm text-muted-foreground">{quote.studio} will be in touch to confirm the dates.</p>
               <Totals quote={quote} />
             </div>
           ) : done === 'declined' || quote.status === 'declined' ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
               <XCircle className="size-10 text-muted-foreground" />
               <p className="font-medium">This quote was declined.</p>
               <p className="text-sm text-muted-foreground">Thanks for letting {quote.studio} know.</p>

@@ -52,7 +52,7 @@ export function ReceiptPage() {
   return (
     <div className="paper mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-4">
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           {error ? (
             <p className="text-sm text-destructive">{error}</p>
           ) : !receipt ? (
@@ -103,7 +103,7 @@ export function ReceiptPage() {
                 </span>
               </div>
 
-              <p className="mt-4 text-3xl font-semibold tabular-nums">
+              <p className="mt-4 text-2xl font-semibold tabular-nums">
                 {formatINR(receipt.amount)}
               </p>
               <p className="text-sm text-muted-foreground">
@@ -161,7 +161,7 @@ export function ReceiptPage() {
                 </div>
               )}
 
-              <dl className="mt-5 flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
+              <dl className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
                 <Row label="Project" value={receipt.project_name ?? '—'} />
                 <Row label="Client" value={receipt.client_name ?? '—'} />
                 <Row label="Project total" value={formatINR(receipt.total_cost)} />
@@ -175,7 +175,7 @@ export function ReceiptPage() {
                 </p>
               )}
 
-              <div className="no-print mt-5 flex flex-wrap gap-2">
+              <div className="no-print mt-4 flex flex-wrap gap-2">
                 <DownloadDocumentButton
                   name={`Receipt ${receipt.receipt_number}${receipt.client_name ? ` ${receipt.client_name}` : ''}`}
                   label="Download PDF"

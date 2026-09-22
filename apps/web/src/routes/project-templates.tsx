@@ -107,7 +107,7 @@ function ProjectTemplatesContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Project Templates"
         description="Create reusable project configurations"

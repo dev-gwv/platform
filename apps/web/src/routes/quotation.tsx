@@ -165,11 +165,11 @@ export function QuotationPage() {
       <div className="paper relative mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 p-4">
         {loadError ? (
           <Card>
-            <CardContent className="p-6 text-center text-sm text-destructive">{loadError}</CardContent>
+            <CardContent className="p-4 text-center text-sm text-destructive">{loadError}</CardContent>
           </Card>
         ) : !quote ? (
           <Card>
-            <CardContent className="flex flex-col gap-2 p-6">
+            <CardContent className="flex flex-col gap-2 p-4">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-1/2" />
@@ -177,9 +177,9 @@ export function QuotationPage() {
           </Card>
         ) : (
           <Card>
-            <CardContent className="p-5 sm:p-8">
+            <CardContent className="p-4 sm:p-8">
               {/* ── Letterhead ────────────────────────────────── */}
-              <header className="paper-block flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
+              <header className="paper-block flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
                 <div className="flex min-w-0 items-start gap-4">
                   {quote.logo_url ? (
                     <img
@@ -196,7 +196,7 @@ export function QuotationPage() {
                     <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                       Project Quotation
                     </p>
-                    <h1 className="mt-1.5 text-2xl font-semibold leading-tight sm:text-3xl">{studioName}</h1>
+                    <h1 className="mt-1.5 text-xl font-semibold leading-tight sm:text-2xl">{studioName}</h1>
                     {quote.company_legal_name && quote.company_legal_name !== studioName && (
                       <p className="mt-0.5 text-xs text-muted-foreground">{quote.company_legal_name}</p>
                     )}
@@ -234,7 +234,7 @@ export function QuotationPage() {
 
               {/* ── Bill to / Project ─────────────────────────── */}
               {(showPref('showBillTo', 'bill_to') || showPref('showProject', 'project')) && (
-                <section className="paper-block grid gap-5 py-6 sm:grid-cols-2">
+                <section className="paper-block grid gap-4 py-4 sm:grid-cols-2">
                   {showPref('showBillTo', 'bill_to') && (
                     <SummaryCard title="Bill to">
                       {quote.client_name ? (
@@ -266,7 +266,7 @@ export function QuotationPage() {
               {/* ── What is included ──────────────────────────── */}
               {showPref('showDeliverables', 'deliverables') &&
                 (deliverables.length === 0 && deliverables2.length === 0 ? (
-                  <section className="paper-block mt-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+                  <section className="paper-block mt-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-4 text-center text-sm text-muted-foreground">
                     Deliverables will be shared separately.
                   </section>
                 ) : (
@@ -317,7 +317,7 @@ export function QuotationPage() {
               {(showPref('showCostSummary', 'cost') || received > 0 || balance !== total) && (
                 <section className="paper-block mt-8 grid gap-4 sm:grid-cols-[1fr_auto]">
                   <div className="hidden sm:block" />
-                  <div className="ml-auto w-full max-w-sm rounded-xl border border-border bg-muted/30 p-5">
+                  <div className="ml-auto w-full max-w-sm rounded-xl border border-border bg-muted/30 p-4">
                     <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Summary
                     </h3>
@@ -399,7 +399,7 @@ export function QuotationPage() {
               </div>
 
               {answered === 'accepted' ? (
-                <div className="mt-5 rounded-lg bg-success/10 p-3 text-sm">
+                <div className="mt-4 rounded-lg bg-success/10 p-3 text-sm">
                   <p className="flex items-center gap-2 font-medium text-success">
                     <CheckCircle2 className="size-4 shrink-0" />
                     Accepted{name ? ` by ${name}` : ''} — the studio has been told.
@@ -411,7 +411,7 @@ export function QuotationPage() {
                   </p>
                 </div>
               ) : (
-                <div className="no-print mt-5 flex flex-col gap-3">
+                <div className="no-print mt-4 flex flex-col gap-3">
                   {answered === 'declined' && (
                     <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
                       You declined this quotation. You can still accept it below if you change your mind.

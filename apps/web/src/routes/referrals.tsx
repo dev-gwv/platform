@@ -83,7 +83,7 @@ function ReferralsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Referral Campaigns"
         description="Manage referral campaigns and track submissions"

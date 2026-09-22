@@ -261,7 +261,7 @@ function TeamBooking({ initialTab }: { initialTab?: Tab | undefined }) {
                 description="Shoots scheduled in this month show up here, each with the crew it still needs."
               />
             ) : (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4">
                 {days.map(([date, dayShoots]) => (
                   <div key={date}>
                     <div className="mb-2 flex items-center gap-2">

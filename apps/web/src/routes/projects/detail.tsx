@@ -207,7 +207,7 @@ function ProjectDetail() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{data.name}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{data.name}</h1>
             <StatusBadge tone={STATUS_TONE[data.status]}>
               <StatusIcon className="mr-1 size-3" aria-hidden />
               {humanize(data.status)}
@@ -486,7 +486,7 @@ function ProjectDetail() {
             client could currently see it was invisible from the tab that is
             about this project's money. */}
         <Card>
-          <CardContent className="p-4 sm:p-5">
+          <CardContent className="p-4 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="flex items-center gap-2 font-semibold tracking-tight">

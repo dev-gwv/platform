@@ -469,7 +469,7 @@ function Tile({
     <Card>
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={cn('mt-1 text-2xl font-semibold tabular-nums', toneClass)}>
+        <p className={cn('mt-1 text-xl font-semibold tabular-nums', toneClass)}>
           {typeof value === 'number' ? <CountUp value={value} /> : value}
         </p>
       </CardContent>

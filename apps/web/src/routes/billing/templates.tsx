@@ -135,7 +135,7 @@ function TemplatesContent() {
   const busy = create.isPending || update.isPending
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Invoice Templates"
         description="Saved print layouts — pick one per invoice, or set a company default."
@@ -540,9 +540,9 @@ function BankAccountsSection() {
           Pick one on the invoice form to fill bank details — the invoice keeps a snapshot, so later edits here don&apos;t rewrite history.
         </p>
         {isLoading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No bank accounts saved yet.</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">No bank accounts saved yet.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((b) => (
@@ -699,9 +699,9 @@ function TextLibrarySection({ type }: { type: 'terms' | 'note' }) {
             : 'Reusable notes snippets. The default fills new invoices; pick any of them from the invoice form.'}
         </p>
         {isLoading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No templates yet — add one or seed defaults.</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">No templates yet — add one or seed defaults.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((t) => (

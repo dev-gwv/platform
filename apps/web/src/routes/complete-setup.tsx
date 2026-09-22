@@ -63,7 +63,7 @@ export function CompleteSetupPage() {
       <CameraBackdrop />
       <TiltCard className="relative z-10 w-full max-w-md">
         <Card>
-          <CardContent className="flex flex-col gap-5 p-6">
+          <CardContent className="flex flex-col gap-4 p-4">
             <div>
               <h1 className="text-lg font-semibold">Name your studio</h1>
               <p className="mt-1 text-sm text-muted-foreground">

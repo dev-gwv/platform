@@ -86,7 +86,7 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
       <StepChips current={step} onJump={goToStep} />
 
       <Card ref={cardRef} className="mt-6 scroll-mt-4">
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           {step === 'engagement' && <EngagementStep draft={draft} set={set} />}
           {step === 'login' && <LoginStep draft={draft} set={set} />}
           {step === 'contact' && <ContactStep draft={draft} set={set} errors={shown} />}
@@ -169,7 +169,7 @@ function StepChips({ current, onJump }: { current: WizardStep; onJump: (s: Wizar
 
 function StepHeader({ title, description }: { title: string; description: string }) {
   return (
-    <div className="mb-5">
+    <div className="mb-4">
       <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
       <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
     </div>
@@ -599,7 +599,7 @@ function DetailsStep({
         title="Anything else on record?"
         description="Both sections are optional — you can fill them in later from the directory."
       />
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         <Field label="Address" error={errors.address}>
           <textarea
             rows={2}

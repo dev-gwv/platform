@@ -101,7 +101,7 @@ function TeamTerms() {
               }
             />
           ) : (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-4">
               {CATEGORY_ORDER.map((category) => {
                 const inCategory = templates.data.filter((t) => (t.category ?? 'general') === category)
                 if (inCategory.length === 0) return null

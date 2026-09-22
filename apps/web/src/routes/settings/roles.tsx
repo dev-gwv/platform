@@ -173,7 +173,7 @@ function RoleGrid({ owned, isOwner }: { owned: readonly EmployeeRole[]; isOwner:
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {STAGE_ORDER.map((stage) => {
         const inStage = cells
           .filter((c) => c.stage === stage)

@@ -72,7 +72,7 @@ function BootSkeleton() {
         <div className="flex h-14 items-center gap-3 border-b border-border bg-card px-4">
           <Skeleton className="ml-auto h-8 w-64" />
         </div>
-        <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-col gap-4 p-4">
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-3 w-80" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

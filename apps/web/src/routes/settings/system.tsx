@@ -222,7 +222,7 @@ function AuditLog() {
 
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold tracking-tight">Audit log</h3>
@@ -321,7 +321,7 @@ function CronRuns() {
   const { data, isLoading, isError, error, refetch } = useCronRuns()
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Scheduled jobs</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           The hourly tick that turns reminders and overdue follow-ups into alerts. A run with no finish time did not complete.
@@ -392,7 +392,7 @@ function CustomLookups() {
 
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold tracking-tight flex items-center gap-2">
@@ -512,7 +512,7 @@ function Services() {
 
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight flex items-center gap-2">
           <Settings className="h-4 w-4" /> Services
         </h3>
@@ -616,7 +616,7 @@ function TaskPriorities() {
 
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight flex items-center gap-2">
           <Settings className="h-4 w-4" /> Task Priorities
         </h3>
@@ -734,7 +734,7 @@ function WorkReminders() {
 
   return (
     <Card className="mt-6">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight flex items-center gap-2">
           <Settings className="h-4 w-4" /> Work Submission Reminders
         </h3>

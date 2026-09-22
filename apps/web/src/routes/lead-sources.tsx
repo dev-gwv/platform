@@ -175,7 +175,7 @@ function SourceCard({ source }: { source: LeadSourceRow }) {
 
   return (
     <Card className={cn(!source.is_active && 'opacity-75')}>
-      <CardContent className="p-4 sm:p-5">
+      <CardContent className="p-4 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Icon className="size-4" />

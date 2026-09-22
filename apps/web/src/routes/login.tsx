@@ -322,13 +322,13 @@ export function LoginPage() {
       <CameraBackdrop />
 
       <TiltCard className="relative w-full max-w-md" max={3} sheen={false}>
-        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight">
+        <h1 className="mb-6 text-center text-xl font-bold tracking-tight">
           <span className="text-brand">IPC</span> Studios
         </h1>
 
         {resetSentTo ? (
           <Card>
-            <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
+            <CardContent className="flex flex-col items-center gap-4 p-4 text-center">
               <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <MailCheck className="size-6" />
               </span>
@@ -353,7 +353,7 @@ export function LoginPage() {
           </Card>
         ) : pendingEmail ? (
           <Card>
-            <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
+            <CardContent className="flex flex-col items-center gap-4 p-4 text-center">
               <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <MailCheck className="size-6" />
               </span>
@@ -392,9 +392,9 @@ export function LoginPage() {
         ) : (
           <>
             <Card>
-              <CardContent className="p-6 sm:p-8">
+              <CardContent className="p-4 sm:p-8">
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold tracking-tight">
+                  <h2 className="text-xl font-bold tracking-tight">
                     {isForgot
                       ? 'Forgot password'
                       : isRegister

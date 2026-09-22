@@ -101,7 +101,7 @@ export function AcceptInvitePage() {
         </div>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             {!token || preview.isError ? (
               <div className="flex flex-col items-center gap-3 text-center">
                 <XCircle className="size-8 text-destructive" />
@@ -155,7 +155,7 @@ export function AcceptInvitePage() {
                   </div>
                 )}
 
-                <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3">
+                <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
                     <Label>Password</Label>
                     <Input

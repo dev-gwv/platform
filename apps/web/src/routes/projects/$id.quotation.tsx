@@ -337,7 +337,7 @@ function ProjectQuotation() {
           paper, so Print gives the client their quotation rather than a
           screenshot of the studio's editing screen -- toolbar, visibility
           toggles, branding warning and all. */}
-      <div className="paper mt-4 rounded-xl border border-border bg-card p-5 sm:p-8">
+      <div className="paper mt-4 rounded-xl border border-border bg-card p-4 sm:p-8">
         <header className="paper-block flex flex-wrap items-start justify-between gap-4 border-b border-border pb-5">
           <div>
             <div className="flex items-center gap-2">
@@ -362,7 +362,7 @@ function ProjectQuotation() {
               </div>
             </div>
             <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Project Quotation</p>
-            <h2 className="mt-1 text-2xl font-semibold">{project.name}</h2>
+            <h2 className="mt-1 text-xl font-semibold">{project.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">Prepared for {project.client_name ?? 'client'}</p>
           </div>
           <div className="text-sm">
@@ -374,7 +374,7 @@ function ProjectQuotation() {
         </header>
 
         {show('showBillTo') && (
-          <section className="mt-5 rounded-lg border border-border/60 p-4">
+          <section className="mt-4 rounded-lg border border-border/60 p-4">
             <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Bill to</h3>
             <p className="mt-1 font-medium">{project.client_name ?? 'No client linked'}</p>
             {project.client_phone && <p className="text-sm text-muted-foreground">{project.client_phone}</p>}
@@ -382,7 +382,7 @@ function ProjectQuotation() {
         )}
 
         {show('showDeliverables') && (
-          <section className="mt-5">
+          <section className="mt-4">
             <h3 className="text-sm font-semibold">Deliverables</h3>
             {project.deliverables.length === 0 ? (
               <EmptyState title="No deliverables yet" description="Deliverables will appear here once added." />

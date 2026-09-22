@@ -18,10 +18,10 @@ export function StatCard({
 }) {
   return (
     <Card className={className}>
-      <CardContent className="flex items-start justify-between gap-4 p-5">
+      <CardContent className="flex items-start justify-between gap-4 p-4">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="mt-1 truncate text-2xl font-semibold tracking-tight">{value}</p>
+          <p className="mt-1 truncate text-xl font-semibold tracking-tight">{value}</p>
           {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         </div>
         {Icon && (

@@ -102,10 +102,10 @@ function Section({
 }) {
   return (
     <Card className="mt-4">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">{title}</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-        <div className="mt-5">{children}</div>
+        <div className="mt-4">{children}</div>
       </CardContent>
     </Card>
   )
@@ -211,7 +211,7 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
   if (company.isLoading || profile.isLoading) {
     return (
       <Card className={className}>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <SkeletonCards count={3} />
         </CardContent>
       </Card>
@@ -223,7 +223,7 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
   if (company.isError || profile.isError) {
     return (
       <Card className={className}>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <ErrorState
             error={company.error ?? profile.error}
             onRetry={() => {
@@ -238,11 +238,11 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
 
   return (
     <Card className={className}>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Profile</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">Editable fields are saved together.</p>
 
-        <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
           <Field
             label="Company name"
             required
@@ -317,7 +317,7 @@ function AccountStatusCard() {
 
   return (
     <Card>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Account status</h3>
         <dl className="mt-4 flex flex-col gap-3 text-sm">
           <Row label="Your role">
@@ -348,7 +348,7 @@ function AccountStatusCard() {
             </StatusBadge>
           </Row>
         </dl>
-        <Button variant="outline" className="mt-5 w-full" asChild>
+        <Button variant="outline" className="mt-4 w-full" asChild>
           <Link to="/settings/subscription">Manage subscription</Link>
         </Button>
       </CardContent>
@@ -644,7 +644,7 @@ function ThemeSummaryCard({ readOnly, className }: { readOnly: boolean; classNam
 
   return (
     <Card className={className}>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Theme &amp; branding</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           The palette and typeface your whole studio sees.
@@ -725,7 +725,7 @@ function SecurityCard() {
 
   return (
     <Card>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Security</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Change your password here. Doing so signs out every other device.
@@ -745,7 +745,7 @@ function SecurityCard() {
             {change.isPending ? 'Changing…' : 'Change password'}
           </Button>
         </form>
-        <div className="mt-5 border-t border-border pt-4">
+        <div className="mt-4 border-t border-border pt-4">
           <p className="text-sm text-muted-foreground">
             Think someone else has access? Sign out of every browser and device this account is open on.
           </p>

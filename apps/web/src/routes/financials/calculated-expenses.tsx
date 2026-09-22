@@ -88,7 +88,7 @@ function CalculatedExpensesContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Profitability report"
         description="Per-project income, expense and margin -- sortable, filterable, exportable."

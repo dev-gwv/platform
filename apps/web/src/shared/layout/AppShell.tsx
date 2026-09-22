@@ -177,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main
           key={pathname}
-          className="page-enter min-w-0 flex-1 overflow-y-auto p-4 md:p-6 print:overflow-visible"
+          className="page-enter min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible"
         >
           {children}
         </main>

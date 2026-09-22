@@ -259,10 +259,22 @@
   }
 }
 /* The app's base size. Tailwind's rem scale hangs off this, so it is the one
-   place to adjust density — 15px reads tighter than the browser's 16px default
-   without dropping any surface below a comfortable reading size. */
+   place to adjust density: every rem-based size in the app — type, padding,
+   gaps, control heights — scales from this number together.
+
+   14px is the density dense business tools settle on. Against the 15px this
+   replaced, a screen fits roughly one more row of content per ten, which is
+   the point: these pages are forms and tables people work down, and the
+   scrolling was the complaint.
+
+   One thing deliberately does NOT shrink with it. `text-sm` lands on 12.25px
+   here, which is fine for a label or a caption and too small for a value
+   somebody types, so the form controls in shared/ui (Input, Textarea, the
+   Select trigger and its options) are pinned to `text-base`. They cost no
+   vertical space — their height is set by h-9, not by the type — so keeping
+   them legible is free. */
 html {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 body {

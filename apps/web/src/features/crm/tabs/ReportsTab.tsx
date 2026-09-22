@@ -98,14 +98,14 @@ export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">Pipeline by stage</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Every open and closed lead right now.</p>
                 <Bars rows={STAGES.map((s) => [s.label, data.byStatus[s.key] ?? 0])} />
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">Arrivals by source</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Leads created in the range, by where they came from.</p>
                 {Object.keys(data.bySource).length === 0 ? (
@@ -116,7 +116,7 @@ export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">Right now</p>
                 <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
                   <Stat label="Open + closed" value={data.total} />
@@ -128,7 +128,7 @@ export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
             <ForecastCard range={range} />
             <LostCard data={data} />
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">Export</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">A CSV of every lead in the inbox, for sheets.</p>
                 <Button className="mt-3" variant="outline" size="sm" onClick={() => exportLeadsCsv(leads)}>
@@ -148,7 +148,7 @@ function ForecastCard({ range }: { range: CrmStatsQuery }) {
   const { data, isLoading, isError, error, refetch } = useForecast(range)
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <p className="font-medium">Forecast</p>
         <p className="mt-0.5 text-xs text-muted-foreground">Deals expected to close in the range, weighted by their probability.</p>
         {isLoading ? (
@@ -187,7 +187,7 @@ function LostCard({ data }: { data: { lost: number; byLostReason: Record<string,
   const competitors = Object.entries(data.byCompetitor).sort((a, b) => b[1] - a[1])
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <p className="font-medium">Lost analysis</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{data.lost} lost in this range.</p>
         {reasons.length === 0 ? (

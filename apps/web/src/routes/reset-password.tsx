@@ -73,7 +73,7 @@ export function ResetPasswordPage() {
           </h1>
         </div>
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             {!token ? (
               <div className="flex flex-col items-center gap-3 text-center">
                 <XCircle className="size-8 text-destructive" />

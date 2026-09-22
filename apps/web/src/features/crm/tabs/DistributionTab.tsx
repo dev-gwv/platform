@@ -38,7 +38,7 @@ export function DistributionTab() {
 
   return (
     <Card>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Lead distribution</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           New unassigned leads go to the active member with fewest open leads. Priority breaks ties (0 = first).
@@ -64,11 +64,11 @@ export function DistributionTab() {
         )}
 
         {!data || data.length === 0 ? (
-          <div className="mt-5">
+          <div className="mt-4">
             <EmptyState title="No rota set up" description="Until someone is on the rota, new leads arrive unassigned." />
           </div>
         ) : (
-          <ul className="mt-5 divide-y divide-border">
+          <ul className="mt-4 divide-y divide-border">
             {data.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">

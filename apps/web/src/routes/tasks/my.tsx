@@ -249,7 +249,7 @@ function MyTasks() {
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             <Section title="Overdue" icon={Clock} items={buckets.overdue} />
             <Section title="Due today" icon={Clock} items={buckets.dueToday} />
             <Section title="Upcoming" icon={Clock} items={buckets.upcoming} />

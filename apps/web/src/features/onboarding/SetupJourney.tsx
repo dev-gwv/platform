@@ -48,7 +48,7 @@ interface Props {
 export function SetupJourney({ steps, completed, total }: Props) {
   return (
     <Card className="mb-6 overflow-hidden">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -99,7 +99,7 @@ export function SetupJourney({ steps, completed, total }: Props) {
           </div>
         </div>
 
-        <ol className="mt-5 flex flex-col gap-1.5">
+        <ol className="mt-4 flex flex-col gap-1.5">
           {steps.map((step) =>
             step.state === 'current' ? (
               <CurrentStep key={step.key} step={step} />

@@ -328,7 +328,7 @@ function Tile({
         <Icon className="size-5" aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-2xl font-semibold tabular-nums leading-tight">{value}</p>
+        <p className="truncate text-xl font-semibold tabular-nums leading-tight">{value}</p>
         <p className="truncate text-sm text-muted-foreground">{label}</p>
         {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>}
       </div>
