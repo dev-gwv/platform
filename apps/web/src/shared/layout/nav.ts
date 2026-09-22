@@ -33,6 +33,7 @@ import {
   FileSignature,
   Eye,
   Table2,
+  Ellipsis,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -149,23 +150,32 @@ export const NAV: NavEntry[] = [
       leaf('Attendance', '/attendance', Clock, { module: 'attendance' }),
       leaf('Roles & Access', '/settings/roles', ShieldCheck, { module: 'team_roles' }),
       leaf('Team Terms', '/settings/team-terms', FileSignature, { module: 'team_terms' }),
+      leaf('Team Payouts', '/team-payouts', DollarSign, { module: 'team_payouts' }),
       leaf('Work Preview', '/team/work-preview', Eye, { module: 'team_work_preview' }),
     ],
   },
 
-  // Alerts reach everyone: reminders and overdue follow-ups land on whoever
-  // owns them, CRM module or not.
-  leaf('Personal Expenses', '/personal-expenses', Wallet, { module: 'personal_expenses' }),
-  leaf('Referrals', '/referrals', Target, { module: 'referrals' }),
-  leaf('Team Payouts', '/team-payouts', DollarSign, { module: 'team_payouts' }),
-  leaf('Reminders', '/reminders', Bell),
+  // The occasional destinations, behind one heading. Six loose rows here made
+  // the menu read as six more things a new studio had to learn before it
+  // could start; none is part of setting a studio up, and the two most urgent
+  // (alerts and reminders) also live on the bell in the header.
+  {
+    kind: 'group',
+    label: 'More',
+    icon: Ellipsis,
+    match: '/activity',
+    children: [
+      // Alerts and reminders reach everyone: overdue follow-ups land on
+      // whoever owns them, CRM module or not.
+      leaf('Alerts', '/notifications', Bell),
+      leaf('Reminders', '/reminders', Bell),
+      // Activity trail: see what's changed across the studio.
+      leaf('Activity', '/activity', Activity),
+      leaf('Personal Expenses', '/personal-expenses', Wallet, { module: 'personal_expenses' }),
+      leaf('Referrals', '/referrals', Target, { module: 'referrals' }),
+    ],
+  },
 
-  // Activity trail: see what's changed across the studio.
-  leaf('Activity', '/activity', Activity),
-
-  // Alerts reach everyone: reminders and overdue follow-ups land on whoever
-  // owns them, CRM module or not.
-  leaf('Alerts', '/notifications', Bell),
   leaf('Settings', '/settings/company', Settings, { module: 'settings' }),
 
   {

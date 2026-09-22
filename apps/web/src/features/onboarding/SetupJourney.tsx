@@ -138,7 +138,7 @@ function CurrentStep({ step }: { step: JourneyStep }) {
         </div>
 
         <Button asChild size="sm" className="shrink-0 self-start sm:self-auto">
-          <Link to={step.action.to}>
+          <Link to={step.action.to} search={step.action.search as never}>
             {step.action.label} <ArrowRight />
           </Link>
         </Button>
@@ -155,6 +155,7 @@ function CompactStep({ step }: { step: JourneyStep }) {
     <li>
       <Link
         to={step.action.to}
+        search={step.action.search as never}
         className="group flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60"
         aria-label={`Step ${step.step} — ${step.title}, ${isDone ? 'completed' : 'not started'}`}
       >

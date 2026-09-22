@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Activity,
@@ -43,6 +44,16 @@ import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
 import { buildJourney } from '@/features/onboarding/journey'
 import { dashboardSections } from '@/features/onboarding/dashboard-sections'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
+
+/** Per-device: this viewer chose the whole dashboard over setup focus. */
+const FULL_VIEW_KEY = 'ipc.dashboard.full'
+function readFullView(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(FULL_VIEW_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function DashboardPage() {
   return <DashboardInner />
@@ -150,6 +161,31 @@ function StudioCommandCenter() {
     (m) => access.hasModule(m),
   )
   const showJourney = isSetupAudience && journeyReady && !journey.allDone
+
+  // While a studio is still being set up, the setup journey is the whole
+  // dashboard. Quick actions, tiles, "needs attention" and recent projects
+  // all used to sit under it, each a door out of the one thing the page was
+  // asking for — and every one of them opens onto something the journey is
+  // about to walk the owner through anyway.
+  //
+  // It is a default, not a cage: the journey is decided by real data, so a
+  // running studio that has simply never used, say, data management would
+  // otherwise be kept off its own dashboard for good. "Show the full
+  // dashboard" is remembered on this device.
+  const [fullView, setFullView] = useState(readFullView)
+  const setupFocus = showJourney && !fullView
+  // Quick actions wait for the counts too, for the reason given just below.
+  const settling = !!isSetupAudience && queries.some((q) => q.isPending)
+  const hideBody = setupFocus || settling
+  const toggleFullView = () => {
+    const next = !fullView
+    setFullView(next)
+    try {
+      globalThis.localStorage?.setItem(FULL_VIEW_KEY, next ? '1' : '0')
+    } catch {
+      // A blocked localStorage costs the preference, not the page.
+    }
+  }
   // Until the counts are real, a setup-audience viewer is shown neither the
   // journey nor the tiles — otherwise the zeros paint first and are then
   // pulled out from under them when the journey arrives.
@@ -169,8 +205,9 @@ function StudioCommandCenter() {
     <>
       <PageHeader
         title={`Welcome, ${session?.display_name ?? ''}`}
-        description="Your studio at a glance."
+        description={setupFocus ? "Let's get your studio ready — one step at a time." : 'Your studio at a glance.'}
         actions={
+          !setupFocus &&
           access.hasAction('projects', 'create') && (
             <Button asChild>
               <Link to="/projects/new">
@@ -185,6 +222,16 @@ function StudioCommandCenter() {
         <SetupJourney steps={journey.steps} completed={journey.completed} total={journey.total} />
       )}
 
+      {showJourney && (
+        <div className="-mt-4 mb-4 flex justify-end">
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={toggleFullView}>
+            {setupFocus ? 'Show the full dashboard' : 'Focus on setup'}
+          </Button>
+        </div>
+      )}
+
+      {!hideBody && (
+      <>
       <QuickActions />
 
       {sections.stats && (
@@ -258,6 +305,8 @@ function StudioCommandCenter() {
             )}
           </CardContent>
         </Card>
+      )}
+      </>
       )}
     </>
   )

@@ -264,7 +264,10 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return merged
   }
   if (method === 'GET' && path === '/team/members') return atStage(members, 'partial')
-  if (method === 'GET' && path === '/team/directory') return atStage(directory, 'partial')
+  // The directory page asks for `/team/directory?page=…`; the plain array it
+  // gets back is paged client-side by useDirectoryPaged.
+  if (method === 'GET' && (path === '/team/directory' || path.startsWith('/team/directory?')))
+    return atStage(directory, 'partial')
   if (method === 'GET' && (path === '/enquiries' || path.startsWith('/enquiries?')))
     return atStage(enquiriesFx, 'partial').length
       ? { items: enquiriesFx, summary: enquirySummaryFx }

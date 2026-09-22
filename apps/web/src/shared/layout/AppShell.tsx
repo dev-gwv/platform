@@ -14,26 +14,6 @@ import { AccountMenu } from './AccountMenu'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
-const GROUPS_KEY = 'ipc.sidebar.groups'
-
-/**
- * Which nav groups are open, remembered across mounts.
- *
- * Every route wraps itself in AuthedPage → AppShell, so the whole sidebar
- * unmounts and rebuilds on each navigation. Local state would reset to the
- * default on every click — collapse a group, open something inside it, and it
- * springs back open. Storage outlives the remount; so does the scroll position
- * below, for the same reason.
- */
-function readOpenGroups(): Record<string, boolean> {
-  try {
-    const raw = globalThis.localStorage?.getItem(GROUPS_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : null
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, boolean>) : {}
-  } catch {
-    return {}
-  }
-}
 
 /** How far the nav was scrolled, so a remount doesn't jump back to the top. */
 let navScrollTop = 0
@@ -58,6 +38,16 @@ function activeTarget(entries: NavEntry[], pathname: string): string | null {
   return best
 }
 
+/** The group holding the page you are on, if it sits inside one. */
+function groupHolding(entries: NavEntry[], pathname: string): string | null {
+  const active = activeTarget(entries, pathname)
+  if (!active) return null
+  for (const e of entries) {
+    if (e.kind === 'group' && e.children.some((c) => c.to === active)) return e.label
+  }
+  return null
+}
+
 function Brand({ compact }: { compact?: boolean }) {
   return (
     <span className="whitespace-nowrap text-base font-bold tracking-tight">
@@ -76,9 +66,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
     () => globalThis.localStorage?.getItem(COLLAPSE_KEY) === '1',
   )
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(readOpenGroups)
   const role = session?.role ?? 'none'
   const entries = filterNav(NAV, role, access, session?.is_platform_admin ?? false)
+
+  // The menu shows headings, and opens one section at a time: the section
+  // holding the page you are on, or the one you just clicked open. Every
+  // group used to start open, so a new studio's first screen was a wall of
+  // twenty-odd links, each one a thing it seemed to need to learn.
+  //
+  // What you open is remembered only until you navigate; a new page hands
+  // the menu back to that page's own section. Nothing is stored, so the
+  // menu can't slowly accrete open sections the way a remembered set does.
+  const activeGroup = groupHolding(entries, pathname)
+  const [manualGroup, setManualGroup] = useState<{ path: string; label: string | null } | null>(null)
+  const openGroup = manualGroup?.path === pathname ? manualGroup.label : activeGroup
 
   // The shell used to unmount on every navigation, which reset this for free.
   // It mounts once now, so the drawer and its scrim would otherwise stay open
@@ -89,17 +90,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     globalThis.localStorage?.setItem(COLLAPSE_KEY, collapsed ? '1' : '0')
   }, [collapsed])
 
-  const toggleGroup = useCallback((label: string) => {
-    setOpenGroups((groups) => {
-      const next = { ...groups, [label]: !(groups[label] ?? true) }
-      try {
-        globalThis.localStorage?.setItem(GROUPS_KEY, JSON.stringify(next))
-      } catch {
-        // A blocked localStorage costs the preference, not the navigation.
-      }
-      return next
-    })
-  }, [])
+  const toggleGroup = useCallback(
+    (label: string) => setManualGroup({ path: pathname, label: openGroup === label ? null : label }),
+    [pathname, openGroup],
+  )
 
   return (
     <div className="flex h-screen overflow-hidden bg-background print:block print:h-auto print:overflow-visible">
@@ -107,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         entries={entries}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
-        openGroups={openGroups}
+        openGroup={openGroup}
         onToggleGroup={toggleGroup}
         className="hidden md:flex"
       />
@@ -119,7 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             entries={entries}
             collapsed={false}
             onClose={() => setMobileOpen(false)}
-            openGroups={openGroups}
+            openGroup={openGroup}
             onToggleGroup={toggleGroup}
             className="fixed inset-y-0 left-0 z-50 flex md:hidden"
           />
@@ -191,7 +185,7 @@ function Sidebar({
   collapsed,
   onToggleCollapse,
   onClose,
-  openGroups,
+  openGroup,
   onToggleGroup,
   className,
 }: {
@@ -199,7 +193,7 @@ function Sidebar({
   collapsed: boolean
   onToggleCollapse?: () => void
   onClose?: () => void
-  openGroups: Record<string, boolean>
+  openGroup: string | null
   onToggleGroup: (label: string) => void
   className?: string
 }) {
@@ -286,7 +280,7 @@ function Sidebar({
               group={e}
               active={active}
               collapsed={collapsed}
-              open={openGroups[e.label] ?? true}
+              open={openGroup === e.label}
               onToggle={() => onToggleGroup(e.label)}
               onExpand={onToggleCollapse}
             />
