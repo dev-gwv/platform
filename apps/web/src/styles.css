@@ -272,7 +272,14 @@
    somebody types, so the form controls in shared/ui (Input, Textarea, the
    Select trigger and its options) are pinned to `text-base`. They cost no
    vertical space — their height is set by h-9, not by the type — so keeping
-   them legible is free. */
+   them legible is free.
+
+   Measured when this landed, on the project wizard's Shoots step with one
+   shoot added at 1440x900: the page went from 1210px of content to 1061px
+   against an 851px viewport, so the overflow fell from 362px to 210px and a
+   whole shoot card — title, date, venue, requirements, deliverables — fits
+   without scrolling. Worth re-measuring the same way before changing this
+   number again, rather than adjusting it by eye. */
 html {
   font-size: 14px;
 }
