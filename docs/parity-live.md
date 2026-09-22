@@ -78,7 +78,7 @@ work**:
 | `/personal-expenses` | `/personal-expenses` | 8 | 3 | 38% | unverified |
 | `/facebook` | `/lead-sources` | 2 | 2 | 100% | unverified |
 | `/referrals` | `/referrals` | 2 | 2 | 100% | unverified |
-| `/financials/gopo` | `/financials/gopo` | 5 | 2 | 40% | unverified |
+| `/financials/gopo` | — | 5 | 2 | 40% | page removed Sep 2026 — see below |
 | `/tasks` | `/tasks` | 10 | 2 | 20% | unverified |
 | `/financials` | `/financials` | 1 | 1 | 100% | unverified |
 | `/platform/studios` | `/platform/studios` | 1 | 1 | 100% | capture empty — recheck |
@@ -263,6 +263,15 @@ empty state was hiding it.
 | Dashboard | Same shape: the employee branch returned before nine hooks |
 | Monthly team cost | Grouped by `team_payouts.employment_type`, a column in no migration. A bare `catch` swallowed it and five ₹0 tiles rendered under a non-zero salary figure |
 | GOPO dashboard | From/To pickers sent to an RPC that takes no parameters, under a caption claiming they filtered payments, expenses and activity |
+
+> **Sep 2026 — the GOPO dashboard and GST Analysis pages are gone.** The
+> studio said the billing section was too complicated and that there is not
+> much GST in its business, so the two analytics pages were removed rather
+> than repaired: GOPO overlapped Financials and Reconciliation, and despite
+> the name almost nothing on it was GST. What survives is two cards on
+> `/financials`, shown only when there is tax to show. `gst_analysis()`
+> stays in SQL and now feeds those cards; `gopo_summary()` was dropped in
+> 0158 because nothing called it any more.
 
 None of these were visible to typecheck, lint or the 1449-test suite.
 `react-hooks/rules-of-hooks` is now on for `apps/web` and caught both hook

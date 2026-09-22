@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { rpcJson } from './rpc'
 
 /**
- * Every dashboard backed by a jsonb-returning RPC -- GOPO, GST, reminders,
+ * Every dashboard backed by a jsonb-returning RPC -- GST, reminders,
  * personal expenses, the attendance streak -- ran JSON.parse() over a value
  * postgres.js had already decoded into an object. In production that surfaced
  * as `JSON Parse error: Unexpected identifier "object"` on every request,

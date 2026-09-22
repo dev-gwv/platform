@@ -4442,15 +4442,16 @@ describe('CRM quote answered off the link (0049)', () => {
 
 /**
  * The dashboard RPCs, actually CALLED. A plpgsql body is not checked until it
- * runs, so gopo_summary and gst_analysis both created cleanly in 0051/0058 and
- * then raised on every invocation -- four separate faults in gopo_summary
- * alone, which is why that page rendered blank in production. Creating them is
- * not evidence they work; only calling them is.
+ * runs, so gst_analysis created cleanly in 0058 and then raised on every
+ * invocation, which is why that page rendered blank in production. Creating a
+ * function is not evidence it works; only calling it is.
+ *
+ * gopo_summary was the other half of this and is gone -- 0158 dropped it with
+ * the page that was its only caller.
  *
  * The fixture is deliberately a LOSS-MAKING, OVER-COLLECTED project: costs
- * above revenue and a client who paid more than was invoiced. That is the shape
- * that drives net_profit and gross_profit negative and collection_rate past
- * 100, which the contracts used to reject outright.
+ * above revenue and a client who paid more than was invoiced. That shape used
+ * to be rejected outright by the contracts.
  */
 describe('dashboard RPCs run and return contract-shaped data (0064)', () => {
   let db: PGlite
@@ -4471,29 +4472,6 @@ describe('dashboard RPCs run and return contract-shaped data (0064)', () => {
       insert into expenses (company_id, project_id, category, amount, expense_date)
         values (get_current_company_id(), (select id from projects limit 1), 'gear', 4000, current_date);
     `)
-  })
-
-  it('gopo_summary reports a loss and an over-collection instead of raising', async () => {
-    const r = await db.query<{ v: Record<string, never> }>(`select gopo_summary() as v;`)
-    const v = r.rows[0]!.v as unknown as {
-      score_card: { net_profit: number; collection_rate: number; profit_margin: number; health_score: number }
-      expense_breakdown: { category: string; percentage: number }[]
-      project_performance: { gross_profit: number }[]
-      attention_items: { kind: string }[]
-    }
-    // 1000 revenue - 4000 expenses = -3000.
-    expect(v.score_card.net_profit).toBe(-3000)
-    // Paid 1500 against 1000 invoiced.
-    expect(v.score_card.collection_rate).toBe(150)
-    expect(v.score_card.profit_margin).toBeLessThan(0)
-    // The score is a 0-100 gauge, so it stays clamped even on a deep loss.
-    expect(v.score_card.health_score).toBeGreaterThanOrEqual(0)
-    expect(v.score_card.health_score).toBeLessThanOrEqual(100)
-    // The windowed percentage over grouped rows used to be a bare column.
-    expect(v.expense_breakdown[0]!.percentage).toBe(100)
-    expect(v.project_performance[0]!.gross_profit).toBe(-3000)
-    // Both arms of the union survive; the loss-making project is called out.
-    expect(v.attention_items.map((a) => a.kind)).toContain('negative_profit')
   })
 
   it('gst_analysis reads real per-line tax, not a flat assumed rate', async () => {

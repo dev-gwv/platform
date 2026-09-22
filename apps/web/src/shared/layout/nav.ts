@@ -27,7 +27,6 @@ import {
   Building2,
   Activity,
   Package,
-  BarChart3,
   Scale,
   DollarSign,
   FileText,
@@ -117,12 +116,11 @@ export const NAV: NavEntry[] = [
     icon: CreditCard,
     match: '/billing',
     children: [
-      leaf('Payments', '/billing', Receipt, { module: 'billing' }),
+      // Labelled Payments, landed on the Invoices tab.
+      leaf('Billing', '/billing', Receipt, { module: 'billing' }),
       leaf('Invoice Templates', '/billing/templates', FileText, { module: 'billing' }),
       leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
       leaf('Reconciliation', '/financials/reconciliation', Scale, { module: 'financials' }),
-      leaf('GOPO Dashboard', '/financials/gopo', BarChart3, { module: 'financials' }),
-      leaf('GST Analysis', '/financials/gst-analysis', Receipt, { module: 'financials' }),
       leaf('Profitability', '/financials', TrendingUp, { module: 'financials' }),
       leaf('Profitability Report', '/financials/calculated-expenses', Table2, { module: 'financials' }),
     ],

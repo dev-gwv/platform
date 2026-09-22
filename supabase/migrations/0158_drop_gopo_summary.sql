@@ -1,0 +1,21 @@
+-- gopo_summary() had exactly one caller: the GOPO Dashboard page, which is
+-- gone. What it showed -- a health ring, cash-flow cards, an expense split,
+-- top and bottom projects -- overlapped Financials and Reconciliation, and
+-- despite the name almost none of it was GST. The studio asked for less to
+-- read, not more.
+--
+-- It is dropped rather than left in place because it is SECURITY DEFINER with
+-- `grant execute to authenticated`: a reachable, company-scoped read that
+-- nothing reads. supabase/tests/no-orphan-definers.test.ts exists to catch
+-- exactly that, and its comment is right that an allowlist is the wrong
+-- answer.
+--
+-- gst_analysis() is NOT dropped: /financials/overview now calls it for the GST
+-- collected / paid figures, replacing a hand-rolled `sum(received * 0.18)`
+-- that invented tax on untaxed invoices.
+--
+-- Explicit argument list on the drop: `create or replace` cannot change a
+-- signature, so a rename-by-arguments leaves two overloads behind and every
+-- later call fails ambiguous (42725). Naming the arguments makes the drop
+-- unambiguous about which one it is removing.
+drop function if exists gopo_summary();

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { Printer, ArrowLeft, Pencil, Trash2, Copy, Mail, MessageCircle, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { amountInWords, type GstSlab } from '@ipc/domain'
+import { amountInWords } from '@ipc/domain'
 import { buildMailtoUrl, buildWhatsAppUrl, companyProfile, friendlyInvoiceError, type InvoiceDetail } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -272,7 +272,7 @@ function EditInvoiceDialog({ invoice, autoOpen }: { invoice: InvoiceDetail; auto
     status: invoice.status === 'draft' ? 'draft' : 'sent',
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date ?? '',
-    discount: invoice.discount,
+    discount: invoice.discount ? String(invoice.discount) : '',
     // Preserve the original discount type on edit — including 'none'.
     discount_type: (invoice.discount_type ?? 'flat') as 'flat' | 'percent' | 'none',
     notes: invoice.notes ?? '',
@@ -283,9 +283,9 @@ function EditInvoiceDialog({ invoice, autoOpen }: { invoice: InvoiceDetail; auto
     lines: invoice.items.map((i) => ({
       description: i.description,
       subtext: i.subtext ?? undefined,
-      quantity: i.quantity,
-      rate: i.rate,
-      gst_rate: i.gst_rate as GstSlab,
+      quantity: String(i.quantity),
+      rate: String(i.rate),
+      gst_rate: Number(i.gst_rate),
     })),
   })
   const [error, setError] = useState<string | null>(null)
@@ -293,6 +293,11 @@ function EditInvoiceDialog({ invoice, autoOpen }: { invoice: InvoiceDetail; auto
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    const problems = form.problems()
+    if (problems.length > 0) {
+      setError(problems[0] ?? 'This invoice is not ready yet.')
+      return
+    }
     try {
       await update.mutateAsync(form.toRequest())
       setOpen(false)
@@ -326,7 +331,7 @@ function EditInvoiceDialog({ invoice, autoOpen }: { invoice: InvoiceDetail; auto
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={update.isPending || form.totals.total <= 0 || !form.values.client_id}>
+            <Button type="submit" disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save changes'}
             </Button>
           </div>

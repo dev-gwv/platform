@@ -10,10 +10,6 @@ import {
   fixedOverhead,
   monthlyProfitSummary,
   projectFinancials,
-  gopoQuery,
-  gopoSummary,
-  gstAnalysis,
-  gstAnalysisRequest,
   profitabilityReportQuery,
   profitabilityReport,
   reconciliationSummary,
@@ -245,75 +241,6 @@ export const financialsRouter = new Hono<AppEnv>()
     return c.json(financials.parse(rows))
   })
 
-  // ── GOPO Dashboard (financials module) ──────────────────────
-  // Lovable parity: date/salary filters + cash+pending split + top/bottom +
-  // attention counts + signals. Base RPC stays authoritative; extras merge in.
-  .get('/gopo', requireModule('financials'), async (c) => {
-    const parsed = gopoQuery.safeParse({
-      include_salaries: c.req.query('include_salaries') ?? undefined,
-    })
-    const data = await attempt(c, 'financials.gopo', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const result = await sql<{ gopo_summary: unknown }[]>`select gopo_summary() as gopo_summary`
-        return rpcJson(result[0]?.gopo_summary, {})
-      }),
-    )
-    if (!data) fail(400, 'We could not load the GOPO dashboard.')
-    const base = data as Record<string, unknown>
-    const perf = Array.isArray(base['project_performance']) ? [...(base['project_performance'] as Record<string, unknown>[])] : []
-    const sorted = [...perf].sort((a, b) => Number(b['gross_profit'] ?? 0) - Number(a['gross_profit'] ?? 0))
-    const score = (base['score_card'] as Record<string, unknown> | undefined) ?? {}
-    const cash = Number(score['total_received'] ?? 0)
-    const pending = Number(score['outstanding_balance'] ?? 0)
-    let salary = 0
-    try {
-      const s = await withUser(c.env, c.get('auth').userId, async (sql) => {
-        const r = await sql<{ total: string }[]>`select coalesce(sum(amount), 0)::text as total from team_payouts
-          where (${parsed.success && !parsed.data.include_salaries} = false or true)`
-        return Number(r[0]?.total ?? 0)
-      })
-      salary = parsed.success && !parsed.data.include_salaries ? 0 : s
-    } catch { salary = 0 }
-    // Lovable parity: company/personal expense split + GST/RCM liabilities.
-    let companyExpenses = 0
-    let personalExpenses = 0
-    let rcm = 0
-    try {
-      const sums = await withUser(c.env, c.get('auth').userId, async (sql) => {
-        const r = await sql<{ company: string; rcm: string }[]>`select coalesce(sum(amount), 0)::text as company,
-            coalesce(sum(amount) filter (where reverse_charge = true), 0)::text as rcm from expenses`
-        return r[0]
-      })
-      companyExpenses = Number(sums?.company ?? 0)
-      rcm = Number(sums?.rcm ?? 0)
-    } catch { /* keep zeros */ }
-    try {
-      const pr = await withUser(c.env, c.get('auth').userId, async (sql) => {
-        const r = await sql<{ total: string }[]>`select coalesce(sum(amount), 0)::text as total from personal_expense`
-        return Number(r[0]?.total ?? 0)
-      })
-      personalExpenses = pr
-    } catch { /* keep zero */ }
-    const attention = Array.isArray(base['attention_items']) ? (base['attention_items'] as unknown[]) : []
-    const signals: string[] = []
-    if (pending > cash * 0.5 && cash > 0) signals.push('Collection lag: pending exceeds 50% of cash received.')
-    if (Number(score['profit_margin'] ?? 0) < 20) signals.push('Margin below 20% — review pricing or costs.')
-    if (attention.length >= 11) signals.push(`${attention.length} attention items need triage.`)
-    return c.json(gopoSummary.parse({
-      ...base,
-      cash_received: cash,
-      pending_receivable: pending,
-      salary_cost: salary,
-      company_expenses: companyExpenses,
-      personal_expenses: personalExpenses,
-      rcm_liability: rcm,
-      top_projects: sorted.slice(0, 5),
-      bottom_projects: sorted.slice(-5).reverse(),
-      attention_count: attention.length,
-      signals,
-    }))
-  })
-
   // ── Financials overview (financials module) ───────────────────
   // Lovable parity: date filter + salaries + GST/RCM + receivables/collection/
   // margin + attention + recent. Minimal cards payload; heavy charts stay on
@@ -356,12 +283,35 @@ export const financialsRouter = new Hono<AppEnv>()
             where company_id = ${c.get('auth').companyId}`
           salaries = Number(sr[0]?.total ?? 0)
         } catch { salaries = 0 }
-        const gst = await sql<{ collected: string; paid: string }[]>`
-          select coalesce(sum(rp.amount * 0.18), 0)::text as collected, '0' as paid
-            from received_payments rp where rp.company_id = ${c.get('auth').companyId}`.catch(() => [{ collected: '0', paid: '0' }] as { collected: string; paid: string }[])
+        // The real tax on the real invoices, from the one function that
+        // works it out.
+        //
+        // This used to read `sum(received_payments.amount * 0.18)` -- a flat
+        // 18% of every rupee the studio had ever received, whether the
+        // invoice carried tax or not, whether it was taxed at 5% or 12%, and
+        // ignoring the date range the rest of this endpoint respects. For a
+        // studio that mostly bills families with no GST at all, that card
+        // invented a liability out of nothing.
+        //
+        // gst_analysis() sums the per-line cgst/sgst/igst that invoice_items
+        // already carries. Calling it rather than copying its query keeps the
+        // one definition of the studio's tax, and keeps the tests that cover
+        // it (tenancy, pending-not-received) covering a live path -- the GST
+        // Analysis page they were written for is gone. It wants a bounded
+        // range; an unbounded overview asks for all of time.
+        const gstJson = await sql<{ gst_analysis: unknown }[]>`
+          select gst_analysis(
+            ${startDate ?? '1900-01-01'}::date,
+            ${endDate ?? '2999-12-31'}::date
+          ) as gst_analysis`.catch(() => [] as { gst_analysis: unknown }[])
+        const gstRow = rpcJson(gstJson[0]?.gst_analysis, {}) as Record<string, unknown>
+        const gst = {
+          collected: String(gstRow['gst_collected'] ?? 0),
+          paid: String(gstRow['gst_paid'] ?? 0),
+        }
         const recent = await sql<Record<string, unknown>[]>`select 'payment' as type, amount, paid_on as date from received_payments
           where company_id = ${c.get('auth').companyId} order by paid_on desc limit 8`.catch(() => [] as Record<string, unknown>[])
-        return { rev: rev[0], exp: (exp as { company: string; rcm: string; uncategorized: string; missing: string }[])[0], personal, personalMissing, salaries, gst: (gst as { collected: string; paid: string }[])[0], recent }
+        return { rev: rev[0], exp: (exp as { company: string; rcm: string; uncategorized: string; missing: string }[])[0], personal, personalMissing, salaries, gst, recent }
       }),
     )
     if (!data) fail(400, 'We could not load the financial overview.')
@@ -539,28 +489,6 @@ export const financialsRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That overhead was not found.')
     await audit(c, { action: 'fixed_overhead.delete', entityType: 'fixed_overhead', entityId: id })
     return c.body(null, 204)
-  })
-
-  // ── GST Analysis (financials module) ───────────────────────
-  .get('/gst-analysis', requireModule('financials'), async (c) => {
-    const parsed = gstAnalysisRequest.safeParse({
-      start_date: c.req.query('start_date'),
-      end_date: c.req.query('end_date'),
-    })
-    if (!parsed.success) fail(422, 'Please provide valid start and end dates.')
-
-    const data = await attempt(c, 'financials.gst_analysis', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const result = await sql<{ gst_analysis: unknown }[]>`
-          select gst_analysis(
-            p_start_date => ${parsed.data.start_date}::date,
-            p_end_date => ${parsed.data.end_date}::date
-          ) as gst_analysis`
-        return rpcJson(result[0]?.gst_analysis, {})
-      }),
-    )
-    if (!data) fail(400, 'We could not load GST analysis.')
-    return c.json(gstAnalysis.parse(data))
   })
 
   // ── Reconciliation (financials module) ──────────────────────

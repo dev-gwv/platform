@@ -390,11 +390,21 @@ function NewInvoiceDialog({ autoOpen }: { autoOpen?: boolean | undefined } = {})
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (form.values.discount_type === 'percent' && form.values.discount > 100) {
+    // Everything the invoice is missing, said out loud. The Create button used
+    // to be disabled instead — on a total that ignored any line without a
+    // description, so a fresh form could never be submitted and nothing on
+    // screen explained why.
+    const problems = form.problems()
+    if (problems.length > 0) {
+      setError(problems[0] ?? 'This invoice is not ready yet.')
+      return
+    }
+    const discount = Number(form.values.discount) || 0
+    if (form.values.discount_type === 'percent' && discount > 100) {
       setError('Discount percentage cannot exceed 100%.')
       return
     }
-    if (form.values.discount_type === 'flat' && form.values.discount > form.totals.subtotal && form.totals.subtotal > 0) {
+    if (form.values.discount_type === 'flat' && discount > form.totals.subtotal && form.totals.subtotal > 0) {
       setError('Discount cannot exceed the invoice subtotal.')
       return
     }
@@ -426,7 +436,17 @@ function NewInvoiceDialog({ autoOpen }: { autoOpen?: boolean | undefined } = {})
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        // Cancelling used to keep the half-typed invoice for next time.
+        if (!next) {
+          form.reset()
+          setError(null)
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <Plus /> New invoice
@@ -446,7 +466,8 @@ function NewInvoiceDialog({ autoOpen }: { autoOpen?: boolean | undefined } = {})
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={create.isPending || form.totals.total <= 0 || !form.values.client_id}>
+            {/* Enabled, so submitting can explain what is missing. */}
+            <Button type="submit" disabled={create.isPending}>
               {create.isPending ? 'Creating…' : 'Create invoice'}
             </Button>
           </div>

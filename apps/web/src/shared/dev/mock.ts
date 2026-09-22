@@ -426,8 +426,6 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return expensesFx
   if (method === 'POST' && path === '/financials/expenses') return expensesFx[0]
   if (method === 'GET' && path === '/financials/projects') return projectFin
-  if (method === 'GET' && path === '/financials/gopo') return gopoFx
-  if (method === 'GET' && path.startsWith('/financials/gst-analysis')) return gstAnalysisFx
   if (method === 'GET' && path.startsWith('/financials/profitability')) return profitabilityReportFx
   if (method === 'GET' && path.startsWith('/activity')) return activityLogFx
   if (method === 'POST' && path === '/activity') return { id: uid(0xea) }
@@ -1041,71 +1039,6 @@ const projectFin = [
     balance_pending: 0,
   },
 ]
-
-const gopoFx = {
-  score_card: {
-    health_score: 78,
-    health_label: 'good',
-    total_revenue: 299000,
-    total_received: 222000,
-    total_expenses: 23000,
-    total_direct_team_cost: 58000,
-    net_profit: 218000,
-    collection_rate: 74,
-    profit_margin: 73,
-    outstanding_balance: 77000,
-  },
-  expense_breakdown: [
-    { category: 'Team cost', amount: 58000, percentage: 72, count: 5 },
-    { category: 'Project expenses', amount: 23000, percentage: 28, count: 4 },
-  ],
-  project_performance: projectFin.map((p) => ({
-    project_id: p.project_id,
-    project_name: p.name,
-    revenue: p.revenue,
-    received: p.received,
-    direct_team_cost: p.direct_team_cost,
-    project_expenses: p.project_expenses,
-    gross_profit: p.gross_profit,
-    balance_pending: p.balance_pending,
-    profit_margin: p.revenue ? Math.round((p.gross_profit / p.revenue) * 100) : 0,
-    status: 'active',
-  })),
-  attention_items: [
-    {
-      kind: 'overdue_payment',
-      severity: 'warning',
-      message: 'Sharma Wedding has ₹77,000 pending past the due date.',
-      project_id: PROJ.p1,
-      project_name: 'Sharma Wedding',
-      amount: 77000,
-    },
-  ],
-  recent_activity: [
-    { date: '2026-09-05', description: 'Payment received — Nova Product Shoot', amount: 72000, type: 'income' },
-    { date: '2026-09-01', description: 'Studio rent', amount: 15000, type: 'expense' },
-  ],
-}
-
-const gstAnalysisFx = {
-  period_start: '2026-08-31',
-  period_end: '2026-09-29',
-  total_income: 299000,
-  total_expenses: 23000,
-  gst_collected: 45610,
-  gst_paid: 4140,
-  net_gst_liability: 41470,
-  reverse_charge: 0,
-  input_tax_credit: 4140,
-  by_state: [
-    { state: 'Maharashtra', income: 227000, gst: 40860 },
-    { state: 'Karnataka', income: 72000, gst: 4750 },
-  ],
-  by_gst_rate: [
-    { rate: 18, taxable_amount: 227000, cgst: 20430, sgst: 20430, igst: 0 },
-    { rate: 12, taxable_amount: 72000, cgst: 0, sgst: 0, igst: 4750 },
-  ],
-}
 
 const profitabilityReportFx = {
   items: projectFin.map((p) => ({

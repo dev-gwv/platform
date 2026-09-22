@@ -51,9 +51,6 @@ function Financials() {
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link to="/financials/gopo">GOPO dashboard</Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
               <Link to="/financials/profit">Monthly profit</Link>
             </Button>
           </div>
@@ -117,8 +114,17 @@ function Financials() {
               <StatCard label="Collection rate" value={`${num(o.collection_rate).toFixed(1)}%`} icon={Gauge} />
               <StatCard label="Margin" value={o.margin == null ? '—' : `${num(o.margin).toFixed(1)}%`} icon={Percent} />
               <StatCard label="Total expenses" value={formatINR(num(o.total_expenses, num(o.company_expenses) + num(o.personal_expenses) + (includeSalaries ? num(o.salaries) : 0)))} icon={Receipt} />
-              <StatCard label="GST collected" value={formatINR(num(o.gst_collected))} icon={Receipt} hint={`Paid: ${formatINR(num(o.gst_paid))}`} />
-              <StatCard label="Reverse charge" value={formatINR(num(o.rcm_liability))} icon={ShieldAlert} />
+              {/*
+                * Shown only when there is tax to show. A studio that bills
+                * families has no GST on anything, and two permanent zeros
+                * read as a broken card rather than an accurate one.
+                */}
+              {num(o.gst_collected) > 0 && (
+                <StatCard label="GST collected" value={formatINR(num(o.gst_collected))} icon={Receipt} hint={`Paid: ${formatINR(num(o.gst_paid))}`} />
+              )}
+              {num(o.rcm_liability) > 0 && (
+                <StatCard label="Reverse charge" value={formatINR(num(o.rcm_liability))} icon={ShieldAlert} />
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

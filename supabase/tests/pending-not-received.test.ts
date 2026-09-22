@@ -47,16 +47,6 @@ const profitPaidIncome = async () => {
   return num(items.find((i) => (i as unknown as { project_id: string }).project_id === PROJECT)?.paid_income)
 }
 
-/**
- * GOPO's money comes through project_financials, so it is covered by the
- * view's filter — asserted here because that is a dependency nobody would
- * notice breaking.
- */
-const gopoReceived = async () => {
-  const r = await q<{ j: { score_card?: Record<string, unknown> } }>(`select gopo_summary() as j;`)
-  return num(r[0]!.j.score_card?.['total_received'])
-}
-
 const gstIncome = async () =>
   num((await q<{ j: Record<string, unknown> }>(
     `select gst_analysis((current_date - 30)::date, (current_date + 1)::date) as j;`,
@@ -120,13 +110,11 @@ describe('pending payments', () => {
     expect(await profitPaidIncome()).toBe(40000)
   })
 
-  it('do not count toward GST total income, nor GOPO’s received', async () => {
+  it('do not count toward GST total income', async () => {
     await addPending()
     expect(await gstIncome()).toBe(0)
-    expect(await gopoReceived()).toBe(0)
     await markPaid()
     expect(await gstIncome()).toBe(40000)
-    expect(await gopoReceived()).toBe(40000)
   })
 
   it('do not reduce the balance the CLIENT is shown on a quotation', async () => {

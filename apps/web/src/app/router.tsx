@@ -34,8 +34,6 @@ import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
 import { MonthlyProfitPage } from '@/routes/financials/profit'
-import { GopoPage } from '@/routes/financials/gopo'
-import { GstAnalysisPage } from '@/routes/financials/gst-analysis'
 import { ReconciliationPage } from '@/routes/financials/reconciliation'
 import { CalculatedExpensesPage } from '@/routes/financials/calculated-expenses'
 import { FollowUpsPage } from '@/routes/follow-ups'
@@ -223,8 +221,6 @@ const routeTree = rootRoute.addChildren([
   route('/company-expenses/report', CompanyExpensesPage),
   route('/financials', FinancialsPage),
   route('/financials/profit', MonthlyProfitPage),
-  route('/financials/gopo', GopoPage),
-  route('/financials/gst-analysis', GstAnalysisPage),
   route('/financials/reconciliation', ReconciliationPage),
   route('/financials/calculated-expenses', CalculatedExpensesPage),
   route('/notifications', NotificationsPage),
