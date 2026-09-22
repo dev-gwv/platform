@@ -279,7 +279,7 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
             disabled={item.disabled}
             onClick={() => choose(item.value)}
             className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors',
+              'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-base transition-colors',
               'focus-visible:outline-none',
               item.disabled ? 'cursor-not-allowed text-muted-foreground opacity-60' : 'hover:bg-muted focus:bg-muted',
               isSelected && 'font-medium',
@@ -325,7 +325,7 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
         aria-invalid={props['aria-invalid']}
         aria-label={props['aria-label']}
         className={cn(
-          'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card py-1 pl-3 pr-2.5 text-left text-sm shadow-sm transition-colors',
+          'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card py-1 pl-3 pr-2.5 text-left text-base shadow-sm transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
           'aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive',

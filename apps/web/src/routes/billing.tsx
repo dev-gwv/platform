@@ -262,7 +262,7 @@ function InvoicesSection() {
         <>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-4">
               <h2 className="font-semibold tracking-tight">Invoiced by month</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">The last six months.</p>
               <BarChart
@@ -273,7 +273,7 @@ function InvoicesSection() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-5">
+            <CardContent className="p-4">
               <h2 className="font-semibold tracking-tight">Collected against outstanding</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Across the filtered set, not just this page.

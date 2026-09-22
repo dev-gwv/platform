@@ -113,7 +113,7 @@ export function MonthlyProfitabilityReport({
 
   return (
     <Card>
-      <CardContent className="p-4 sm:p-5">
+      <CardContent className="p-4 sm:p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="flex items-center gap-2 font-semibold tracking-tight">

@@ -328,7 +328,7 @@ export function ViewReceivedPaymentDialog({
             <div className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-semibold tabular-nums">{formatINR(data.amount)}</p>
+                  <p className="text-xl font-semibold tabular-nums">{formatINR(data.amount)}</p>
                   <p className="text-sm text-muted-foreground">
                     {data.project_name ?? '—'}
                     {data.description ? ` · ${data.description}` : ''}

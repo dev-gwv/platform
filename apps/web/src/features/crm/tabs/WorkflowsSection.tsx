@@ -411,7 +411,7 @@ function WorkflowForm({ initial, existing, names, onClose }: { initial: Draft; e
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
+      <CardContent className="flex flex-col gap-4 p-4 sm:p-4">
         <div className="flex items-center gap-2">
           <p className="font-medium">{existing ? `Edit “${existing.name}”` : 'New workflow'}</p>
           <Button size="sm" variant="ghost" className="ml-auto" onClick={onClose}>

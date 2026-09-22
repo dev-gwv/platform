@@ -342,7 +342,7 @@ function MyWork() {
         ) : rows.length === 0 ? (
           <EmptyState title="No work assigned yet" description="Tasks assigned to you will show up here." action={<SubmitDialog />} />
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             <Group title="Overdue" icon={AlertCircle} items={groups.overdue} />
             <Group title="Due today" icon={Clock} items={groups.today} />
             <Group title="Upcoming" icon={Clock} items={groups.upcoming} />

@@ -79,7 +79,7 @@ export function MetaSetupChecklist() {
 
   return (
     <Card className="mt-4">
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <p className="flex items-center gap-2 font-semibold tracking-tight">
           <ClipboardCheck className="size-4 text-muted-foreground" />
           Meta setup checklist

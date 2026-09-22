@@ -116,7 +116,7 @@ export function ReferPage() {
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
       <CameraBackdrop />
       <Card className="relative z-10 w-full max-w-lg">
-        <CardContent className="flex flex-col gap-5 p-6">
+        <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">
             {campaign?.logo_url ? (
               <img src={campaign.logo_url} alt={campaign.studio_name ?? 'Studio logo'} className="size-10 rounded-lg object-contain" />
@@ -141,7 +141,7 @@ export function ReferPage() {
           ) : !campaign ? (
             <Skeleton className="h-40" />
           ) : done ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
               <CheckCircle2 className="size-10 text-success" />
               <p className="font-medium">Thanks — we've got it.</p>
               <p className="text-sm text-muted-foreground">{campaign.studio_name ?? 'The studio'} will reach out shortly.</p>

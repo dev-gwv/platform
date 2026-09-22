@@ -347,7 +347,7 @@ export function TermsWizard({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="self-start">
-          <CardContent className="p-5">
+          <CardContent className="p-4">
             {step === 1 && (
               <div className="flex flex-col gap-4">
                 <div>
@@ -709,7 +709,7 @@ export function TermsWizard({
               </div>
             )}
 
-            <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
               <Button
                 variant="outline"
                 size="sm"
@@ -771,7 +771,7 @@ function TermsPreview({
   const clauses = terms.split('\n').map((l) => l.trim()).filter(Boolean)
   return (
     <Card className="paper self-start">
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <div className="paper-toolbar mb-3 flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <FileText className="size-3.5" /> Live preview
@@ -839,12 +839,12 @@ function TermsPreview({
           )}
         </section>
 
-        <section className="paper-block mt-5 border-t border-border pt-4">
+        <section className="paper-block mt-4 border-t border-border pt-4">
           <h4 className="text-sm font-semibold">Acknowledgement</h4>
           <p className="mt-1 text-sm text-muted-foreground">
             By accepting these terms, the client confirms they have read and agreed to the above.
           </p>
-          <div className="mt-6 grid gap-6 text-xs text-muted-foreground sm:grid-cols-2">
+          <div className="mt-6 grid gap-4 text-xs text-muted-foreground sm:grid-cols-2">
             <p className="border-t border-dashed border-border pt-1.5">Client signature &amp; date</p>
             <p className="border-t border-dashed border-border pt-1.5">For {studio ?? 'the studio'}</p>
           </div>

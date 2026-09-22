@@ -229,7 +229,7 @@ function Tile({ icon: Icon, label, value, to }: { icon: typeof CheckCircle2; lab
             <Icon className="size-5" aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-2xl font-semibold tabular-nums leading-tight">{value}</p>
+            <p className="truncate text-xl font-semibold tabular-nums leading-tight">{value}</p>
             <p className="truncate text-sm text-muted-foreground">{label}</p>
           </div>
         </CardContent>

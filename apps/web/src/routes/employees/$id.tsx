@@ -114,7 +114,7 @@ function EmployeeDetail() {
   }
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/employees' })}>
           <ArrowLeft className="mr-1 size-4" /> Back
@@ -144,7 +144,7 @@ function EmployeeDetail() {
       </div>
 
       <Card>
-        <CardContent className="p-5 sm:p-6">
+        <CardContent className="p-4 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">{member.name}</h2>
@@ -162,7 +162,7 @@ function EmployeeDetail() {
               Joined {member.created_at.slice(0, 10)}
             </div>
           </div>
-          <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
             <Row label="Email" value={member.email ?? '—'} />
             <Row label="Phone" value={member.phone ?? '—'} />
             <Row label="Alternate phone" value={member.alternate_phone ?? '—'} />
@@ -185,7 +185,7 @@ function EmployeeDetail() {
       </Card>
 
       <Card>
-        <CardContent className="p-5 sm:p-6">
+        <CardContent className="p-4 sm:p-4">
           <h3 className="mb-3 font-medium">Role assignments</h3>
           {roleNames.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
@@ -208,7 +208,7 @@ function EmployeeDetail() {
       </Card>
 
       <Card>
-        <CardContent className="p-5 sm:p-6">
+        <CardContent className="p-4 sm:p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-medium">Salary summary</h3>
             {canManage && (

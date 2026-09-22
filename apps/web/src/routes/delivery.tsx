@@ -93,7 +93,7 @@ export function DeliveryPage() {
         </div>
 
         <Card>
-          <CardContent className="p-5 sm:p-6">
+          <CardContent className="p-4 sm:p-4">
             {error ? (
               <p className="text-sm text-destructive">{error}</p>
             ) : !delivery ? (

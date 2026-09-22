@@ -21,7 +21,7 @@ function GstAnalysisContent() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <PageHeader title="GST Analysis" description="GST liability and input tax credit analysis" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
@@ -33,7 +33,7 @@ function GstAnalysisContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="GST Analysis"
         description="GST liability and input tax credit analysis"
@@ -97,7 +97,7 @@ function GstAnalysisContent() {
             <StatCard label="Reverse Charge" value={`₹${data.reverse_charge.toLocaleString()}`} icon={FileText} />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {/* By GST Rate */}
             <Card>
               <CardHeader>

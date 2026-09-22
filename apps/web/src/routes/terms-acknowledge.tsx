@@ -112,7 +112,7 @@ export function TermsAcknowledgePage() {
 
       {loadError ? (
         <Card>
-          <CardContent className="p-6 text-center text-sm text-muted-foreground">{loadError}</CardContent>
+          <CardContent className="p-4 text-center text-sm text-muted-foreground">{loadError}</CardContent>
         </Card>
       ) : done ? (
         <Card>
@@ -126,7 +126,7 @@ export function TermsAcknowledgePage() {
           </CardContent>
         </Card>
       ) : doc === null ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-6" role="status" aria-label="Loading your terms">
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4" role="status" aria-label="Loading your terms">
           {Array.from({ length: 8 }, (_, i) => (
             <Skeleton key={i} className={i % 3 === 2 ? 'h-3 w-3/4' : 'h-3 w-full'} />
           ))}
@@ -156,7 +156,7 @@ export function TermsAcknowledgePage() {
             </Button>
           </div>
           <Card className="no-print">
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               <form onSubmit={onAgree} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <Label>Your full name</Label>

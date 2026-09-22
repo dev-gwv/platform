@@ -62,7 +62,7 @@ export function VerifyEmailPage() {
           </h1>
         </div>
         <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
+          <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
             {failed ? (
               <>
                 <XCircle className="size-8 text-destructive" />

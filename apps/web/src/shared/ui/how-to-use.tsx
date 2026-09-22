@@ -20,7 +20,7 @@ export function HowToUse({
   className?: string
 }) {
   return (
-    <div className={cn('rounded-lg border border-primary/15 bg-primary/[0.04] p-4 sm:p-5', className)}>
+    <div className={cn('rounded-lg border border-primary/15 bg-primary/[0.04] p-4 sm:p-4', className)}>
       <div className="flex gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Lightbulb className="size-5" />

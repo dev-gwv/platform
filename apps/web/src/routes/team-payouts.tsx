@@ -99,7 +99,7 @@ function TeamPayoutsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Team Payouts"
         description="Manage team settlements and payments"
@@ -461,7 +461,7 @@ function ShootPayoutsTracker() {
           Nothing matches these filters.
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {[...byMember.entries()].map(([userId, memberSlots]) => {
             const memberTotal = memberSlots.reduce((n, s) => n + (s.final_cost ?? s.estimated_cost ?? 0), 0)
             const memberPaid = memberSlots.reduce((n, s) => n + (paidBySlot.get(s.id)?.paid_total ?? 0), 0)

@@ -242,7 +242,7 @@ function Appearance() {
       )}
 
       <Card className="mt-6">
-        <CardContent className="p-5 sm:p-6">
+        <CardContent className="p-4 sm:p-4">
           <Switch
             checked={isCustomOn}
             onChange={toggleCustomTheme}
@@ -357,7 +357,7 @@ function ThemeCard({
           applied && 'border-primary ring-1 ring-primary/30',
         )}
       >
-      <CardContent className="flex flex-1 flex-col p-5">
+      <CardContent className="flex flex-1 flex-col p-4">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold tracking-tight">{preset.label}</h3>
           {applied && (
@@ -471,9 +471,9 @@ function CustomizePanel({
   }
 
   return (
-    <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
       <Card>
-        <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
+        <CardContent className="flex flex-col gap-4 p-4 sm:p-4">
           <div>
             <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight">
               <Palette className="h-4 w-4" /> Colours
@@ -670,7 +670,7 @@ function FontDialog({
           })}
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-4 flex justify-end gap-2">
           <DialogClose asChild>
             <Button type="button" variant="outline">
               Cancel

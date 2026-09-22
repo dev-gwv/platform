@@ -62,21 +62,21 @@ export function ForecastTab() {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">By stage</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Weighted value, with the full value in grey.</p>
                 <Bars rows={data.by_stage.map((s) => ({ label: `${s.name} (${s.count})`, value: s.weighted, total: s.total_value }))} />
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">By owner</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Who is carrying the forecast.</p>
                 <Bars rows={data.by_owner.map((o) => ({ label: `${o.name} (${o.count})`, value: o.weighted, total: o.total_value }))} />
               </CardContent>
             </Card>
             <Card className="md:col-span-2">
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <p className="font-medium">By expected close month</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Deals without a close date fall in the month they arrived.</p>
                 <Bars rows={data.by_month.map((m) => ({ label: `${monthLabel(m.month)} (${m.count})`, value: m.weighted, total: m.total_value }))} />

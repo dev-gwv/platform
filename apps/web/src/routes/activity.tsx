@@ -63,14 +63,14 @@ function ActivityContent() {
   const items = q.data?.pages.flatMap((p) => p.items) ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Activity Log"
         description="See who did what, when — a lightweight trail of actions across the studio."
       />
 
       <Card>
-        <CardContent className="p-5 sm:p-6">
+        <CardContent className="p-4 sm:p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold tracking-tight">Recent Activity</h3>

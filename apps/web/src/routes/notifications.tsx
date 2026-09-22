@@ -271,7 +271,7 @@ function GeneratorCentre() {
 
   return (
     <Card className="mt-4">
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <h3 className="flex items-center gap-2 font-semibold tracking-tight">
           <Zap className="size-4" /> Generate notifications
         </h3>

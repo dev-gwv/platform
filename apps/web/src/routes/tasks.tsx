@@ -949,7 +949,7 @@ function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
         description="A checklist you raise again every time the same job comes round."
         className="max-h-[85vh] max-w-2xl overflow-y-auto"
       >
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           <div>
             <p className="mb-2 text-sm font-medium">Your bundles</p>
             {isLoading ? (

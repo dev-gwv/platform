@@ -134,13 +134,13 @@ function AttendanceLocation() {
       />
       {!isOwner ? (
         <Card className="mt-4">
-          <CardContent className="p-6 text-sm text-muted-foreground">
+          <CardContent className="p-4 text-sm text-muted-foreground">
             Only the studio owner can manage the attendance location.
           </CardContent>
         </Card>
       ) : (
         <Card className="mt-4 max-w-xl">
-          <CardContent className="p-5 sm:p-6">
+          <CardContent className="p-4 sm:p-4">
             {!fence.data && !fence.isLoading && (
               <p className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
                 Employees cannot check in until attendance location is configured.

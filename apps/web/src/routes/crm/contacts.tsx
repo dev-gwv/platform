@@ -206,7 +206,7 @@ function ContactDrawer({ contact, onClose }: { contact: CrmContact; onClose: () 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={contact.name ?? contact.phone ?? 'Contact'} description={`${LIFECYCLE_LABEL[contact.lifecycle]} · added ${dayFormat.format(new Date(contact.created_at))}`} className="max-w-xl">
-        <div className="flex max-h-[75vh] flex-col gap-5 overflow-y-auto pr-1">
+        <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap gap-2">
             {contact.phone && (
               <Button variant="outline" size="sm" asChild>

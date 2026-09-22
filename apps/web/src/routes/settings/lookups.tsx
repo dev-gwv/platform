@@ -146,7 +146,7 @@ function Lookups() {
         <ErrorState onRetry={() => void q.refetch()} />
       ) : rows.length === 0 ? (
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <EmptyState title="No values yet" description="Seed the defaults or add your first value." />
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>

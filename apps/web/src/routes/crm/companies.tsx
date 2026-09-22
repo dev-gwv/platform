@@ -167,7 +167,7 @@ function CompanyDrawer({ company, onClose }: { company: CrmCompany; onClose: () 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={company.name} description={`${company.contact_count} contact${company.contact_count === 1 ? '' : 's'} · ${formatINR(company.open_value)} open`} className="max-w-xl">
-        <div className="flex max-h-[75vh] flex-col gap-5 overflow-y-auto pr-1">
+        <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap gap-2">
             {company.phone && (
               <Button variant="outline" size="sm" asChild>

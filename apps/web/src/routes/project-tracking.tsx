@@ -310,7 +310,7 @@ function ProjectRow({ project: p }: { project: TrackedProject }) {
         {/* The same five figures the health breakdown spells out below, kept on
             the row so a studio can scan twenty projects for the one that is
             short a copy or a review without expanding each of them. */}
-        <div className="hidden shrink-0 gap-5 lg:flex">
+        <div className="hidden shrink-0 gap-4 lg:flex">
           <Figure label="Tasks" value={`${p.tasks_done}/${p.tasks_total}`} />
           <Figure label="Deliverables" value={`${p.deliverables_done}/${p.deliverables_total}`} />
           <Figure

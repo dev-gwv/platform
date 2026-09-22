@@ -214,7 +214,7 @@ function Subscription() {
                     <Sparkles className="size-4 text-primary" />
                     {p.name}
                   </CardTitle>
-                  <p className="text-2xl font-semibold">
+                  <p className="text-xl font-semibold">
                     {formatINR(p.price)}
                     <span className="text-sm font-normal text-muted-foreground">
                       {' '}

@@ -189,7 +189,7 @@ function CadenceForm() {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
+      <CardContent className="flex flex-col gap-3 p-4 sm:p-4">
         <p className="font-medium">New cadence</p>
         <div className="flex flex-col gap-1">
           <Label htmlFor="cad-name">Name</Label>

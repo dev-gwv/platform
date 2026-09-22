@@ -75,7 +75,7 @@ export function CrmSettingsTab({ leads, archived }: { leads: readonly CrmLead[];
       <SlaCard />
       <MyViewCard />
       <Card>
-        <CardContent className="flex flex-col gap-3 p-5">
+        <CardContent className="flex flex-col gap-3 p-4">
           <p className="flex items-center gap-2 font-medium">
             <Archive className="size-4 text-muted-foreground" /> Archive lost leads
           </p>
@@ -91,7 +91,7 @@ export function CrmSettingsTab({ leads, archived }: { leads: readonly CrmLead[];
         </CardContent>
       </Card>
       <Card>
-        <CardContent className="flex flex-col gap-3 p-5">
+        <CardContent className="flex flex-col gap-3 p-4">
           <p className="flex items-center gap-2 font-medium">
             <Megaphone className="size-4 text-muted-foreground" /> Where leads come from
           </p>
@@ -120,7 +120,7 @@ function MyViewCard() {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <Columns3 className="size-4 text-muted-foreground" /> My inbox view
         </p>
@@ -225,7 +225,7 @@ function PipelinesCard() {
 
   return (
     <Card className="md:col-span-2">
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <KanbanSquare className="size-4 text-muted-foreground" /> Pipelines &amp; stages
         </p>
@@ -428,7 +428,7 @@ function LostReasonsCard() {
   const [label, setLabel] = useState('')
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <XCircle className="size-4 text-muted-foreground" /> Lost reasons
         </p>
@@ -485,7 +485,7 @@ function IntegrationsCard() {
   const sync = useEmailSync()
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <Plug className="size-4 text-muted-foreground" /> Integrations
         </p>
@@ -573,7 +573,7 @@ function ScoringCard() {
 
   return (
     <Card className="md:col-span-2">
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <Gauge className="size-4 text-muted-foreground" /> Lead scoring
         </p>
@@ -701,7 +701,7 @@ function SlaCard() {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 font-medium">
           <Timer className="size-4 text-muted-foreground" /> First-contact SLA
         </p>

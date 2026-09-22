@@ -78,7 +78,7 @@ function ShootDetail() {
       </div>
 
       <Card>
-        <CardContent className="p-5">
+        <CardContent className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-xl font-semibold">
@@ -116,7 +116,7 @@ function ShootDetail() {
       </Card>
 
       <Card>
-        <CardContent className="p-5">
+        <CardContent className="p-4">
           <h3 className="mb-3 font-medium">Booked crew ({crew.length})</h3>
           {crew.length === 0 ? (
             <p className="text-sm text-muted-foreground">

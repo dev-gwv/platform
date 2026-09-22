@@ -331,7 +331,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <Card>
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
       </CardContent>
     </Card>
   )

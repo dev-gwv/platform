@@ -42,7 +42,7 @@ function GopoContent() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <PageHeader title="GOPO Dashboard" description="Cash flow health analysis" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
@@ -57,7 +57,7 @@ function GopoContent() {
   // query failed -- no header, no message, nothing to retry.
   if (isError || !data) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <PageHeader title="GOPO Dashboard" description="Cash flow health analysis" />
         <Card>
           <CardContent className="py-2">
@@ -97,7 +97,7 @@ function GopoContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="GOPO Dashboard"
         description="Cash flow health analysis"
@@ -135,7 +135,7 @@ function GopoContent() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="relative h-24 w-24 shrink-0">
               <svg className="h-24 w-24 -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted" />
@@ -157,7 +157,7 @@ function GopoContent() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold">{score_card.health_score}</span>
+                <span className="text-xl font-bold">{score_card.health_score}</span>
               </div>
             </div>
             <div className="grid flex-1 grid-cols-2 gap-4">
@@ -231,7 +231,7 @@ function GopoContent() {
             <StatCard label="Salary expenses" value={`₹${salaryCost.toLocaleString()}`} icon={Users} />
           ) : (
             <Card>
-              <CardContent className="p-5 text-sm text-muted-foreground">
+              <CardContent className="p-4 text-sm text-muted-foreground">
                 Salaries excluded. Turn on Include salaries to include them.
               </CardContent>
             </Card>
@@ -253,7 +253,7 @@ function GopoContent() {
         <StatCard label="Team Cost" value={`₹${score_card.total_direct_team_cost.toLocaleString()}`} icon={DollarSign} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Expense Breakdown */}
         <Card>
           <CardHeader>
@@ -330,7 +330,7 @@ function GopoContent() {
       </div>
 
       {/* Top / Bottom projects (Lovable parity) */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Top Projects (by profit)</CardTitle></CardHeader>
           <CardContent>

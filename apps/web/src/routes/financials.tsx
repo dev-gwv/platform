@@ -128,7 +128,7 @@ function Financials() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <h2 className="font-semibold tracking-tight">Recent activity</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">Latest payments in range.</p>
                 {recent.length === 0 ? (
@@ -148,7 +148,7 @@ function Financials() {
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <h2 className="flex items-center gap-2 font-semibold tracking-tight">
                   <AlertTriangle className="size-4 text-muted-foreground" /> Attention items
                   {typeof o.attention_count === 'number' && (
@@ -230,7 +230,7 @@ function ProjectTable({
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardContent className="p-5">
+          <CardContent className="p-4">
             <h2 className="font-semibold tracking-tight">Profit by project</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               The eight best earners. Hover a bar for the figure.
@@ -239,7 +239,7 @@ function ProjectTable({
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-5">
+          <CardContent className="p-4">
             <h2 className="font-semibold tracking-tight">Where the revenue goes</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Profit against what it cost to earn it.

@@ -19,12 +19,12 @@ export function ImportsTab() {
   const access = useAccess()
   const canCreate = access.hasAction('crm', 'create')
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {canCreate ? (
         <CsvImport />
       ) : (
         <Card>
-          <CardContent className="p-5 text-sm text-muted-foreground">Importing needs the ability to create leads.</CardContent>
+          <CardContent className="p-4 text-sm text-muted-foreground">Importing needs the ability to create leads.</CardContent>
         </Card>
       )}
       <CadencesSection />
@@ -72,7 +72,7 @@ function CsvImport() {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-5">
+      <CardContent className="flex flex-col gap-3 p-4">
         <div>
           <p className="font-medium">Import leads from a spreadsheet</p>
           <p className="mt-0.5 text-sm text-muted-foreground">

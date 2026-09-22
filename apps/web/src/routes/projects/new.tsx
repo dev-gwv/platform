@@ -502,10 +502,10 @@ function CreatedDialog({
 function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
     <Card>
-      <CardContent className="p-5 sm:p-6">
+      <CardContent className="p-4 sm:p-4">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
-        <div className="mt-5">{children}</div>
+        <div className="mt-4">{children}</div>
       </CardContent>
     </Card>
   )
@@ -528,7 +528,7 @@ function RowList({
   return (
     <div className="flex flex-col gap-3">
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
           {empty}
         </p>
       ) : (
@@ -581,7 +581,7 @@ function ClientStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
   )
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <Field label="Project name" required>
         <Input
           value={draft.name}
@@ -1786,7 +1786,7 @@ function DeliverablesStep({
   })).filter((i) => i.title)
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {/* ── what the client is promised ── */}
       <SubCard
         icon={Package}
@@ -2189,7 +2189,7 @@ function BillingStep({
     patch({ payments: draft.payments.map((x, idx) => (idx === i ? { ...x, ...p } : x)) })
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Package cost (₹)" hint="The headline price, before any chargeable extras.">
           <Input

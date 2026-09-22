@@ -179,7 +179,7 @@ function PersonalExpensesContent({ report }: { report?: boolean | undefined }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Personal Expenses"
         description="Track your personal expenses"
@@ -304,7 +304,7 @@ function PersonalExpensesContent({ report }: { report?: boolean | undefined }) {
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : isError ? (
-        <div className="rounded-lg border border-border bg-card p-6 text-center">
+        <div className="rounded-lg border border-border bg-card p-4 text-center">
           <p className="text-sm text-destructive">Could not load expenses.</p>
           <Button variant="outline" size="sm" className="mt-2" onClick={() => void refetch()}>Retry</Button>
         </div>

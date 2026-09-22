@@ -102,7 +102,7 @@ export function TermsDocumentSheet({
       )}
 
       <Card>
-        <CardContent className={`whitespace-pre-wrap p-6 text-sm leading-relaxed ${bodyClassName}`}>
+        <CardContent className={`whitespace-pre-wrap p-4 text-sm leading-relaxed ${bodyClassName}`}>
           {doc.body}
         </CardContent>
       </Card>

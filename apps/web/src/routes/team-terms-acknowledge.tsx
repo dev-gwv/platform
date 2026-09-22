@@ -101,7 +101,7 @@ export function TeamTermsAcknowledgePage() {
         </div>
 
         <Card>
-          <CardContent className="p-5 sm:p-6">
+          <CardContent className="p-4 sm:p-4">
             {loadError ? (
               <p className="text-sm text-destructive">{loadError}</p>
             ) : !terms ? (

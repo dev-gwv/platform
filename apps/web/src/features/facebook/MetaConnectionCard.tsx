@@ -57,7 +57,7 @@ export function MetaConnectionCard() {
 
   return (
     <Card>
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <div className="flex flex-wrap items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Facebook className="size-5" />
@@ -158,7 +158,7 @@ export function MetaConnectionCard() {
           </div>
         )}
 
-        <div className="mt-5">
+        <div className="mt-4">
           <h4 className="text-sm font-medium">Pages</h4>
           {pages.isLoading ? (
             <div className="mt-2">

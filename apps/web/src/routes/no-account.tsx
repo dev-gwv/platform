@@ -24,7 +24,7 @@ export function NoAccountPage() {
       <CameraBackdrop />
       <div className="relative w-full max-w-sm">
         <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
+          <CardContent className="flex flex-col items-center gap-3 p-4 text-center">
             <span className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <UserX className="size-6" />
             </span>

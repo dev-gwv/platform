@@ -148,7 +148,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
         description={`${lead.source} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
         className="max-w-xl"
       >
-        <div className="flex max-h-[75vh] flex-col gap-5 overflow-y-auto pr-1">
+        <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={lead.is_hot ? 'danger' : 'neutral'}>{lead.is_hot ? 'Hot lead' : 'Normal'}</StatusBadge>
             <ScoreBadge score={lead.score} hotScore={settings?.hot_score ?? 60} />
