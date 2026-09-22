@@ -99,9 +99,10 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost" title="Edit">
+        <Button size="sm" variant="ghost" title={`Edit ${member.name}`}>
           <Pencil />
-          <span className="sr-only">Edit {member.name}</span>
+          Edit
+          <span className="sr-only"> {member.name}</span>
         </Button>
       </DialogTrigger>
       <DialogContent title={`Edit ${member.name}`} description="Anything set when they joined can be corrected here.">

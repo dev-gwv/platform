@@ -236,6 +236,31 @@ export function useAddMember() {
   )
 }
 
+/**
+ * The calls bulk add makes, without the per-call toast the single-member hooks
+ * raise. Forty "X added to the team" toasts stacked over the table would bury
+ * the one message that matters, so a batch reports once, at the end, and asks
+ * for the team lists to refresh once rather than after every row.
+ */
+export function useBulkTeamCalls() {
+  const qc = useQueryClient()
+  return {
+    addMember: (input: AddMemberRequest) =>
+      callApi('/team/members', {
+        method: 'POST',
+        body: addMemberRequest.parse(input),
+        responseSchema: addMemberResponse,
+      }),
+    createRole: (input: UpsertEmployeeRoleRequest) =>
+      callApi('/team/roles', {
+        method: 'POST',
+        body: upsertEmployeeRoleRequest.parse(input),
+        responseSchema: employeeRole,
+      }),
+    refresh: () => qc.invalidateQueries({ queryKey: ['team'] }),
+  }
+}
+
 export function useUpdateMember() {
   return useTeamMutation(
     ({ userId, patch }: { userId: string; patch: UpdateMemberRequest }) =>

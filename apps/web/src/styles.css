@@ -353,14 +353,41 @@ body {
   backdrop-filter: blur(4px);
 }
 
-/* Row actions are clutter on every row at once and invisible on none. They
-   appear on hover, and for anyone tabbing through, on focus.
+/* A table's actions column, pinned to the right edge of its scroll box.
+
+   A wide table scrolls sideways, and the actions column is always the last
+   one — so on an ordinary laptop screen the team directory's Edit and Delete
+   sat past the right edge, reachable only by scrolling a table nobody had a
+   reason to think was wider than the screen. Pinned, they are on screen on
+   every row whatever the width; the data columns scroll beneath them. */
+.col-pinned-end {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background-color: var(--color-card);
+  box-shadow: -1px 0 0 var(--color-border);
+}
+/* The header cell is pinned both ways, so it has to sit above both the
+   scrolling header and the pinned body cells. */
+.table-sticky thead th.col-pinned-end {
+  z-index: 2;
+}
+
+/* Row actions sit quietly on every row and come up to full strength on the
+   row you are pointing at, or tabbing through.
+
+   They used to be fully invisible until hovered. That kept the table calm,
+   but it also meant a studio owner looking for "edit" or "delete" on their
+   team list found nothing there and concluded the feature did not exist —
+   an action nobody can find is an action that does not exist. Muted keeps
+   most of the calm and none of the hiding.
+
    `pointer: fine` as well as `hover: hover`: a 2-in-1 in tablet mode reports
    hover capability from its detached mouse but never delivers a hover event,
-   which would leave the actions permanently invisible yet still tappable. */
+   so on anything else the actions simply stay at full strength. */
 @media (hover: hover) and (pointer: fine) {
   .row-actions {
-    opacity: 0;
+    opacity: 0.6;
     transition: opacity 120ms ease;
   }
   tr:hover .row-actions,

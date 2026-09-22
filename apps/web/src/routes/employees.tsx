@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Download, Plus, ShieldCheck, Users } from 'lucide-react'
 import type { DirectoryMember } from '@ipc/contracts'
@@ -18,6 +18,8 @@ import { downloadCsv } from '@/shared/ui/csv'
 import { Select } from '@/shared/ui/input'
 import { useDeleteMember, useDirectoryPaged, useEmployeeRoles, useUpdateMember } from '@/features/team/api'
 import { AddMemberWizard } from '@/features/team/AddMemberWizard'
+import { AddTeamChooser, type AddMode } from '@/features/team/AddTeamChooser'
+import { BulkAddMembers } from '@/features/team/BulkAddMembers'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
@@ -43,9 +45,47 @@ export function EmployeesPage() {
 
 type Section = 'directory' | 'salaries'
 
+/** `?add=choose|single|bulk` opens straight into adding — how the setup journey links here. */
+function addModeFromUrl(): AddMode | null {
+  const v = new URLSearchParams(window.location.search).get('add')
+  return v === 'choose' || v === 'single' || v === 'bulk' ? v : null
+}
+
 function TeamPage() {
+  const navigate = useNavigate()
+  const { session } = useAuth()
+  const isOwner = !!session?.is_owner
   const [section, setSection] = useState<Section>('directory')
-  const [adding, setAdding] = useState(false)
+  // Adding is owner-only on the server, so only an owner is ever put into it —
+  // a manager following an old link lands on the directory, not on a form
+  // that would refuse them at the last step.
+  const [adding, setAddingState] = useState<AddMode | null>(() => (isOwner ? addModeFromUrl() : null))
+
+  const setAdding = (mode: AddMode | null) => {
+    setAddingState(mode)
+    // Leaving the add flow drops `?add=` too, so a refresh shows the list
+    // rather than dropping the owner back into a form they already finished.
+    if (mode === null && window.location.search.includes('add=')) {
+      void navigate({ to: '/employees', replace: true })
+    }
+  }
+
+  // Adding someone is its own screen, with nothing else on it: no section
+  // tabs, no filters, no list. The owner came to add people; everything else
+  // is one Cancel away.
+  if (adding) {
+    return (
+      <div className="pt-2">
+        {adding === 'choose' ? (
+          <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} />
+        ) : adding === 'bulk' ? (
+          <BulkAddMembers onDone={() => setAdding(null)} onCancel={() => setAdding('choose')} />
+        ) : (
+          <AddMemberWizard onDone={() => setAdding(null)} onCancel={() => setAdding('choose')} />
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -60,21 +100,10 @@ function TeamPage() {
           { value: 'salaries', label: 'Salaries' },
         ]}
         value={section}
-        onChange={(v) => {
-          setSection(v)
-          setAdding(false)
-        }}
+        onChange={setSection}
       />
 
-      {adding ? (
-        <div className="mt-6">
-          <AddMemberWizard onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />
-        </div>
-      ) : section === 'salaries' ? (
-        <SalariesTab />
-      ) : (
-        <Directory onAdd={() => setAdding(true)} />
-      )}
+      {section === 'salaries' ? <SalariesTab /> : <Directory onAdd={() => setAdding('choose')} />}
     </>
   )
 }
@@ -106,8 +135,6 @@ function Directory({ onAdd }: { onAdd: () => void }) {
     status: filters.status || undefined,
     engagement_type: tab === 'freelance' ? 'freelancer' : filters.type || undefined,
     role: filters.role || undefined,
-    min_salary: filters.minSalary || undefined,
-    max_salary: filters.maxSalary || undefined,
   })
   const updateMember = useUpdateMember()
   const deleteMember = useDeleteMember()
@@ -190,18 +217,27 @@ function Directory({ onAdd }: { onAdd: () => void }) {
     }
   }
 
+  // The how-to panel is for a studio that has nobody yet. Once real people are
+  // on the list it is a block of instructions sitting between the owner and
+  // the list they came to manage. The owner's own row always exists, so a
+  // total of one with no filters narrowing it means "nobody added yet".
+  const teamIsEmpty =
+    paged.isSuccess && total <= 1 && !hasActiveFilters(filters) && tab === 'all'
+
   return (
     <>
-      <HowToUse
-        className="mt-6"
-        title="Manage your team"
-        description="Add photographers, editors, managers, and other team members here."
-        steps={[
-          'Create team roles first.',
-          'Add team members with login access.',
-          'Assign them to shoots and tasks.',
-        ]}
-      />
+      {teamIsEmpty && (
+        <HowToUse
+          className="mt-6"
+          title="Manage your team"
+          description="Add photographers, editors, managers, and other team members here."
+          steps={[
+            'Create team roles first.',
+            'Add team members with login access.',
+            'Assign them to shoots and tasks.',
+          ]}
+        />
+      )}
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold tracking-tight">Team Directory</h2>

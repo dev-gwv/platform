@@ -31,7 +31,12 @@ export interface JourneyStepDef {
   key: JourneyStepKey
   title: string
   description: string
-  action: { label: string; to: string }
+  /**
+   * Where the step's button goes. `search` lets a step open a page already
+   * doing the thing it asks for — "set up your team" lands on "how do you
+   * want to add them?", not on a list of nobody with filters above it.
+   */
+  action: { label: string; to: string; search?: Record<string, string> }
   /** Step is hidden from anyone whose access does not include this module. */
   module: ModuleKey
   isDone: (s: StudioSignals) => boolean
@@ -56,7 +61,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     title: 'Set up your team',
     description:
       'Add your photographers, editors, managers, and team members. Then prepare their access and roles.',
-    action: { label: 'Team Directory', to: '/employees' },
+    action: { label: 'Add your team', to: '/employees', search: { add: 'choose' } },
     module: 'team_directory',
     isDone: (s) => s.teammates > 0,
   },

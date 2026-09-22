@@ -9,6 +9,7 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Avatar } from '@/shared/ui/avatar'
+import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useRemoveMember, useSendReset, useUpdateMember } from './api'
 import { EditMemberDialog } from './EditMemberDialog'
 import type { DirectoryFilters, SortKey } from './filters'
@@ -30,9 +31,13 @@ const engagementLabel = (v: string | null): string =>
   v === 'freelancer' ? 'Freelancer' : v === 'in_house' ? 'In-house' : '—'
 
 /**
- * The filter bar. Every control narrows the same list client-side: the whole
- * directory is one request and a studio's team is tens of people, so filtering
- * on the server would only add latency to a keystroke.
+ * The filter bar: one row, the questions people actually ask of a team list —
+ * who, which kind, which status, which role.
+ *
+ * A salary range used to sit here too. It was the first thing a new owner met
+ * after clicking "Set up your team", and it pulled them into filtering a list
+ * that had nobody in it yet instead of adding the people it was for. Salary
+ * questions belong on the Salaries tab, which is built around them.
  */
 export function DirectoryFiltersBar({
   filters,
@@ -47,8 +52,8 @@ export function DirectoryFiltersBar({
     onChange({ ...filters, [key]: value })
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div className="relative lg:col-span-2">
+    <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="relative sm:col-span-2">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.q}
@@ -89,21 +94,6 @@ export function DirectoryFiltersBar({
           </optgroup>
         )}
       </Select>
-
-      <Input
-        inputMode="numeric"
-        value={filters.minSalary}
-        onChange={(e) => set('minSalary', e.target.value)}
-        placeholder="Min salary"
-        aria-label="Minimum salary"
-      />
-      <Input
-        inputMode="numeric"
-        value={filters.maxSalary}
-        onChange={(e) => set('maxSalary', e.target.value)}
-        placeholder="Max salary"
-        aria-label="Maximum salary"
-      />
 
       <Select
         value={filters.sort}
@@ -231,7 +221,7 @@ export function DirectoryTable({
             {showSalary && <th className="px-4 py-2 text-right font-medium">Salary</th>}
             <th className="px-4 py-2 font-medium">Joined</th>
             {canManage && (
-              <th className="px-4 py-2 font-medium">
+              <th className="col-pinned-end px-4 py-2 font-medium">
                 <span className="sr-only">Actions</span>
               </th>
             )}
@@ -299,7 +289,7 @@ export function DirectoryTable({
               )}
               <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">{m.created_at.slice(0, 10)}</td>
               {canManage && (
-                <td className="px-4 py-2">
+                <td className="col-pinned-end px-2 py-2">
                   <RowActions member={m} onDelete={onDelete} onManageAccess={onManageAccess} />
                 </td>
               )}
@@ -350,54 +340,51 @@ function RowActions({
     if (yes) remove.mutate(member.user_id)
   }
 
-  if (isOwnerRow) return <span className="text-xs text-muted-foreground">Owner</span>
+  if (isOwnerRow) return <span className="px-2 text-xs text-muted-foreground">Owner</span>
+
+  // Edit and Delete are what people look for on a team list, so they are the
+  // two named buttons. The rest are real but occasional, and live in the menu.
+  const more: RowMenuItem[] = [
+    ...(onManageAccess && member.login_enabled
+      ? [{ label: 'Manage access', icon: <ShieldCheck />, onSelect: () => onManageAccess(member) }]
+      : []),
+    ...(member.login_enabled && member.email
+      ? [
+          {
+            label: 'Send password reset',
+            icon: <KeyRound />,
+            disabled: reset.isPending,
+            onSelect: () =>
+              reset.mutate(member.user_id, {
+                onSuccess: () => toast.success(`Reset link sent to ${member.name}.`),
+              }),
+          },
+        ]
+      : []),
+    {
+      label: active ? 'Deactivate' : 'Activate',
+      icon: active ? <UserX /> : <UserCheck />,
+      disabled: update.isPending,
+      onSelect: () =>
+        update.mutate({ userId: member.user_id, patch: { status: active ? 'inactive' : 'active' } }),
+    },
+  ]
 
   return (
-    <div className="row-actions flex items-center justify-end gap-1">
+    <div className="row-actions flex items-center justify-end gap-0.5">
       <EditMemberDialog member={member} />
-      {onManageAccess && member.login_enabled && (
-        <Button size="sm" variant="ghost" title="Manage access" onClick={() => onManageAccess(member)}>
-          <ShieldCheck />
-          <span className="sr-only">Manage access</span>
-        </Button>
-      )}
-      {member.login_enabled && member.email && (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={reset.isPending}
-          title="Email them a password reset link"
-          onClick={() =>
-            reset.mutate(member.user_id, {
-              onSuccess: () => toast.success(`Reset link sent to ${member.name}.`),
-            })
-          }
-        >
-          <KeyRound />
-          <span className="sr-only sm:not-sr-only">Reset</span>
-        </Button>
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={update.isPending}
-        title={active ? 'Deactivate' : 'Activate'}
-        onClick={() =>
-          update.mutate({ userId: member.user_id, patch: { status: active ? 'inactive' : 'active' } })
-        }
-      >
-        {active ? <UserX /> : <UserCheck />}
-        <span className="sr-only">{active ? 'Deactivate' : 'Activate'}</span>
-      </Button>
+      <RowMenu items={more} label={`More actions for ${member.name}`} />
       <Button
         size="sm"
         variant="ghost"
         disabled={remove.isPending}
-        title="Remove from the team"
+        title={`Delete ${member.name} from the team`}
+        className="text-destructive hover:text-destructive"
         onClick={() => void onRemove()}
       >
         <Trash2 />
-        <span className="sr-only">Remove</span>
+        Delete
+        <span className="sr-only"> {member.name}</span>
       </Button>
     </div>
   )

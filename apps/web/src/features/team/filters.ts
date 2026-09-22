@@ -21,8 +21,6 @@ export interface DirectoryFilters {
    * `job:<uuid>` is a studio's own job role. Empty means every role.
    */
   role: string
-  minSalary: string
-  maxSalary: string
   sort: SortKey
 }
 
@@ -31,13 +29,11 @@ export const EMPTY_FILTERS: DirectoryFilters = {
   type: '',
   status: '',
   role: '',
-  minSalary: '',
-  maxSalary: '',
   sort: 'newest',
 }
 
 export const hasActiveFilters = (f: DirectoryFilters): boolean =>
-  Boolean(f.q || f.type || f.status || f.role || f.minSalary || f.maxSalary)
+  Boolean(f.q || f.type || f.status || f.role)
 
 // num(), matchesQuery(), matchesRole() and matchesSalary() lived here. They
 // narrowed a page the server had already chosen, so the pager under the list
