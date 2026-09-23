@@ -159,7 +159,8 @@ export const projectsRouter = new Hono<AppEnv>()
             -- against any particular shoot.
             select count(*) as total,
                    count(*) filter (
-                     where primary_status <> 'verified' or backup_status <> 'verified'
+                     -- A backup declared not needed is not a missing backup.
+                     where primary_status <> 'verified' or backup_status not in ('verified', 'not_required')
                    ) as unverified
             from shoot_data_records where project_id = p.id and shoot_id is not null
           ) dr on true

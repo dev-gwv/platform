@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { HardDrive, Plus, Check, Pencil, Trash2, Download, Settings2, AlertTriangle } from 'lucide-react'
-import { shootListItem, type CreateDataRecordRequest, type DataRecord, type StorageLocationKind } from '@ipc/contracts'
+import { shootListItem, type CreateDataRecordRequest, type DataRecord, type DataStage, type StorageLocationKind } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -27,6 +27,7 @@ import {
   useUpdateStorageLocation,
   useDeleteStorageLocation,
 } from '@/features/data/api'
+import { STAGE_LABEL, STAGE_TONE, TRACK_LABEL, TRACK_TONE } from '@/features/data/stage'
 import { useProjects } from '@/features/projects/api'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -34,33 +35,18 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 const DATA_TYPES = ['Photos (RAW)', 'Photos (JPEG)', 'Video', 'Audio', 'Mixed']
 const shootsList = shootListItem.array()
 
-const TONE = { pending: 'neutral', copied: 'warning', verified: 'success' } as const
+// Labels and tones for a record's stage and each copy's status live with the
+// rules that derive them (features/data/stage.ts), so this page, the shoot
+// card and the database never describe the same record differently.
+const DATA_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  (['with_shooter', 'received', 'copied', 'backed_up', 'verified', 'issue', 'not_required'] as const).map((s) => [
+    s,
+    STAGE_LABEL[s],
+  ]),
+)
 
-/** Eight-stage journey a card travels, plus flags — mirrors the Lovable model. */
-const DATA_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  with_shooter: 'With shooter',
-  received: 'Received',
-  copied: 'Copied',
-  backup_done: 'Backup done',
-  ready_for_edit: 'Ready for edit',
-  handed_to_editor: 'Handed to editor',
-  archived: 'Archived',
-}
-
-const DATA_STATUS_TONE: Record<string, 'neutral' | 'warning' | 'info' | 'success'> = {
-  pending: 'neutral',
-  with_shooter: 'warning',
-  received: 'info',
-  copied: 'info',
-  backup_done: 'success',
-  ready_for_edit: 'success',
-  handed_to_editor: 'success',
-  archived: 'neutral',
-}
-
-function dataStatusLabel(s: string): string {
-  return DATA_STATUS_LABELS[s] ?? s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+function dataStatusLabel(s: DataStage): string {
+  return STAGE_LABEL[s]
 }
 
 type DmTab = 'records' | 'locations'
@@ -176,7 +162,8 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
   function markReceived(r: DataRecord) {
     updateRecord.mutate({
       id: r.id,
-      patch: { data_status: 'received', date_received: new Date().toISOString().slice(0, 10) },
+      // The stage follows from the date (0160); "received" is not set directly.
+      patch: { date_received: new Date().toISOString().slice(0, 10) },
     })
   }
 
@@ -352,7 +339,14 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
                           {r.data_label}
                         </span>
                         {r.data_type && <span className="ml-6 text-xs text-muted-foreground">{r.data_type}</span>}
-                        {r.team_member_name && <span className="ml-6 block text-xs text-muted-foreground">{r.team_member_name}{r.requirement_name ? ` · ${r.requirement_name}` : ''}</span>}
+                        {(r.user_name ?? r.team_member_name) && (
+                          <span className="ml-6 block text-xs text-muted-foreground">
+                            {r.user_name ?? r.team_member_name}
+                            {r.requirement_name ? ` · ${r.requirement_name}` : ''}
+                            {r.shoot_name ? ` · ${r.shoot_name}` : ''}
+                            {r.shoot_date ? ` · ${r.shoot_date}` : ''}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{r.project_name ?? '—'}</td>
                       <td className="px-4 py-2 text-muted-foreground">
@@ -360,31 +354,29 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex flex-col items-start gap-1">
-                          <StatusBadge tone={DATA_STATUS_TONE[r.data_status] ?? 'neutral'}>{dataStatusLabel(r.data_status)}</StatusBadge>
-                          {r.issue_found && <StatusBadge tone="danger">Issue found</StatusBadge>}
-                          {r.is_not_required && <StatusBadge tone="neutral">Not required</StatusBadge>}
+                          <StatusBadge tone={STAGE_TONE[r.data_status]}>{dataStatusLabel(r.data_status)}</StatusBadge>
                         </div>
                       </td>
                       <td className="px-4 py-2">
-                        <StatusBadge tone={TONE[r.primary_status]}>{humanize(r.primary_status)}</StatusBadge>
+                        <StatusBadge tone={TRACK_TONE[r.primary_status]}>{TRACK_LABEL[r.primary_status]}</StatusBadge>
                         {r.primary_location_name && (
                           <span className="ml-1.5 text-xs text-muted-foreground">{r.primary_location_name}</span>
                         )}
                       </td>
                       <td className="px-4 py-2">
-                        <StatusBadge tone={TONE[r.backup_status]}>{humanize(r.backup_status)}</StatusBadge>
+                        <StatusBadge tone={TRACK_TONE[r.backup_status]}>{TRACK_LABEL[r.backup_status]}</StatusBadge>
                         {r.backup_location_name && (
                           <span className="ml-1.5 text-xs text-muted-foreground">{r.backup_location_name}</span>
                         )}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <div className="flex justify-end gap-1">
-                          {r.data_status === 'pending' && !r.is_not_required && (
+                          {r.data_status === 'with_shooter' && (
                             <Button size="sm" variant="outline" disabled={updateRecord.isPending} onClick={() => markReceived(r)}>
                               Mark Received
                             </Button>
                           )}
-                          {r.backup_status !== 'verified' && (
+                          {r.backup_status !== 'verified' && r.backup_status !== 'not_required' && (
                             <Button size="sm" variant="outline" onClick={() => verify.mutate({ id: r.id, track: 'backup' })}>
                               <Check /> Backup Done
                             </Button>

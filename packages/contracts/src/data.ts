@@ -1,8 +1,21 @@
 import { z } from 'zod'
 import { uuid, isoDateTime } from './shared/primitives'
 
-export const custodyStatus = z.enum(['pending', 'copied', 'verified'])
+/**
+ * Where one copy of the footage is. The backup can also be declared not
+ * needed; either copy can be flagged as having a problem.
+ */
+export const custodyStatus = z.enum(['pending', 'copied', 'verified', 'issue', 'not_required'])
 export type CustodyStatus = z.infer<typeof custodyStatus>
+export const primaryStatus = z.enum(['pending', 'copied', 'verified', 'issue'])
+export const backupStatus = custodyStatus
+
+/**
+ * The stage a record is at, derived by the database from the two copies
+ * (0160) -- never set by a caller.
+ */
+export const dataStage = z.enum(['with_shooter', 'received', 'copied', 'backed_up', 'verified', 'issue', 'not_required'])
+export type DataStage = z.infer<typeof dataStage>
 
 export const storageLocationKind = z.enum(['drive', 'nas', 'cloud', 'other'])
 export type StorageLocationKind = z.infer<typeof storageLocationKind>
@@ -49,8 +62,8 @@ export const dataRecord = z.object({
   project_id: uuid.nullable(),
   project_name: z.string().nullable(),
   shoot_id: uuid.nullable(),
-  primary_status: custodyStatus,
-  backup_status: custodyStatus,
+  primary_status: primaryStatus.catch('pending'),
+  backup_status: backupStatus.catch('pending'),
   primary_location_id: uuid.nullable(),
   primary_location_name: z.string().nullable(),
   backup_location_id: uuid.nullable(),
@@ -66,11 +79,22 @@ export const dataRecord = z.object({
   date_received: z.string().nullable().default(null),
   received_by_name: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
-  data_status: z.string().default('pending'),
+  data_status: dataStage.catch('with_shooter'),
   issue_found: z.boolean().default(false),
   is_not_required: z.boolean().default(false),
   team_member_name: z.string().nullable().default(null),
   requirement_name: z.string().nullable().default(null),
+  /** The booking this data came off, and whose cards they were. */
+  slot_id: uuid.nullable().default(null),
+  user_id: uuid.nullable().default(null),
+  user_name: z.string().nullable().default(null),
+  /** Who copied it: a team member, or a typed name for an outside helper. */
+  copied_by_uid: uuid.nullable().default(null),
+  copied_by_name: z.string().nullable().default(null),
+  shoot_name: z.string().nullable().default(null),
+  shoot_date: z.string().nullable().default(null),
+  backup_folder_path: z.string().nullable().default(null),
+  backup_cloud_link: z.string().nullable().default(null),
 })
 export type DataRecord = z.infer<typeof dataRecord>
 
@@ -95,6 +119,16 @@ export const createDataRecordRequest = z.object({
   team_member_name: z.string().trim().max(160).optional(),
   requirement_name: z.string().trim().max(160).optional(),
   backup_granularity: z.string().trim().max(80).optional(),
+  /** Tie the record to a booking; the API fills the person and role from it. */
+  slot_id: uuid.nullable().optional(),
+  user_id: uuid.nullable().optional(),
+  /** A team member; or leave null and give copied_by_name for anyone else. */
+  copied_by_uid: uuid.nullable().optional(),
+  copied_by_name: z.string().trim().max(160).nullable().optional(),
+  primary_status: primaryStatus.optional(),
+  backup_status: backupStatus.optional(),
+  backup_folder_path: z.string().trim().max(500).optional(),
+  backup_cloud_link: z.string().trim().max(500).optional(),
 })
 export type CreateDataRecordRequest = z.infer<typeof createDataRecordRequest>
 
@@ -119,7 +153,22 @@ export const updateDataRecordRequest = z.object({
   team_member_name: z.string().trim().max(160).nullable().optional(),
   requirement_name: z.string().trim().max(160).nullable().optional(),
   backup_granularity: z.string().trim().max(80).nullable().optional(),
+  slot_id: uuid.nullable().optional(),
+  user_id: uuid.nullable().optional(),
+  copied_by_uid: uuid.nullable().optional(),
+  copied_by_name: z.string().trim().max(160).nullable().optional(),
+  primary_status: primaryStatus.optional(),
+  backup_status: backupStatus.optional(),
+  backup_folder_path: z.string().trim().max(500).nullable().optional(),
+  backup_cloud_link: z.string().trim().max(500).nullable().optional(),
 })
 export type UpdateDataRecordRequest = z.infer<typeof updateDataRecordRequest>
 
 export const verifyDataRequest = z.object({ track: z.enum(['primary', 'backup']) })
+
+/** Move one copy along: POST /data/:id/track. */
+export const setDataTrackRequest = z.object({
+  track: z.enum(['primary', 'backup']),
+  status: custodyStatus,
+})
+export type SetDataTrackRequest = z.infer<typeof setDataTrackRequest>

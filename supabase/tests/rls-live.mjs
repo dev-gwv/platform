@@ -685,5 +685,89 @@ if (listed) {
   })
 }
 
+// ── Data from a booking: who copied it, where the copies are (0160) ──────
+{
+  const me = await api('/auth/session', { token: aToken })
+  const uid = me.json.user_id
+  const day = new Date(Date.now() + 50 * 86_400_000).toISOString().slice(0, 10)
+  const booked = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: uid, start_at: `${day}T04:00:00.000Z`, end_at: `${day}T08:00:00.000Z`, service_name: 'Drone Operator' },
+  })
+  const slotId = booked.json.id
+
+  const created = await api('/data', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      slot_id: slotId,
+      data_label: 'Drone cards',
+      copied_by_name: 'Aman (intern)',
+      primary_status: 'copied',
+      backup_status: 'not_required',
+      size_gb: 128,
+    },
+  })
+  check(
+    'data: a record for a booking takes its person and role, and its stage is worked out',
+    created.status === 201 &&
+      created.json.slot_id === slotId &&
+      created.json.user_id === uid &&
+      created.json.requirement_name === 'Drone Operator' &&
+      created.json.copied_by_name === 'Aman (intern)' &&
+      created.json.copied_by_uid === null &&
+      created.json.data_status === 'backed_up',
+    created.json,
+  )
+
+  const bySlot = await api(`/data?slot_id=${slotId}`, { token: aToken })
+  check(
+    'data: a booking finds its record',
+    Array.isArray(bySlot.json) && bySlot.json.length === 1 && bySlot.json[0].id === created.json.id,
+    bySlot.json,
+  )
+
+  const tracked = await api(`/data/${created.json.id}/track`, {
+    token: aToken,
+    method: 'POST',
+    body: { track: 'primary', status: 'verified' },
+  })
+  check(
+    'data: verifying the main copy completes custody and stamps when',
+    tracked.status === 200 && tracked.json.data_status === 'verified' && !!tracked.json.verified_at,
+    tracked.json,
+  )
+
+  // The stage is derived: a caller sending one neither fails nor changes it.
+  const forced = await api(`/data/${created.json.id}`, { token: aToken, method: 'PATCH', body: { data_status: 'received' } })
+  check('data: a stage sent by a caller is ignored, not refused', forced.status === 200 && forced.json.data_status === 'verified', forced.json)
+
+  const badTrack = await api(`/data/${created.json.id}/track`, {
+    token: aToken,
+    method: 'POST',
+    body: { track: 'primary', status: 'not_required' },
+  })
+  check('data: the main copy cannot be marked not needed', badTrack.status === 422, badTrack.json)
+
+  const other = await api(`/data?slot_id=${slotId}`, { token: newPw.json.access_token })
+  check("data: another studio cannot see this studio's data", Array.isArray(other.json) && other.json.length === 0, other.json)
+
+  // Opting a booking out needs a reason.
+  const noReason = await api(`/allocation/${slotId}/data`, { token: aToken, method: 'POST', body: { data_required: false } })
+  const withReason = await api(`/allocation/${slotId}/data`, {
+    token: aToken,
+    method: 'POST',
+    body: { data_required: false, data_not_required_reason: 'Assistant, no camera' },
+  })
+  const slots = await api('/allocation', { token: aToken })
+  const s = (Array.isArray(slots.json) ? slots.json : []).find((x) => x.id === slotId)
+  check(
+    'data: a booking can say no data is needed -- with a reason',
+    noReason.status === 422 && withReason.status === 204 && s?.data_not_required_reason === 'Assistant, no camera',
+    { noReason: noReason.status, withReason: withReason.status, slot: s },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

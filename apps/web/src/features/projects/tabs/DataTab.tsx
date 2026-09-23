@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { Database, Plus } from 'lucide-react'
-import type { CustodyStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -8,12 +7,8 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
 import { useProjectDataRecords, useVerifyData } from '@/features/data/api'
+import { TRACK_LABEL, TRACK_TONE } from '@/features/data/stage'
 
-const TONE: Record<CustodyStatus, 'neutral' | 'warning' | 'success'> = {
-  pending: 'neutral',
-  copied: 'warning',
-  verified: 'success',
-}
 
 /** This project's own shoot data records — a real tab instead of a link away to the global page. */
 export function DataTab({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
@@ -30,8 +25,8 @@ export function DataTab({ projectId, canEdit }: { projectId: string; canEdit: bo
     total: rows.length,
     pending: rows.filter((r) => r.primary_status === 'pending').length,
     copied: rows.filter((r) => r.primary_status !== 'pending').length,
-    backupPending: rows.filter((r) => r.backup_status !== 'verified').length,
-    backupDone: rows.filter((r) => r.backup_status === 'verified').length,
+    backupPending: rows.filter((r) => r.backup_status !== 'verified' && r.backup_status !== 'not_required').length,
+    backupDone: rows.filter((r) => r.backup_status === 'verified' || r.backup_status === 'not_required').length,
     issues: rows.filter((r) => r.issue_found).length,
   }
 
@@ -104,12 +99,12 @@ export function DataTab({ projectId, canEdit }: { projectId: string; canEdit: bo
                         {humanize(d.primary_status)} — verify
                       </Button>
                     ) : (
-                      <StatusBadge tone={TONE[d.primary_status]}>{humanize(d.primary_status)}</StatusBadge>
+                      <StatusBadge tone={TRACK_TONE[d.primary_status]}>{TRACK_LABEL[d.primary_status]}</StatusBadge>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Backup</span>
-                    {canEdit && d.backup_status !== 'verified' ? (
+                    {canEdit && d.backup_status !== 'verified' && d.backup_status !== 'not_required' ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -119,7 +114,7 @@ export function DataTab({ projectId, canEdit }: { projectId: string; canEdit: bo
                         {humanize(d.backup_status)} — verify
                       </Button>
                     ) : (
-                      <StatusBadge tone={TONE[d.backup_status]}>{humanize(d.backup_status)}</StatusBadge>
+                      <StatusBadge tone={TRACK_TONE[d.backup_status]}>{TRACK_LABEL[d.backup_status]}</StatusBadge>
                     )}
                   </div>
                 </CardContent>

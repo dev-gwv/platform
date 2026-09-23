@@ -1,5 +1,6 @@
 import type { ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
 import type { Client } from '@ipc/contracts'
+import { deriveStage } from '@/features/data/stage'
 
 /**
  * DEV-ONLY UI preview mode. Enabled with VITE_MOCK=1. Supplies a fake session
@@ -413,8 +414,23 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     } as unknown as (typeof dataRecords)[number]
     created.primary_location_name = storageLocationsFx.find((l) => l.id === created.primary_location_id)?.name ?? null
     created.backup_location_name = storageLocationsFx.find((l) => l.id === created.backup_location_id)?.name ?? null
+    withStage(created)
     dataRecords.push(created)
     return created
+  }
+  if (method === 'POST' && /^\/data\/[^/]+\/track$/.test(path)) {
+    const id = path.split('/')[2]
+    const r = dataRecords.find((x) => x.id === id) as Record<string, unknown> | undefined
+    const b = body as { track: 'primary' | 'backup'; status: string }
+    if (r) r[`${b.track}_status`] = b.status
+    if (r) withStage(r)
+    return r ?? {}
+  }
+  if (method === 'POST' && /^\/allocation\/[^/]+\/data$/.test(path)) {
+    const id = path.split('/')[2]
+    const sl = slots.find((x) => x.id === id) as Record<string, unknown> | undefined
+    if (sl) Object.assign(sl, body as object)
+    return {}
   }
   if (method === 'PATCH' && /^\/data\/[^/]+$/.test(path)) {
     const id = path.split('/').pop()
@@ -423,6 +439,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       Object.assign(rec, body as object)
       rec.primary_location_name = storageLocationsFx.find((l) => l.id === rec.primary_location_id)?.name ?? null
       rec.backup_location_name = storageLocationsFx.find((l) => l.id === rec.backup_location_id)?.name ?? null
+      withStage(rec)
     }
     return rec ?? null
   }
@@ -683,6 +700,28 @@ const storageLocationsFx = [
   { id: uid(0x76), name: 'Google Drive', kind: 'cloud' },
 ]
 
+/**
+ * The stage is the database's to work out (0160), so the mock works it out
+ * too -- with the same rules -- rather than echoing whatever was sent.
+ */
+function withStage(r: object) {
+  const x = r as Record<string, unknown>
+  const people = members as { user_id: string; name: string }[]
+  x.data_status = deriveStage({
+    primary_status: (x.primary_status as 'pending') ?? 'pending',
+    backup_status: (x.backup_status as 'pending') ?? 'pending',
+    date_received: (x.date_received as string | null) ?? null,
+    issue_found: !!x.issue_found,
+    is_not_required: !!x.is_not_required,
+  })
+  if (x.copied_by_uid) x.copied_by_name = people.find((m) => m.user_id === x.copied_by_uid)?.name ?? null
+  const sl = slots.find((s) => s.id === x.slot_id)
+  if (sl) {
+    x.user_id = sl.user_id
+    x.user_name = sl.user_name
+  }
+}
+
 const dataRecords = [
   {
     id: uid(0x71),
@@ -701,6 +740,14 @@ const dataRecords = [
     size_gb: 64.5,
     verified_at: '2026-07-02T09:00:00Z',
     created_at: '2026-07-01T09:00:00Z',
+    // Rahul's Candid seat on the engagement shoot: data safe, both copies checked.
+    slot_id: uid(0x51),
+    user_id: uid(0xe1),
+    user_name: 'Rahul Verma',
+    team_member_name: 'Rahul Verma',
+    requirement_name: 'Candid Photographer',
+    copied_by_name: 'Sana Khan',
+    data_status: 'verified',
   },
   {
     id: uid(0x72),
@@ -719,6 +766,7 @@ const dataRecords = [
     size_gb: 32,
     verified_at: null,
     created_at: '2026-07-01T09:05:00Z',
+    data_status: 'copied',
   },
   {
     id: uid(0x73),
@@ -737,6 +785,7 @@ const dataRecords = [
     size_gb: 512,
     verified_at: null,
     created_at: '2026-07-05T09:00:00Z',
+    data_status: 'backed_up',
   },
 ]
 
