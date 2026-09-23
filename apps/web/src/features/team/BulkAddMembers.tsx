@@ -5,7 +5,9 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
+import { ToneChip, TONE_DOT, TONE_TEXT } from '@/shared/ui/tone-chip'
 import { useBulkTeamCalls, useEmployeeRoles, useRoleLibrary } from './api'
+import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE } from './role-stages'
 import {
   DEFAULT_PASTE_COLUMNS,
   isBlankRow,
@@ -136,6 +138,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
     }
 
     let added = 0
+    let linked = 0
     let failed = 0
     let done = 0
     const queue = [...todo]
@@ -144,9 +147,10 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
         const row = r
         patch(row.key, { status: 'saving', error: null })
         try {
-          await calls.addMember(toRequest(row, (k) => resolved.get(k) ?? null))
+          const out = await calls.addMember(toRequest(row, (k) => resolved.get(k) ?? null))
           patch(row.key, { status: 'added' })
           added++
+          if (out.linked_existing_login) linked++
         } catch (err) {
           patch(row.key, {
             status: 'failed',
@@ -164,6 +168,15 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
 
     if (roleFailures.length > 0) {
       toast.error(`Couldn't create: ${roleFailures.join(', ')}. You can add these roles from each person's Edit.`)
+    }
+    // People who already use IPC for another studio were linked to that login
+    // rather than given the password from this table -- say so, or the owner
+    // hands out a password that does not work for them.
+    if (linked > 0) {
+      toast.info(
+        `${plural(linked, 'person', 'people')} already use${linked === 1 ? 's' : ''} IPC with another studio, so they sign in with their own password and switch to yours.`,
+        { duration: 10_000 },
+      )
     }
     if (failed === 0) {
       toast.success(`${plural(added, 'person', 'people')} added to your team.`)
@@ -528,28 +541,31 @@ function RolePicker({
             No job roles yet. You can add them under Roles &amp; Access and assign them later.
           </p>
         ) : (
-          <div className="flex max-h-[50vh] flex-wrap gap-1.5 overflow-y-auto">
-            {pickable.map((p) => {
-              const on = chosen.includes(p.key)
+          // Grouped by when in the job the role works — the same grouping and
+          // colours as the roles page and the shoot requirement picker.
+          <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto">
+            {STAGE_ORDER.map((stage) => {
+              const inStage = pickable.filter((p) => p.stage === stage)
+              if (inStage.length === 0) return null
+              const tone = STAGE_TONE[stage]
               return (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => toggle(p.key)}
-                  aria-pressed={on}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm transition-colors',
-                    on
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-card hover:bg-muted/60',
-                  )}
-                >
-                  {on && <Check className="size-3.5" />}
-                  {p.type_name}
-                  {!p.owned && !on && (
-                    <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">default</span>
-                  )}
-                </button>
+                <div key={stage}>
+                  <p className={cn('mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider', TONE_TEXT[tone])}>
+                    <span className={cn('size-2 rounded-full', TONE_DOT[tone])} aria-hidden />
+                    {STAGE_LABEL[stage]}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {inStage.map((p) => (
+                      <ToneChip
+                        key={p.key}
+                        tone={tone}
+                        label={p.type_name}
+                        selected={chosen.includes(p.key)}
+                        onClick={() => toggle(p.key)}
+                      />
+                    ))}
+                  </div>
+                </div>
               )
             })}
           </div>

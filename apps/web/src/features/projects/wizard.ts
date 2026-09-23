@@ -464,6 +464,9 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): CreateS
 export function shootIssues(shoot: ShootDraft): string[] {
   const issues: string[] = []
   if (!shoot.name.trim() || !shoot.shoot_date) issues.push('Title & date needed')
+  // The crew needs a call time as much as a date; a shoot without one is not
+  // ready to book people onto, even if nothing stops the project saving.
+  if (!shoot.start_time) issues.push('Time needed')
   if (shoot.requirements.filter((r) => r.name.trim()).length === 0) issues.push('No requirements')
   return issues
 }
@@ -684,6 +687,59 @@ export function rememberDueDays(title: string, dueDays: string): void {
   } catch {
     // A blocked localStorage costs the shortcut, not the deliverable.
   }
+}
+
+const LEARNED_KEY = 'ipc.project.learnedDeliverables'
+const LEARNED_MAX = 12
+
+/**
+ * Deliverables this studio has actually promised, newest first, offered back
+ * as quick-add chips.
+ *
+ * The built-in chips are a generic wedding list. A studio that sells a
+ * "Coffee Table Book" or a "Save the Date Film" typed it by hand on every
+ * project, because the chips never learned. Per-device, like the lead-time
+ * memory above and for the same reason: it is a typing shortcut.
+ */
+export function learnedDeliverables(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(LEARNED_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Record titles just used; most recent first, no case-duplicates, capped. */
+export function rememberDeliverables(titles: readonly string[]): void {
+  const fresh = titles.map((t) => t.trim()).filter(Boolean)
+  if (fresh.length === 0) return
+  const seen = new Set<string>()
+  const next = [...fresh, ...learnedDeliverables()].filter((t) => {
+    const k = t.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  try {
+    globalThis.localStorage?.setItem(LEARNED_KEY, JSON.stringify(next.slice(0, LEARNED_MAX)))
+  } catch {
+    // A blocked localStorage costs the shortcut, not the project.
+  }
+}
+
+/**
+ * The quick-add row: what this studio has used first, then the built-in list,
+ * without repeating a title that is in both.
+ */
+export function quickDeliverables(learned: readonly string[]): { title: string; learned: boolean }[] {
+  const out = learned.map((title) => ({ title, learned: true }))
+  const have = new Set(learned.map((t) => t.toLowerCase()))
+  for (const title of QUICK_DELIVERABLES) {
+    if (!have.has(title.toLowerCase())) out.push({ title, learned: false })
+  }
+  return out
 }
 
 /**

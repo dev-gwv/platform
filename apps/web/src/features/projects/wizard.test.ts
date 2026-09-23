@@ -22,6 +22,9 @@ import {
   newShoot,
   removeShootAt,
   shootIssues,
+  learnedDeliverables,
+  quickDeliverables,
+  rememberDeliverables,
   shootStartAt,
   nextStep,
   prevStep,
@@ -329,16 +332,20 @@ describe('the shoot card', () => {
   const shoot = (over: Partial<ShootDraft> = {}): ShootDraft => ({ ...newShoot(), ...over })
 
   it('names what a shoot is still missing', () => {
-    expect(shootIssues(shoot())).toEqual(['Title & date needed', 'No requirements'])
-    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Title & date needed', 'No requirements'])
+    expect(shootIssues(shoot())).toEqual(['Title & date needed', 'Time needed', 'No requirements'])
+    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Title & date needed', 'Time needed', 'No requirements'])
     expect(
       shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20' })),
+    ).toEqual(['Time needed', 'No requirements'])
+    expect(
+      shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30' })),
     ).toEqual(['No requirements'])
     expect(
       shootIssues(
         shoot({
           name: 'Haldi',
           shoot_date: '2026-11-20',
+          start_time: '17:30',
           requirements: [{ name: 'Photographer', quantity: '2' }],
         }),
       ),
@@ -347,7 +354,7 @@ describe('the shoot card', () => {
 
   // A row the studio started typing and left blank is not a requirement.
   it('does not count an empty requirement row', () => {
-    const s = shoot({ name: 'Haldi', shoot_date: '2026-11-20', requirements: [{ name: '  ', quantity: '1' }] })
+    const s = shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30', requirements: [{ name: '  ', quantity: '1' }] })
     expect(shootIssues(s)).toEqual(['No requirements'])
   })
 
@@ -539,5 +546,17 @@ describe('lead-time memory', () => {
     rememberDueDays('  ', '45')
     rememberDueDays('Teaser', '  ')
     expect(recallDueDays('Teaser')).toBe('')
+  })
+})
+
+describe('learned deliverables', () => {
+  it('puts what the studio used first, newest first, and skips repeats of the built-in list', () => {
+    globalThis.localStorage?.removeItem('ipc.project.learnedDeliverables')
+    rememberDeliverables(['Coffee Table Book', 'highlight film'])
+    rememberDeliverables(['Save the Date Film', 'Coffee table book'])
+    expect(learnedDeliverables()).toEqual(['Save the Date Film', 'Coffee table book', 'highlight film'])
+    const row = quickDeliverables(learnedDeliverables())
+    expect(row.slice(0, 3).every((r) => r.learned)).toBe(true)
+    expect(row.filter((r) => r.title.toLowerCase() === 'highlight film')).toHaveLength(1)
   })
 })

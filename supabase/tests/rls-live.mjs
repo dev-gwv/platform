@@ -468,5 +468,160 @@ if (listed) {
   )
 }
 
+// ── One person, many studios, one email (0159) ─────────────────
+// A freelancer on two studios' teams: both studios add the same email, they
+// sign in once with their own password, see both studios, switch between
+// them -- and each studio still sees only its own data.
+{
+  // Studios A and B from the top of this file: the credential endpoints share
+  // one per-IP limit, and two more sign-ups would spend most of it. Both
+  // tokens are the latest each studio holds (A's after logout-all, B's after
+  // its password reset).
+  const c = { token: aToken }
+  const d = { token: newPw.json.access_token }
+  const shared = `rls-free-${rand()}@example.com`
+  const member = (password) => ({
+    name: 'Shared Freelancer',
+    phone: randPhone(),
+    email: shared,
+    password,
+    create_login: true,
+    engagement_type: 'freelancer',
+    // Admin, so the RLS check below has something (clients) to read.
+    role: 'admin',
+  })
+
+  const inC = await api('/team/members', { token: c.token, method: 'POST', body: member('Freelance12345!') })
+  check('multi: studio A adds the freelancer', inC.status === 201 && inC.json.linked_existing_login === false, inC.json)
+
+  const twiceC = await api('/team/members', { token: c.token, method: 'POST', body: member('Other12345!') })
+  check('multi: the same email twice in one studio is still refused (409)', twiceC.status === 409, twiceC.json)
+
+  const inD = await api('/team/members', { token: d.token, method: 'POST', body: member('Ignored12345!') })
+  check(
+    'multi: studio B adds the same email -- linked to the existing login, not refused',
+    inD.status === 201 && inD.json.linked_existing_login === true && inD.json.user_id !== inC.json.user_id,
+    inD.json,
+  )
+
+  // D's typed password was not used: it is the freelancer's own that works.
+  const wrong = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Ignored12345!' } })
+  check("multi: the password studio B typed does not sign in", wrong.status === 401, wrong.json)
+  const login = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Freelance12345!' } })
+  check('multi: the freelancer signs in with their own password', login.status === 200, login.json)
+
+  const s1 = await api('/auth/session', { token: login.json.access_token })
+  const studios = s1.json.studios ?? []
+  check('multi: the session lists both studios', s1.status === 200 && studios.length === 2, s1.json)
+  const other = studios.find((st) => st.company_id !== s1.json.company_id)
+
+  // A client of C's, to prove D's session cannot see it.
+  const cClient = await api('/clients', { token: c.token, method: 'POST', body: { name: `C Client ${rand()}` } })
+
+  const sw = await api('/auth/switch', {
+    token: login.json.access_token,
+    method: 'POST',
+    body: { profile_id: other?.profile_id, refresh_token: login.json.refresh_token },
+  })
+  check('multi: switching studio returns a fresh pair', sw.status === 200 && !!sw.json.access_token, sw.json)
+  const s2 = await api('/auth/session', { token: sw.json.access_token })
+  check(
+    'multi: after switching, the session is the other studio',
+    s2.status === 200 && s2.json.company_id === other?.company_id && s2.json.user_id === other?.profile_id,
+    s2.json,
+  )
+  const dSession = [
+    { tok: login.json.access_token, sess: s1 },
+    { tok: sw.json.access_token, sess: s2 },
+  ].find((x) => x.sess.json.user_id === inD.json.user_id)
+  if (dSession) {
+    const seen = await api('/clients', { token: dSession.tok })
+    check(
+      "multi: in studio B, studio A's client is invisible (RLS per studio)",
+      Array.isArray(seen.json) && !seen.json.some((cl) => cl.id === cClient.json.id),
+      seen.json,
+    )
+  } else check('multi: found the studio B session', false, { s1: s1.json.user_id, s2: s2.json.user_id })
+
+  // The session left behind gave up its refresh token.
+  const stale = await api('/auth/refresh', { method: 'POST', body: { refresh_token: login.json.refresh_token } })
+  check('multi: the session switched away from cannot refresh', stale.status === 401, stale.json)
+
+  // Switching into a studio that is not theirs is refused.
+  const foreign = await api('/auth/switch', {
+    token: sw.json.access_token,
+    method: 'POST',
+    body: { profile_id: inC.json.user_id === other?.profile_id ? inD.json.user_id : inC.json.user_id },
+  })
+  check('multi: switching back to the first studio works', foreign.status === 200, foreign.json)
+  const notTheirs = await api('/auth/switch', {
+    token: sw.json.access_token,
+    method: 'POST',
+    body: { profile_id: '00000000-0000-4000-8000-000000000000' },
+  })
+  check("multi: switching into someone else's studio is refused (403)", notTheirs.status === 403, notTheirs.json)
+
+  // Next sign-in opens the studio they were last in.
+  const again = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Freelance12345!' } })
+  const s3 = await api('/auth/session', { token: again.json.access_token })
+  check(
+    'multi: the next sign-in opens the last studio used',
+    s3.json.user_id === (inC.json.user_id === other?.profile_id ? inD.json.user_id : inC.json.user_id),
+    { got: s3.json.user_id },
+  )
+
+  // D removes them: D is gone from their list, C still works, and they were
+  // not signed out of C.
+  const removed = await api(`/team/members/${inD.json.user_id}`, { token: d.token, method: 'DELETE' })
+  check('multi: studio B removes them', removed.status === 200, removed.json)
+  const back = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Freelance12345!' } })
+  const s5 = await api('/auth/session', { token: back.json.access_token })
+  check(
+    'multi: after removal from B, signing in lands in A',
+    s5.status === 200 && s5.json.user_id === inC.json.user_id && (s5.json.studios ?? []).length === 1,
+    s5.json,
+  )
+
+  // An invitation to the same email joins that login too, with the existing
+  // password -- not a second account. Studio B, which removed them above,
+  // asks them back.
+  const inv = await api('/team/invitations', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Shared Freelancer', email: shared, role: 'employee' },
+  })
+  // Read off the link as text: APP_URL is unset in CI, so it is not a URL.
+  const invToken = /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? ''
+  const peek = await api(`/auth/invite?token=${encodeURIComponent(invToken ?? '')}`)
+  check('multi: the invite says this email already has a login', peek.status === 200 && peek.json.has_account === true, peek.json)
+  const badAccept = await api('/auth/accept-invite', { method: 'POST', body: { token: invToken, password: 'NotMine12345!' } })
+  check('multi: accepting needs the existing password (401)', badAccept.status === 401, badAccept.json)
+  const accepted = await api('/auth/accept-invite', {
+    method: 'POST',
+    body: { token: invToken, password: 'Freelance12345!' },
+  })
+  const s6 = await api('/auth/session', { token: accepted.json.access_token })
+  check(
+    'multi: accepting signs them into the inviting studio, alongside A',
+    accepted.status === 200 && (s6.json.studios ?? []).length === 2 && s6.json.user_id !== inC.json.user_id,
+    s6.json,
+  )
+
+  // One password for every studio: changing it signs out all of them.
+  const changed = await api('/auth/change-password', {
+    token: s6.status === 200 ? accepted.json.access_token : back.json.access_token,
+    method: 'POST',
+    body: { current_password: 'Freelance12345!', new_password: 'Changed12345!' },
+  })
+  const oldC = await api('/auth/session', { token: back.json.access_token })
+  check(
+    "multi: a password change signs out every studio's sessions",
+    changed.status === 200 && oldC.status === 401,
+    { change: changed.status, oldC: oldC.status },
+  )
+  const newLogin = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Changed12345!' } })
+  check('multi: the new password works', newLogin.status === 200, newLogin.json)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

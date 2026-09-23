@@ -37,6 +37,12 @@
   --color-tone-green-soft: var(--tone-green-soft);
   --color-tone-violet: var(--tone-violet);
   --color-tone-violet-soft: var(--tone-violet-soft);
+  --color-tone-amber: var(--tone-amber);
+  --color-tone-amber-soft: var(--tone-amber-soft);
+  --color-tone-rose: var(--tone-rose);
+  --color-tone-rose-soft: var(--tone-rose-soft);
+  --color-tone-teal: var(--tone-teal);
+  --color-tone-teal-soft: var(--tone-teal-soft);
   /* The whole corner scale, derived from one number so a theme can change
      every corner in the app at once.
 
@@ -89,6 +95,12 @@
   --tone-green-soft: oklch(0.96 0.04 160);
   --tone-violet: oklch(0.5 0.19 300);
   --tone-violet-soft: oklch(0.96 0.035 300);
+  --tone-amber: oklch(0.52 0.13 60);
+  --tone-amber-soft: oklch(0.96 0.05 80);
+  --tone-rose: oklch(0.52 0.18 10);
+  --tone-rose-soft: oklch(0.96 0.03 10);
+  --tone-teal: oklch(0.5 0.1 195);
+  --tone-teal-soft: oklch(0.96 0.03 195);
 }
 
 .dark {
@@ -122,6 +134,12 @@
   --tone-green-soft: oklch(0.29 0.06 160);
   --tone-violet: oklch(0.83 0.11 300);
   --tone-violet-soft: oklch(0.31 0.07 300);
+  --tone-amber: oklch(0.84 0.12 80);
+  --tone-amber-soft: oklch(0.31 0.06 70);
+  --tone-rose: oklch(0.82 0.1 10);
+  --tone-rose-soft: oklch(0.3 0.07 10);
+  --tone-teal: oklch(0.83 0.09 195);
+  --tone-teal-soft: oklch(0.3 0.05 195);
 }
 
 * {

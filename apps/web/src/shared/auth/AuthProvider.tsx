@@ -1,8 +1,8 @@
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { z, sessionState, type SessionState } from '@ipc/contracts'
+import { z, authToken, sessionState, type SessionState } from '@ipc/contracts'
 import { callApi, ApiError, markCookieSession, rotateTokens, setAuthLostHandler } from '../api/client'
-import { clearToken, getRefreshToken, getToken, onSessionChange } from './token'
+import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
 import { MOCK_ENABLED, mockSession } from '../dev/mock'
 import { setSentryUser } from '@/shared/error/sentry'
 
@@ -22,6 +22,12 @@ interface AuthValue {
   retry: () => Promise<void>
   signOut: () => Promise<void>
   signOutEverywhere: () => Promise<void>
+  /**
+   * Open another studio this login belongs to (`session.studios`). Reloads
+   * into its dashboard: every cached row, and every page's local state,
+   * belongs to the studio being left.
+   */
+  switchStudio: (profileId: string) => Promise<void>
 }
 
 const AuthCtx = createContext<AuthValue | null>(null)
@@ -131,8 +137,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     endSession()
   }, [endSession])
 
+  const switchStudio = useCallback(
+    async (profileId: string) => {
+      if (MOCK_ENABLED) return
+      const refresh_token = getRefreshToken()
+      const pair = await callApi('/auth/switch', {
+        method: 'POST',
+        body: { profile_id: profileId, ...(refresh_token ? { refresh_token } : {}) },
+        responseSchema: authToken,
+      })
+      setTokens(pair)
+      markCookieSession(!pair.refresh_token)
+      qc.clear()
+      window.location.assign('/dashboard')
+    },
+    [qc],
+  )
+
   return (
-    <AuthCtx value={{ session, loading, bootError, refresh, retry: boot, signOut, signOutEverywhere }}>
+    <AuthCtx
+      value={{ session, loading, bootError, refresh, retry: boot, signOut, signOutEverywhere, switchStudio }}
+    >
       {children}
     </AuthCtx>
   )

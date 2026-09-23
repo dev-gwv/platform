@@ -14,6 +14,7 @@ import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { cn } from '@/shared/ui/cn'
 import { useClient, useClients, useDeleteClient } from '@/features/clients/api'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
+import { AddMorePrompt, useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
 import { ClientDetailDialog } from '@/features/clients/ClientDetailDialog'
 import type { Client } from '@ipc/contracts'
 
@@ -52,6 +53,14 @@ const SORTS = [
 const added = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 function ClientsList() {
+  // Arriving from the setup journey's "add your first client": the form is
+  // already open, and saving asks whether to add another or move on.
+  const fromSetup = useFromSetup()
+  const backToSetup = useBackToSetup()
+  const [adding, setAdding] = useState(
+    () => new URLSearchParams(window.location.search).get('add') === '1',
+  )
+  const [justAdded, setJustAdded] = useState(false)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<'recent' | 'name' | 'city'>('recent')
   const [relation, setRelation] = useState('')
@@ -142,6 +151,28 @@ function ClientsList() {
             <ClientFormDialog />
           </div>
         }
+      />
+
+      <ClientFormDialog
+        hideTrigger
+        open={adding}
+        onOpenChange={setAdding}
+        onCreated={() => setJustAdded(true)}
+      />
+      <AddMorePrompt
+        open={justAdded}
+        title="Client added"
+        description="Add another client now, or carry on — you can add clients any time, including while creating a project."
+        moreLabel="Add another client"
+        fromSetup={fromSetup}
+        onMore={() => {
+          setJustAdded(false)
+          setAdding(true)
+        }}
+        onDone={() => {
+          setJustAdded(false)
+          if (fromSetup) backToSetup()
+        }}
       />
 
       <HowToUse

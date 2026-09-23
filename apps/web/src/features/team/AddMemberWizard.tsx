@@ -10,7 +10,8 @@ import type { FieldErrors } from '@/shared/forms/field-errors'
 import { scrollIntoView } from '@/shared/ui/motion'
 import { useAddMember, useCreateRole, useEmployeeRoles, useRoleLibrary } from './api'
 import { BUILT_IN_TYPES, CompensationFields, PAY_COMPONENTS } from './CompensationFields'
-import { STAGE_LABEL, STAGE_ORDER, stageOf } from './role-stages'
+import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE, stageOf } from './role-stages'
+import { TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT } from '@/shared/ui/tone-chip'
 import {
   EMPTY_DRAFT,
   STEP_LABELS,
@@ -511,9 +512,13 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
               .filter((r) => r.stage === stage)
               .sort((a, b) => a.type_name.localeCompare(b.type_name))
             if (inStage.length === 0) return null
+            const tone = STAGE_TONE[stage]
             return (
               <div key={stage}>
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">{STAGE_LABEL[stage]}</p>
+                <p className={cn('mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider', TONE_TEXT[tone])}>
+                  <span className={cn('size-2 rounded-full', TONE_DOT[tone])} aria-hidden />
+                  {STAGE_LABEL[stage]}
+                </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {inStage.map((r) => {
                     const on = !!r.id && draft.role_ids.includes(r.id)
@@ -528,7 +533,7 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
                         className={cn(
                           'flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-60',
                           on
-                            ? 'border-primary bg-primary/5 text-foreground'
+                            ? TONE_CHIP_STATIC[tone]
                             : 'border-border hover:border-primary/40 hover:bg-accent',
                         )}
                       >
