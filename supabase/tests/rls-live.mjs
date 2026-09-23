@@ -623,5 +623,67 @@ if (listed) {
   check('multi: the new password works', newLogin.status === 200, newLogin.json)
 }
 
+// ── Assign team: bulk booking, payout set with the booking ─────────
+{
+  const me = await api('/auth/session', { token: aToken })
+  const uid = me.json.user_id
+  const day = new Date(Date.now() + 40 * 86_400_000).toISOString().slice(0, 10)
+  const at = (h) => `${day}T${String(h).padStart(2, '0')}:00:00.000Z`
+
+  const members = await api('/team/members', { token: aToken })
+  check(
+    'assign: the crew picker gets job roles for each person',
+    members.status === 200 && Array.isArray(members.json) && members.json.every((m) => Array.isArray(m.role_names)),
+    members.json,
+  )
+
+  const batch = await api('/allocation/batch', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      items: [
+        { user_id: uid, start_at: at(4), end_at: at(6), service_name: 'Candid Photographer' },
+        // Overlaps the first: refused on its own, without undoing the others.
+        { user_id: uid, start_at: at(5), end_at: at(7), service_name: 'Cinematographer' },
+        {
+          user_id: uid,
+          start_at: at(8),
+          end_at: at(9),
+          service_name: 'Drone Operator',
+          estimated_cost: 7000,
+          cost_status: 'final',
+          cost_notes: 'Paid on the day',
+        },
+      ],
+    },
+  })
+  const r = batch.json.results ?? []
+  check(
+    'assign: a bulk booking books what it can and names the clash',
+    batch.status === 201 && !!r[0]?.id && r[1]?.error === 'double_booked' && !!r[2]?.id,
+    batch.json,
+  )
+
+  const list = await api('/allocation', { token: aToken })
+  const drone = (Array.isArray(list.json) ? list.json : []).find((x) => x.id === r[2]?.id)
+  check(
+    'assign: payout status, amount and note are saved with the booking',
+    drone?.cost_status === 'final' && Number(drone?.estimated_cost) === 7000 && drone?.cost_notes === 'Paid on the day',
+    drone,
+  )
+
+  // Remove: the seat opens again and the same hours can be booked.
+  const released = await api(`/allocation/${r[0]?.id}/status`, { token: aToken, method: 'POST', body: { status: 'released' } })
+  const rebook = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: uid, start_at: at(5), end_at: at(7), service_name: 'Cinematographer' },
+  })
+  check('assign: removing someone frees their hours for another booking', released.status === 204 && rebook.status === 201, {
+    released: released.status,
+    rebook: rebook.json,
+  })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
