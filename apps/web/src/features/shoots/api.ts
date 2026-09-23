@@ -42,6 +42,24 @@ function useServiceMutation<TArgs>(fn: (a: TArgs) => Promise<unknown>, message: 
   })
 }
 
+/**
+ * Keep a requirement someone typed by hand, the moment they type it.
+ *
+ * Requirements were only learned when a project was saved, so a custom
+ * "Highlight Editor" typed on the first shoot of a new project was not
+ * offered back on the second shoot of the same one. Quiet on purpose: this is
+ * the picker remembering, not the user doing anything worth a toast. A
+ * failure costs the shortcut, never the requirement on the shoot.
+ */
+export function useRememberService() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) =>
+      callApi('/shoots/services', { method: 'POST', body: { name }, responseSchema: serviceOption }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['shoots', 'services'] }),
+  })
+}
+
 export function useCreateService() {
   return useServiceMutation(
     (name: string) => callApi('/shoots/services', { method: 'POST', body: { name }, responseSchema: serviceOption }),

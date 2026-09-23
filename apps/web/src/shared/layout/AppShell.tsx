@@ -11,6 +11,7 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { AccountMenu } from './AccountMenu'
+import { SetupReturnBar } from '@/features/onboarding/setup-flow'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -173,6 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           key={pathname}
           className="page-enter min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible"
         >
+          <SetupReturnBar />
           {children}
         </main>
       </div>

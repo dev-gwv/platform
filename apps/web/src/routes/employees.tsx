@@ -20,6 +20,7 @@ import { useDeleteMember, useDirectoryPaged, useEmployeeRoles, useUpdateMember }
 import { AddMemberWizard } from '@/features/team/AddMemberWizard'
 import { AddTeamChooser, type AddMode } from '@/features/team/AddTeamChooser'
 import { BulkAddMembers } from '@/features/team/BulkAddMembers'
+import { AddMorePrompt, useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
@@ -60,6 +61,10 @@ function TeamPage() {
   // a manager following an old link lands on the directory, not on a form
   // that would refuse them at the last step.
   const [adding, setAddingState] = useState<AddMode | null>(() => (isOwner ? addModeFromUrl() : null))
+  // Set once people have just been added: the "add more?" question.
+  const [justAdded, setJustAdded] = useState(false)
+  const fromSetup = useFromSetup()
+  const backToSetup = useBackToSetup()
 
   const setAdding = (mode: AddMode | null) => {
     setAddingState(mode)
@@ -73,16 +78,39 @@ function TeamPage() {
   // Adding someone is its own screen, with nothing else on it: no section
   // tabs, no filters, no list. The owner came to add people; everything else
   // is one Cancel away.
+  // Whichever way they were added, the next question is the same one: more,
+  // or move on? "Move on" from setup is the next setup step, not this list.
+  const onAdded = () => setJustAdded(true)
+  const prompt = (
+    <AddMorePrompt
+      open={justAdded}
+      title="Added to your team"
+      description="Want to add more people now? You can always add or edit anyone later from the team list."
+      moreLabel="Add more people"
+      fromSetup={fromSetup}
+      onMore={() => {
+        setJustAdded(false)
+        setAddingState('choose')
+      }}
+      onDone={() => {
+        setJustAdded(false)
+        if (fromSetup) backToSetup()
+        else setAdding(null)
+      }}
+    />
+  )
+
   if (adding) {
     return (
       <div className="pt-2">
         {adding === 'choose' ? (
           <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} />
         ) : adding === 'bulk' ? (
-          <BulkAddMembers onDone={() => setAdding(null)} onCancel={() => setAdding('choose')} />
+          <BulkAddMembers onDone={onAdded} onCancel={() => setAdding('choose')} />
         ) : (
-          <AddMemberWizard onDone={() => setAdding(null)} onCancel={() => setAdding('choose')} />
+          <AddMemberWizard onDone={onAdded} onCancel={() => setAdding('choose')} />
         )}
+        {prompt}
       </div>
     )
   }

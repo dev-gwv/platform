@@ -1,4 +1,5 @@
 import type { EmployeeRole, ProductionStage } from '@ipc/contracts'
+import type { Tone } from '@/shared/ui/tone-chip'
 
 /**
  * Job roles, grouped by the part of the job they belong to.
@@ -22,6 +23,17 @@ export const STAGE_LABEL: Record<ProductionStage, string> = {
 export const STAGE_ORDER: readonly ProductionStage[] = ['pre', 'production', 'post', 'other']
 
 /**
+ * One colour per stage, used wherever roles appear grouped, so "violet" means
+ * pre-production on the team page and in the shoot picker alike.
+ */
+export const STAGE_TONE: Record<ProductionStage, Tone> = {
+  pre: 'violet',
+  production: 'blue',
+  post: 'green',
+  other: 'amber',
+}
+
+/**
  * Name → stage, first match wins. Ordered most specific first: "Album
  * Designer" is post-production, and must be decided before the looser
  * "designer"-ish patterns further down could claim it.
@@ -32,7 +44,9 @@ const BY_NAME: ReadonlyArray<readonly [RegExp, ProductionStage]> = [
   [/album designer/, 'post'],
   [/data manager|digital asset/, 'post'],
   [/same.?day.*editor/, 'post'],
-  [/(video|image|photo|cinematic).*editor|^editor$|retouch/, 'post'],
+  // Any editor edits after the shoot: "Highlight Editor", "Reel Editor", a
+  // studio's own name for the job, not only the four the library ships with.
+  [/editor|editing|retouch/, 'post'],
   [/bts|behind the scenes/, 'production'],
   [/mobile.*(cinematograph|shoot)/, 'production'],
   [/drone/, 'production'],

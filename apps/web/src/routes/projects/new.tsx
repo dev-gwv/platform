@@ -71,15 +71,26 @@ import { useRoleLibrary } from '@/features/team/api'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import {
   useDeleteShootPreset,
+  useRememberService,
   useSaveShootPreset,
   useServices,
   useShootPresets,
 } from '@/features/shoots/api'
 import {
+  groupRequirementOptions,
+  requirementOptions,
+  stageOfRequirement,
+} from '@/features/projects/requirements'
+import { STAGE_TONE } from '@/features/team/role-stages'
+import { useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
+import { QuantityStepper, ToneChip, TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT, toneAt } from '@/shared/ui/tone-chip'
+import {
   BUILT_IN_SETS,
   EMPTY_DRAFT,
-  QUICK_DELIVERABLES,
   QUICK_SHOOTS,
+  learnedDeliverables,
+  quickDeliverables,
+  rememberDeliverables,
   SHOOT_PRESET,
   STEP_HINTS,
   STEP_LABELS,
@@ -233,6 +244,10 @@ function NewProject() {
       }
 
       const { id } = await createProject.mutateAsync(toProjectRequest(draft, clientId))
+      // What was promised to the client becomes a quick-add chip next time.
+      rememberDeliverables(
+        [...deliverablesIn(draft, 'client'), ...deliverablesIn(draft, 'add_on')].map(({ item }) => item.title),
+      )
 
       // Shoots hang off the project, so they can only be created once it exists.
       // A failure here leaves a real project behind — say so rather than
@@ -337,7 +352,7 @@ function NewProject() {
           {step === 'client' && <ClientStep draft={draft} patch={patch} />}
           {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
           {step === 'deliverables' && (
-            <DeliverablesStep draft={draft} patch={patch} onJump={goTo} />
+            <DeliverablesStep draft={draft} patch={patch} />
           )}
           {step === 'billing' && <BillingStep draft={draft} patch={patch} totals={totals} />}
           {step === 'review' && <ReviewStep draft={draft} totals={totals} errors={errors} onJump={goTo} />}
@@ -424,6 +439,8 @@ function CreatedDialog({
   const issue = useIssueQuotation()
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const fromSetup = useFromSetup()
+  const backToSetup = useBackToSetup()
 
   const openProject = (quotation?: boolean) =>
     void navigate({
@@ -492,6 +509,14 @@ function CreatedDialog({
             <Button variant="ghost" className="w-full" onClick={() => openProject()}>
               Continue to project
             </Button>
+            {/* Opened from the setup journey: the obvious next thing is the
+                next setup step, so it is offered by name rather than left to
+                the sidebar. */}
+            {fromSetup && (
+              <Button variant="outline" className="w-full" onClick={backToSetup}>
+                Next setup step <ArrowRight />
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>
@@ -972,27 +997,20 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Quick add{(shootTypes.data ?? []).length ? ' · from library' : ''}
         </span>
-        {quickList.map((name) => {
+        {quickList.map((name, i) => {
           const already = draft.shoots.some(
             (s) => s.name.trim().toLowerCase() === name.toLowerCase(),
           )
           return (
-            <button
+            <ToneChip
               key={name}
-              type="button"
-              onClick={() => add([name])}
+              tone={toneAt(i)}
+              label={name}
+              selected={already}
               disabled={already}
-              title={already ? `${name} is already on the schedule` : undefined}
-              className={cn(
-                'press flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm font-medium transition-colors',
-                already
-                  ? 'cursor-not-allowed text-muted-foreground opacity-60'
-                  : 'hover:border-primary hover:bg-primary/10 hover:text-primary',
-              )}
-            >
-              {already ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
-              {name}
-            </button>
+              onClick={() => add([name])}
+              title={already ? `${name} is already on the schedule` : `Add ${name}`}
+            />
           )
         })}
       </div>
@@ -1014,7 +1032,6 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
               index={i}
               shoot={s}
               draft={draft}
-              patch={patch}
               onChange={(p) => set(i, p)}
               onRemove={() => patch(removeShootAt(draft, i))}
             />
@@ -1028,10 +1045,15 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
 /**
  * Picking the crew a shoot needs.
  *
- * Three sources, in the order a studio actually thinks: what is already on
- * this shoot, what they have booked before, and the standard roles for anyone
- * who has booked nothing yet. Everything is a tap; the typing is there for the
- * one-off nobody has a name for.
+ * Everything a shoot can ask for, grouped by when in the job it happens —
+ * pre-production, on the day, post-production — with a colour per group, so
+ * the eye finds "the people on the floor" before it reads a single name. The
+ * studio's own requirements come first in each group; library defaults after.
+ *
+ * What is picked sits beside the suggestions (above them on a phone), each
+ * with a visible − / + so the quantity can't be missed. Tapping a chip that is
+ * already picked adds one more, and the chip shows its count, so "two candid
+ * photographers" is two taps without looking anywhere else.
  *
  * The draft is local until Save, so half-tapped chips do not leak into the
  * project when somebody backs out.
@@ -1050,24 +1072,45 @@ function RequirementsDialog({
   const [custom, setCustom] = useState('')
   const services = useServices()
   const library = useRoleLibrary()
+  const remember = useRememberService()
 
-  const has = (name: string) =>
-    draft.some((r) => r.name.trim().toLowerCase() === name.trim().toLowerCase())
+  const options = useMemo(
+    () => requirementOptions(services.data ?? [], library.data ?? []),
+    [services.data, library.data],
+  )
+  const groups = useMemo(() => groupRequirementOptions(options), [options])
 
-  const add = (name: string) => {
+  const indexOf = (name: string) =>
+    draft.findIndex((r) => r.name.trim().toLowerCase() === name.trim().toLowerCase())
+  const qty = (r: ShootRequirementDraft) => Math.max(1, Number(r.quantity) || 1)
+
+  /** Add it, or — if it is already picked — one more of it. */
+  const bump = (name: string) => {
     const clean = name.trim()
-    if (!clean || has(clean)) return
-    setDraft((d) => [...d, { name: clean, quantity: '1' }])
+    if (!clean) return
+    const at = indexOf(clean)
+    if (at >= 0) {
+      setDraft((d) => d.map((r, i) => (i === at ? { ...r, quantity: String(Math.min(99, qty(r) + 1)) } : r)))
+    } else {
+      setDraft((d) => [...d, { name: clean, quantity: '1' }])
+    }
   }
 
-  const setQuantity = (at: number, quantity: string) =>
-    setDraft((d) => d.map((r, i) => (i === at ? { ...r, quantity } : r)))
+  const addCustom = () => {
+    const clean = custom.trim()
+    if (!clean) return
+    const known = options.some((o) => o.name.toLowerCase() === clean.toLowerCase())
+    bump(clean)
+    // Learned now, not when the project is saved: the next shoot on this very
+    // project should already offer it.
+    if (!known) remember.mutate(clean)
+    setCustom('')
+  }
 
-  // What this studio has booked before, minus what is already on this shoot.
-  const saved = (services.data ?? []).filter((s) => !has(s.name))
-  const suggested = (library.data ?? []).filter(
-    (r) => !has(r.type_name) && !saved.some((s) => s.name.toLowerCase() === r.type_name.toLowerCase()),
-  )
+  const setQuantity = (at: number, n: number) =>
+    setDraft((d) => d.map((r, i) => (i === at ? { ...r, quantity: String(n) } : r)))
+
+  const people = draft.reduce((sum, r) => sum + qty(r), 0)
 
   return (
     <Dialog
@@ -1082,107 +1125,101 @@ function RequirementsDialog({
     >
       <DialogTrigger asChild>
         <Button size="sm">
-          <SlidersHorizontal /> Add requirements
+          <SlidersHorizontal /> {requirements.length ? 'Edit requirements' : 'Add requirements'}
         </Button>
       </DialogTrigger>
       <DialogContent
+        className="max-w-4xl"
         title="Shoot requirements"
-        description={`Pick what's needed for “${shootName || 'this shoot'}” and set quantities.`}
+        description={`Who does “${shootName || 'this shoot'}” need? Tap to add — tap again for one more.`}
       >
-        <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto">
-          <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
-            <p className="mb-2 text-sm font-medium text-primary">
-              Selected for this shoot ({draft.length})
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_21rem]">
+          {/* ── what is picked: first on a phone, alongside on a wider screen ── */}
+          <section
+            aria-label="Selected for this shoot"
+            className="order-first rounded-lg border border-primary/25 bg-primary/5 p-3 md:order-last md:self-start"
+          >
+            <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-primary">
+              Selected for this shoot
+              <span className="text-xs font-medium text-muted-foreground">
+                {people} {people === 1 ? 'person' : 'people'}
+              </span>
             </p>
             {draft.length === 0 ? (
               <p className="rounded-md border border-dashed border-warning/40 bg-warning/10 px-3 py-3 text-center text-sm text-warning">
-                No requirements added yet. Tap a suggestion or add a new one below.
+                Nothing picked yet. Tap who this shoot needs.
               </p>
             ) : (
-              <div className="flex flex-col gap-2">
-                {draft.map((r, at) => (
-                  <div key={at} className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.name}</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={99}
-                      value={r.quantity}
-                      onChange={(e) => setQuantity(at, e.target.value)}
-                      aria-label={`How many ${r.name}`}
-                      className="w-20"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDraft((d) => d.filter((_, i) => i !== at))}
-                    >
-                      <Trash2 />
-                      <span className="sr-only">Remove {r.name}</span>
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto md:max-h-[50vh]">
+                {draft.map((r, at) => {
+                  const tone = STAGE_TONE[stageOfRequirement(r.name, options)]
+                  return (
+                    <li key={at} className="flex items-center gap-2 rounded-md bg-card px-2 py-1.5">
+                      <span className={cn('size-2 shrink-0 rounded-full', TONE_DOT[tone])} aria-hidden />
+                      <span className="min-w-0 flex-1 break-words text-sm font-medium leading-tight">{r.name}</span>
+                      <QuantityStepper value={qty(r)} onChange={(n) => setQuantity(at, n)} label={r.name} />
+                      <button
+                        type="button"
+                        onClick={() => setDraft((d) => d.filter((_, i) => i !== at))}
+                        className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
+                      >
+                        <X className="size-3.5" aria-hidden />
+                        <span className="sr-only">Remove {r.name}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
-          </div>
+          </section>
 
-          <div className="rounded-lg border border-border p-3">
-            <Label>Add custom requirement</Label>
-            <div className="mt-1.5 flex items-center gap-2">
+          {/* ── what can be picked ── */}
+          <div className="flex min-w-0 flex-col gap-4 md:max-h-[60vh] md:overflow-y-auto md:pr-1">
+            <div className="flex items-center gap-2">
               <Input
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return
                   e.preventDefault()
-                  add(custom)
-                  setCustom('')
+                  addCustom()
                 }}
-                placeholder="e.g. Highlight Editor"
+                placeholder="Someone not listed? e.g. Highlight Editor"
+                aria-label="Add your own requirement"
               />
-              <Button
-                onClick={() => {
-                  add(custom)
-                  setCustom('')
-                }}
-                disabled={!custom.trim()}
-              >
+              <Button variant="outline" onClick={addCustom} disabled={!custom.trim()}>
                 <Plus /> Add
               </Button>
             </div>
-          </div>
 
-          <div>
-            <p className="mb-1.5 text-sm font-medium">Your saved requirements (tap to add)</p>
-            {saved.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-3 py-3 text-center text-sm text-muted-foreground">
-                None yet. Add one above or pick from suggestions below.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {saved.map((s) => (
-                  <Chip key={s.id} label={s.name} onAdd={() => add(s.name)} />
-                ))}
+            {groups.map((g) => (
+              <div key={g.stage}>
+                <p className={cn('mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider', TONE_TEXT[g.tone])}>
+                  <span className={cn('size-2 rounded-full', TONE_DOT[g.tone])} aria-hidden />
+                  {g.label}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.options.map((o) => {
+                    const at = indexOf(o.name)
+                    return (
+                      <ToneChip
+                        key={o.name}
+                        tone={g.tone}
+                        label={o.name}
+                        selected={at >= 0}
+                        count={at >= 0 ? qty(draft[at]!) : undefined}
+                        onClick={() => bump(o.name)}
+                        title={at >= 0 ? `Add one more ${o.name}` : `Add ${o.name}`}
+                      />
+                    )
+                  })}
+                </div>
               </div>
-            )}
+            ))}
           </div>
-
-          {suggested.length > 0 && (
-            <div>
-              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-                <Sparkles className="size-3.5 text-muted-foreground" aria-hidden />
-                Suggested (tap to add)
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {suggested.map((r) => (
-                  <Chip key={r.id} label={r.type_name} onAdd={() => add(r.type_name)} />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
           <DialogClose asChild>
             <Button type="button" variant="outline">
               Cancel
@@ -1194,24 +1231,11 @@ function RequirementsDialog({
               setOpen(false)
             }}
           >
-            Save requirements
+            <Check /> Save {draft.length > 0 ? `${people} ${people === 1 ? 'person' : 'people'}` : 'requirements'}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function Chip({ label, onAdd }: { label: string; onAdd: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onAdd}
-      className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary"
-    >
-      <Plus className="size-3.5" aria-hidden />
-      {label}
-    </button>
   )
 }
 
@@ -1231,37 +1255,56 @@ function ShootCard({
   index,
   shoot,
   draft,
-  patch,
   onChange,
   onRemove,
 }: {
   index: number
   shoot: ShootDraft
   draft: ProjectDraft
-  patch: Patch
   onChange: (p: Partial<ShootDraft>) => void
   onRemove: () => void
 }) {
   const issues = shootIssues(shoot)
+  const ready = issues.length === 0
   const work = internalWorkFor(draft, index)
+  const services = useServices()
+  const library = useRoleLibrary()
+  const options = useMemo(
+    () => requirementOptions(services.data ?? [], library.data ?? []),
+    [services.data, library.data],
+  )
   return (
     <div
       className={cn(
-        'card-enter rounded-lg border p-4',
-        issues.length ? 'border-destructive/25 bg-destructive/5' : 'border-border',
+        // Red while anything is missing, green the moment it isn't: the card
+        // itself says whether this day is done, without reading the badges.
+        'card-enter rounded-lg border p-4 transition-colors duration-300',
+        ready ? 'border-success/40 bg-success/[0.04]' : 'border-destructive/25 bg-destructive/5',
       )}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-          {index + 1}
+        <span
+          className={cn(
+            'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+            ready ? 'bg-success text-card' : 'bg-primary/10 text-primary',
+          )}
+        >
+          {ready ? <Check className="size-3.5" aria-hidden /> : index + 1}
         </span>
         <span className="font-medium">{shoot.name.trim() || `Shoot ${index + 1}`}</span>
-        {issues.map((issue) => (
-          <StatusBadge key={issue} tone={issue === 'No requirements' ? 'warning' : 'danger'}>
-            <AlertCircle className="mr-1 size-3" aria-hidden />
-            {issue}
+        {ready ? (
+          <StatusBadge tone="success">
+            <CheckCircle2 className="mr-1 size-3" aria-hidden />
+            Ready
           </StatusBadge>
-        ))}
+        ) : (
+          issues.map((issue) => (
+            <StatusBadge key={issue} tone={issue === 'Title & date needed' ? 'danger' : 'warning'}>
+              <AlertCircle className="mr-1 size-3" aria-hidden />
+              {issue}
+            </StatusBadge>
+          ))
+        )}
         <div className="ml-auto flex items-center gap-1">
           <SavePresetButton
             kind="shoot"
@@ -1287,6 +1330,7 @@ function ShootCard({
             value={shoot.name}
             onChange={(e) => onChange({ name: e.target.value })}
             placeholder="Wedding day"
+            aria-invalid={!shoot.name.trim()}
           />
         </Field>
         <Field label="Date" icon={CalendarDays}>
@@ -1294,6 +1338,7 @@ function ShootCard({
             type="date"
             value={shoot.shoot_date}
             onChange={(e) => onChange({ shoot_date: e.target.value })}
+            aria-invalid={!shoot.shoot_date}
           />
         </Field>
         <Field label="Time" icon={Clock}>
@@ -1301,6 +1346,7 @@ function ShootCard({
             type="time"
             value={shoot.start_time}
             onChange={(e) => onChange({ start_time: e.target.value })}
+            aria-invalid={!shoot.start_time}
           />
         </Field>
         <Field label="City / Venue" icon={MapPin}>
@@ -1358,23 +1404,27 @@ function ShootCard({
           // A summary, not an editor: changes happen in the dialog, so the card
           // stays readable when a wedding day needs eight people.
           <div className="flex flex-wrap gap-2">
-            {shoot.requirements.map((r, at) => (
-              <span
-                key={at}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm"
-              >
-                {r.name.trim() || 'Unnamed'}
-                <span className="font-semibold text-primary">
-                  ×{Math.max(1, Number(r.quantity) || 1)}
+            {shoot.requirements.map((r, at) => {
+              const tone = STAGE_TONE[stageOfRequirement(r.name, options)]
+              return (
+                <span
+                  key={at}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium',
+                    TONE_CHIP_STATIC[tone],
+                  )}
+                >
+                  {r.name.trim() || 'Unnamed'}
+                  <span className="rounded-full bg-card/60 px-1.5 text-xs font-semibold tabular-nums">
+                    ×{Math.max(1, Number(r.quantity) || 1)}
+                  </span>
                 </span>
-              </span>
-            ))}
+              )
+            })}
           </div>
         )}
       </SubCard>
 
-      {/* ── what the edit room owes off it ── */}
-      <InternalWorkBlock index={index} shoot={shoot} draft={draft} patch={patch} work={work} />
     </div>
   )
 }
@@ -1382,8 +1432,12 @@ function ShootCard({
 /**
  * The team's own list for one shoot — culling, sorting, the reel — kept off
  * the quotation because a client is not buying "data sorting", they are
- * buying the album it feeds. Same deliverables array as step 3; this is the
- * per-shoot window onto it.
+ * buying the album it feeds.
+ *
+ * It lives on the Deliverables step, one block per shoot. It used to sit
+ * inside each shoot card as well, so the wizard asked "deliverables for this
+ * shoot?" on step 2 and then asked about deliverables again on step 3 — the
+ * same question twice, on the step that should only be about the day itself.
  */
 function InternalWorkBlock({
   index,
@@ -1419,8 +1473,8 @@ function InternalWorkBlock({
   return (
     <SubCard
       icon={Package}
-      title="Deliverables for this shoot"
-      hint="These items help the team edit, sort, hand off and track. They never appear on the quotation unless you say so."
+      title={shoot.name.trim() || `Shoot ${index + 1}`}
+      hint="What the team edits, sorts and hands off from this day."
       actions={
         <>
           <PresetMenu
@@ -1519,15 +1573,7 @@ function InternalWorkBlock({
             Suggested for {shoot.name.trim() || 'this shoot'}
           </span>
           {suggestions.map((title) => (
-            <button
-              key={title}
-              type="button"
-              onClick={() => addTitles([title])}
-              className="press flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary"
-            >
-              <Plus className="size-3.5" aria-hidden />
-              {title}
-            </button>
+            <ToneChip key={title} tone="teal" label={title} onClick={() => addTitles([title])} />
           ))}
         </div>
       )}
@@ -1756,24 +1802,19 @@ function SavePresetButton({
  * already carries, so turning "Charged on top" on moves an item into add-ons
  * with no second source of truth to disagree.
  */
-function DeliverablesStep({
-  draft,
-  patch,
-  onJump,
-}: {
-  draft: ProjectDraft
-  patch: Patch
-  onJump: (step: WizardStep) => void
-}) {
+function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
   const sets = useDeliverableSets()
   const saveSet = useSaveDeliverableSet()
   const deleteSet = useDeleteDeliverableSet()
   const [naming, setNaming] = useState(false)
   const [setName, setSetName] = useState('')
 
+  const quick = useMemo(() => quickDeliverables(learnedDeliverables()), [])
   const client = deliverablesIn(draft, 'client')
   const addOns = deliverablesIn(draft, 'add_on')
-  const internal = deliverablesIn(draft, 'internal')
+  // Per-shoot work is listed under its shoot below; only what belongs to no
+  // shoot needs a list of its own.
+  const loose = deliverablesIn(draft, 'internal').filter(({ item }) => item.shoot_index === null)
 
   const add = (items: { title: string }[]) =>
     patch({ deliverables: withDeliverables(draft.deliverables, items) })
@@ -1813,21 +1854,18 @@ function DeliverablesStep({
               Load set
             </span>
             {BUILT_IN_SETS.map((s) => (
-              <button
+              <ToneChip
                 key={s.name}
-                type="button"
+                tone="amber"
+                label={s.name}
                 onClick={() => add(s.titles.map((title) => ({ title })))}
                 title={s.titles.join(', ')}
-                className="flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-sm font-medium transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary"
-              >
-                <Plus className="size-3.5" aria-hidden />
-                {s.name}
-              </button>
+              />
             ))}
             {(sets.data ?? []).map((s) => (
               <span
                 key={s.id}
-                className="flex items-center rounded-full border border-border bg-card pr-1 text-sm font-medium"
+                className={cn('flex items-center rounded-full border pr-1 text-sm font-medium', TONE_CHIP_STATIC.rose)}
               >
                 <button
                   type="button"
@@ -1908,27 +1946,28 @@ function DeliverablesStep({
             <Sparkles className="size-3.5" aria-hidden />
             Quick add
           </span>
-          {QUICK_DELIVERABLES.map((title) => {
+          {quick.map(({ title, learned }, i) => {
             const already = draft.deliverables.some(
               (d) => d.title.trim().toLowerCase() === title.toLowerCase(),
             )
             return (
-              <button
+              <ToneChip
                 key={title}
-                type="button"
-                onClick={() => add([{ title }])}
+                // What this studio has used before stands out in one colour;
+                // the generic list cycles through the rest.
+                tone={learned ? 'rose' : toneAt(i + 1)}
+                label={title}
+                selected={already}
                 disabled={already}
-                title={already ? `${title} is already on the list` : undefined}
-                className={cn(
-                  'flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm font-medium transition-colors',
+                onClick={() => add([{ title }])}
+                title={
                   already
-                    ? 'cursor-not-allowed text-muted-foreground opacity-60'
-                    : 'hover:border-primary hover:bg-primary/10 hover:text-primary',
-                )}
-              >
-                {already ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
-                {title}
-              </button>
+                    ? `${title} is already on the list`
+                    : learned
+                      ? `${title} — you've used this before`
+                      : `Add ${title}`
+                }
+              />
             )
           })}
         </div>
@@ -1972,37 +2011,39 @@ function DeliverablesStep({
         )}
       </SubCard>
 
-      {/* ── what only the team sees ── */}
-      {internal.length > 0 && (
+      {/* ── what only the team sees, shoot by shoot ── */}
+      {draft.shoots.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="mt-2 flex items-center gap-2 text-sm font-semibold">
+            <Users className="size-4 text-muted-foreground" aria-hidden />
+            Team work for each shoot
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Culling, sorting, reels — what your team does off the back of each day. Never shown on the quotation.
+          </p>
+        </div>
+      )}
+      {draft.shoots.map((shoot, i) => (
+        <InternalWorkBlock
+          key={i}
+          index={i}
+          shoot={shoot}
+          draft={draft}
+          patch={patch}
+          work={internalWorkFor(draft, i)}
+        />
+      ))}
+      {loose.length > 0 && (
         <SubCard
           icon={Users}
-          title="Internal work"
-          hint="For your team only — never shown on the quotation. Items added inside a shoot are edited there."
-          actions={
-            internal.some(({ item }) => item.shoot_index !== null) ? (
-              <Button size="sm" variant="ghost" onClick={() => onJump('shoots')}>
-                <Pencil /> Edit in Shoots
-              </Button>
-            ) : null
-          }
+          title="Other team work"
+          hint="Internal items not tied to one shoot. Never shown on the quotation."
+          actions={null}
         >
           <div className="flex flex-col gap-2">
-            {internal.map(({ at, item }) =>
-              item.shoot_index === null ? (
-                <DeliverableRow key={at} at={at} item={item} draft={draft} patch={patch} />
-              ) : (
-                <div
-                  key={at}
-                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
-                >
-                  <Package className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="font-medium">{item.title || 'Untitled'}</span>
-                  <span className="text-muted-foreground">
-                    · {draft.shoots[item.shoot_index]?.name?.trim() || `Shoot ${item.shoot_index + 1}`}
-                  </span>
-                </div>
-              ),
-            )}
+            {loose.map(({ at, item }) => (
+              <DeliverableRow key={at} at={at} item={item} draft={draft} patch={patch} />
+            ))}
           </div>
         </SubCard>
       )}

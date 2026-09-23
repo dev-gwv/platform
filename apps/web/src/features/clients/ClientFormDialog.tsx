@@ -11,14 +11,30 @@ interface Props {
   client?: Client
   /** Edit mode renders as an icon button by default; pass a custom trigger to override. */
   trigger?: React.ReactNode
+  /**
+   * Controlled open state, for a page that opens the form itself — the setup
+   * journey lands on "add a client" with the form already up. Omit both to
+   * let the trigger manage it.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** No trigger button: the page opens it via `open`. */
+  hideTrigger?: boolean
+  /** Called after a new client is saved (not after an edit). */
+  onCreated?: () => void
 }
 
 /** Create- or edit-client modal, depending on whether `client` is passed. */
-export function ClientFormDialog({ client, trigger }: Props) {
+export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange, hideTrigger, onCreated }: Props) {
   const isEdit = !!client
   const create = useCreateClient()
   const update = useUpdateClient(client?.id ?? '')
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = (o: boolean) => {
+    if (openProp === undefined) setOpenState(o)
+    onOpenChange?.(o)
+  }
   const [name, setName] = useState(client?.name ?? '')
   const [phone, setPhone] = useState(client?.phone ?? '')
   const [alternatePhone, setAlternatePhone] = useState(client?.alternate_phone ?? '')
@@ -75,7 +91,10 @@ export function ClientFormDialog({ client, trigger }: Props) {
         })
       }
       setOpen(false)
-      if (!isEdit) reset()
+      if (!isEdit) {
+        reset()
+        onCreated?.()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : `Could not ${isEdit ? 'update' : 'add'} the client.`)
     }
@@ -85,17 +104,19 @@ export function ClientFormDialog({ client, trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (isEdit ? (
-          <Button variant="outline" size="icon" aria-label={`Edit ${client.name}`}>
-            <Pencil />
-          </Button>
-        ) : (
-          <Button>
-            <Plus /> New client
-          </Button>
-        ))}
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          {trigger ?? (isEdit ? (
+            <Button variant="outline" size="icon" aria-label={`Edit ${client.name}`}>
+              <Pencil />
+            </Button>
+          ) : (
+            <Button>
+              <Plus /> New client
+            </Button>
+          ))}
+        </DialogTrigger>
+      )}
       <DialogContent
         title={isEdit ? 'Edit client' : 'New client'}
         description={isEdit ? "Update what's on file for them." : 'Add someone you work with.'}
