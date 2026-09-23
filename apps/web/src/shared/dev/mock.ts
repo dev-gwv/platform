@@ -48,6 +48,11 @@ export const mockSession: SessionState = {
   plan_gate: 'active',
   plan_expiry: '2027-01-01T00:00:00Z',
   permissions: [],
+  // Two studios, so the switcher in the account menu shows in a preview.
+  studios: [
+    { profile_id: uid(1), company_id: uid(0xaa), company_name: 'Demo Studio', role: 'super_admin', is_owner: true },
+    { profile_id: uid(0xf1), company_id: uid(0xab), company_name: 'Lensworks Weddings', role: 'employee', is_owner: false },
+  ],
 }
 
 /** Directory rows carry a lot of nullable columns; only name the ones that vary. */
@@ -313,7 +318,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if ((method === 'PATCH' || method === 'DELETE') && path.startsWith('/team/roles/')) return { ok: true }
   if (method === 'PATCH' && /^\/team\/members\/[^/]+\/roles$/.test(path)) return { ok: true }
   if (method === 'POST' && path === '/team/members')
-    return { user_id: uid(0xd5), temp_password: null }
+    return { user_id: uid(0xd5), temp_password: null, linked_existing_login: false }
   if ((method === 'PATCH' || method === 'DELETE') && /^\/team\/members\/[^/]+$/.test(path))
     return { ok: true }
   if (method === 'GET' && path === '/team/invitations') return atStage(invitations, 'partial')

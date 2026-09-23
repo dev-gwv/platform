@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Building2, ChevronDown, LogOut, Palette, type LucideIcon } from 'lucide-react'
-import { companyProfile } from '@ipc/contracts'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Loader2, LogOut, Palette, type LucideIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import { companyProfile, type StudioMembership } from '@ipc/contracts'
 import { callApi } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { useAccess } from '../auth/useAccess'
@@ -94,6 +95,10 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
         >
           <Identity name={session.display_name} email={session.email} role={session.role} />
 
+          {session.studios.length > 1 && (
+            <StudioSwitcher studios={session.studios} current={session.user_id} />
+          )}
+
           {canSettings && (
             <div className="border-t border-border p-1.5">
               <Item to="/settings/company" icon={Building2} label="Company Profile" />
@@ -172,5 +177,67 @@ function Item({
       <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       {label}
     </Link>
+  )
+}
+
+/**
+ * The other studios this login belongs to.
+ *
+ * One person can be on several studios' teams under one email -- a freelancer
+ * shooting for three studios, or an owner who runs two -- and each studio is
+ * its own workspace with its own data. This is how they move between them
+ * without signing out; the current one is ticked.
+ */
+function StudioSwitcher({ studios, current }: { studios: StudioMembership[]; current: string }) {
+  const { switchStudio } = useAuth()
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function go(profileId: string) {
+    if (profileId === current || busy) return
+    setBusy(profileId)
+    try {
+      await switchStudio(profileId)
+    } catch (e) {
+      setBusy(null)
+      toast.error(e instanceof Error ? e.message : 'We could not open that studio.')
+    }
+  }
+
+  return (
+    <div className="border-t border-border p-1.5">
+      <p className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        <ArrowLeftRight className="size-3" aria-hidden /> Switch studio
+      </p>
+      {studios.map((s) => {
+        const here = s.profile_id === current
+        return (
+          <button
+            key={s.profile_id}
+            type="button"
+            role="menuitem"
+            onClick={() => void go(s.profile_id)}
+            aria-current={here || undefined}
+            disabled={!!busy}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:opacity-60',
+              here && 'bg-muted/60',
+            )}
+          >
+            <Avatar name={s.company_name} size="sm" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{s.company_name}</span>
+              <span className="block text-xs text-muted-foreground">
+                {s.is_owner ? 'Owner' : humanize(s.role)}
+              </span>
+            </span>
+            {busy === s.profile_id ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            ) : here ? (
+              <Check className="size-4 text-primary" aria-label="Current studio" />
+            ) : null}
+          </button>
+        )
+      })}
+    </div>
   )
 }

@@ -52,6 +52,10 @@ export function AcceptInvitePage() {
   const signedEmail = session?.email?.toLowerCase() ?? null
   const inviteEmail = preview.data?.email?.toLowerCase() ?? null
   const differentEmail = !!session && !!inviteEmail && !!signedEmail && signedEmail !== inviteEmail
+  // The invited email already signs in to IPC (another studio's team, or a
+  // studio of its own): accepting adds this studio to that login, so what we
+  // ask for is the password they already have, not a new one.
+  const hasAccount = preview.data?.has_account ?? false
 
   async function signOutDifferent() {
     await signOut()
@@ -60,11 +64,15 @@ export function AcceptInvitePage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (password.length < 8) {
+    if (hasAccount) {
+      if (!password) {
+        setError('Enter your IPC password.')
+        return
+      }
+    } else if (password.length < 8) {
       setError('Use at least 8 characters.')
       return
-    }
-    if (password !== confirmPassword) {
+    } else if (password !== confirmPassword) {
       setError('Passwords do not match.')
       return
     }
@@ -127,8 +135,19 @@ export function AcceptInvitePage() {
                   Join {preview.data?.company_name}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  You’re joining as {humanize(preview.data?.role ?? 'employee')}. Choose a password
-                  for {preview.data?.email}.
+                  {hasAccount ? (
+                    <>
+                      You’re joining as {humanize(preview.data?.role ?? 'employee')}.{' '}
+                      {preview.data?.email} already has an IPC login — enter its password and this
+                      studio is added to it. You can switch between your studios from the account
+                      menu.
+                    </>
+                  ) : (
+                    <>
+                      You’re joining as {humanize(preview.data?.role ?? 'employee')}. Choose a
+                      password for {preview.data?.email}.
+                    </>
+                  )}
                 </p>
 
                 {session && !differentEmail && (
@@ -157,32 +176,47 @@ export function AcceptInvitePage() {
 
                 <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Password</Label>
+                    <Label htmlFor="invite-password">
+                      {hasAccount ? 'Your IPC password' : 'Password'}
+                    </Label>
                     <Input
+                      id="invite-password"
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 8 characters"
-                      autoComplete="new-password"
+                      placeholder={hasAccount ? undefined : 'At least 8 characters'}
+                      autoComplete={hasAccount ? 'current-password' : 'new-password'}
                       autoFocus
                     />
+                    {hasAccount && (
+                      <p className="text-xs text-muted-foreground">
+                        Forgot it? Use “Forgot password” on the{' '}
+                        <Link to="/login" className="text-primary hover:underline">
+                          sign-in page
+                        </Link>
+                        , then open this link again.
+                      </p>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Confirm password</Label>
-                    <Input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </div>
+                  {!hasAccount && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="invite-confirm">Confirm password</Label>
+                      <Input
+                        id="invite-confirm"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  )}
                   {error && (
             <p id="form-error" role="alert" className="text-sm text-destructive">
               {error}
             </p>
           )}
                   <Button type="submit" disabled={busy || differentEmail}>
-                    {busy ? 'Setting up…' : 'Accept invitation'}
+                    {busy ? 'Setting up…' : hasAccount ? 'Add this studio to my login' : 'Accept invitation'}
                   </Button>
                 </form>
               </>

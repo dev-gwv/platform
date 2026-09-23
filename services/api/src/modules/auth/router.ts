@@ -17,6 +17,8 @@ import {
   authToken,
   sessionState,
   completeSetupRequest,
+  switchStudioRequest,
+  studioMembership,
   type AuthToken,
   type PlanGate,
 } from '@ipc/contracts'
@@ -43,10 +45,14 @@ async function decoyHash(): Promise<string> {
   return decoy
 }
 
-/** The version stamped into a freshly minted token (see issueToken). */
+/**
+ * The version stamped into a freshly minted token (see issueToken). A studio
+ * profile shares its login's version (0159), so one password change or
+ * "sign out everywhere" strands every studio's tokens at once.
+ */
 async function passwordVersion(sql: TransactionSql, uid: string): Promise<number> {
   const [r] = await sql<{ password_version: number }[]>`
-    select password_version from auth.users where id = ${uid}`
+    select password_version from auth.users where id = auth_identity_of(${uid})`
   return r?.password_version ?? 0
 }
 
@@ -54,15 +60,35 @@ async function passwordVersion(sql: TransactionSql, uid: string): Promise<number
  * The one place a session is minted. Every sign-in path (login, verify, reset)
  * returns this pair: a short access token stamped with the caller's current
  * password_version, and a fresh refresh-token family.
+ *
+ * `uid` is a login; the session is for one of its studios. Which one is
+ * `profile` when the caller already knows (a studio switch, accepting an
+ * invitation into a particular studio), else the studio they were last in
+ * (pick_login_profile). A person on one studio's team gets that studio, as
+ * before.
  */
-async function signIn(c: Context<AppEnv>, uid: string): Promise<AuthToken> {
+async function signIn(c: Context<AppEnv>, uid: string, profile?: string): Promise<AuthToken> {
   const env = c.env
-  const { pwv, refresh } = await withService(env, async (sql) => {
-    const pwv = await passwordVersion(sql, uid)
-    const [r] = await sql<{ token: string }[]>`select issue_refresh_token(${uid}) as token`
-    return { pwv, refresh: r!.token }
+  const minted = await withService(env, async (sql) => {
+    const [p] = await sql<{ id: string | null }[]>`
+      select pick_login_profile(${uid}, ${profile ?? null}) as id`
+    const target = p?.id
+    if (!target) return null
+    await sql`select remember_login_profile(${target})`
+    const pwv = await passwordVersion(sql, target)
+    const [r] = await sql<{ token: string }[]>`select issue_refresh_token(${target}) as token`
+    return { target, pwv, refresh: r!.token }
   })
-  return pair(c, await issueToken(env, uid, pwv), refresh)
+  if (!minted) fail(403, 'You are not a member of that studio.')
+  return pair(c, await issueToken(env, minted.target, minted.pwv), minted.refresh)
+}
+
+/** Every studio the caller's login can open, for the switcher. */
+async function studiosOf(sql: TransactionSql, uid: string) {
+  const rows = await sql`
+    select profile_id, company_id, company_name, role, is_owner
+      from list_login_profiles(auth_identity_of(${uid}))`
+  return studioMembership.array().parse(rows)
 }
 
 /**
@@ -425,13 +451,15 @@ export const authRouter = new Hono<AppEnv>()
   .post('/change-password', requireAuth, async (c) => {
     const parsed = changePasswordRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Use at least 8 characters, and not the current password.')
+    // The password belongs to the login, not to the studio this session is
+    // in: a person on three studios' teams has one password.
     const uid = c.get('auth').userId
 
     const rows = await attempt(c, 'auth.change_password.lookup', () =>
       withService(
         c.env,
         (sql) => sql<{ encrypted_password: string | null }[]>`
-          select encrypted_password from auth.users where id = ${uid}`,
+          select encrypted_password from auth.users where id = auth_identity_of(${uid})`,
       ),
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
@@ -445,8 +473,9 @@ export const authRouter = new Hono<AppEnv>()
         await sql`
           update auth.users
              set encrypted_password = ${pwHash}, password_changed_at = now()
-           where id = ${uid}`
-        // Bumps password_version and revokes every refresh family.
+           where id = auth_identity_of(${uid})`
+        // Bumps password_version and revokes every refresh family, in every
+        // studio this login belongs to.
         await sql`select revoke_all_sessions(${uid})`
         return true
       }),
@@ -454,7 +483,7 @@ export const authRouter = new Hono<AppEnv>()
     if (!done) fail(400, 'We could not change your password. Please try again.')
 
     await audit(c, { action: 'account.password_changed', entityType: 'user', entityId: uid })
-    return c.json(await signIn(c, uid))
+    return c.json(await signIn(c, uid, uid))
   })
 
   // ── Invitations ─────────────────────────────────────────────
@@ -482,7 +511,30 @@ export const authRouter = new Hono<AppEnv>()
 
   .post('/accept-invite', async (c) => {
     const parsed = acceptInvitationRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please choose a password of at least 6 characters.')
+    if (!parsed.success) fail(422, 'Please enter a password.')
+
+    // Someone already signing in to IPC -- on another studio's team, or with a
+    // studio of their own -- joins with that login, not a second one. Their
+    // existing password is the proof here, on top of the link: the link alone
+    // proves the mailbox, and the page told them which password it wants.
+    const existing = await attempt(c, 'auth.accept_invite.lookup', () =>
+      withService(
+        c.env,
+        (sql) => sql<{ id: string; encrypted_password: string | null; email_verified: boolean }[]>`
+          select au.id, au.encrypted_password, au.email_verified
+            from peek_user_invitation(${parsed.data.token}) i
+            join auth.users au on lower(au.email) = lower(i.email) and au.identity_id is null`,
+      ),
+    )
+    if (!existing) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    const login = existing[0]
+    const isLogin = !!login && (!!login.encrypted_password || login.email_verified)
+    if (isLogin && login.encrypted_password) {
+      const ok = await verifyPassword(parsed.data.password, login.encrypted_password)
+      if (!ok) fail(401, 'That is not the password for your existing IPC login.')
+    } else if (!isLogin && parsed.data.password.length < 8) {
+      fail(422, 'Please choose a password of at least 8 characters.')
+    }
 
     // Hash first, then consume: the SQL side creates the identity and the tenant
     // row in one transaction, so a failure leaves no half-built member behind.
@@ -501,8 +553,9 @@ export const authRouter = new Hono<AppEnv>()
     if (uid === 'taken') fail(409, 'An account with this email already exists. Please sign in instead.')
     if (!uid) fail(400, 'This invitation is invalid, revoked, or has expired.')
 
-    // Following the link proves mailbox control, so acceptance signs them in.
-    return c.json(await signIn(c, uid))
+    // Following the link proves mailbox control, so acceptance signs them in --
+    // into the studio that invited them, whichever others they belong to.
+    return c.json(await signIn(c, uid, uid))
   })
 
   .post('/refresh', async (c) => {
@@ -566,9 +619,36 @@ export const authRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
+  // Open another studio this login belongs to. A fresh pair for that studio's
+  // profile; the session being left gives up its refresh family, so switching
+  // back and forth does not pile up live tokens.
+  .post('/switch', requireAuth, async (c) => {
+    const parsed = switchStudioRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please choose a studio.')
+    const uid = c.get('auth').userId
+    const token = await signIn(c, uid, parsed.data.profile_id)
+    const leaving = parsed.data.refresh_token ?? readRefreshCookie(c)
+    if (leaving && parsed.data.profile_id !== uid) {
+      await attempt(c, 'auth.switch.revoke', () =>
+        withService(c.env, (sql) => sql`select revoke_refresh_family(${leaving})`),
+      )
+    }
+    await audit(c, {
+      action: 'account.studio_switched',
+      entityType: 'user',
+      entityId: uid,
+      after: { to_profile: parsed.data.profile_id },
+    })
+    return c.json(token)
+  })
+
   // Whole-session hydration for an established tenant.
-  .get('/session', requireAuth, (c) => {
+  .get('/session', requireAuth, async (c) => {
     const a = c.get('auth')
+    // A failure here costs the switcher, not the session.
+    const studios = (await attempt(c, 'auth.session.studios', () =>
+      withService(c.env, (sql) => studiosOf(sql, a.userId)),
+    )) ?? []
     return c.json(
       sessionState.parse({
         user_id: a.userId,
@@ -581,6 +661,7 @@ export const authRouter = new Hono<AppEnv>()
         plan_gate: a.planGate,
         plan_expiry: a.planExpiry,
         permissions: serializeAccess(a.access),
+        studios,
       }),
     )
   })

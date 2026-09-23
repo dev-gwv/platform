@@ -138,6 +138,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
     }
 
     let added = 0
+    let linked = 0
     let failed = 0
     let done = 0
     const queue = [...todo]
@@ -146,9 +147,10 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
         const row = r
         patch(row.key, { status: 'saving', error: null })
         try {
-          await calls.addMember(toRequest(row, (k) => resolved.get(k) ?? null))
+          const out = await calls.addMember(toRequest(row, (k) => resolved.get(k) ?? null))
           patch(row.key, { status: 'added' })
           added++
+          if (out.linked_existing_login) linked++
         } catch (err) {
           patch(row.key, {
             status: 'failed',
@@ -166,6 +168,15 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
 
     if (roleFailures.length > 0) {
       toast.error(`Couldn't create: ${roleFailures.join(', ')}. You can add these roles from each person's Edit.`)
+    }
+    // People who already use IPC for another studio were linked to that login
+    // rather than given the password from this table -- say so, or the owner
+    // hands out a password that does not work for them.
+    if (linked > 0) {
+      toast.info(
+        `${plural(linked, 'person', 'people')} already use${linked === 1 ? 's' : ''} IPC with another studio, so they sign in with their own password and switch to yours.`,
+        { duration: 10_000 },
+      )
     }
     if (failed === 0) {
       toast.success(`${plural(added, 'person', 'people')} added to your team.`)

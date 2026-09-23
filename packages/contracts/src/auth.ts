@@ -113,6 +113,16 @@ export type ChangePasswordRequest = z.infer<typeof changePasswordRequest>
 export const planGate = z.enum(['active', 'grace', 'grandfathered', 'expired'])
 export type PlanGate = z.infer<typeof planGate>
 
+/** One studio a login belongs to. */
+export const studioMembership = z.object({
+  profile_id: uuid,
+  company_id: uuid,
+  company_name: z.string(),
+  role: z.enum(['platform_admin', 'super_admin', 'admin', 'manager', 'employee', 'none']),
+  is_owner: z.boolean(),
+})
+export type StudioMembership = z.infer<typeof studioMembership>
+
 /** The whole-session payload the client hydrates from after login. */
 export const sessionState = z.object({
   user_id: uuid,
@@ -127,5 +137,20 @@ export const sessionState = z.object({
   plan_expiry: isoDateTime.nullable(),
   /** Effective module permission keys, pre-composed server-side. */
   permissions: z.array(z.string()),
+  /**
+   * Every studio this login can open, the current one included. One person
+   * can be on several studios' teams under one email -- a freelancer, or an
+   * owner running more than one studio -- and this is what the studio
+   * switcher lists. `profile_id` is the id to hand to POST /auth/switch.
+   */
+  studios: z.array(studioMembership).default([]),
 })
 export type SessionState = z.infer<typeof sessionState>
+
+/** Open a different studio this login belongs to. */
+export const switchStudioRequest = z.object({
+  profile_id: uuid,
+  /** The session being left, so its refresh family is revoked (body mode). */
+  refresh_token: z.string().min(10).max(500).optional(),
+})
+export type SwitchStudioRequest = z.infer<typeof switchStudioRequest>

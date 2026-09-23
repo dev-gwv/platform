@@ -170,6 +170,12 @@ export type AddMemberRequest = z.infer<typeof addMemberRequest>
 export const addMemberResponse = z.object({
   user_id: uuid,
   temp_password: z.string().nullable(),
+  /**
+   * The email already signs in to IPC, so this studio was added to that login
+   * rather than a new one made: they sign in with their own password, and the
+   * one typed here was not used.
+   */
+  linked_existing_login: z.boolean().default(false),
 })
 export type AddMemberResponse = z.infer<typeof addMemberResponse>
 
@@ -262,12 +268,20 @@ export const invitationPreview = z.object({
   company_name: z.string(),
   role: z.string(),
   expires_at: isoDateTime,
+  /**
+   * The invited email already signs in to IPC (another studio's team, or a
+   * studio of its own). Accepting then adds this studio to that login, so the
+   * page asks for the existing password instead of a new one.
+   */
+  has_account: z.boolean().default(false),
 })
 export type InvitationPreview = z.infer<typeof invitationPreview>
 
 export const acceptInvitationRequest = z.object({
   token: z.string().min(10),
-  password: z.string().min(8).max(72),
+  // A new login needs 8+ (checked by the API); an existing one is checked
+  // against whatever it already has, which older accounts set shorter.
+  password: z.string().min(1).max(200),
 })
 export type AcceptInvitationRequest = z.infer<typeof acceptInvitationRequest>
 

@@ -232,7 +232,12 @@ export function useAddMember() {
         body: addMemberRequest.parse(input),
         responseSchema: addMemberResponse,
       }),
-    (_out, input) => `${input.name} added to the team`,
+    // Someone already on another studio's team keeps their own login: this
+    // studio was added to it, and the password typed in the form was not used.
+    (out, input) =>
+      out.linked_existing_login
+        ? `${input.name} added. They already use IPC with ${input.email}, so they sign in with their own password and switch to your studio.`
+        : `${input.name} added to the team`,
   )
 }
 

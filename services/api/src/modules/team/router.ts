@@ -378,19 +378,62 @@ export const teamRouter = new Hono<AppEnv>()
 
     // One transaction: create the auth user and its tenant row together, so a
     // failed row insert rolls back the auth user (no orphan to clean up).
-    const userId = await attempt(
+    //
+    // An email that already signs in to IPC -- a freelancer another studio
+    // added first, or an owner joining a second studio's team -- is not a
+    // conflict any more (0159). This studio gets a profile on that login: they
+    // sign in with the password they already have and pick the studio, and
+    // the password typed here is not used. Only the same person twice in THIS
+    // studio is refused.
+    const added = await attempt(
       c,
       'team.member_add',
       () =>
         withService(c.env, async (sql) => {
-          const created = await sql<{ id: string }[]>`
-            insert into auth.users (email, encrypted_password, email_verified, email_verified_at)
-            values (
-              ${email ?? null}, ${pwHash},
-              ${create_login}, ${create_login ? new Date().toISOString() : null}
-            )
-            returning id`
-          const id = created[0]!.id
+          if (email) {
+            // Serialize concurrent adds of one email, so two tabs cannot both
+            // pass the "already on your team" check below.
+            await sql`select pg_advisory_xact_lock(hashtext(${`member:${companyId}:${email}`}))`
+            const [onTeam] = await sql<{ one: number }[]>`
+              select 1 as one from users
+               where company_id = ${companyId} and lower(email) = ${email} and deleted_at is null
+               limit 1`
+            if (onTeam) return 'on_team' as const
+          }
+          const [existing] = email
+            ? await sql<{ id: string; encrypted_password: string | null; email_verified: boolean }[]>`
+                select id, encrypted_password, email_verified from auth.users
+                 where lower(email) = ${email} and identity_id is null`
+            : []
+          // A row that has never signed in (someone's offline directory entry)
+          // is not a login yet: the password chosen here becomes its password.
+          const isLogin = !!existing && (!!existing.encrypted_password || existing.email_verified)
+
+          let id: string
+          let linked = false
+          if (!existing) {
+            const created = await sql<{ id: string }[]>`
+              insert into auth.users (email, encrypted_password, email_verified, email_verified_at)
+              values (
+                ${email ?? null}, ${pwHash},
+                ${create_login}, ${create_login ? new Date().toISOString() : null}
+              )
+              returning id`
+            id = created[0]!.id
+          } else {
+            if (!isLogin && create_login && pwHash) {
+              await sql`
+                update auth.users
+                   set encrypted_password = ${pwHash}, email_verified = true, email_verified_at = now()
+                 where id = ${existing.id}`
+            }
+            const created = await sql<{ id: string }[]>`
+              insert into auth.users (email, encrypted_password, email_verified, email_verified_at, identity_id)
+              values (null, null, true, now(), ${existing.id})
+              returning id`
+            id = created[0]!.id
+            linked = isLogin && create_login
+          }
           await sql`
             insert into users ${sql({
               user_id: id,
@@ -429,21 +472,26 @@ export const teamRouter = new Hono<AppEnv>()
                 select 1 from employee_roles where id = ${roleId} and company_id = ${companyId}
               )`
           }
-          return id
+          return { id, linked }
         }),
       { onCode: duplicateCode },
     )
-    if (userId === 'duplicate') fail(409, 'Someone with that email already has an account.')
-    if (!userId) fail(400, 'We could not add this member.')
+    if (added === 'on_team') fail(409, 'Someone with that email is already on your team.')
+    if (added === 'duplicate') fail(409, 'Someone with that email is already on your team.')
+    if (!added) fail(400, 'We could not add this member.')
+    const { id: userId, linked } = added
 
     await audit(c, {
       action: 'member.add',
       entityType: 'user',
       entityId: userId,
-      after: { name, email, role, create_login, engagement_type, role_ids },
+      after: { name, email, role, create_login, engagement_type, role_ids, linked_existing_login: linked },
     })
     // The owner picked the password, so there is nothing to hand back.
-    return c.json(addMemberResponse.parse({ user_id: userId, temp_password: null }), 201)
+    return c.json(
+      addMemberResponse.parse({ user_id: userId, temp_password: null, linked_existing_login: linked }),
+      201,
+    )
   })
 
   .patch('/members/:id', requireOwner(), async (c) => {
@@ -517,9 +565,11 @@ export const teamRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not remove this member.')
     if (!rows.length) fail(404, 'We could not find that team member.')
-    // Their sessions end now, not at the next access-token mint (0034).
+    // Their sessions in this studio end now, not at the next access-token
+    // mint (0034) -- and only in this studio: someone who is also on other
+    // studios' teams stays signed in to those (0159).
     await attempt(c, 'team.member_remove_sessions', () =>
-      withService(c.env, (sql) => sql`select revoke_all_sessions(${id})`),
+      withService(c.env, (sql) => sql`select revoke_profile_sessions(${id})`),
     )
     await audit(c, { action: 'member.remove', entityType: 'user', entityId: id, after: reason ? { reason } : {} })
     return c.json({ ok: true })
@@ -551,7 +601,10 @@ export const teamRouter = new Hono<AppEnv>()
 
     const raw = await attempt(c, 'team.reset_issue', () =>
       withService(c.env, async (sql) => {
-        const [t] = await sql<{ token: string }[]>`select issue_password_reset(${targetId}) as token`
+        // The password is the login's, which for someone on several studios'
+        // teams is not this studio's profile id.
+        const [t] = await sql<{ token: string }[]>`
+          select issue_password_reset(auth_identity_of(${targetId})) as token`
         return t?.token ?? null
       }),
     )
