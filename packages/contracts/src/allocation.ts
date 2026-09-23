@@ -41,8 +41,33 @@ export const bookSlotRequest = z.object({
   start_at: isoDateTime,
   end_at: isoDateTime,
   estimated_cost: money.optional(),
+  /** Payout bookkeeping set in the same step as the booking (Lovable parity). */
+  cost_status: slotCostStatus.optional(),
+  cost_notes: z.string().trim().max(500).optional(),
 })
 export type BookSlotRequest = z.infer<typeof bookSlotRequest>
+
+/**
+ * Several bookings in one request: many people onto one shoot, or one person
+ * onto many shoots. Each is booked on its own, so one clash does not undo the
+ * rest -- the result says, per item, which went in and why any did not.
+ */
+export const bookSlotsBatchRequest = z.object({
+  items: z.array(bookSlotRequest).min(1).max(60),
+})
+export type BookSlotsBatchRequest = z.infer<typeof bookSlotsBatchRequest>
+
+export const bookSlotsBatchResult = z.object({
+  results: z.array(
+    z.object({
+      index: z.number().int(),
+      id: uuid.nullable(),
+      /** 'double_booked' when the person is already out at that time. */
+      error: z.enum(['double_booked', 'failed']).nullable(),
+    }),
+  ),
+})
+export type BookSlotsBatchResult = z.infer<typeof bookSlotsBatchResult>
 
 export const setSlotStatusRequest = z.object({ status: slotStatus })
 export type SetSlotStatusRequest = z.infer<typeof setSlotStatusRequest>
@@ -74,6 +99,17 @@ export const teamMember = z.object({
   user_id: uuid,
   name: z.string(),
   role: z.string(),
+  /** Job roles ("Candid Photographer"), so a picker can put the right people first. */
+  role_names: z.array(z.string()).default([]),
+  engagement_type: z.string().nullable().default(null),
+  phone: z.string().nullable().default(null),
+  email: z.string().nullable().default(null),
+  /**
+   * How they are paid, for pre-filling a booking's payout. Only sent to people
+   * who plan crew (projects edit); null for everyone else.
+   */
+  payout_type: z.string().nullable().default(null),
+  freelancer_rate: money.nullable().default(null),
 })
 export type TeamMember = z.infer<typeof teamMember>
 

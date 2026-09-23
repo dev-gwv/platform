@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarClock, ChevronLeft, ChevronRight, Download, IndianRupee, Pencil, UserPlus, X } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight, Download, IndianRupee, Pencil, UserPlus, Users, X } from 'lucide-react'
 import { findConflicts, overlaps } from '@ipc/domain'
 import { shootListItem, type BookSlotRequest, type ShootListItem, type TeamSlot } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
+import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { PageHeader } from '@/shared/layout/page-header'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -73,6 +74,7 @@ function TeamBooking({ initialTab }: { initialTab?: Tab | undefined }) {
   const { session } = useAuth()
   const access = useAccess()
   const [tab, setTab] = useState<Tab>(initialTab ?? 'calendar')
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [view, setView] = useState<CalendarView>('month')
   const today = new Date()
   /**
@@ -177,11 +179,16 @@ function TeamBooking({ initialTab }: { initialTab?: Tab | undefined }) {
             <BookDialog
               shoots={inMonth}
               trigger={
-                <Button>
-                  <UserPlus /> Bulk Assign
+                <Button variant="outline">
+                  <UserPlus /> Book someone
                 </Button>
               }
             />
+            {/* The old button said Bulk Assign but opened a one-booking form. */}
+            <Button onClick={() => setBulkOpen(true)}>
+              <Users /> Bulk Assign
+            </Button>
+            {bulkOpen && <BulkAssignDialog onClose={() => setBulkOpen(false)} />}
           </>
         }
       />

@@ -58,12 +58,29 @@ export const teamRouter = new Hono<AppEnv>()
   // never a place to see who used to work here, so a deactivated member
   // (status = 'inactive', deleted_at still null) is excluded the same as a
   // removed one.
+  // The crew picker's list. Job roles let it put the right people first for a
+  // requirement; the pay basis lets a booking pre-fill its payout -- but only
+  // for someone who plans crew, since this route is open to every member.
   .get('/members', async (c) => {
+    const canPlan = c.get('auth').access.hasAction('projects', 'edit')
     const rows = await attempt(c, 'team.members', () =>
       withUser(
         c.env,
         c.get('auth').userId,
-        (sql) => sql`select user_id, name, role from users where deleted_at is null and status = 'active' order by name`,
+        (sql) => sql`
+          select u.user_id, u.name, u.role, u.engagement_type, u.phone, u.email,
+                 ${canPlan ? sql`u.payout_type` : sql`null::text`} as payout_type,
+                 ${canPlan ? sql`u.freelancer_rate` : sql`null::numeric`} as freelancer_rate,
+                 coalesce(
+                   array_agg(er.type_name order by er.type_name) filter (where er.id is not null),
+                   '{}'::text[]
+                 ) as role_names
+            from users u
+            left join employee_role_assignments era on era.user_id = u.user_id
+            left join employee_roles er on er.id = era.role_id
+           where u.deleted_at is null and u.status = 'active'
+           group by u.user_id
+           order by u.name`,
       ),
     )
     if (!rows) fail(400, 'We could not load the team.')

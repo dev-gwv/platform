@@ -14,6 +14,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -30,7 +31,9 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { Dialog, DialogContent } from '@/shared/ui/dialog'
+import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
+import { Avatar } from '@/shared/ui/avatar'
+import { QuantityStepper, ToneChip, toneAt } from '@/shared/ui/tone-chip'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
@@ -39,7 +42,10 @@ import { humanize, formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useShootTypes } from '@/features/projects/api'
 import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/features/shoots/api'
-import { useBookSlot, useMembers, useSlots } from '@/features/allocation/api'
+import { useReleaseSlot, useSlots } from '@/features/allocation/api'
+import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
+import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
+import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
 import { useDataRecords } from '@/features/data/api'
 
 /**
@@ -82,8 +88,6 @@ const TONE: Record<ShootStatus, 'info' | 'success' | 'warning' | 'danger'> = {
   cancelled: 'danger',
 }
 
-/** A booking that still counts: cancelled and released seats are open again. */
-const isLive = (s: TeamSlot) => s.status === 'booked'
 
 const timeOf = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null
@@ -97,7 +101,7 @@ const timeOf = (iso: string | null) =>
  * preset could only ever be applied while first creating the project. Planning
  * one wedding meant three screens.
  */
-export function ShootsTab({ projectId }: { projectId: string }) {
+export function ShootsTab({ projectId, onOpenData }: { projectId: string; onOpenData?: (() => void) | undefined }) {
   const { session } = useAuth()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
@@ -107,6 +111,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   const slots = useSlots()
   const dataRecords = useDataRecords()
   const [customOpen, setCustomOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -159,12 +164,20 @@ export function ShootsTab({ projectId }: { projectId: string }) {
         <h2 className="text-sm font-semibold text-muted-foreground">
           Plan every shoot day and assign crew per requirement
         </h2>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/shoots">
-            <ExternalLink /> All shoots
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {canEdit && (data?.length ?? 0) > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+              <Users /> Bulk assign
+            </Button>
+          )}
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/shoots">
+              <ExternalLink /> All shoots
+            </Link>
+          </Button>
+        </div>
       </div>
+      {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
       {canEdit && (
         <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -251,6 +264,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
               canEdit={canEdit}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
               dataCount={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
+              onOpenData={onOpenData}
             />
           ))}
         </div>
@@ -265,23 +279,30 @@ function ShootPlanner({
   canEdit,
   slots,
   dataCount,
+  onOpenData,
 }: {
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
   dataCount: { primary_status: string; backup_status: string }[]
+  onOpenData?: (() => void) | undefined
 }) {
   const update = useUpdateShoot()
   const del = useDeleteShoot()
   const services = useServices()
+  const release = useReleaseSlot()
   const confirm = useConfirm()
-  const [assignFor, setAssignFor] = useState<string | null>(null)
+  /** Open the assign desk; a requirement name focuses it on that role. */
+  const [assign, setAssign] = useState<{ requirement?: string } | null>(null)
   const [editing, setEditing] = useState(false)
+  const [addingReq, setAddingReq] = useState(false)
 
   const live = slots.filter(isLive)
+  const fill = requirementFill(shoot, live)
+  const progress = shootProgress(fill)
 
-  /** Per requirement: how many of that role are booked against how many needed. */
-  const filled = useMemo(() => {
+  /** Per requirement: who holds its seats. */
+  const holders = useMemo(() => {
     const m = new Map<string, TeamSlot[]>()
     for (const s of live) {
       const key = (s.service_name ?? '').toLowerCase()
@@ -289,13 +310,6 @@ function ShootPlanner({
     }
     return m
   }, [live])
-
-  const needed = shoot.requirements.reduce((n, r) => n + r.quantity, 0)
-  const booked = shoot.requirements.reduce(
-    (n, r) => n + Math.min((filled.get(r.name.toLowerCase()) ?? []).length, r.quantity),
-    0,
-  )
-  const pct = needed === 0 ? 0 : Math.round((booked / needed) * 100)
 
   const dataReady = dataCount.filter(
     (d) => d.primary_status === 'verified' && d.backup_status === 'verified',
@@ -318,13 +332,24 @@ function ShootPlanner({
 
   const start = timeOf(shoot.start_at)
   const end = timeOf(shoot.end_at)
+  const staffed = progress.required > 0 && progress.assigned >= progress.required
+
+  async function removeHolder(sl: TeamSlot) {
+    const yes = await confirm({
+      title: `Remove ${sl.user_name ?? 'this person'} from ${shoot.name}?`,
+      description: 'Their seat opens again. The booking stays in the history.',
+      destructive: true,
+      confirmLabel: 'Remove',
+    })
+    if (yes) release.mutate(sl.id, { onSuccess: () => toast.success(`${sl.user_name ?? 'Member'} removed.`) })
+  }
 
   return (
-    <Card>
+    <Card className={cn('overflow-hidden border-t-4', staffed ? 'border-t-success' : 'border-t-primary')}>
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="flex items-center gap-2 font-medium">
+            <span className="flex items-center gap-2 text-base font-semibold">
               <Camera className="size-4 text-muted-foreground" />
               {shoot.name}
               <StatusBadge tone={TONE[shoot.status]}>{humanize(shoot.status)}</StatusBadge>
@@ -354,63 +379,77 @@ function ShootPlanner({
                   Map <ExternalLink className="size-3" />
                 </a>
               )}
+              <span className="flex items-center gap-1">
+                <Users className="size-3" />
+                {progress.assigned}/{progress.required} assigned
+              </span>
+              <span className="flex items-center gap-1">
+                <Database className="size-3" /> Data {dataReady}/{dataCount.length}
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <StatusBadge tone={needed > 0 && booked >= needed ? 'success' : 'warning'}>
-              {booked}/{needed} assigned
-            </StatusBadge>
-            <StatusBadge tone={dataCount.length > 0 && dataReady === dataCount.length ? 'success' : 'neutral'}>
-              <Database className="size-3" /> Data {dataReady}/{dataCount.length}
-            </StatusBadge>
-            {canEdit && (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
-                  <Pencil />
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
+                <Plus /> Add requirement
+              </Button>
+              <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
+                <UserPlus /> Assign team
+              </Button>
+              {onOpenData && (
+                <Button size="sm" variant="outline" onClick={onOpenData}>
+                  <Database /> Add data
                 </Button>
-                <Button size="sm" variant="ghost" asChild>
-                  <Link to="/shoots/$id" params={{ id: shoot.id }}>
-                    Open
-                  </Link>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Delete ${shoot.name}`}
-                  onClick={async () => {
-                    const yes = await confirm({
-                      title: `Delete ${shoot.name}?`,
-                      description: 'Its crew bookings go with it. This cannot be undone.',
-                      destructive: true,
-                      confirmLabel: 'Delete',
-                    })
-                    if (yes) del.mutate(shoot.id)
-                  }}
-                >
-                  <Trash2 />
-                </Button>
-              </>
-            )}
-          </div>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
+                <Pencil />
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <Link to="/shoots/$id" params={{ id: shoot.id }}>
+                  Open
+                </Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                aria-label={`Delete ${shoot.name}`}
+                onClick={async () => {
+                  const yes = await confirm({
+                    title: `Delete ${shoot.name}?`,
+                    description: 'Its crew bookings go with it. This cannot be undone.',
+                    destructive: true,
+                    confirmLabel: 'Delete',
+                  })
+                  if (yes) del.mutate(shoot.id)
+                }}
+              >
+                <Trash2 />
+              </Button>
+            </div>
+          )}
         </div>
 
-        {needed > 0 && (
+        {progress.required > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Crew booked</span>
-              <span className="tabular-nums">{pct}%</span>
+              <span>Team allocation</span>
+              <span className="tabular-nums">{progress.pct}%</span>
             </div>
             <div
               className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted"
               role="progressbar"
-              aria-valuenow={pct}
+              aria-valuenow={progress.pct}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label={`${shoot.name} crew booked`}
+              aria-label={`${shoot.name} team allocated`}
             >
               <div
-                className={cn('h-full rounded-full transition-[width] duration-500', pct === 100 ? 'bg-success' : 'bg-primary')}
-                style={{ width: `${pct}%` }}
+                className={cn(
+                  'h-full rounded-full transition-[width] duration-500',
+                  progress.pct === 100 ? 'bg-success' : progress.pct > 0 ? 'bg-warning' : 'bg-destructive',
+                )}
+                style={{ width: `${progress.pct}%` }}
               />
             </div>
           </div>
@@ -420,20 +459,19 @@ function ShootPlanner({
             editing the requirement list there. */}
         {canEdit && roleChips.length > 0 && (
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-2.5">
-            <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-              <Users className="size-3.5" /> Add a role this day needs
+            <p className="flex items-center gap-1.5 text-xs font-medium">
+              <Users className="size-3.5 text-primary" /> Add more team
+              <span className="font-normal text-muted-foreground">— roles this shoot needs. Set how many on the row.</span>
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {roleChips.map((name) => (
-                <Button
+              {roleChips.map((name, i) => (
+                <ToneChip
                   key={name}
-                  size="sm"
-                  variant="outline"
+                  tone={toneAt(i)}
+                  label={name}
                   disabled={update.isPending}
                   onClick={() => setRequirements([...asInput(), { name, quantity: 1 }])}
-                >
-                  <Plus /> {name}
-                </Button>
+                />
               ))}
             </div>
           </div>
@@ -441,40 +479,60 @@ function ShootPlanner({
 
         <div className="mt-3 flex flex-col gap-2">
           {shoot.requirements.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Nothing booked for this day yet — add the roles it needs above.
+            <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+              No roles on this day yet — add the ones it needs above, then assign the team.
             </p>
           ) : (
-            shoot.requirements.map((r) => {
-              const on = filled.get(r.name.toLowerCase()) ?? []
-              const full = on.length >= r.quantity
+            fill.map((r) => {
+              const req = shoot.requirements.find((x) => x.name === r.name)!
+              const on = holders.get(r.name.toLowerCase()) ?? []
+              const full = r.open === 0
               return (
                 <div
-                  key={r.service_id}
+                  key={req.service_id}
                   className={cn(
-                    'rounded-md border-l-2 border border-border p-2.5',
-                    full ? 'border-l-success bg-success/5' : 'border-l-destructive bg-destructive/5',
+                    'rounded-md border border-l-4 p-3',
+                    full ? 'border-success/40 border-l-success bg-success/5' : 'border-warning/40 border-l-warning bg-warning/5',
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-sm">{r.name}</span>
-                    <span className="text-[11px] text-muted-foreground">Required {r.quantity}</span>
-                    <StatusBadge tone={full ? 'success' : 'warning'}>
-                      {on.length}/{r.quantity} assigned
-                    </StatusBadge>
-                    <span className="ml-auto flex items-center gap-1.5">
+                    <span className="text-sm font-semibold">{r.name}</span>
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        full ? 'bg-success/15 text-success' : 'bg-destructive/10 text-destructive',
+                      )}
+                    >
+                      <Users className="size-3" /> Assigned {r.assigned}/{r.required}
+                    </span>
+                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
                       {canEdit && (
                         <>
-                          <Button size="sm" variant={full ? 'outline' : 'default'} onClick={() => setAssignFor(r.name)}>
-                            <UserPlus /> {full ? 'Manage' : 'Assign'}
+                          <QuantityStepper
+                            label={r.name}
+                            value={req.quantity}
+                            min={1}
+                            max={20}
+                            onChange={(q) =>
+                              setRequirements(asInput().map((x) => (x.name === r.name ? { ...x, quantity: q } : x)))
+                            }
+                          />
+                          <Button
+                            size="sm"
+                            variant={full ? 'outline' : 'default'}
+                            className={cn(!full && 'bg-warning text-card hover:bg-warning/90')}
+                            onClick={() => setAssign({ requirement: r.name })}
+                          >
+                            <UserPlus /> {full ? 'Manage team' : 'Assign team'}
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="text-destructive"
                             aria-label={`Remove ${r.name}`}
                             onClick={() => setRequirements(asInput().filter((x) => x.name !== r.name))}
                           >
-                            <Trash2 />
+                            <X />
                           </Button>
                         </>
                       )}
@@ -482,24 +540,39 @@ function ShootPlanner({
                   </div>
 
                   {on.length === 0 ? (
-                    <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <AlertTriangle className="size-3.5 text-destructive" />
-                      Nobody assigned yet.
-                    </p>
+                    <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 p-2 text-xs">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                      <div>
+                        <p className="font-medium text-warning">Team not assigned</p>
+                        <p className="text-muted-foreground">Assign a team member for this requirement using the button above.</p>
+                      </div>
+                    </div>
                   ) : (
-                    <ul className="mt-1.5 flex flex-col gap-1">
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
                       {on.map((sl) => (
-                        <li key={sl.id} className="flex flex-wrap items-center gap-2 text-xs">
+                        <li
+                          key={sl.id}
+                          className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
+                        >
+                          <Avatar name={sl.user_name ?? '?'} size="sm" />
                           <span className="font-medium">{sl.user_name ?? 'Unknown'}</span>
                           <span className="text-muted-foreground">
                             {timeOf(sl.start_at)}–{timeOf(sl.end_at)}
                           </span>
-                          {sl.final_cost != null || sl.estimated_cost != null ? (
-                            <span className="text-muted-foreground">
-                              {formatINR(sl.final_cost ?? sl.estimated_cost ?? 0)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">Cost not set</span>
+                          <span className="text-muted-foreground">
+                            {sl.final_cost != null || sl.estimated_cost != null
+                              ? formatINR(sl.final_cost ?? sl.estimated_cost ?? 0)
+                              : 'No payout'}
+                          </span>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              aria-label={`Remove ${sl.user_name ?? 'member'} from ${r.name}`}
+                              className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => void removeHolder(sl)}
+                            >
+                              <X className="size-3" />
+                            </button>
                           )}
                         </li>
                       ))}
@@ -511,11 +584,21 @@ function ShootPlanner({
           )}
         </div>
 
-        {assignFor && (
-          <AssignDialog
-            shoot={shoot}
-            role={assignFor}
-            onClose={() => setAssignFor(null)}
+        {assign && (
+          <AssignTeamDialog shoot={shoot} initialRequirement={assign.requirement} onClose={() => setAssign(null)} />
+        )}
+        {addingReq && (
+          <AddRequirementDialog
+            existing={shoot.requirements.map((r) => r.name)}
+            suggestions={(services.data ?? []).map((s) => s.name)}
+            busy={update.isPending}
+            onClose={() => setAddingReq(false)}
+            onAdd={(items) =>
+              update.mutate(
+                { id: shoot.id, patch: { requirements: [...asInput(), ...items] } },
+                { onSuccess: () => setAddingReq(false) },
+              )
+            }
           />
         )}
         {editing && <EditShootDialog shoot={shoot} onClose={() => setEditing(false)} />}
@@ -524,79 +607,102 @@ function ShootPlanner({
   )
 }
 
-/** Book one person onto one role on this day. */
-function AssignDialog({ shoot, role, onClose }: { shoot: ShootListItem; role: string; onClose: () => void }) {
-  const members = useMembers()
-  const book = useBookSlot()
-  const day = shoot.shoot_date ?? todayISO()
-  const [userId, setUserId] = useState('')
-  const [from, setFrom] = useState(`${day}T09:00`)
-  const [to, setTo] = useState(`${day}T18:00`)
-  const [cost, setCost] = useState('')
+/**
+ * Add one or several roles to a day, each with how many are needed. The
+ * studio's own roles are offered as chips; anything else can be typed.
+ */
+function AddRequirementDialog({
+  existing,
+  suggestions,
+  busy,
+  onClose,
+  onAdd,
+}: {
+  existing: string[]
+  suggestions: string[]
+  busy: boolean
+  onClose: () => void
+  onAdd: (items: ShootRequirementInput[]) => void
+}) {
+  const have = new Set(existing.map((n) => n.toLowerCase()))
+  const pool = [...new Set([...suggestions, ...FALLBACK_ROLES])].filter((n) => !have.has(n.toLowerCase()))
+  const [picked, setPicked] = useState<ShootRequirementInput[]>([])
+  const [custom, setCustom] = useState('')
+  const isPicked = (n: string) => picked.some((p) => p.name.toLowerCase() === n.toLowerCase())
+
+  function addName(name: string) {
+    const n = name.trim()
+    if (!n || have.has(n.toLowerCase())) return
+    setPicked((p) => (isPicked(n) ? p : [...p, { name: n, quantity: 1 }]))
+  }
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={`Assign ${role}`} description={`${shoot.name}${shoot.shoot_date ? ` · ${shoot.shoot_date}` : ''}`}>
+      <DialogContent title="Add requirements" description="Pick the roles this shoot needs and how many of each.">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="assign-who">Who</Label>
-            <Select id="assign-who" value={userId} onChange={(e) => setUserId(e.target.value)}>
-              <option value="">Pick someone</option>
-              {(members.data ?? []).map((m) => (
-                <option key={m.user_id} value={m.user_id}>
-                  {m.name}
-                </option>
-              ))}
-            </Select>
+          <div className="flex flex-wrap gap-1.5">
+            {pool.map((n, i) => (
+              <ToneChip key={n} tone={toneAt(i)} label={n} selected={isPicked(n)} onClick={() => (isPicked(n) ? setPicked((p) => p.filter((x) => x.name !== n)) : addName(n))} />
+            ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-from">From</Label>
-              <Input id="assign-from" type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-to">To</Label>
-              <Input id="assign-to" type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="assign-cost">Estimated cost</Label>
+          <div className="flex gap-2">
             <Input
-              id="assign-cost"
-              inputMode="numeric"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              placeholder="Optional"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="Another role, e.g. Makeup Artist"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addName(custom)
+                  setCustom('')
+                }
+              }}
+              aria-label="Another role"
             />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Double-booking is refused — if this person is already out on another shoot in these hours you will be
-            told, rather than finding out on the day.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
             <Button
-              disabled={!userId || book.isPending}
-              onClick={() =>
-                book.mutate(
-                  {
-                    user_id: userId,
-                    shoot_id: shoot.id,
-                    service_name: role,
-                    start_at: new Date(from).toISOString(),
-                    end_at: new Date(to).toISOString(),
-                    ...(cost.trim() ? { estimated_cost: Number(cost) } : {}),
-                  },
-                  { onSuccess: onClose },
-                )
-              }
+              variant="outline"
+              disabled={!custom.trim()}
+              onClick={() => {
+                addName(custom)
+                setCustom('')
+              }}
             >
-              {book.isPending ? 'Booking…' : 'Book'}
+              <Plus /> Add
             </Button>
           </div>
+          {picked.length > 0 && (
+            <ul className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+              {picked.map((p) => (
+                <li key={p.name} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
+                  <QuantityStepper
+                    label={p.name}
+                    value={p.quantity}
+                    min={1}
+                    max={20}
+                    onChange={(q) => setPicked((all) => all.map((x) => (x.name === p.name ? { ...x, quantity: q } : x)))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Drop ${p.name}`}
+                    onClick={() => setPicked((all) => all.filter((x) => x.name !== p.name))}
+                  >
+                    <X />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={picked.length === 0 || busy} onClick={() => onAdd(picked)}>
+            {busy ? 'Adding…' : `Add ${picked.length || ''} ${picked.length === 1 ? 'role' : 'roles'}`}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

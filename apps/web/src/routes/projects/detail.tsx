@@ -556,7 +556,7 @@ function ProjectDetail() {
       </div>
       )}
 
-      {tab === 'shoots' && <ShootsTab projectId={id} />}
+      {tab === 'shoots' && <ShootsTab projectId={id} onOpenData={() => setTab('data')} />}
       {tab === 'completed_work' && <CompletedWorkTab projectId={id} canReview={canReviewWork} />}
       {tab === 'terms' && <TermsTab projectId={id} canEdit={canEdit} />}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}

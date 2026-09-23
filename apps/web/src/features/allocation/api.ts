@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
-import { teamSlot, teamMember, type BookSlotRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
+import { bookSlotsBatchResult, teamSlot, teamMember, type BookSlotRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -41,6 +41,34 @@ export function useBookSlot() {
       toast.success('Crew booked')
       void qc.invalidateQueries({ queryKey: ['allocation'] })
     },
+  })
+}
+
+/**
+ * Book several at once (bulk assign). Resolves with a result per item rather
+ * than throwing on the first clash; the caller reports what went in.
+ */
+export function useBookSlots() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (items: BookSlotRequest[]) =>
+      callApi('/allocation/batch', {
+        method: 'POST',
+        body: { items },
+        responseSchema: bookSlotsBatchResult,
+      }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['allocation'] }),
+  })
+}
+
+/** Take someone off a shoot: the seat opens again, the history stays. */
+export function useReleaseSlot() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      callApi(`/allocation/${id}/status`, { method: 'POST', body: { status: 'released' }, responseSchema: z.unknown() }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['allocation'] }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

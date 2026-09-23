@@ -371,6 +371,11 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   }
   if (method === 'GET' && path === '/allocation') return atStage(slots, 'full')
   if (method === 'POST' && path === '/allocation') return { id: uid(0x5a) }
+  if (method === 'POST' && path === '/allocation/batch') {
+    const items = ((body as { items?: unknown[] } | undefined)?.items ?? []) as unknown[]
+    return { results: items.map((_, index) => ({ index, id: uid(0x5b0 + index), error: null })) }
+  }
+  if (method === 'POST' && /^\/allocation\/[^/]+\/status$/.test(path)) return {}
   if (method === 'GET' && path === '/data/locations') return storageLocationsFx
   if (method === 'POST' && path === '/data/locations') {
     const created = { id: uid(0x77 + storageLocationsFx.length), name: 'New location', kind: 'drive', ...(body as object) }
@@ -1237,10 +1242,41 @@ const workSubs = [
   },
 ]
 
+const teamPick = (
+  id: number,
+  name: string,
+  roleNames: string[],
+  over: Partial<{ role: string; engagement_type: string; payout_type: string; freelancer_rate: number; phone: string }> = {},
+) => ({
+  user_id: uid(id),
+  name,
+  role: over.role ?? 'employee',
+  role_names: roleNames,
+  engagement_type: over.engagement_type ?? 'in_house',
+  phone: over.phone ?? null,
+  email: null,
+  payout_type: over.payout_type ?? null,
+  freelancer_rate: over.freelancer_rate ?? null,
+})
+
+// Job roles and pay so the assign desk shows role matches, who is busy, and a
+// freelancer's rate pre-filling the payout.
 const members = [
-  { user_id: uid(0xe1), name: 'Rahul (Photographer)', role: 'employee' },
-  { user_id: uid(0xe2), name: 'Anita (Cinematographer)', role: 'employee' },
-  { user_id: uid(0xe3), name: 'Sana (Editor)', role: 'manager' },
+  teamPick(0xe1, 'Rahul Verma', ['Candid Photographer'], { payout_type: 'salary' }),
+  teamPick(0xe2, 'Anita Rao', ['Cinematographer'], { payout_type: 'salary' }),
+  teamPick(0xe3, 'Sana Khan', ['Video Editor'], { role: 'manager' }),
+  teamPick(0xe4, 'Vikram Singh', ['Candid Photographer', 'Traditional Photographer'], {
+    engagement_type: 'freelancer',
+    payout_type: 'per_shoot',
+    freelancer_rate: 12000,
+  }),
+  teamPick(0xe5, 'Meera Iyer', ['Traditional Videographer'], {
+    engagement_type: 'freelancer',
+    payout_type: 'per_day',
+    freelancer_rate: 9000,
+  }),
+  teamPick(0xe6, 'Arjun Das', ['Drone Operator'], { engagement_type: 'freelancer', payout_type: 'per_shoot', freelancer_rate: 7000 }),
+  teamPick(0xe7, 'Kavya Nair', ['Photographer'], { engagement_type: 'freelancer', payout_type: 'per_shoot', freelancer_rate: 10000 }),
 ]
 
 const bundlesFx = [
@@ -1803,6 +1839,9 @@ const slots = [
     end_at: daysFromNow(3, 22),
     status: 'booked',
     estimated_cost: 8000,
+    final_cost: null,
+    cost_status: 'tentative',
+    cost_notes: null,
   },
   {
     id: uid(0x52),
@@ -1814,6 +1853,9 @@ const slots = [
     end_at: daysFromNow(3, 22),
     status: 'booked',
     estimated_cost: 10000,
+    final_cost: null,
+    cost_status: 'tentative',
+    cost_notes: null,
   },
 ]
 
