@@ -134,7 +134,7 @@ export const NAV: NavEntry[] = [
     match: '/clients',
     children: [
       // Three, from six. Enquiries was the same list one step earlier -- an
-      // unworked enquiry is now a lead wearing an "Uncontacted" badge (0166).
+      // unworked enquiry is now a lead wearing an "Uncontacted" badge (0168).
       // Contacts and Companies were an org-chart layer on a business whose
       // customer is a family; what they held lives on the lead itself.
       //

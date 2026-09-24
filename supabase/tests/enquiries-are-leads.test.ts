@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * 0166: an enquiry is a lead nobody has called yet.
+ * 0168: an enquiry is a lead nobody has called yet.
  *
  * The migration runs against an empty database at boot, so the interesting
  * cases can only be exercised by seeding enquiries and running the file again
@@ -14,7 +14,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
  * enquiry duplicated in the list it works from.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
-const FOLD = readFileSync(join(migDir, '0166_enquiries_are_leads.sql'), 'utf8')
+const FOLD = readFileSync(join(migDir, '0168_enquiries_are_leads.sql'), 'utf8')
 
 const OWNER = 'e0000000-0000-4000-8000-000000000001'
 const OTHER_OWNER = 'e0000000-0000-4000-8000-000000000002'
@@ -57,7 +57,7 @@ const leads = () =>
        from crm_leads order by name`,
   )
 
-describe('0166: enquiries fold into leads', () => {
+describe('0168: enquiries fold into leads', () => {
   it('brings an unworked enquiry across, with its message and its own source wording', async () => {
     await db.exec(`
       insert into enquiries (company_id, name, phone, email, message, source, enquiry_status)
