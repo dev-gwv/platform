@@ -593,9 +593,9 @@ function NewTaskDialog() {
   const [voiceNoteUrl, setVoiceNoteUrl] = useState('')
   const [assignees, setAssignees] = useState<string[]>([])
   const { data: deliverables } = useBoardDeliverables()
-  // Only the chosen project's own deliverables: the list is every open one in
-  // the studio, and attaching a task to another project's would be a mistake.
-  const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId)
+  // Only the chosen project's own, still-open deliverables: attaching a task to
+  // another project's, or to one already delivered, would be a mistake.
+  const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId && d.status !== 'completed')
 
   function reset() {
     setTitle('')

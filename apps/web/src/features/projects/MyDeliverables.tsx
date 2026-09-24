@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { ExternalLink, Film } from 'lucide-react'
 import { Card, CardContent } from '@/shared/ui/card'
+import { useAccess } from '@/shared/auth/useAccess'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { useMyDeliverables } from '@/features/projects/api'
 import { DueChip, NextStageButton } from '@/features/projects/DeliverableRow'
@@ -14,6 +15,7 @@ import { STAGE_LABEL, STAGE_TONE, stageOf } from '@/features/projects/deliverabl
  */
 export function MyDeliverables() {
   const { data } = useMyDeliverables()
+  const canOpenProjects = useAccess().hasModule('projects')
   if (!data?.length) return null
   return (
     <Card className="mt-4">
@@ -33,14 +35,19 @@ export function MyDeliverables() {
                 <div className="min-w-[12rem] flex-1">
                   <p className="truncate text-sm font-semibold">{d.title}</p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    <Link
-                      to="/projects/$id"
-                      params={{ id: d.project_id }}
-                      search={{ tab: 'deliverables' }}
-                      className="font-medium text-foreground hover:underline"
-                    >
-                      {d.project_name}
-                    </Link>
+                    {/* An editor may not be able to open projects; then it is just a name. */}
+                    {canOpenProjects ? (
+                      <Link
+                        to="/projects/$id"
+                        params={{ id: d.project_id }}
+                        search={{ tab: 'deliverables' }}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {d.project_name}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-foreground">{d.project_name}</span>
+                    )}
                     {d.shoot_name && <span>{d.shoot_name}</span>}
                     <DueChip d={d} />
                     {d.delivery_link && (

@@ -856,6 +856,23 @@ if (listed) {
     { cross: cross.status, total },
   )
 
+  // A javascript: link never gets in; a dropped extra stops being charged.
+  const badLink = await api(`/projects/deliverables/${added.json.id}/stage`, {
+    token: aToken,
+    method: 'POST',
+    body: { status: 'review', delivery_link: 'javascript:alert(1)' },
+  })
+  check('deliverables: only web links are accepted (422)', badLink.status === 422, badLink.json)
+  const extra = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Drone film', is_additional_charge: true, additional_charge_amount: 8000 },
+  })
+  const withExtra = Number((await api(`/projects/${pid}`, { token: aToken })).json.total_cost)
+  await api(`/projects/deliverables/${extra.json.id}/stage`, { token: aToken, method: 'POST', body: { status: 'cancelled' } })
+  const afterDrop = Number((await api(`/projects/${pid}`, { token: aToken })).json.total_cost)
+  check('deliverables: a dropped extra is no longer charged', withExtra === 58000 && afterDrop === 50000, { withExtra, afterDrop })
+
   // A project template creates a real project now -- and asks for a client.
   const tpl = await api('/projects/templates', {
     token: aToken,

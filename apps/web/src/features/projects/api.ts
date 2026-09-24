@@ -14,7 +14,6 @@ import {
   type IssueQuotationRequest,
   type PaymentInput,
   type SaveDeliverableSetRequest,
-  type SetDeliverableSourcesRequest,
   type SetDeliverableStageRequest,
   type UpdateDeliverableRequest,
   type UpdateProjectRequest,
@@ -130,18 +129,6 @@ export function useUpdateDeliverable(id: string) {
   })
 }
 
-export function useSetDeliverableSources(id: string) {
-  return useMutation({
-    mutationFn: ({ deliverableId, shoot_ids }: { deliverableId: string } & SetDeliverableSourcesRequest) =>
-      callApi(`/projects/${id}/deliverables/${deliverableId}/shoots`, {
-        method: 'PUT',
-        body: { shoot_ids },
-        responseSchema: anySchema,
-      }),
-    onSuccess: useProjectMutation(id, 'Linked shoots updated'),
-  })
-}
-
 export function useDeleteDeliverable(id: string) {
   return useMutation({
     mutationFn: (deliverableId: string) =>
@@ -235,10 +222,8 @@ export function useBoardDeliverables() {
   })
 }
 
-// ── Granular catalog (shoot types / deliverable templates / workflow presets) ──
+// ── Shoot types catalog ──
 const shootTypeItem = z.object({ id: z.string().uuid(), name: z.string(), category: z.string().nullable().default(null), usage_count: z.number().int().default(0), is_archived: z.boolean().default(false) })
-const deliverableTemplateItem = z.object({ id: z.string().uuid(), title: z.string(), shoot_type: z.string().nullable().default(null), delivery_days: z.number().int().nullable().default(null), due_basis: z.string().nullable().default(null), brief: z.string().nullable().default(null), is_combined: z.boolean().default(false), usage_count: z.number().int().default(0), is_archived: z.boolean().default(false) })
-const workflowPresetItem = z.object({ id: z.string().uuid(), name: z.string(), shoot_type: z.string().nullable().default(null), shoot_time: z.string().nullable().default(null), shoot_city: z.string().nullable().default(null), requirements: z.array(z.string()).default([]), deliverables: z.array(z.string()).default([]), usage_count: z.number().int().default(0), is_archived: z.boolean().default(false) })
 
 export function useShootTypes() {
   const { session } = useAuth()
@@ -251,29 +236,6 @@ export function useCreateShootType() {
     onSuccess: () => { toast.success('Shoot type added'); void qc.invalidateQueries({ queryKey: ['catalog', 'shoot-types'] }) },
   })
 }
-export function useDeliverableTemplates() {
-  const { session } = useAuth()
-  return useQuery({ queryKey: ['catalog', 'deliverable-templates'], queryFn: () => callApi('/projects/catalog/deliverable-templates', { responseSchema: deliverableTemplateItem.array() }), enabled: !!session, staleTime: 60_000 })
-}
-export function useCreateDeliverableTemplate() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: { title: string; shoot_type?: string; delivery_days?: number; due_basis?: string; brief?: string; is_combined?: boolean }) => callApi('/projects/catalog/deliverable-templates', { method: 'POST', body: input, responseSchema: deliverableTemplateItem }),
-    onSuccess: () => { toast.success('Deliverable template added'); void qc.invalidateQueries({ queryKey: ['catalog', 'deliverable-templates'] }) },
-  })
-}
-export function useWorkflowPresets() {
-  const { session } = useAuth()
-  return useQuery({ queryKey: ['catalog', 'workflow-presets'], queryFn: () => callApi('/projects/catalog/workflow-presets', { responseSchema: workflowPresetItem.array() }), enabled: !!session, staleTime: 60_000 })
-}
-export function useCreateWorkflowPreset() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: { name: string; shoot_type?: string; shoot_time?: string; shoot_city?: string; requirements?: string[]; deliverables?: string[] }) => callApi('/projects/catalog/workflow-presets', { method: 'POST', body: input, responseSchema: workflowPresetItem }),
-    onSuccess: () => { toast.success('Workflow preset added'); void qc.invalidateQueries({ queryKey: ['catalog', 'workflow-presets'] }) },
-  })
-}
-
 const setsList = deliverableSet.array()
 
 /**

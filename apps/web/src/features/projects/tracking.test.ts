@@ -22,6 +22,7 @@ const row = (name: string, over: Partial<ProjectTrackingRow> = {}): ProjectTrack
   tasks_overdue: 0,
   deliverables_total: 0,
   deliverables_done: 0,
+  deliverables_late: 0,
   data_records_total: 0,
   data_records_unverified: 0,
   pending_reviews: 0,

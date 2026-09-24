@@ -656,7 +656,6 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       body: 'These are the terms of service for your photography package. By clicking "I agree" you accept the scope, payment schedule, and delivery timelines outlined in your quotation.',
     }
   if (method === 'POST' && path.includes('/terms/') && path.endsWith('/ack')) return { ok: true }
-  if (method === 'POST' && path === '/tasks/generate') return { created: 3 }
   if (method === 'GET' && path === '/platform/studios') return platformStudiosFx
   if (method === 'GET' && path === '/platform/usage') return platformUsageFx
   if (method === 'POST' && /^\/platform\/studios\/[^/]+\/plan$/.test(path)) return { ok: true }
@@ -1830,6 +1829,7 @@ const trackingRows = [
     tasks_overdue: 2,
     deliverables_total: 3,
     deliverables_done: 1,
+    deliverables_late: 2,
     data_records_total: 4,
     data_records_unverified: 3,
     pending_reviews: 1,
@@ -2032,7 +2032,6 @@ function delv(
     show_on_quotation: visibility_scope === 'client',
     start_rule: sourceShoots.length > 0 ? ('specific_shoots' as const) : ('whole_project' as const),
     status: extra.status ?? 'pending',
-    source_shoots: sourceShoots,
     estimated_date: extra.due !== undefined ? day(extra.due) : null,
     delivered_at: extra.delivered !== undefined ? `${day(extra.delivered)}T10:00:00Z` : null,
     assignee_id: extra.editor?.[0] ?? null,

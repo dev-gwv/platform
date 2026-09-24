@@ -628,7 +628,12 @@ export function InvoiceFormFields({
       ])
     } else if (kind === 'deliverables') {
       const extra = p.deliverables.filter(
-        (d) => d.visibility_scope === 'client' && d.show_on_quotation && d.is_additional_charge && d.additional_charge_amount > 0,
+        (d) =>
+          d.visibility_scope === 'client' &&
+          d.show_on_quotation &&
+          d.status !== 'cancelled' &&
+          d.is_additional_charge &&
+          d.additional_charge_amount > 0,
       )
       if (extra.length === 0) return setImportNote('This project has no billable deliverables.')
       set('lines', [

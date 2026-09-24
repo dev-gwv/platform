@@ -67,6 +67,7 @@ import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
+import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
 /** The tabs across a project. Each one is a view of the same project. */
 const TABS = [
@@ -311,6 +312,8 @@ function ProjectDetail() {
                 <Fact label="Email" value={data.client_email ?? '—'} />
               </CardContent>
             </Card>
+
+            <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
 
             <Card>
               <CardHeader className="pb-3">
@@ -695,7 +698,6 @@ function PaymentRow({
   )
 }
 
-/** Deliverables grouped under their shoot instead of split by scope. */
 function ReferralsTab({ projectId, projectName, clientName }: { projectId: string; projectName: string; clientName: string | null }) {
   void projectId
   const { data, isLoading } = useReferralCampaigns()

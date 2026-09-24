@@ -17,13 +17,9 @@ import {
 import {
   useShootTypes,
   useCreateShootType,
-  useDeliverableTemplates,
-  useCreateDeliverableTemplate,
-  useWorkflowPresets,
-  useCreateWorkflowPreset,
 } from '@/features/projects/api'
 import { type CreateProjectTemplateRequest } from '@ipc/contracts'
-import { Plus, Trash2, Copy, Package, Camera, ListChecks, Calendar, Sparkles } from 'lucide-react'
+import { Plus, Trash2, Copy, Package, Camera, ListChecks, Calendar } from 'lucide-react'
 
 function ProjectTemplatesContent() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -357,13 +353,14 @@ function ProjectTemplatesContent() {
   )
 }
 
-/** Granular catalog: shoot types, deliverable templates and workflow presets. */
+/**
+ * Shoot types, offered when adding a shoot. (Deliverable templates and
+ * workflow presets used to sit here too; nothing ever read them.)
+ */
 function CatalogManagers() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <ShootTypeManager />
-      <DeliverableTemplateManager />
-      <WorkflowPresetManager />
     </div>
   )
 }
@@ -406,94 +403,6 @@ function ShootTypeManager() {
             </li>
           ))}
           {items.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">No shoot types yet.</li>}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}
-
-function DeliverableTemplateManager() {
-  const { data } = useDeliverableTemplates()
-  const create = useCreateDeliverableTemplate()
-  const [title, setTitle] = useState('')
-  const [shootType, setShootType] = useState('')
-  const items = (data ?? []).filter((t) => !t.is_archived)
-
-  async function onAdd() {
-    if (!title.trim()) return
-    await create.mutateAsync({ title: title.trim(), ...(shootType.trim() ? { shoot_type: shootType.trim() } : {}) })
-    setTitle('')
-    setShootType('')
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Package className="h-4 w-4 text-primary" /> Deliverable templates
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">Suggestions offered when planning deliverables.</p>
-        <div className="mt-2 flex gap-2">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Wedding Teaser" aria-label="Deliverable title" />
-          <Button size="sm" onClick={() => void onAdd()} disabled={!title.trim() || create.isPending}>
-            <Plus /> Add
-          </Button>
-        </div>
-        <Input value={shootType} onChange={(e) => setShootType(e.target.value)} placeholder="Shoot type (optional)" aria-label="Deliverable shoot type" className="mt-2" />
-        <ul className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
-          {items.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
-              <span className="min-w-0 truncate">{t.title}{t.shoot_type && <span className="ml-1.5 text-xs text-muted-foreground">{t.shoot_type}</span>}</span>
-              {t.is_combined && <Badge variant="secondary">Combined</Badge>}
-            </li>
-          ))}
-          {items.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">No deliverable templates yet.</li>}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}
-
-function WorkflowPresetManager() {
-  const { data } = useWorkflowPresets()
-  const create = useCreateWorkflowPreset()
-  const [name, setName] = useState('')
-  const [shootType, setShootType] = useState('')
-  const items = (data ?? []).filter((t) => !t.is_archived)
-
-  async function onAdd() {
-    if (!name.trim() || !shootType.trim()) return
-    await create.mutateAsync({ name: name.trim(), shoot_type: shootType.trim() })
-    setName('')
-    setShootType('')
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="h-4 w-4 text-primary" /> Workflow presets
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">One-click shoot setups: requirements and deliverables together.</p>
-        <div className="mt-2 flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haldi Complete" aria-label="Preset name" />
-          <Button size="sm" onClick={() => void onAdd()} disabled={!name.trim() || !shootType.trim() || create.isPending}>
-            <Plus /> Add
-          </Button>
-        </div>
-        <Input value={shootType} onChange={(e) => setShootType(e.target.value)} placeholder="Shoot type" aria-label="Preset shoot type" className="mt-2" />
-        <ul className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
-          {items.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
-              <span className="min-w-0 truncate">{t.name}<span className="ml-1.5 text-xs text-muted-foreground">{t.shoot_type}</span></span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">{t.requirements.length + t.deliverables.length} items</span>
-            </li>
-          ))}
-          {items.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">No presets yet.</li>}
         </ul>
       </CardContent>
     </Card>

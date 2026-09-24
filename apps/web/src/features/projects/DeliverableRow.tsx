@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, CalendarDays, ExternalLink, Pencil, RotateCcw, Trash2, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, ExternalLink, Pencil, RotateCcw, Trash2, UserPlus, X } from 'lucide-react'
 import type { Deliverable, DeliverableStatus } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
@@ -8,7 +8,8 @@ import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
-import { useSetDeliverableStage } from '@/features/projects/api'
+import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
+import { useMembers } from '@/features/allocation/api'
 import {
   NEXT_ACTION,
   STAGE_LABEL,
@@ -138,28 +139,36 @@ export function DeliverableRow({
       )}
     >
       <div className="min-w-[12rem] flex-1">
-        <p className={cn('flex items-center gap-2 text-sm font-semibold', dropped && 'line-through')}>
-          <span className="truncate">{d.title}</span>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold">
+          <span className={cn('min-w-0 break-words', dropped && 'line-through')}>{d.title}</span>
           {d.visibility_scope === 'internal' && (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
               Team only
             </span>
           )}
           {d.is_additional_charge && d.additional_charge_amount > 0 && (
-            <span className="shrink-0 text-xs font-medium text-tone-green">+{formatINR(d.additional_charge_amount)}</span>
+            // A dropped extra is no longer charged -- say so rather than
+            // leaving an amount that reads as still owed.
+            <span className={cn('shrink-0 text-xs font-medium', dropped ? 'text-muted-foreground' : 'text-tone-green')}>
+              {dropped ? `${formatINR(d.additional_charge_amount)} not charged` : `+${formatINR(d.additional_charge_amount)}`}
+            </span>
           )}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-          <DueChip d={d} />
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            {d.assignee_name ? (
-              <>
-                <Avatar name={d.assignee_name} size="sm" /> {d.assignee_name}
-              </>
-            ) : (
-              'No editor'
-            )}
-          </span>
+          {canEdit && !dropped ? <DueEditor d={d} /> : <DueChip d={d} />}
+          {canEdit && !dropped && stage !== 'completed' ? (
+            <EditorPicker d={d} />
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              {d.assignee_name ? (
+                <>
+                  <Avatar name={d.assignee_name} size="sm" /> {d.assignee_name}
+                </>
+              ) : (
+                'No editor'
+              )}
+            </span>
+          )}
           {d.delivery_link && (
             <a
               href={d.delivery_link}
@@ -171,9 +180,13 @@ export function DeliverableRow({
             </a>
           )}
         </div>
+        {d.description && <Brief text={d.description} />}
       </div>
 
-      <StatusBadge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</StatusBadge>
+      {/* On a phone the next-step button already says where it stands. */}
+      <StatusBadge tone={STAGE_TONE[stage]} className={cn(canEdit && !dropped && stage !== 'completed' && 'hidden sm:inline-flex')}>
+        {STAGE_LABEL[stage]}
+      </StatusBadge>
 
       {canEdit && (
         <div className="flex items-center gap-1">
@@ -182,5 +195,95 @@ export function DeliverableRow({
         </div>
       )}
     </li>
+  )
+}
+
+/**
+ * Who is editing it, changed right on the row -- the old screen's name chip,
+ * without a task in between. Empty reads "Assign editor" so the gap is the
+ * thing you see.
+ */
+function EditorPicker({ d }: { d: Deliverable }) {
+  const { data: members } = useMembers()
+  const update = useUpdateDeliverable(d.project_id)
+  return (
+    <label className="relative inline-flex items-center gap-1 text-xs">
+      {d.assignee_name ? (
+        <Avatar name={d.assignee_name} size="sm" />
+      ) : (
+        <UserPlus className="size-3.5 text-primary" aria-hidden />
+      )}
+      <select
+        aria-label={`Editor for ${d.title}`}
+        value={d.assignee_id ?? ''}
+        disabled={update.isPending}
+        onChange={(e) => update.mutate({ deliverableId: d.id, patch: { assignee_id: e.target.value || null } })}
+        className={cn(
+          'cursor-pointer appearance-none rounded bg-transparent py-0.5 pr-1 font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          d.assignee_name ? 'text-muted-foreground' : 'text-primary',
+        )}
+      >
+        <option value="">{d.assignee_name ? 'No editor' : 'Assign editor'}</option>
+        {/* Someone not on the team list (the owner, say) still shows as themselves. */}
+        {d.assignee_id && !(members ?? []).some((m) => m.user_id === d.assignee_id) && (
+          <option value={d.assignee_id}>{d.assignee_name ?? 'Current editor'}</option>
+        )}
+        {(members ?? []).map((m) => (
+          <option key={m.user_id} value={m.user_id}>
+            {m.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/** The due chip, which becomes a date field when tapped; "Add due date" when there is none. */
+function DueEditor({ d }: { d: Deliverable }) {
+  const update = useUpdateDeliverable(d.project_id)
+  const [open, setOpen] = useState(false)
+  if (open) {
+    return (
+      <Input
+        type="date"
+        autoFocus
+        aria-label={`Due date for ${d.title}`}
+        defaultValue={d.estimated_date ?? ''}
+        className="h-7 w-40 text-xs"
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+        onChange={(e) => {
+          update.mutate({ deliverableId: d.id, patch: { estimated_date: e.target.value || null } })
+          setOpen(false)
+        }}
+      />
+    )
+  }
+  if (!d.estimated_date && stageOf(d.status) !== 'completed') {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        <CalendarDays className="size-3.5" aria-hidden /> Add due date
+      </button>
+    )
+  }
+  return (
+    <button type="button" onClick={() => setOpen(true)} className="rounded hover:underline" aria-label={`Change due date for ${d.title}`}>
+      <DueChip d={d} />
+    </button>
+  )
+}
+
+/** The editor's brief, one line until tapped. */
+function Brief({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      aria-expanded={open}
+      className={cn('mt-1 block w-full text-left text-xs text-muted-foreground', !open && 'line-clamp-1')}
+    >
+      <span className="font-medium text-foreground">Brief:</span> {text}
+    </button>
   )
 }

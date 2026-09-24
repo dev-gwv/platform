@@ -4,11 +4,18 @@ import type { Deliverable } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
-import { cn } from '@/shared/ui/cn'
-import { useDeleteDeliverable } from '@/features/projects/api'
+import { useAddDeliverable, useDeleteDeliverable } from '@/features/projects/api'
 import { DeliverableDialog } from '@/features/projects/DeliverableDialog'
 import { DeliverableRow } from '@/features/projects/DeliverableRow'
 import { deliverableCounts, groupByShoot, type ShootRef } from '@/features/projects/deliverable-stage'
+
+/**
+ * One tap adds the usual thing to an empty group -- the old screen's
+ * "Import work deliverables" without a dialog. Anything else goes through
+ * "+ Add", where any title can be typed.
+ */
+const SHOOT_SUGGESTIONS = ['Edited Photos', 'Teaser', 'Highlight Film', 'Reel / Short Video']
+const PROJECT_SUGGESTIONS = ['Photo Album', 'Full Wedding Film', 'Raw Photos', 'Instagram Reels Pack']
 
 const dateFmt = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -34,6 +41,7 @@ export function DeliverablesTab({
 }) {
   const [dialog, setDialog] = useState<{ deliverable?: Deliverable; shootId?: string | null } | null>(null)
   const del = useDeleteDeliverable(projectId)
+  const add = useAddDeliverable(projectId)
   const confirm = useConfirm()
   const counts = deliverableCounts(deliverables)
   const groups = groupByShoot(deliverables, shoots)
@@ -83,9 +91,32 @@ export function DeliverablesTab({
                 )}
               </div>
               {g.items.length === 0 ? (
-                <p className={cn('rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground')}>
-                  Nothing from this {g.shoot ? 'shoot' : 'project'} yet.
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                  <span className="mr-1">Nothing from this {g.shoot ? 'shoot' : 'project'} yet.</span>
+                  {canEdit &&
+                    (g.shoot ? SHOOT_SUGGESTIONS : PROJECT_SUGGESTIONS).map((title) => (
+                      <button
+                        key={title}
+                        type="button"
+                        disabled={add.isPending}
+                        onClick={() =>
+                          add.mutate({
+                            title,
+                            list_key: 'primary',
+                            start_rule: 'whole_project',
+                            visibility_scope: 'client',
+                            show_on_quotation: true,
+                            is_additional_charge: false,
+                            additional_charge_amount: 0,
+                            shoot_id: g.shoot?.id ?? null,
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border border-tone-violet/30 bg-tone-violet-soft px-2.5 py-0.5 font-medium text-tone-violet hover:bg-tone-violet/15"
+                      >
+                        <Plus className="size-3" aria-hidden /> {title}
+                      </button>
+                    ))}
+                </div>
               ) : (
                 <ul className="flex flex-col gap-1.5">
                   {g.items.map((d) => (
