@@ -95,7 +95,9 @@ export const createPersonalExpenseRequest = z.object({
   party_id: uuid.nullish(),
   amount: money.refine((v) => v > 0, 'amount must be positive'),
   expense_date: isoDate.optional(),
-  category: personalExpenseCategory.nullish(),
+  // The built-in categories are defaults, not the whole list: a studio adds
+  // its own from the form (Settings → Lookups, personal_expense_category).
+  category: z.string().trim().min(1).max(80).nullish(),
   gst_treatment: z.enum(['non_gst', 'gst_applicable', 'exempt', 'reverse_charge']).default('non_gst'),
   gst_rate: gstRate.nullish(),
   description: z.string().trim().max(2000).nullish(),

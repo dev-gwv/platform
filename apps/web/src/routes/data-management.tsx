@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { HardDrive, Plus, Check, Pencil, Trash2, Download, Settings2, AlertTriangle } from 'lucide-react'
-import { shootListItem, type CreateDataRecordRequest, type DataRecord, type DataStage, type StorageLocationKind } from '@ipc/contracts'
+import { shootListItem, type CreateDataRecordRequest, type DataRecord, type DataStage } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -27,12 +27,13 @@ import {
   useUpdateStorageLocation,
   useDeleteStorageLocation,
 } from '@/features/data/api'
-import { STAGE_LABEL, STAGE_TONE, TRACK_LABEL, TRACK_TONE } from '@/features/data/stage'
+import { DATA_TYPES, STAGE_LABEL, STAGE_TONE, TRACK_LABEL, TRACK_TONE } from '@/features/data/stage'
+import { LocationKindSelect, kindFields, kindLabelOf, kindValueOf } from '@/features/data/LocationKindSelect'
+import { LookupSelect } from '@/features/settings/LookupSelect'
 import { useProjects } from '@/features/projects/api'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
-const DATA_TYPES = ['Photos (RAW)', 'Photos (JPEG)', 'Video', 'Audio', 'Mixed']
 const shootsList = shootListItem.array()
 
 // Labels and tones for a record's stage and each copy's status live with the
@@ -79,6 +80,15 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
   const [search, setSearch] = useState('')
   const [projectId, setProjectId] = useState('')
   const [dataType, setDataType] = useState('')
+  // Built-in types plus whatever types are actually on records.
+  const typeFilterOptions = (() => {
+    const out: { value: string; label: string }[] = DATA_TYPES.map((t) => ({ value: t.value, label: t.label }))
+    for (const r of data ?? []) {
+      const t = r.data_type?.trim()
+      if (t && !out.some((o) => o.value === t)) out.push({ value: t, label: t })
+    }
+    return out
+  })()
   /**
    * The chips answer "is this card safe yet". These three answer the other
    * questions a studio actually asks the screen: where is it in the eight-stage
@@ -259,9 +269,10 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
             </Select>
             <Select value={dataType} onChange={(e) => setDataType(e.target.value)} className="w-40" aria-label="Filter by type">
               <option value="">All types</option>
-              {DATA_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {/* Every type actually on a record, so a studio's own types filter too. */}
+              {typeFilterOptions.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
                 </option>
               ))}
             </Select>
@@ -407,12 +418,6 @@ function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
   }
 }
 
-const LOCATION_KINDS: { value: StorageLocationKind; label: string }[] = [
-  { value: 'drive', label: 'Drive' },
-  { value: 'nas', label: 'NAS' },
-  { value: 'cloud', label: 'Cloud' },
-  { value: 'other', label: 'Other' },
-]
 
 /** Storage locations: capacity, holder and archive state at a glance. */
 function LocationsTab() {
@@ -468,7 +473,7 @@ function LocationsTab() {
           {locations.map((loc) => (
             <tr key={loc.id} className="border-t border-border">
               <td className="px-4 py-2 font-medium">{loc.name}</td>
-              <td className="px-4 py-2 text-muted-foreground">{humanize(loc.kind)}</td>
+              <td className="px-4 py-2 text-muted-foreground">{kindLabelOf(loc)}</td>
               <td className="px-4 py-2 text-muted-foreground">{loc.capacity_gb != null ? `${loc.capacity_gb} GB` : '—'}</td>
               <td className="px-4 py-2 text-muted-foreground">{loc.owner ?? '—'}</td>
               <td className="px-4 py-2">
@@ -544,7 +549,7 @@ function ManageLocationsDialog() {
   const confirm = useConfirm()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<StorageLocationKind>('drive')
+  const [kind, setKind] = useState<string>('drive')
   const [capacity, setCapacity] = useState('')
   const [owner, setOwner] = useState('')
 
@@ -553,7 +558,8 @@ function ManageLocationsDialog() {
     if (!name.trim()) return
     await create.mutateAsync({
       name: name.trim(),
-      kind,
+      kind: kindFields(kind).kind,
+      ...(kindFields(kind).location_type ? { location_type: kindFields(kind).location_type! } : {}),
       ...(capacity.trim() ? { capacity_gb: Number(capacity) } : {}),
       ...(owner.trim() ? { owner: owner.trim() } : {}),
     })
@@ -589,13 +595,7 @@ function ManageLocationsDialog() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Kind</Label>
-              <Select value={kind} onChange={(e) => setKind(e.target.value as StorageLocationKind)} className="w-28">
-                {LOCATION_KINDS.map((k) => (
-                  <option key={k.value} value={k.value}>
-                    {k.label}
-                  </option>
-                ))}
-              </Select>
+              <LocationKindSelect value={kind} onChange={setKind} className="w-44" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Capacity (GB)</Label>
@@ -626,17 +626,11 @@ function ManageLocationsDialog() {
                       if (value && value !== loc.name) update.mutate({ id: loc.id, patch: { name: value } })
                     }}
                   />
-                  <Select
-                    value={loc.kind}
-                    onChange={(e) => update.mutate({ id: loc.id, patch: { kind: e.target.value as StorageLocationKind } })}
-                    className="w-28"
-                  >
-                    {LOCATION_KINDS.map((k) => (
-                      <option key={k.value} value={k.value}>
-                        {k.label}
-                      </option>
-                    ))}
-                  </Select>
+                  <LocationKindSelect
+                    value={kindValueOf(loc)}
+                    onChange={(v) => update.mutate({ id: loc.id, patch: kindFields(v) })}
+                    className="w-44"
+                  />
                   <Button size="sm" variant="ghost" title="Remove" onClick={() => void onDelete(loc.id, loc.name)}>
                     <Trash2 />
                   </Button>
@@ -765,14 +759,16 @@ function AddRecordDialog({ record, trigger }: { record?: DataRecord; trigger?: R
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Data type</Label>
-            <Select value={dataType} onChange={(e) => setDataType(e.target.value)}>
-              <option value="">Unspecified</option>
-              {DATA_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
+            <LookupSelect
+              category="data_type"
+              aria-label="Data type"
+              value={dataType}
+              onChange={setDataType}
+              defaults={DATA_TYPES}
+              placeholder="Unspecified"
+              addLabel="Add a type…"
+              inputPlaceholder="e.g. Reels, 360° video"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">

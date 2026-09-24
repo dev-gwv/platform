@@ -21,7 +21,7 @@ interface Props {
   /** No trigger button: the page opens it via `open`. */
   hideTrigger?: boolean
   /** Called after a new client is saved (not after an edit). */
-  onCreated?: () => void
+  onCreated?: (client: Client) => void
 }
 
 /** Create- or edit-client modal, depending on whether `client` is passed. */
@@ -60,7 +60,11 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    // Opened from inside another form (a new invoice), React would carry this
+    // submit up to that form too, through the dialog's portal.
+    e.stopPropagation()
     setError(null)
+    let created: Client | undefined
     try {
       if (isEdit) {
         // Editing always resends every field explicitly — including as null —
@@ -78,7 +82,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
           notes: notes.trim() || null,
         })
       } else {
-        await create.mutateAsync({
+        created = await create.mutateAsync({
           name: name.trim(),
           ...(phone.trim() ? { phone: phone.trim() } : {}),
           ...(alternatePhone.trim() ? { alternate_phone: alternatePhone.trim() } : {}),
@@ -93,7 +97,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
       setOpen(false)
       if (!isEdit) {
         reset()
-        onCreated?.()
+        if (created) onCreated?.(created)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : `Could not ${isEdit ? 'update' : 'add'} the client.`)

@@ -52,6 +52,8 @@ import { QuoteRow } from './tabs/QuotesTab'
 import { ScoreBadge } from './tabs/shared'
 import { LostReasonDialog } from './LostReasonDialog'
 import { Timeline } from './Timeline'
+import { LookupSelect } from '@/features/settings/LookupSelect'
+import { EVENT_TYPE_DEFAULTS } from './event-types'
 import { STAGE_LABEL, dueBucket } from './leads'
 
 /** A datetime-local value from an ISO string, in the viewer's own timezone. */
@@ -340,8 +342,21 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="lead-event-type">Event type</Label>
-              <Input id="lead-event-type" defaultValue={lead.event_type ?? ''} placeholder="Wedding, Pre-wedding…" disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.event_type) patch({ event_type: v }) }} />
+              {canEdit ? (
+                <LookupSelect
+                  category="project_type"
+                  id="lead-event-type"
+                  aria-label="Event type"
+                  value={lead.event_type ?? ''}
+                  onChange={(v) => { const next = v || null; if (next !== lead.event_type) patch({ event_type: next }) }}
+                  defaults={EVENT_TYPE_DEFAULTS}
+                  placeholder="—"
+                  addLabel="Add an event type…"
+                  inputPlaceholder="e.g. Baby shower"
+                />
+              ) : (
+                <Input id="lead-event-type" value={lead.event_type ?? ''} disabled readOnly />
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="lead-event-date">Event date</Label>

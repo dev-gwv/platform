@@ -29,6 +29,10 @@ import { toast } from 'sonner'
 import { uploadFile } from '@/shared/api/client'
 import { useParties, useCreateParty, useUpdateParty, useDeleteParty } from '@/features/parties/api'
 import { PERSONAL_EXPENSE_CATEGORIES, type CreatePersonalExpenseRequest, type PersonalExpense } from '@ipc/contracts'
+import { LookupSelect } from '@/features/settings/LookupSelect'
+import { useActiveLookups } from '@/features/settings/api'
+
+const humanizeCategory = (c: string) => c.charAt(0).toUpperCase() + c.slice(1)
 import { PartyPicker } from '@/features/parties/PartyPicker'
 
 const GST_RATES = [0, 5, 12, 18, 28]
@@ -168,6 +172,7 @@ function PersonalExpensesContent({ report }: { report?: boolean | undefined }) {
     }
   }, [sorted])
 
+  const ownCategories = useActiveLookups('personal_expense_category')
   const categoryLabels: Record<string, string> = {
     travel: 'Travel',
     food: 'Food',
@@ -236,6 +241,10 @@ function PersonalExpensesContent({ report }: { report?: boolean | undefined }) {
             tabs={[
               { label: 'All', value: 'all' },
               ...PERSONAL_EXPENSE_CATEGORIES.map((c) => ({ label: categoryLabels[c] ?? c, value: c })),
+              // The studio's own categories filter too.
+              ...(ownCategories.data ?? [])
+                .filter((l) => !(PERSONAL_EXPENSE_CATEGORIES as readonly string[]).includes(l.value))
+                .map((l) => ({ label: l.value, value: l.value })),
             ]}
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -697,10 +706,16 @@ function ExpenseDialog({ open, onOpenChange, initial }: { open: boolean; onOpenC
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label>Category</Label>
-              <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="">Select category</option>
-                {PERSONAL_EXPENSE_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
-              </Select>
+              <LookupSelect
+                category="personal_expense_category"
+                aria-label="Category"
+                value={category}
+                onChange={setCategory}
+                defaults={PERSONAL_EXPENSE_CATEGORIES.map((c) => ({ value: c, label: humanizeCategory(c) }))}
+                placeholder="Select category"
+                addLabel="Add a category…"
+                inputPlaceholder="e.g. Parking, Tips"
+              />
             </div>
             <div><Label>Invoice number</Label><Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="INV-001" /></div>
           </div>
