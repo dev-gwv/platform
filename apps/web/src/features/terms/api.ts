@@ -20,7 +20,6 @@ const termsDocument = z.object({
 export type TermsDocument = z.infer<typeof termsDocument>
 const list = termsDocument.array()
 
-const issued = z.object({ document_id: z.string().uuid(), token: z.string() })
 
 /** What the server answers after making (and maybe emailing) a link. */
 const sentLink = z.object({
@@ -145,19 +144,6 @@ export function useTermsTemplates() {
   })
 }
 
-export function useSeedTermsTemplates() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () =>
-      callApi('/terms/templates/seed', { method: 'POST', responseSchema: z.object({ seeded: z.number() }) }),
-    onSuccess: (r) => {
-      toast.success(r.seeded ? `Added ${r.seeded} template${r.seeded === 1 ? '' : 's'}` : 'You already have all three')
-      void qc.invalidateQueries({ queryKey: ['terms', 'templates'] })
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
-
 export function useSaveTermsTemplate() {
   const qc = useQueryClient()
   return useMutation({
@@ -172,14 +158,6 @@ export function useSaveTermsTemplate() {
 }
 
 /** One instalment of the schedule the client is agreeing to. */
-export interface PaymentTermDraft {
-  label: string
-  mode: 'percent' | 'amount'
-  value: number
-  due_trigger?: string | undefined
-  notes?: string | undefined
-}
-
 export interface IssueTermsInput {
   project_id: string | null
   rendered_body: string
@@ -191,26 +169,14 @@ export interface IssueTermsInput {
   expiry_days?: number | undefined
 }
 
-/** Issuing again replaces the active link for that project — the old one still shows in history. */
-export function useIssueTerms() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: IssueTermsInput) =>
-      callApi('/terms/issue', { method: 'POST', body: input, responseSchema: issued }),
-    onSuccess: (_d, v) => {
-      toast.success('Terms link issued')
-      void qc.invalidateQueries({ queryKey: ['terms', 'documents'] })
-      // The server clears the draft on issue; drop our copy so reopening the
-      // wizard does not offer to resume something already sent.
-      if (v.project_id) void qc.invalidateQueries({ queryKey: ['terms', 'draft', v.project_id] })
-    },
-  })
+export interface PaymentTermDraft {
+  label: string
+  mode: 'percent' | 'amount'
+  value: number
+  due_trigger?: string | undefined
+  notes?: string | undefined
 }
 
-/**
- * A terms sheet saved part-way through. One per project: "save draft" means
- * "keep where I am", not "keep every version of where I have been".
- */
 export const termsDraft = z.object({
   id: z.string().uuid(),
   project_id: z.string().uuid().nullable(),
@@ -238,19 +204,6 @@ export function useTermsDraft(projectId: string | null) {
   })
 }
 
-export function useSaveTermsDraft() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: Record<string, unknown> & { project_id: string }) =>
-      callApi('/terms/draft', { method: 'PUT', body: input, responseSchema: termsDraft }),
-    onSuccess: (_d, v) => {
-      toast.success('Draft saved')
-      void qc.invalidateQueries({ queryKey: ['terms', 'draft', v.project_id] })
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
-
 /**
  * Keep the half-written terms as the owner types -- no button, no toast.
  * A failed save is quiet too: the text is still on screen, and the next
@@ -271,20 +224,6 @@ export function useAutosaveTermsDraft() {
   })
 }
 
-export function useDiscardTermsDraft() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (projectId: string) =>
-      callApi(`/terms/draft?project_id=${projectId}`, { method: 'DELETE', responseSchema: z.unknown() }),
-    onSuccess: (_d, projectId) => {
-      toast.success('Draft discarded')
-      void qc.invalidateQueries({ queryKey: ['terms', 'draft', projectId] })
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
-
-/** What was emailed for one document, and whether it actually went. */
 export const termsEmailLog = z.object({
   id: z.string().uuid(),
   to_email: z.string().nullable(),
@@ -293,24 +232,6 @@ export const termsEmailLog = z.object({
   created_at: z.string(),
 })
 export type TermsEmailLog = z.infer<typeof termsEmailLog>
-
-/**
- * The send history behind a terms document. "I sent it, they say it never
- * arrived" is otherwise unanswerable — the log records the address, the
- * outcome and the provider's error.
- */
-export function useTermsEmailLogs(documentId: string | null) {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['terms', 'email-logs', documentId],
-    queryFn: () =>
-      callApi(`/terms/documents/${documentId}/email-logs`, { responseSchema: termsEmailLog.array() }),
-    enabled: !!session && !!documentId,
-    staleTime: 15_000,
-  })
-}
-
-/** Email a link the studio already holds, without replacing it. */
 export function useEmailTermsLink() {
   return useMutation({
     mutationFn: ({ documentId, token, to_email }: { documentId: string; token: string; to_email?: string | null }) =>

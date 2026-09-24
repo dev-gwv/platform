@@ -230,6 +230,27 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   }
   if (method === 'GET' && path === '/clients') return atStage(clients, 'partial')
   if (method === 'GET' && path === '/projects') return atStage(projects, 'partial')
+  // The All Projects page asks for one page plus totals across the filter.
+  if (method === 'GET' && path.startsWith('/projects?')) {
+    const q = new URLSearchParams(path.split('?')[1] ?? '')
+    const all = atStage(projects, 'partial') as Array<{ status: string; name: string; client_name: string | null; total_cost: number; received: number }>
+    const term = (q.get('search') ?? '').toLowerCase()
+    const matched = all.filter((p) => !term || `${p.name} ${p.client_name ?? ''}`.toLowerCase().includes(term))
+    const status = q.get('status')
+    const rows = matched.filter((p) => !status || p.status === status)
+    const value = rows.reduce((n, p) => n + p.total_cost, 0)
+    const received = rows.reduce((n, p) => n + p.received, 0)
+    const counts: Record<string, number> = {}
+    for (const p of matched) counts[p.status] = (counts[p.status] ?? 0) + 1
+    return {
+      items: rows,
+      total: rows.length,
+      page: Number(q.get('page') ?? 1),
+      page_size: Number(q.get('page_size') ?? 20),
+      summary: { value, received, due: Math.max(0, value - received) },
+      status_counts: counts,
+    }
+  }
   if (method === 'GET' && path === '/projects/tracking') return atStage(trackingRows, 'partial')
   // Above the catch-all below, which would answer this with a project detail.
   if (method === 'GET' && path === '/projects/deliverable-sets')

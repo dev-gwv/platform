@@ -97,12 +97,22 @@ export const projectsRouter = new Hono<AppEnv>()
     const offset = (page - 1) * pageSize
     const result = await attempt(c, 'projects.list.page', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const countRows = await sql<{ n: number }[]>`
-          select count(*)::int as n from projects p
-          left join clients cl on cl.id = p.client_id
-          where ${status && status !== 'all' ? sql`p.status = ${status}` : sql`true`}
-            and ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}`
-        const total = countRows[0]?.n ?? 0
+        // One pass over everything the search matches: the count and money
+        // for the chosen status, and a count per status for the tabs.
+        const countRows = await sql<{ status: string; n: number; value: number; received: number }[]>`
+          select p.status, count(*)::int as n, coalesce(sum(p.total_cost), 0)::float8 as value,
+                 coalesce(sum((select sum(rp.amount) from received_payments rp
+                                where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid')), 0)::float8 as received
+            from projects p
+            left join clients cl on cl.id = p.client_id
+           where ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}
+           group by p.status`
+        const inFilter = countRows.filter((r) => !status || status === 'all' || r.status === status)
+        const total = inFilter.reduce((n, r) => n + r.n, 0)
+        const value = inFilter.reduce((n, r) => n + Number(r.value), 0)
+        const received = inFilter.reduce((n, r) => n + Number(r.received), 0)
+        const summary = { value, received, due: Math.max(0, value - received) }
+        const statusCounts = Object.fromEntries(countRows.map((r) => [r.status, r.n]))
         // orderBy is an allow-listed fragment (see switch above), never user input.
         const rows = await sql`
           select p.id, p.name, p.status, p.client_id, p.package_cost, p.total_cost, p.created_at,
@@ -116,11 +126,11 @@ export const projectsRouter = new Hono<AppEnv>()
             and ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}
           order by ${sql.unsafe(orderBy)}
           limit ${pageSize} offset ${offset}`
-        return { total, rows }
+        return { total, rows, summary, statusCounts }
       }),
     )
     if (!result) fail(400, 'We could not load your projects.')
-    return c.json(projectListPage.parse({ items: result.rows, total: result.total, page, page_size: pageSize }))
+    return c.json(projectListPage.parse({ items: result.rows, total: result.total, page, page_size: pageSize, summary: result.summary, status_counts: result.statusCounts }))
   })
 
   // Tracking: one aggregate row per project. Counting happens here — it is a
@@ -143,6 +153,9 @@ export const projectsRouter = new Hono<AppEnv>()
             coalesce(d.total, 0)::int        as deliverables_total,
             coalesce(d.done, 0)::int         as deliverables_done,
             coalesce(d.late, 0)::int         as deliverables_late,
+            coalesce(d.with_client, 0)::int  as deliverables_with_client,
+            coalesce((select sum(rp.amount) from received_payments rp
+                       where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'), 0) as received,
             coalesce(dr.total, 0)::int       as data_records_total,
             coalesce(dr.unverified, 0)::int  as data_records_unverified,
             coalesce(w.pending, 0)::int      as pending_reviews,
@@ -153,7 +166,9 @@ export const projectsRouter = new Hono<AppEnv>()
           from projects p
           left join clients cl on cl.id = p.client_id
           left join lateral (
-            select count(*) as total,
+            -- A cancelled task is not owed: counting it would hold the
+            -- project short of 100% for ever.
+            select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
                      where status not in ('completed', 'cancelled')
@@ -168,9 +183,11 @@ export const projectsRouter = new Hono<AppEnv>()
             select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
-                     where status not in ('completed', 'cancelled')
+                     where status not in ('completed', 'cancelled', 'review')
                        and estimated_date is not null and estimated_date < current_date
-                   ) as late
+                   ) as late,
+                   -- Sent to the client and waiting on them: not late on us.
+                   count(*) filter (where status = 'review') as with_client
             from deliverables where project_id = p.id
           ) d on true
           left join lateral (

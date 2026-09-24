@@ -1,0 +1,19 @@
+{
+  // Cloudflare Workers Builds runs its deploy commands from the repository
+  // root. Production is pointed at apps/web/wrangler.jsonc, but preview
+  // (non-production branch) builds run a bare `wrangler versions upload`
+  // here and found no Worker -- every pull request showed a red
+  // "Workers Builds: ipc-web". This root copy describes the same Worker, so
+  // both commands work with no dashboard change.
+  //
+  // Keep in step with apps/web/wrangler.jsonc (name, compatibility, assets).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ipc-web",
+  "compatibility_date": "2026-08-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "apps/web/dist",
+    // SPA history fallback -- serve index.html for unknown routes (e.g. /verify).
+    "not_found_handling": "single-page-application"
+  }
+}

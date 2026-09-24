@@ -285,7 +285,10 @@ export interface DraftTotals {
   packageCost: number
   addOns: number
   total: number
+  /** Money that came in. A "promised" payment is not here. */
   received: number
+  /** Payments the client promised but has not paid yet. */
+  promised: number
   balance: number
 }
 
@@ -300,12 +303,14 @@ export function draftTotals(draft: ProjectDraft): DraftTotals {
     packageCost,
     draft.deliverables.map(forTotal),
   )
-  const received = draft.payments.reduce((sum, p) => sum + money(p.amount), 0)
+  const received = draft.payments.filter((p) => p.status !== 'pending').reduce((sum, p) => sum + money(p.amount), 0)
+  const promised = draft.payments.filter((p) => p.status === 'pending').reduce((sum, p) => sum + money(p.amount), 0)
   return {
     packageCost,
     addOns: additional_deliverables_cost,
     total: total_cost,
     received,
+    promised,
     balance: Math.max(0, total_cost - received),
   }
 }
@@ -347,8 +352,8 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
 
   const totals = draftTotals(draft)
   if (draft.payments.some((p) => money(p.amount) <= 0)) errors.billing = 'Every payment needs an amount.'
-  else if (totals.received > totals.total && totals.total > 0) {
-    errors.billing = 'Payments received exceed the project total.'
+  else if (totals.received + totals.promised > totals.total && totals.total > 0) {
+    errors.billing = 'The payments add up to more than the project total.'
   }
 
   return errors

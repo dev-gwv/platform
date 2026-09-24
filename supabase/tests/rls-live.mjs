@@ -1013,5 +1013,49 @@ if (listed) {
   check('terms: sending clears the draft', sent.status === 201 && gone.json === null, { sent: sent.status, gone: gone.json })
 }
 
+// ── Create Project: a promised advance stays promised ───────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Wizard Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', {
+    token: aToken, method: 'POST',
+    body: {
+      name: `Wizard project ${rand()}`, client_id: client.json.id, package_cost: 100000,
+      payments: [
+        { amount: 25000, mode: 'UPI' },
+        { amount: 25000, status: 'pending', description: 'Before the shoot' },
+      ],
+    },
+  })
+  const detail = await api(`/projects/${project.json.id}`, { token: aToken })
+  const pays = detail.json.payments ?? []
+  const promised = pays.find((x) => x.status === 'pending')
+  check(
+    'create project: a promised advance is saved as promised, with its client',
+    project.status === 201 && pays.length === 2 && !!promised && promised.description === 'Before the shoot' && pays.every((x) => x.client_id === client.json.id || x.client_id === undefined),
+    { status: project.status, pays },
+  )
+  const page = await api(`/projects?q=Wizard%20project&page_size=100`, { token: aToken })
+  const items = Array.isArray(page.json) ? page.json : (page.json.items ?? [])
+  const row = items.find((x) => x.id === project.json.id)
+  check('create project: only the paid advance counts as received', Number(row?.received) === 25000, { row })
+}
+
+// ── Tracking: a cancelled task is not owed ──────────────────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Track Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Track project ${rand()}`, client_id: client.json.id, package_cost: 1000, payments: [{ amount: 400 }] } })
+  const pid = project.json.id
+  const mk = (title, status) => api('/tasks', { token: aToken, method: 'POST', body: { project_id: pid, title, status, priority: 'medium', assignees: [] } })
+  const t1 = await mk('Done one', 'completed')
+  const t2 = await mk('Dropped one', 'cancelled')
+  const tracking = await api('/projects/tracking', { token: aToken })
+  const row = (tracking.json ?? []).find((r) => r.id === pid)
+  check(
+    'tracking: a cancelled task does not hold the project short, and received is paid money',
+    t1.status < 300 && t2.status < 300 && row?.tasks_total === 1 && row?.tasks_done === 1 && Number(row?.received) === 400,
+    { t1: t1.status, t2: t2.status, row },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

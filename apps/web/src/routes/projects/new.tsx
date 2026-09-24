@@ -241,6 +241,9 @@ function NewProject() {
         const { toNewClientRequest } = await import('@/features/projects/wizard')
         const created = await createClient.mutateAsync(toNewClientRequest(draft))
         clientId = created.id
+        // Remember the client now: if the project call below fails and the
+        // owner presses Create again, it must not make a second client.
+        patch({ client_id: created.id })
       }
 
       const { id } = await createProject.mutateAsync(toProjectRequest(draft, clientId))
@@ -255,19 +258,28 @@ function NewProject() {
       const shoots = toShootRequests(draft, id)
       const perShoot = shootDeliverables(draft)
       const failed: string[] = []
+      const failedWork: string[] = []
       for (const { draftIndex, ...shoot } of shoots) {
+        let made: { id: string }
         try {
-          const made = await createShoot.mutateAsync(shoot)
-          // That shoot's own team work, now that there is a shoot to tie it to.
-          for (const d of perShoot.get(draftIndex) ?? []) {
+          made = await createShoot.mutateAsync(shoot)
+        } catch {
+          failed.push(shoot.name)
+          continue
+        }
+        // That shoot's own team work, now that there is a shoot to tie it to.
+        // The shoot itself is saved either way, so a miss here is reported
+        // as the work item, not as the shoot.
+        for (const d of perShoot.get(draftIndex) ?? []) {
+          try {
             await callApi(`/projects/${id}/deliverables`, {
               method: 'POST',
               body: { ...d, shoot_id: made.id },
               responseSchema: z.object({ id: z.string() }),
             })
+          } catch {
+            failedWork.push(`${d.title} (${shoot.name})`)
           }
-        } catch {
-          failed.push(shoot.name)
         }
       }
       void qc.invalidateQueries({ queryKey: ['shoots'] })
@@ -278,9 +290,7 @@ function NewProject() {
       // bad news into it rather than dropping someone on a page with a toast.
       setCreated({
         id,
-        warning: failed.length
-          ? `Created, but these shoots did not save: ${failed.join(', ')}. Add them from the project.`
-          : null,
+        warning: missedWarning(failed, failedWork),
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the project.')
@@ -383,7 +393,8 @@ function NewProject() {
           <Money label="Add-ons" value={totals.addOns} />
           <Money label="Total" value={totals.total} strong />
           {totals.received > 0 && <Money label="Received" value={totals.received} />}
-          {totals.received > 0 && <Money label="Balance" value={totals.balance} />}
+          {totals.promised > 0 && <Money label="Promised" value={totals.promised} />}
+          {totals.received + totals.promised > 0 && <Money label="Still to collect" value={totals.balance} />}
 
           <div className="ml-auto flex items-center gap-2">
             <Button variant="ghost" onClick={() => void navigate({ to: '/projects' })} disabled={busy}>
@@ -1444,6 +1455,17 @@ function ShootCard({
  * shoot?" on step 2 and then asked about deliverables again on step 3 — the
  * same question twice, on the step that should only be about the day itself.
  */
+/** "Created, but …" for whatever did not save after the project itself did. */
+function missedWarning(shoots: string[], work: string[]): string | null {
+  const parts = [
+    shoots.length ? `these shoots did not save: ${shoots.join(', ')}.` : '',
+    work.length ? `This team work did not save: ${work.join(', ')}.` : '',
+  ].filter(Boolean)
+  if (parts.length === 0) return null
+  const text = parts.join(' ')
+  return `Created, but ${text.charAt(0).toLowerCase()}${text.slice(1)} Add them from the project.`
+}
+
 function InternalWorkBlock({
   index,
   shoot,
@@ -1470,7 +1492,7 @@ function InternalWorkBlock({
       deliverables: [
         ...draft.deliverables,
         ...names
-          .filter((n) => !n.trim() || !titles.has(n.trim().toLowerCase()))
+          .filter((n) => n.trim() && !titles.has(n.trim().toLowerCase()))
           .map((n) => newInternalWork(index, n.trim())),
       ],
     })
@@ -2344,7 +2366,7 @@ function ReviewStep({
         />
         <ReviewTile
           label="Payments"
-          value={`Received ${formatINR(totals.received)} · Pending ${formatINR(totals.balance)}`}
+          value={`Received ${formatINR(totals.received)}${totals.promised ? ` · Promised ${formatINR(totals.promised)}` : ''} · Still to collect ${formatINR(totals.balance)}`}
           problem={errors.billing}
           onEdit={() => onJump('billing')}
         />
