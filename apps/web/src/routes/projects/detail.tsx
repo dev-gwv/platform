@@ -22,19 +22,17 @@ import {
   PauseCircle,
   Pencil,
   Phone,
-  Plus,
   Printer,
   Receipt,
   Eye,
   FileCheck,
-  ListChecks,
   MapPin,
   Trash2,
   Users,
   Wallet,
   X,
 } from 'lucide-react'
-import { shootListItem, type Deliverable, type DeliverableInput, type DeliverableStatus, type PaymentInput, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
+import { shootListItem, type PaymentInput, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { QuotationLinkDialog } from '@/features/projects/QuotationLinkDialog'
@@ -47,20 +45,15 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { Input, Label, Select, Textarea } from '@/shared/ui/input'
-import { useCreateTask } from '@/features/tasks/api'
+import { Input, Label, Select } from '@/shared/ui/input'
 import { MonthlyProfitabilityReport } from '@/features/projects/MonthlyProfitabilityReport'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import {
-  useAddDeliverable,
   useAddPayment,
-  useDeleteDeliverable,
   useDeletePayment,
   useDeleteProject,
   useProject,
-  useSetDeliverableSources,
-  useUpdateDeliverable,
   useUpdateProject,
   useUpdateQuotation,
 } from '@/features/projects/api'
@@ -73,6 +66,7 @@ import { TermsTab } from '@/features/projects/tabs/TermsTab'
 import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DataTab } from '@/features/projects/tabs/DataTab'
+import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 
 /** The tabs across a project. Each one is a view of the same project. */
 const TABS = [
@@ -110,12 +104,8 @@ const dayFormat = new Intl.DateTimeFormat('en-IN', {
 })
 const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
 
-const DELIVERABLE_STATUS_TONE: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
-  pending: 'warning',
-  in_progress: 'info',
-  completed: 'success',
-  cancelled: 'danger',
-}
+const shootsList = shootListItem.array()
+
 
 export function ProjectDetailPage() {
   return (
@@ -136,15 +126,15 @@ function ProjectDetail() {
   const canReviewWork = access.hasAction('team_work_preview', 'edit')
   // Task status updates are gated on tasks:edit, not projects:edit.
   const canEditTasks = access.hasAction('tasks', 'edit')
-  const del = useDeleteDeliverable(id)
-  const updateDeliverable = useUpdateDeliverable(id)
-  const setDeliverableSources = useSetDeliverableSources(id)
   const update = useUpdateProject(id)
   const updateQuotation = useUpdateQuotation(id)
   const removeProject = useDeleteProject()
   const confirm = useConfirm()
-  const [tab, setTab] = useState<Tab>('overview')
-  const [groupByShoot, setGroupByShoot] = useState(false)
+  // ?tab=deliverables opens straight onto a tab -- My Work links to it.
+  const [tab, setTab] = useState<Tab>(() => {
+    const wanted = new URLSearchParams(window.location.search).get('tab')
+    return TABS.some((t) => t.value === wanted) ? (wanted as Tab) : 'overview'
+  })
 
   /**
    * The month the Allocation action should open on. Same query key the Shoots
@@ -177,15 +167,9 @@ function ProjectDetail() {
   const balance = Math.max(0, data.total_cost - received)
   const StatusIcon = STATUS_ICON[data.status]
 
-  async function removeDeliverable(dId: string, title: string) {
-    if (await confirm({ title: `Remove "${title}"?`, destructive: true, confirmLabel: 'Remove' })) {
-      del.mutate(dId)
-    }
-  }
-
   async function onDelete() {
     const yes = await confirm({
-      title: `Delete ?`,
+      title: `Delete ${data?.name ?? 'this project'}?`,
       description:
         'Its shoots, deliverables and tasks go with it. A project with payments recorded cannot be deleted — cancel it instead.',
       confirmLabel: 'Delete project',
@@ -398,75 +382,12 @@ function ProjectDetail() {
       )}
 
       {tab === 'deliverables' && (
-      <div className="mt-4 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="tablist" aria-label="Deliverables view">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!groupByShoot}
-              onClick={() => setGroupByShoot(false)}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition-colors',
-                !groupByShoot ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              By scope
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={groupByShoot}
-              onClick={() => setGroupByShoot(true)}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition-colors',
-                groupByShoot ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-              title="Group every deliverable under its shoot"
-            >
-              Grouped by shoot
-            </button>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {groupByShoot ? 'Client + internal together under each shoot.' : 'Client vs internal lists.'}
-          </p>
-        </div>
-        {groupByShoot ? (
-          <DeliverablesByShoot
-            projectId={id}
-            items={data.deliverables}
-            canEdit={canEdit}
-            updateDeliverable={updateDeliverable}
-            setDeliverableSources={setDeliverableSources}
-            onRemove={removeDeliverable}
-          />
-        ) : (
-        <>
-        <DeliverableGroup
+        <DeliverablesTab
           projectId={id}
-          title="Client Deliverables"
-          description="Shown on quotation and promised to the client."
-          scope="client"
-          items={data.deliverables.filter((d) => d.visibility_scope === 'client')}
+          deliverables={data.deliverables}
+          shoots={(projectShoots.data ?? []).map((s) => ({ id: s.id, name: s.name, shoot_date: s.shoot_date }))}
           canEdit={canEdit}
-          updateDeliverable={updateDeliverable}
-          setDeliverableSources={setDeliverableSources}
-          onRemove={removeDeliverable}
         />
-        <DeliverableGroup
-          projectId={id}
-          title="Internal Work"
-          description="Your team's own work items — never shown to the client."
-          scope="internal"
-          items={data.deliverables.filter((d) => d.visibility_scope === 'internal')}
-          canEdit={canEdit}
-          updateDeliverable={updateDeliverable}
-          setDeliverableSources={setDeliverableSources}
-          onRemove={removeDeliverable}
-        />
-        </>
-        )}
-      </div>
       )}
 
       {tab === 'billing' && (
@@ -775,165 +696,6 @@ function PaymentRow({
 }
 
 /** Deliverables grouped under their shoot instead of split by scope. */
-function DeliverablesByShoot({
-  projectId,
-  items,
-  canEdit,
-  updateDeliverable,
-  setDeliverableSources,
-  onRemove,
-}: {
-  projectId: string
-  items: Deliverable[]
-  canEdit: boolean
-  updateDeliverable: ReturnType<typeof useUpdateDeliverable>
-  setDeliverableSources: ReturnType<typeof useSetDeliverableSources>
-  onRemove: (deliverableId: string, title: string) => void
-}) {
-  const groups = new Map<string, { name: string; items: Deliverable[] }>()
-  const unlinked: Deliverable[] = []
-  for (const d of items) {
-    const first = d.source_shoots[0]
-    if (!first) {
-      unlinked.push(d)
-      continue
-    }
-    const g = groups.get(first.id) ?? { name: first.name, items: [] }
-    g.items.push(d)
-    groups.set(first.id, g)
-  }
-  if (items.length === 0) {
-    return <EmptyState title="No deliverables yet" description="Add what the client receives and what the team must produce." />
-  }
-  return (
-    <div className="flex flex-col gap-4">
-      {[...groups.values()].map((g) => (
-        <Card key={g.name}>
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="size-4" aria-hidden /> {g.name}
-                <StatusBadge tone="neutral">{g.items.length}</StatusBadge>
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-3">
-              {g.items.map((d) => (
-                <ShootGroupedRow
-                  key={d.id}
-                  projectId={projectId}
-                  d={d}
-                  canEdit={canEdit}
-                  updateDeliverable={updateDeliverable}
-                  setDeliverableSources={setDeliverableSources}
-                  onRemove={onRemove}
-                />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ))}
-      {unlinked.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="size-4" aria-hidden /> Project-level (unlinked)
-              <StatusBadge tone="neutral">{unlinked.length}</StatusBadge>
-            </CardTitle>
-            <p className="mt-0.5 text-sm text-muted-foreground">Not waiting on any specific shoot.</p>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-3">
-              {unlinked.map((d) => (
-                <ShootGroupedRow
-                  key={d.id}
-                  projectId={projectId}
-                  d={d}
-                  canEdit={canEdit}
-                  updateDeliverable={updateDeliverable}
-                  setDeliverableSources={setDeliverableSources}
-                  onRemove={onRemove}
-                />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function ShootGroupedRow({
-  projectId,
-  d,
-  canEdit,
-  updateDeliverable,
-  setDeliverableSources,
-  onRemove,
-}: {
-  projectId: string
-  d: Deliverable
-  canEdit: boolean
-  updateDeliverable: ReturnType<typeof useUpdateDeliverable>
-  setDeliverableSources: ReturnType<typeof useSetDeliverableSources>
-  onRemove: (deliverableId: string, title: string) => void
-}) {
-  return (
-    <li className="rounded-lg border border-border p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium">{d.title}</p>
-        <StatusBadge tone={DELIVERABLE_STATUS_TONE[d.status] ?? 'neutral'}>{humanize(d.status)}</StatusBadge>
-        <StatusBadge tone={d.visibility_scope === 'client' ? 'info' : 'neutral'}>
-          {d.visibility_scope === 'client' ? 'Client deliverable' : 'Internal work'}
-        </StatusBadge>
-        <StatusBadge tone={d.show_on_quotation ? 'success' : 'neutral'}>
-          {d.show_on_quotation ? 'Shown on quotation' : 'Internal only'}
-        </StatusBadge>
-        {d.is_additional_charge && <span className="text-sm font-medium">{formatINR(d.additional_charge_amount)}</span>}
-      </div>
-      {d.source_shoots.length > 1 && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="font-medium uppercase tracking-wide">Sources:</span>
-          {d.source_shoots.map((s) => (
-            <StatusBadge key={s.id} tone="neutral">{s.name}</StatusBadge>
-          ))}
-        </div>
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Input
-          type="date"
-          value={d.estimated_date ?? ''}
-          disabled={!canEdit}
-          onChange={(e) => updateDeliverable.mutate({ deliverableId: d.id, patch: { estimated_date: e.target.value || null } })}
-          className="w-40"
-          aria-label={`Estimated delivery for ${d.title}`}
-        />
-        <Select
-          value={d.status}
-          disabled={!canEdit}
-          onChange={(e) => updateDeliverable.mutate({ deliverableId: d.id, patch: { status: e.target.value as DeliverableStatus } })}
-          className="w-36"
-          aria-label={`Status for ${d.title}`}
-        >
-          <option value="pending">Pending</option>
-          <option value="in_progress">In progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </Select>
-        {canEdit && <EditDeliverableDialog id={projectId} deliverable={d} />}
-        {canEdit && <LinkedShootsDialog projectId={projectId} deliverable={d} setDeliverableSources={setDeliverableSources} />}
-        {canEdit && (
-          <Button variant="ghost" size="icon" onClick={() => onRemove(d.id, d.title)}>
-            <Trash2 />
-          </Button>
-        )}
-      </div>
-    </li>
-  )
-}
-
-/** Referrals for this project: active campaigns plus a share-ready message. */
 function ReferralsTab({ projectId, projectName, clientName }: { projectId: string; projectName: string; clientName: string | null }) {
   void projectId
   const { data, isLoading } = useReferralCampaigns()
@@ -1273,490 +1035,6 @@ function EditProjectDialog({
             </DialogClose>
             <Button type="submit" disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function DeliverableGroup({
-  projectId,
-  title,
-  description,
-  scope,
-  items,
-  canEdit,
-  updateDeliverable,
-  setDeliverableSources,
-  onRemove,
-}: {
-  projectId: string
-  title: string
-  description: string
-  scope: 'client' | 'internal'
-  items: Deliverable[]
-  canEdit: boolean
-  updateDeliverable: ReturnType<typeof useUpdateDeliverable>
-  setDeliverableSources: ReturnType<typeof useSetDeliverableSources>
-  onRemove: (deliverableId: string, title: string) => void
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            {title}
-            <StatusBadge tone="neutral">{items.length}</StatusBadge>
-          </CardTitle>
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-        </div>
-        {canEdit && (
-          <AddDeliverableDialog
-            id={projectId}
-            defaultVisibility={scope}
-            label={scope === 'client' ? 'Add client deliverable' : 'Add internal work'}
-          />
-        )}
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <EmptyState
-            title={scope === 'client' ? 'No client deliverables yet' : 'No internal work yet'}
-            description={
-              scope === 'client'
-                ? 'List what the client receives — the album, the film, the reel. Chargeable ones add to the project total.'
-                : "Track your team's own work items here — they never reach the client."
-            }
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {items.map((d) => (
-              <li key={d.id} className="rounded-lg border border-border p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{d.title}</p>
-                  <StatusBadge tone={DELIVERABLE_STATUS_TONE[d.status] ?? 'neutral'}>
-                    {humanize(d.status)}
-                  </StatusBadge>
-                  <StatusBadge tone={d.visibility_scope === 'client' ? 'info' : 'neutral'}>
-                    {d.visibility_scope === 'client' ? 'Client deliverable' : 'Internal work'}
-                  </StatusBadge>
-                  <StatusBadge tone={d.show_on_quotation ? 'success' : 'neutral'}>
-                    {d.show_on_quotation ? 'Shown on quotation' : 'Internal only'}
-                  </StatusBadge>
-                  {d.is_additional_charge && (
-                    <span className="text-sm font-medium">{formatINR(d.additional_charge_amount)}</span>
-                  )}
-                </div>
-                {d.source_shoots.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="font-medium uppercase tracking-wide">Sources:</span>
-                    {d.source_shoots.map((s) => (
-                      <StatusBadge key={s.id} tone="neutral">
-                        {s.name}
-                      </StatusBadge>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Input
-                    type="date"
-                    value={d.estimated_date ?? ''}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                      updateDeliverable.mutate({
-                        deliverableId: d.id,
-                        patch: { estimated_date: e.target.value || null },
-                      })
-                    }
-                    className="w-40"
-                    aria-label={`Estimated delivery for ${d.title}`}
-                  />
-                  <Select
-                    value={d.status}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                      updateDeliverable.mutate({
-                        deliverableId: d.id,
-                        patch: { status: e.target.value as DeliverableStatus },
-                      })
-                    }
-                    className="w-36"
-                    aria-label={`Status for ${d.title}`}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </Select>
-                  {canEdit && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        updateDeliverable.mutate({
-                          deliverableId: d.id,
-                          patch: { visibility_scope: scope === 'client' ? 'internal' : 'client' },
-                        })
-                      }
-                    >
-                      {scope === 'client' ? 'To internal' : 'To client'}
-                    </Button>
-                  )}
-                  {canEdit && <CreateTaskForDeliverable projectId={projectId} deliverable={d} />}
-                  {canEdit && <EditDeliverableDialog id={projectId} deliverable={d} />}
-                  {canEdit && (
-                    <LinkedShootsDialog
-                      projectId={projectId}
-                      deliverable={d}
-                      setDeliverableSources={setDeliverableSources}
-                    />
-                  )}
-                  {canEdit && (
-                    <Button variant="ghost" size="icon" onClick={() => onRemove(d.id, d.title)}>
-                      <Trash2 />
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-/**
- * Turn one deliverable into a task someone owns.
- *
- * Generating tasks existed only for a whole project at once, from the Tasks
- * page — so the answer to "who is cutting the highlight film" was to generate
- * tasks for everything and then delete the ones you did not want. The old app
- * puts an Assign Task action on each row; this is that, pre-linked to the
- * deliverable so the task and the thing it delivers stay connected.
- */
-function CreateTaskForDeliverable({
-  projectId,
-  deliverable,
-}: {
-  projectId: string
-  deliverable: Deliverable
-}) {
-  const create = useCreateTask()
-  const [done, setDone] = useState(false)
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={create.isPending || done}
-      title={`Create a task for ${deliverable.title}`}
-      onClick={() =>
-        create.mutate(
-          {
-            title: deliverable.title,
-            project_id: projectId,
-            deliverable_id: deliverable.id,
-            status: 'to_do',
-            priority: 'medium',
-            assignees: [],
-            ...(deliverable.description ? { description: deliverable.description } : {}),
-            ...(deliverable.estimated_date ? { due_date: deliverable.estimated_date } : {}),
-          },
-          { onSuccess: () => setDone(true) },
-        )
-      }
-    >
-      <ListChecks /> {done ? 'Task created' : 'Create task'}
-    </Button>
-  )
-}
-
-const shootsList = shootListItem.array()
-
-/** Pick which of this project's shoots a deliverable is waiting on data from. */
-function LinkedShootsDialog({
-  projectId,
-  deliverable,
-  setDeliverableSources,
-}: {
-  projectId: string
-  deliverable: Deliverable
-  setDeliverableSources: ReturnType<typeof useSetDeliverableSources>
-}) {
-  const [open, setOpen] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set(deliverable.source_shoots.map((s) => s.id)))
-  const shoots = useQuery({
-    queryKey: ['shoots', 'project', projectId],
-    queryFn: () => callApi(`/shoots?project_id=${projectId}`, { responseSchema: shootsList }),
-    enabled: open,
-  })
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  async function onSave() {
-    await setDeliverableSources.mutateAsync({ deliverableId: deliverable.id, shoot_ids: [...selected] })
-    setOpen(false)
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (next) setSelected(new Set(deliverable.source_shoots.map((s) => s.id)))
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <Link2 /> Linked shoots
-        </Button>
-      </DialogTrigger>
-      <DialogContent
-        title="Linked shoots"
-        description={`Which shoots is "${deliverable.title}" waiting on data from?`}
-      >
-        <div className="flex flex-col gap-3">
-          {shoots.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading shoots…</p>
-          ) : !shoots.data || shoots.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">This project has no shoots yet.</p>
-          ) : (
-            <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-              {shoots.data.map((s) => (
-                <li key={s.id}>
-                  <label className="flex items-center gap-2 rounded-md p-2 hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(s.id)}
-                      onChange={() => toggle(s.id)}
-                      className="size-4"
-                    />
-                    <span className="text-sm">
-                      {s.name}
-                      {s.shoot_date && <span className="ml-1.5 text-xs text-muted-foreground">{s.shoot_date}</span>}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-2 flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={() => void onSave()} disabled={setDeliverableSources.isPending}>
-              {setDeliverableSources.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function AddDeliverableDialog({
-  id,
-  defaultVisibility = 'client',
-  label = 'Add',
-}: {
-  id: string
-  defaultVisibility?: 'client' | 'internal'
-  label?: string
-}) {
-  const add = useAddDeliverable(id)
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [charge, setCharge] = useState(false)
-  const [amount, setAmount] = useState('')
-  const [workType, setWorkType] = useState('')
-  const [internalNotes, setInternalNotes] = useState('')
-  const [brief, setBrief] = useState('')
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    const body: DeliverableInput = {
-      title: title.trim(),
-      list_key: 'primary',
-      is_additional_charge: charge,
-      additional_charge_amount: charge ? Number(amount) || 0 : 0,
-      visibility_scope: defaultVisibility,
-      // Internal work is never shown on the client's quotation by definition.
-      show_on_quotation: defaultVisibility === 'client',
-      start_rule: 'whole_project',
-      ...(workType.trim() ? { work_type: workType.trim() } : {}),
-      ...(internalNotes.trim() ? { internal_notes: internalNotes.trim() } : {}),
-      ...(brief.trim() ? { description: brief.trim() } : {}),
-    }
-    await add.mutateAsync(body)
-    setOpen(false)
-    setTitle('')
-    setCharge(false)
-    setAmount('')
-    setWorkType('')
-    setInternalNotes('')
-    setBrief('')
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Plus /> {label}
-        </Button>
-      </DialogTrigger>
-      <DialogContent title={defaultVisibility === 'client' ? 'Add client deliverable' : 'Add internal work'}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Work type (optional)</Label>
-            <Input value={workType} onChange={(e) => setWorkType(e.target.value)} placeholder="e.g. Editing, Album design" />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={charge} onChange={(e) => setCharge(e.target.checked)} />
-            Additional charge
-          </label>
-          {charge && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Amount (₹)</Label>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label>Brief (optional)</Label>
-            <Textarea
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              rows={3}
-              placeholder="What this is, and what done looks like — the editor reads this."
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Internal notes (optional)</Label>
-            <Textarea
-              value={internalNotes}
-              onChange={(e) => setInternalNotes(e.target.value)}
-              rows={2}
-              placeholder="Never shown to the client"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={add.isPending}>
-              {add.isPending ? 'Adding…' : 'Add'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function EditDeliverableDialog({ id, deliverable }: { id: string; deliverable: Deliverable }) {
-  const update = useUpdateDeliverable(id)
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState(deliverable.title)
-  const [charge, setCharge] = useState(deliverable.is_additional_charge)
-  const [amount, setAmount] = useState(String(deliverable.additional_charge_amount ?? ''))
-  const [showOnQuotation, setShowOnQuotation] = useState(deliverable.show_on_quotation)
-  const [workType, setWorkType] = useState(deliverable.work_type ?? '')
-  const [internalNotes, setInternalNotes] = useState(deliverable.internal_notes ?? '')
-  /**
-   * What this deliverable actually is, in the studio's words. `description`
-   * has been on the deliverable and in the contract all along and no form
-   * asked for it — the old app puts an "Add brief" action right on the row.
-   */
-  const [brief, setBrief] = useState(deliverable.description ?? '')
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    await update.mutateAsync({
-      deliverableId: deliverable.id,
-      patch: {
-        title: title.trim(),
-        is_additional_charge: charge,
-        additional_charge_amount: charge ? Number(amount) || 0 : 0,
-        show_on_quotation: showOnQuotation,
-        work_type: workType.trim() || null,
-        internal_notes: internalNotes.trim() || null,
-        description: brief.trim() || null,
-      },
-    })
-    setOpen(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Edit">
-          <Pencil />
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Edit deliverable">
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Work type (optional)</Label>
-            <Input value={workType} onChange={(e) => setWorkType(e.target.value)} placeholder="e.g. Editing, Album design" />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={charge} onChange={(e) => setCharge(e.target.checked)} />
-            Additional charge
-          </label>
-          {charge && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Amount (₹)</Label>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={showOnQuotation} onChange={(e) => setShowOnQuotation(e.target.checked)} />
-            Show on quotation
-          </label>
-          <div className="flex flex-col gap-1.5">
-            <Label>Brief (optional)</Label>
-            <Textarea
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              rows={3}
-              placeholder="What this is, and what done looks like — the editor reads this."
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Internal notes (optional)</Label>
-            <Textarea
-              value={internalNotes}
-              onChange={(e) => setInternalNotes(e.target.value)}
-              rows={2}
-              placeholder="Never shown to the client"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save changes'}
             </Button>
           </div>
         </form>

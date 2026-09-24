@@ -144,9 +144,22 @@ const projectDetail: ProjectDetail = {
   quotation_terms: null,
   quotation_display_prefs: {},
   deliverables: [
-    delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000),
-    delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }]),
-    delv(uid(0xd3), 'Raw footage archive', 'internal', false, 0),
+    delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000, [], { due: 40 }),
+    delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }], {
+      status: 'review',
+      due: -2,
+      editor: [uid(0xe3), 'Sana Khan'],
+      shoot: [uid(0x61), 'Engagement shoot'],
+      link: 'https://drive.google.com/demo-highlight',
+    }),
+    delv(uid(0xd3), 'Raw footage archive', 'internal', false, 0, [], { status: 'completed', delivered: -1 }),
+    delv(uid(0xd4), 'Edited Photos', 'client', false, 0, [], {
+      status: 'in_progress',
+      due: -3,
+      editor: [uid(1), 'Demo Owner'],
+      shoot: [uid(0x62), 'Wedding day'],
+    }),
+    delv(uid(0xd5), 'Data Sorting', 'internal', false, 0, [], { shoot: [uid(0x62), 'Wedding day'], due: 5 }),
   ],
   payments: [
     { id: uid(0xf1), amount: 100000, paid_on: '2026-06-02', mode: 'upi', reference: 'TXN9931', status: null, description: null, is_gst: false, gst_number: null },
@@ -223,6 +236,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/projects/deliverable-sets')
     return { id: uid(0xd5), ...(body as object) }
   if (method === 'DELETE' && path.startsWith('/projects/deliverable-sets/')) return {}
+  if (method === 'GET' && path === '/projects/board/deliverables')
+    return projectDetail.deliverables
+      .filter((d) => d.status !== 'cancelled')
+      .map((d) => ({ ...d, board_status: d.status, project_name: 'Sharma Wedding', due_date: d.estimated_date }))
+  if (method === 'GET' && path === '/projects/deliverables/mine')
+    return projectDetail.deliverables
+      .filter((d) => d.assignee_id === uid(1) && !['completed', 'cancelled'].includes(d.status))
+      .map((d) => ({ ...d, project_name: 'Sharma Wedding', client_name: 'Priya Sharma' }))
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
@@ -255,6 +276,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && path.startsWith('/projects/')) return {}
   if (method === 'PUT' && /^\/projects\/[^/]+\/deliverables\/[^/]+\/shoots$/.test(path)) return {}
   if (method === 'POST' && /^\/projects\/[^/]+\/(deliverables|payments)$/.test(path)) return {}
+  if (method === 'POST' && /^\/projects\/deliverables\/[^/]+\/stage$/.test(path)) return {}
   if (method === 'POST' && path === '/clients') return fakeClient(uid(0xc9), 'New Client', null)
   // Single client — the project editor loads this to edit contact details.
   if (method === 'GET' && /^\/clients\/[^/]+$/.test(path)) {
@@ -1982,7 +2004,23 @@ function delv(
   is_additional_charge: boolean,
   amount: number,
   sourceShoots: { id: string; name: string }[] = [],
+  extra: {
+    status?: string
+    /** Days from today it is due; negative is late. */
+    due?: number
+    delivered?: number
+    editor?: [string, string]
+    shoot?: [string, string]
+    link?: string
+  } = {},
 ) {
+  // A local date so this can run before the helpers further down exist.
+  const day = (n: number) => {
+    const at = new Date()
+    at.setDate(at.getDate() + n)
+    const p = (x: number) => String(x).padStart(2, '0')
+    return `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}`
+  }
   return {
     id,
     project_id: PROJ.p1,
@@ -1993,8 +2031,15 @@ function delv(
     visibility_scope,
     show_on_quotation: visibility_scope === 'client',
     start_rule: sourceShoots.length > 0 ? ('specific_shoots' as const) : ('whole_project' as const),
-    status: 'in_progress',
+    status: extra.status ?? 'pending',
     source_shoots: sourceShoots,
+    estimated_date: extra.due !== undefined ? day(extra.due) : null,
+    delivered_at: extra.delivered !== undefined ? `${day(extra.delivered)}T10:00:00Z` : null,
+    assignee_id: extra.editor?.[0] ?? null,
+    assignee_name: extra.editor?.[1] ?? null,
+    shoot_id: extra.shoot?.[0] ?? null,
+    shoot_name: extra.shoot?.[1] ?? null,
+    delivery_link: extra.link ?? null,
   }
 }
 

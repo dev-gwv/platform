@@ -33,6 +33,7 @@ import {
   stepErrors,
   toProjectRequest,
   toShootRequests,
+  shootDeliverables,
   withDeliverables,
   withShoots,
   type ProjectDraft,
@@ -210,6 +211,23 @@ describe('toProjectRequest', () => {
     expect(sent.delivery_days_after_start).toBe(7)
   })
 
+  it('holds back a shoot’s team work to add once that shoot exists', () => {
+    const d = named({
+      shoots: [newShoot(), { ...newShoot(), name: 'Wedding' }],
+      deliverables: [
+        { ...newDeliverable(), title: 'Album' },
+        { ...newInternalWork(1, 'Culling'), show_on_quotation: true },
+        // Its shoot has no name, so it will not be created: keep it with the project.
+        newInternalWork(0, 'Backup'),
+      ],
+    })
+    expect(toProjectRequest(d, 'c1').deliverables.map((x) => x.title)).toEqual(['Album', 'Backup'])
+    const held = shootDeliverables(d)
+    expect([...held.keys()]).toEqual([1])
+    expect(held.get(1)!.map((x) => [x.title, x.show_on_quotation])).toEqual([['Culling', false]])
+    expect(toShootRequests(d, 'p1').map((x) => x.draftIndex)).toEqual([1])
+  })
+
   it('omits optional fields rather than sending blanks', () => {
     const d = named({ deliverables: [{ ...newDeliverable(), title: 'Album' }] })
     const sent = toProjectRequest(d, 'c1').deliverables[0]!
@@ -237,6 +255,7 @@ describe('toProjectRequest', () => {
     })
     expect(toShootRequests(d, 'proj-9')).toEqual([
       {
+        draftIndex: 0,
         project_id: 'proj-9',
         name: 'Wedding',
         status: 'confirmed',

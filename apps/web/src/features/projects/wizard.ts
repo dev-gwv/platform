@@ -371,25 +371,49 @@ export function prevStep(step: WizardStep): WizardStep {
 }
 
 /** Draft → the create payload. Blank rows are dropped, not sent as empties. */
+/** One wizard row as the API takes it. */
+function toDeliverableInput(draft: ProjectDraft, d: DeliverableDraft): DeliverableInput {
+  const estimated = estimatedDateFor(draft, d)
+  const lead = days(d.lead_days)
+  return {
+    title: d.title.trim(),
+    list_key: 'primary',
+    ...(d.description.trim() ? { description: d.description.trim() } : {}),
+    is_additional_charge: d.is_additional_charge,
+    additional_charge_amount: d.is_additional_charge ? money(d.additional_charge_amount) : 0,
+    visibility_scope: d.visibility_scope,
+    // Team work is never on the quotation, whatever the row's switch says.
+    show_on_quotation: d.visibility_scope === 'client' && d.show_on_quotation,
+    start_rule: d.start_rule,
+    ...(lead !== undefined ? { delivery_days_after_start: lead } : {}),
+    ...(estimated ? { estimated_date: estimated } : {}),
+  }
+}
+
+/** Is this row tied to a shoot that will actually be created? */
+const onRealShoot = (draft: ProjectDraft, d: DeliverableDraft) =>
+  d.shoot_index !== null && !!draft.shoots[d.shoot_index]?.name.trim()
+
+/**
+ * Deliverables tied to a shoot, keyed by the shoot's position in the draft.
+ * They can only be saved once that shoot exists, so the wizard adds them
+ * right after creating it -- sending them with the project lost the link.
+ */
+export function shootDeliverables(draft: ProjectDraft): Map<number, DeliverableInput[]> {
+  const out = new Map<number, DeliverableInput[]>()
+  for (const d of draft.deliverables) {
+    if (!d.title.trim() || !onRealShoot(draft, d)) continue
+    const list = out.get(d.shoot_index!) ?? []
+    list.push(toDeliverableInput(draft, d))
+    out.set(d.shoot_index!, list)
+  }
+  return out
+}
+
 export function toProjectRequest(draft: ProjectDraft, clientId: string): CreateProjectRequest {
   const deliverables: DeliverableInput[] = draft.deliverables
-    .filter((d) => d.title.trim())
-    .map((d) => {
-      const estimated = estimatedDateFor(draft, d)
-      const lead = days(d.lead_days)
-      return {
-        title: d.title.trim(),
-        list_key: 'primary',
-        ...(d.description.trim() ? { description: d.description.trim() } : {}),
-        is_additional_charge: d.is_additional_charge,
-        additional_charge_amount: d.is_additional_charge ? money(d.additional_charge_amount) : 0,
-        visibility_scope: d.visibility_scope,
-        show_on_quotation: d.show_on_quotation,
-        start_rule: d.start_rule,
-        ...(lead !== undefined ? { delivery_days_after_start: lead } : {}),
-        ...(estimated ? { estimated_date: estimated } : {}),
-      }
-    })
+    .filter((d) => d.title.trim() && !onRealShoot(draft, d))
+    .map((d) => toDeliverableInput(draft, d))
 
   return {
     client_id: clientId,
@@ -434,12 +458,14 @@ export function toNewClientRequest(draft: ProjectDraft): {
 }
 
 /** Shoots are created after the project, so they need its id. */
-export function toShootRequests(draft: ProjectDraft, projectId: string): CreateShootRequest[] {
+export function toShootRequests(draft: ProjectDraft, projectId: string): (CreateShootRequest & { draftIndex: number })[] {
   return draft.shoots
-    .filter((s) => s.name.trim())
-    .map((s) => {
+    .map((s, draftIndex) => ({ s, draftIndex }))
+    .filter(({ s }) => s.name.trim())
+    .map(({ s, draftIndex }) => {
       const startAt = shootStartAt(s)
       return {
+        draftIndex,
         project_id: projectId,
         name: s.name.trim(),
         status: s.status,

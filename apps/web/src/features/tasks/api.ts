@@ -9,7 +9,6 @@ import {
   createTaskPriorityRequest,
   updateTaskPriorityRequest,
   createTaskRequest,
-  generateTasksRequest,
   taskBundle,
   taskListItem,
   updateTaskRequest,
@@ -20,7 +19,6 @@ import {
   type CreateTaskPriorityRequest,
   type UpdateTaskPriorityRequest,
   type CreateTaskRequest,
-  type GenerateTasksRequest,
   type SetBoardOrderRequest,
   type TaskStatus,
   type UpdateTaskRequest,
@@ -256,19 +254,6 @@ export function useApplyBundle() {
         responseSchema: countOnly,
       }),
     (out) => `${out.created} ${out.created === 1 ? 'task' : 'tasks'} created`,
-  )
-}
-
-/** Turn a project's deliverables into tasks, one per deliverable. */
-export function useGenerateTasks() {
-  return useTaskMutation(
-    (input: GenerateTasksRequest) =>
-      callApi('/tasks/generate', {
-        method: 'POST',
-        body: generateTasksRequest.parse(input),
-        responseSchema: countOnly,
-      }),
-    (out) => `${out.created} ${out.created === 1 ? 'task' : 'tasks'} generated`,
   )
 }
 

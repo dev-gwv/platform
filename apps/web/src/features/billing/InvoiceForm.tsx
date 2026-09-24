@@ -627,7 +627,9 @@ export function InvoiceFormFields({
         { description: `${p.name} — Package`, quantity: '1', rate: String(p.package_cost), gst_rate: rate },
       ])
     } else if (kind === 'deliverables') {
-      const extra = p.deliverables.filter((d) => d.is_additional_charge && d.additional_charge_amount > 0)
+      const extra = p.deliverables.filter(
+        (d) => d.visibility_scope === 'client' && d.show_on_quotation && d.is_additional_charge && d.additional_charge_amount > 0,
+      )
       if (extra.length === 0) return setImportNote('This project has no billable deliverables.')
       set('lines', [
         ...values.lines,
