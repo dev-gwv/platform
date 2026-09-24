@@ -17,6 +17,12 @@ export const ALLOWED_FILE_MIMES = [
   'application/pdf',
   'text/csv',
   'text/plain',
+  // Voice notes recorded in the browser: Chrome and Firefox record webm/ogg,
+  // Safari mp4. mpeg covers an mp3 someone drops in.
+  'audio/webm',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/mpeg',
 ] as const
 
 /** Branding assets load without a session; everything else needs one. */

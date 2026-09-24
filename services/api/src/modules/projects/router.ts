@@ -5,6 +5,8 @@ import {
   updateDeliverableRequest,
   setDeliverableStageRequest,
   myDeliverable,
+  deliverableNote,
+  createDeliverableNoteRequest,
   deliverableSet,
   paymentInput,
   updatePaymentRequest,
@@ -464,7 +466,9 @@ export const projectsRouter = new Hono<AppEnv>()
       withUser(c.env, auth.userId, (sql) => sql`
         select d.id, d.project_id, p.name as project_name, cl.name as client_name,
                d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
-               d.delivery_link, d.visibility_scope
+               d.delivery_link, d.visibility_scope,
+               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
+               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count
         from deliverables d
         join projects p on p.id = d.project_id
         left join clients cl on cl.id = p.client_id
@@ -512,6 +516,80 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  /**
+   * A deliverable's timeline: notes, voice notes and stage changes, oldest
+   * first, read like a conversation. Anyone in the studio who can see the
+   * deliverable can read it; RLS keeps it to the studio.
+   */
+  .get('/deliverables/:did/notes', async (c) => {
+    const did = uuidParam(c, 'did')
+    const rows = await attempt(c, 'projects.deliverable_notes', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const found = await sql`select 1 from deliverables where id = ${did}`
+        if (!found.length) return null
+        return sql`
+          select n.id, n.deliverable_id, n.kind, n.body, n.file_id, n.duration_seconds,
+                 n.author_id, u.name as author_name, n.created_at
+            from deliverable_notes n
+            left join users u on u.user_id = n.author_id
+           where n.deliverable_id = ${did}
+           order by n.created_at, n.id`
+      }),
+    )
+    if (rows === null) fail(404, 'That deliverable was not found.')
+    if (!rows) fail(400, 'We could not load the notes.')
+    return c.json(deliverableNote.array().parse(rows))
+  })
+
+  /**
+   * Leave a written or voice note. Same rule as moving the stage: the editor
+   * on it, or anyone who can edit projects. The database tells the other side.
+   */
+  .post('/deliverables/:did/notes', async (c) => {
+    const parsed = createDeliverableNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the note.')
+    const did = uuidParam(c, 'did')
+    const auth = c.get('auth')
+    const canEdit = auth.access.hasAction('projects', 'edit')
+    const n = parsed.data
+    const outcome = await attempt(
+      c,
+      'projects.deliverable_note_add',
+      () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          const found = await sql<{ assignee_id: string | null }[]>`
+            select assignee_id from deliverables where id = ${did}`
+          const d = found[0]
+          if (!d) return 'missing' as const
+          if (!canEdit && d.assignee_id !== auth.userId) return 'forbidden' as const
+          const rows = await sql`
+            insert into deliverable_notes (deliverable_id, kind, body, file_id, duration_seconds, author_id)
+            values (${did}, ${n.kind}, ${n.body ?? null},
+                    ${n.kind === 'voice' ? n.file_id : null},
+                    ${n.kind === 'voice' ? (n.duration_seconds ?? null) : null}, ${auth.userId})
+            returning id, deliverable_id, kind, body, file_id, duration_seconds, author_id, created_at`
+          return rows[0] ?? null
+        }),
+      { onCode: (code) => (code === '42501' ? fail(403, 'That recording is not one of this studio’s files.') : undefined) },
+    )
+    if (outcome === 'missing') fail(404, 'That deliverable was not found.')
+    if (outcome === 'forbidden') fail(403, 'Only the editor on it, or a manager, can leave notes here.')
+    if (!outcome) fail(400, 'We could not save the note.')
+    await audit(c, { action: `deliverable.note.${n.kind}`, entityType: 'deliverable', entityId: did })
+    return c.json(deliverableNote.parse({ ...outcome, author_name: null }), 201)
+  })
+
+  /** Take a note back: its author, or an admin or manager. Stage events stay. */
+  .delete('/deliverables/notes/:nid', async (c) => {
+    const nid = uuidParam(c, 'nid')
+    const rows = await attempt(c, 'projects.deliverable_note_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from deliverable_notes where id = ${nid} returning id`),
+    )
+    if (!rows) fail(400, 'We could not delete the note.')
+    if (!rows.length) fail(404, 'That note was not found, or it is not yours to delete.')
+    return c.body(null, 204)
+  })
+
   .get('/:id', requireAction('projects', 'view'), async (c) => {
     const id = uuidParam(c)
     const row = await attempt(c, 'projects.get', () =>
@@ -527,11 +605,25 @@ export const projectsRouter = new Hono<AppEnv>()
                      to_jsonb(d) || jsonb_build_object(
                        'shoot_name', (select s.name from shoots s where s.id = d.shoot_id),
                        'shoot_date', (select s.shoot_date from shoots s where s.id = d.shoot_id),
-                       'assignee_name', (select u.name from users u where u.user_id = d.assignee_id)
+                       'assignee_name', (select u.name from users u where u.user_id = d.assignee_id),
+                       'notes_count', (select count(*) from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event'),
+                       'voice_count', (select count(*) from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice'),
+                       'last_activity_at', la.created_at,
+                       'last_activity_by', la.author_name,
+                       'last_activity_kind', la.kind,
+                       'last_activity_body', la.body
                      )
                      order by d.created_at
                    )
-                   from deliverables d where d.project_id = p.id
+                   from deliverables d
+                   -- The latest thing that happened on it, for the card's activity line.
+                   left join lateral (
+                     select n.created_at, n.kind, n.body, u.name as author_name
+                       from deliverable_notes n left join users u on u.user_id = n.author_id
+                      where n.deliverable_id = d.id
+                      order by n.created_at desc limit 1
+                   ) la on true
+                   where d.project_id = p.id
                  ), '[]'::jsonb) as deliverables,
                  coalesce((
                    select jsonb_agg(jsonb_build_object(

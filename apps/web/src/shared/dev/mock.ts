@@ -151,6 +151,9 @@ const projectDetail: ProjectDetail = {
       editor: [uid(0xe3), 'Sana Khan'],
       shoot: [uid(0x61), 'Engagement shoot'],
       link: 'https://drive.google.com/demo-highlight',
+      notes: 3,
+      voice: 1,
+      activity: { daysAgo: 1, by: 'Sana Khan', kind: 'voice', body: null },
     }),
     delv(uid(0xd3), 'Raw footage archive', 'internal', false, 0, [], { status: 'completed', delivered: -1 }),
     delv(uid(0xd4), 'Edited Photos', 'client', false, 0, [], {
@@ -158,6 +161,8 @@ const projectDetail: ProjectDetail = {
       due: -3,
       editor: [uid(1), 'Demo Owner'],
       shoot: [uid(0x62), 'Wedding day'],
+      notes: 1,
+      activity: { daysAgo: 2, by: 'Demo Owner', kind: 'event', body: 'moved:in_progress' },
     }),
     delv(uid(0xd5), 'Data Sorting', 'internal', false, 0, [], { shoot: [uid(0x62), 'Wedding day'], due: 5 }),
   ],
@@ -252,6 +257,44 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/projects/tracking') return atStage(trackingRows, 'partial')
+  // A deliverable's timeline: notes, voice notes and stage changes.
+  if (path.startsWith('/projects/deliverables/') && path.includes('/notes')) {
+    if (method === 'DELETE') return {}
+    const did = path.split('/')[3] ?? ''
+    if (method === 'POST') {
+      const b = (body ?? {}) as { kind?: string; body?: string; file_id?: string; duration_seconds?: number }
+      return {
+        id: uid(0x9f0 + Math.floor(Math.random() * 100)),
+        deliverable_id: did,
+        kind: b.kind ?? 'text',
+        body: b.body ?? null,
+        file_id: b.file_id ?? null,
+        duration_seconds: b.duration_seconds ?? null,
+        author_id: uid(1),
+        author_name: 'Demo Owner',
+        created_at: new Date().toISOString(),
+      }
+    }
+    const at = (daysAgo: number, h: number) => {
+      const d = new Date()
+      d.setDate(d.getDate() - daysAgo)
+      d.setHours(h, 15, 0, 0)
+      return d.toISOString()
+    }
+    const note = (n: number, kind: string, by: [string, string] | null, extra: object, when: string) => ({
+      id: uid(0x9a0 + n), deliverable_id: did, kind, body: null, file_id: null, duration_seconds: null,
+      author_id: by?.[0] ?? null, author_name: by?.[1] ?? null, created_at: when, ...extra,
+    })
+    const owner: [string, string] = [uid(1), 'Demo Owner']
+    const sana: [string, string] = [uid(0xe3), 'Sana Khan']
+    return [
+      note(1, 'event', owner, { body: 'moved:in_progress' }, at(6, 10)),
+      note(2, 'text', owner, { body: 'Keep it under 4 minutes. Open with the pheras, end on the vidaai. Song: Kesariya (acoustic).' }, at(6, 10)),
+      note(3, 'voice', sana, { file_id: uid(0xfa1), duration_seconds: 14 }, at(3, 18)),
+      note(4, 'text', sana, { body: 'First cut is on the drive. Colour pass tomorrow.' }, at(3, 18)),
+      note(5, 'event', sana, { body: 'moved:review' }, at(1, 12)),
+    ]
+  }
   // Above the catch-all below, which would answer this with a project detail.
   if (method === 'GET' && path === '/projects/deliverable-sets')
     return atStage(deliverableSetsFx, 'partial')
@@ -2097,6 +2140,9 @@ function delv(
     editor?: [string, string]
     shoot?: [string, string]
     link?: string
+    notes?: number
+    voice?: number
+    activity?: { daysAgo: number; by: string; kind: 'text' | 'voice' | 'event'; body: string | null }
   } = {},
 ) {
   // A local date so this can run before the helpers further down exist.
@@ -2124,6 +2170,12 @@ function delv(
     shoot_id: extra.shoot?.[0] ?? null,
     shoot_name: extra.shoot?.[1] ?? null,
     delivery_link: extra.link ?? null,
+    notes_count: extra.notes ?? 0,
+    voice_count: extra.voice ?? 0,
+    last_activity_at: extra.activity ? `${day(-extra.activity.daysAgo)}T09:30:00Z` : null,
+    last_activity_by: extra.activity?.by ?? null,
+    last_activity_kind: extra.activity?.kind ?? null,
+    last_activity_body: extra.activity?.body ?? null,
   }
 }
 
