@@ -1,7 +1,16 @@
 import { z } from 'zod'
 import { uuid, isoDateTime } from './shared/primitives'
 
-export const workStatus = z.enum(['submitted', 'approved', 'rejected'])
+/** 'sent' = delivered to the client straight from review (0115/0155). */
+export const workStatus = z.enum(['submitted', 'approved', 'rejected', 'sent'])
+
+/** Plain words for each status, the same everywhere the team sees one. */
+export const WORK_STATUS_LABEL: Record<z.infer<typeof workStatus>, string> = {
+  submitted: 'Waiting for review',
+  approved: 'Approved',
+  rejected: 'Sent back',
+  sent: 'Sent to client',
+}
 
 export const workSubmission = z.object({
   id: uuid,
@@ -29,6 +38,8 @@ export const workSubmission = z.object({
   status: workStatus,
   review_notes: z.string().nullable(),
   created_at: isoDateTime,
+  /** Who handed it in -- a reviewer needs to know whom to ask. */
+  submitted_by_name: z.string().nullable().default(null),
   // Lovable parity: hard-disk handover (additive, defaulted).
   disk_name: z.string().nullable().default(null),
   disk_location: z.string().nullable().default(null),

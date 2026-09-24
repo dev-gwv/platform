@@ -45,7 +45,8 @@ export const workRouter = new Hono<AppEnv>()
                       hard_disk_label, review_required, review_state, version,
                       client_sent_at, client_channel, revoked_at,
                       submission_link, location_note, notes, status, review_notes, created_at,
-                      disk_name, disk_location, folder_path
+                      disk_name, disk_location, folder_path,
+                      (select u.name from users u where u.user_id = team_work_submissions.submitted_by) as submitted_by_name
               from team_work_submissions
               where ${userId ? sql`submitted_by = ${userId}` : sql`true`}
                 and ${project ? sql`project_id = ${project}` : sql`true`}

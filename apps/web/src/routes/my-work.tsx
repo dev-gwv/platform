@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink, Layers, Mic, Plus, Pencil, Send } from 'lucide-react'
-import { shootListItem, workSubmission, type SubmitWorkRequest, type TaskListItem, type TaskStatus, type UpdateWorkSubmissionRequest, type WorkSubmission, z } from '@ipc/contracts'
+import { WORK_STATUS_LABEL, shootListItem, workSubmission, type SubmitWorkRequest, type TaskListItem, type TaskStatus, type UpdateWorkSubmissionRequest, type WorkSubmission, z } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -26,7 +26,7 @@ import { todayISO } from '@/features/tasks/board'
 
 const list = workSubmission.array()
 const shootsList = shootListItem.array()
-const TONE = { submitted: 'warning', approved: 'success', rejected: 'danger' } as const
+const TONE = { submitted: 'warning', approved: 'success', rejected: 'danger', sent: 'success' } as const
 
 type SortKey = 'due_asc' | 'due_desc' | 'recent' | 'priority'
 type StatusFilter = 'all' | TaskStatus | 'pending_review'
@@ -232,7 +232,7 @@ function MyWork() {
                       {humanize(t.status)}
                     </StatusBadge>
                     {t.due_date && <StatusBadge tone={overdue ? 'danger' : t.due_date === today ? 'warning' : 'neutral'}>{overdue ? `Overdue · ${t.due_date}` : t.due_date === today ? 'Due today' : t.due_date}</StatusBadge>}
-                    {submission && <StatusBadge tone={TONE[submission.status]}>{humanize(submission.status)}</StatusBadge>}
+                    {submission && <StatusBadge tone={TONE[submission.status]}>{WORK_STATUS_LABEL[submission.status]}</StatusBadge>}
                   </div>
                 </div>
                 {t.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{t.description}</p>}
@@ -472,7 +472,7 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
                   <Ban /> Revoke link
                 </Button>
               )}
-              <StatusBadge tone={TONE[s.status]}>{humanize(s.status)}</StatusBadge>
+              <StatusBadge tone={TONE[s.status]}>{WORK_STATUS_LABEL[s.status]}</StatusBadge>
             </div>
           </CardContent>
         </Card>

@@ -976,5 +976,21 @@ if (listed) {
   )
 }
 
+// ── Work to review: work sent straight to the client still lists ─────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Work Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Work project ${rand()}`, client_id: client.json.id } })
+  const pid = project.json.id
+  const sub = await api('/work/submissions', { token: aToken, method: 'POST', body: { project_id: pid, title: 'Album first cut', submission_link: 'https://example.test/album' } })
+  const sent = await api(`/work/submissions/${sub.json.id}/deliver`, { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const listed = await api(`/work/submissions?project_id=${pid}`, { token: aToken })
+  const row = Array.isArray(listed.json) ? listed.json[0] : null
+  check(
+    'work: a submission sent to the client still lists, with who handed it in',
+    sent.status === 200 && listed.status === 200 && row?.status === 'sent' && typeof row?.submitted_by_name === 'string',
+    { sub: sub.status, sent: sent.status, listed: listed.status, row },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
