@@ -17,7 +17,7 @@ import {
 import { grossProfit, balancePending } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
-import { requireModule } from '../../middleware/permissions'
+import { requireAction, requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { numberQuery, uuidParam, uuidQuery } from '../../lib/params'
 import { withUser } from '../../lib/db'
@@ -149,7 +149,7 @@ export const financialsRouter = new Hono<AppEnv>()
     return c.json(row)
   })
 
-  .post('/expenses', requireModule('company_expenses'), async (c) => {
+  .post('/expenses', requireAction('company_expenses', 'create'), async (c) => {
     const parsed = createExpenseRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the expense details.')
     const auth = c.get('auth')
@@ -181,7 +181,7 @@ export const financialsRouter = new Hono<AppEnv>()
     return c.json(created, 201)
   })
 
-  .patch('/expenses/:id', requireModule('company_expenses'), async (c) => {
+  .patch('/expenses/:id', requireAction('company_expenses', 'edit'), async (c) => {
     const parsed = updateExpenseRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the expense details.')
     if (Object.keys(parsed.data).length === 0) fail(422, 'Nothing to change.')
@@ -205,7 +205,7 @@ export const financialsRouter = new Hono<AppEnv>()
     return c.json(updated)
   })
 
-  .delete('/expenses/:id', requireModule('company_expenses'), async (c) => {
+  .delete('/expenses/:id', requireAction('company_expenses', 'delete'), async (c) => {
     const id = uuidParam(c)
     const rows = await attempt(c, 'financials.expense_delete', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`

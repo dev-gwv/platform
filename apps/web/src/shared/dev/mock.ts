@@ -164,6 +164,7 @@ const projectDetail: ProjectDetail = {
   payments: [
     { id: uid(0xf1), amount: 100000, paid_on: '2026-06-02', mode: 'upi', reference: 'TXN9931', status: null, description: null, is_gst: false, gst_number: null },
     { id: uid(0xf2), amount: 50000, paid_on: '2026-07-15', mode: 'bank', reference: 'NEFT5521', status: null, description: null, is_gst: false, gst_number: null },
+    { id: uid(0xf3), amount: 40000, paid_on: '2026-10-01', mode: 'UPI', reference: null, status: 'pending', description: 'Before the wedding', is_gst: false, gst_number: null },
   ],
 }
 

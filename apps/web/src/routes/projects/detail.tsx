@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   ArrowRight,
-  Briefcase,
   Camera,
   CheckSquare,
   CircleCheck,
@@ -22,9 +21,7 @@ import {
   PauseCircle,
   Pencil,
   Phone,
-  Printer,
   Receipt,
-  Eye,
   FileCheck,
   MapPin,
   Trash2,
@@ -32,7 +29,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react'
-import { shootListItem, type PaymentInput, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
+import { shootListItem, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { QuotationLinkDialog } from '@/features/projects/QuotationLinkDialog'
@@ -46,19 +43,14 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { MonthlyProfitabilityReport } from '@/features/projects/MonthlyProfitabilityReport'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import {
-  useAddPayment,
-  useDeletePayment,
   useDeleteProject,
   useProject,
   useUpdateProject,
-  useUpdateQuotation,
 } from '@/features/projects/api'
 import { useReferralCampaigns, useReferralSubmissions } from '@/features/referrals/api'
-import { useProjectFinancials } from '@/features/financials/api'
 import { EntityReminders } from '@/features/reminders/EntityReminders'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { CompletedWorkTab } from '@/features/projects/tabs/CompletedWorkTab'
@@ -67,6 +59,7 @@ import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
+import { BillingTab, CollectionBar, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
 /** The tabs across a project. Each one is a view of the same project. */
@@ -128,7 +121,6 @@ function ProjectDetail() {
   // Task status updates are gated on tasks:edit, not projects:edit.
   const canEditTasks = access.hasAction('tasks', 'edit')
   const update = useUpdateProject(id)
-  const updateQuotation = useUpdateQuotation(id)
   const removeProject = useDeleteProject()
   const confirm = useConfirm()
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
@@ -164,8 +156,11 @@ function ProjectDetail() {
   if (isLoading) return <SkeletonCards count={3} />
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />
 
-  const received = data.payments.reduce((s, p) => s + p.amount, 0)
-  const balance = Math.max(0, data.total_cost - received)
+  // Received counts only money that came in; "promised" payments are shown
+  // separately and never counted as collected.
+  const money = projectMoney(data)
+  const received = money.received
+  const balance = money.due
   const StatusIcon = STATUS_ICON[data.status]
 
   async function onDelete() {
@@ -243,11 +238,15 @@ function ProjectDetail() {
         )}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Figure icon={IndianRupee} label="Total cost" value={formatINR(data.total_cost)} />
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
         <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" />
-        <Figure icon={Clock} label="Pending payments" value={formatINR(balance)} tone="warning" />
-        <Figure icon={Briefcase} label="Balance" value={formatINR(balance)} tone="info" />
+        <Figure
+          icon={Clock}
+          label={money.promised > 0 ? `Still to collect · ${formatINR(money.promised)} promised` : 'Still to collect'}
+          value={formatINR(balance)}
+          tone={balance > 0 ? 'warning' : 'success'}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card p-1.5">
@@ -316,25 +315,14 @@ function ProjectDetail() {
             <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
 
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Financial snapshot</CardTitle>
+              <CardHeader className="flex-row items-center justify-between pb-3">
+                <CardTitle>Payments</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setTab('billing')}>
+                  Open billing
+                </Button>
               </CardHeader>
               <CardContent>
-                <dl className="flex flex-col gap-2 text-sm">
-                  <Money label="Package cost" value={data.package_cost} />
-                  <Money label="Additional" value={data.additional_deliverables_cost} />
-                  <Money label="Total project value" value={data.total_cost} accent />
-                  <Money label="Received" value={received} />
-                  <Money label="Balance due" value={balance} accent />
-                </dl>
-                {canEdit && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <AddPaymentDialog id={id} balance={balance} />
-                    <Button variant="outline" size="sm" onClick={() => setTab('billing')}>
-                      <FileText /> View payments
-                    </Button>
-                  </div>
-                )}
+                <CollectionBar project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
               </CardContent>
             </Card>
           </div>
@@ -393,92 +381,7 @@ function ProjectDetail() {
         />
       )}
 
-      {tab === 'billing' && (
-      <div className="mt-4 flex flex-col gap-4">
-        <ProfitabilityPanel
-          projectId={id}
-          packageCost={data.package_cost}
-          addOns={data.additional_deliverables_cost}
-          total={data.total_cost}
-          received={received}
-          balance={balance}
-        />
-        {/* What the project cost to run, not just what came in. */}
-        <MonthlyProfitabilityReport projectId={id} bookedRevenue={data.total_cost} />
-
-        {/* The quotation lived only behind a Quick action, so whether the
-            client could currently see it was invisible from the tab that is
-            about this project's money. */}
-        <Card>
-          <CardContent className="p-4 sm:p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-semibold tracking-tight">
-                  <FileText className="size-4 text-muted-foreground" aria-hidden />
-                  Quotation
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  A printable quotation built from this project&apos;s details, deliverables and shoots.
-                </p>
-              </div>
-              <StatusBadge tone={data.show_quotation ? 'success' : 'neutral'}>
-                {data.show_quotation ? 'Visible to client' : 'Hidden from client'}
-              </StatusBadge>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              {canEdit && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={data.show_quotation}
-                    onChange={(e) => updateQuotation.mutate({ show_quotation: e.target.checked })}
-                  />
-                  Show quotation to client
-                </label>
-              )}
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/projects/$id/quotation" params={{ id }}>
-                  <FileText /> Open quotation
-                </Link>
-              </Button>
-            </div>
-            {!data.show_quotation && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                The public link shows a &ldquo;hidden by the studio&rdquo; notice until this is switched on.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Payments</CardTitle>
-            {canEdit && <AddPaymentDialog id={id} balance={balance} />}
-          </CardHeader>
-          <CardContent>
-            {data.payments.length === 0 ? (
-              <EmptyState
-                title="No payments yet"
-                description="Record an advance or an instalment and the balance updates here."
-              />
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {data.payments.map((p) => (
-                  <PaymentRow
-                    key={p.id}
-                    projectId={id}
-                    projectName={data.name}
-                    clientName={data.client_name}
-                    clientPhone={data.client_phone}
-                    payment={p}
-                    canEdit={canEdit}
-                  />
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      )}
+      {tab === 'billing' && <BillingTab project={data} canEdit={canEdit} />}
 
       {tab === 'shoots' && <ShootsTab projectId={id} />}
       {tab === 'completed_work' && <CompletedWorkTab projectId={id} canReview={canReviewWork} />}
@@ -505,212 +408,6 @@ function ProjectDetail() {
 }
 
 /** Project value vs money in: collection progress and what's still out. */
-function ProfitabilityPanel({
-  projectId,
-  packageCost,
-  addOns,
-  total,
-  received,
-  balance,
-}: {
-  projectId: string
-  packageCost: number
-  addOns: number
-  total: number
-  received: number
-  balance: number
-}) {
-  const pct = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0
-  // True margin once team payouts and company expenses are booked: the
-  // project_financials view's cost summary for this project, when the
-  // financials module is available to this user.
-  const { data: financials } = useProjectFinancials()
-  const costs = financials?.find((f) => f.project_id === projectId)
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Profitability</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <dl className="flex flex-col gap-2 text-sm">
-          <Money label="Package cost" value={packageCost} />
-          <Money label="Additional deliverables" value={addOns} />
-          <Money label="Total project value" value={total} accent />
-          <Money label="Total received" value={received} accent />
-          <Money label="Balance pending" value={balance} />
-        </dl>
-        {costs && (
-          <>
-            <p className="mb-1 mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Cost summary
-            </p>
-            <dl className="flex flex-col gap-2 text-sm">
-              <Money label="Revenue" value={costs.revenue} />
-              <Money label="Direct team cost" value={costs.direct_team_cost} />
-              <Money label="Project expenses" value={costs.project_expenses} />
-              <Money label="Gross profit" value={costs.gross_profit} accent />
-            </dl>
-          </>
-        )}
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Collected</span>
-            <span className="font-medium tabular-nums">{pct}%</span>
-          </div>
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Collection progress">
-            <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Gross margin before team payouts and company expenses. Price team work in the Shoots tab so payouts stay inside this total.
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-type DetailPayment = {
-  id: string
-  amount: number
-  paid_on: string
-  mode: string | null
-  reference: string | null
-  status: string | null
-  description: string | null
-  is_gst: boolean
-  gst_number: string | null
-}
-
-function receiptText(projectName: string, clientName: string | null, p: DetailPayment): string {
-  const lines = [
-    `Payment receipt — ${projectName}`,
-    clientName ? `Client: ${clientName}` : null,
-    `Amount: ${formatINR(p.amount)}`,
-    `Date: ${p.paid_on}`,
-    p.mode ? `Mode: ${p.mode}` : null,
-    p.reference ? `Reference: ${p.reference}` : null,
-    p.status ? `Status: ${p.status}` : null,
-    p.is_gst ? `GST invoice${p.gst_number ? ` (${p.gst_number})` : ''}` : null,
-    p.description ? `Note: ${p.description}` : null,
-  ]
-  return lines.filter(Boolean).join('\n')
-}
-
-/** One payment with receipt actions: view, print, email, WhatsApp, delete. */
-function PaymentRow({
-  projectId,
-  projectName,
-  clientName,
-  clientPhone,
-  payment: p,
-  canEdit,
-}: {
-  projectId: string
-  projectName: string
-  clientName: string | null
-  clientPhone: string | null
-  payment: DetailPayment
-  canEdit: boolean
-}) {
-  const del = useDeletePayment(projectId)
-  const confirm = useConfirm()
-  const [viewOpen, setViewOpen] = useState(false)
-  const digits = (clientPhone ?? '').replace(/\D/g, '')
-
-  async function onDelete() {
-    const yes = await confirm({
-      title: `Delete this ${formatINR(p.amount)} payment?`,
-      description: 'The balance updates immediately. This cannot be undone.',
-      destructive: true,
-      confirmLabel: 'Delete payment',
-    })
-    if (yes) del.mutate(p.id)
-  }
-
-  function onWhatsApp() {
-    if (!digits) {
-      toast.error('Add a client phone number to send this receipt on WhatsApp.')
-      return
-    }
-    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(receiptText(projectName, clientName, p))}`, '_blank', 'noopener,noreferrer')
-  }
-
-  function onEmail() {
-    const body = encodeURIComponent(receiptText(projectName, clientName, p))
-    const subject = encodeURIComponent(`Payment receipt — ${projectName} — ${formatINR(p.amount)}`)
-    window.location.href = `mailto:?subject=${subject}&body=${body}`
-  }
-
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{formatINR(p.amount)}</p>
-        <p className="text-xs text-muted-foreground">
-          {p.paid_on}
-          {p.mode ? ` · ${p.mode}` : ''}
-          {p.reference ? ` · ${p.reference}` : ''}
-          {p.description ? ` · ${p.description}` : ''}
-        </p>
-        <div className="mt-1 flex flex-wrap gap-1">
-          <StatusBadge tone={p.status === 'pending' ? 'warning' : 'success'}>
-            {p.status === 'pending' ? 'Pending' : 'Paid'}
-          </StatusBadge>
-          {p.is_gst && <StatusBadge tone="info">GST{p.gst_number ? ` ${p.gst_number}` : ''}</StatusBadge>}
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-1">
-        <Button variant="ghost" size="icon" title="View receipt" aria-label="View receipt" onClick={() => setViewOpen(true)}>
-          <Eye />
-        </Button>
-        <Button variant="ghost" size="icon" title="Print receipt" aria-label="Print receipt" onClick={() => setViewOpen(true)}>
-          <Printer />
-        </Button>
-        <Button variant="ghost" size="icon" title="Email receipt" aria-label="Email receipt" onClick={onEmail}>
-          <Mail />
-        </Button>
-        <Button variant="ghost" size="icon" title="WhatsApp receipt" aria-label="WhatsApp receipt" onClick={onWhatsApp} className="text-success">
-          <MessageCircle />
-        </Button>
-        {canEdit && (
-          <Button variant="ghost" size="icon" title="Delete payment" aria-label="Delete payment" className="text-destructive" onClick={() => void onDelete()}>
-            <Trash2 />
-          </Button>
-        )}
-      </div>
-      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent
-          className="paper"
-          title={`Receipt — ${formatINR(p.amount)}`}
-          description={`${projectName}${clientName ? ` · ${clientName}` : ''}`}
-        >
-          <dl className="flex flex-col gap-2 text-sm">
-            <Money label="Amount" value={p.amount} accent />
-            <Fact label="Date" value={p.paid_on} />
-            <Fact label="Mode" value={p.mode ?? '—'} />
-            <Fact label="Reference" value={p.reference ?? '—'} />
-            <Fact label="Status" value={p.status === 'pending' ? 'Pending' : 'Paid'} />
-            <Fact label="GST" value={p.is_gst ? `Yes${p.gst_number ? ` (${p.gst_number})` : ''}` : 'No'} />
-            {p.description && <Fact label="Note" value={p.description} />}
-          </dl>
-          {/* The buttons are part of the dialog, so they are inside `paper`
-              and would print on the receipt. `paper-toolbar` drops them. */}
-          <div className="paper-toolbar mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onEmail}>
-              <Mail /> Email
-            </Button>
-            <Button variant="outline" size="sm" onClick={onWhatsApp}>
-              <MessageCircle /> WhatsApp
-            </Button>
-            <Button size="sm" onClick={() => window.print()}>
-              <Printer /> Print
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </li>
-  )
-}
-
 function ReferralsTab({ projectId, projectName, clientName }: { projectId: string; projectName: string; clientName: string | null }) {
   void projectId
   const { data, isLoading } = useReferralCampaigns()
@@ -915,16 +612,6 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-function Money({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn('tabular-nums', accent ? 'font-semibold text-primary' : 'font-medium')}>
-        {formatINR(value)}
-      </dd>
-    </div>
-  )
-}
 
 function EditProjectDialog({
   id,
@@ -1050,100 +737,6 @@ function EditProjectDialog({
             </DialogClose>
             <Button type="submit" disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function AddPaymentDialog({ id, balance }: { id: string; balance: number }) {
-  const add = useAddPayment(id)
-  const [open, setOpen] = useState(false)
-  const [amount, setAmount] = useState(String(balance))
-  const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10))
-  const [mode, setMode] = useState('upi')
-  const [reference, setReference] = useState('')
-  const [status, setStatus] = useState<'paid' | 'pending'>('paid')
-  const [description, setDescription] = useState('')
-  const [isGst, setIsGst] = useState(false)
-  const [gstNumber, setGstNumber] = useState('')
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    const body: PaymentInput = {
-      amount: Number(amount) || 0,
-      paid_on: paidOn || undefined,
-      ...(mode.trim() ? { mode: mode.trim() } : {}),
-      ...(reference.trim() ? { reference: reference.trim() } : {}),
-      ...(status !== 'paid' ? { status } : {}),
-      ...(description.trim() ? { description: description.trim() } : {}),
-      ...(isGst ? { is_gst: true } : {}),
-      ...(gstNumber.trim() ? { gst_number: gstNumber.trim() } : {}),
-    }
-    await add.mutateAsync(body)
-    setOpen(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <IndianRupee /> Record
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Record payment" description={`Balance ${formatINR(balance)}`}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Amount</Label>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Date</Label>
-              <Input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Mode</Label>
-              <Input value={mode} onChange={(e) => setMode(e.target.value)} placeholder="upi / cash / bank" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <Select value={status} onChange={(e) => setStatus(e.target.value as 'paid' | 'pending')}>
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
-              </Select>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Reference (optional)</Label>
-            <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="UTR / cheque no." />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Description (optional)</Label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Advance, final settlement…" />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={isGst} onChange={(e) => setIsGst(e.target.checked)} />
-            GST invoice
-          </label>
-          {isGst && (
-            <div className="flex flex-col gap-1.5">
-              <Label>GST number</Label>
-              <Input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={add.isPending}>
-              {add.isPending ? 'Saving…' : 'Record'}
             </Button>
           </div>
         </form>

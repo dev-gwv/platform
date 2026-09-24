@@ -16,6 +16,7 @@ import {
   type SaveDeliverableSetRequest,
   type SetDeliverableStageRequest,
   type UpdateDeliverableRequest,
+  type UpdatePaymentRequest,
   type UpdateProjectRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -102,6 +103,9 @@ function useProjectMutation(id: string, message: string) {
     toast.success(message)
     void qc.invalidateQueries({ queryKey: ['projects', id] })
     void qc.invalidateQueries({ queryKey: ['projects'] })
+    // Money moved: profit and billing screens read it too.
+    void qc.invalidateQueries({ queryKey: ['financials'] })
+    void qc.invalidateQueries({ queryKey: ['received-payments'] })
   }
 }
 
@@ -170,6 +174,16 @@ export function useAddPayment(id: string) {
     mutationFn: (input: PaymentInput) =>
       callApi(`/projects/${id}/payments`, { method: 'POST', body: input, responseSchema: anySchema }),
     onSuccess: useProjectMutation(id, 'Payment recorded'),
+  })
+}
+
+/** Change a payment -- most often "promised" becoming "received". */
+export function useUpdatePayment(id: string) {
+  return useMutation({
+    mutationFn: ({ paymentId, patch }: { paymentId: string; patch: UpdatePaymentRequest }) =>
+      callApi(`/projects/${id}/payments/${paymentId}`, { method: 'PATCH', body: patch, responseSchema: anySchema }),
+    onSuccess: useProjectMutation(id, 'Payment updated'),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

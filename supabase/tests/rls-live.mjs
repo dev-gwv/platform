@@ -949,5 +949,32 @@ if (listed) {
   check("terms: another studio sees none of this project's terms", Array.isArray(other.json) && other.json.length === 0, other.json)
 }
 
+// ── Project money: promised is not received; a payment can be changed ───
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Money Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Money project ${rand()}`, client_id: client.json.id, package_cost: 100000 } })
+  const pid = project.json.id
+  const zero = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 0 } })
+  await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 30000, mode: 'UPI' } })
+  const promised = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 20000, status: 'pending' } })
+  const listed = async () => {
+    const page = await api(`/projects?q=${encodeURIComponent(project.json.id ? 'Money project' : '')}&page_size=100`, { token: aToken })
+    const items = Array.isArray(page.json) ? page.json : (page.json.items ?? [])
+    return items.find((x) => x.id === pid)
+  }
+  const before = await listed()
+  check('money: a ₹0 payment is refused, and a promised one is not counted as received', zero.status === 422 && Number(before?.received) === 30000, {
+    zero: zero.status, before,
+  })
+  const marked = await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
+  const after = await listed()
+  const detail = await api(`/projects/${pid}`, { token: aToken })
+  check(
+    'money: marking a promised payment received counts it',
+    marked.status === 204 && Number(after?.received) === 50000 && detail.json.payments.every((x) => x.status === 'paid'),
+    { marked: marked.status, after },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

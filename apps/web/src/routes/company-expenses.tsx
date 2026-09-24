@@ -529,12 +529,25 @@ export function AddExpenseDialog({
   expense,
   trigger,
   presetProjectId,
-}: { expense?: Expense; trigger?: React.ReactNode; presetProjectId?: string } = {}) {
+  defaultOpen = false,
+  onClosed,
+}: {
+  expense?: Expense
+  trigger?: React.ReactNode
+  presetProjectId?: string
+  /** Open on mount (editing from a row menu); `onClosed` fires when it shuts. */
+  defaultOpen?: boolean
+  onClosed?: () => void
+} = {}) {
   const isEdit = !!expense
   const create = useCreateExpense()
   const update = useUpdateExpense()
   const { data: projects } = useProjects()
-  const [open, setOpen] = useState(false)
+  const [open, setOpenState] = useState(defaultOpen)
+  const setOpen = (v: boolean) => {
+    setOpenState(v)
+    if (!v) onClosed?.()
+  }
   const [category, setCategory] = useState(expense?.category ?? '')
   const [description, setDescription] = useState(expense?.description ?? '')
   const [amount, setAmount] = useState(String(expense?.amount ?? ''))
@@ -549,13 +562,21 @@ export function AddExpenseDialog({
   const [taxAmount, setTaxAmount] = useState(expense?.tax_amount != null ? String(expense.tax_amount) : '')
   const [reverse, setReverse] = useState(expense?.reverse_charge ?? false)
   const [error, setError] = useState<string | null>(null)
+  // From a project's tab the project is already known, so its picker and the
+  // "shared overhead" option are noise. Tax paperwork is folded until asked for.
+  const projectMode = !!presetProjectId && !isEdit
+  const [showTax, setShowTax] = useState(
+    !!(expense && (expense.gst_treatment !== 'non_gst' || expense.invoice_number || expense.tax_name || expense.tax_amount)),
+  )
 
   function reset() {
     setCategory('')
     setDescription('')
     setAmount('')
     setExpenseDate(todayISO())
-    setProjectId('')
+    // Added from a project: the next one belongs to it too. (Clearing this
+    // saved the second expense unlinked, and it vanished from the tab.)
+    setProjectId(presetProjectId ?? '')
     setPartyId('')
     setOverhead(false)
     setGstTreatment('non_gst')
@@ -619,7 +640,7 @@ export function AddExpenseDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent title={isEdit ? 'Edit expense' : 'Add expense'} description="Log a studio or project cost.">
+      <DialogContent title={isEdit ? 'Edit expense' : 'Add expense'} description={projectMode ? 'A cost for this project — it counts against its profit.' : 'Log a studio or project cost.'}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <ExpenseCategoryPicker value={category} onChange={setCategory} />
@@ -640,6 +661,7 @@ export function AddExpenseDialog({
               <Label>Date</Label>
               <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
             </div>
+            {!projectMode && (
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
               <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={overhead}>
@@ -651,8 +673,10 @@ export function AddExpenseDialog({
                 ))}
               </Select>
             </div>
+            )}
           </div>
 
+          {!projectMode && (
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -664,7 +688,14 @@ export function AddExpenseDialog({
             />
             Fixed overhead (shared equally across every active project)
           </label>
+          )}
 
+          {!showTax ? (
+            <button type="button" onClick={() => setShowTax(true)} className="self-start text-xs font-medium text-primary hover:underline">
+              + GST, invoice number or tax
+            </button>
+          ) : (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>GST treatment</Label>
@@ -709,6 +740,8 @@ export function AddExpenseDialog({
               Reverse charge
             </label>
           </div>
+          </>
+          )}
 
           {error && (
             <p id="form-error" role="alert" className="text-sm text-destructive">

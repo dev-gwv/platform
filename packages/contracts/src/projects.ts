@@ -87,8 +87,12 @@ export type SetDeliverableStageRequest = z.infer<typeof setDeliverableStageReque
 export const projectPaymentStatus = z.enum(['paid', 'pending'])
 export type ProjectPaymentStatus = z.infer<typeof projectPaymentStatus>
 
+/** Amounts on a payment: more than zero -- a ₹0 "payment" is a mistake. */
+const paymentAmount = money.refine((v) => v > 0, 'Enter the amount received.')
+const gstNumber = z.string().trim().max(20).refine((v) => v === '' || v.length >= 5, 'That GST number looks too short.')
+
 export const paymentInput = z.object({
-  amount: money,
+  amount: paymentAmount,
   paid_on: isoDate.optional(),
   mode: z.string().max(40).optional(),
   reference: z.string().max(120).optional(),
@@ -98,9 +102,21 @@ export const paymentInput = z.object({
   status: projectPaymentStatus.optional(),
   description: z.string().max(500).optional(),
   is_gst: z.boolean().optional(),
-  gst_number: z.string().trim().max(20).optional(),
+  gst_number: gstNumber.optional(),
 })
 export type PaymentInput = z.infer<typeof paymentInput>
+
+export const updatePaymentRequest = z.object({
+  amount: paymentAmount.optional(),
+  paid_on: isoDate.optional(),
+  mode: z.string().max(40).nullable().optional(),
+  reference: z.string().max(120).nullable().optional(),
+  status: projectPaymentStatus.optional(),
+  description: z.string().max(500).nullable().optional(),
+  is_gst: z.boolean().optional(),
+  gst_number: gstNumber.nullable().optional(),
+})
+export type UpdatePaymentRequest = z.infer<typeof updatePaymentRequest>
 
 export const createProjectRequest = z.object({
   client_id: uuid,

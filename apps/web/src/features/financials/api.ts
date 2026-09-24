@@ -129,6 +129,8 @@ export function useCreateExpense() {
     onSuccess: () => {
       toast.success('Expense added')
       void qc.invalidateQueries({ queryKey: ['expenses'] })
+      // An expense changes a project's profit.
+      void qc.invalidateQueries({ queryKey: ['financials'] })
     },
   })
 }
@@ -141,6 +143,8 @@ export function useUpdateExpense() {
     onSuccess: () => {
       toast.success('Expense updated')
       void qc.invalidateQueries({ queryKey: ['expenses'] })
+      // An expense changes a project's profit.
+      void qc.invalidateQueries({ queryKey: ['financials'] })
     },
   })
 }
@@ -152,6 +156,8 @@ export function useDeleteExpense() {
     onSuccess: () => {
       toast.success('Expense deleted')
       void qc.invalidateQueries({ queryKey: ['expenses'] })
+      // An expense changes a project's profit.
+      void qc.invalidateQueries({ queryKey: ['financials'] })
     },
   })
 }
