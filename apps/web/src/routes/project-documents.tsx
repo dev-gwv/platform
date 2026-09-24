@@ -10,7 +10,9 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { SkeletonList } from '@/shared/ui/skeleton'
-import { useTermsDocuments, useIssueTerms, useTermsEmailLogs, type TermsDocument } from '@/features/terms/api'
+import { useTermsDocuments, useIssueTerms, useSendTermsAgain, useTermsEmailLogs, type TermsDocument } from '@/features/terms/api'
+import { Link } from '@tanstack/react-router'
+import { buildWhatsAppUrl } from '@ipc/contracts'
 import { useProjects } from '@/features/projects/api'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
 
@@ -56,7 +58,7 @@ export function ProjectDocumentsPage() {
 
 function ProjectDocuments() {
   const { data, isLoading, isError, refetch } = useTermsDocuments()
-  const issue = useIssueTerms()
+  const sendAgain = useSendTermsAgain()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | DocStatus>('all')
   const [quick, setQuick] = useState<'all' | 'missing_link' | 'pending_ack' | 'expiring_soon'>('all')
@@ -93,9 +95,12 @@ function ProjectDocuments() {
     }
   }, [data])
 
+  // A fresh link for the SAME document -- never a new one. (This used to
+  // issue a placeholder document, which then replaced the real terms.)
   async function generateLink(d: TermsDocument): Promise<string> {
-    const res = await issue.mutateAsync({ project_id: d.project_id, rendered_body: `Terms & conditions for ${d.project_name ?? 'the project'}` })
-    return termsLink(res.token)
+    if (d.acknowledged_at) throw new Error('The client has already agreed to these terms.')
+    const res = await sendAgain.mutateAsync({ documentId: d.id })
+    return res.url || termsLink(res.token)
   }
 
   async function onCopy(d: TermsDocument) {
@@ -117,11 +122,7 @@ function ProjectDocuments() {
     setBusy({ id: d.id, kind: 'wa' })
     try {
       const link = await generateLink(d)
-      const digits = (d.client_phone ?? '').replace(/\D/g, '')
-      const url = digits
-        ? `https://wa.me/${digits}?text=${encodeURIComponent(clientMessage(d, link))}`
-        : `https://wa.me/?text=${encodeURIComponent(clientMessage(d, link))}`
-      window.open(url, '_blank', 'noopener')
+      window.open(buildWhatsAppUrl(d.client_phone, clientMessage(d, link)), '_blank', 'noopener')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not generate link.')
     } finally {
@@ -249,14 +250,13 @@ function ProjectDocuments() {
                           <Button size="sm" variant="ghost" onClick={() => setLogFor(d.id)} title="Email history">
                             <History />
                           </Button>
-                          <IssueTermsDialog
-                            projectId={d.project_id}
-                            trigger={
-                              <Button variant="outline" size="sm">
-                                Resend
-                              </Button>
-                            }
-                          />
+                          {d.project_id ? (
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to="/projects/$id" params={{ id: d.project_id }} search={{ tab: 'terms' }}>
+                                Open
+                              </Link>
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

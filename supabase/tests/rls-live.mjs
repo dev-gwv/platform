@@ -893,5 +893,61 @@ if (listed) {
   )
 }
 
+// ── Client terms: send, send again, cancel, agree (0163) ────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Terms Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Terms project', client_id: client.json.id, package_cost: 90000 } })
+  const pid = project.json.id
+  const tokenOf = (url) => new URL(url, 'http://x').searchParams.get('token') ?? ''
+
+  const sent = await api('/terms/issue', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      project_id: pid,
+      rendered_body: 'Booking is confirmed on payment.',
+      title: 'Wedding terms',
+      payment_terms: [{ label: 'Advance', mode: 'percent', value: 50, due_trigger: 'On signing' }],
+      total_cost: 90000,
+      legal_note: 'Tap I agree to accept.',
+      expiry_days: 30,
+    },
+  })
+  const first = await api(`/public/terms/${sent.json.token}/payload`)
+  check(
+    'terms: the client sees the payment plan and legal note',
+    sent.status === 201 && !!sent.json.url && first.status === 200 && first.json.payment_terms?.length === 1 && first.json.legal_note === 'Tap I agree to accept.',
+    { sent: sent.json, first: first.json },
+  )
+
+  const again = await api(`/terms/documents/${sent.json.document_id}/link`, { token: aToken, method: 'POST', body: {} })
+  const oldLink = await api(`/public/terms/${sent.json.token}/payload`)
+  const newLink = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
+  check('terms: sending again makes a new link and stops the old one', again.status === 200 && oldLink.status === 404 && newLink.status === 200, {
+    again: again.status, old: oldLink.status, fresh: newLink.status,
+  })
+
+  const cancelled = await api(`/terms/documents/${sent.json.document_id}/revoke`, { token: aToken, method: 'POST' })
+  const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
+  const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)
+  const lateAgree = await api(`/public/terms/${tokenOf(again.json.url)}/ack`, { method: 'POST', body: { name: 'Priya' } })
+  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 404 && legacy.status === 404 && lateAgree.status === 409, {
+    cancelled: cancelled.status, afterCancel: afterCancel.status, legacy: legacy.status, lateAgree: lateAgree.status,
+  })
+
+  const v2 = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Version two.' } })
+  const agreed = await api(`/public/terms/${v2.json.token}/ack`, { method: 'POST', body: { name: 'Priya Sharma' } })
+  const twice = await api(`/public/terms/${v2.json.token}/ack`, { method: 'POST', body: { name: 'Someone' } })
+  const reread = await api(`/public/terms/${v2.json.token}/payload`)
+  const list = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  check(
+    'terms: agreeing works once, the client can re-read it, and the studio sees who agreed',
+    agreed.status === 200 && twice.status === 409 && reread.status === 200 && list.json[0]?.acknowledged_by_name === 'Priya Sharma' && list.json.length === 2,
+    { agreed: agreed.status, twice: twice.status, reread: reread.status, list: list.json },
+  )
+  const other = await api(`/terms/projects/${pid}/documents`, { token: newPw.json.access_token })
+  check("terms: another studio sees none of this project's terms", Array.isArray(other.json) && other.json.length === 0, other.json)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

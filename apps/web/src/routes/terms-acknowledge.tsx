@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { z, buildMailtoUrl, buildWhatsAppUrl } from '@ipc/contracts'
-import { CheckCircle2, Printer, MessageCircle, Mail, Copy } from 'lucide-react'
-import { toast } from 'sonner'
+import { z } from '@ipc/contracts'
+import { CheckCircle2, Printer } from 'lucide-react'
 import { callApi, ApiError } from '@/shared/api/client'
 import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
 import { Button } from '@/shared/ui/button'
@@ -46,7 +45,7 @@ export function TermsAcknowledgePage() {
     callApi(`/public/terms/${token}/payload`, { responseSchema: termsPayload })
       .then((r) => {
         if (r.revoked) {
-          setLoadError('This link has been revoked. Please ask the studio for a fresh one.')
+          setLoadError('This link was cancelled or replaced by a newer one. Please ask the studio to send it again.')
           return
         }
         if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) {
@@ -92,18 +91,6 @@ export function TermsAcknowledgePage() {
     }
   }
 
-  const url = typeof window !== 'undefined' ? window.location.href : ''
-  const shareText = doc ? `${doc.title ?? 'Terms & agreement'}${doc.project_name ? ` for ${doc.project_name}` : ''}: ${url}` : url
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(url)
-      toast.success('Link copied.')
-    } catch {
-      toast.error('Could not copy the link.')
-    }
-  }
-
   return (
     <div className="relative overflow-hidden">
       <CameraBackdrop />
@@ -115,16 +102,27 @@ export function TermsAcknowledgePage() {
           <CardContent className="p-4 text-center text-sm text-muted-foreground">{loadError}</CardContent>
         </Card>
       ) : done ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
-            <CheckCircle2 className="size-10 text-success" />
-            <p className="font-medium">Thank you, {name}</p>
-            <p className="text-sm text-muted-foreground">Your agreement has been recorded.{doc?.already_acknowledged ? ' (Already acknowledged — showing the existing receipt.)' : ''}</p>
+        <>
+          <Card className="border-tone-green/40 bg-tone-green-soft/40">
+            <CardContent className="flex items-center gap-3 p-4">
+              <CheckCircle2 className="size-8 shrink-0 text-success" />
+              <div>
+                <p className="font-medium">Thank you{name ? `, ${name}` : ''} — you have agreed to these terms.</p>
+                <p className="text-sm text-muted-foreground">
+                  {doc?.acknowledged_at ? `Agreed on ${new Date(doc.acknowledged_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}. ` : ''}
+                  Keep this page or print it for your records.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          {doc && <TermsDocumentSheet doc={doc} bodyClassName="" />}
+          <div className="no-print flex flex-wrap gap-2">
+            <DownloadDocumentButton name={`${doc?.document_number ?? 'Terms'}${doc?.project_name ? ` ${doc.project_name}` : ''}`} />
             <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="mr-1 size-4" /> Print receipt
+              <Printer className="mr-1 size-4" /> Print
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </>
       ) : doc === null ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4" role="status" aria-label="Loading your terms">
           {Array.from({ length: 8 }, (_, i) => (
@@ -141,19 +139,6 @@ export function TermsAcknowledgePage() {
             <Button variant="outline" size="sm" onClick={() => window.print()}>
               <Printer className="mr-1 size-4" /> Print
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href={buildWhatsAppUrl(doc.client_phone, shareText)} target="_blank" rel="noreferrer noopener">
-                <MessageCircle className="mr-1 size-4" /> WhatsApp
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href={buildMailtoUrl(null, doc.title ?? 'Terms & agreement', shareText)}>
-                <Mail className="mr-1 size-4" /> Email
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void copy()}>
-              <Copy className="mr-1 size-4" /> Copy
-            </Button>
           </div>
           <Card className="no-print">
             <CardContent className="p-4">
@@ -167,8 +152,8 @@ export function TermsAcknowledgePage() {
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button type="submit" disabled={busy || !name.trim()}>
-                  {busy ? 'Recording…' : 'I agree'}
+                <Button type="submit" size="lg" disabled={busy || !name.trim()}>
+                  {busy ? 'Recording…' : 'I have read these terms and I agree'}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
                   Your name, time and IP address are recorded as evidence of agreement.

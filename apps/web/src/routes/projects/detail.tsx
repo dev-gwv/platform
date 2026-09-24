@@ -482,7 +482,20 @@ function ProjectDetail() {
 
       {tab === 'shoots' && <ShootsTab projectId={id} />}
       {tab === 'completed_work' && <CompletedWorkTab projectId={id} canReview={canReviewWork} />}
-      {tab === 'terms' && <TermsTab projectId={id} canEdit={canEdit} />}
+      {tab === 'terms' && (
+        <TermsTab
+          canEdit={canEdit}
+          project={{
+            id,
+            name: data.name,
+            client_name: data.client_name,
+            client_phone: data.client_phone,
+            client_email: data.client_email,
+            total_cost: data.total_cost,
+            event_date: (projectShoots.data ?? []).map((s) => s.shoot_date).filter((d): d is string => !!d).sort()[0] ?? null,
+          }}
+        />
+      )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
       {tab === 'tasks' && <TasksTab projectId={id} canEdit={canEditTasks} />}
       {tab === 'data' && <DataTab projectId={id} canEdit={canEdit} />}

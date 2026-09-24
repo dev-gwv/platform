@@ -323,7 +323,41 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/terms/documents') return atStage(termsDocumentsFx, 'partial')
   if (method === 'GET' && /^\/terms\/documents\/[^/]+\/payload$/.test(path)) return termsDocumentPayloadFx
   if (method === 'POST' && path === '/terms/issue')
-    return { document_id: uid(0xbc), token: 'demo-project-terms-token' }
+    return {
+      document_id: uid(0xbc),
+      token: 'demo-project-terms-token',
+      url: 'http://localhost:5199/terms/acknowledge?token=demo-project-terms-token',
+      email_status: 'not_requested',
+      email_error: null,
+    }
+  // One project's terms: Sharma Wedding has a version waiting and an older
+  // one it replaced; every other project has none yet.
+  if (method === 'GET' && /^\/terms\/projects\/[^/]+\/documents$/.test(path))
+    return path.includes(PROJ.p1)
+      ? [
+          {
+            id: uid(0xbd), title: 'Terms & conditions — Sharma Wedding', created_at: '2026-09-20T10:00:00Z',
+            expires_at: '2026-10-04T10:00:00Z', revoked_at: null, acknowledged_at: null, acknowledged_by_name: null,
+            acknowledged_by_email: null, access_count: 2, link_live: true, emailed_to: 'priya@example.com',
+          },
+          {
+            id: uid(0xbe), title: 'Terms & conditions — Sharma Wedding', created_at: '2026-09-10T10:00:00Z',
+            expires_at: '2026-09-24T10:00:00Z', revoked_at: '2026-09-20T10:00:00Z', acknowledged_at: null, acknowledged_by_name: null,
+            acknowledged_by_email: null, access_count: 1, link_live: false, emailed_to: null,
+          },
+        ]
+      : []
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/link$/.test(path))
+    return {
+      document_id: path.split('/')[3]!,
+      token: 'demo-fresh-token',
+      url: 'http://localhost:5199/terms/acknowledge?token=demo-fresh-token',
+      email_status: 'not_requested',
+      email_error: null,
+    }
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/email$/.test(path)) return { status: 'sent', error: null }
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/revoke$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/terms/templates') return []
   if (method === 'POST' && path === '/team-terms/sends')
     return {
       send_id: uid(0xba),
