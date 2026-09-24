@@ -364,7 +364,7 @@ function ProjectDetail() {
         />
       )}
 
-      {tab === 'billing' && <BillingTab project={data} canEdit={canEdit} />}
+      {tab === 'billing' && <BillingTab project={data} canEdit={canEdit} onOpenTab={setTab} />}
 
       {tab === 'shoots' && <ShootsTab projectId={id} />}
       {tab === 'completed_work' && <CompletedWorkTab projectId={id} canReview={canReviewWork} />}

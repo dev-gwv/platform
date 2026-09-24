@@ -10,6 +10,7 @@ import {
   gstState,
   invoiceBankAccount,
   invoiceBankAccountList,
+  billingOverview,
   invoiceDetail,
   invoiceListItem,
   invoiceListQuery,
@@ -70,9 +71,11 @@ export const billingRouter = new Hono<AppEnv>()
           c.get('auth').userId,
           (sql) => sql`
             select i.id, i.invoice_number, i.invoice_date, i.total, i.balance_due, i.status,
-                   cl.name as client_name
+                   cl.name as client_name, cl.phone as client_phone,
+                   i.project_id, pj.name as project_name, i.due_date, i.taxable
             from invoices i
             left join clients cl on cl.id = i.client_id
+            left join projects pj on pj.id = i.project_id
             order by i.invoice_date desc`,
         ),
       )
@@ -103,13 +106,17 @@ export const billingRouter = new Hono<AppEnv>()
             : status === 'pending'
               ? sql`i.balance_due > 0 and i.status != 'cancelled'`
               : status === 'overdue'
-                ? sql`i.balance_due > 0 and i.due_date is not null and i.due_date < current_date`
-                : sql`i.status = ${status}`
+                ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date is not null and i.due_date < current_date`
+                : status === 'due_soon'
+                  ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date between current_date and current_date + 7`
+                  : sql`i.status = ${status}`
         const items = await sql`
           select i.id, i.invoice_number, i.invoice_date, i.total, i.balance_due, i.status,
-                 cl.name as client_name
+                 cl.name as client_name, cl.phone as client_phone,
+                 i.project_id, pj.name as project_name, i.due_date, i.taxable
             from invoices i
             left join clients cl on cl.id = i.client_id
+            left join projects pj on pj.id = i.project_id
            where ${statusCond}
              and ${search ? sql`(i.invoice_number ilike ${'%' + search + '%'} or cl.name ilike ${'%' + search + '%'})` : sql`true`}
              and ${q.client_id ? sql`i.client_id = ${q.client_id}` : sql`true`}
@@ -120,9 +127,10 @@ export const billingRouter = new Hono<AppEnv>()
            limit ${q.page_size} offset ${offset}`
         const agg = await sql`
           select count(*)::int as total_invoices,
-                 coalesce(sum(i.total), 0)::float as billed,
-                 coalesce(sum(i.total - i.balance_due), 0)::float as paid,
-                 coalesce(sum(i.balance_due), 0)::float as pending,
+                 -- A cancelled invoice is no longer owed, so it adds nothing.
+                 coalesce(sum(i.total) filter (where i.status <> 'cancelled'), 0)::float as billed,
+                 coalesce(sum(i.total - i.balance_due) filter (where i.status <> 'cancelled'), 0)::float as paid,
+                 coalesce(sum(i.balance_due) filter (where i.status <> 'cancelled'), 0)::float as pending,
                  count(*)::int as total
             from invoices i
             left join clients cl on cl.id = i.client_id
@@ -195,7 +203,7 @@ export const billingRouter = new Hono<AppEnv>()
           select * from create_invoice(
             p_client_id => ${req.client_id},
             p_project_id => ${req.project_id},
-            p_place_of_supply => ${req.place_of_supply},
+            p_place_of_supply => ${req.place_of_supply?.trim() || null},
             p_invoice_date => ${req.invoice_date ?? null},
             p_due_date => ${req.due_date ?? null},
             p_subtotal => ${totals.subtotal},
@@ -332,7 +340,7 @@ export const billingRouter = new Hono<AppEnv>()
             p_invoice_id => ${id},
             p_client_id => ${req.client_id},
             p_project_id => ${req.project_id},
-            p_place_of_supply => ${req.place_of_supply},
+            p_place_of_supply => ${req.place_of_supply?.trim() || null},
             p_intra_state => ${req.intra_state},
             p_invoice_date => ${req.invoice_date ?? null},
             p_due_date => ${req.due_date ?? null},
@@ -382,6 +390,166 @@ export const billingRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That invoice was not found, or already has a payment recorded.')
     await audit(c, { action: 'invoice.delete', entityType: 'invoice', entityId: id })
     return c.body(null, 204)
+  })
+
+  /**
+   * The Billing overview: what is still owed across every project, which
+   * invoices are late or nearly due, and what came in lately. One request, so
+   * the page opens on the answer instead of on filters.
+   */
+  .get('/overview', async (c) => {
+    const data = await attempt(c, 'billing.overview', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [head] = await sql`
+          select
+            coalesce((
+              select sum(greatest(p.total_cost - coalesce((
+                select sum(rp.amount) from received_payments rp
+                 where rp.project_id = p.id and rp.status = 'paid'), 0), 0))
+                from projects p where p.status <> 'cancelled'), 0)::float as to_collect,
+            (select count(*) from invoices i
+              where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
+                and i.due_date < current_date)::int as overdue_count,
+            coalesce((select sum(i.balance_due) from invoices i
+              where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
+                and i.due_date < current_date), 0)::float as overdue_amount,
+            (select count(*) from invoices i
+              where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
+                and i.due_date between current_date and current_date + 7)::int as due_soon_count,
+            coalesce((select sum(i.balance_due) from invoices i
+              where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
+                and i.due_date between current_date and current_date + 7), 0)::float as due_soon_amount,
+            coalesce((select sum(rp.amount) from received_payments rp
+              where rp.status = 'paid' and rp.paid_on >= date_trunc('month', current_date)), 0)::float as received_this_month,
+            coalesce((select sum(i.total) from invoices i
+              where i.status not in ('cancelled', 'draft') and i.invoice_date >= date_trunc('month', current_date)), 0)::float as invoiced_this_month`
+        const monthly = await sql`
+          select to_char(m, 'YYYY-MM') as month,
+                 coalesce((select sum(i.total) from invoices i
+                   where i.status not in ('cancelled', 'draft')
+                     and i.invoice_date >= m and i.invoice_date < m + interval '1 month'), 0)::float as invoiced,
+                 coalesce((select sum(rp.amount) from received_payments rp
+                   where rp.status = 'paid' and rp.paid_on >= m and rp.paid_on < m + interval '1 month'), 0)::float as received
+            from generate_series(date_trunc('month', current_date) - interval '5 months',
+                                 date_trunc('month', current_date), interval '1 month') m
+           order by m`
+        const due = await sql`
+          select i.id, i.invoice_number, i.invoice_date, i.due_date, i.total, i.balance_due, i.status,
+                 cl.name as client_name, cl.phone as client_phone, i.project_id, pj.name as project_name
+            from invoices i
+            left join clients cl on cl.id = i.client_id
+            left join projects pj on pj.id = i.project_id
+           where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
+           order by i.due_date nulls last, i.invoice_date
+           limit 25`
+        const projects = await sql`
+          select * from (
+            select p.id as project_id, p.name as project_name, cl.name as client_name, cl.phone as client_phone,
+                   p.total_cost::float as total_cost,
+                   coalesce((select sum(rp.amount) from received_payments rp
+                     where rp.project_id = p.id and rp.status = 'paid'), 0)::float as received,
+                   coalesce((select sum(i.balance_due) from invoices i
+                     where i.project_id = p.id and i.balance_due > 0 and i.status not in ('cancelled', 'draft')), 0)::float as invoiced_open
+              from projects p left join clients cl on cl.id = p.client_id
+             where p.status <> 'cancelled'
+          ) x
+           where x.total_cost - x.received > 0
+           order by x.total_cost - x.received desc
+           limit 12`
+        const recent = await sql`
+          select rp.id, rp.amount, coalesce(rp.date_received, rp.paid_on) as paid_on, rp.mode,
+                 cl.name as client_name, rp.project_id, pj.name as project_name,
+                 rp.invoice_id, i.invoice_number
+            from received_payments rp
+            left join clients cl on cl.id = coalesce(rp.client_id, (select p.client_id from projects p where p.id = rp.project_id))
+            left join projects pj on pj.id = rp.project_id
+            left join invoices i on i.id = rp.invoice_id
+           where rp.status = 'paid'
+           order by coalesce(rp.date_received, rp.paid_on) desc, rp.created_at desc
+           limit 8`
+        const h = head as Record<string, number>
+        return {
+          to_collect: h.to_collect,
+          overdue: { count: h.overdue_count, amount: h.overdue_amount },
+          due_soon: { count: h.due_soon_count, amount: h.due_soon_amount },
+          received_this_month: h.received_this_month,
+          invoiced_this_month: h.invoiced_this_month,
+          monthly,
+          due_invoices: due,
+          projects_to_collect: projects.map((r) => ({ ...r, due: Math.max(0, Number(r.total_cost) - Number(r.received)) })),
+          recent_payments: recent,
+        }
+      }),
+    )
+    if (!data) fail(400, 'We could not load billing.')
+    return c.json(billingOverview.parse(data))
+  })
+
+  /**
+   * A link the client can open without logging in (or, with revoke, one that
+   * stops working). Each call replaces the previous link.
+   */
+  .post('/invoices/:id/share', requireAction('billing', 'view'), async (c) => {
+    const id = uuidParam(c)
+    const body = (await c.req.json().catch(() => ({}))) as { revoke?: unknown }
+    const revoke = body.revoke === true
+    const rows = await attempt(c, 'billing.invoice_share', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const inv = await sql<{ status: string }[]>`select status from invoices where id = ${id}`
+        if (!inv[0]) return { missing: true as const }
+        if (revoke) {
+          await sql`select revoke_access_token('invoice', ${id})`
+          return { token: null }
+        }
+        if (inv[0].status === 'cancelled' || inv[0].status === 'draft') return { unsendable: inv[0].status }
+        const t = await sql<{ token: string }[]>`select rotate_access_token('invoice', ${id}, ${24 * 365}) as token`
+        return { token: t[0]?.token ?? null }
+      }),
+    )
+    if (!rows) fail(400, 'We could not make the link.')
+    if ('missing' in rows) fail(404, 'That invoice was not found.')
+    if ('unsendable' in rows) {
+      fail(409, rows.unsendable === 'draft' ? 'This invoice is still a draft. Mark it as sent first.' : 'This invoice is cancelled.')
+    }
+    await audit(c, { action: revoke ? 'invoice.share_revoke' : 'invoice.share', entityType: 'invoice', entityId: id })
+    if (revoke) return c.json({ ok: true })
+    if (!rows.token) fail(400, 'We could not make the link.')
+    return c.json({ link: `${c.env.APP_URL}/invoice?token=${rows.token}` }, 201)
+  })
+
+  /**
+   * Cancel an invoice, even one with money against it. The money stays: each
+   * payment is kept on the project (it was the project's money all along),
+   * just no longer against this invoice. The client's link stops working.
+   */
+  .post('/invoices/:id/cancel', requireAction('billing', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const result = await attempt(
+      c,
+      'billing.invoice_cancel',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const inv = await sql<{ project_id: string | null; status: string }[]>`
+            select project_id, status from invoices where id = ${id} for update`
+          if (!inv[0]) return 'missing' as const
+          if (inv[0].status === 'cancelled') return 'ok' as const
+          const orphan = await sql`
+            select 1 from received_payments where invoice_id = ${id} and project_id is null and ${inv[0].project_id}::uuid is null limit 1`
+          if (orphan.length) return 'orphan' as const
+          await sql`
+            update received_payments
+               set project_id = coalesce(project_id, ${inv[0].project_id}::uuid), invoice_id = null
+             where invoice_id = ${id}`
+          await sql`update invoices set status = 'cancelled', balance_due = 0 where id = ${id}`
+          await sql`select revoke_access_token('invoice', ${id})`
+          return 'ok' as const
+        }),
+    )
+    if (!result) fail(400, 'We could not cancel this invoice.')
+    if (result === 'missing') fail(404, 'That invoice was not found.')
+    if (result === 'orphan') fail(409, 'This invoice has payments and no project to keep them on. Move or delete those payments first.')
+    await audit(c, { action: 'invoice.cancel', entityType: 'invoice', entityId: id })
+    return c.json({ ok: true })
   })
 
   .post('/invoices/:id/payments', requireAction('billing', 'edit'), async (c) => {

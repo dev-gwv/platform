@@ -13,6 +13,14 @@ export const invoiceListItem = z.object({
   total: money,
   balance_due: money,
   status: invoiceStatus,
+  // Which project it belongs to and when it falls due, so a list row can link
+  // back to the project and say "overdue" -- defaulted for older servers.
+  project_id: uuid.nullable().default(null),
+  project_name: z.string().nullable().default(null),
+  due_date: isoDate.nullable().default(null),
+  client_phone: z.string().nullable().default(null),
+  /** The value before GST; a payment plan instalment is counted against this. */
+  taxable: money.nullable().default(null),
 })
 export type InvoiceListItem = z.infer<typeof invoiceListItem>
 
@@ -132,6 +140,8 @@ export const invoiceDetail = z.object({
       mode: z.string().nullable(),
       reference: z.string().nullable().default(null),
       notes: z.string().nullable().default(null),
+      /** 'pending' is promised money; it does not reduce the balance. */
+      status: z.string().nullable().default('paid'),
     }),
   ),
 })
@@ -166,6 +176,81 @@ export const invoiceListResponse = z.object({
   page_size: z.number().int().min(1),
 })
 export type InvoiceListResponse = z.infer<typeof invoiceListResponse>
+
+/** One line of the Billing overview's "due" list. */
+export const billingDueInvoice = z.object({
+  id: uuid,
+  invoice_number: z.string(),
+  invoice_date: isoDate,
+  due_date: isoDate.nullable(),
+  total: money,
+  balance_due: money,
+  status: invoiceStatus,
+  client_name: z.string().nullable(),
+  client_phone: z.string().nullable(),
+  project_id: uuid.nullable(),
+  project_name: z.string().nullable(),
+})
+export type BillingDueInvoice = z.infer<typeof billingDueInvoice>
+
+/** A project with money still to come in. */
+export const billingToCollect = z.object({
+  project_id: uuid,
+  project_name: z.string(),
+  client_name: z.string().nullable(),
+  client_phone: z.string().nullable(),
+  total_cost: money,
+  received: money,
+  due: money,
+  invoiced_open: money,
+})
+export type BillingToCollect = z.infer<typeof billingToCollect>
+
+/** The Billing overview: what is owed, what is late, what came in. */
+export const billingOverview = z.object({
+  to_collect: money,
+  overdue: z.object({ count: z.number().int(), amount: money }),
+  due_soon: z.object({ count: z.number().int(), amount: money }),
+  received_this_month: money,
+  invoiced_this_month: money,
+  monthly: z.array(z.object({ month: z.string(), invoiced: money, received: money })),
+  due_invoices: z.array(billingDueInvoice),
+  projects_to_collect: z.array(billingToCollect),
+  recent_payments: z.array(
+    z.object({
+      id: uuid,
+      amount: money,
+      paid_on: isoDate,
+      mode: z.string().nullable(),
+      client_name: z.string().nullable(),
+      project_id: uuid.nullable(),
+      project_name: z.string().nullable(),
+      invoice_id: uuid.nullable(),
+      invoice_number: z.string().nullable(),
+    }),
+  ),
+})
+export type BillingOverview = z.infer<typeof billingOverview>
+
+/** What a client sees at an invoice link: the invoice and who it is from. */
+export const publicInvoice = z.object({
+  invoice: invoiceDetail,
+  company: z.object({
+    name: z.string().nullable(),
+    legal_name: z.string().nullable().default(null),
+    city: z.string().nullable().default(null),
+    state: z.string().nullable().default(null),
+    country: z.string().nullable().default(null),
+    invoice_gst_number: z.string().nullable().default(null),
+    invoice_address: z.string().nullable().default(null),
+    invoice_phone: z.string().nullable().default(null),
+    invoice_email: z.string().nullable().default(null),
+    invoice_upi_id: z.string().nullable().default(null),
+    logo_url: z.string().nullable().default(null),
+    document_footer_note: z.string().nullable().default(null),
+  }),
+})
+export type PublicInvoice = z.infer<typeof publicInvoice>
 
 /** Map a technical save failure to copy a studio owner can act on. */
 export function friendlyInvoiceError(err: unknown): string {

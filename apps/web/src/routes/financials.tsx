@@ -247,7 +247,7 @@ function Statement({ lines: l, className }: { lines: PnlLines; className?: strin
         <ul className="mt-2">
           <li className="flex items-baseline gap-3 py-2 text-sm font-medium">
             <span className="flex-1">
-              <Link to="/billing" search={{ tab: 'payments' }} className="hover:text-primary hover:underline">
+              <Link to="/billing/payments" className="hover:text-primary hover:underline">
                 Income
               </Link>
               {l.gst_collected > 0 && <span className="block text-xs font-normal text-muted-foreground">Includes {formatINR(l.gst_collected)} GST invoiced</span>}
@@ -290,7 +290,7 @@ function Rail({ data }: { data: ProfitAndLoss }) {
         <p className="px-2 pt-1 text-sm font-semibold">Still to settle</p>
         {item(<Wallet className="size-4 text-tone-amber" aria-hidden />, 'Still to collect', r.still_to_collect, 'Project value not yet received', '/projects')}
         {item(<Users className="size-4 text-tone-violet" aria-hidden />, 'Owed to the team', r.owed_to_team, 'Crew booked, not yet paid', '/team-payouts')}
-        {item(<Landmark className="size-4 text-tone-blue" aria-hidden />, 'Not banked yet', r.unbanked, 'Received, not marked as in the bank', '/billing', { tab: 'payments' })}
+        {item(<Landmark className="size-4 text-tone-blue" aria-hidden />, 'Not banked yet', r.unbanked, 'Received, not marked as in the bank', '/billing/payments')}
       </CardContent>
     </Card>
   )

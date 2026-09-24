@@ -105,6 +105,8 @@ export const paymentInput = z.object({
   description: z.string().max(500).optional(),
   is_gst: z.boolean().optional(),
   gst_number: gstNumber.optional(),
+  /** The project's invoice this money settles, if any. */
+  invoice_id: uuid.nullable().optional(),
 })
 export type PaymentInput = z.infer<typeof paymentInput>
 
@@ -117,6 +119,7 @@ export const updatePaymentRequest = z.object({
   description: z.string().max(500).nullable().optional(),
   is_gst: z.boolean().optional(),
   gst_number: gstNumber.nullable().optional(),
+  invoice_id: uuid.nullable().optional(),
 })
 export type UpdatePaymentRequest = z.infer<typeof updatePaymentRequest>
 
@@ -383,10 +386,50 @@ export const projectDetail = z.object({
       description: z.string().nullable().default(null),
       is_gst: z.boolean().default(false),
       gst_number: z.string().nullable().default(null),
+      invoice_id: uuid.nullable().default(null),
+      invoice_number: z.string().nullable().default(null),
     }),
   ),
 })
 export type ProjectDetail = z.infer<typeof projectDetail>
+
+/** One instalment of the payment plan the client agreed to in the terms. */
+export const planInstalment = z.object({
+  label: z.string(),
+  mode: z.enum(['percent', 'amount']),
+  value: z.number(),
+  due_trigger: z.string().nullable().default(null),
+})
+export type PlanInstalment = z.infer<typeof planInstalment>
+
+/** The project's money beyond its payments: the agreed plan and its invoices. */
+export const projectBilling = z.object({
+  plan: z
+    .object({
+      document_id: uuid,
+      title: z.string().nullable(),
+      agreed_at: isoDateTime.nullable(),
+      total_cost: money.nullable(),
+      instalments: z.array(planInstalment),
+    })
+    .nullable(),
+  /** Null when the person cannot see Billing. */
+  invoices: z
+    .array(
+      z.object({
+        id: uuid,
+        invoice_number: z.string(),
+        invoice_date: isoDate,
+        due_date: isoDate.nullable(),
+        status: z.string(),
+        total: money,
+        taxable: money,
+        balance_due: money,
+      }),
+    )
+    .nullable(),
+})
+export type ProjectBilling = z.infer<typeof projectBilling>
 
 /**
  * One row of the tracking board: raw counters, not verdicts.

@@ -14,6 +14,8 @@ import {
   ListTodo,
   CreditCard,
   Receipt,
+  Gauge,
+  Banknote,
   Wallet,
   TrendingUp,
   Contact,
@@ -119,12 +121,14 @@ export const NAV: NavEntry[] = [
     icon: CreditCard,
     match: '/billing',
     children: [
-      // Labelled Payments, landed on the Invoices tab.
-      leaf('Billing', '/billing', Receipt, { module: 'billing' }),
-      leaf('Invoice Templates', '/billing/templates', FileText, { module: 'billing' }),
+      // What is owed and late, then the two lists behind it.
+      leaf('Overview', '/billing', Gauge, { module: 'billing' }),
+      leaf('Invoices', '/billing/invoices', Receipt, { module: 'billing' }),
+      leaf('Payments', '/billing/payments', Banknote, { module: 'billing' }),
       leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
       leaf('Profit & Loss', '/financials', TrendingUp, { module: 'financials' }),
       leaf('Reconciliation', '/financials/reconciliation', Scale, { module: 'financials' }),
+      leaf('Invoice Settings', '/billing/settings', FileText, { module: 'billing' }),
     ],
   },
   {

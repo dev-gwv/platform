@@ -4,6 +4,7 @@ import {
   issueReceiptRequest,
   issuedLink,
   publicDelivery,
+  publicInvoice,
   publicQuotation,
   publicReceipt,
   respondToQuotationRequest,
@@ -290,6 +291,16 @@ export const publicDocumentsRouter = new Hono<AppEnv>()
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]) fail(404, 'This link is invalid or has expired.')
     return c.json(publicReceipt.parse(rows[0]))
+  })
+
+  .get('/invoice/:token', async (c) => {
+    const token = textParam(c, 'token', 400)
+    const rows = await attempt(c, 'documents.public_invoice', () =>
+      withService(c.env, (sql) => sql<{ doc: unknown }[]>`select get_invoice_for_token(p_raw => ${token}) as doc`),
+    )
+    if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    if (!rows[0]?.doc) fail(404, 'This link is invalid or has expired.')
+    return c.json(publicInvoice.parse(rows[0].doc))
   })
 
   .get('/delivery/:token', async (c) => {
