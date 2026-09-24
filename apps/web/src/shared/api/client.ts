@@ -227,6 +227,24 @@ export async function downloadFile(path: string, filename: string): Promise<void
 }
 
 /**
+ * Fetch a guarded file as a Blob -- for playing a voice note or showing a
+ * private image, which an <audio src> or <img src> cannot do on its own
+ * because the access token is never a cookie. Rotates once like callApi.
+ */
+export async function fetchFileBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const send = () => {
+    const token = getToken()
+    const init: RequestInit = { credentials: 'same-origin', headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    if (signal) init.signal = signal
+    return fetch(`${config.apiBaseUrl}${path}`, init)
+  }
+  let res = await send()
+  if (res.status === 401 && (await rotateTokens())) res = await send()
+  if (!res.ok) throw new ApiError(res.status, res.status === 404 ? 'That file is no longer available.' : 'We could not load that file.')
+  return res.blob()
+}
+
+/**
  * Upload one file to /files and get back the URL to store.
  *
  * Separate from `callApi` because that one sets `Content-Type: application/json`

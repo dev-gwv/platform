@@ -30,7 +30,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useBoard, useLaneColors, useSetBoardOrder, useSetLaneColor, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { useBoardDeliverables } from '@/features/projects/api'
-import { DueChip } from '@/features/projects/DeliverableRow'
+import { DueChip } from '@/features/projects/DeliverableCard'
 import { STAGE_LABEL, STAGE_ORDER, stageOf } from '@/features/projects/deliverable-stage'
 
 /**

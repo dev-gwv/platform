@@ -829,6 +829,32 @@ if (listed) {
   const notTheirs = await api(`/projects/deliverables/${other.json.id}/stage`, { token: edToken, method: 'POST', body: { status: 'in_progress' } })
   check('deliverables: someone else cannot move work they are not on (403)', notTheirs.status === 403, notTheirs.json)
 
+  // Voice notes: the editor records one, the owner hears it; the timeline
+  // carries the stage changes the database wrote on its own.
+  const form = new FormData()
+  form.append('file', new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4])], { type: 'audio/webm;codecs=opus' }), 'voice-note.weba')
+  const up = await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${edToken}` }, body: form })
+  const upJson = await up.json().catch(() => ({}))
+  check('notes: a browser voice recording uploads', up.status === 200 && upJson.mime === 'audio/webm', upJson)
+  const voice = await api(`/projects/deliverables/${added.json.id}/notes`, {
+    token: edToken, method: 'POST', body: { kind: 'voice', file_id: upJson.id, duration_seconds: 7 },
+  })
+  const text = await api(`/projects/deliverables/${added.json.id}/notes`, { token: aToken, method: 'POST', body: { kind: 'text', body: 'Lovely, send it.' } })
+  const timeline = await api(`/projects/deliverables/${added.json.id}/notes`, { token: aToken })
+  const kinds = (timeline.json ?? []).map((n) => `${n.kind}:${n.kind === 'event' ? n.body : n.author_name}`)
+  check(
+    'notes: the timeline has the stage changes, the voice note and the reply, in order',
+    voice.status === 201 && text.status === 201 && timeline.status === 200 &&
+      JSON.stringify(kinds) === JSON.stringify(['event:moved:review', 'event:moved:completed', 'voice:Priya Editor', 'text:' + (timeline.json?.[3]?.author_name ?? '?')]),
+    { voice: voice.status, text: text.status, kinds },
+  )
+  const counted = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === added.json.id)
+  check('notes: the card knows there is a voice note', counted?.voice_count === 1 && counted?.notes_count === 2 && counted?.last_activity_kind === 'text', counted)
+  const noteNotTheirs = await api(`/projects/deliverables/${other.json.id}/notes`, { token: edToken, method: 'POST', body: { kind: 'text', body: 'hi' } })
+  check('notes: someone not on the work cannot write on it (403)', noteNotTheirs.status === 403, noteNotTheirs.json)
+  const emptyNote = await api(`/projects/deliverables/${added.json.id}/notes`, { token: aToken, method: 'POST', body: { kind: 'text', body: '  ' } })
+  check('notes: an empty note is refused (422)', emptyNote.status === 422, emptyNote.json)
+
   const internal = await api(`/projects/${pid}/deliverables`, {
     token: aToken,
     method: 'POST',
@@ -844,6 +870,8 @@ if (listed) {
   })
   check('deliverables: a shoot from elsewhere is refused (422)', foreignShoot.status === 422, foreignShoot.json)
 
+  const otherStudioNotes = await api(`/projects/deliverables/${added.json.id}/notes`, { token: newPw.json.access_token })
+  check('notes: another studio cannot read them (404)', otherStudioNotes.status === 404, otherStudioNotes.json)
   const cross = await api(`/projects/${pid}/deliverables`, {
     token: newPw.json.access_token,
     method: 'POST',

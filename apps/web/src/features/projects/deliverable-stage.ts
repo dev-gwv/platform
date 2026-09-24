@@ -87,6 +87,31 @@ export function dueLabel(
   return `Due ${short(d.estimated_date)}`
 }
 
+/**
+ * The due date as a person says it: "Due tomorrow", "Due in 12 days",
+ * "3 days late", "Delivered 10 Sept". The card leads with this; the exact
+ * date sits in its tooltip.
+ */
+export function relativeDue(
+  d: Dated & { delivered_at?: string | null | undefined },
+  today = todayIso(),
+): string | null {
+  const s = stageOf(d.status)
+  if (s === 'completed') return d.delivered_at ? `Delivered ${short(d.delivered_at.slice(0, 10))}` : 'Delivered'
+  if (s === 'cancelled' || !d.estimated_date) return null
+  const diff = daysBetween(today, d.estimated_date)
+  if (diff === 0) return 'Due today'
+  if (diff === 1) return 'Due tomorrow'
+  if (diff < 0) return diff === -1 ? '1 day late' : `${-diff} days late`
+  return `Due in ${diff} days`
+}
+
+/** Days until due (negative when late), or null when there is no open date. */
+export function daysToDue(d: Dated, today = todayIso()): number | null {
+  if (!d.estimated_date || !isOpen(d.status)) return null
+  return daysBetween(today, d.estimated_date)
+}
+
 export interface ShootRef {
   id: string
   name: string

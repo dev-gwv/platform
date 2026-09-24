@@ -1,48 +1,83 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ExternalLink, Film } from 'lucide-react'
+import { Film, MessageSquare, Mic } from 'lucide-react'
+import type { Deliverable, MyDeliverable } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
+import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
-import { StatusBadge } from '@/shared/ui/status-badge'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMyDeliverables } from '@/features/projects/api'
-import { DueChip, NextStageButton } from '@/features/projects/DeliverableRow'
-import { STAGE_LABEL, STAGE_TONE, stageOf } from '@/features/projects/deliverable-stage'
+import { DueChip, KindTile, NextStageButton } from '@/features/projects/DeliverableCard'
+import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
+import { StageStepper, STAGE_STYLE } from '@/features/projects/StageStepper'
+import { isLate, stageOf } from '@/features/projects/deliverable-stage'
+
+/** An item on my list, in the shape the panel reads. I am its editor. */
+function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string | null }): Deliverable {
+  return {
+    id: d.id,
+    project_id: d.project_id,
+    title: d.title,
+    description: d.description ?? null,
+    list_key: 'primary',
+    is_additional_charge: false,
+    additional_charge_amount: 0,
+    visibility_scope: d.visibility_scope,
+    show_on_quotation: d.visibility_scope === 'client',
+    estimated_date: d.estimated_date ?? null,
+    start_rule: 'whole_project',
+    status: d.status,
+    shoot_name: d.shoot_name ?? null,
+    assignee_id: me.id,
+    assignee_name: me.name,
+    delivery_link: d.delivery_link ?? null,
+    notes_count: d.notes_count,
+    voice_count: d.voice_count,
+  }
+}
 
 /**
- * What the signed-in person is editing, soonest due first -- with the same
- * one button the project page has, so an editor can say "sent to client"
- * and leave the link without needing to edit the whole project.
+ * What the signed-in person is editing, soonest due first. Each one shows
+ * where it stands and how many notes are waiting; tapping it opens the same
+ * panel the project page has, so an editor can listen to a voice note, reply
+ * with one, and say "sent to client" -- without editing the whole project.
  * Renders nothing for someone with no deliverables.
  */
 export function MyDeliverables() {
   const { data } = useMyDeliverables()
+  const { session } = useAuth()
   const canOpenProjects = useAccess().hasModule('projects')
+  const [openId, setOpenId] = useState<string | null>(null)
   if (!data?.length) return null
+  const me = { id: session?.user_id ?? null, name: session?.display_name ?? null }
+  const open = data.find((d) => d.id === openId)
+
   return (
     <Card className="mt-4">
       <CardContent className="p-3">
         <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
           <Film className="size-4 text-tone-violet" aria-hidden /> Your deliverables
-          <span className="text-xs font-normal text-muted-foreground">{data.length}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{data.length}</span>
         </p>
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2">
           {data.map((d) => {
             const stage = stageOf(d.status)
             return (
               <li
                 key={d.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-card px-3 py-2"
+                className={cn(
+                  'flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-l-4 border-border bg-card px-3 py-2.5 transition-shadow hover:shadow-md',
+                  isLate(d) ? 'border-l-destructive' : STAGE_STYLE[stage].border,
+                )}
+                onClick={() => setOpenId(d.id)}
               >
+                <KindTile title={d.title} status={d.status} />
                 <div className="min-w-[12rem] flex-1">
                   <p className="truncate text-sm font-semibold">{d.title}</p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                     {/* An editor may not be able to open projects; then it is just a name. */}
                     {canOpenProjects ? (
-                      <Link
-                        to="/projects/$id"
-                        params={{ id: d.project_id }}
-                        search={{ tab: 'deliverables' }}
-                        className="font-medium text-foreground hover:underline"
-                      >
+                      <Link to="/projects/$id" params={{ id: d.project_id }} search={{ tab: 'deliverables' }} className="font-medium text-foreground hover:underline">
                         {d.project_name}
                       </Link>
                     ) : (
@@ -50,20 +85,36 @@ export function MyDeliverables() {
                     )}
                     {d.shoot_name && <span>{d.shoot_name}</span>}
                     <DueChip d={d} />
-                    {d.delivery_link && (
-                      <a href={d.delivery_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                        <ExternalLink className="size-3.5" aria-hidden /> Link
-                      </a>
+                    {d.voice_count > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-tone-blue-soft px-2 py-0.5 font-medium text-tone-blue">
+                        <Mic className="size-3" aria-hidden /> {d.voice_count}
+                      </span>
+                    )}
+                    {d.notes_count - d.voice_count > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium">
+                        <MessageSquare className="size-3" aria-hidden /> {d.notes_count - d.voice_count}
+                      </span>
                     )}
                   </div>
+                  <div className="mt-1.5">
+                    <StageStepper status={d.status} />
+                  </div>
                 </div>
-                <StatusBadge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</StatusBadge>
-                <NextStageButton id={d.id} status={d.status} link={d.delivery_link} />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <NextStageButton id={d.id} status={d.status} link={d.delivery_link} />
+                </div>
               </li>
             )
           })}
         </ul>
       </CardContent>
+      <DeliverableDrawer
+        deliverable={open ? asDeliverable(open, me) : null}
+        canEdit={false}
+        onClose={() => setOpenId(null)}
+        onEdit={() => undefined}
+        onDelete={() => undefined}
+      />
     </Card>
   )
 }

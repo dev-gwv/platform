@@ -226,8 +226,44 @@ export const deliverable = z.object({
   assignee_name: z.string().nullish(),
   delivery_link: z.string().nullish(),
   delivered_at: isoDateTime.nullish(),
+  /** Written and voice notes on it; stage events are not counted. */
+  notes_count: z.number().int().default(0),
+  voice_count: z.number().int().default(0),
+  /** The latest thing that happened on it, for the one-line activity on the card. */
+  last_activity_at: isoDateTime.nullish(),
+  last_activity_by: z.string().nullish(),
+  last_activity_kind: z.enum(['text', 'voice', 'event']).nullish(),
+  last_activity_body: z.string().nullish(),
 })
 export type Deliverable = z.infer<typeof deliverable>
+
+/**
+ * One entry on a deliverable's timeline: a written note, a voice note, or a
+ * stage change the database recorded (body "moved:<status>").
+ */
+export const deliverableNote = z.object({
+  id: uuid,
+  deliverable_id: uuid,
+  kind: z.enum(['text', 'voice', 'event']),
+  body: z.string().nullish(),
+  file_id: uuid.nullish(),
+  duration_seconds: z.number().int().nullish(),
+  author_id: uuid.nullish(),
+  author_name: z.string().nullish(),
+  created_at: isoDateTime,
+})
+export type DeliverableNote = z.infer<typeof deliverableNote>
+
+export const createDeliverableNoteRequest = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('text'), body: z.string().trim().min(1, 'Write something first.').max(4000) }),
+  z.object({
+    kind: z.literal('voice'),
+    file_id: uuid,
+    duration_seconds: z.number().int().min(0).max(3600).optional(),
+    body: z.string().trim().max(500).optional(),
+  }),
+])
+export type CreateDeliverableNoteRequest = z.infer<typeof createDeliverableNoteRequest>
 
 /** A deliverable on someone's own list: what, for whom, and by when. */
 export const myDeliverable = z.object({
@@ -242,6 +278,8 @@ export const myDeliverable = z.object({
   shoot_name: z.string().nullish(),
   delivery_link: z.string().nullish(),
   visibility_scope: deliverableVisibility,
+  notes_count: z.number().int().default(0),
+  voice_count: z.number().int().default(0),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 

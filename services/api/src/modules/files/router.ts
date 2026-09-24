@@ -55,8 +55,12 @@ export const filesRouter = new Hono<AppEnv>()
     if (file.size === 0) fail(422, 'That file is empty.')
     if (file.size > MAX_FILE_BYTES) fail(422, 'That file is larger than 10 MB.')
 
-    const mime = (file.type || 'application/octet-stream').split(';')[0]!.trim().toLowerCase()
-    if (!allowed.has(mime)) fail(422, 'That file type is not supported. Use PNG, JPG, WEBP, SVG, PDF, CSV or TXT.')
+    // The runtime labels an upload by its file extension; Safari's voice
+    // notes arrive as .m4a, which it calls audio/x-m4a -- the same thing as
+    // audio/mp4, stored under the one name the player expects.
+    const raw = (file.type || 'application/octet-stream').split(';')[0]!.trim().toLowerCase()
+    const mime = raw === 'audio/x-m4a' ? 'audio/mp4' : raw
+    if (!allowed.has(mime)) fail(422, 'That file type is not supported. Use PNG, JPG, WEBP, SVG, PDF, CSV, TXT or a voice recording.')
 
     const wantsPublic = c.req.query('public') === '1' && IMAGE_MIMES.includes(mime)
     const bytes = Buffer.from(await file.arrayBuffer())
