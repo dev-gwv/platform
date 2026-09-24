@@ -58,6 +58,19 @@ export function UncontactedBadge({ lead }: { lead: CrmLead }) {
   )
 }
 
+/** "Spoke 3 days ago", or that nobody has. */
+export function lastTouch(lead: CrmLead): string {
+  if (!lead.last_contacted_at) return 'Not contacted yet'
+  const at = new Date(lead.last_contacted_at)
+  if (Number.isNaN(at.getTime())) return 'Not contacted yet'
+  const days = Math.floor((Date.now() - at.getTime()) / 86_400_000)
+  if (days <= 0) return 'Spoke today'
+  if (days === 1) return 'Spoke yesterday'
+  if (days < 30) return `Spoke ${days} days ago`
+  const months = Math.floor(days / 30)
+  return `Spoke ${months} month${months === 1 ? '' : 's'} ago`
+}
+
 export function DueBadge({ lead, now }: { lead: CrmLead; now: Date }) {
   const bucket = dueBucket(lead, now)
   if (bucket === 'none') {
@@ -221,6 +234,10 @@ export function LeadTable({
             {l.notes && (
               <span className="mt-0.5 block max-w-xs truncate text-xs text-muted-foreground/80">{l.notes}</span>
             )}
+            {/* When you last spoke to them. A list of names answers "who";
+                this is half of "where are we", and it was on the record all
+                along without ever reaching the screen. */}
+            <span className="mt-0.5 block text-xs text-muted-foreground/70">{lastTouch(l)}</span>
           </td>
         )
       case 'stage':

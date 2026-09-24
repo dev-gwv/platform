@@ -10,7 +10,6 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { Select } from '@/shared/ui/input'
 import { useCrmStats, useForecast } from '../api'
 import { STAGES } from '../leads'
-import { DateRange, daysBack } from './DateRange'
 import { exportLeadsCsv } from './shared'
 
 /** The channels a lead can arrive through — the same list the CRM filters on. */
@@ -27,8 +26,20 @@ const SOURCES = [
   'other',
 ] as const
 
-export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
-  const [range, setRange] = useState<CrmStatsQuery>(() => daysBack(29))
+export function ReportsTab({ leads, range: pageRange }: { leads: readonly CrmLead[]; range: CrmStatsQuery }) {
+  /*
+   * The dates come from the page; "which source" and "whose" stay here.
+   * They narrow this report only -- the other two sections beneath it have no
+   * such axis -- so folding them into the shared bar would offer a filter that
+   * silently applied to a third of what is on screen.
+   */
+  const [source, setSource] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const range: CrmStatsQuery = {
+    ...pageRange,
+    ...(source ? { source } : {}),
+    ...(assignee ? { assignee } : {}),
+  }
   /** Owners taken from the leads on hand, so the list only offers real ones. */
   const owners = [
     ...new Map(
@@ -42,19 +53,13 @@ export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="no-print flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <DateRange value={range} onChange={setRange} />
-        </div>
         {/* "How is Instagram doing" and "how is Priya doing" are the two
             questions asked of this screen, and a date range answers neither. */}
         <Select
-          value={range.source ?? ''}
+          value={source}
           aria-label="Filter by source"
           className="w-40"
-          onChange={(e) => {
-            const v = e.target.value
-            setRange(({ source: _drop, ...rest }) => (v ? { ...rest, source: v } : rest))
-          }}
+          onChange={(e) => setSource(e.target.value)}
         >
           <option value="">All sources</option>
           {SOURCES.map((o) => (
@@ -64,13 +69,10 @@ export function ReportsTab({ leads }: { leads: readonly CrmLead[] }) {
           ))}
         </Select>
         <Select
-          value={range.assignee ?? ''}
+          value={assignee}
           aria-label="Filter by owner"
           className="w-44"
-          onChange={(e) => {
-            const v = e.target.value
-            setRange(({ assignee: _drop, ...rest }) => (v ? { ...rest, assignee: v } : rest))
-          }}
+          onChange={(e) => setAssignee(e.target.value)}
         >
           <option value="">All members</option>
           {owners.map(([id, name]) => (

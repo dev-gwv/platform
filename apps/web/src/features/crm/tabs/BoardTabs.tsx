@@ -24,7 +24,7 @@ import { taskDueBy } from '@ipc/domain'
 import { Check, ClipboardList } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LostReasonDialog } from '../LostReasonDialog'
-import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted } from '../leads'
+import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted, type DueBucket } from '../leads'
 import { BoardColumn, DueBadge, LeadCard, LeadTable, stageTone } from './shared'
 
 /** Everything owed today or already late — the list to clear before going home. */
@@ -168,12 +168,30 @@ function TodayList({
   )
 }
 
-/** The pipeline seen by when it is owed, rather than by stage. */
-export function FollowUpBoardTab({ leads, now, onOpen }: { leads: readonly CrmLead[]; now: Date; onOpen: (id: string) => void }) {
+/**
+ * What is owed, by when.
+ *
+ * `omit` drops columns the caller has already shown. Under Today -- which
+ * lists overdue and due-today as a table above -- rendering those two again as
+ * board columns put every late lead on the screen twice, which is the exact
+ * "same leads sliced two ways" this redesign set out to remove.
+ */
+export function FollowUpBoardTab({
+  leads,
+  now,
+  onOpen,
+  omit = [],
+}: {
+  leads: readonly CrmLead[]
+  now: Date
+  onOpen: (id: string) => void
+  omit?: readonly DueBucket[]
+}) {
   const columns = boardColumns(leads, now)
+  const shownColumns = DUE_COLUMNS.filter((c) => !omit.includes(c.key))
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-      {DUE_COLUMNS.map((col) => (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {shownColumns.map((col) => (
         <BoardColumn
           key={col.key}
           title={col.label}

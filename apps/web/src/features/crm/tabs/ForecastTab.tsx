@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CrmStatsQuery } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonTiles } from '@/shared/ui/skeleton'
@@ -6,7 +6,7 @@ import { StatCard } from '@/shared/ui/stat-card'
 import { ErrorState } from '@/shared/ui/states'
 import { formatINR } from '@/shared/ui/format'
 import { useForecast } from '../api'
-import { DateRange, daysBack } from './DateRange'
+import { DateRange } from './DateRange'
 
 function ahead(days: number): CrmStatsQuery {
   const from = new Date()
@@ -26,21 +26,30 @@ const monthLabel = (m: string) => {
  * won ones, over the window their expected close falls in. By stage, by
  * owner, by month, with the win rate and cycle time of what has closed.
  */
-export function ForecastTab() {
+export function ForecastTab({ range: pageRange }: { range: CrmStatsQuery }) {
+  /*
+   * A forecast looks FORWARD, so it opens on the next 90 days rather than on
+   * the page's backward-looking range -- but it follows the page whenever that
+   * changes, so the three sections never contradict each other on screen.
+   */
   const [range, setRange] = useState<CrmStatsQuery>(() => ahead(90))
+  const [followPage, setFollowPage] = useState(false)
+  useEffect(() => {
+    if (followPage) setRange(pageRange)
+  }, [followPage, pageRange])
   const { data, isLoading, isError, error, refetch } = useForecast(range)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-0 flex-1">
-          <DateRange value={range} onChange={setRange} />
+          <DateRange value={range} onChange={(r) => { setFollowPage(false); setRange(r) }} />
         </div>
-        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setRange(ahead(90))}>
+        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => { setFollowPage(false); setRange(ahead(90)) }}>
           Next 90 days
         </button>
-        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setRange(daysBack(29))}>
-          Last 30 days
+        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setFollowPage(true)}>
+          Match the page
         </button>
       </div>
 

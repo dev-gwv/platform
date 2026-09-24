@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { Settings2 } from 'lucide-react'
+import type { CrmStatsQuery } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { SkeletonList } from '@/shared/ui/skeleton'
-import { cn } from '@/shared/ui/cn'
+import { MetricCard } from '@/shared/ui/metric-card'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { ErrorState } from '@/shared/ui/states'
 import { useLeads } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawer } from '@/features/crm/LeadDrawer'
+import { GettingStarted } from '@/features/crm/GettingStarted'
+import { ALL_GROUPS, CrmFilterBar, inGroup } from '@/features/crm/FilterBar'
+import { daysBack } from '@/features/crm/tabs/DateRange'
 import { EMPTY_QUERY, countsFor, summarise, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab, TodayTab } from '@/features/crm/tabs/BoardTabs'
@@ -65,6 +70,11 @@ function Crm() {
   const { search } = useLocation()
   const navigate = useNavigate()
   const [query, setQuery] = useState<LeadQuery>(EMPTY_QUERY)
+  // One group and one date range, read by every tab. Reports, Forecast and Per
+  // person each owned a date picker before, so setting one left the other two
+  // on their defaults and three sections on one screen disagreed.
+  const [group, setGroup] = useState<string>(ALL_GROUPS)
+  const [range, setRange] = useState<CrmStatsQuery>(() => daysBack(29))
   const [openLead, setOpenLead] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -84,8 +94,9 @@ function Crm() {
   // The archived rows cost a second request, so they are only fetched when
   // someone asks to see them or a direct link needs to find one.
   const everything = useLeads(showArchived || hasLeadLink)
-  const leads = useMemo(() => active.data ?? [], [active.data])
+  const allOpen = useMemo(() => active.data ?? [], [active.data])
   const allLeads = useMemo(() => everything.data ?? [], [everything.data])
+  const leads = useMemo(() => inGroup(allOpen, group), [allOpen, group])
 
   // One clock for the whole page, so a lead cannot be "due today" in the strip
   // and "overdue" in the table because two components asked at different times.
@@ -93,8 +104,8 @@ function Crm() {
   const totals = useMemo(() => summarise(leads, now), [leads, now])
   const chipCounts = useMemo(() => countsFor(leads, now), [leads, now])
 
-  const inboxLeads = showArchived ? allLeads : leads
-  const selected = [...allLeads, ...leads].find((l) => l.id === openLead) ?? null
+  const inboxLeads = inGroup(showArchived ? allLeads : allOpen, group)
+  const selected = [...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null
 
   return (
     <>
@@ -113,24 +124,20 @@ function Crm() {
         }
       />
 
-      <div role="tablist" aria-label="Leads" className="no-print mt-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            id={`crm-tab-${t.key}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            aria-controls="crm-tabpanel"
-            onClick={() => setTab(t.key)}
-            className={cn(
-              'whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Under the title, reading as part of it rather than as a control
+          competing with the list below. */}
+      <SectionTabs
+        className="no-print mt-2"
+        variant="underline"
+        label="Leads"
+        tabs={TABS.map((t) => ({ value: t.key, label: t.label }))}
+        value={tab}
+        onChange={setTab}
+      />
+
+      <div className="mt-4 flex flex-col gap-4">
+        <CrmFilterBar leads={allOpen} group={group} onGroup={setGroup} range={range} onRange={setRange} />
+        <GettingStarted leads={allOpen} />
       </div>
 
       <div id="crm-tabpanel" role="tabpanel" aria-labelledby={`crm-tab-${tab}`} className="mt-4">
@@ -151,7 +158,9 @@ function Crm() {
             <TodayTab leads={leads} now={now} onOpen={setOpenLead} />
             <div>
               <h2 className="mb-2 text-sm font-semibold text-muted-foreground">What is coming</h2>
-              <FollowUpBoardTab leads={leads} now={now} onOpen={setOpenLead} />
+              {/* Overdue and Today are the table above; repeating them as
+                  columns put every late lead on the screen twice. */}
+              <FollowUpBoardTab leads={leads} now={now} onOpen={setOpenLead} omit={['overdue', 'today']} />
             </div>
           </div>
         ) : tab === 'inbox' ? (
@@ -169,14 +178,14 @@ function Crm() {
           <PipelineTab leads={leads} onOpen={setOpenLead} />
         ) : (
           <div className="flex flex-col gap-8">
-            <ReportsTab leads={leads} />
+            <ReportsTab leads={leads} range={range} />
             <section>
               <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Forecast</h2>
-              <ForecastTab />
+              <ForecastTab range={range} />
             </section>
             <section>
               <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Per person</h2>
-              <TeamTab />
+              <TeamTab range={range} />
             </section>
           </div>
         )}
@@ -187,24 +196,39 @@ function Crm() {
   )
 }
 
-/** Late, due, never called -- the three that decide what happens next. */
+/** Late, due, never called -- the figures that decide what happens next. */
 function TodayCounts({ totals }: { totals: ReturnType<typeof summarise> }) {
-  const stats: Array<[string, number, string]> = [
-    ['Overdue', totals.overdue, 'text-destructive'],
-    ['Due today', totals.today, 'text-primary'],
-    ['Never contacted', totals.uncontacted, 'text-warning'],
-    ['Hot', totals.hot, 'text-destructive'],
-    ['Open', totals.total, 'text-foreground'],
-    ['Won this month', totals.wonThisMonth, 'text-success'],
-  ]
+  const pct = (n: number) => (totals.total === 0 ? '' : `${Math.round((n / totals.total) * 100)}% of open leads`)
   return (
-    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-      {stats.map(([label, value, tone]) => (
-        <span key={label} className="flex items-baseline gap-1.5">
-          <span className={cn('text-lg font-semibold tabular-nums', tone)}>{value}</span>
-          <span className="text-sm text-muted-foreground">{label}</span>
-        </span>
-      ))}
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard
+        label="Overdue"
+        value={totals.overdue}
+        tone={totals.overdue > 0 ? 'danger' : 'muted'}
+        hint={totals.overdue > 0 ? 'Promised earlier and missed' : 'Nothing is late'}
+        help="Open leads whose promised call-back date has already passed."
+      />
+      <MetricCard
+        label="Due today"
+        value={totals.today}
+        tone="accent"
+        hint={totals.today > 0 ? 'Before the day ends' : 'Nothing owed today'}
+        help="Open leads you promised to contact today."
+      />
+      <MetricCard
+        label="Never contacted"
+        value={totals.uncontacted}
+        tone={totals.uncontacted > 0 ? 'warning' : 'muted'}
+        hint={pct(totals.uncontacted)}
+        help="Leads still marked new that nobody has rung, messaged or emailed."
+      />
+      <MetricCard
+        label="Won this month"
+        value={totals.wonThisMonth}
+        tone="success"
+        hint={`${totals.total} open · ${totals.hot} hot`}
+        help="Leads converted to a client or project since the 1st."
+      />
     </div>
   )
 }
