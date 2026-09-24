@@ -55,6 +55,7 @@ export function DeliverablesTab({
   const [dialog, setDialog] = useState<{ deliverable?: Deliverable; shootId?: string | null } | null>(null)
   const [filter, setFilter] = useState<PipelineFilter>(null)
   const [openId, setOpenId] = useState<string | null>(wantedFromUrl)
+  const [openAction, setOpenAction] = useState<'voice' | null>(null)
   const del = useDeleteDeliverable(projectId)
   const add = useAddDeliverable(projectId)
   const confirm = useConfirm()
@@ -157,7 +158,10 @@ export function DeliverablesTab({
                     key={d.id}
                     d={d}
                     canEdit={canEdit}
-                    onOpen={() => setOpenId(d.id)}
+                    onOpen={(action) => {
+                      setOpenAction(action ?? null)
+                      setOpenId(d.id)
+                    }}
                     onEdit={() => setDialog({ deliverable: d })}
                     onDelete={() => void remove(d)}
                   />
@@ -171,7 +175,11 @@ export function DeliverablesTab({
       <DeliverableDrawer
         deliverable={open}
         canEdit={canEdit}
-        onClose={() => setOpenId(null)}
+        action={openAction}
+        onClose={() => {
+          setOpenId(null)
+          setOpenAction(null)
+        }}
         onEdit={(d) => setDialog({ deliverable: d })}
         onDelete={(d) => void remove(d)}
       />

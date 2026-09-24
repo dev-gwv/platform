@@ -55,7 +55,10 @@ export function BillingPage({ newInvoice }: { newInvoice?: boolean } = {}) {
 }
 
 function Billing({ newInvoice }: { newInvoice?: boolean | undefined }) {
-  const [tab, setTab] = useState<'invoices' | 'payments'>('invoices')
+  // ?tab=payments opens the payments list (linked from Profit & Loss).
+  const [tab, setTab] = useState<'invoices' | 'payments'>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'payments' ? 'payments' : 'invoices',
+  )
   return (
     <>
       <PageHeader

@@ -23,6 +23,8 @@ import {
   Users,
   Clock,
   Settings,
+  ListOrdered,
+  Lightbulb,
   ShieldCheck,
   Building2,
   Activity,
@@ -32,7 +34,6 @@ import {
   FileText,
   FileSignature,
   Eye,
-  Table2,
   Ellipsis,
   type LucideIcon,
 } from 'lucide-react'
@@ -106,6 +107,7 @@ export const NAV: NavEntry[] = [
       leaf('Project Tracking', '/project-tracking', Target, { module: 'projects' }),
       leaf('Templates', '/settings/project-templates', Package, { module: 'projects' }),
       leaf('Documents', '/project-documents', FileSignature, { module: 'projects' }),
+      leaf('Delivery Stages', '/projects/stages', ListOrdered, { module: 'projects' }),
     ],
   },
 
@@ -121,9 +123,8 @@ export const NAV: NavEntry[] = [
       leaf('Billing', '/billing', Receipt, { module: 'billing' }),
       leaf('Invoice Templates', '/billing/templates', FileText, { module: 'billing' }),
       leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
+      leaf('Profit & Loss', '/financials', TrendingUp, { module: 'financials' }),
       leaf('Reconciliation', '/financials/reconciliation', Scale, { module: 'financials' }),
-      leaf('Profitability', '/financials', TrendingUp, { module: 'financials' }),
-      leaf('Profitability Report', '/financials/calculated-expenses', Table2, { module: 'financials' }),
     ],
   },
   {
@@ -187,6 +188,7 @@ export const NAV: NavEntry[] = [
     children: [
       leaf('Studios', '/platform/studios', Building2, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
+      leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
     ],
   },
 ]

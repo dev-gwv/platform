@@ -5,6 +5,7 @@ import {
   createRouter,
   Outlet,
   Link,
+  Navigate,
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
@@ -33,9 +34,7 @@ import { BillingPage } from '@/routes/billing'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
-import { MonthlyProfitPage } from '@/routes/financials/profit'
 import { ReconciliationPage } from '@/routes/financials/reconciliation'
-import { CalculatedExpensesPage } from '@/routes/financials/calculated-expenses'
 import { FollowUpsPage } from '@/routes/follow-ups'
 import { CrmContactsPage } from '@/routes/crm/contacts'
 import { CrmCompaniesPage } from '@/routes/crm/companies'
@@ -45,6 +44,7 @@ import { EmployeesPage } from '@/routes/employees'
 import { EmployeeDetailPage } from '@/routes/employees/$id'
 import { SubscriptionPage } from '@/routes/subscription'
 import { SettingsPage } from '@/routes/settings'
+import { DeliveryStagesPage } from '@/routes/delivery-stages'
 import { RolesAccessPage } from '@/routes/settings/roles'
 import { TeamTermsPage } from '@/routes/settings/team-terms'
 import { AppearancePage } from '@/routes/settings/appearance'
@@ -61,6 +61,7 @@ import { ProjectDocumentsPage } from '@/routes/project-documents'
 import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
 import { PlatformStudiosPage } from '@/routes/platform/studios'
 import { PlatformUsagePage } from '@/routes/platform/usage'
+import { PlatformFeedbackPage } from '@/routes/platform/feedback'
 import { SystemPage } from '@/routes/settings/system'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
@@ -220,11 +221,13 @@ const routeTree = rootRoute.addChildren([
   route('/company-expenses', CompanyExpensesPage),
   route('/company-expenses/report', CompanyExpensesPage),
   route('/financials', FinancialsPage),
-  route('/financials/profit', MonthlyProfitPage),
+  // The two older profit screens now live in Profit & Loss.
+  route('/financials/profit', () => <Navigate to="/financials" replace />),
   route('/financials/reconciliation', ReconciliationPage),
-  route('/financials/calculated-expenses', CalculatedExpensesPage),
+  route('/financials/calculated-expenses', () => <Navigate to="/financials" replace />),
   route('/notifications', NotificationsPage),
   route('/notifications/generate', () => <NotificationsPage generate />),
+  route('/projects/stages', DeliveryStagesPage),
   route('/settings/company', SettingsPage),
   route('/settings/roles', RolesAccessPage),
   route('/settings/team-terms', TeamTermsPage),
@@ -246,6 +249,7 @@ const routeTree = rootRoute.addChildren([
   route('/activity', ActivityPage),
   route('/platform/studios', PlatformStudiosPage),
   route('/platform/usage', PlatformUsagePage),
+  route('/platform/feedback', PlatformFeedbackPage),
   ]),
 ])
 

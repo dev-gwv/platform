@@ -797,8 +797,8 @@ if (listed) {
   const detail = await api(`/projects/${pid}`, { token: aToken })
   const film = (detail.json.deliverables ?? []).find((d) => d.id === added.json.id)
   check(
-    'deliverables: one is tied to its shoot and its editor',
-    added.status === 201 && film?.shoot_name === 'Wedding day' && film?.assignee_name === 'Priya Editor' && film?.status === 'pending',
+    'deliverables: one is tied to its shoot and its editor, and giving it to an editor starts it',
+    added.status === 201 && film?.shoot_name === 'Wedding day' && film?.assignee_name === 'Priya Editor' && film?.status === 'in_progress',
     film ?? added.json,
   )
 
@@ -854,6 +854,67 @@ if (listed) {
   check('notes: someone not on the work cannot write on it (403)', noteNotTheirs.status === 403, noteNotTheirs.json)
   const emptyNote = await api(`/projects/deliverables/${added.json.id}/notes`, { token: aToken, method: 'POST', body: { kind: 'text', body: '  ' } })
   check('notes: an empty note is refused (422)', emptyNote.status === 422, emptyNote.json)
+
+  // ── A studio's own stages, and submitted work moving the deliverable (0166)
+  const stages = await api('/projects/stages', { token: edToken })
+  check(
+    'stages: every studio starts with its named stages, readable by the team',
+    stages.status === 200 && ['with_manager', 'approved', 'with_client', 'client_approved', 'changes_requested'].every((c) => stages.json.some((s) => s.code === c)),
+    stages.json,
+  )
+  const grading = await api('/projects/stages', { token: aToken, method: 'POST', body: { label: 'Colour grading', stage: 'in_progress', color: 'violet' } })
+  const edAdds = await api('/projects/stages', { token: edToken, method: 'POST', body: { label: 'Mine', stage: 'in_progress' } })
+  check('stages: a manager adds one; an editor cannot (403)', grading.status === 201 && grading.json.code === 'colour_grading' && edAdds.status === 403, { grading: grading.json, edAdds: edAdds.status })
+
+  const reel = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Teaser reel', assignee_id: edUid } })
+  const toGrading = await api(`/projects/deliverables/${reel.json.id}/stage`, { token: edToken, method: 'POST', body: { status: 'in_progress', custom_status_code: 'colour_grading' } })
+  const approveSelf = await api(`/projects/deliverables/${reel.json.id}/stage`, { token: edToken, method: 'POST', body: { status: 'review', custom_status_code: 'approved' } })
+  const wrongStep = await api(`/projects/deliverables/${reel.json.id}/stage`, { token: aToken, method: 'POST', body: { status: 'pending', custom_status_code: 'with_client' } })
+  check(
+    'stages: the editor moves to a team stage, not to Approved (403); a stage from another step is refused (422)',
+    toGrading.status === 204 && approveSelf.status === 403 && wrongStep.status === 422,
+    { toGrading: toGrading.status, approveSelf: approveSelf.status, wrongStep: wrongStep.status },
+  )
+
+  const submitted = await api('/work/submissions', {
+    token: edToken,
+    method: 'POST',
+    body: { project_id: pid, deliverable_id: reel.json.id, submission_link: 'https://drive.example.com/reel-v1' },
+  })
+  const inReview = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === reel.json.id)
+  const reelTimeline = (await api(`/projects/deliverables/${reel.json.id}/notes`, { token: aToken })).json ?? []
+  const submittedEvent = reelTimeline.find((n) => n.body === `submitted:${submitted.json.id}`)
+  check(
+    'submissions: work handed in for a deliverable moves it to Review · With manager, link and all',
+    submitted.status === 201 && inReview?.status === 'review' && inReview?.custom_status_code === 'with_manager' &&
+      inReview?.delivery_link === 'https://drive.example.com/reel-v1' && submittedEvent?.link === 'https://drive.example.com/reel-v1',
+    { submitted: submitted.json, inReview, reelTimeline },
+  )
+  const sentBack = await api(`/work/submissions/${submitted.json.id}/review`, {
+    token: aToken, method: 'POST', body: { approve: false, review_notes: 'Shorter intro, please' },
+  })
+  const backAgain = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === reel.json.id)
+  const afterReview = (await api(`/projects/deliverables/${reel.json.id}/notes`, { token: edToken })).json ?? []
+  check(
+    'submissions: sending it back moves it to Changes requested, and the editor reads why in its timeline',
+    (sentBack.status === 200 || sentBack.status === 204) && backAgain?.status === 'in_progress' && backAgain?.custom_status_code === 'changes_requested' &&
+      afterReview.some((n) => n.kind === 'text' && n.body === 'Shorter intro, please'),
+    { sentBack: sentBack.status, backAgain, afterReview },
+  )
+  const wrongProject = await api('/work/submissions', {
+    token: edToken, method: 'POST', body: { project_id: '00000000-0000-4000-8000-000000000001', deliverable_id: reel.json.id, submission_link: 'https://x.example.com' },
+  })
+  check('submissions: a deliverable from another project is refused (422)', wrongProject.status === 422, wrongProject.json)
+
+  // ── Suggest a feature
+  const idea = await api('/feedback/features', { token: edToken, method: 'POST', body: { body: 'WhatsApp the album link', page_url: '/my-work' } })
+  const blank = await api('/feedback/features', { token: edToken, method: 'POST', body: { body: '  ' } })
+  const inboxAsStudio = await api('/platform/feedback', { token: aToken })
+  check(
+    'feedback: anyone can suggest a feature; an empty one is refused; a studio cannot read the inbox',
+    idea.status === 201 && blank.status === 422 && inboxAsStudio.status === 403,
+    { idea: idea.json, blank: blank.status, inbox: inboxAsStudio.status },
+  )
 
   const internal = await api(`/projects/${pid}/deliverables`, {
     token: aToken,
@@ -955,6 +1016,21 @@ if (listed) {
     again: again.status, old: oldLink.status, fresh: newLink.status,
   })
 
+  // The studio's own words for the email are taken as given (no mail
+  // provider here, so it reports that rather than pretending it went).
+  const worded = await api(`/terms/documents/${sent.json.document_id}/email`, {
+    token: aToken,
+    method: 'POST',
+    body: { token: tokenOf(again.json.url), to_email: 'client@example.com', subject: 'Our terms for your wedding', message: 'Hello Priya,\nPlease read and agree.' },
+  })
+  const tooLong = await api(`/terms/documents/${sent.json.document_id}/email`, {
+    token: aToken, method: 'POST', body: { token: tokenOf(again.json.url), subject: 'x'.repeat(201) },
+  })
+  check(
+    'terms: the email can carry the studio’s own subject and message',
+    worded.status === 200 && ['provider_missing', 'sent', 'failed'].includes(worded.json.status) && tooLong.status === 422,
+    { worded: worded.json, tooLong: tooLong.status },
+  )
   const cancelled = await api(`/terms/documents/${sent.json.document_id}/revoke`, { token: aToken, method: 'POST' })
   const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
   const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)
@@ -1002,6 +1078,27 @@ if (listed) {
     marked.status === 204 && Number(after?.received) === 50000 && detail.json.payments.every((x) => x.status === 'paid'),
     { marked: marked.status, after },
   )
+
+  // Profit & Loss (0167): the project's 50,000 received shows as income for
+  // today, in its own row; the other studio's statement does not include it.
+  const today = new Date().toISOString().slice(0, 10)
+  const pnl = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: aToken })
+  const row = (pnl.json.projects ?? []).find((x) => x.project_id === pid)
+  check(
+    'p&l: payments received today are income, in that project’s row, over twelve months of trend',
+    pnl.status === 200 && pnl.json.lines.income >= 50000 && row?.income === 50000 && row?.to_collect === 50000 && pnl.json.monthly.length === 12,
+    { status: pnl.status, lines: pnl.json.lines, row },
+  )
+  const theirs = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: newPw.json.access_token })
+  check(
+    'p&l: another studio’s statement has none of it',
+    theirs.status === 200 && !(theirs.json.projects ?? []).some((x) => x.project_id === pid),
+    { status: theirs.status, projects: theirs.json.projects?.length },
+  )
+  const one = await api(`/financials/pnl?from=2000-01-01&to=2100-12-31&basis=booked&project_id=${pid}`, { token: aToken })
+  check('p&l: one project over its life, for its Billing tab', one.status === 200 && one.json.projects[0]?.income === 100000, one.json.projects)
+  const bad = await api(`/financials/pnl?from=${today}&to=2000-01-01`, { token: aToken })
+  check('p&l: a backwards period is refused (422)', bad.status === 422, bad.json)
 }
 
 // ── Work to review: work sent straight to the client still lists ─────────

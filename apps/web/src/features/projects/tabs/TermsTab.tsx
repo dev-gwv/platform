@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, ChevronDown, Clock, Eye, FileSignature, Hourglass, Send, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock, Eye, FileSignature, Hourglass, PencilLine, Send, XCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -20,6 +20,7 @@ import { TermsComposer, type TermsProject, type TermsStart } from '@/features/te
 import { useTermsDocumentPayload } from '@/features/terms/document'
 import { TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { ShareTermsPanel } from '@/features/terms/ShareTermsPanel'
+import { useCompanyProfile } from '@/features/settings/api'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -240,28 +241,23 @@ function CurrentCard({
           <StatusBadge tone={look.tone}>{look.label}</StatusBadge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canEdit && (s === 'waiting' || s === 'expired') && (
-            <Button onClick={onResend}>
-              <Send /> Send again
+          {/* Changing the terms is the common need, so it is a button, not a
+              menu item: it opens the terms as sent, to edit and send as a new
+              version -- the old link then stops working. */}
+          {canEdit && (
+            <Button onClick={onNewVersion}>
+              <PencilLine /> Edit &amp; resend
             </Button>
           )}
-          {canEdit && s === 'cancelled' && (
-            <Button onClick={onNewVersion}>
-              <Send /> Send terms again
+          {canEdit && (s === 'waiting' || s === 'expired') && (
+            <Button variant="outline" onClick={onResend}>
+              <Send /> Share the link again
             </Button>
           )}
           <Button variant="outline" onClick={onView}>
             <Eye /> View what was sent
           </Button>
-          {canEdit && s !== 'cancelled' && (
-            <RowMenu
-              label="More"
-              items={[
-                { label: 'Send a new version…', onSelect: onNewVersion },
-                ...(s === 'waiting' ? [{ label: 'Cancel this link', onSelect: onCancel }] : []),
-              ]}
-            />
-          )}
+          {canEdit && s === 'waiting' && <RowMenu label="More" items={[{ label: 'Cancel this link', onSelect: onCancel }]} />}
         </div>
       </CardContent>
     </Card>
@@ -302,6 +298,8 @@ function ShareDialog({
   description: string
   onClose: () => void
 }) {
+  const company = useCompanyProfile()
+  const studioName = company.data?.display_name || company.data?.name || undefined
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={title} description={description}>
@@ -314,6 +312,7 @@ function ShareDialog({
             clientPhone={project.client_phone}
             clientEmail={project.client_email}
             projectName={project.name}
+            studioName={studioName}
           />
         ) : (
           <p className="py-6 text-center text-sm text-muted-foreground">Making a fresh link…</p>

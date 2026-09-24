@@ -12,6 +12,8 @@ export interface Env {
   /** Email (Resend) for verification mail. */
   RESEND_API_KEY: string
   EMAIL_FROM: string
+  /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
+  PLATFORM_FEEDBACK_EMAIL?: string
   /** Public web app origin, used to build the verification link. */
   APP_URL: string
   RAZORPAY_KEY_ID: string

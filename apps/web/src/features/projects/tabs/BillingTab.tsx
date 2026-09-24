@@ -13,7 +13,7 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAddPayment, useDeletePayment, useUpdatePayment, useUpdateQuotation } from '@/features/projects/api'
-import { useProjectFinancials } from '@/features/financials/api'
+import { useProfitAndLoss } from '@/features/financials/api'
 import { issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/features/billing/receiptShare'
 
 type Payment = ProjectDetail['payments'][number]
@@ -379,13 +379,17 @@ function PaymentDialog({
 }
 
 /** What the project made: value, minus crew and expenses. Only for those who see profit. */
+/**
+ * The project's own profit, over its whole life, from the same statement as
+ * Billing > Profit & Loss (booked: its value, its crew, its expenses) -- so
+ * the two never disagree.
+ */
 function ProfitCard({ project }: { project: ProjectDetail }) {
   const canSee = useAccess().hasModule('financials')
-  const { data } = useProjectFinancials()
+  const { data } = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: project.id }, canSee)
   if (!canSee) return null
-  const f = data?.find((x) => x.project_id === project.id)
+  const f = data?.projects[0]
   if (!f) return null
-  const margin = f.revenue > 0 ? Math.round((f.gross_profit / f.revenue) * 100) : 0
   return (
     <Card>
       <CardContent className="p-4">
@@ -393,13 +397,13 @@ function ProfitCard({ project }: { project: ProjectDetail }) {
           <TrendingUp className="size-4 text-tone-violet" aria-hidden /> What this project makes
         </p>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Fig label="Project value" value={formatINR(f.revenue)} />
-          <Fig label="Crew cost" value={`− ${formatINR(f.direct_team_cost)}`} />
-          <Fig label="Expenses" value={`− ${formatINR(f.project_expenses)}`} />
+          <Fig label="Project value" value={formatINR(f.income)} />
+          <Fig label="Crew cost" value={`− ${formatINR(f.team)}`} />
+          <Fig label="Expenses" value={`− ${formatINR(f.expenses)}`} />
           <Fig
-            label={`Profit${f.revenue > 0 ? ` · ${margin}%` : ''}`}
-            value={formatINR(f.gross_profit)}
-            className={f.gross_profit >= 0 ? 'text-tone-green' : 'text-destructive'}
+            label={`Profit${f.margin != null ? ` · ${Math.round(f.margin)}%` : ''}`}
+            value={formatINR(f.profit)}
+            className={f.profit >= 0 ? 'text-tone-green' : 'text-destructive'}
           />
         </dl>
         <p className="mt-2 text-[11px] text-muted-foreground">

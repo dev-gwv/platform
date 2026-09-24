@@ -19,6 +19,7 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { useInvoice, useUpdateInvoice, useDeleteInvoice, useStates, useRecordPayment } from '@/features/billing/api'
 import { useInvoiceForm, InvoiceFormFields } from '@/features/billing/InvoiceForm'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
+import { DateField } from '@/shared/ui/date-field'
 
 const TONE = { draft: 'neutral', sent: 'info', partial: 'warning', paid: 'success', cancelled: 'danger' } as const
 
@@ -426,12 +427,7 @@ function DetailRecordPayment({ invoiceId, balance }: { invoiceId: string; balanc
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Payment date</label>
-              <input
-                type="date"
-                value={paidOn}
-                onChange={(e) => setPaidOn(e.target.value)}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-              />
+              <DateField aria-label="Payment date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Reference (optional)</label>

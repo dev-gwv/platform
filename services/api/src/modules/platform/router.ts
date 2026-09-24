@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, z } from '@ipc/contracts'
+import { platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
+import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requirePlatformAdmin } from '../../middleware/permissions'
@@ -16,6 +17,45 @@ import { audit } from '../../lib/audit'
  */
 export const platformRouter = new Hono<AppEnv>()
   .use('*', requireAuth, requirePlatformAdmin())
+
+  /** Every studio's "Suggest a feature", newest first. */
+  .get('/feedback', async (c) => {
+    const want = c.req.query('status')
+    const status = want ? featureRequestStatus.safeParse(want) : null
+    if (want && !status?.success) fail(422, 'Unknown status.')
+    const rows = await attempt(c, 'platform.feedback', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select * from platform_list_feature_requests(${status?.success ? status.data : null})`),
+    )
+    if (!rows) fail(400, 'We could not load the suggestions.')
+    return c.json(featureRequest.array().parse(rows))
+  })
+
+  .patch('/feedback/:id', async (c) => {
+    const parsed = updateFeatureRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the status or note.')
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'platform.feedback_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ ok: boolean }[]>`
+        select platform_update_feature_request(${id}, ${parsed.data.status ?? null}, ${parsed.data.admin_note ?? null}) as ok`),
+    )
+    if (!rows) fail(400, 'We could not update that suggestion.')
+    if (!rows[0]?.ok) fail(404, 'That suggestion was not found.')
+    return c.body(null, 204)
+  })
+
+  /** A voice note or screenshot on a suggestion (another studio's file, so not via /files). */
+  .get('/feedback/:id/files/:fid', async (c) => {
+    const id = uuidParam(c)
+    const fid = uuidParam(c, 'fid')
+    const rows = await attempt(c, 'platform.feedback_file', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select * from platform_feature_request_file(${id}, ${fid})`),
+    )
+    if (!rows) fail(400, 'We could not load that file.')
+    if (!rows.length) fail(404, 'That file was not found.')
+    return serve(rows[0]!)
+  })
 
   .get('/studios', async (c) => {
     const rows = await attempt(c, 'platform.studios', () =>

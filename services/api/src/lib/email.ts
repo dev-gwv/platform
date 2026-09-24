@@ -253,3 +253,37 @@ export async function sendTeamTermsEmail(
     return false
   }
 }
+
+const esc = (t: string) =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * A studio's "Suggest a feature", to the platform team's inbox. Non-fatal:
+ * the suggestion is already saved, and the platform page lists every one.
+ */
+export function sendFeatureRequestEmail(
+  env: Env,
+  s: { studio: string; person: string; page: string | null; text: string | null; hasVoice: boolean; hasScreenshot: boolean; link: string },
+): Promise<void> {
+  const to = env.PLATFORM_FEEDBACK_EMAIL
+  if (!to) return Promise.resolve()
+  const extras = [s.hasVoice && 'a voice note', s.hasScreenshot && 'a screenshot'].filter(Boolean).join(' and ')
+  const body =
+    `<strong>${esc(s.person)}</strong> at <strong>${esc(s.studio)}</strong> suggested:<br><br>` +
+    (s.text ? `&ldquo;${esc(s.text).replace(/\n/g, '<br>')}&rdquo;<br><br>` : '') +
+    (extras ? `With ${extras}.<br>` : '') +
+    (s.page ? `From the page ${esc(s.page)}.` : '')
+  return send(
+    env,
+    to,
+    `Feature suggestion from ${s.studio}`,
+    brandedHtml({
+      title: 'A feature suggestion',
+      preheader: s.text ? s.text.slice(0, 120) : `${s.person} sent ${extras || 'a suggestion'}`,
+      body,
+      cta: 'Open the inbox',
+      link: s.link,
+      footer: 'Sent from the "Suggest a feature" button.',
+    }),
+  )
+}

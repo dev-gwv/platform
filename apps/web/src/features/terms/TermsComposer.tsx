@@ -22,6 +22,7 @@ import {
   BUILT_IN_TEMPLATES,
   DEFAULT_LEGAL_NOTE,
   PAYMENT_PRESETS,
+  advanceAndBalance,
   fillPlaceholders,
   presetTerms,
   type TermsContext,
@@ -107,12 +108,16 @@ export function TermsComposer({
   const confirm = useConfirm()
 
   const first = BUILT_IN_TEMPLATES[0]!
+  /** The words to fill, with the advance and balance of this plan. */
+  const ctxFor = (plan: PaymentTermDraft[]): TermsContext => ({
+    ...ctx,
+    ...(advanceAndBalance(plan, project.total_cost, formatINR) ?? { advance: 'the booking amount', balance: 'the balance' }),
+  })
+  const firstPlan = presetTerms(PAYMENT_PRESETS.find((p) => p.key === first.preset)!)
   const [picked, setPicked] = useState<string>(start ? 'current' : `builtin:${first.key}`)
   const [title, setTitle] = useState(start?.title ?? `Terms & conditions — ${project.name}`)
-  const [body, setBody] = useState(() => start?.body ?? fillPlaceholders(first.body, ctx))
-  const [plan, setPlan] = useState<PaymentTermDraft[]>(
-    () => start?.plan ?? presetTerms(PAYMENT_PRESETS.find((p) => p.key === first.preset)!),
-  )
+  const [body, setBody] = useState(() => start?.body ?? fillPlaceholders(first.body, ctxFor(firstPlan)))
+  const [plan, setPlan] = useState<PaymentTermDraft[]>(() => start?.plan ?? firstPlan)
   const [edited, setEdited] = useState(false)
   const [expiryDays, setExpiryDays] = useState(14)
   const [savingAs, setSavingAs] = useState<string | null>(null)
@@ -161,12 +166,13 @@ export function TermsComposer({
     setPicked(key)
     if (key.startsWith('builtin:')) {
       const t = BUILT_IN_TEMPLATES.find((b) => `builtin:${b.key}` === key)!
-      setBody(fillPlaceholders(t.body, ctx))
       const preset = PAYMENT_PRESETS.find((p) => p.key === t.preset)
-      if (preset) setPlan(presetTerms(preset))
+      const nextPlan = preset ? presetTerms(preset) : plan
+      setBody(fillPlaceholders(t.body, ctxFor(nextPlan)))
+      if (preset) setPlan(nextPlan)
     } else {
       const t = (myTemplates ?? []).find((m) => `mine:${m.id}` === key)
-      if (t) setBody(fillPlaceholders(t.body, ctx))
+      if (t) setBody(fillPlaceholders(t.body, ctxFor(plan)))
     }
     setEdited(false)
   }

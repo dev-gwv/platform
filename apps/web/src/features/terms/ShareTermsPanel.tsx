@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Check, Copy, Mail, MessageCircle } from 'lucide-react'
+import { Check, Copy, Mail, MessageCircle, Pencil } from 'lucide-react'
 import { buildWhatsAppUrl } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Input, Textarea } from '@/shared/ui/input'
 import { useEmailTermsLink } from './api'
 
 /**
@@ -19,6 +19,7 @@ export function ShareTermsPanel({
   clientPhone,
   clientEmail,
   projectName,
+  studioName,
 }: {
   documentId: string
   token: string
@@ -27,8 +28,15 @@ export function ShareTermsPanel({
   clientPhone: string | null | undefined
   clientEmail: string | null | undefined
   projectName: string
+  studioName?: string | undefined
 }) {
   const [to, setTo] = useState(clientEmail ?? '')
+  // The email's words, the studio's to change: what it says above the button.
+  const [editingWords, setEditingWords] = useState(false)
+  const [subject, setSubject] = useState(`Terms & conditions for ${projectName}${studioName ? ` — ${studioName}` : ''}`)
+  const [intro, setIntro] = useState(
+    `Hello ${clientName ?? ''},\n\nPlease read the terms for ${projectName} and tap "I agree" at the end of the page.\n\n${studioName ?? ''}`.trim(),
+  )
   const [copied, setCopied] = useState(false)
   const [emailed, setEmailed] = useState<string | null>(null)
   const email = useEmailTermsLink()
@@ -47,7 +55,12 @@ export function ShareTermsPanel({
 
   function sendEmail() {
     email.mutate(
-      { documentId, token, to_email: to.trim() || null },
+      {
+        documentId,
+        token,
+        to_email: to.trim() || null,
+        ...(editingWords ? { subject: subject.trim() || null, message: intro.trim() || null } : {}),
+      },
       {
         onSuccess: (r) => {
           if (r.status === 'sent') {
@@ -55,7 +68,7 @@ export function ShareTermsPanel({
             toast.success(`Emailed to ${to.trim()}`)
           } else if (r.status === 'provider_missing') {
             // No email service set up: open their own mail app instead.
-            window.location.href = `mailto:${encodeURIComponent(to.trim())}?subject=${encodeURIComponent(`Terms for ${projectName}`)}&body=${encodeURIComponent(message)}`
+            window.location.href = `mailto:${encodeURIComponent(to.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(editingWords ? `${intro}\n\n${url}` : message)}`
           } else {
             toast.error(r.error ?? 'The email did not go out. Try WhatsApp or copy the link.')
           }
@@ -89,6 +102,17 @@ export function ShareTermsPanel({
             {email.isPending ? 'Sending…' : emailed === to.trim() && emailed ? 'Sent' : 'Send'}
           </Button>
         </div>
+        {editingWords ? (
+          <div className="mt-1 flex flex-col gap-2">
+            <Input aria-label="Email subject" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
+            <Textarea aria-label="Email message" rows={5} value={intro} onChange={(e) => setIntro(e.target.value)} maxLength={2000} className="text-sm" />
+            <p className="text-[11px] text-muted-foreground">The button to open the terms is added below your message.</p>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setEditingWords(true)} className="inline-flex w-fit items-center gap-1 text-xs font-medium text-primary hover:underline">
+            <Pencil className="size-3" aria-hidden /> Edit the subject and message
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-2">

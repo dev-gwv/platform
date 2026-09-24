@@ -3,6 +3,8 @@ import { AlertTriangle, CalendarClock } from 'lucide-react'
 import { cn } from '@/shared/ui/cn'
 import { STAGE_LABEL, STAGE_ORDER, daysToDue, deliverableCounts, isLate, relativeDue, stageOf } from './deliverable-stage'
 import { STAGE_STYLE } from './StageStepper'
+import { TONE_CLASSES, namedStage, toneOf } from './stages'
+import { useDeliverableStages } from './stages-api'
 
 export type PipelineFilter = (typeof STAGE_ORDER)[number] | 'late' | null
 
@@ -24,8 +26,22 @@ export function DeliveryPipeline({
   onFilter?: (f: PipelineFilter) => void
   compact?: boolean
 }) {
+  const stages = useDeliverableStages()
   const counts = deliverableCounts(deliverables)
   const live = deliverables.filter((d) => stageOf(d.status) !== 'cancelled')
+  /** "2 With manager · 1 With client": the named stages inside one step. */
+  const breakdown = (s: DeliverableStatus) => {
+    const by = new Map<string, { label: string; color: string | null | undefined; n: number }>()
+    for (const d of live) {
+      if (stageOf(d.status) !== s) continue
+      const named = namedStage(d, stages)
+      if (!named) continue
+      const at = by.get(named.code) ?? { label: named.label, color: named.color, n: 0 }
+      at.n += 1
+      by.set(named.code, at)
+    }
+    return [...by.values()]
+  }
   const byStage = (s: DeliverableStatus) => live.filter((d) => stageOf(d.status) === s).length
   const pct = counts.total ? Math.round((counts.delivered / counts.total) * 100) : 0
 
@@ -59,6 +75,18 @@ export function DeliveryPipeline({
               <span className={cn('absolute inset-x-0 top-0 h-1', style.solid)} aria-hidden />
               <span className={cn('mt-1 text-2xl font-semibold tabular-nums leading-none', n > 0 ? 'text-foreground' : 'text-muted-foreground')}>{n}</span>
               <span className={cn('mt-1 text-xs font-medium', style.text)}>{STAGE_LABEL[s]}</span>
+              {!compact && breakdown(s).length > 0 && (
+                <span className="mt-1.5 flex flex-wrap gap-1">
+                  {breakdown(s).map((b) => {
+                    const t = TONE_CLASSES[toneOf(b.color)]
+                    return (
+                      <span key={b.label} className={cn('rounded-full px-1.5 py-px text-[10px] font-semibold', t.soft, t.text)}>
+                        {b.n} {b.label}
+                      </span>
+                    )
+                  })}
+                </span>
+              )}
             </Tag>
           )
         })}

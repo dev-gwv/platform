@@ -10,7 +10,7 @@ import { MOCK_ENABLED } from '@/shared/dev/mock'
  * the component goes, so a long timeline does not pile up blobs. Loads only
  * when `enabled`, so a list of voice notes fetches each one on first play.
  */
-export function useFileBlobUrl(fileId: string | null | undefined, enabled = true) {
+export function useFileBlobUrl(fileId: string | null | undefined, enabled = true, path?: string) {
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,7 +23,7 @@ export function useFileBlobUrl(fileId: string | null | undefined, enabled = true
     }
     const ctrl = new AbortController()
     let made: string | null = null
-    fetchFileBlob(`/files/${fileId}`, ctrl.signal)
+    fetchFileBlob(path ?? `/files/${fileId}`, ctrl.signal)
       .then((blob) => {
         made = URL.createObjectURL(blob)
         setUrl(made)
@@ -35,7 +35,7 @@ export function useFileBlobUrl(fileId: string | null | undefined, enabled = true
       ctrl.abort()
       if (made) URL.revokeObjectURL(made)
     }
-  }, [fileId, enabled])
+  }, [fileId, enabled, path])
 
   return { url, error }
 }

@@ -20,6 +20,9 @@ import {
   projectTemplateList,
   createShootTypeRequest,
   shootTypeItem,
+  deliverableStage,
+  createDeliverableStageRequest,
+  updateDeliverableStageRequest,
   z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -42,7 +45,19 @@ function deliverableRuleBroken(code: string, err: unknown): never | undefined {
   const msg = err instanceof Error ? err.message : ''
   if (msg.includes('shoot')) fail(422, 'That shoot is not part of this project.')
   if (msg.includes('team')) fail(422, 'That person is not on your team.')
+  if (msg.includes('stage')) fail(422, 'That stage does not belong to this step. Pick one from the list.')
   return undefined
+}
+
+/** "Colour grading" -> "colour_grading", for a stage's stored code. */
+function stageCode(label: string): string {
+  const base = label
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 30)
+  return base || 'stage'
 }
 
 export const projectsRouter = new Hono<AppEnv>()
@@ -456,6 +471,86 @@ export const projectsRouter = new Hono<AppEnv>()
   })
 
   /**
+   * The studio's named stages, step by step. Anyone in the studio reads them:
+   * an editor's own list shows them too.
+   */
+  .get('/stages', async (c) => {
+    const rows = await attempt(c, 'projects.stages', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, code, label, stage, color, team_allowed, sort_order
+          from company_deliverable_statuses
+         where stage is not null and scope in ('deliverable', 'both')
+         order by array_position(array['pending','in_progress','review','completed'], stage), sort_order, label`),
+    )
+    if (!rows) fail(400, 'We could not load the stages.')
+    return c.json(deliverableStage.array().parse(rows))
+  })
+
+  .post('/stages', requireAction('projects', 'edit'), async (c) => {
+    const parsed = createDeliverableStageRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the stage.')
+    const s = parsed.data
+    const category = s.stage === 'pending' ? 'to_do' : s.stage === 'completed' ? 'completed' : 'in_progress'
+    const row = await attempt(c, 'projects.stage_add', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const taken = await sql<{ code: string }[]>`select code from company_deliverable_statuses`
+        const have = new Set(taken.map((t) => t.code))
+        let code = stageCode(s.label)
+        for (let n = 2; have.has(code); n++) code = `${stageCode(s.label).slice(0, 27)}_${n}`
+        const [next] = await sql<{ n: number }[]>`
+          select coalesce(max(sort_order), 0)::int + 10 as n
+            from company_deliverable_statuses where stage = ${s.stage}`
+        const rows = await sql`
+          insert into company_deliverable_statuses
+            (company_id, code, label, scope, category, stage, color, team_allowed, sort_order)
+          values (get_current_company_id(), ${code}, ${s.label}, 'deliverable', ${category}::task_status,
+                  ${s.stage}, ${s.color}, ${s.team_allowed}, ${next?.n ?? 10})
+          returning id, code, label, stage, color, team_allowed, sort_order`
+        return rows[0] ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not add that stage.')
+    await audit(c, { action: 'deliverable_stage.create', entityType: 'deliverable_stage', entityId: String(row.id), after: s })
+    return c.json(deliverableStage.parse(row), 201)
+  })
+
+  .patch('/stages/:sid', requireAction('projects', 'edit'), async (c) => {
+    const parsed = updateDeliverableStageRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the stage.')
+    const sid = uuidParam(c, 'sid')
+    const patch = withoutUndefined(parsed.data)
+    if (!Object.keys(patch).length) fail(422, 'Nothing to change.')
+    const rows = await attempt(c, 'projects.stage_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        update company_deliverable_statuses set ${sql(patch)}
+         where id = ${sid} and stage is not null
+         returning id, code, label, stage, color, team_allowed, sort_order`),
+    )
+    if (!rows) fail(400, 'We could not change that stage.')
+    if (!rows.length) fail(404, 'That stage was not found.')
+    return c.json(deliverableStage.parse(rows[0]))
+  })
+
+  /** Remove a stage. Deliverables on it stay in their step, unnamed. */
+  .delete('/stages/:sid', requireAction('projects', 'edit'), async (c) => {
+    const sid = uuidParam(c, 'sid')
+    const rows = await attempt(c, 'projects.stage_delete', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const found = await sql<{ code: string }[]>`
+          select code from company_deliverable_statuses where id = ${sid} and stage is not null`
+        const code = found[0]?.code
+        if (!code) return []
+        await sql`update deliverables set custom_status_code = null where custom_status_code = ${code}`
+        return sql`delete from company_deliverable_statuses where id = ${sid} returning id`
+      }),
+    )
+    if (!rows) fail(400, 'We could not remove that stage.')
+    if (!rows.length) fail(404, 'That stage was not found.')
+    await audit(c, { action: 'deliverable_stage.delete', entityType: 'deliverable_stage', entityId: sid })
+    return c.body(null, 204)
+  })
+
+  /**
    * What the caller is editing: every open deliverable they are the editor on,
    * soonest due first. Any member -- an editor need not see whole projects to
    * see their own work.
@@ -466,7 +561,7 @@ export const projectsRouter = new Hono<AppEnv>()
       withUser(c.env, auth.userId, (sql) => sql`
         select d.id, d.project_id, p.name as project_name, cl.name as client_name,
                d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
-               d.delivery_link, d.visibility_scope,
+               d.delivery_link, d.visibility_scope, d.custom_status_code,
                (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
                (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count
         from deliverables d
@@ -498,7 +593,16 @@ export const projectsRouter = new Hono<AppEnv>()
         const d = found[0]
         if (!d) return 'missing' as const
         if (!canEdit && d.assignee_id !== auth.userId) return 'forbidden' as const
-        const patch: Record<string, unknown> = { status: parsed.data.status }
+        const code = parsed.data.custom_status_code || null
+        if (code) {
+          const st = await sql<{ stage: string | null; team_allowed: boolean }[]>`
+            select stage, team_allowed from company_deliverable_statuses where code = ${code}`
+          if (!st[0] || st[0].stage !== parsed.data.status) return 'bad_stage' as const
+          // The editor picks from the stages the studio lets the team use;
+          // "Approved" and the like are for whoever reviews.
+          if (!canEdit && !st[0].team_allowed) return 'not_team' as const
+        }
+        const patch: Record<string, unknown> = { status: parsed.data.status, custom_status_code: code }
         if (parsed.data.delivery_link !== undefined) patch.delivery_link = parsed.data.delivery_link || null
         await sql`update deliverables set ${sql(patch)} where id = ${did}`
         return d.project_id
@@ -506,6 +610,8 @@ export const projectsRouter = new Hono<AppEnv>()
     )
     if (outcome === 'missing') fail(404, 'That deliverable was not found.')
     if (outcome === 'forbidden') fail(403, 'Only the editor on it, or a manager, can move this.')
+    if (outcome === 'bad_stage') fail(422, 'That stage does not belong to this step. Pick one from the list.')
+    if (outcome === 'not_team') fail(403, 'A manager moves it to that stage.')
     if (!outcome) fail(400, 'We could not update the deliverable.')
     await audit(c, {
       action: 'deliverable.stage',
@@ -529,9 +635,14 @@ export const projectsRouter = new Hono<AppEnv>()
         if (!found.length) return null
         return sql`
           select n.id, n.deliverable_id, n.kind, n.body, n.file_id, n.duration_seconds,
-                 n.author_id, u.name as author_name, n.created_at
+                 n.author_id, u.name as author_name, n.created_at, w.submission_link as link
             from deliverable_notes n
             left join users u on u.user_id = n.author_id
+            -- submitted:<id>, approved:<id>, sent_back:<id>: the work's link.
+            left join team_work_submissions w
+              on n.kind = 'event'
+             and n.body ~ '^(submitted|resubmitted|approved|sent_back|sent_to_client):[0-9a-f-]{36}$'
+             and w.id = split_part(n.body, ':', 2)::uuid
            where n.deliverable_id = ${did}
            order by n.created_at, n.id`
       }),

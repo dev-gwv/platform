@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, FolderOpen, Camera, Pencil, Send, Trash2, X } from 'lucide-react'
-import type { Deliverable, DeliverableNote } from '@ipc/contracts'
+import type { Deliverable, DeliverableNote, DeliverableStage } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import { Input, Textarea } from '@/shared/ui/input'
@@ -12,9 +12,11 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
-import { STAGE_LABEL, stageOf } from './deliverable-stage'
-import { DueChip, DueEditor, EditorName, EditorPicker, KindTile, NextStageButton } from './DeliverableCard'
+import { isLate, stageOf } from './deliverable-stage'
+import { DueChip, DueEditor, EditorName, EditorPicker, KindTile, MoveToMenu, NextStageButton, activityWhat } from './DeliverableCard'
 import { StageStepper } from './StageStepper'
+import { TONE_CLASSES, stageName, stageTone } from './stages'
+import { useDeliverableStages } from './stages-api'
 import { VoiceNotePlayer } from './VoiceNotePlayer'
 import { VoiceNoteRecorder } from './VoiceNoteRecorder'
 import { useAddDeliverableNote, useDeleteDeliverableNote, useDeliverableNotes, useSendVoiceNote } from './notes-api'
@@ -32,41 +34,63 @@ const when = (iso: string) =>
 export function DeliverableDrawer({
   deliverable: d,
   canEdit,
+  action = null,
   onClose,
   onEdit,
   onDelete,
 }: {
   deliverable: Deliverable | null
   canEdit: boolean
+  /** 'voice': open with the recorder already listening. */
+  action?: 'voice' | null
   onClose: () => void
   onEdit: (d: Deliverable) => void
   onDelete: (d: Deliverable) => void
 }) {
+  const stages = useDeliverableStages()
   return (
     <Sheet open={!!d} onOpenChange={(open) => !open && onClose()}>
       {d && (
-        <SheetContent title={d.title} description={`${STAGE_LABEL[stageOf(d.status)]} · ${d.shoot_name ?? 'Whole project'}`}>
-          <DrawerBody d={d} canEdit={canEdit} onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} />
+        <SheetContent title={d.title} description={`${stageName(d, stages)} · ${d.shoot_name ?? 'Whole project'}`}>
+          <DrawerBody key={`${d.id}:${action ?? ''}`} d={d} canEdit={canEdit} action={action} onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} />
         </SheetContent>
       )}
     </Sheet>
   )
 }
 
-function DrawerBody({ d, canEdit, onEdit, onDelete }: { d: Deliverable; canEdit: boolean; onEdit: () => void; onDelete: () => void }) {
+function DrawerBody({
+  d,
+  canEdit,
+  action,
+  onEdit,
+  onDelete,
+}: {
+  d: Deliverable
+  canEdit: boolean
+  action: 'voice' | null
+  onEdit: () => void
+  onDelete: () => void
+}) {
   const { session } = useAuth()
   const access = useAccess()
+  const stages = useDeliverableStages()
   const me = session?.user_id ?? null
   // The editor on it can talk about it and move it, even without project rights.
   const canWrite = canEdit || (!!me && d.assignee_id === me)
   const stage = stageOf(d.status)
   const dropped = stage === 'cancelled'
   const move = useSetDeliverableStage()
+  // The header wears the stage's colour, so the panel says where it stands
+  // before a word is read. Late turns it red.
+  const tone = TONE_CLASSES[stageTone(d, stages)]
+  const late = isLate(d)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* ── What and where it stands ─────────────────────────── */}
-      <header className="border-b border-border bg-card px-5 pb-4 pt-5">
+      <header className={cn('relative border-b border-border px-5 pb-4 pt-5', dropped ? 'bg-card' : tone.soft)}>
+        <span className={cn('absolute inset-x-0 top-0 h-1', late ? 'bg-destructive' : tone.solid)} aria-hidden />
         <div className="flex items-start gap-3 pr-8">
           <KindTile title={d.title} status={d.status} size="lg" />
           <div className="min-w-0 flex-1">
@@ -83,15 +107,21 @@ function DrawerBody({ d, canEdit, onEdit, onDelete }: { d: Deliverable; canEdit:
         </div>
 
         <div className="mt-4">
-          <StageStepper status={d.status} size="lg" />
+          {canWrite && !dropped ? (
+            <MoveToMenu d={d} canEdit={canEdit}>
+              <StageStepper status={d.status} code={d.custom_status_code} size="lg" />
+            </MoveToMenu>
+          ) : (
+            <StageStepper status={d.status} code={d.custom_status_code} size="lg" />
+          )}
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg bg-muted/60 px-3 py-2">
+          <div className="rounded-lg bg-card/90 px-3 py-2 shadow-sm">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Editor</dt>
             <dd className="mt-1">{canEdit && !dropped && stage !== 'completed' ? <EditorPicker d={d} /> : <EditorName name={d.assignee_name} />}</dd>
           </div>
-          <div className="rounded-lg bg-muted/60 px-3 py-2">
+          <div className="rounded-lg bg-card/90 px-3 py-2 shadow-sm">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</dt>
             <dd className="mt-1">
               {canEdit && !dropped ? (
@@ -107,7 +137,7 @@ function DrawerBody({ d, canEdit, onEdit, onDelete }: { d: Deliverable; canEdit:
 
         {canWrite && !dropped && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <NextStageButton id={d.id} status={d.status} link={d.delivery_link} size="default" />
+            <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} canEdit={canEdit} size="default" />
             {canEdit && (
               <Button variant="ghost" size="sm" onClick={onEdit}>
                 <Pencil /> Edit details
@@ -121,7 +151,7 @@ function DrawerBody({ d, canEdit, onEdit, onDelete }: { d: Deliverable; canEdit:
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <Brief d={d} canEdit={canEdit} />
         <DeliveryLink d={d} canEdit={canWrite} />
-        <Timeline d={d} me={me} canModerate={access.hasAction('projects', 'edit')} />
+        <Timeline d={d} me={me} canModerate={access.hasAction('projects', 'edit')} stages={stages} />
 
         {canEdit && (
           <div className="mt-8 flex flex-wrap gap-2 border-t border-border pt-4">
@@ -141,7 +171,9 @@ function DrawerBody({ d, canEdit, onEdit, onDelete }: { d: Deliverable; canEdit:
         )}
       </div>
 
-      {canWrite && <Composer deliverableId={d.id} editorName={d.assignee_id === me ? null : d.assignee_name} />}
+      {canWrite && (
+        <Composer deliverableId={d.id} editorName={d.assignee_id === me ? null : d.assignee_name} startRecording={action === 'voice'} />
+      )}
     </div>
   )
 }
@@ -219,7 +251,17 @@ function DeliveryLink({ d, canEdit }: { d: Deliverable; canEdit: boolean }) {
   )
 }
 
-function Timeline({ d, me, canModerate }: { d: Deliverable; me: string | null; canModerate: boolean }) {
+function Timeline({
+  d,
+  me,
+  canModerate,
+  stages,
+}: {
+  d: Deliverable
+  me: string | null
+  canModerate: boolean
+  stages: readonly DeliverableStage[]
+}) {
   const { data, isLoading, isError } = useDeliverableNotes(d.id)
   const del = useDeleteDeliverableNote(d.id)
   const confirm = useConfirm()
@@ -247,6 +289,7 @@ function Timeline({ d, me, canModerate }: { d: Deliverable; me: string | null; c
             <NoteItem
               key={n.id}
               n={n}
+              stages={stages}
               mine={!!me && n.author_id === me}
               onDelete={
                 n.kind !== 'event' && ((!!me && n.author_id === me) || canModerate)
@@ -264,15 +307,46 @@ function Timeline({ d, me, canModerate }: { d: Deliverable; me: string | null; c
   )
 }
 
-function NoteItem({ n, mine, onDelete }: { n: DeliverableNote; mine: boolean; onDelete?: (() => void) | undefined }) {
+function NoteItem({
+  n,
+  mine,
+  stages,
+  onDelete,
+}: {
+  n: DeliverableNote
+  mine: boolean
+  stages: readonly DeliverableStage[]
+  onDelete?: (() => void) | undefined
+}) {
   if (n.kind === 'event') {
-    const to = stageOf((n.body ?? '').replace('moved:', ''))
+    const [tag = '', status = '', code] = (n.body ?? '').split(':')
+    const isMove = tag === 'moved'
+    const tone = TONE_CLASSES[stageTone({ status: isMove ? status : 'review', custom_status_code: isMove ? (code ?? null) : null }, stages)]
     return (
       <li className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" aria-hidden />
-        <span>
-          <span className="font-medium text-foreground/80">{n.author_name ?? 'Someone'}</span> moved it to{' '}
-          <span className="font-medium text-foreground/80">{STAGE_LABEL[to]}</span> · {when(n.created_at)}
+        <span className="text-center">
+          <span className="font-medium text-foreground/80">{n.author_name ?? 'Someone'}</span>{' '}
+          {isMove ? (
+            <>
+              moved it to{' '}
+              <span className={cn('rounded-full px-1.5 py-0.5 font-semibold', tone.soft, tone.text)}>
+                {stageName({ status, custom_status_code: code ?? null }, stages)}
+              </span>
+            </>
+          ) : (
+            activityWhat('event', n.body, stages)
+          )}
+          {n.link && (
+            <>
+              {' '}
+              ·{' '}
+              <a href={n.link} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                Open the work
+              </a>
+            </>
+          )}{' '}
+          · {when(n.created_at)}
         </span>
         <span className="h-px flex-1 bg-border" aria-hidden />
       </li>
@@ -309,7 +383,15 @@ function NoteItem({ n, mine, onDelete }: { n: DeliverableNote; mine: boolean; on
 }
 
 /** Write a note or record a voice note. Enter sends; Shift+Enter is a new line. */
-function Composer({ deliverableId, editorName }: { deliverableId: string; editorName: string | null | undefined }) {
+function Composer({
+  deliverableId,
+  editorName,
+  startRecording,
+}: {
+  deliverableId: string
+  editorName: string | null | undefined
+  startRecording: boolean
+}) {
   const add = useAddDeliverableNote(deliverableId)
   const voice = useSendVoiceNote(deliverableId)
   const [text, setText] = useState('')
@@ -347,6 +429,7 @@ function Composer({ deliverableId, editorName }: { deliverableId: string; editor
         ) : (
           <div className={cn(recording && 'flex-1')}>
             <VoiceNoteRecorder
+              autoStart={startRecording}
               sending={voice.isPending}
               onBusyChange={setRecording}
               onSend={(blob, seconds) => voice.mutateAsync({ blob, seconds })}

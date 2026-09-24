@@ -10,6 +10,7 @@ import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './na
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
+import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { AccountMenu } from './AccountMenu'
 import { SetupReturnBar } from '@/features/onboarding/setup-flow'
 
@@ -152,6 +153,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               </kbd>
             </button>
 
+            <SuggestFeatureButton />
+
             <div className="flex items-center gap-1">
               <NotificationBell />
               <Button variant="ghost" size="icon" onClick={toggleScheme} aria-label="Toggle theme">
@@ -289,6 +292,12 @@ function Sidebar({
           ),
         )}
       </nav>
+      {/* On a phone the bar has room only for the bulb; the menu says it in full. */}
+      {onClose && (
+        <div className="border-t border-border p-3">
+          <SuggestFeatureButton variant="menu" />
+        </div>
+      )}
     </aside>
   )
 }

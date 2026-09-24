@@ -2,15 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   expense,
   reconciliationSummary,
-  projectFinancials,
-  profitabilityReport,
-  financialOverview,
-  monthlyProfitSummary,
   fixedOverhead,
+  profitAndLoss,
   z,
   type CreateExpenseRequest,
   type CreateFixedOverheadRequest,
-  type ProfitabilityReportQuery,
+  type PnlQuery,
   type UpdateExpenseRequest,
 } from '@ipc/contracts'
 
@@ -21,7 +18,6 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
 const expenses = expense.array()
-const financials = projectFinancials.array()
 
 export interface ExpenseFilters {
   search?: string | undefined
@@ -162,67 +158,9 @@ export function useDeleteExpense() {
   })
 }
 
-export function useProjectFinancials() {
-  const { session } = useAuth()
-  const access = useAccess()
-  return useQuery({
-    queryKey: ['financials', 'projects'],
-    queryFn: () => callApi('/financials/projects', { responseSchema: financials }),
-    enabled: !!session && access.hasModule('financials'),
-    staleTime: 30_000,
-  })
-}
 
-export function useProfitabilityReport(query: ProfitabilityReportQuery) {
-  const { session } = useAuth()
-  const access = useAccess()
-  const params = new URLSearchParams()
-  if (query.date_from) params.set('date_from', query.date_from)
-  if (query.date_to) params.set('date_to', query.date_to)
-  if (query.project_id) params.set('project_id', query.project_id)
-  if (query.client_id) params.set('client_id', query.client_id)
-  if (query.status) params.set('status', query.status)
-  if (query.search) params.set('search', query.search)
-  params.set('sort_by', query.sort_by)
-  params.set('sort_direction', query.sort_direction)
-  params.set('page', String(query.page))
-  params.set('page_size', String(query.page_size))
-  return useQuery({
-    queryKey: ['financials', 'profitability', params.toString()],
-    queryFn: () => callApi(`/financials/profitability?${params.toString()}`, { responseSchema: profitabilityReport }),
-    enabled: !!session && access.hasModule('financials'),
-    staleTime: 15_000,
-  })
-}
 
-/** Lovable parity: date-filtered financial overview cards + salaries toggle. */
-export function useFinancialOverview(startDate?: string, endDate?: string, includeSalaries = true) {
-  const { session } = useAuth()
-  const access = useAccess()
-  const params = new URLSearchParams()
-  if (startDate) params.set('start_date', startDate)
-  if (endDate) params.set('end_date', endDate)
-  params.set('include_salaries', includeSalaries ? 'true' : 'false')
-  return useQuery({
-    queryKey: ['financials', 'overview', params.toString()],
-    queryFn: () => callApi(`/financials/overview?${params.toString()}`, { responseSchema: financialOverview }),
-    enabled: !!session && access.hasModule('financials'),
-    staleTime: 30_000,
-  })
-}
 
-/** Lovable parity: monthly profit (cash/booked + alloc). */
-export function useMonthlyProfitSummary(month: string, basis: 'cash' | 'booked', alloc: string) {
-  const { session } = useAuth()
-  const access = useAccess()
-  const params = new URLSearchParams({ month, basis, alloc })
-  return useQuery({
-    queryKey: ['financials', 'monthly-profit', params.toString()],
-    queryFn: () => callApi(`/financials/monthly-profit-summary?${params.toString()}`, { responseSchema: monthlyProfitSummary }),
-    enabled: !!session && access.hasModule('financials'),
-    staleTime: 15_000,
-  })
-}
 
 const overheads = fixedOverhead.array()
 
@@ -324,5 +262,19 @@ export function useReconciliation() {
     queryFn: () => callApi('/financials/reconciliation', { responseSchema: reconciliationSummary }),
     enabled: !!session && access.hasModule('financials'),
     staleTime: 30_000,
+  })
+}
+
+/** The Profit & Loss for a period (cash or booked), or one project's whole life. */
+export function useProfitAndLoss(q: PnlQuery, enabled = true) {
+  const { session } = useAuth()
+  const access = useAccess()
+  const params = new URLSearchParams({ from: q.from, to: q.to, basis: q.basis, ...(q.project_id ? { project_id: q.project_id } : {}) })
+  return useQuery({
+    queryKey: ['financials', 'pnl', q.from, q.to, q.basis, q.project_id ?? null],
+    queryFn: () => callApi(`/financials/pnl?${params.toString()}`, { responseSchema: profitAndLoss }),
+    enabled: enabled && !!session && access.hasModule('financials'),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   })
 }

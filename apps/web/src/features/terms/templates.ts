@@ -15,13 +15,33 @@ export interface TermsContext {
   studio_name: string
   total: string
   event_date: string
+  /** The first payment in the plan, and what is left after it. */
+  advance?: string | undefined
+  balance?: string | undefined
 }
 
-/** Fill {{client_name}}, {{project_name}}, {{studio_name}}, {{total}} and {{event_date}}. */
+/**
+ * Fill {{client_name}}, {{project_name}}, {{studio_name}}, {{total}},
+ * {{event_date}}, {{advance}} and {{balance}}.
+ */
 export function fillPlaceholders(text: string, ctx: TermsContext): string {
-  return text.replace(/\{\{\s*(client_name|project_name|studio_name|total|event_date)\s*\}\}/g, (_, key: keyof TermsContext) =>
-    ctx[key] || '',
+  return text.replace(
+    /\{\{\s*(client_name|project_name|studio_name|total|event_date|advance|balance)\s*\}\}/g,
+    (_, key: keyof TermsContext) => ctx[key] || '',
   )
+}
+
+/** The advance (first payment) and the balance, in rupees, for a plan and a total. */
+export function advanceAndBalance(
+  plan: ReadonlyArray<{ mode: string; value: number | string }>,
+  total: number,
+  format: (n: number) => string,
+): { advance: string; balance: string } | null {
+  const first = plan[0]
+  if (!first || !(total > 0)) return null
+  const v = Number(first.value) || 0
+  const advance = first.mode === 'percent' ? Math.round((total * v) / 100) : v
+  return { advance: format(advance), balance: format(Math.max(0, total - advance)) }
 }
 
 export interface PaymentPreset {
@@ -90,6 +110,56 @@ Data: we keep a backup of your files for 6 months after delivery. Please save yo
 Our liability for any loss is limited to the amount paid to us.`
 
 export const BUILT_IN_TEMPLATES: readonly BuiltInTemplate[] = [
+  {
+    key: 'mulberry',
+    name: 'Mulberry Weddings',
+    hint: 'Our wedding terms · 30 / 30 / 30 / 10',
+    preset: '30-30-30-10',
+    body: `These terms are between {{studio_name}} and {{client_name}} for {{project_name}} ({{event_date}}). The total agreed amount is {{total}}.
+
+1. Delivery of photographs
+Raw photographs will be shared within 7–10 days after settlement of outstanding dues. A selection of best-edited photos may be shared within 5–7 days after the final function.
+
+2. Album delivery
+If an album is included in the quotation, the custom album will be delivered within 15 days of design approval and payment completion.
+
+3. Payment schedule
+30% retainer fee is required to secure the dates ({{advance}}).
+30% is payable on the day of the first event.
+30% is payable on the final day of shooting.
+Remaining 10% is payable at the time of data delivery.
+Payments may be accepted via bank transfer or cash.
+
+4. Album photo selection
+The client should select preferred photos for the album within one month of receiving the event photos. A delay in selection may delay album delivery.
+
+5. Wedding film delivery
+The first wedding film will be delivered within 35 days after soundtrack approval. The editing timeline starts from the date of song approval.
+
+6. Rights and social media
+The studio reserves the right to use selected event photos and films for its portfolio and social media unless agreed otherwise in writing.
+
+7. Photo sharing
+Edited photos may be shared via an online gallery, Google Drive, or another suitable delivery method.
+
+8. Data backup
+After final delivery, the responsibility of backing up photos and videos rests with the client. The studio is not responsible for lost data after delivery.
+
+9. Cancellation
+In case of cancellation due to unforeseen reasons, the advance payment is non-refundable and the quotation may not be revised.
+
+10. Portfolio shoot time
+A minimum of 40–45 minutes should be allocated for the bride and groom portfolio shoot.
+
+11. After the vidaai
+The team will leave after the vidaai unless post-vidaai home entry coverage is discussed and agreed in advance.
+
+12. Small function shoot duration
+For smaller functions like haldi, mehendi and engagement, the shoot duration is generally 5–6 hours unless agreed otherwise.
+
+13. Acknowledgement
+By accepting these terms, the client confirms that they have read, understood, and agreed to the terms and conditions.`,
+  },
   {
     key: 'wedding',
     name: 'Wedding',
