@@ -16,7 +16,9 @@ import {
   type ProjectTermsVersion,
   type SentLink,
 } from '@/features/terms/api'
-import { SendTermsDialog, type TermsProject } from '@/features/terms/SendTermsDialog'
+import { TermsComposer, type TermsProject, type TermsStart } from '@/features/terms/TermsComposer'
+import { useTermsDocumentPayload } from '@/features/terms/document'
+import { TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { ShareTermsPanel } from '@/features/terms/ShareTermsPanel'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
 
@@ -38,12 +40,15 @@ const LOOK: Record<State, { label: string; tone: 'success' | 'warning' | 'neutra
 }
 
 /**
- * This project's terms & conditions, in one card: are they agreed?
+ * This project's terms & conditions.
  *
- * The answer is the headline -- "Agreed by Priya Sharma on 12 Oct", or
- * "Waiting for the client · opened 3 times". Under it, only the next useful
- * thing: send again, see what was sent, or send a new version. Older versions
- * fold away underneath, kept as the record of what was sent before.
+ * Nothing sent yet: the tab IS the place to write them -- pick your usual
+ * terms, check the payment plan, read the words, with the client's view
+ * beside you -- and one button sends them.
+ *
+ * Sent: the answer is the headline ("Agreed by Priya Sharma on 12 Oct", or
+ * "Waiting for the client · opened 3 times"), with the terms that were sent
+ * right underneath. Older versions fold away below.
  */
 export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit: boolean }) {
   const { data, isLoading, isError, refetch } = useProjectTerms(project.id)
@@ -52,61 +57,98 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
   const [composing, setComposing] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)
   const [resending, setResending] = useState<string | null>(null)
+  const [justSent, setJustSent] = useState<SentLink | null>(null)
   const [showOld, setShowOld] = useState(false)
+
+  const versions = data ?? []
+  const current = versions[0]
+  const sentDoc = useTermsDocumentPayload(current?.id ?? null)
 
   if (isLoading) return <SkeletonList rows={2} columns={3} />
   if (isError) return <ErrorState onRetry={() => void refetch()} />
 
-  const versions = data ?? []
-  const current = versions[0]
   const older = versions.slice(1)
   const client = project.client_name ?? 'the client'
 
-  return (
-    <div className="mt-4 flex flex-col gap-4">
-      {!current ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <FileSignature className="size-6" aria-hidden />
-            </span>
-            <div>
-              <p className="text-base font-semibold">No terms sent yet</p>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Send {client} your terms & conditions. They open a link on their phone, read them, and tap “I agree”.
-              </p>
-            </div>
-            <ol className="grid w-full max-w-lg gap-2 text-left text-sm sm:grid-cols-3">
-              {['Pick your usual terms', 'Check the payment plan', 'Send on WhatsApp or email'].map((s, i) => (
-                <li key={s} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] text-primary-foreground">
-                    {i + 1}
-                  </span>
-                  {s}
-                </li>
-              ))}
-            </ol>
-            {canEdit && (
-              <Button size="lg" onClick={() => setComposing(true)}>
-                <Send /> Send terms to {client}
-              </Button>
-            )}
+  // A new version starts from the words and plan that were sent last.
+  const start: TermsStart | undefined =
+    current && sentDoc.data
+      ? {
+          title: sentDoc.data.title ?? `Terms & conditions — ${project.name}`,
+          body: sentDoc.data.body ?? '',
+          plan: (sentDoc.data.payment_terms ?? []).map((p) => ({
+            label: p.label ?? '',
+            mode: p.mode === 'amount' ? ('amount' as const) : ('percent' as const),
+            value: Number(p.value) || 0,
+            due_trigger: p.due_trigger ?? '',
+          })),
+        }
+      : undefined
+
+  const share = justSent && (
+    <ShareDialog
+      link={justSent}
+      project={project}
+      title="Terms are ready to send"
+      description={`${client} opens the link, reads the terms and taps “I agree”. You will see it here, and get a notification.`}
+      onClose={() => setJustSent(null)}
+    />
+  )
+
+  const onSent = (link: SentLink) => {
+    setComposing(false)
+    setJustSent(link)
+  }
+
+  if (!current || composing) {
+    if (!canEdit) {
+      return (
+        <Card className="mt-4">
+          <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
+            <FileSignature className="size-6 text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">No terms have been sent to {client} yet.</p>
           </CardContent>
         </Card>
-      ) : (
-        <CurrentCard
-          v={current}
-          client={client}
-          canEdit={canEdit}
-          onView={() => setViewing(current.id)}
-          onResend={() => setResending(current.id)}
-          onNewVersion={() => setComposing(true)}
-          onCancel={async () => {
-            if (await confirm({ title: 'Cancel this link?', description: `${client} will no longer be able to open it or agree.`, confirmLabel: 'Cancel link', destructive: true })) {
-              cancel.mutate(current.id)
-            }
-          }}
+      )
+    }
+    return (
+      <div className="mt-4">
+        <TermsComposer
+          key={composing ? `v-${current?.id}` : 'first'}
+          project={project}
+          start={composing ? start : undefined}
+          onSent={onSent}
+          onCancel={composing ? () => setComposing(false) : undefined}
         />
+        {share}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-4">
+      <CurrentCard
+        v={current}
+        client={client}
+        canEdit={canEdit}
+        onView={() => setViewing(current.id)}
+        onResend={() => setResending(current.id)}
+        onNewVersion={() => setComposing(true)}
+        onCancel={async () => {
+          if (await confirm({ title: 'Cancel this link?', description: `${client} will no longer be able to open it or agree.`, confirmLabel: 'Cancel link', destructive: true })) {
+            cancel.mutate(current.id)
+          }
+        }}
+      />
+
+      {/* What was sent, right here -- not behind a button. */}
+      {sentDoc.data && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">The terms {client} received</p>
+            <TermsDocumentSheet doc={sentDoc.data} bodyClassName="max-h-[60vh] overflow-auto" />
+          </CardContent>
+        </Card>
       )}
 
       {older.length > 0 && (
@@ -140,9 +182,9 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
         </div>
       )}
 
-      {composing && <SendTermsDialog project={project} onClose={() => setComposing(false)} />}
       <TermsDocumentViewer documentId={viewing} onClose={() => setViewing(null)} />
       {resending && <SendAgainDialog documentId={resending} project={project} onClose={() => setResending(null)} />}
+      {share}
     </div>
   )
 }
@@ -237,11 +279,32 @@ function SendAgainDialog({ documentId, project, onClose }: { documentId: string;
   }, [documentId, mutate, onClose])
 
   return (
+    <ShareDialog
+      link={link}
+      project={project}
+      title="Send the terms again"
+      description="A fresh link — the old one stops working, so only this one can be agreed to."
+      onClose={onClose}
+    />
+  )
+}
+
+function ShareDialog({
+  link,
+  project,
+  title,
+  description,
+  onClose,
+}: {
+  link: SentLink | null
+  project: TermsProject
+  title: string
+  description: string
+  onClose: () => void
+}) {
+  return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        title="Send the terms again"
-        description="A fresh link — the old one stops working, so only this one can be agreed to."
-      >
+      <DialogContent title={title} description={description}>
         {link ? (
           <ShareTermsPanel
             documentId={link.document_id}

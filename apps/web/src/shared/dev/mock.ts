@@ -359,6 +359,16 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && /^\/terms\/documents\/[^/]+\/email$/.test(path)) return { status: 'sent', error: null }
   if (method === 'POST' && /^\/terms\/documents\/[^/]+\/revoke$/.test(path)) return { ok: true }
   if (method === 'GET' && path === '/terms/templates') return []
+  // Drafts: none saved yet; a save echoes back as the stored draft.
+  if (method === 'GET' && path.startsWith('/terms/draft')) return null
+  if (method === 'PUT' && path === '/terms/draft') {
+    const b = (body ?? {}) as Record<string, unknown>
+    return {
+      id: uid(0xd7), project_id: b.project_id ?? null, rendered_body: b.rendered_body ?? '', title: b.title ?? null,
+      payment_summary: null, sections: [], payment_terms: b.payment_terms ?? [], total_cost: b.total_cost ?? null,
+      legal_note: null, template_id: null, updated_at: new Date().toISOString(),
+    }
+  }
   if (method === 'POST' && path === '/team-terms/sends')
     return {
       send_id: uid(0xba),

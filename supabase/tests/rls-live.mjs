@@ -992,5 +992,26 @@ if (listed) {
   )
 }
 
+// ── Terms drafts: half-written terms are kept ───────────────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Draft Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Draft project ${rand()}`, client_id: client.json.id } })
+  const pid = project.json.id
+  const saved = await api('/terms/draft', { token: aToken, method: 'PUT', body: { project_id: pid, rendered_body: 'Half written', title: 'Terms' } })
+  const again = await api('/terms/draft', {
+    token: aToken, method: 'PUT',
+    body: { project_id: pid, rendered_body: 'Half written, more', payment_terms: [{ label: 'Advance', mode: 'percent', value: 50 }] },
+  })
+  const read = await api(`/terms/draft?project_id=${pid}`, { token: aToken })
+  check(
+    'terms: a draft saves with no plan yet, saves again, and reads back',
+    saved.status === 200 && again.status === 200 && read.json?.rendered_body === 'Half written, more' && read.json?.payment_terms?.length === 1,
+    { saved: saved.status, again: again.status, read: read.json },
+  )
+  const sent = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Final words' } })
+  const gone = await api(`/terms/draft?project_id=${pid}`, { token: aToken })
+  check('terms: sending clears the draft', sent.status === 201 && gone.json === null, { sent: sent.status, gone: gone.json })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

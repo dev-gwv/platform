@@ -17,7 +17,10 @@ import { router } from '@/app/router'
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
   mutationCache: new MutationCache({
-    onError: (error) => {
+    onError: (error, _vars, _ctx, mutation) => {
+      // Background saves (e.g. a draft autosave) opt out with meta.silent:
+      // the owner did not press anything, so a toast would come from nowhere.
+      if (mutation.meta?.silent) return
       // The toast is the user's answer; Sentry is ours. A mutation that fails
       // for everyone looks, from here, like one person seeing one toast.
       Sentry.captureException(error)
