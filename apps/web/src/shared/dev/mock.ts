@@ -600,6 +600,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return expensesFx
   if (method === 'POST' && path === '/financials/expenses') return expensesFx[0]
   if (method === 'GET' && path === '/financials/projects') return projectFin
+  if (method === 'GET' && path.startsWith('/financials/pnl')) return pnlFx(path)
   if (method === 'GET' && path.startsWith('/financials/profitability')) return profitabilityReportFx
   if (method === 'GET' && path.startsWith('/activity')) return activityLogFx
   if (method === 'POST' && path === '/activity') return { id: uid(0xea) }
@@ -2138,6 +2139,58 @@ function fakeProject(
     created_at: '2026-06-01T10:00:00Z',
     next_shoot_date: null,
     tasks_overdue: 0,
+  }
+}
+
+/** A believable year for a small wedding studio, for the Profit & Loss preview. */
+function pnlFx(path: string) {
+  const q = new URLSearchParams(path.split('?')[1] ?? '')
+  const from = q.get('from') ?? '2026-09-01'
+  const to = q.get('to') ?? '2026-09-30'
+  const basis = q.get('basis') === 'booked' ? 'booked' : 'cash'
+  const project = q.get('project_id')
+  const line = (income: number, crew: number, payouts: number, projExp: number, salaries: number, overheads: number, studio: number) => ({
+    income,
+    gst_collected: Math.round(income * 0.05),
+    team_crew: crew,
+    team_payouts: payouts,
+    project_expenses: projExp,
+    gross_profit: income - crew - payouts - projExp,
+    salaries,
+    overheads,
+    studio_expenses: studio,
+    net_profit: income - crew - payouts - projExp - salaries - overheads - studio,
+  })
+  const shape = [0.4, 0.3, 0.5, 0.7, 1.2, 1.5, 0.8, 0.5, 0.9, 1.4, 1.1, 1.0]
+  const end = new Date(`${to}T00:00:00`)
+  const monthly = shape.map((k, i) => {
+    const d = new Date(end.getFullYear(), end.getMonth() - (11 - i), 1)
+    const inc = Math.round(420000 * k * (basis === 'booked' ? 1.1 : 1))
+    return { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, ...line(inc, Math.round(inc * 0.22), 15000, Math.round(inc * 0.06), 90000, 38000, 12000) }
+  })
+  const lines = basis === 'booked' ? line(462000, 101640, 15000, 27720, 90000, 38000, 12000) : line(420000, 84000, 15000, 25200, 90000, 38000, 12000)
+  const projects = [
+    { project_id: PROJ.p1, name: 'Sharma Wedding', client_name: 'Priya Sharma', status: 'active', income: 150000, team: 42000, expenses: 9800, to_collect: 77000 },
+    { project_id: '00000000-0000-4000-8000-000000000092', name: 'Kapoor Engagement', client_name: 'Rohan Kapoor', status: 'active', income: 120000, team: 26000, expenses: 6400, to_collect: 30000 },
+    { project_id: '00000000-0000-4000-8000-000000000093', name: 'Mehta Pre-wedding', client_name: 'Anika Mehta', status: 'completed', income: 90000, team: 11000, expenses: 5200, to_collect: 0 },
+    { project_id: '00000000-0000-4000-8000-000000000094', name: 'Iyer Reception', client_name: 'S. Iyer', status: 'active', income: 60000, team: 5000, expenses: 3800, to_collect: 140000 },
+  ].map((p) => ({ ...p, profit: p.income - p.team - p.expenses, margin: p.income ? Math.round(((p.income - p.team - p.expenses) / p.income) * 1000) / 10 : null }))
+  return {
+    from,
+    to,
+    basis,
+    lines,
+    monthly,
+    categories: [
+      { category: 'rent', amount: 25000 },
+      { category: 'Travel', amount: 14200 },
+      { category: 'Albums & prints', amount: 11000 },
+      { category: 'software', amount: 8000 },
+      { category: 'internet', amount: 5000 },
+      { category: 'Food', amount: 4000 },
+    ],
+    projects: project ? projects.filter((p) => p.project_id === project) : projects,
+    rail: { still_to_collect: 247000, owed_to_team: 36000, unbanked: 55000 },
   }
 }
 

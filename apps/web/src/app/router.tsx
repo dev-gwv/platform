@@ -5,6 +5,7 @@ import {
   createRouter,
   Outlet,
   Link,
+  Navigate,
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
@@ -33,9 +34,7 @@ import { BillingPage } from '@/routes/billing'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
-import { MonthlyProfitPage } from '@/routes/financials/profit'
 import { ReconciliationPage } from '@/routes/financials/reconciliation'
-import { CalculatedExpensesPage } from '@/routes/financials/calculated-expenses'
 import { FollowUpsPage } from '@/routes/follow-ups'
 import { CrmContactsPage } from '@/routes/crm/contacts'
 import { CrmCompaniesPage } from '@/routes/crm/companies'
@@ -222,9 +221,10 @@ const routeTree = rootRoute.addChildren([
   route('/company-expenses', CompanyExpensesPage),
   route('/company-expenses/report', CompanyExpensesPage),
   route('/financials', FinancialsPage),
-  route('/financials/profit', MonthlyProfitPage),
+  // The two older profit screens now live in Profit & Loss.
+  route('/financials/profit', () => <Navigate to="/financials" replace />),
   route('/financials/reconciliation', ReconciliationPage),
-  route('/financials/calculated-expenses', CalculatedExpensesPage),
+  route('/financials/calculated-expenses', () => <Navigate to="/financials" replace />),
   route('/notifications', NotificationsPage),
   route('/notifications/generate', () => <NotificationsPage generate />),
   route('/projects/stages', DeliveryStagesPage),

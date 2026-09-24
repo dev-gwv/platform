@@ -56,7 +56,10 @@ function TeamPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
   const isOwner = !!session?.is_owner
-  const [section, setSection] = useState<Section>('directory')
+  // ?section=salaries opens the salaries straight away (linked from Profit & Loss).
+  const [section, setSection] = useState<Section>(() =>
+    new URLSearchParams(window.location.search).get('section') === 'salaries' ? 'salaries' : 'directory',
+  )
   // Adding is owner-only on the server, so only an owner is ever put into it —
   // a manager following an old link lands on the directory, not on a form
   // that would refuse them at the last step.

@@ -1063,6 +1063,27 @@ if (listed) {
     marked.status === 204 && Number(after?.received) === 50000 && detail.json.payments.every((x) => x.status === 'paid'),
     { marked: marked.status, after },
   )
+
+  // Profit & Loss (0167): the project's 50,000 received shows as income for
+  // today, in its own row; the other studio's statement does not include it.
+  const today = new Date().toISOString().slice(0, 10)
+  const pnl = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: aToken })
+  const row = (pnl.json.projects ?? []).find((x) => x.project_id === pid)
+  check(
+    'p&l: payments received today are income, in that project’s row, over twelve months of trend',
+    pnl.status === 200 && pnl.json.lines.income >= 50000 && row?.income === 50000 && row?.to_collect === 50000 && pnl.json.monthly.length === 12,
+    { status: pnl.status, lines: pnl.json.lines, row },
+  )
+  const theirs = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: newPw.json.access_token })
+  check(
+    'p&l: another studio’s statement has none of it',
+    theirs.status === 200 && !(theirs.json.projects ?? []).some((x) => x.project_id === pid),
+    { status: theirs.status, projects: theirs.json.projects?.length },
+  )
+  const one = await api(`/financials/pnl?from=2000-01-01&to=2100-12-31&basis=booked&project_id=${pid}`, { token: aToken })
+  check('p&l: one project over its life, for its Billing tab', one.status === 200 && one.json.projects[0]?.income === 100000, one.json.projects)
+  const bad = await api(`/financials/pnl?from=${today}&to=2000-01-01`, { token: aToken })
+  check('p&l: a backwards period is refused (422)', bad.status === 422, bad.json)
 }
 
 // ── Work to review: work sent straight to the client still lists ─────────

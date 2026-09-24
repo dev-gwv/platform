@@ -34,7 +34,6 @@ import {
   FileText,
   FileSignature,
   Eye,
-  Table2,
   Ellipsis,
   type LucideIcon,
 } from 'lucide-react'
@@ -124,9 +123,8 @@ export const NAV: NavEntry[] = [
       leaf('Billing', '/billing', Receipt, { module: 'billing' }),
       leaf('Invoice Templates', '/billing/templates', FileText, { module: 'billing' }),
       leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
+      leaf('Profit & Loss', '/financials', TrendingUp, { module: 'financials' }),
       leaf('Reconciliation', '/financials/reconciliation', Scale, { module: 'financials' }),
-      leaf('Profitability', '/financials', TrendingUp, { module: 'financials' }),
-      leaf('Profitability Report', '/financials/calculated-expenses', Table2, { module: 'financials' }),
     ],
   },
   {

@@ -13,6 +13,8 @@ import {
   profitabilityReportQuery,
   profitabilityReport,
   reconciliationSummary,
+  pnlQuery,
+  profitAndLoss,
 } from '@ipc/contracts'
 import { grossProfit, balancePending } from '@ipc/domain'
 import type { AppEnv } from '../../context'
@@ -504,6 +506,27 @@ export const financialsRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not work out the reconciliation.')
     if (!row.data) fail(400, 'We could not work out the reconciliation.')
     return c.json(reconciliationSummary.parse(row.data))
+  })
+
+  /**
+   * The Profit & Loss for a period (0167): cash or booked, every cost once,
+   * each project, the 12-month trend. `project_id` narrows it to one project
+   * -- the Billing tab's profit card reads that.
+   */
+  .get('/pnl', requireModule('financials'), async (c) => {
+    const parsed = pnlQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams))
+    if (!parsed.success) fail(422, 'Pick a start and an end date.')
+    const q = parsed.data
+    if (q.to < q.from) fail(422, 'The end date is before the start date.')
+    const row = await attempt(c, 'financials.pnl', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = await sql<{ r: unknown }[]>`
+          select profit_and_loss(${q.from}::date, ${q.to}::date, ${q.basis}, ${q.project_id ?? null}::uuid) as r`
+        return { data: rpcJson(rows[0]?.r, null) }
+      }),
+    )
+    if (!row?.data) fail(400, 'We could not work out the profit and loss.')
+    return c.json(profitAndLoss.parse(row.data))
   })
 
   // ── Project profitability report (financials module) ───────

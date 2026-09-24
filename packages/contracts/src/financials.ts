@@ -233,3 +233,59 @@ export const reconciliationSummary = z.object({
   }),
 })
 export type ReconciliationSummary = z.infer<typeof reconciliationSummary>
+
+/**
+ * The Profit & Loss statement (0167). `cash`: what came in and went out in
+ * the period. `booked`: the work done in the period -- each project's value
+ * spread over its shoots, with the crew those shoots cost. Every cost is in
+ * exactly one line.
+ */
+export const pnlBasis = z.enum(['cash', 'booked'])
+export type PnlBasis = z.infer<typeof pnlBasis>
+
+export const pnlQuery = z.object({
+  from: isoDate,
+  to: isoDate,
+  basis: pnlBasis.default('cash'),
+  project_id: uuid.optional(),
+})
+export type PnlQuery = z.infer<typeof pnlQuery>
+
+export const pnlLines = z.object({
+  income: z.number(),
+  gst_collected: z.number(),
+  team_crew: z.number(),
+  team_payouts: z.number(),
+  project_expenses: z.number(),
+  gross_profit: z.number(),
+  salaries: z.number(),
+  overheads: z.number(),
+  studio_expenses: z.number(),
+  net_profit: z.number(),
+})
+export type PnlLines = z.infer<typeof pnlLines>
+
+export const profitAndLoss = z.object({
+  from: isoDate,
+  to: isoDate,
+  basis: pnlBasis,
+  lines: pnlLines,
+  monthly: z.array(pnlLines.extend({ month: z.string() })),
+  categories: z.array(z.object({ category: z.string(), amount: z.number() })),
+  projects: z.array(
+    z.object({
+      project_id: uuid,
+      name: z.string(),
+      client_name: z.string().nullish(),
+      status: z.string(),
+      income: z.number(),
+      team: z.number(),
+      expenses: z.number(),
+      profit: z.number(),
+      margin: z.number().nullish(),
+      to_collect: z.number(),
+    }),
+  ),
+  rail: z.object({ still_to_collect: z.number(), owed_to_team: z.number(), unbanked: z.number() }),
+})
+export type ProfitAndLoss = z.infer<typeof profitAndLoss>
