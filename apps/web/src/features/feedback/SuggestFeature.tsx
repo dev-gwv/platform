@@ -3,7 +3,6 @@ import { Camera, ImagePlus, Lightbulb, Loader2, Send, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Textarea } from '@/shared/ui/input'
-import { cn } from '@/shared/ui/cn'
 import { VoiceNoteRecorder } from '@/features/projects/VoiceNoteRecorder'
 import { VoiceNotePlayer } from '@/features/projects/VoiceNotePlayer'
 import { useSendFeatureRequest } from './api'
@@ -36,16 +35,16 @@ export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header
           onClick={() => setOpen(true)}
           aria-label="Suggest a feature · सुझाव दें"
           title="Suggest a feature · सुझाव दें"
-          className={cn(
-            'flex h-10 items-center gap-2 rounded-full border border-tone-amber/40 bg-tone-amber-soft px-2.5 text-left transition-colors hover:border-tone-amber',
-          )}
+          // One line with room around it: the two-line pill was cramped
+          // against its own border.
+          className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-tone-amber/40 bg-tone-amber-soft px-3 text-xs font-semibold text-foreground transition-colors hover:border-tone-amber sm:px-4"
         >
           <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
-          <span className="hidden sm:block">
-            <span className="block text-[11px] font-semibold leading-tight text-foreground">Suggest a feature</span>
-            {/* Devanagari needs the room below the line; leading-none clips it. */}
-            <span className="block text-[11px] leading-snug text-muted-foreground">सुझाव दें</span>
+          <span className="hidden xl:inline">Suggest a feature</span>
+          <span className="hidden text-muted-foreground xl:inline" aria-hidden>
+            ·
           </span>
+          <span className="hidden font-medium leading-normal sm:inline">सुझाव दें</span>
         </button>
       )}
       <SuggestFeatureDialog open={open} onOpenChange={setOpen} />
