@@ -455,8 +455,10 @@ export const termsRouter = new Hono<AppEnv>()
              sections, payment_terms, total_cost, legal_note, template_id)
           values (get_current_company_id(), ${d.project_id}, true, ${d.rendered_body},
                   ${d.title ?? null}, ${d.payment_summary ?? null},
-                  ${d.sections ? sql.json(d.sections as never) : null}::jsonb,
-                  ${d.payment_terms ? sql.json(d.payment_terms as never) : null}::jsonb,
+                  -- Both columns are NOT NULL: a draft with no sections or plan
+                  -- yet is an empty list, not a missing one.
+                  coalesce(${d.sections ? sql.json(d.sections as never) : null}::jsonb, '[]'::jsonb),
+                  coalesce(${d.payment_terms ? sql.json(d.payment_terms as never) : null}::jsonb, '[]'::jsonb),
                   ${d.total_cost ?? null}, ${d.legal_note ?? null}, ${d.template_id ?? null})
           on conflict (company_id, project_id) where is_draft and project_id is not null
           do update set rendered_body = excluded.rendered_body,

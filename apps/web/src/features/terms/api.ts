@@ -251,6 +251,26 @@ export function useSaveTermsDraft() {
   })
 }
 
+/**
+ * Keep the half-written terms as the owner types -- no button, no toast.
+ * A failed save is quiet too: the text is still on screen, and the next
+ * keystroke tries again.
+ */
+export function useAutosaveTermsDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: {
+      project_id: string
+      rendered_body: string
+      title: string | null
+      payment_terms: PaymentTermDraft[]
+      total_cost: number | null
+    }) => callApi('/terms/draft', { method: 'PUT', body: input, responseSchema: termsDraft }),
+    onSuccess: (d, v) => qc.setQueryData(['terms', 'draft', v.project_id], d),
+    meta: { silent: true },
+  })
+}
+
 export function useDiscardTermsDraft() {
   const qc = useQueryClient()
   return useMutation({
