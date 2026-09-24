@@ -24,7 +24,7 @@ export function TermsDocumentSheet({
   bodyClassName?: string
 }) {
   const estimatedFor = (mode: string | null | undefined, value: number | null | undefined) =>
-    mode === 'percentage' && doc.total_cost ? ((Number(value) || 0) / 100) * doc.total_cost : Number(value) || 0
+    (mode === 'percentage' || mode === 'percent') && doc.total_cost ? ((Number(value) || 0) / 100) * doc.total_cost : Number(value) || 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,7 +61,7 @@ export function TermsDocumentSheet({
                         {p.notes ? <div className="text-[10px] text-muted-foreground">{p.notes}</div> : null}
                       </td>
                       <td className="px-2 py-1.5 text-right">
-                        {p.mode === 'percentage'
+                        {p.mode === 'percentage' || p.mode === 'percent'
                           ? `${p.value}%`
                           : `₹${Number(p.value ?? 0).toLocaleString('en-IN')}`}
                       </td>

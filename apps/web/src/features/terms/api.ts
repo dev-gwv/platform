@@ -22,6 +22,96 @@ const list = termsDocument.array()
 
 const issued = z.object({ document_id: z.string().uuid(), token: z.string() })
 
+/** What the server answers after making (and maybe emailing) a link. */
+const sentLink = z.object({
+  document_id: z.string().uuid(),
+  token: z.string(),
+  url: z.string(),
+  email_status: z.enum(['sent', 'provider_missing', 'failed', 'not_requested']),
+  email_error: z.string().nullable(),
+})
+export type SentLink = z.infer<typeof sentLink>
+
+/** One version of a project's terms. */
+export const projectTermsVersion = z.object({
+  id: z.string().uuid(),
+  title: z.string().nullable(),
+  created_at: z.string(),
+  expires_at: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  acknowledged_at: z.string().nullable(),
+  acknowledged_by_name: z.string().nullable(),
+  acknowledged_by_email: z.string().nullable(),
+  access_count: z.number().int(),
+  link_live: z.boolean(),
+  emailed_to: z.string().nullable(),
+})
+export type ProjectTermsVersion = z.infer<typeof projectTermsVersion>
+
+/** Every version of this project's terms, newest first. */
+export function useProjectTerms(projectId: string) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['terms', 'project', projectId],
+    queryFn: () => callApi(`/terms/projects/${projectId}/documents`, { responseSchema: projectTermsVersion.array() }),
+    enabled: !!session && access.hasModule('projects'),
+    staleTime: 15_000,
+  })
+}
+
+const invalidateTerms = (qc: ReturnType<typeof useQueryClient>) => {
+  void qc.invalidateQueries({ queryKey: ['terms'] })
+}
+
+/** Make the terms for a project and its link -- and email it, if asked. */
+export function useSendNewTerms() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: IssueTermsInput & { email?: boolean; to_email?: string | null }) =>
+      callApi('/terms/issue', { method: 'POST', body: input, responseSchema: sentLink }),
+    onSuccess: () => invalidateTerms(qc),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** A fresh link for terms already sent (the old one stops working). */
+export function useSendTermsAgain() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ documentId, ...body }: { documentId: string; email?: boolean; to_email?: string | null; expiry_days?: number }) =>
+      callApi(`/terms/documents/${documentId}/link`, { method: 'POST', body, responseSchema: sentLink }),
+    onSuccess: () => invalidateTerms(qc),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** Stop a link working. */
+export function useCancelTerms() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      callApi(`/terms/documents/${documentId}/revoke`, { method: 'POST', responseSchema: z.object({ ok: z.boolean() }) }),
+    onSuccess: () => {
+      toast.success('Link cancelled — it no longer opens')
+      invalidateTerms(qc)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useDeleteTermsTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/terms/templates/${id}`, { method: 'DELETE', responseSchema: z.unknown() }),
+    onSuccess: () => {
+      toast.success('Template removed')
+      void qc.invalidateQueries({ queryKey: ['terms', 'templates'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 /** Every project's paperwork, newest document first per project. */
 export function useTermsDocuments() {
   const { session } = useAuth()
@@ -197,5 +287,18 @@ export function useTermsEmailLogs(documentId: string | null) {
       callApi(`/terms/documents/${documentId}/email-logs`, { responseSchema: termsEmailLog.array() }),
     enabled: !!session && !!documentId,
     staleTime: 15_000,
+  })
+}
+
+/** Email a link the studio already holds, without replacing it. */
+export function useEmailTermsLink() {
+  return useMutation({
+    mutationFn: ({ documentId, token, to_email }: { documentId: string; token: string; to_email?: string | null }) =>
+      callApi(`/terms/documents/${documentId}/email`, {
+        method: 'POST',
+        body: { token, to_email: to_email || null },
+        responseSchema: z.object({ status: z.string(), error: z.string().nullable() }),
+      }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }

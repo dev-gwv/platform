@@ -893,5 +893,104 @@ if (listed) {
   )
 }
 
+// ── Client terms: send, send again, cancel, agree (0163) ────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Terms Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Terms project', client_id: client.json.id, package_cost: 90000 } })
+  const pid = project.json.id
+  const tokenOf = (url) => new URL(url, 'http://x').searchParams.get('token') ?? ''
+
+  const sent = await api('/terms/issue', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      project_id: pid,
+      rendered_body: 'Booking is confirmed on payment.',
+      title: 'Wedding terms',
+      payment_terms: [{ label: 'Advance', mode: 'percent', value: 50, due_trigger: 'On signing' }],
+      total_cost: 90000,
+      legal_note: 'Tap I agree to accept.',
+      expiry_days: 30,
+    },
+  })
+  const first = await api(`/public/terms/${sent.json.token}/payload`)
+  check(
+    'terms: the client sees the payment plan and legal note',
+    sent.status === 201 && !!sent.json.url && first.status === 200 && first.json.payment_terms?.length === 1 && first.json.legal_note === 'Tap I agree to accept.',
+    { sent: sent.json, first: first.json },
+  )
+
+  const again = await api(`/terms/documents/${sent.json.document_id}/link`, { token: aToken, method: 'POST', body: {} })
+  const oldLink = await api(`/public/terms/${sent.json.token}/payload`)
+  const newLink = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
+  check('terms: sending again makes a new link and stops the old one', again.status === 200 && oldLink.status === 404 && newLink.status === 200, {
+    again: again.status, old: oldLink.status, fresh: newLink.status,
+  })
+
+  const cancelled = await api(`/terms/documents/${sent.json.document_id}/revoke`, { token: aToken, method: 'POST' })
+  const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
+  const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)
+  const lateAgree = await api(`/public/terms/${tokenOf(again.json.url)}/ack`, { method: 'POST', body: { name: 'Priya' } })
+  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 404 && legacy.status === 404 && lateAgree.status === 409, {
+    cancelled: cancelled.status, afterCancel: afterCancel.status, legacy: legacy.status, lateAgree: lateAgree.status,
+  })
+
+  const v2 = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Version two.' } })
+  const agreed = await api(`/public/terms/${v2.json.token}/ack`, { method: 'POST', body: { name: 'Priya Sharma' } })
+  const twice = await api(`/public/terms/${v2.json.token}/ack`, { method: 'POST', body: { name: 'Someone' } })
+  const reread = await api(`/public/terms/${v2.json.token}/payload`)
+  const list = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  check(
+    'terms: agreeing works once, the client can re-read it, and the studio sees who agreed',
+    agreed.status === 200 && twice.status === 409 && reread.status === 200 && list.json[0]?.acknowledged_by_name === 'Priya Sharma' && list.json.length === 2,
+    { agreed: agreed.status, twice: twice.status, reread: reread.status, list: list.json },
+  )
+  const other = await api(`/terms/projects/${pid}/documents`, { token: newPw.json.access_token })
+  check("terms: another studio sees none of this project's terms", Array.isArray(other.json) && other.json.length === 0, other.json)
+}
+
+// ── Project money: promised is not received; a payment can be changed ───
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Money Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Money project ${rand()}`, client_id: client.json.id, package_cost: 100000 } })
+  const pid = project.json.id
+  const zero = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 0 } })
+  await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 30000, mode: 'UPI' } })
+  const promised = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 20000, status: 'pending' } })
+  const listed = async () => {
+    const page = await api(`/projects?q=${encodeURIComponent(project.json.id ? 'Money project' : '')}&page_size=100`, { token: aToken })
+    const items = Array.isArray(page.json) ? page.json : (page.json.items ?? [])
+    return items.find((x) => x.id === pid)
+  }
+  const before = await listed()
+  check('money: a ₹0 payment is refused, and a promised one is not counted as received', zero.status === 422 && Number(before?.received) === 30000, {
+    zero: zero.status, before,
+  })
+  const marked = await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
+  const after = await listed()
+  const detail = await api(`/projects/${pid}`, { token: aToken })
+  check(
+    'money: marking a promised payment received counts it',
+    marked.status === 204 && Number(after?.received) === 50000 && detail.json.payments.every((x) => x.status === 'paid'),
+    { marked: marked.status, after },
+  )
+}
+
+// ── Work to review: work sent straight to the client still lists ─────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Work Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Work project ${rand()}`, client_id: client.json.id } })
+  const pid = project.json.id
+  const sub = await api('/work/submissions', { token: aToken, method: 'POST', body: { project_id: pid, title: 'Album first cut', submission_link: 'https://example.test/album' } })
+  const sent = await api(`/work/submissions/${sub.json.id}/deliver`, { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const listed = await api(`/work/submissions?project_id=${pid}`, { token: aToken })
+  const row = Array.isArray(listed.json) ? listed.json[0] : null
+  check(
+    'work: a submission sent to the client still lists, with who handed it in',
+    sent.status === 200 && listed.status === 200 && row?.status === 'sent' && typeof row?.submitted_by_name === 'string',
+    { sub: sub.status, sent: sent.status, listed: listed.status, row },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

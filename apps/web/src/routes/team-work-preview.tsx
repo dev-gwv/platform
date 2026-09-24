@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, ClipboardList, Camera, FileCheck } from 'lucide-react'
-import { taskListItem, shootListItem, z } from '@ipc/contracts'
+import { WORK_STATUS_LABEL, taskListItem, shootListItem, z } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -25,7 +25,7 @@ const workSubmission = z.object({
   task_id: z.string().uuid().nullable(),
   submission_link: z.string().nullable(),
   notes: z.string().nullable(),
-  status: z.enum(['submitted', 'approved', 'rejected']),
+  status: z.enum(['submitted', 'approved', 'rejected', 'sent']),
   review_notes: z.string().nullable(),
   created_at: z.string(),
 })
@@ -156,9 +156,9 @@ function TeamWorkPreview() {
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <StatusBadge
-                        tone={s.status === 'approved' ? 'success' : s.status === 'rejected' ? 'danger' : 'info'}
+                        tone={s.status === 'approved' || s.status === 'sent' ? 'success' : s.status === 'rejected' ? 'danger' : 'info'}
                       >
-                        {s.status}
+                        {WORK_STATUS_LABEL[s.status]}
                       </StatusBadge>
                       {canReview && s.status === 'submitted' && (
                         <>

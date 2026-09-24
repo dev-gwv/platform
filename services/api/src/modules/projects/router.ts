@@ -7,6 +7,7 @@ import {
   myDeliverable,
   deliverableSet,
   paymentInput,
+  updatePaymentRequest,
   projectDetail,
   projectListItem,
   projectListPage,
@@ -60,7 +61,7 @@ export const projectsRouter = new Hono<AppEnv>()
           select p.id, p.name, p.status, p.client_id, p.package_cost, p.total_cost, p.created_at,
                  cl.name as client_name, cl.phone as client_phone,
                  coalesce(
-                   (select sum(rp.amount) from received_payments rp where rp.project_id = p.id),
+                   (select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),
                    0
                  ) as received,
                  (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> 'cancelled') as next_shoot_date,
@@ -85,10 +86,10 @@ export const projectsRouter = new Hono<AppEnv>()
         case 'value_desc': return 'p.total_cost desc'
         case 'pending_desc':
         case 'risk':
-        case 'overdue': return '(p.total_cost - coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id),0)) desc'
-        case 'received_desc': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id),0) desc'
+        case 'overdue': return '(p.total_cost - coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0)) desc'
+        case 'received_desc': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) desc'
         case 'name': return 'p.name asc'
-        case 'completion': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id),0) / nullif(p.total_cost,0) asc'
+        case 'completion': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) / nullif(p.total_cost,0) asc'
         case 'upcoming': return '(select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> \'cancelled\') asc nulls last'
         default: return 'p.created_at desc'
       }
@@ -106,7 +107,7 @@ export const projectsRouter = new Hono<AppEnv>()
         const rows = await sql`
           select p.id, p.name, p.status, p.client_id, p.package_cost, p.total_cost, p.created_at,
                  cl.name as client_name, cl.phone as client_phone,
-                 coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id),0) as received,
+                 coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),0) as received,
                  (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> 'cancelled') as next_shoot_date,
                  coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < current_date),0) as tasks_overdue
           from projects p
@@ -661,11 +662,15 @@ export const projectsRouter = new Hono<AppEnv>()
   // Record a payment against a project.
   .post('/:id/payments', requireAction('projects', 'edit'), async (c) => {
     const parsed = paymentInput.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please check the payment details.')
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the payment details.')
     const auth = c.get('auth')
     const projectId = uuidParam(c)
     const row = await attempt(c, 'projects.payment_add', () =>
       withUser(c.env, auth.userId, async (sql) => {
+        // Tie it to the project's client too, so Billing's client ledger and
+        // receipts find it without a second step.
+        const owner = await sql<{ client_id: string | null }[]>`select client_id from projects where id = ${projectId}`
+        if (!owner.length) return null
         const rows = await sql<{ id: string }[]>`
           insert into received_payments ${sql({
             project_id: projectId,
@@ -679,6 +684,7 @@ export const projectsRouter = new Hono<AppEnv>()
             description: (parsed.data as { description?: string }).description ?? null,
             is_gst: (parsed.data as { is_gst?: boolean }).is_gst ?? false,
             gst_number: (parsed.data as { gst_number?: string }).gst_number ?? null,
+            client_id: owner[0]!.client_id,
             recorded_by: auth.userId,
           })}
           returning id`
@@ -688,6 +694,27 @@ export const projectsRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not record the payment.')
     await audit(c, { action: 'project.payment', entityType: 'project', entityId: projectId, after: parsed.data })
     return c.json({ id: row.id }, 201)
+  })
+
+  /**
+   * Change a payment: most often "promised" becoming "received", or a typo in
+   * the amount. The project page had no way to do either short of deleting.
+   */
+  .patch('/:id/payments/:pid', requireAction('projects', 'edit'), async (c) => {
+    const parsed = updatePaymentRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the payment details.')
+    const patch = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined))
+    if (Object.keys(patch).length === 0) fail(422, 'Nothing to change.')
+    const projectId = uuidParam(c)
+    const pid = uuidParam(c, 'pid')
+    const rows = await attempt(c, 'projects.payment_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update received_payments set ${sql(patch)} where id = ${pid} and project_id = ${projectId} returning id`),
+    )
+    if (!rows) fail(400, 'We could not update this payment.')
+    if (!rows.length) fail(404, 'That payment was not found.')
+    await audit(c, { action: 'project.payment_update', entityType: 'project', entityId: projectId, after: { payment_id: pid, ...patch } })
+    return c.body(null, 204)
   })
 
   // Delete a payment (Lovable parity: billing tab receipt management).

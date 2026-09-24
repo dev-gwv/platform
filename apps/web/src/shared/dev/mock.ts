@@ -164,6 +164,7 @@ const projectDetail: ProjectDetail = {
   payments: [
     { id: uid(0xf1), amount: 100000, paid_on: '2026-06-02', mode: 'upi', reference: 'TXN9931', status: null, description: null, is_gst: false, gst_number: null },
     { id: uid(0xf2), amount: 50000, paid_on: '2026-07-15', mode: 'bank', reference: 'NEFT5521', status: null, description: null, is_gst: false, gst_number: null },
+    { id: uid(0xf3), amount: 40000, paid_on: '2026-10-01', mode: 'UPI', reference: null, status: 'pending', description: 'Before the wedding', is_gst: false, gst_number: null },
   ],
 }
 
@@ -323,7 +324,41 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/terms/documents') return atStage(termsDocumentsFx, 'partial')
   if (method === 'GET' && /^\/terms\/documents\/[^/]+\/payload$/.test(path)) return termsDocumentPayloadFx
   if (method === 'POST' && path === '/terms/issue')
-    return { document_id: uid(0xbc), token: 'demo-project-terms-token' }
+    return {
+      document_id: uid(0xbc),
+      token: 'demo-project-terms-token',
+      url: 'http://localhost:5199/terms/acknowledge?token=demo-project-terms-token',
+      email_status: 'not_requested',
+      email_error: null,
+    }
+  // One project's terms: Sharma Wedding has a version waiting and an older
+  // one it replaced; every other project has none yet.
+  if (method === 'GET' && /^\/terms\/projects\/[^/]+\/documents$/.test(path))
+    return path.includes(PROJ.p1)
+      ? [
+          {
+            id: uid(0xbd), title: 'Terms & conditions — Sharma Wedding', created_at: '2026-09-20T10:00:00Z',
+            expires_at: '2026-10-04T10:00:00Z', revoked_at: null, acknowledged_at: null, acknowledged_by_name: null,
+            acknowledged_by_email: null, access_count: 2, link_live: true, emailed_to: 'priya@example.com',
+          },
+          {
+            id: uid(0xbe), title: 'Terms & conditions — Sharma Wedding', created_at: '2026-09-10T10:00:00Z',
+            expires_at: '2026-09-24T10:00:00Z', revoked_at: '2026-09-20T10:00:00Z', acknowledged_at: null, acknowledged_by_name: null,
+            acknowledged_by_email: null, access_count: 1, link_live: false, emailed_to: null,
+          },
+        ]
+      : []
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/link$/.test(path))
+    return {
+      document_id: path.split('/')[3]!,
+      token: 'demo-fresh-token',
+      url: 'http://localhost:5199/terms/acknowledge?token=demo-fresh-token',
+      email_status: 'not_requested',
+      email_error: null,
+    }
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/email$/.test(path)) return { status: 'sent', error: null }
+  if (method === 'POST' && /^\/terms\/documents\/[^/]+\/revoke$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/terms/templates') return []
   if (method === 'POST' && path === '/team-terms/sends')
     return {
       send_id: uid(0xba),
@@ -1283,6 +1318,8 @@ const workSubs = [
     task_id: null,
     submission_link: 'https://drive.google.com/album-v1',
     location_note: null,
+    title: 'Wedding album — first cut',
+    submitted_by_name: 'Rajesh Kumar',
     notes: 'First album cut',
     status: 'submitted',
     review_notes: null,
@@ -1294,6 +1331,8 @@ const workSubs = [
     task_id: null,
     submission_link: 'https://drive.google.com/film-v2',
     location_note: null,
+    title: 'Highlight film',
+    submitted_by_name: 'Anita Rao',
     notes: 'Highlight film',
     status: 'approved',
     review_notes: 'Great work',
@@ -1304,11 +1343,26 @@ const workSubs = [
     project_id: PROJ.p2,
     task_id: null,
     submission_link: 'https://drive.google.com/teaser',
+    title: 'Teaser reel',
+    submitted_by_name: 'Rajesh Kumar',
     location_note: null,
     notes: null,
     status: 'rejected',
     review_notes: 'Re-grade the outdoor shots',
     created_at: '2026-06-28T08:00:00Z',
+  },
+  {
+    id: uid(0x84),
+    project_id: PROJ.p1,
+    task_id: null,
+    title: 'Pre-wedding edits',
+    submitted_by_name: 'Anita Rao',
+    submission_link: 'https://drive.google.com/prewed',
+    location_note: null,
+    notes: null,
+    status: 'sent',
+    review_notes: null,
+    created_at: '2026-06-25T08:00:00Z',
   },
 ]
 

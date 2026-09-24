@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -9,6 +9,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
+import { sendClientDocEmail } from '../../lib/email'
 
 const issueTermsRequest = z.object({
   project_id: z.string().uuid().nullable().default(null),
@@ -24,6 +25,9 @@ const issueTermsRequest = z.object({
   total_cost: z.number().nonnegative().nullish(),
   legal_note: z.string().trim().max(2000).nullish(),
   template_id: z.string().uuid().nullish(),
+  /** Email the link as well (to `to_email`, or the client's address). */
+  email: z.boolean().default(false),
+  to_email: z.string().trim().email().max(200).nullish(),
 })
 
 /**
@@ -95,6 +99,11 @@ const termsPayload = z.object({
   gstin: z.string().nullable().nullish(),
   document_number: z.string().nullable().nullish(),
   issued_at: z.string().nullable().nullish(),
+  // The schedule and legal note the client agrees to. Without these here
+  // zod stripped them and the client only ever saw the one-line summary.
+  payment_terms: z.array(z.record(z.string(), z.unknown())).nullish(),
+  total_cost: z.coerce.number().nullish(),
+  legal_note: z.string().nullable().nullish(),
 })
 const ackRequest = z.object({ name: z.string().trim().min(1).max(160), email: z.string().max(200).optional() })
 
@@ -112,6 +121,75 @@ const termsDocument = z.object({
   created_at: z.string(),
 })
 const termsDocumentList = termsDocument.array()
+
+/** Every version of one project's terms, newest first. */
+const projectTermsVersion = z.object({
+  id: z.string().uuid(),
+  title: z.string().nullable(),
+  created_at: z.string(),
+  expires_at: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  acknowledged_at: z.string().nullable(),
+  acknowledged_by_name: z.string().nullable(),
+  acknowledged_by_email: z.string().nullable(),
+  access_count: z.number().int(),
+  link_live: z.boolean(),
+  emailed_to: z.string().nullable(),
+})
+
+const sendLinkRequest = z.object({
+  expiry_days: z.number().int().min(1).max(365).default(14),
+  /** Also email the link: to this address, or the client's when blank. */
+  email: z.boolean().default(false),
+  to_email: z.string().trim().email().max(200).nullish(),
+})
+
+const linkResponse = z.object({
+  document_id: z.string().uuid(),
+  token: z.string(),
+  url: z.string(),
+  email_status: z.enum(['sent', 'provider_missing', 'failed', 'not_requested']),
+  email_error: z.string().nullable(),
+})
+
+const termsLink = (env: { APP_URL?: string | undefined }, token: string) =>
+  `${env.APP_URL ?? ''}/terms/acknowledge?token=${encodeURIComponent(token)}`
+
+/** The name and email the terms go to, and who is sending them. */
+async function emailTerms(
+  c: Context<AppEnv>,
+  documentId: string,
+  url: string,
+  toOverride: string | null | undefined,
+): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error: string | null }> {
+  const info = await attempt(c, 'terms.email_info', () =>
+    withUser(c.env, c.get('auth').userId, async (sql) => {
+      const rows = await sql<{ client_email: string | null; project_name: string | null; company_name: string | null }[]>`
+        select cl.email as client_email, p.name as project_name, coalesce(co.display_name, co.name) as company_name
+          from project_terms_documents d
+          left join projects p on p.id = d.project_id
+          left join clients cl on cl.id = p.client_id
+          left join companies co on co.id = d.company_id
+         where d.id = ${documentId}`
+      return rows[0] ?? null
+    }),
+  )
+  const to = toOverride || info?.client_email || null
+  const result = await sendClientDocEmail(
+    c.env,
+    to,
+    `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`,
+    url,
+    `${info?.company_name ?? 'The studio'} has shared the terms${info?.project_name ? ` for ${info.project_name}` : ''}. Please open the link, read them, and tap "I agree".`,
+  )
+  try {
+    await withUser(c.env, c.get('auth').userId, async (sql) => {
+      await sql`insert into project_terms_email_logs (company_id, document_id, to_email, status, error, created_by)
+        values (${c.get('auth').companyId}, ${documentId}, ${to}, ${result.status}, ${result.error ?? null}, ${c.get('auth').userId})`
+    })
+  } catch { /* the log never blocks the send */ }
+  return { status: result.status, error: result.error ?? null }
+}
 
 /** Studio side: issue a terms document + client acknowledgement link. */
 export const termsRouter = new Hono<AppEnv>()
@@ -162,40 +240,102 @@ export const termsRouter = new Hono<AppEnv>()
     )
   })
 
-  // 5-state lifecycle + KPIs are derived client-side from the same rows;
-  // revoke/rotate act on the underlying document + access token.
-  .post('/documents/:id/revoke', requireAction('projects', 'edit'), async (c) => {
-    const id = c.req.param('id')
-    if (!id || !z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
-    const ok = await attempt(c, 'terms.revoke', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const rows = await sql`update project_terms_documents set revoked_at = now() where id = ${id as string} returning id`
-        return (rows as unknown[]).length > 0
-      }),
+  /** Every version of one project's terms, newest first. */
+  .get('/projects/:projectId/documents', requireAction('projects', 'view'), async (c) => {
+    const projectId = c.req.param('projectId') ?? ''
+    if (!z.string().uuid().safeParse(projectId).success) fail(422, 'Invalid project id.')
+    const rows = await attempt(c, 'terms.project_documents', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from list_project_terms(${projectId}::uuid)`),
     )
-    if (!ok) fail(400, 'We could not revoke this document.')
-    await audit(c, { action: 'terms.revoke', entityType: 'terms_document', entityId: id })
-    return c.json({ ok: true })
+    if (!rows) fail(400, 'We could not load the terms for this project.')
+    return c.json(projectTermsVersion.array().parse(rows))
   })
 
-  .post('/documents/:id/rotate', requireAction('projects', 'edit'), async (c) => {
-    const id = c.req.param('id')
-    if (!id || !z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
-    const row = await attempt(c, 'terms.rotate', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const docs = await sql<{ project_id: string | null; rendered_body: string }[]>`
-          select project_id, rendered_body from project_terms_documents where id = ${id as string} limit 1`
-        const doc = docs[0]
-        if (!doc) return null
-        await sql`update project_terms_documents set revoked_at = now() where id = ${id as string}`
-        const made = await sql<{ document_id: string; token: string }[]>`
-          select * from issue_terms_document(p_project_id => ${doc.project_id}, p_rendered_body => ${doc.rendered_body})`
-        return made[0] ?? null
+  /**
+   * A fresh link for a document already sent -- "send again" -- with the old
+   * link cancelled. Optionally emails it. The raw link is never stored, so
+   * this is also how the studio gets a link to copy after the first send.
+   */
+  .post('/documents/:id/link', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
+    const parsed = sendLinkRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the email address.')
+    const token = await attempt(
+      c,
+      'terms.new_link',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql<{ token: string }[]>`
+            select terms_document_new_link(${id}::uuid, ${parsed.data.expiry_days * 24}) as token`
+          return rows[0]?.token ?? null
+        }),
+      {
+        onCode: (code, err) =>
+          code === '22023' || code === 'P0001' ? fail(422, err instanceof Error ? err.message : 'This link cannot be sent.') : undefined,
+      },
+    )
+    if (!token) fail(400, 'We could not make a new link.')
+    const url = termsLink(c.env, token)
+    const email = parsed.data.email ? await emailTerms(c, id, url, parsed.data.to_email) : null
+    await audit(c, { action: 'terms.new_link', entityType: 'terms_document', entityId: id, after: { emailed: !!email } })
+    return c.json(
+      linkResponse.parse({
+        document_id: id,
+        token,
+        url,
+        email_status: email?.status ?? 'not_requested',
+        email_error: email?.error ?? null,
       }),
     )
-    if (!row) fail(400, 'We could not rotate this link.')
-    await audit(c, { action: 'terms.rotate', entityType: 'terms_document', entityId: id, after: { document_id: row.document_id } })
-    return c.json(issueTermsResponse.parse(row), 201)
+  })
+
+  /**
+   * Email a link the studio already holds (just made, maybe already sent on
+   * WhatsApp) without replacing it. The link must belong to this document and
+   * still work -- the server checks the token, it never trusts the URL.
+   */
+  .post('/documents/:id/email', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
+    const parsed = z
+      .object({ token: z.string().min(10).max(200), to_email: z.string().trim().email().max(200).nullish() })
+      .safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the email address.')
+    const live = await attempt(c, 'terms.email_check', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = await sql<{ ok: boolean }[]>`
+          select terms_link_is_live(${id}::uuid, ${parsed.data.token}) as ok`
+        return rows[0]?.ok ?? false
+      }),
+    )
+    if (!live) fail(409, 'That link no longer works. Send the terms again to make a new one.')
+    const url = termsLink(c.env, parsed.data.token)
+    const email = await emailTerms(c, id, url, parsed.data.to_email)
+    await audit(c, { action: 'terms.email', entityType: 'terms_document', entityId: id, after: { status: email.status } })
+    return c.json({ status: email.status, error: email.error })
+  })
+
+  /** Kept for the Documents page: now a new link for the SAME document. */
+  .post('/documents/:id/rotate', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
+    const token = await attempt(
+      c,
+      'terms.rotate',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql<{ token: string }[]>`select terms_document_new_link(${id}::uuid, 336) as token`
+          return rows[0]?.token ?? null
+        }),
+      {
+        onCode: (code, err) =>
+          code === '22023' || code === 'P0001' ? fail(422, err instanceof Error ? err.message : 'This link cannot be sent.') : undefined,
+      },
+    )
+    if (!token) fail(400, 'We could not rotate this link.')
+    await audit(c, { action: 'terms.rotate', entityType: 'terms_document', entityId: id })
+    return c.json(issueTermsResponse.parse({ document_id: id, token }), 201)
   })
 
   .post('/email-log', requireAction('projects', 'edit'), async (c) => {
@@ -255,6 +395,18 @@ export const termsRouter = new Hono<AppEnv>()
     if (!rows?.length) fail(400, 'We could not save that template.')
     await audit(c, { action: 'terms.template_create', entityType: 'terms_template', entityId: rows[0]!.id })
     return c.json({ id: rows[0]!.id }, 201)
+  })
+
+  .delete('/templates/:id', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid template id.')
+    const rows = await attempt(c, 'terms.template_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from project_terms_templates where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not remove that template.')
+    if (!rows.length) fail(404, 'That template was not found.')
+    await audit(c, { action: 'terms.template_delete', entityType: 'terms_template', entityId: id })
+    return c.body(null, 204)
   })
 
   /** Three starting points, for a studio with an empty library. */
@@ -342,12 +494,57 @@ export const termsRouter = new Hono<AppEnv>()
   .post('/issue', requireAction('projects', 'edit'), async (c) => {
     const parsed = issueTermsRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Terms text is required.')
+    const d = parsed.data
+    const ttlHours = (d.expiry_days ?? 14) * 24
+    // A project's terms go through the one call that also withdraws the older
+    // version and its link. Loose documents (no project) keep the old path.
+    if (d.project_id) {
+      const made = await attempt(
+        c,
+        'terms.issue_client',
+        () =>
+          withUser(c.env, c.get('auth').userId, async (sql) => {
+            const rows = await sql<{ document_id: string; token: string }[]>`
+              select * from issue_client_terms(
+                p_project_id => ${d.project_id},
+                p_body => ${d.rendered_body},
+                p_title => ${d.title ?? null},
+                p_payment_terms => ${d.payment_terms ? sql.json(d.payment_terms as never) : null}::jsonb,
+                p_total_cost => ${d.total_cost ?? null},
+                p_legal_note => ${d.legal_note ?? null},
+                p_ttl_hours => ${ttlHours},
+                p_template_id => ${d.template_id ?? null}
+              )`
+            return rows[0] ?? null
+          }),
+        { onCode: (code, err) => (code === '22023' ? fail(422, err instanceof Error ? err.message : 'The terms are empty.') : undefined) },
+      )
+      if (!made) fail(400, 'We could not create the document.')
+      const url = termsLink(c.env, made.token)
+      const email = d.email ? await emailTerms(c, made.document_id, url, d.to_email) : null
+      await audit(c, {
+        action: 'terms.issue',
+        entityType: 'terms_document',
+        entityId: made.document_id,
+        after: { project_id: d.project_id, emailed: !!email },
+      })
+      return c.json(
+        linkResponse.parse({
+          ...made,
+          url,
+          email_status: email?.status ?? 'not_requested',
+          email_error: email?.error ?? null,
+        }),
+        201,
+      )
+    }
     const row = await attempt(c, 'terms.issue', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const rows = await sql<{ document_id: string; token: string }[]>`
           select * from issue_terms_document(
-            p_project_id => ${parsed.data.project_id},
-            p_rendered_body => ${parsed.data.rendered_body}
+            p_project_id => ${d.project_id},
+            p_rendered_body => ${d.rendered_body},
+            p_ttl_hours => ${ttlHours}
           )`
         return rows[0] ?? null
       }),
@@ -393,12 +590,12 @@ export const termsRouter = new Hono<AppEnv>()
     const id = textParam(c, 'id', 400)
     const ok = await attempt(c, 'terms.revoke', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        await sql`update project_terms_documents set revoked_at = now()
-          where id = ${id}::uuid and company_id = ${c.get('auth').companyId}`
-        return true
+        // The document AND its link: the client page checks both now.
+        const rows = await sql<{ ok: boolean }[]>`select cancel_terms_document(${id}::uuid) as ok`
+        return rows[0]?.ok ?? false
       }),
     )
-    if (!ok) fail(400, 'We could not revoke this link.')
+    if (!ok) fail(409, 'This link cannot be cancelled — it was already agreed to or replaced.')
     await audit(c, { action: 'terms.revoke', entityType: 'terms_document', entityId: id })
     return c.json({ ok: true })
   })
