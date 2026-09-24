@@ -8,7 +8,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState } from '@/shared/ui/states'
 import { Avatar } from '@/shared/ui/avatar'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
-import { dueBucket } from '../leads'
+import { dueBucket, isUncontacted } from '../leads'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 export const SOURCE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -39,6 +39,24 @@ export const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
 
 /** Today's date as the API wants it. */
 export const isoDay = (d: Date) => d.toISOString().slice(0, 10)
+
+/**
+ * Never called, and it shows.
+ *
+ * Merging the enquiries list into this one (0166) only works if an unworked
+ * lead is visible at a glance -- that was the whole argument for keeping them
+ * apart. Privyr answers it with a label and a dot on the row, which is what
+ * this is; `isUncontacted` has computed the state all along.
+ */
+export function UncontactedBadge({ lead }: { lead: CrmLead }) {
+  if (!isUncontacted(lead)) return null
+  return (
+    <StatusBadge tone="info" className="gap-1.5">
+      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+      Uncontacted
+    </StatusBadge>
+  )
+}
 
 export function DueBadge({ lead, now }: { lead: CrmLead; now: Date }) {
   const bucket = dueBucket(lead, now)
@@ -144,7 +162,9 @@ export function LeadTable({
               {l.phone ?? '—'}
               {l.deal_value !== null ? ` · ${formatINR(l.deal_value)}` : ''}
             </p>
+            {l.notes && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.notes}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              <UncontactedBadge lead={l} />
               {l.is_hot && (
                 <StatusBadge tone="danger">
                   <Flame className="mr-1 size-3" /> Hot
@@ -188,16 +208,29 @@ export function LeadTable({
               {l.is_archived && <Archive className="size-3.5 shrink-0 text-muted-foreground" aria-label="Archived" />}
               {l.name ?? 'Unnamed lead'}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="block text-xs text-muted-foreground">
               {l.phone ?? '—'}
               {l.crm_company_name ? ` · ${l.crm_company_name}` : ''}
             </span>
+            {/*
+              * What Privyr's row carries and ours did not: a line of the notes.
+              * A list of names answers "who"; the question a studio actually
+              * has open is "where are we with this one", and the note is the
+              * answer far more often than the stage is.
+              */}
+            {l.notes && (
+              <span className="mt-0.5 block max-w-xs truncate text-xs text-muted-foreground/80">{l.notes}</span>
+            )}
           </td>
         )
       case 'stage':
         return (
           <td key={key} className={pad}>
-            <StatusBadge tone={STAGE_TONE[l.status]}>{leadStageLabel(l)}</StatusBadge>
+            {isUncontacted(l) ? (
+              <UncontactedBadge lead={l} />
+            ) : (
+              <StatusBadge tone={STAGE_TONE[l.status]}>{leadStageLabel(l)}</StatusBadge>
+            )}
           </td>
         )
       case 'score':

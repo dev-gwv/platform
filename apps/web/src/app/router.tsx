@@ -36,8 +36,7 @@ import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
 import { ReconciliationPage } from '@/routes/financials/reconciliation'
 import { FollowUpsPage } from '@/routes/follow-ups'
-import { CrmContactsPage } from '@/routes/crm/contacts'
-import { CrmCompaniesPage } from '@/routes/crm/companies'
+import { CrmSetupPage } from '@/routes/follow-ups/setup'
 import { AttendancePage } from '@/routes/attendance'
 import { NotificationsPage } from '@/routes/notifications'
 import { EmployeesPage } from '@/routes/employees'
@@ -52,7 +51,6 @@ import { TermsAcknowledgePage } from '@/routes/terms-acknowledge'
 import { QuoteAcceptPage } from '@/routes/quote-accept'
 import { TeamTermsAcknowledgePage } from '@/routes/team-terms-acknowledge'
 import { QuotationPage } from '@/routes/quotation'
-import { EnquiriesPage } from '@/routes/enquiries'
 import { PersonalExpensesPage } from '@/routes/personal-expenses'
 import { ReceiptPage } from '@/routes/receipt'
 import { DeliveryPage } from '@/routes/delivery'
@@ -200,8 +198,8 @@ const routeTree = rootRoute.addChildren([
   route('/team-allocation/conflicts', () => <TeamAllocationPage initialTab="conflicts" />),
   route('/team-allocation/member/$uid', AllocationMemberPage),
   route('/follow-ups', FollowUpsPage),
-  route('/crm/contacts', CrmContactsPage),
-  route('/crm/companies', CrmCompaniesPage),
+  // Everything a studio sets once and never opens again.
+  route('/follow-ups/setup', CrmSetupPage),
   route('/lead-sources', LeadSourcesPage),
   // The permissions matrix has declared /facebook as this module's path since
   // Phase 2; keep it working rather than breaking anyone's bookmark.
@@ -235,7 +233,6 @@ const routeTree = rootRoute.addChildren([
   route('/settings/attendance-location', AttendanceLocationPage),
   route('/settings/lookups', LookupsPage),
   route('/settings/advanced', AdvancedSettingsPage),
-  route('/enquiries', EnquiriesPage),
   route('/personal-expenses', PersonalExpensesPage),
   route('/personal-expenses/report', () => <PersonalExpensesPage report />),
   route('/settings/appearance', AppearancePage),

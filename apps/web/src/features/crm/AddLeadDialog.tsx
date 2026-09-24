@@ -35,6 +35,8 @@ export function AddLeadDialog({
   const add = useAddLead()
   const { canCreate } = useCrmAccess()
   const [openSelf, setOpenSelf] = useState(false)
+  /** The fifteen fields a studio fills in later, if ever. */
+  const [showMore, setShowMore] = useState(false)
   const members = useMembers()
   const pipelines = usePipelines()
   // The default pipeline's stages — a lead can start anywhere, not only at the
@@ -95,6 +97,7 @@ export function AddLeadDialog({
     setStageId('')
     setQuality('')
     setErrors({})
+    setShowMore(false)
   }
 
   function onSubmit(e: FormEvent) {
@@ -153,6 +156,15 @@ export function AddLeadDialog({
         description="A number is enough to start. If we already have it, you'll be taken to that lead instead."
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          {/*
+            * Two questions, then everything else.
+            *
+            * This form asked seventeen. Exactly one -- the phone number -- is
+            * required, and a studio taking a call at a wedding venue has the
+            * number and a name and nothing else yet. The other fifteen are
+            * answers you learn later, on the lead itself, so they wait behind
+            * one toggle instead of standing between the call and the record.
+            */}
           <div className="flex flex-col gap-1.5">
             <Label>
               Phone <span className="text-destructive">*</span>
@@ -178,151 +190,163 @@ export function AddLeadDialog({
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>Alternate phone</Label>
-            <Input value={alternatePhone} onChange={(e) => setAlternatePhone(e.target.value)} placeholder="Optional" />
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className="self-start text-sm font-medium text-primary hover:underline"
+          >
+            {showMore ? 'Fewer details' : 'More details'}
+          </button>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          {showMore && (
+            <div className="flex flex-col gap-3 rounded-md border border-border p-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Optional"
-                aria-invalid={!!errors.email}
-              />
-              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+              <Label>Alternate phone</Label>
+              <Input value={alternatePhone} onChange={(e) => setAlternatePhone(e.target.value)} placeholder="Optional" />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Source</Label>
-              <Select
-                value={source}
-                onChange={(e) => setSource(e.target.value as CreateLeadRequest['source'])}
-              >
-                <option value="enquiry">Enquiry</option>
-                <option value="referral">Referral</option>
-                <option value="manual">Manual</option>
-                <option value="webform">Web form</option>
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="google_form">Google Form</option>
-                <option value="csv_import">CSV import</option>
-                <option value="other">Other</option>
-              </Select>
-            </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Event type</Label>
-              <LookupSelect
-                category="project_type"
-                aria-label="Event type"
-                value={eventType}
-                onChange={setEventType}
-                defaults={EVENT_TYPE_DEFAULTS}
-                placeholder="—"
-                addLabel="Add an event type…"
-                inputPlaceholder="e.g. Baby shower"
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Optional"
+                  aria-invalid={!!errors.email}
+                />
+                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Source</Label>
+                <Select
+                  value={source}
+                  onChange={(e) => setSource(e.target.value as CreateLeadRequest['source'])}
+                >
+                  <option value="enquiry">Enquiry</option>
+                  <option value="referral">Referral</option>
+                  <option value="manual">Manual</option>
+                  <option value="webform">Web form</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="google_form">Google Form</option>
+                  <option value="csv_import">CSV import</option>
+                  <option value="other">Other</option>
+                </Select>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Event date</Label>
-              <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Venue / location</Label>
-              <Input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Optional" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Event type</Label>
+                <LookupSelect
+                  category="project_type"
+                  aria-label="Event type"
+                  value={eventType}
+                  onChange={setEventType}
+                  defaults={EVENT_TYPE_DEFAULTS}
+                  placeholder="—"
+                  addLabel="Add an event type…"
+                  inputPlaceholder="e.g. Baby shower"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Event date</Label>
+                <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>City</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
-            </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Deal value (₹)</Label>
-              <Input type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Optional" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Venue / location</Label>
+                <Input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Optional" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>City</Label>
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Expected close</Label>
-              <Input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Assign to</Label>
-              <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
-                <option value="">
-                  {/* Empty is not "nobody" — the distribution rota picks. */}
-                  Auto-assign
-                </option>
-                {(members.data ?? []).map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Deal value (₹)</Label>
+                <Input type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Optional" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Expected close</Label>
+                <Input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Assign to</Label>
+                <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+                  <option value="">
+                    {/* Empty is not "nobody" — the distribution rota picks. */}
+                    Auto-assign
                   </option>
-                ))}
-              </Select>
+                  {(members.data ?? []).map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Follow up at</Label>
+                <Input
+                  type="datetime-local"
+                  value={followUpAt}
+                  onChange={(e) => setFollowUpAt(e.target.value)}
+                />
+              </div>
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Stage</Label>
+                <Select value={stageId} onChange={(e) => setStageId(e.target.value)}>
+                  <option value="">First stage</option>
+                  {stages.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Group / segment</Label>
+                <Input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Wedding 2027, Corporate…"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Quality</Label>
+                <Select value={quality} onChange={(e) => setQuality(e.target.value as LeadQuality | '')}>
+                  <option value="">Not rated yet</option>
+                  <option value="hot">Hot — ready to book</option>
+                  <option value="warm">Warm — interested, no date</option>
+                  <option value="cold">Cold — just looking</option>
+                </Select>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1.5">
-              <Label>Follow up at</Label>
-              <Input
-                type="datetime-local"
-                value={followUpAt}
-                onChange={(e) => setFollowUpAt(e.target.value)}
+              <Label>Notes</Label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="What are they asking for? Dates, budget, how they found you."
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Stage</Label>
-              <Select value={stageId} onChange={(e) => setStageId(e.target.value)}>
-                <option value="">First stage</option>
-                {stages.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name}
-                  </option>
-                ))}
-              </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Group / segment</Label>
-              <Input
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="Wedding 2027, Corporate…"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Quality</Label>
-              <Select value={quality} onChange={(e) => setQuality(e.target.value as LeadQuality | '')}>
-                <option value="">Not rated yet</option>
-                <option value="hot">Hot — ready to book</option>
-                <option value="warm">Warm — interested, no date</option>
-                <option value="cold">Cold — just looking</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Notes</Label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="What are they asking for? Dates, budget, how they found you."
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <DialogClose asChild>

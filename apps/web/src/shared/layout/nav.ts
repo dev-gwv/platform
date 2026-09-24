@@ -133,10 +133,15 @@ export const NAV: NavEntry[] = [
     icon: Contact,
     match: '/clients',
     children: [
-      leaf('Enquiries', '/enquiries', Inbox, { module: 'crm' }),
-      leaf('CRM', '/follow-ups', Bell, { module: 'crm' }),
-      leaf('Contacts', '/crm/contacts', Users, { module: 'crm' }),
-      leaf('Companies', '/crm/companies', Building2, { module: 'crm' }),
+      // Three, from six. Enquiries was the same list one step earlier -- an
+      // unworked enquiry is now a lead wearing an "Uncontacted" badge (0166).
+      // Contacts and Companies were an org-chart layer on a business whose
+      // customer is a family; what they held lives on the lead itself.
+      //
+      // The path stays /follow-ups: /leads already belongs to the lead_sources
+      // module's route patterns, and every reminder and notification link
+      // points here.
+      leaf('Leads', '/follow-ups', Inbox, { module: 'crm' }),
       leaf('Clients', '/clients', Contact, { module: 'clients' }),
       leaf('Lead Sources', '/lead-sources', Megaphone, { module: 'lead_sources' }),
     ],

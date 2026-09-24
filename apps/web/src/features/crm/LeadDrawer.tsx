@@ -5,12 +5,12 @@ import {
   ArchiveRestore,
   Building2,
   Check,
-  Contact,
   Copy,
   Flame,
   FolderPlus,
   Mail,
   MessageCircle,
+  MessageSquare,
   Phone,
   Repeat,
   Square,
@@ -78,6 +78,27 @@ const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', 
  * when it continues. Everything saves on the spot — this is opened between
  * phone calls, not filled in like a form.
  */
+/**
+ * wa.me opens the chat with this person in whichever WhatsApp they have.
+ *
+ * Privyr's whole product rests on this: the message goes from the studio's own
+ * number, in a normal chat, with no Business API account and no per-message
+ * fee. Digits only -- wa.me rejects spaces, plus signs and dashes -- and a bare
+ * ten-digit Indian number needs its country code.
+ */
+function waLink(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const withCode = digits.length === 10 ? `91${digits}` : digits
+  return `https://wa.me/${withCode}`
+}
+
+const LEAD_TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'info', label: 'Info' },
+  { key: 'timeline', label: 'Timeline' },
+] as const
+type LeadTab = (typeof LEAD_TABS)[number]['key']
+
 export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => void }) {
   const update = useUpdateLead('Lead updated')
   const send = useSendTemplate()
@@ -88,6 +109,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   const [notes, setNotes] = useState(lead.notes ?? '')
   const [followUp, setFollowUp] = useState(toLocalInput(lead.follow_up_at))
   const [copied, setCopied] = useState(false)
+  const [tab, setTab] = useState<LeadTab>('overview')
   const move = useMoveStage()
   const { data: pipelines } = usePipelines()
   const { data: companies } = useCrmCompanies()
@@ -172,53 +194,91 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 </Link>
               </Button>
             )}
-            {lead.contact_id && (
-              <Button size="sm" variant="ghost" asChild>
-                <Link to="/crm/contacts" search={{ contact: lead.contact_id } as never}>
-                  <Contact /> Contact
-                </Link>
-              </Button>
-            )}
-            {lead.crm_company_id && (
-              <Button size="sm" variant="ghost" asChild>
-                <Link to="/crm/companies" search={{ company: lead.crm_company_id } as never}>
-                  <Building2 /> {lead.crm_company_name ?? 'Company'}
-                </Link>
-              </Button>
+            {/*
+              * The company is a fact about the lead now, not a link to its own
+              * page. Contacts and Companies were an org-chart layer on a
+              * business whose customer is a family; the record already carries
+              * the name, phone, email and city those pages showed, and the
+              * picker for both still sits under Info for the corporate shoot.
+              */}
+            {lead.crm_company_name && (
+              <StatusBadge tone="neutral">
+                <Building2 className="mr-1 size-3" />
+                {lead.crm_company_name}
+              </StatusBadge>
             )}
           </div>
 
-          {/* Reaching the person is the point of the screen, so it comes first. */}
-          <div className="flex flex-wrap gap-2">
-            {lead.phone && (
-              <>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={`tel:${lead.phone}`}>
-                    <Phone /> {lead.phone}
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(lead.phone!)
-                    setCopied(true)
-                    toast.success('Number copied')
-                  }}
-                >
-                  {copied ? <Check /> : <Copy />} Copy
-                </Button>
-              </>
-            )}
-            {lead.email && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={`mailto:${lead.email}`}>
-                  <Mail /> {lead.email}
+          {/*
+            * Reaching the person IS the screen, so the four ways to do it sit
+            * at the top and never move.
+            *
+            * They are disabled, not hidden, when that channel has no number or
+            * address. Hiding them -- which is what this did -- meant a lead
+            * with no email simply had no email button, and nothing told you
+            * whether that was the app or the record. A greyed-out button says
+            * which.
+            */}
+          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-2 border-b border-border bg-card px-1 pb-3">
+            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
+              {lead.phone ? (
+                <a href={`tel:${lead.phone}`}>
+                  <Phone /> Call
                 </a>
+              ) : (
+                <span>
+                  <Phone /> Call
+                </span>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
+              {lead.phone ? (
+                <a href={waLink(lead.phone)} target="_blank" rel="noreferrer">
+                  <MessageCircle /> WhatsApp
+                </a>
+              ) : (
+                <span>
+                  <MessageCircle /> WhatsApp
+                </span>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
+              {lead.phone ? (
+                <a href={`sms:${lead.phone}`}>
+                  <MessageSquare /> SMS
+                </a>
+              ) : (
+                <span>
+                  <MessageSquare /> SMS
+                </span>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" disabled={!lead.email} asChild={!!lead.email}>
+              {lead.email ? (
+                <a href={`mailto:${lead.email}`}>
+                  <Mail /> Email
+                </a>
+              ) : (
+                <span>
+                  <Mail /> Email
+                </span>
+              )}
+            </Button>
+            {lead.phone && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  void navigator.clipboard.writeText(lead.phone!)
+                  setCopied(true)
+                  toast.success('Number copied')
+                }}
+              >
+                {copied ? <Check /> : <Copy />} Copy
               </Button>
             )}
             {canEdit && (
-              <Button variant={lead.is_hot ? 'default' : 'outline'} size="sm" onClick={() => patch({ is_hot: !lead.is_hot })}>
+              <Button variant={lead.is_hot ? 'default' : 'outline'} size="sm" className="ml-auto" onClick={() => patch({ is_hot: !lead.is_hot })}>
                 <Flame /> {lead.is_hot ? 'Hot' : 'Mark hot'}
               </Button>
             )}
@@ -226,7 +286,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
 
           {canEdit && sendable.length > 0 && (
             <div className="rounded-lg border border-border p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Send a template</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick response</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Sends from the studio's WhatsApp when connected, otherwise opens your own app with the message filled in. Either way the lead is marked contacted.
               </p>
@@ -250,159 +310,274 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-stage">Stage{pipeline ? ` · ${pipeline.name}` : ''}</Label>
-              <Select
-                id="lead-stage"
-                value={lead.stage_id ?? ''}
-                onChange={(e) => moveTo(e.target.value)}
-                disabled={move.isPending || !canEdit || stages.length === 0}
+          {/*
+            * Three tabs, from one 780-line scroll: what you are doing about
+            * them, what you know about them, and what has happened. Privyr's
+            * shape, and it is the right one -- the fields you change on a call
+            * are a different set from the ones you filled in once.
+            */}
+          <div role="tablist" aria-label="Lead sections" className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+            {LEAD_TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  tab === t.key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
               >
-                {stages.length === 0 && <option value="">{STAGE_LABEL[lead.status]}</option>}
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.required_fields.length > 0 ? ' *' : ''}
-                  </option>
-                ))}
-              </Select>
-              {lead.lost_reason && (
-                <p className="text-xs text-muted-foreground">
-                  Lost: {lead.lost_reason}
-                  {lead.lost_competitor ? ` · to ${lead.lost_competitor}` : ''}
-                </p>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'overview' && (
+            <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-stage">Stage{pipeline ? ` · ${pipeline.name}` : ''}</Label>
+                <Select
+                  id="lead-stage"
+                  value={lead.stage_id ?? ''}
+                  onChange={(e) => moveTo(e.target.value)}
+                  disabled={move.isPending || !canEdit || stages.length === 0}
+                >
+                  {stages.length === 0 && <option value="">{STAGE_LABEL[lead.status]}</option>}
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.required_fields.length > 0 ? ' *' : ''}
+                    </option>
+                  ))}
+                </Select>
+                {lead.lost_reason && (
+                  <p className="text-xs text-muted-foreground">
+                    Lost: {lead.lost_reason}
+                    {lead.lost_competitor ? ` · to ${lead.lost_competitor}` : ''}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-owner">Owner</Label>
+                <Select id="lead-owner" value={lead.assigned_to ?? ''} onChange={(e) => patch({ assigned_to: e.target.value || null })} disabled={update.isPending || !canEdit}>
+                  <option value="">Unassigned</option>
+                  {(members ?? []).map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {/* Hot / warm / cold. The Mark hot button above only ever set the
+                  binary flag; a trigger keeps the two consistent either way, so
+                  picking "hot" here lights that button up too. */}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-quality">Quality</Label>
+                <Select
+                  id="lead-quality"
+                  value={lead.quality ?? ''}
+                  onChange={(e) => patch({ quality: (e.target.value || null) as LeadQuality | null })}
+                  disabled={update.isPending || !canEdit}
+                >
+                  <option value="">Not rated yet</option>
+                  <option value="hot">Hot — ready to book</option>
+                  <option value="warm">Warm — interested, no date</option>
+                  <option value="cold">Cold — just looking</option>
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="lead-followup">Next follow-up</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input id="lead-followup" type="datetime-local" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="w-56" disabled={!canEdit} />
+                <Button
+                  size="sm"
+                  disabled={update.isPending || !canEdit || followUp === toLocalInput(lead.follow_up_at)}
+                  onClick={() => patch({ follow_up_at: followUp ? new Date(followUp).toISOString() : null })}
+                >
+                  Set
+                </Button>
+                {lead.follow_up_at && canEdit && (
+                  <Button size="sm" variant="ghost" onClick={() => patch({ follow_up_at: null })} disabled={update.isPending}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {canEdit && (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {QUICK_DATES.map((q) => (
+                    <button
+                      key={q.label}
+                      type="button"
+                      onClick={() => {
+                        const at = new Date()
+                        at.setDate(at.getDate() + q.days)
+                        at.setHours(10, 0, 0, 0)
+                        patch({ follow_up_at: at.toISOString() })
+                      }}
+                      className={cn(
+                        'rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground',
+                        'transition-colors hover:border-primary/40 hover:text-foreground',
+                      )}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
+
+            {canEdit && <CadencePanel lead={lead} />}
+            {canEdit && <WorkflowPanel lead={lead} />}
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-owner">Owner</Label>
-              <Select id="lead-owner" value={lead.assigned_to ?? ''} onChange={(e) => patch({ assigned_to: e.target.value || null })} disabled={update.isPending || !canEdit}>
-                <option value="">Unassigned</option>
-                {(members ?? []).map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {/* Hot / warm / cold. The Mark hot button above only ever set the
-                binary flag; a trigger keeps the two consistent either way, so
-                picking "hot" here lights that button up too. */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-quality">Quality</Label>
-              <Select
-                id="lead-quality"
-                value={lead.quality ?? ''}
-                onChange={(e) => patch({ quality: (e.target.value || null) as LeadQuality | null })}
-                disabled={update.isPending || !canEdit}
-              >
-                <option value="">Not rated yet</option>
-                <option value="hot">Hot — ready to book</option>
-                <option value="warm">Warm — interested, no date</option>
-                <option value="cold">Cold — just looking</option>
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-title">Deal title</Label>
-              <Input id="lead-title" defaultValue={lead.title ?? ''} placeholder={`${lead.name ?? 'New'} wedding`} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.title) patch({ title: v }) }} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-company">Company</Label>
-              <Select id="lead-company" value={lead.crm_company_id ?? ''} onChange={(e) => patch({ crm_company_id: e.target.value || null })} disabled={update.isPending || !canEdit}>
-                <option value="">None</option>
-                {(companies ?? []).map((co) => (
-                  <option key={co.id} value={co.id}>
-                    {co.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-contact">Contact</Label>
-              <Select
-                id="lead-contact"
-                value={lead.contact_id ?? ''}
-                onChange={(e) => patch({ contact_id: e.target.value || null })}
-                disabled={update.isPending || !canEdit}
-              >
-                <option value="">None</option>
-                {(contacts ?? []).map((ct) => (
-                  <option key={ct.id} value={ct.id}>
-                    {ct.name ?? ct.phone ?? ct.email ?? 'Unnamed'}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-event-type">Event type</Label>
-              {canEdit ? (
-                <LookupSelect
-                  category="project_type"
-                  id="lead-event-type"
-                  aria-label="Event type"
-                  value={lead.event_type ?? ''}
-                  onChange={(v) => { const next = v || null; if (next !== lead.event_type) patch({ event_type: next }) }}
-                  defaults={EVENT_TYPE_DEFAULTS}
-                  placeholder="—"
-                  addLabel="Add an event type…"
-                  inputPlaceholder="e.g. Baby shower"
-                />
-              ) : (
-                <Input id="lead-event-type" value={lead.event_type ?? ''} disabled readOnly />
+              <Label htmlFor="lead-notes">Notes</Label>
+              <textarea
+                id="lead-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                disabled={!canEdit}
+                placeholder="What was said, what they asked for, what you promised."
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              {canEdit && (
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" disabled={update.isPending || notes === (lead.notes ?? '')} onClick={() => patch({ notes })}>
+                    Save notes
+                  </Button>
+                </div>
               )}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-event-date">Event date</Label>
-              <Input id="lead-event-date" type="date" defaultValue={lead.event_date ?? ''} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value || null; if (v !== lead.event_date) patch({ event_date: v }) }} />
+
+            {/*
+              * Both converts count. Offering the panel again to a lead that was
+              * converted client-only is how one enquiry ends up as two clients,
+              * each with its own projects and invoices.
+              */}
+            {canEdit && !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && (
+              <ConvertPanel lead={lead} onDone={onClose} />
+            )}
+
+            <QuotesPanel lead={lead} canEdit={canEdit} />
+            </div>
+          )}
+
+          {tab === 'info' && (
+            <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-title">Deal title</Label>
+                <Input id="lead-title" defaultValue={lead.title ?? ''} placeholder={`${lead.name ?? 'New'} wedding`} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.title) patch({ title: v }) }} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-company">Company</Label>
+                <Select id="lead-company" value={lead.crm_company_id ?? ''} onChange={(e) => patch({ crm_company_id: e.target.value || null })} disabled={update.isPending || !canEdit}>
+                  <option value="">None</option>
+                  {(companies ?? []).map((co) => (
+                    <option key={co.id} value={co.id}>
+                      {co.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-contact">Contact</Label>
+                <Select
+                  id="lead-contact"
+                  value={lead.contact_id ?? ''}
+                  onChange={(e) => patch({ contact_id: e.target.value || null })}
+                  disabled={update.isPending || !canEdit}
+                >
+                  <option value="">None</option>
+                  {(contacts ?? []).map((ct) => (
+                    <option key={ct.id} value={ct.id}>
+                      {ct.name ?? ct.phone ?? ct.email ?? 'Unnamed'}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-event-type">Event type</Label>
+                {canEdit ? (
+                  <LookupSelect
+                    category="project_type"
+                    id="lead-event-type"
+                    aria-label="Event type"
+                    value={lead.event_type ?? ''}
+                    onChange={(v) => { const next = v || null; if (next !== lead.event_type) patch({ event_type: next }) }}
+                    defaults={EVENT_TYPE_DEFAULTS}
+                    placeholder="—"
+                    addLabel="Add an event type…"
+                    inputPlaceholder="e.g. Baby shower"
+                  />
+                ) : (
+                  <Input id="lead-event-type" value={lead.event_type ?? ''} disabled readOnly />
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-event-date">Event date</Label>
+                <Input id="lead-event-date" type="date" defaultValue={lead.event_date ?? ''} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value || null; if (v !== lead.event_date) patch({ event_date: v }) }} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-event-location">Venue / location</Label>
+                <Input id="lead-event-location" defaultValue={lead.event_location ?? ''} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.event_location) patch({ event_location: v }) }} />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-city">City</Label>
+                <Input id="lead-city" defaultValue={lead.city ?? ''} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.city) patch({ city: v }) }} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-alt-phone">Alternate phone</Label>
+                <Input id="lead-alt-phone" defaultValue={lead.alternate_phone ?? ''} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.alternate_phone) patch({ alternate_phone: v }) }} />
+              </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-event-location">Venue / location</Label>
-              <Input id="lead-event-location" defaultValue={lead.event_location ?? ''} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.event_location) patch({ event_location: v }) }} />
+              <Label htmlFor="lead-group">Group / tag</Label>
+              <Input id="lead-group" defaultValue={lead.group_name ?? ''} placeholder="e.g. Hot Lead, Already Booked" disabled={!canEdit}
+                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.group_name) patch({ group_name: v }) }} />
             </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-city">City</Label>
-              <Input id="lead-city" defaultValue={lead.city ?? ''} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.city) patch({ city: v }) }} />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-value">Deal value (₹)</Label>
+                <Input id="lead-value" type="number" min={0} defaultValue={lead.deal_value ?? ''} placeholder="0" disabled={!canEdit}
+                  onBlur={(e)=>{ const v = e.target.value ? Number(e.target.value) : null; if (v !== lead.deal_value) patch({ deal_value: v })}} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-prob">Probability %</Label>
+                <Input id="lead-prob" type="number" min={0} max={100} defaultValue={lead.probability ?? ''} placeholder="auto" disabled={!canEdit}
+                  onBlur={(e)=>{ const v = e.target.value === '' ? null : Number(e.target.value); if (v !== lead.probability) patch({ probability: v })}} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lead-close">Expected close</Label>
+                <Input id="lead-close" type="date" defaultValue={lead.close_date ?? ''} disabled={!canEdit}
+                  onBlur={(e) => { const v = e.target.value || null; if (v !== lead.close_date) patch({ close_date: v }) }} />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-alt-phone">Alternate phone</Label>
-              <Input id="lead-alt-phone" defaultValue={lead.alternate_phone ?? ''} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.alternate_phone) patch({ alternate_phone: v }) }} />
+            {lead.sla_due_at && !['converted','lost'].includes(lead.status) && (
+              <p className={`text-xs font-medium ${new Date(lead.sla_due_at).getTime() < Date.now() ? 'text-destructive' : 'text-muted-foreground'}`}>
+                SLA {new Date(lead.sla_due_at).getTime() < Date.now() ? 'breached' : 'due'} {when.format(new Date(lead.sla_due_at))} · {lead.probability ?? 10}% · ₹{lead.deal_value ?? 0}
+              </p>
+            )}
             </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="lead-group">Group / tag</Label>
-            <Input id="lead-group" defaultValue={lead.group_name ?? ''} placeholder="e.g. Hot Lead, Already Booked" disabled={!canEdit}
-              onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.group_name) patch({ group_name: v }) }} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-value">Deal value (₹)</Label>
-              <Input id="lead-value" type="number" min={0} defaultValue={lead.deal_value ?? ''} placeholder="0" disabled={!canEdit}
-                onBlur={(e)=>{ const v = e.target.value ? Number(e.target.value) : null; if (v !== lead.deal_value) patch({ deal_value: v })}} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-prob">Probability %</Label>
-              <Input id="lead-prob" type="number" min={0} max={100} defaultValue={lead.probability ?? ''} placeholder="auto" disabled={!canEdit}
-                onBlur={(e)=>{ const v = e.target.value === '' ? null : Number(e.target.value); if (v !== lead.probability) patch({ probability: v })}} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lead-close">Expected close</Label>
-              <Input id="lead-close" type="date" defaultValue={lead.close_date ?? ''} disabled={!canEdit}
-                onBlur={(e) => { const v = e.target.value || null; if (v !== lead.close_date) patch({ close_date: v }) }} />
-            </div>
-          </div>
+          )}
+
+          {tab === 'timeline' && <Timeline lead={lead} />}
+
           <LostReasonDialog
             open={losingTo !== null}
             pending={move.isPending}
@@ -412,89 +587,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               move.mutate({ leadId: lead.id, stage_id: losingTo, ...d }, { onSuccess: () => setLosingTo(null) })
             }}
           />
-          {lead.sla_due_at && !['converted','lost'].includes(lead.status) && (
-            <p className={`text-xs font-medium ${new Date(lead.sla_due_at).getTime() < Date.now() ? 'text-destructive' : 'text-muted-foreground'}`}>
-              SLA {new Date(lead.sla_due_at).getTime() < Date.now() ? 'breached' : 'due'} {when.format(new Date(lead.sla_due_at))} · {lead.probability ?? 10}% · ₹{lead.deal_value ?? 0}
-            </p>
-          )}
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="lead-followup">Next follow-up</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input id="lead-followup" type="datetime-local" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="w-56" disabled={!canEdit} />
-              <Button
-                size="sm"
-                disabled={update.isPending || !canEdit || followUp === toLocalInput(lead.follow_up_at)}
-                onClick={() => patch({ follow_up_at: followUp ? new Date(followUp).toISOString() : null })}
-              >
-                Set
-              </Button>
-              {lead.follow_up_at && canEdit && (
-                <Button size="sm" variant="ghost" onClick={() => patch({ follow_up_at: null })} disabled={update.isPending}>
-                  Clear
-                </Button>
-              )}
-            </div>
-            {canEdit && (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {QUICK_DATES.map((q) => (
-                  <button
-                    key={q.label}
-                    type="button"
-                    onClick={() => {
-                      const at = new Date()
-                      at.setDate(at.getDate() + q.days)
-                      at.setHours(10, 0, 0, 0)
-                      patch({ follow_up_at: at.toISOString() })
-                    }}
-                    className={cn(
-                      'rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground',
-                      'transition-colors hover:border-primary/40 hover:text-foreground',
-                    )}
-                  >
-                    {q.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {canEdit && <CadencePanel lead={lead} />}
-          {canEdit && <WorkflowPanel lead={lead} />}
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="lead-notes">Notes</Label>
-            <textarea
-              id="lead-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              disabled={!canEdit}
-              placeholder="What was said, what they asked for, what you promised."
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            {canEdit && (
-              <div className="flex justify-end">
-                <Button size="sm" variant="outline" disabled={update.isPending || notes === (lead.notes ?? '')} onClick={() => patch({ notes })}>
-                  Save notes
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/*
-            * Both converts count. Offering the panel again to a lead that was
-            * converted client-only is how one enquiry ends up as two clients,
-            * each with its own projects and invoices.
-            */}
-          {canEdit && !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && (
-            <ConvertPanel lead={lead} onDone={onClose} />
-          )}
-
-          <QuotesPanel lead={lead} canEdit={canEdit} />
-
-          <Timeline lead={lead} />
-
           {canEdit && (
             <div className="flex justify-end border-t border-border pt-3">
               <Button size="sm" variant="ghost" disabled={update.isPending} onClick={() => patch({ is_archived: !lead.is_archived })}>
