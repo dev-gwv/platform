@@ -9,6 +9,7 @@ import {
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
+import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
 import { ResetPasswordPage } from '@/routes/reset-password'
@@ -250,7 +251,12 @@ const routeTree = rootRoute.addChildren([
   ]),
 ])
 
-export const router = createRouter({ routeTree })
+export const router = createRouter({
+  routeTree,
+  // A screen that breaks says so in plain words, with a way on, and keeps the
+  // menu around it -- never the bare "Something went wrong!".
+  defaultErrorComponent: RouteError,
+})
 
 function NotFound() {
   return (

@@ -435,17 +435,18 @@ export function DeliverableCard({
 
         {canEdit && (
           <div className="flex shrink-0 items-center justify-end gap-1" onClick={keepControlClicks}>
-            {!dropped && d.assignee_id && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-8 text-muted-foreground"
+            {!dropped && (
+              <button
+                type="button"
                 onClick={() => onOpen('voice')}
-                aria-label={`Send ${d.assignee_name ?? 'the editor'} a voice note`}
-                title="Send a voice note"
+                aria-label={`Send ${d.assignee_name ?? 'a'} voice note`}
+                title="Record a voice note"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/5 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
               >
-                <Mic />
-              </Button>
+                <span className="size-2 rounded-full bg-destructive" aria-hidden />
+                <Mic className="size-3.5" aria-hidden />
+                <span className="hidden sm:inline">Voice note</span>
+              </button>
             )}
             {!dropped && <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} />}
             <RowMenu label={`More for ${d.title}`} items={items} />

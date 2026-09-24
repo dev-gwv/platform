@@ -7,6 +7,7 @@ import { Input, Textarea } from '@/shared/ui/input'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -52,7 +53,9 @@ export function DeliverableDrawer({
     <Sheet open={!!d} onOpenChange={(open) => !open && onClose()}>
       {d && (
         <SheetContent title={d.title} description={`${stageName(d, stages)} · ${d.shoot_name ?? 'Whole project'}`}>
-          <DrawerBody key={`${d.id}:${action ?? ''}`} d={d} canEdit={canEdit} action={action} onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} />
+          <PanelBoundary resetKey={d.id} label="this deliverable">
+            <DrawerBody key={`${d.id}:${action ?? ''}`} d={d} canEdit={canEdit} action={action} onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} />
+          </PanelBoundary>
         </SheetContent>
       )}
     </Sheet>
@@ -403,42 +406,43 @@ function Composer({
     add.mutate({ kind: 'text', body }, { onSuccess: () => setText('') })
   }
 
+  // Every control stays mounted and is only shown or hidden. Swapping them
+  // in and out as you type is what dictation and grammar extensions trip
+  // over -- they hold on to the old text box and React then fails to remove
+  // it, taking the screen down.
+  const typing = !!text.trim() && !recording
   return (
     <div className="border-t border-border bg-card px-4 py-3">
       <div className="flex items-end gap-2">
-        {!recording && (
-          <Textarea
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
-            placeholder={editorName ? `Message ${editorName.split(' ')[0]}…` : 'Write a note…'}
-            aria-label="Write a note"
-            className="max-h-32 min-h-10 flex-1 resize-none rounded-2xl bg-background py-2.5 text-sm"
+        <Textarea
+          rows={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              send()
+            }
+          }}
+          placeholder={editorName ? `Message ${editorName.split(' ')[0]}…` : 'Write a note…'}
+          aria-label="Write a note"
+          className={cn('max-h-32 min-h-10 flex-1 resize-none rounded-2xl bg-background py-2.5 text-sm', recording && 'hidden')}
+        />
+        <Button size="icon" className={cn('rounded-full', !typing && 'hidden')} onClick={send} disabled={add.isPending} aria-label="Send note">
+          <Send />
+        </Button>
+        <div className={cn(recording && 'flex-1', typing && 'hidden')}>
+          <VoiceNoteRecorder
+            autoStart={startRecording}
+            sending={voice.isPending}
+            onBusyChange={setRecording}
+            onSend={(blob, seconds) => voice.mutateAsync({ blob, seconds })}
           />
-        )}
-        {text.trim() && !recording ? (
-          <Button size="icon" className="rounded-full" onClick={send} disabled={add.isPending} aria-label="Send note">
-            <Send />
-          </Button>
-        ) : (
-          <div className={cn(recording && 'flex-1')}>
-            <VoiceNoteRecorder
-              autoStart={startRecording}
-              sending={voice.isPending}
-              onBusyChange={setRecording}
-              onSend={(blob, seconds) => voice.mutateAsync({ blob, seconds })}
-            />
-          </div>
-        )}
+        </div>
       </div>
       <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-        {editorName ? `${editorName} gets a notification.` : 'The project owner gets a notification.'} Tap the mic to send a voice note.
+        {editorName ? `${editorName} gets a notification.` : 'The project owner gets a notification.'} Type a note, or tap
+        the red Voice note button and speak.
       </p>
     </div>
   )

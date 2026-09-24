@@ -16,7 +16,22 @@ type State =
   | { kind: 'idle' }
   | { kind: 'recording'; started: number }
   | { kind: 'preview'; blob: Blob; url: string; seconds: number }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; retry: boolean }
+
+/** Why the microphone did not start, in words a person can act on. */
+export function micProblem(e: unknown): { message: string; retry: boolean } {
+  const name = e instanceof DOMException || e instanceof Error ? e.name : ''
+  if (name === 'NotAllowedError' || name === 'SecurityError')
+    return {
+      message: 'The microphone is blocked for this site. Click the 🔒 (or ⓘ) left of the address, set Microphone to Allow, then tap Try again.',
+      retry: true,
+    }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError')
+    return { message: 'No microphone was found. Plug one in (or check your headset), then try again.', retry: true }
+  if (name === 'NotReadableError' || name === 'AbortError')
+    return { message: 'Another app is using the microphone. Close it (Zoom, Meet…) and try again.', retry: true }
+  return { message: 'The microphone could not start. Try again, or write a note instead.', retry: true }
+}
 
 /**
  * Record a voice note in place: tap the mic, talk, tap stop, listen back, send.
@@ -31,6 +46,7 @@ export function VoiceNoteRecorder({
   autoStart = false,
   maxSeconds = MAX_SECONDS,
   sendLabel = 'Send',
+  compact = false,
 }: {
   onSend: (blob: Blob, seconds: number) => Promise<unknown>
   sending: boolean
@@ -41,6 +57,8 @@ export function VoiceNoteRecorder({
   maxSeconds?: number
   /** The word on the button after listening back; "Use this" where it is kept for later. */
   sendLabel?: string
+  /** Just the dot and the mic, where there is no room for the words. */
+  compact?: boolean
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' })
   const [now, setNow] = useState(Date.now())
@@ -80,7 +98,7 @@ export function VoiceNoteRecorder({
 
   async function start() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setState({ kind: 'error', message: 'This browser cannot record. Write a note instead.' })
+      setState({ kind: 'error', message: 'This browser cannot record. Write a note instead.', retry: false })
       return
     }
     try {
@@ -102,17 +120,55 @@ export function VoiceNoteRecorder({
       rec.start(250)
       setNow(started)
       setState({ kind: 'recording', started })
-    } catch {
-      setState({ kind: 'error', message: 'Allow the microphone in your browser to record a voice note.' })
+      listen(s)
+    } catch (e) {
+      setState({ kind: 'error', ...micProblem(e) })
     }
   }
 
+  /** A live level, so people can see it is hearing them. */
+  const [levels, setLevels] = useState<number[]>(() => Array(12).fill(0))
+  const audioCtx = useRef<AudioContext | null>(null)
+  function listen(s: MediaStream) {
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Ctx) return
+      const ctx = new Ctx()
+      audioCtx.current = ctx
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 64
+      ctx.createMediaStreamSource(s).connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        if (ctx.state === 'closed') return
+        analyser.getByteFrequencyData(data)
+        const bars = Array.from({ length: 12 }, (_, i) => (data[i + 1] ?? 0) / 255)
+        setLevels(bars)
+        requestAnimationFrame(tick)
+      }
+      tick()
+    } catch {
+      /* the meter is a nicety; recording works without it */
+    }
+  }
+  useEffect(() => {
+    if (state.kind !== 'recording') {
+      void audioCtx.current?.close().catch(() => undefined)
+      audioCtx.current = null
+    }
+  }, [state.kind])
+
   if (state.kind === 'recording') {
     return (
-      <div className="flex w-full items-center gap-3 rounded-full border border-destructive/30 bg-destructive/5 py-1.5 pl-4 pr-1.5">
-        <span className="ipc-rec-dot size-2.5 rounded-full bg-destructive" aria-hidden />
-        <span className="flex-1 text-sm font-medium tabular-nums text-destructive">
+      <div className="flex w-full items-center gap-3 rounded-full border border-destructive/40 bg-destructive/5 py-1.5 pl-4 pr-1.5">
+        <span className="ipc-rec-dot size-3 rounded-full bg-destructive" aria-hidden />
+        <span className="text-sm font-semibold tabular-nums text-destructive">
           Recording {clock((now - state.started) / 1000)}
+        </span>
+        <span className="flex h-6 flex-1 items-center gap-0.5" aria-hidden>
+          {levels.map((v, i) => (
+            <span key={i} className="w-1 rounded-full bg-destructive/70 transition-[height] duration-75" style={{ height: `${Math.max(12, Math.round(v * 100))}%` }} />
+          ))}
         </span>
         <Button size="sm" variant="destructive" className="rounded-full" onClick={() => recorder.current?.stop()}>
           <Square className="fill-current" /> Stop
@@ -143,19 +199,27 @@ export function VoiceNoteRecorder({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Button
+    <div className="flex flex-col items-end gap-1.5">
+      {/* A red dot and the words: nobody should have to guess this records. */}
+      <button
         type="button"
-        size="icon"
-        variant="outline"
-        className="rounded-full"
         onClick={() => void start()}
         aria-label="Record a voice note"
         title="Record a voice note"
+        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
       >
-        <Mic />
-      </Button>
-      {state.kind === 'error' && <span className="text-xs text-destructive">{state.message}</span>}
+        <span className="relative flex size-3 items-center justify-center" aria-hidden>
+          <span className="absolute size-3 animate-ping rounded-full bg-destructive/30" />
+          <span className="size-2.5 rounded-full bg-destructive" />
+        </span>
+        <Mic className="size-4" aria-hidden />
+        <span className={compact ? 'hidden' : 'hidden sm:inline'}>{state.kind === 'error' && state.retry ? 'Try again' : 'Voice note'}</span>
+      </button>
+      {state.kind === 'error' && (
+        <p role="alert" className="max-w-xs rounded-lg bg-destructive/5 px-2.5 py-1.5 text-left text-xs text-destructive">
+          {state.message}
+        </p>
+      )}
     </div>
   )
 }

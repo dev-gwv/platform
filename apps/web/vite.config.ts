@@ -2,7 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import fs from 'node:fs'
 import path from 'node:path'
+import type { Plugin } from 'vite'
 import { fileURLToPath } from 'node:url'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -52,10 +54,48 @@ const mapUpload = ((): { authToken: string; org: string; project: string } | nul
 })()
 const uploadMaps = mapUpload !== null
 
+/**
+ * `vite preview` sends the same headers Cloudflare does (public/_headers), so
+ * a policy that blocks something -- the microphone, blob: audio -- shows up
+ * locally instead of first on the live site. Only the `/*` block is read;
+ * connect-src is widened to the local API, which is plain http.
+ */
+function previewHeaders(): Plugin {
+  const read = (): [string, string][] => {
+    const text = fs.readFileSync(path.resolve(dirname, 'public/_headers'), 'utf8')
+    const out: [string, string][] = []
+    let inAll = false
+    for (const line of text.split('\n')) {
+      if (line.startsWith('#') || !line.trim()) continue
+      if (!line.startsWith(' ')) {
+        inAll = line.trim() === '/*'
+        continue
+      }
+      const at = line.indexOf(':')
+      if (inAll && at > 0) out.push([line.slice(0, at).trim(), line.slice(at + 1).trim()])
+    }
+    return out
+  }
+  return {
+    name: 'ipc-preview-headers',
+    configurePreviewServer(server) {
+      const api = process.env['VITE_API_BASE_URL'] ?? ''
+      server.middlewares.use((_req, res, next) => {
+        for (const [k, v] of read()) {
+          if (k.toLowerCase() === 'strict-transport-security') continue
+          res.setHeader(k, k.toLowerCase() === 'content-security-policy' && api ? v.replace("connect-src 'self'", `connect-src 'self' ${api}`) : v)
+        }
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    previewHeaders(),
     ...(mapUpload
       ? [
           sentryVitePlugin({
