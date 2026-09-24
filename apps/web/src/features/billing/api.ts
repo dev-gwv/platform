@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
 import {
+  billingOverview,
   gstState,
   invoiceBankAccount,
   invoiceBankAccountList,
@@ -25,6 +26,7 @@ import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { invalidateMoney } from './invalidate'
 
 const invoicesLegacy = invoiceListItem.array()
 const states = gstState.array()
@@ -290,7 +292,7 @@ export function useCreateInvoice() {
       }),
     onSuccess: () => {
       toast.success('Invoice created')
-      void qc.invalidateQueries({ queryKey: ['invoices'] })
+      invalidateMoney(qc)
     },
   })
 }
@@ -302,8 +304,7 @@ export function useUpdateInvoice(invoiceId: string) {
       callApi(`/billing/invoices/${invoiceId}`, { method: 'PATCH', body: input, responseSchema: anySchema }),
     onSuccess: () => {
       toast.success('Invoice updated')
-      void qc.invalidateQueries({ queryKey: ['invoices'] })
-      void qc.invalidateQueries({ queryKey: ['invoices', invoiceId] })
+      invalidateMoney(qc)
     },
   })
 }
@@ -314,7 +315,7 @@ export function useDeleteInvoice() {
     mutationFn: (id: string) => callApi(`/billing/invoices/${id}`, { method: 'DELETE', responseSchema: anySchema }),
     onSuccess: () => {
       toast.success('Invoice deleted')
-      void qc.invalidateQueries({ queryKey: ['invoices'] })
+      invalidateMoney(qc)
     },
   })
 }
@@ -330,7 +331,7 @@ export function useRecordPayment(invoiceId: string) {
       }),
     onSuccess: () => {
       toast.success('Payment recorded')
-      void qc.invalidateQueries({ queryKey: ['invoices'] })
+      invalidateMoney(qc)
     },
   })
 }
@@ -404,7 +405,7 @@ export function useCreateReceivedPayment() {
       }),
     onSuccess: () => {
       toast.success('Payment added')
-      void qc.invalidateQueries({ queryKey: ['received-payments'] })
+      invalidateMoney(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -417,7 +418,7 @@ export function useUpdateReceivedPayment(id: string) {
       callApi(`/billing/payments/${id}`, { method: 'PATCH', body: input, responseSchema: z.object({ ok: z.boolean() }) }),
     onSuccess: () => {
       toast.success('Payment updated')
-      void qc.invalidateQueries({ queryKey: ['received-payments'] })
+      invalidateMoney(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -429,7 +430,7 @@ export function useDeleteReceivedPayment() {
     mutationFn: (id: string) => callApi(`/billing/payments/${id}`, { method: 'DELETE', responseSchema: anySchema }),
     onSuccess: () => {
       toast.success('Payment deleted')
-      void qc.invalidateQueries({ queryKey: ['received-payments'] })
+      invalidateMoney(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -455,8 +456,55 @@ export function useSetPaymentCleared() {
       }),
     onSuccess: (_r, v) => {
       toast.success(v.cleared ? 'Marked as banked.' : 'Bank confirmation removed.')
-      void qc.invalidateQueries({ queryKey: ['billing', 'payments'] })
-      void qc.invalidateQueries({ queryKey: ['financials', 'reconciliation'] })
+      invalidateMoney(qc)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+const overviewSchema = billingOverview
+
+/** The Billing overview: owed, late, received, and the lists behind them. */
+export function useBillingOverview() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['billing', 'overview'],
+    queryFn: () => callApi('/billing/overview', { responseSchema: overviewSchema }),
+    enabled: !!session && access.hasModule('billing'),
+    staleTime: 15_000,
+  })
+}
+
+/** Make (or replace) the link a client opens without logging in. */
+export async function issueInvoiceLink(invoiceId: string): Promise<string | null> {
+  try {
+    const r = await callApi(`/billing/invoices/${invoiceId}/share`, { method: 'POST', body: {}, responseSchema: z.object({ link: z.string() }) })
+    return r.link
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Could not make the invoice link.')
+    return null
+  }
+}
+
+export function useRevokeInvoiceLink() {
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      callApi(`/billing/invoices/${invoiceId}/share`, { method: 'POST', body: { revoke: true }, responseSchema: anySchema }),
+    onSuccess: () => toast.success('The old link no longer works.'),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** Cancel an invoice; its payments stay on the project. */
+export function useCancelInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      callApi(`/billing/invoices/${invoiceId}/cancel`, { method: 'POST', body: {}, responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Invoice cancelled')
+      invalidateMoney(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })

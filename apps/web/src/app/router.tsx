@@ -32,6 +32,9 @@ import { TeamAllocationPage } from '@/routes/team-allocation'
 import { DataManagementPage } from '@/routes/data-management'
 import { MyWorkPage } from '@/routes/my-work'
 import { BillingPage } from '@/routes/billing'
+import { InvoicesPage } from '@/routes/billing/invoices'
+import { PaymentsPage } from '@/routes/billing/payments'
+import { PublicInvoicePage } from '@/routes/public-invoice'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
@@ -151,6 +154,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/team-terms', TeamTermsAcknowledgePage),
   publicRoute('/quotation', QuotationPage),
   publicRoute('/receipt', ReceiptPage),
+  publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
 
@@ -211,6 +215,8 @@ const routeTree = rootRoute.addChildren([
   route('/attendance/my', () => <AttendancePage initialTab="mine" />),
   route('/attendance/$uid', AttendanceUidPage),
   route('/billing', BillingPage),
+  route('/billing/invoices', InvoicesPage),
+  route('/billing/payments', PaymentsPage),
   route('/billing/templates', InvoiceTemplatesPage),
   route('/billing/settings', InvoiceTemplatesPage),
   route('/billing/invoices/new', () => <BillingPage newInvoice />),

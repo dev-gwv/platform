@@ -1,20 +1,23 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { CheckCircle2, FileText, Hourglass, IndianRupee, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
-import type { ProjectDetail } from '@ipc/contracts'
+import { CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
+import type { ProjectBilling, ProjectDetail } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
-import { Input, Label } from '@/shared/ui/input'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useAddPayment, useDeletePayment, useUpdatePayment, useUpdateQuotation } from '@/features/projects/api'
+import { useDeletePayment, useProjectBilling, useUpdatePayment, useUpdateQuotation } from '@/features/projects/api'
 import { useProfitAndLoss } from '@/features/financials/api'
 import { issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/features/billing/receiptShare'
+import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/RecordPaymentDialog'
+import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
+import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
+import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
+import { dueText, invoiceBadge, shortDate } from '@/features/billing/status'
 
 type Payment = ProjectDetail['payments'][number]
 
@@ -83,18 +86,115 @@ export function CollectionBar({ project, onRecord }: { project: ProjectDetail; o
  * those who may see it. The monthly allocation report, with its methods and
  * pickers, lives on the Profit page where it belongs.
  */
-export function BillingTab({ project, canEdit }: { project: ProjectDetail; canEdit: boolean }) {
-  const [editing, setEditing] = useState<Payment | 'new' | null>(null)
+export function BillingTab({
+  project,
+  canEdit,
+  onOpenTab,
+}: {
+  project: ProjectDetail
+  canEdit: boolean
+  onOpenTab?: ((tab: 'terms') => void) | undefined
+}) {
+  const access = useAccess()
+  const canBill = access.hasModule('billing')
+  const canInvoice = access.hasAction('billing', 'create')
+  const [editing, setEditing] = useState<{ payment?: Payment; invoiceId?: string; amount?: number } | null>(null)
+  const [invoicing, setInvoicing] = useState<Partial<InvoiceFormValues> | null>(null)
+  const billing = useProjectBilling(project.id)
   const m = projectMoney(project)
   const payments = [...project.payments].sort((a, b) => b.paid_on.localeCompare(a.paid_on))
+  const invoices = billing.data?.invoices ?? null
+  const live = (invoices ?? []).filter((i) => i.status !== 'cancelled' && i.status !== 'draft')
+  const openInvoices: OpenInvoice[] = live.filter((i) => i.balance_due > 0)
+
+  /** A new invoice for this project, with one line when it is for a part of the plan. */
+  const invoiceFor = (line?: { description: string; amount: number }) =>
+    setInvoicing({
+      client_id: project.client_id,
+      project_id: project.id,
+      // Raised from the project to be sent: a draft could not be paid or shared.
+      status: 'sent',
+      ...(line ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] } : {}),
+    })
 
   return (
     <div className="mt-4 flex flex-col gap-4">
       <Card>
         <CardContent className="p-4">
-          <CollectionBar project={project} onRecord={canEdit ? () => setEditing('new') : undefined} />
+          <CollectionBar project={project} onRecord={canEdit ? () => setEditing({}) : undefined} />
+          {canBill && live.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Invoiced {formatINR(live.reduce((n, i) => n + i.total, 0))} in {live.length} invoice{live.length === 1 ? '' : 's'}
+              {openInvoices.length > 0 ? ` · ${formatINR(openInvoices.reduce((n, i) => n + i.balance_due, 0))} unpaid on them` : ' · all paid'}
+            </p>
+          )}
         </CardContent>
       </Card>
+
+      <PlanCard
+        project={project}
+        plan={billing.data?.plan ?? null}
+        loading={billing.isLoading}
+        invoicedValue={live.reduce((n, i) => n + i.taxable, 0)}
+        canEdit={canEdit}
+        canInvoice={canInvoice}
+        onRecord={(amount) => setEditing({ amount })}
+        onInvoice={(description, amount) => invoiceFor({ description, amount })}
+        onOpenTerms={onOpenTab ? () => onOpenTab('terms') : undefined}
+      />
+
+      {canBill && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="size-4 text-tone-blue" aria-hidden /> Invoices
+                <span className="text-xs font-normal text-muted-foreground">{invoices?.length ?? 0}</span>
+              </p>
+              {canInvoice && (
+                <Button size="sm" variant="outline" onClick={() => invoiceFor()}>
+                  <Plus /> Create invoice
+                </Button>
+              )}
+            </div>
+            {!invoices || invoices.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                No invoices for this project yet.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {invoices.map((inv) => {
+                  const badge = invoiceBadge(inv)
+                  const due = dueText(inv)
+                  return (
+                    <li key={inv.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
+                      <Link to="/billing/invoices/$id" params={{ id: inv.id }} className="min-w-[7rem] font-semibold text-primary hover:underline">
+                        {inv.invoice_number}
+                      </Link>
+                      <span className="text-xs text-muted-foreground">
+                        {shortDate(inv.invoice_date)}
+                        {due ? ` · ${due}` : ''}
+                      </span>
+                      <span className="ml-auto text-sm tabular-nums">
+                        {formatINR(inv.total)}
+                        {inv.balance_due > 0 && inv.status !== 'cancelled' && (
+                          <span className="text-xs text-muted-foreground"> · {formatINR(inv.balance_due)} due</span>
+                        )}
+                      </span>
+                      <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+                      {canEdit && inv.balance_due > 0 && inv.status !== 'cancelled' && inv.status !== 'draft' && (
+                        <Button size="sm" variant="ghost" onClick={() => setEditing({ invoiceId: inv.id, amount: inv.balance_due })}>
+                          <IndianRupee /> Record
+                        </Button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-4">
@@ -106,7 +206,7 @@ export function BillingTab({ project, canEdit }: { project: ProjectDetail; canEd
             <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-6 text-center">
               <p className="text-sm text-muted-foreground">No payments yet. Record the advance when it comes in.</p>
               {canEdit && (
-                <Button size="sm" onClick={() => setEditing('new')}>
+                <Button size="sm" onClick={() => setEditing({})}>
                   <Plus /> Record payment
                 </Button>
               )}
@@ -120,7 +220,8 @@ export function BillingTab({ project, canEdit }: { project: ProjectDetail; canEd
                   paid={m.isPaid(p)}
                   project={project}
                   canEdit={canEdit}
-                  onEdit={() => setEditing(p)}
+                  canBill={canBill}
+                  onEdit={() => setEditing({ payment: p })}
                 />
               ))}
             </ul>
@@ -132,35 +233,148 @@ export function BillingTab({ project, canEdit }: { project: ProjectDetail; canEd
       <QuotationCard project={project} canEdit={canEdit} />
 
       {editing && (
-        <PaymentDialog
-          key={editing === 'new' ? 'new' : editing.id}
-          projectId={project.id}
-          payment={editing === 'new' ? undefined : editing}
-          suggested={m.due}
+        <RecordPaymentDialog
+          target={{ kind: 'project', projectId: project.id, invoices: canBill ? openInvoices : [], invoiceId: editing.invoiceId }}
+          payment={editing.payment}
+          suggested={editing.amount ?? m.due}
           onClose={() => setEditing(null)}
         />
       )}
+      {invoicing && <NewInvoiceDialog initial={invoicing} openAfter={false} onClose={() => setInvoicing(null)} />}
     </div>
   )
 }
+
+/**
+ * The plan the client agreed to in the terms, part by part: how much, when,
+ * and whether it is in. The part due next carries the two things to do
+ * about it -- invoice it, or record the money.
+ */
+function PlanCard({
+  project,
+  plan,
+  loading,
+  invoicedValue,
+  canEdit,
+  canInvoice,
+  onRecord,
+  onInvoice,
+  onOpenTerms,
+}: {
+  project: ProjectDetail
+  plan: ProjectBilling['plan']
+  loading: boolean
+  invoicedValue: number
+  canEdit: boolean
+  canInvoice: boolean
+  onRecord: (amount: number) => void
+  onInvoice: (description: string, amount: number) => void
+  onOpenTerms?: (() => void) | undefined
+}) {
+  if (loading) return null
+  if (!plan) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <CalendarClock className="size-4 text-muted-foreground" aria-hidden />
+          <div className="min-w-[12rem] flex-1">
+            <p className="text-sm font-semibold">Payment plan</p>
+            <p className="text-xs text-muted-foreground">
+              No plan agreed yet. Add the instalments (like 30% advance) in the terms, and each one shows here with what has come in.
+            </p>
+          </div>
+          {onOpenTerms && (
+            <Button size="sm" variant="outline" onClick={onOpenTerms}>
+              Open Terms
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+  const m = projectMoney(project)
+  const total = project.total_cost > 0 ? project.total_cost : (plan.total_cost ?? 0)
+  const rows = planStatus({ instalments: plan.instalments, total, received: m.received, invoiced: invoicedValue })
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <CalendarClock className="size-4 text-tone-violet" aria-hidden /> Payment plan
+          </p>
+          <span className="text-xs text-muted-foreground">
+            {plan.agreed_at ? `Agreed by the client on ${shortDate(plan.agreed_at)}` : 'Sent in the terms, not agreed yet'}
+          </span>
+        </div>
+        <ol className="flex flex-col gap-1.5">
+          {rows.map((r) => (
+            <li
+              key={r.index}
+              className={cn(
+                'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2',
+                r.state === 'received' ? 'border-border bg-tone-green-soft/30' : r.state === 'due' || r.state === 'part' ? 'border-tone-amber/50 bg-tone-amber-soft/30' : 'border-border',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                  r.state === 'received' ? 'bg-tone-green text-white' : 'bg-muted text-muted-foreground',
+                )}
+                aria-hidden
+              >
+                {r.state === 'received' ? <Check className="size-3.5" /> : r.index + 1}
+              </span>
+              <div className="min-w-[9rem] flex-1">
+                <p className="text-sm font-semibold">{r.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[r.due_trigger, r.state === 'part' ? `${formatINR(r.received)} in, ${formatINR(r.remaining)} to come` : null].filter(Boolean).join(' · ') || '\u00a0'}
+                </p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums">{formatINR(r.amount)}</span>
+              <StatusBadge tone={PLAN_TONE[r.state]}>{PLAN_STATE_LABEL[r.state]}</StatusBadge>
+              {(r.state === 'due' || r.state === 'part' || r.state === 'invoiced') && (
+                <div className="flex w-full justify-end gap-1.5 sm:w-auto">
+                  {canInvoice && r.state !== 'invoiced' && (
+                    <Button size="sm" variant="outline" onClick={() => onInvoice(`${r.label} — ${project.name}`, r.remaining)}>
+                      <FileText /> Invoice this
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button size="sm" onClick={() => onRecord(r.remaining)}>
+                      <IndianRupee /> Record payment
+                    </Button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
+  )
+}
+
+const PLAN_TONE = { received: 'success', part: 'warning', invoiced: 'info', due: 'warning', upcoming: 'neutral' } as const
 
 function PaymentItem({
   p,
   paid,
   project,
   canEdit,
+  canBill,
   onEdit,
 }: {
   p: Payment
   paid: boolean
   project: ProjectDetail
   canEdit: boolean
+  canBill: boolean
   onEdit: () => void
 }) {
   const update = useUpdatePayment(project.id)
   const del = useDeletePayment(project.id)
   const confirm = useConfirm()
-  const canShareReceipt = useAccess().hasModule('billing')
+  const canShareReceipt = canBill
 
   const summary = {
     clientName: project.client_name,
@@ -190,7 +404,21 @@ function PaymentItem({
       )}
       <div className="min-w-[10rem] flex-1">
         <p className="text-sm font-semibold tabular-nums">{formatINR(p.amount)}</p>
-        <p className="text-xs text-muted-foreground">{details.join(' · ')}</p>
+        <p className="text-xs text-muted-foreground">
+          {details.join(' · ')}
+          {p.invoice_id && p.invoice_number && (
+            <>
+              {details.length ? ' · ' : ''}
+              {canBill ? (
+                <Link to="/billing/invoices/$id" params={{ id: p.invoice_id }} className="font-medium text-primary hover:underline">
+                  against {p.invoice_number}
+                </Link>
+              ) : (
+                <>against {p.invoice_number}</>
+              )}
+            </>
+          )}
+        </p>
       </div>
       <StatusBadge tone={paid ? 'success' : 'warning'}>{paid ? 'Received' : 'Promised'}</StatusBadge>
       <div className="flex items-center gap-1">
@@ -229,152 +457,6 @@ function PaymentItem({
         )}
       </div>
     </li>
-  )
-}
-
-const MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
-
-/**
- * Record or change a payment: how much, when, how, and whether it has come
- * in or is only promised. GST and a note sit under "More".
- */
-function PaymentDialog({
-  projectId,
-  payment,
-  suggested,
-  onClose,
-}: {
-  projectId: string
-  payment?: Payment | undefined
-  suggested: number
-  onClose: () => void
-}) {
-  const add = useAddPayment(projectId)
-  const update = useUpdatePayment(projectId)
-  const editing = !!payment
-  const [amount, setAmount] = useState(payment ? String(payment.amount) : suggested > 0 ? String(suggested) : '')
-  const [paidOn, setPaidOn] = useState(payment?.paid_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
-  const [mode, setMode] = useState(payment?.mode ?? 'UPI')
-  const [received, setReceived] = useState((payment?.status ?? 'paid') !== 'pending')
-  const [more, setMore] = useState(!!(payment?.reference || payment?.description || payment?.is_gst))
-  const [reference, setReference] = useState(payment?.reference ?? '')
-  const [description, setDescription] = useState(payment?.description ?? '')
-  const [isGst, setIsGst] = useState(payment?.is_gst ?? false)
-  const [gstNumber, setGstNumber] = useState(payment?.gst_number ?? '')
-  const busy = add.isPending || update.isPending
-  const value = Number(amount) || 0
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (value <= 0) return
-    const body = {
-      amount: value,
-      paid_on: paidOn,
-      mode: mode.trim() || undefined,
-      status: received ? ('paid' as const) : ('pending' as const),
-      reference: reference.trim() || undefined,
-      description: description.trim() || undefined,
-      is_gst: isGst,
-      gst_number: isGst && gstNumber.trim() ? gstNumber.trim() : undefined,
-    }
-    if (editing) {
-      update.mutate(
-        { paymentId: payment.id, patch: { ...body, reference: body.reference ?? null, description: body.description ?? null, gst_number: body.gst_number ?? null } },
-        { onSuccess: onClose },
-      )
-    } else {
-      add.mutate(body, { onSuccess: onClose })
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={editing ? 'Change payment' : 'Record payment'} description={suggested > 0 && !editing ? `${formatINR(suggested)} is still to collect.` : undefined}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div role="radiogroup" aria-label="Has it come in?" className="grid grid-cols-2 gap-1 rounded-lg border border-input p-1">
-            {[
-              { v: true, label: 'Received', hint: 'The money is in' },
-              { v: false, label: 'Promised', hint: 'Not received yet' },
-            ].map((o) => (
-              <button
-                key={o.label}
-                type="button"
-                role="radio"
-                aria-checked={received === o.v}
-                onClick={() => setReceived(o.v)}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-left transition-colors',
-                  received === o.v ? (o.v ? 'bg-tone-green-soft text-tone-green' : 'bg-tone-amber-soft text-tone-amber') : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                <span className="block text-sm font-semibold">{o.label}</span>
-                <span className="block text-[11px]">{o.hint}</span>
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pay-amount">Amount (₹)</Label>
-              <Input id="pay-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pay-date">{received ? 'Received on' : 'Expected on'}</Label>
-              <Input id="pay-date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>How</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {MODES.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  onClick={() => setMode(m)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                    mode === m ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </div>
-          {more ? (
-            <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="pay-ref">Reference</Label>
-                  <Input id="pay-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="UTR / cheque no." />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="pay-note">Note</Label>
-                  <Input id="pay-note" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Advance, final settlement…" />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={isGst} onChange={(e) => setIsGst(e.target.checked)} />
-                GST receipt
-              </label>
-              {isGst && <Input aria-label="GST number" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="GST number, e.g. 27ABCDE1234F1Z5" />}
-            </div>
-          ) : (
-            <button type="button" onClick={() => setMore(true)} className="self-start text-xs font-medium text-primary hover:underline">
-              + Reference, note or GST
-            </button>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy || value <= 0}>
-              {busy ? 'Saving…' : editing ? 'Save' : received ? 'Record payment' : 'Save as promised'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 

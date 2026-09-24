@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { TransactionSql } from 'postgres'
 import {
   createProjectRequest,
   deliverableInput,
@@ -11,6 +12,8 @@ import {
   paymentInput,
   updatePaymentRequest,
   projectDetail,
+  projectBilling,
+  type PlanInstalment,
   projectListItem,
   projectListPage,
   projectTrackingRow,
@@ -741,7 +744,9 @@ export const projectsRouter = new Hono<AppEnv>()
                      'id', rp.id, 'amount', rp.amount, 'paid_on', rp.paid_on,
                      'mode', rp.mode, 'reference', rp.reference,
                      'status', coalesce(rp.status,'paid'), 'description', rp.description,
-                     'is_gst', coalesce(rp.is_gst,false), 'gst_number', rp.gst_number) order by rp.paid_on)
+                     'is_gst', coalesce(rp.is_gst,false), 'gst_number', rp.gst_number,
+                     'invoice_id', rp.invoice_id,
+                     'invoice_number', (select i.invoice_number from invoices i where i.id = rp.invoice_id)) order by rp.paid_on)
                    from received_payments rp where rp.project_id = p.id
                  ), '[]'::jsonb) as payments
           from projects p
@@ -879,6 +884,49 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  /**
+   * The project's money beyond its payments: the plan the client agreed to in
+   * the terms (the latest agreed version, else the latest sent), and -- for
+   * those who can see Billing -- the invoices raised for it.
+   */
+  .get('/:id/billing', requireAction('projects', 'view'), async (c) => {
+    const projectId = uuidParam(c)
+    const canSeeBilling = c.get('auth').access.hasModule('billing')
+    const data = await attempt(c, 'projects.billing', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const docs = await sql<{ id: string; title: string | null; acknowledged_at: string | null; total_cost: number | null; payment_terms: unknown }[]>`
+          select d.id, d.title, d.acknowledged_at, d.total_cost::float as total_cost, d.payment_terms
+            from project_terms_documents d
+           where d.project_id = ${projectId} and d.revoked_at is null
+             and jsonb_typeof(d.payment_terms) = 'array' and jsonb_array_length(d.payment_terms) > 0
+           order by (d.acknowledged_at is not null) desc, d.created_at desc
+           limit 1`
+        const invoices = canSeeBilling
+          ? await sql`
+              select id, invoice_number, invoice_date, due_date, status,
+                     total::float as total, taxable::float as taxable, balance_due::float as balance_due
+                from invoices where project_id = ${projectId}
+               order by invoice_date, created_at`
+          : null
+        const d = docs[0]
+        return {
+          plan: d
+            ? {
+                document_id: d.id,
+                title: d.title,
+                agreed_at: d.acknowledged_at,
+                total_cost: d.total_cost,
+                instalments: planInstalmentsFrom(d.payment_terms),
+              }
+            : null,
+          invoices,
+        }
+      }),
+    )
+    if (!data) fail(400, 'We could not load the project billing.')
+    return c.json(projectBilling.parse(data))
+  })
+
   // Record a payment against a project.
   .post('/:id/payments', requireAction('projects', 'edit'), async (c) => {
     const parsed = paymentInput.safeParse(await c.req.json().catch(() => ({})))
@@ -891,6 +939,7 @@ export const projectsRouter = new Hono<AppEnv>()
         // receipts find it without a second step.
         const owner = await sql<{ client_id: string | null }[]>`select client_id from projects where id = ${projectId}`
         if (!owner.length) return null
+        if (parsed.data.invoice_id && !(await invoiceFitsProject(sql, parsed.data.invoice_id, projectId))) return 'bad_invoice' as const
         const rows = await sql<{ id: string }[]>`
           insert into received_payments ${sql({
             project_id: projectId,
@@ -904,6 +953,7 @@ export const projectsRouter = new Hono<AppEnv>()
             description: (parsed.data as { description?: string }).description ?? null,
             is_gst: (parsed.data as { is_gst?: boolean }).is_gst ?? false,
             gst_number: (parsed.data as { gst_number?: string }).gst_number ?? null,
+            invoice_id: parsed.data.invoice_id ?? null,
             client_id: owner[0]!.client_id,
             recorded_by: auth.userId,
           })}
@@ -912,6 +962,7 @@ export const projectsRouter = new Hono<AppEnv>()
       }),
     )
     if (!row) fail(400, 'We could not record the payment.')
+    if (row === 'bad_invoice') fail(422, 'That invoice belongs to another project.')
     await audit(c, { action: 'project.payment', entityType: 'project', entityId: projectId, after: parsed.data })
     return c.json({ id: row.id }, 201)
   })
@@ -928,10 +979,14 @@ export const projectsRouter = new Hono<AppEnv>()
     const projectId = uuidParam(c)
     const pid = uuidParam(c, 'pid')
     const rows = await attempt(c, 'projects.payment_update', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
-        update received_payments set ${sql(patch)} where id = ${pid} and project_id = ${projectId} returning id`),
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        if (patch.invoice_id && !(await invoiceFitsProject(sql, patch.invoice_id as string, projectId))) return 'bad_invoice' as const
+        return sql<{ id: string }[]>`
+          update received_payments set ${sql(patch)} where id = ${pid} and project_id = ${projectId} returning id`
+      }),
     )
     if (!rows) fail(400, 'We could not update this payment.')
+    if (rows === 'bad_invoice') fail(422, 'That invoice belongs to another project.')
     if (!rows.length) fail(404, 'That payment was not found.')
     await audit(c, { action: 'project.payment_update', entityType: 'project', entityId: projectId, after: { payment_id: pid, ...patch } })
     return c.body(null, 204)
@@ -973,3 +1028,26 @@ export const projectsRouter = new Hono<AppEnv>()
   })
 
 
+
+/** A payment may settle an invoice of this project, or one not tied to any project. */
+async function invoiceFitsProject(sql: TransactionSql, invoiceId: string, projectId: string): Promise<boolean> {
+  const rows = await sql`select 1 from invoices where id = ${invoiceId} and (project_id = ${projectId} or project_id is null)`
+  return rows.length > 0
+}
+
+/** The terms' payment rows, read defensively: they were typed in by people, over several versions. */
+function planInstalmentsFrom(raw: unknown): PlanInstalment[] {
+  if (!Array.isArray(raw)) return []
+  const out: PlanInstalment[] = []
+  for (const r of raw as Record<string, unknown>[]) {
+    const value = Number(r?.value)
+    if (!Number.isFinite(value) || value <= 0) continue
+    out.push({
+      label: typeof r.label === 'string' && r.label.trim() ? r.label.trim() : `Instalment ${out.length + 1}`,
+      mode: r.mode === 'amount' ? 'amount' : 'percent',
+      value,
+      due_trigger: typeof r.due_trigger === 'string' && r.due_trigger.trim() ? r.due_trigger.trim() : null,
+    })
+  }
+  return out
+}

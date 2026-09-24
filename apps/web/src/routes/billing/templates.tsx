@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { Button } from '@/shared/ui/button'
 import { Input, Label } from '@/shared/ui/input'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
@@ -60,14 +62,40 @@ const emptyForm = (): CreateInvoiceTemplateRequest => ({
 export function InvoiceTemplatesPage() {
   return (
     <AuthedPage module="billing">
-      <div className="space-y-8">
-        <TemplatesContent />
-        <CompanyInvoiceDefaults />
-        <BankAccountsSection />
-        <TextLibrarySection type="terms" />
-        <TextLibrarySection type="note" />
-      </div>
+      <InvoiceSettings />
     </AuthedPage>
+  )
+}
+
+/**
+ * Everything printed on an invoice, in three places instead of one long
+ * page: who the invoice is from and where to pay, how it is laid out, and
+ * the terms and notes that go at the bottom.
+ */
+function InvoiceSettings() {
+  const [tab, setTab] = useUrlParam('tab', 'details')
+  return (
+    <>
+      <PageHeader title="Invoice settings" description="What every invoice says about you, how it looks, and the words at the bottom." />
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="details">Your details & bank</TabsTrigger>
+          <TabsTrigger value="layouts">Print layouts</TabsTrigger>
+          <TabsTrigger value="text">Terms & notes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="details" className="space-y-8">
+          <CompanyInvoiceDefaults />
+          <BankAccountsSection />
+        </TabsContent>
+        <TabsContent value="layouts">
+          <TemplatesContent />
+        </TabsContent>
+        <TabsContent value="text" className="space-y-8">
+          <TextLibrarySection type="terms" />
+          <TextLibrarySection type="note" />
+        </TabsContent>
+      </Tabs>
+    </>
   )
 }
 
@@ -136,15 +164,12 @@ function TemplatesContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Invoice Templates"
-        description="Saved print layouts — pick one per invoice, or set a company default."
-        actions={
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="mr-1 h-4 w-4" /> New Template
-          </Button>
-        }
-      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Saved print layouts. Pick one per invoice, or set a default.</p>
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="mr-1 h-4 w-4" /> New layout
+        </Button>
+      </div>
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Loading…</div>
       ) : isError ? (

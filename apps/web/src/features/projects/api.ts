@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from '@ipc/contracts'
 import {
+  projectBilling,
   createProjectRequest,
   deliverableSet,
   myDeliverable,
@@ -20,6 +21,7 @@ import {
   type UpdateProjectRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { invalidateMoney } from '@/features/billing/invalidate'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
@@ -102,10 +104,8 @@ function useProjectMutation(id: string, message: string) {
   return () => {
     toast.success(message)
     void qc.invalidateQueries({ queryKey: ['projects', id] })
-    void qc.invalidateQueries({ queryKey: ['projects'] })
-    // Money moved: profit and billing screens read it too.
-    void qc.invalidateQueries({ queryKey: ['financials'] })
-    void qc.invalidateQueries({ queryKey: ['received-payments'] })
+    // Money moved: invoices, payments, profit and the Billing overview read it too.
+    invalidateMoney(qc)
   }
 }
 
@@ -196,8 +196,7 @@ export function useDeletePayment(id: string) {
       callApi(`/projects/${id}/payments/${paymentId}`, { method: 'DELETE', responseSchema: anySchema }),
     onSuccess: () => {
       toast.success('Payment removed')
-      void qc.invalidateQueries({ queryKey: ['projects', id] })
-      void qc.invalidateQueries({ queryKey: ['projects'] })
+      invalidateMoney(qc)
     },
   })
 }
@@ -331,5 +330,16 @@ export function useDeleteProject() {
       toast.success('Project deleted')
       void qc.invalidateQueries({ queryKey: ['projects'] })
     },
+  })
+}
+
+/** The agreed payment plan and (with Billing access) the project's invoices. */
+export function useProjectBilling(id: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['projects', id, 'billing'],
+    queryFn: () => callApi(`/projects/${id}/billing`, { responseSchema: projectBilling }),
+    enabled: !!session && !!id,
+    staleTime: 15_000,
   })
 }

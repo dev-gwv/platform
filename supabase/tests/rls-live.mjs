@@ -468,6 +468,99 @@ if (listed) {
   )
 }
 
+// ── Billing belongs to the project (0169) ─────────────────────
+// A payment recorded on the project can settle one of its invoices; the
+// project page lists its invoices; the Billing overview gathers what is
+// owed; an invoice has a link a client opens without logging in, which the
+// studio can stop; cancelling keeps the money on the project.
+{
+  const pid = ledgerProject.json.id
+  const onProject = await api(`/projects/${pid}/payments`, {
+    token: aToken,
+    method: 'POST',
+    body: { amount: 4000, paid_on: new Date().toISOString().slice(0, 10), status: 'paid', invoice_id: invId },
+  })
+  const inv4 = await api(`/billing/invoices/${invId}`, { token: aToken })
+  check(
+    'billing: a payment on the project can settle its invoice',
+    onProject.status === 201 && Number(inv4.json.amount_paid) === 4000 && inv4.json.status === 'partial',
+    { status: onProject.status, amount_paid: inv4.json.amount_paid, inv: inv4.json.status },
+  )
+
+  const detail = await api(`/projects/${pid}`, { token: aToken })
+  const pay = (detail.json.payments ?? []).find((x) => x.id === onProject.json.id)
+  check('billing: the project payment says which invoice it settled', pay?.invoice_number === inv4.json.invoice_number, { pay })
+
+  const pb = await api(`/projects/${pid}/billing`, { token: aToken })
+  check(
+    'billing: the project lists its invoices',
+    pb.status === 200 && (pb.json.invoices ?? []).some((i) => i.id === invId) && pb.json.plan === null,
+    { status: pb.status, invoices: pb.json.invoices?.length, plan: pb.json.plan },
+  )
+
+  const other = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Other project', client_id: ledgerClient.json.id, package_cost: 5000 } })
+  const otherInv = await api('/billing/invoices', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      client_id: ledgerClient.json.id, project_id: other.json.id, place_of_supply: '27', intra_state: true,
+      invoice_date: new Date().toISOString().slice(0, 10), discount: 0, discount_type: 'flat', status: 'sent',
+      lines: [{ description: 'Other', quantity: 1, rate: 5000, gst_rate: 0 }],
+    },
+  })
+  const wrong = await api(`/projects/${pid}/payments`, {
+    token: aToken,
+    method: 'POST',
+    body: { amount: 100, status: 'paid', invoice_id: otherInv.json.id },
+  })
+  check("billing: a payment cannot settle another project's invoice", wrong.status === 422, { status: wrong.status })
+
+  const ov = await api('/billing/overview', { token: aToken })
+  check(
+    'billing: the overview lists the unpaid invoice with its project',
+    ov.status === 200 && (ov.json.due_invoices ?? []).some((i) => i.id === invId && i.project_name === 'Ledger project'),
+    { status: ov.status, due: ov.json.due_invoices?.length },
+  )
+  const ovB = await api('/billing/overview', { token: newPw.json.access_token })
+  check("billing: another studio's overview does not see it", ovB.status === 200 && !(ovB.json.due_invoices ?? []).some((i) => i.id === invId), { status: ovB.status })
+
+  const listRow = await api(`/billing/invoices?project_id=${pid}&page=1&page_size=10`, { token: aToken })
+  check(
+    'billing: the invoice list carries the project',
+    (listRow.json.items ?? []).some((i) => i.id === invId && i.project_id === pid && i.project_name === 'Ledger project'),
+    { items: listRow.json.items?.length },
+  )
+
+  const share = await api(`/billing/invoices/${invId}/share`, { token: aToken, method: 'POST', body: {} })
+  const token = (share.json.link ?? '').split('token=')[1] ?? ''
+  const pub = await api(`/public/invoice/${token}`)
+  check(
+    'billing: the client link opens the invoice without logging in',
+    share.status === 201 && pub.status === 200 && pub.json.invoice?.invoice_number === inv4.json.invoice_number && Number(pub.json.invoice?.balance_due) === 6000,
+    { share: share.status, pub: pub.status },
+  )
+  const bShare = await api(`/billing/invoices/${invId}/share`, { token: newPw.json.access_token, method: 'POST', body: {} })
+  check("billing: another studio cannot make a link to it", bShare.status === 404, { status: bShare.status })
+  const junk = await api(`/public/invoice/${'x'.repeat(40)}`)
+  check('billing: a made-up link does not open', junk.status === 404, { status: junk.status })
+
+  await api(`/billing/invoices/${invId}/share`, { token: aToken, method: 'POST', body: { revoke: true } })
+  const pubAfter = await api(`/public/invoice/${token}`)
+  check('billing: a stopped link no longer opens', pubAfter.status === 404, { status: pubAfter.status })
+
+  const share2 = await api(`/billing/invoices/${invId}/share`, { token: aToken, method: 'POST', body: {} })
+  const token2 = (share2.json.link ?? '').split('token=')[1] ?? ''
+  const cancel = await api(`/billing/invoices/${invId}/cancel`, { token: aToken, method: 'POST', body: {} })
+  const afterCancel = await api(`/projects/${pid}`, { token: aToken })
+  const kept = (afterCancel.json.payments ?? []).find((x) => x.id === onProject.json.id)
+  const pubCancelled = await api(`/public/invoice/${token2}`)
+  check(
+    'billing: cancelling keeps the money on the project and closes the link',
+    cancel.status === 200 && !!kept && kept.invoice_id === null && pubCancelled.status === 404,
+    { cancel: cancel.status, kept: !!kept, invoice_id: kept?.invoice_id, pub: pubCancelled.status },
+  )
+}
+
 // ── One person, many studios, one email (0159) ─────────────────
 // A freelancer on two studios' teams: both studios add the same email, they
 // sign in once with their own password, see both studios, switch between
