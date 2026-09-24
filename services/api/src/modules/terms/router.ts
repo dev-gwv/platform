@@ -137,11 +137,18 @@ const projectTermsVersion = z.object({
   emailed_to: z.string().nullable(),
 })
 
+/** The studio's own words for the email, when it wants them. */
+const emailWords = {
+  subject: z.string().trim().max(200).nullish(),
+  message: z.string().trim().max(2000).nullish(),
+}
+
 const sendLinkRequest = z.object({
   expiry_days: z.number().int().min(1).max(365).default(14),
   /** Also email the link: to this address, or the client's when blank. */
   email: z.boolean().default(false),
   to_email: z.string().trim().email().max(200).nullish(),
+  ...emailWords,
 })
 
 const linkResponse = z.object({
@@ -152,6 +159,9 @@ const linkResponse = z.object({
   email_error: z.string().nullable(),
 })
 
+const escapeHtml = (t: string) =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
 const termsLink = (env: { APP_URL?: string | undefined }, token: string) =>
   `${env.APP_URL ?? ''}/terms/acknowledge?token=${encodeURIComponent(token)}`
 
@@ -161,6 +171,7 @@ async function emailTerms(
   documentId: string,
   url: string,
   toOverride: string | null | undefined,
+  words: { subject?: string | null | undefined; message?: string | null | undefined } = {},
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error: string | null }> {
   const info = await attempt(c, 'terms.email_info', () =>
     withUser(c.env, c.get('auth').userId, async (sql) => {
@@ -178,9 +189,12 @@ async function emailTerms(
   const result = await sendClientDocEmail(
     c.env,
     to,
-    `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`,
+    words.subject || `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`,
     url,
-    `${info?.company_name ?? 'The studio'} has shared the terms${info?.project_name ? ` for ${info.project_name}` : ''}. Please open the link, read them, and tap "I agree".`,
+    // The studio's message goes out as written, escaped: the email is HTML.
+    words.message
+      ? escapeHtml(words.message).replace(/\n/g, '<br>')
+      : `${info?.company_name ?? 'The studio'} has shared the terms${info?.project_name ? ` for ${info.project_name}` : ''}. Please open the link, read them, and tap "I agree".`,
   )
   try {
     await withUser(c.env, c.get('auth').userId, async (sql) => {
@@ -277,7 +291,9 @@ export const termsRouter = new Hono<AppEnv>()
     )
     if (!token) fail(400, 'We could not make a new link.')
     const url = termsLink(c.env, token)
-    const email = parsed.data.email ? await emailTerms(c, id, url, parsed.data.to_email) : null
+    const email = parsed.data.email
+      ? await emailTerms(c, id, url, parsed.data.to_email, { subject: parsed.data.subject, message: parsed.data.message })
+      : null
     await audit(c, { action: 'terms.new_link', entityType: 'terms_document', entityId: id, after: { emailed: !!email } })
     return c.json(
       linkResponse.parse({
@@ -299,7 +315,7 @@ export const termsRouter = new Hono<AppEnv>()
     const id = c.req.param('id') ?? ''
     if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
     const parsed = z
-      .object({ token: z.string().min(10).max(200), to_email: z.string().trim().email().max(200).nullish() })
+      .object({ token: z.string().min(10).max(200), to_email: z.string().trim().email().max(200).nullish(), ...emailWords })
       .safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the email address.')
     const live = await attempt(c, 'terms.email_check', () =>
@@ -311,7 +327,7 @@ export const termsRouter = new Hono<AppEnv>()
     )
     if (!live) fail(409, 'That link no longer works. Send the terms again to make a new one.')
     const url = termsLink(c.env, parsed.data.token)
-    const email = await emailTerms(c, id, url, parsed.data.to_email)
+    const email = await emailTerms(c, id, url, parsed.data.to_email, { subject: parsed.data.subject, message: parsed.data.message })
     await audit(c, { action: 'terms.email', entityType: 'terms_document', entityId: id, after: { status: email.status } })
     return c.json({ status: email.status, error: email.error })
   })

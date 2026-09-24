@@ -1016,6 +1016,21 @@ if (listed) {
     again: again.status, old: oldLink.status, fresh: newLink.status,
   })
 
+  // The studio's own words for the email are taken as given (no mail
+  // provider here, so it reports that rather than pretending it went).
+  const worded = await api(`/terms/documents/${sent.json.document_id}/email`, {
+    token: aToken,
+    method: 'POST',
+    body: { token: tokenOf(again.json.url), to_email: 'client@example.com', subject: 'Our terms for your wedding', message: 'Hello Priya,\nPlease read and agree.' },
+  })
+  const tooLong = await api(`/terms/documents/${sent.json.document_id}/email`, {
+    token: aToken, method: 'POST', body: { token: tokenOf(again.json.url), subject: 'x'.repeat(201) },
+  })
+  check(
+    'terms: the email can carry the studio’s own subject and message',
+    worded.status === 200 && ['provider_missing', 'sent', 'failed'].includes(worded.json.status) && tooLong.status === 422,
+    { worded: worded.json, tooLong: tooLong.status },
+  )
   const cancelled = await api(`/terms/documents/${sent.json.document_id}/revoke`, { token: aToken, method: 'POST' })
   const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
   const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)

@@ -234,10 +234,22 @@ export const termsEmailLog = z.object({
 export type TermsEmailLog = z.infer<typeof termsEmailLog>
 export function useEmailTermsLink() {
   return useMutation({
-    mutationFn: ({ documentId, token, to_email }: { documentId: string; token: string; to_email?: string | null }) =>
+    mutationFn: ({
+      documentId,
+      token,
+      to_email,
+      subject,
+      message,
+    }: {
+      documentId: string
+      token: string
+      to_email?: string | null
+      subject?: string | null
+      message?: string | null
+    }) =>
       callApi(`/terms/documents/${documentId}/email`, {
         method: 'POST',
-        body: { token, to_email: to_email || null },
+        body: { token, to_email: to_email || null, subject: subject || null, message: message || null },
         responseSchema: z.object({ status: z.string(), error: z.string().nullable() }),
       }),
     onError: (e: Error) => toast.error(e.message),
