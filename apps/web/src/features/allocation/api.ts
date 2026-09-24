@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
-import { bookSlotsBatchResult, teamSlot, teamMember, type BookSlotRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
+import { bookSlotsBatchResult, teamSlot, teamMember, type BookSlotRequest, type SetSlotDataRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -58,6 +58,20 @@ export function useBookSlots() {
         responseSchema: bookSlotsBatchResult,
       }),
     onSettled: () => void qc.invalidateQueries({ queryKey: ['allocation'] }),
+  })
+}
+
+/** Say a booking owes no data (with why), or that it does again. */
+export function useSetSlotData() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: SetSlotDataRequest & { id: string }) =>
+      callApi(`/allocation/${id}/data`, { method: 'POST', body, responseSchema: z.unknown() }),
+    onSuccess: (_d, v) => {
+      toast.success(v.data_required ? 'Data expected from this booking again' : 'Marked: no data needed')
+      void qc.invalidateQueries({ queryKey: ['allocation'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

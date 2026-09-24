@@ -200,6 +200,11 @@ export const allocationRouter = new Hono<AppEnv>()
   .post('/:id/data', requireAction('projects', 'edit'), async (c) => {
     const parsed = setSlotDataRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the data requirement.')
+    // Opting a booking out of data needs a reason: that reason is what tells
+    // "nobody has to hand cards over" apart from "nobody has asked yet".
+    if (!parsed.data.data_required && !parsed.data.data_not_required_reason?.trim()) {
+      fail(422, 'Say why no data is needed from this booking.')
+    }
     const id = uuidParam(c)
     const ok = await attempt(c, 'allocation.set_data', () =>
       withUser(

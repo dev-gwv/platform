@@ -22,6 +22,7 @@ import {
   shootListItem,
   type ShootListItem,
   type ShootRequirementInput,
+  type DataRecord,
   type ShootStatus,
   type TeamSlot,
 } from '@ipc/contracts'
@@ -32,18 +33,19 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
-import { Avatar } from '@/shared/ui/avatar'
 import { QuantityStepper, ToneChip, toneAt } from '@/shared/ui/tone-chip'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { humanize, formatINR } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useShootTypes } from '@/features/projects/api'
 import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/features/shoots/api'
 import { useReleaseSlot, useSlots } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
+import { AssignmentRow } from '@/features/shoots/AssignmentRow'
+import { dataCounts, recordForSlot } from '@/features/data/stage'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
 import { useDataRecords } from '@/features/data/api'
@@ -101,7 +103,7 @@ const timeOf = (iso: string | null) =>
  * preset could only ever be applied while first creating the project. Planning
  * one wedding meant three screens.
  */
-export function ShootsTab({ projectId, onOpenData }: { projectId: string; onOpenData?: (() => void) | undefined }) {
+export function ShootsTab({ projectId }: { projectId: string }) {
   const { session } = useAuth()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
@@ -263,8 +265,7 @@ export function ShootsTab({ projectId, onOpenData }: { projectId: string; onOpen
               shoot={s}
               canEdit={canEdit}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
-              dataCount={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
-              onOpenData={onOpenData}
+              records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
             />
           ))}
         </div>
@@ -278,14 +279,12 @@ function ShootPlanner({
   shoot,
   canEdit,
   slots,
-  dataCount,
-  onOpenData,
+  records,
 }: {
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
-  dataCount: { primary_status: string; backup_status: string }[]
-  onOpenData?: (() => void) | undefined
+  records: DataRecord[]
 }) {
   const update = useUpdateShoot()
   const del = useDeleteShoot()
@@ -311,9 +310,8 @@ function ShootPlanner({
     return m
   }, [live])
 
-  const dataReady = dataCount.filter(
-    (d) => d.primary_status === 'verified' && d.backup_status === 'verified',
-  ).length
+  // "Data 2/3": bookings whose footage is copied and backed up, of those that owe it.
+  const dataTally = dataCounts(live, records)
 
   /** Roles this studio uses that are not yet on this day. */
   const roleChips = (() => {
@@ -384,7 +382,7 @@ function ShootPlanner({
                 {progress.assigned}/{progress.required} assigned
               </span>
               <span className="flex items-center gap-1">
-                <Database className="size-3" /> Data {dataReady}/{dataCount.length}
+                <Database className="size-3" /> Data {dataTally.done}/{dataTally.needed}
               </span>
             </div>
           </div>
@@ -396,16 +394,11 @@ function ShootPlanner({
               <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
                 <UserPlus /> Assign team
               </Button>
-              {onOpenData && (
-                <Button size="sm" variant="outline" onClick={onOpenData}>
-                  <Database /> Add data
-                </Button>
-              )}
               <Button size="sm" variant="ghost" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
                 <Pencil />
               </Button>
               <Button size="sm" variant="ghost" asChild>
-                <Link to="/shoots/$id" params={{ id: shoot.id }}>
+                <Link to="/shoots/$shootId" params={{ shootId: shoot.id }}>
                   Open
                 </Link>
               </Button>
@@ -505,6 +498,25 @@ function ShootPlanner({
                     >
                       <Users className="size-3" /> Assigned {r.assigned}/{r.required}
                     </span>
+                    {on.length > 0 &&
+                      (() => {
+                        const t = dataCounts(on, records)
+                        if (t.needed === 0) return null
+                        return (
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                              t.done >= t.needed
+                                ? 'bg-success/15 text-success'
+                                : t.done > 0
+                                  ? 'bg-warning/15 text-warning'
+                                  : 'bg-destructive/10 text-destructive',
+                            )}
+                          >
+                            <Database className="size-3" /> Data {t.done}/{t.needed}
+                          </span>
+                        )
+                      })()}
                     <span className="ml-auto flex flex-wrap items-center gap-1.5">
                       {canEdit && (
                         <>
@@ -548,33 +560,17 @@ function ShootPlanner({
                       </div>
                     </div>
                   ) : (
-                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                    <ul className="mt-2 flex flex-col gap-1.5">
                       {on.map((sl) => (
-                        <li
+                        <AssignmentRow
                           key={sl.id}
-                          className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2 text-xs"
-                        >
-                          <Avatar name={sl.user_name ?? '?'} size="sm" />
-                          <span className="font-medium">{sl.user_name ?? 'Unknown'}</span>
-                          <span className="text-muted-foreground">
-                            {timeOf(sl.start_at)}–{timeOf(sl.end_at)}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {sl.final_cost != null || sl.estimated_cost != null
-                              ? formatINR(sl.final_cost ?? sl.estimated_cost ?? 0)
-                              : 'No payout'}
-                          </span>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              aria-label={`Remove ${sl.user_name ?? 'member'} from ${r.name}`}
-                              className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => void removeHolder(sl)}
-                            >
-                              <X className="size-3" />
-                            </button>
-                          )}
-                        </li>
+                          projectId={shoot.project_id}
+                          shoot={shoot}
+                          slot={sl}
+                          record={recordForSlot(sl, records)}
+                          canEdit={canEdit}
+                          onRemove={() => void removeHolder(sl)}
+                        />
                       ))}
                     </ul>
                   )}

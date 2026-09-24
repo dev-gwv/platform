@@ -214,7 +214,8 @@ export function payBasisLabel(member: Pick<TeamMember, 'freelancer_rate' | 'payo
 }
 
 /** "10:00 am–2:00 pm", for a booking's window. */
-export function hoursLabel(slot: Pick<TeamSlot, 'start_at' | 'end_at'>): string {
-  const t = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+export function hoursLabel(slot: Pick<TeamSlot, 'start_at' | 'end_at'>, timeZone?: string): string {
+  const t = (iso: string) =>
+    new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', ...(timeZone ? { timeZone } : {}) })
   return `${t(slot.start_at)}–${t(slot.end_at)}`
 }

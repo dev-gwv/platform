@@ -7,6 +7,7 @@ import {
   type UpdateDataRecordRequest,
   type CreateStorageLocationRequest,
   type UpdateStorageLocationRequest,
+  type SetDataTrackRequest,
 } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
@@ -106,7 +107,7 @@ export function useCreateDataRecord() {
     mutationFn: (input: CreateDataRecordRequest) =>
       callApi('/data', { method: 'POST', body: input, responseSchema: dataRecord }),
     onSuccess: () => {
-      toast.success('Card logged')
+      toast.success('Data saved')
       void qc.invalidateQueries({ queryKey: ['data'] })
     },
   })
@@ -121,6 +122,17 @@ export function useUpdateDataRecord() {
       toast.success('Record updated')
       void qc.invalidateQueries({ queryKey: ['data'] })
     },
+  })
+}
+
+/** Move one copy along: pending → copied → verified, or issue / not needed. */
+export function useSetDataTrack() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: SetDataTrackRequest & { id: string }) =>
+      callApi(`/data/${id}/track`, { method: 'POST', body, responseSchema: dataRecord }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['data'] }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 
