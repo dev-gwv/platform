@@ -10,6 +10,7 @@ import { useReminders } from '@/features/reminders/api'
 import { useQuery } from '@tanstack/react-query'
 import { attendanceRecord } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { MyDeliveryStrip } from '@/features/projects/MyDeliveryStrip'
 
 const myList = attendanceRecord.array()
 
@@ -77,6 +78,8 @@ export function EmployeeDashboard() {
           to="/attendance"
         />
       </div>
+
+      <MyDeliveryStrip />
 
       {overdue.length > 0 && (
         <Card className="border-warning/40 bg-warning/5">

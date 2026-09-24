@@ -1,7 +1,9 @@
 import { Check } from 'lucide-react'
 import type { DeliverableStatus } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
-import { STAGE_LABEL, STAGE_ORDER, stageOf } from './deliverable-stage'
+import { STAGE_ORDER, stageOf } from './deliverable-stage'
+import { STEP_LABEL, TONE_CLASSES, stageName, stageTone } from './stages'
+import { useDeliverableStages } from './stages-api'
 
 /**
  * One colour per stage, used everywhere a stage is drawn -- the pipeline, the
@@ -17,11 +19,24 @@ export const STAGE_STYLE: Record<DeliverableStatus, { solid: string; soft: strin
 }
 
 /**
- * Where one deliverable is on To do → Editing → With client → Delivered, as
- * four joined steps: done ones filled, the current one filled and labelled,
- * the rest empty. Readable at a glance, without reading a word.
+ * Where one deliverable is on To do → Editing → Review → Delivered, as four
+ * joined steps: done ones filled, the current one filled and labelled, the
+ * rest empty. Readable at a glance, without reading a word. The label is the
+ * studio's own name for where it is ("With manager", "Colour grading") in
+ * that stage's colour, when it has one.
  */
-export function StageStepper({ status, size = 'sm', showLabel = true }: { status: string; size?: 'sm' | 'lg'; showLabel?: boolean }) {
+export function StageStepper({
+  status,
+  code,
+  size = 'sm',
+  showLabel = true,
+}: {
+  status: string
+  code?: string | null | undefined
+  size?: 'sm' | 'lg'
+  showLabel?: boolean
+}) {
+  const stages = useDeliverableStages()
   const stage = stageOf(status)
   if (stage === 'cancelled') {
     return <span className="text-xs font-medium text-muted-foreground">Dropped</span>
@@ -29,9 +44,11 @@ export function StageStepper({ status, size = 'sm', showLabel = true }: { status
   const at = STAGE_ORDER.indexOf(stage as (typeof STAGE_ORDER)[number])
   const style = STAGE_STYLE[stage]
   const big = size === 'lg'
+  const name = stageName({ status, custom_status_code: code }, stages)
+  const labelTone = TONE_CLASSES[stageTone({ status, custom_status_code: code }, stages)]
 
   return (
-    <div className={cn('flex items-center', big ? 'gap-3' : 'gap-2')} aria-label={`Stage: ${STAGE_LABEL[stage]}`}>
+    <div className={cn('flex items-center', big ? 'gap-3' : 'gap-2')} aria-label={`Stage: ${name}`}>
       <ol className="flex items-center" aria-hidden>
         {STAGE_ORDER.map((s, i) => {
           const reached = i <= at
@@ -40,7 +57,7 @@ export function StageStepper({ status, size = 'sm', showLabel = true }: { status
             <li key={s} className="flex items-center">
               {i > 0 && <span className={cn(big ? 'h-0.5 w-7' : 'h-0.5 w-3.5', reached ? style.solid : 'bg-border')} />}
               <span
-                title={STAGE_LABEL[s]}
+                title={STEP_LABEL[s]}
                 className={cn(
                   'flex items-center justify-center rounded-full transition-colors',
                   big ? 'size-5' : 'size-2.5',
@@ -55,7 +72,23 @@ export function StageStepper({ status, size = 'sm', showLabel = true }: { status
           )
         })}
       </ol>
-      {showLabel && <span className={cn('font-semibold', big ? 'text-sm' : 'text-xs', style.text)}>{STAGE_LABEL[stage]}</span>}
+      {showLabel &&
+        (name === STEP_LABEL[stage as keyof typeof STEP_LABEL] ? (
+          <span className={cn('font-semibold', big ? 'text-sm' : 'text-xs', style.text)}>{name}</span>
+        ) : (
+          // A named stage reads as a chip, so "With manager" is clearly a
+          // place and not just a word.
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 font-semibold',
+              big ? 'text-sm' : 'text-[11px]',
+              labelTone.soft,
+              labelTone.text,
+            )}
+          >
+            {name}
+          </span>
+        ))}
     </div>
   )
 }

@@ -44,12 +44,17 @@ export const workSubmission = z.object({
   disk_name: z.string().nullable().default(null),
   disk_location: z.string().nullable().default(null),
   folder_path: z.string().nullable().default(null),
+  /** The deliverable this work is for, when the editor said which. */
+  deliverable_id: uuid.nullable().default(null),
+  deliverable_title: z.string().nullable().default(null),
 })
 export type WorkSubmission = z.infer<typeof workSubmission>
 
 export const submitWorkRequest = z.object({
   task_id: uuid.nullable().default(null),
   project_id: uuid.nullable().default(null),
+  /** Which deliverable it is for: submitting moves that deliverable to Review. */
+  deliverable_id: uuid.nullable().default(null),
   title: z.string().trim().min(1).max(200).optional(),
   work_type: z.string().trim().max(60).optional(),
   method: z.string().trim().max(60).optional(),
@@ -67,7 +72,7 @@ export const submitWorkRequest = z.object({
 export type SubmitWorkRequest = z.infer<typeof submitWorkRequest>
 
 /** Same shape as submission, minus which task/project it's against -- that link doesn't change after the fact. */
-export const updateWorkSubmissionRequest = submitWorkRequest.omit({ task_id: true, project_id: true })
+export const updateWorkSubmissionRequest = submitWorkRequest.omit({ task_id: true, project_id: true, deliverable_id: true })
 export type UpdateWorkSubmissionRequest = z.infer<typeof updateWorkSubmissionRequest>
 
 export const reviewWorkRequest = z.object({

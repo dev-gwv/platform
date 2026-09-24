@@ -45,7 +45,8 @@ export const workRouter = new Hono<AppEnv>()
                       hard_disk_label, review_required, review_state, version,
                       client_sent_at, client_channel, revoked_at,
                       submission_link, location_note, notes, status, review_notes, created_at,
-                      disk_name, disk_location, folder_path,
+                      disk_name, disk_location, folder_path, deliverable_id,
+                      (select d.title from deliverables d where d.id = team_work_submissions.deliverable_id) as deliverable_title,
                       (select u.name from users u where u.user_id = team_work_submissions.submitted_by) as submitted_by_name
               from team_work_submissions
               where ${userId ? sql`submitted_by = ${userId}` : sql`true`}
@@ -60,7 +61,10 @@ export const workRouter = new Hono<AppEnv>()
   .post('/submissions', async (c) => {
     const parsed = submitWorkRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please add a link to your work.')
-    const id = await attempt(c, 'work.submit', () =>
+    const id = await attempt(
+      c,
+      'work.submit',
+      () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         // submit_work RPC predates handover columns; insert directly so disk fields persist.
         const rows = await sql<{ id: string }[]>`
@@ -68,6 +72,7 @@ export const workRouter = new Hono<AppEnv>()
             company_id: c.get('auth').companyId,
             task_id: parsed.data.task_id,
             project_id: parsed.data.project_id,
+            deliverable_id: parsed.data.deliverable_id,
             submitted_by: c.get('auth').userId,
             title: parsed.data.title ?? null,
             work_type: parsed.data.work_type ?? null,
@@ -84,9 +89,14 @@ export const workRouter = new Hono<AppEnv>()
           })} returning id`
         return rows[0]?.id ?? null
       }),
+      {
+        // The deliverable must be this studio's and from the same project (0166).
+        onCode: (code) =>
+          code === '42501' || code === '23514' ? fail(422, 'That deliverable is not part of this project.') : undefined,
+      },
     )
     if (!id) fail(400, 'We could not submit your work.')
-    await audit(c, { action: 'work.submit', entityType: 'work_submission', entityId: id, after: { task_id: parsed.data.task_id, project_id: parsed.data.project_id } })
+    await audit(c, { action: 'work.submit', entityType: 'work_submission', entityId: id, after: { task_id: parsed.data.task_id, project_id: parsed.data.project_id, deliverable_id: parsed.data.deliverable_id } })
     return c.json({ id }, 201)
   })
 

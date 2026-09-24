@@ -28,11 +28,19 @@ export function VoiceNoteRecorder({
   onSend,
   sending,
   onBusyChange,
+  autoStart = false,
+  maxSeconds = MAX_SECONDS,
+  sendLabel = 'Send',
 }: {
   onSend: (blob: Blob, seconds: number) => Promise<unknown>
   sending: boolean
   /** Tells the composer to hide the text box while recording or previewing. */
   onBusyChange?: (busy: boolean) => void
+  /** Start listening as soon as it appears -- "send them a voice brief". */
+  autoStart?: boolean
+  maxSeconds?: number
+  /** The word on the button after listening back; "Use this" where it is kept for later. */
+  sendLabel?: string
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' })
   const [now, setNow] = useState(Date.now())
@@ -47,10 +55,18 @@ export function VoiceNoteRecorder({
     if (state.kind !== 'recording') return
     const t = window.setInterval(() => {
       setNow(Date.now())
-      if ((Date.now() - state.started) / 1000 >= MAX_SECONDS) recorder.current?.stop()
+      if ((Date.now() - state.started) / 1000 >= maxSeconds) recorder.current?.stop()
     }, 250)
     return () => window.clearInterval(t)
-  }, [state])
+  }, [state, maxSeconds])
+
+  // Opened to record: start once, on mount.
+  const autoStarted = useRef(false)
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return
+    autoStarted.current = true
+    void start()
+  }, [autoStart])
 
   // Let go of the microphone and any preview if the panel closes mid-way.
   useEffect(
@@ -120,7 +136,7 @@ export function VoiceNoteRecorder({
           disabled={sending}
           onClick={() => void onSend(state.blob, state.seconds).then(() => setState({ kind: 'idle' }))}
         >
-          <Send /> {sending ? 'Sending…' : 'Send'}
+          <Send /> {sending ? 'Sending…' : sendLabel}
         </Button>
       </div>
     )

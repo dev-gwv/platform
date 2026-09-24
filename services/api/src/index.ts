@@ -35,6 +35,7 @@ import { personalExpensesRouter } from './modules/personal-expenses/router'
 import { partiesRouter } from './modules/parties/router'
 import { settingsRouter } from './modules/settings/router'
 import { platformRouter } from './modules/platform/router'
+import { feedbackRouter } from './modules/feedback/router'
 import { referralsRouter, publicReferralsRouter } from './modules/referrals/router'
 import { teamPayoutsRouter } from './modules/team-payouts/router'
 import { remindersRouter } from './modules/reminders/router'
@@ -156,6 +157,7 @@ app.route('/public', publicDocumentsRouter)
 app.route('/public', publicFilesRouter)
 app.route('/settings', settingsRouter)
 app.route('/platform', platformRouter)
+app.route('/feedback', feedbackRouter)
 app.route('/referrals', referralsRouter)
 app.route('/public', publicReferralsRouter)
 app.route('/team-payouts', teamPayoutsRouter)

@@ -45,6 +45,7 @@ import { EmployeesPage } from '@/routes/employees'
 import { EmployeeDetailPage } from '@/routes/employees/$id'
 import { SubscriptionPage } from '@/routes/subscription'
 import { SettingsPage } from '@/routes/settings'
+import { DeliveryStagesPage } from '@/routes/delivery-stages'
 import { RolesAccessPage } from '@/routes/settings/roles'
 import { TeamTermsPage } from '@/routes/settings/team-terms'
 import { AppearancePage } from '@/routes/settings/appearance'
@@ -61,6 +62,7 @@ import { ProjectDocumentsPage } from '@/routes/project-documents'
 import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
 import { PlatformStudiosPage } from '@/routes/platform/studios'
 import { PlatformUsagePage } from '@/routes/platform/usage'
+import { PlatformFeedbackPage } from '@/routes/platform/feedback'
 import { SystemPage } from '@/routes/settings/system'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
@@ -225,6 +227,7 @@ const routeTree = rootRoute.addChildren([
   route('/financials/calculated-expenses', CalculatedExpensesPage),
   route('/notifications', NotificationsPage),
   route('/notifications/generate', () => <NotificationsPage generate />),
+  route('/projects/stages', DeliveryStagesPage),
   route('/settings/company', SettingsPage),
   route('/settings/roles', RolesAccessPage),
   route('/settings/team-terms', TeamTermsPage),
@@ -246,6 +249,7 @@ const routeTree = rootRoute.addChildren([
   route('/activity', ActivityPage),
   route('/platform/studios', PlatformStudiosPage),
   route('/platform/usage', PlatformUsagePage),
+  route('/platform/feedback', PlatformFeedbackPage),
   ]),
 ])
 

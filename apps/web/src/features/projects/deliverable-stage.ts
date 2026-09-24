@@ -4,8 +4,9 @@ import type { Tone } from '@/features/data/stage'
 /**
  * Where a deliverable stands, in the studio's words.
  *
- * Five stages and nothing custom: To do, Editing, With client, Delivered --
- * and Dropped for something the client no longer wants. "Late" is not a
+ * Four steps -- To do, Editing, Review, Delivered -- and, inside them, the
+ * studio's own named stages (see ./stages.ts); plus Dropped, for something
+ * the client no longer wants. "Late" is not a
  * stage; it is a due date that has passed on work not yet delivered, and it
  * shows on the date, where the eye already is.
  */
@@ -16,7 +17,7 @@ export const STAGE_ORDER = ['pending', 'in_progress', 'review', 'completed'] as 
 export const STAGE_LABEL: Record<DeliverableStatus, string> = {
   pending: 'To do',
   in_progress: 'Editing',
-  review: 'With client',
+  review: 'Review',
   completed: 'Delivered',
   cancelled: 'Dropped',
 }

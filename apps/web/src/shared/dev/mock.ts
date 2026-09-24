@@ -147,6 +147,7 @@ const projectDetail: ProjectDetail = {
     delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000, [], { due: 40 }),
     delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }], {
       status: 'review',
+      code: 'with_manager',
       due: -2,
       editor: [uid(0xe3), 'Sana Khan'],
       shoot: [uid(0x61), 'Engagement shoot'],
@@ -162,7 +163,8 @@ const projectDetail: ProjectDetail = {
       editor: [uid(1), 'Demo Owner'],
       shoot: [uid(0x62), 'Wedding day'],
       notes: 1,
-      activity: { daysAgo: 2, by: 'Demo Owner', kind: 'event', body: 'moved:in_progress' },
+      code: 'changes_requested',
+      activity: { daysAgo: 2, by: 'Demo Owner', kind: 'event', body: 'sent_back:x' },
     }),
     delv(uid(0xd5), 'Data Sorting', 'internal', false, 0, [], { shoot: [uid(0x62), 'Wedding day'], due: 5 }),
   ],
@@ -292,8 +294,19 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       note(2, 'text', owner, { body: 'Keep it under 4 minutes. Open with the pheras, end on the vidaai. Song: Kesariya (acoustic).' }, at(6, 10)),
       note(3, 'voice', sana, { file_id: uid(0xfa1), duration_seconds: 14 }, at(3, 18)),
       note(4, 'text', sana, { body: 'First cut is on the drive. Colour pass tomorrow.' }, at(3, 18)),
-      note(5, 'event', sana, { body: 'moved:review' }, at(1, 12)),
+      note(5, 'event', sana, { body: 'submitted:' + uid(0x5b1), link: 'https://drive.google.com/demo-highlight' }, at(1, 12)),
     ]
+  }
+  // The studio's named stages.
+  if (method === 'GET' && path === '/projects/stages') return deliverableStagesFx
+  if (method === 'POST' && path === '/projects/stages') {
+    const b = (body ?? {}) as { label?: string; stage?: string; color?: string; team_allowed?: boolean }
+    return { id: uid(0x5c0 + Math.floor(Math.random() * 50)), code: (b.label ?? 'stage').toLowerCase().replace(/\W+/g, '_'), label: b.label ?? 'Stage', stage: b.stage ?? 'in_progress', color: b.color ?? 'slate', team_allowed: b.team_allowed ?? true, sort_order: 50 }
+  }
+  if (path.startsWith('/projects/stages/')) {
+    const id = path.split('/')[3]
+    const at = deliverableStagesFx.find((x) => x.id === id)
+    return method === 'DELETE' ? {} : { ...at, ...(body as object) }
   }
   // Above the catch-all below, which would answer this with a project detail.
   if (method === 'GET' && path === '/projects/deliverable-sets')
@@ -766,6 +779,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   if (method === 'POST' && path.includes('/terms/') && path.endsWith('/ack')) return { ok: true }
   if (method === 'GET' && path === '/platform/studios') return platformStudiosFx
+  if (method === 'POST' && path === '/feedback/features') return { id: uid(0xfe1) }
+  if (method === 'GET' && path.startsWith('/platform/feedback')) return feedbackFx
+  if (method === 'PATCH' && path.startsWith('/platform/feedback/')) return {}
   if (method === 'GET' && path === '/platform/usage') return platformUsageFx
   if (method === 'POST' && /^\/platform\/studios\/[^/]+\/plan$/.test(path)) return { ok: true }
   // 204-style writes: return an empty object so the schema (z.any) passes.
@@ -2125,6 +2141,43 @@ function fakeProject(
   }
 }
 
+const stageRow = (n: number, code: string, label: string, stage: string, color: string, team_allowed: boolean, sort_order: number) => ({
+  id: `00000000-0000-4000-8000-0000000005${String(n).padStart(2, '0')}`,
+  code,
+  label,
+  stage,
+  color,
+  team_allowed,
+  sort_order,
+})
+const deliverableStagesFx = [
+  stageRow(1, 'changes_requested', 'Changes requested', 'in_progress', 'rose', true, 10),
+  stageRow(2, 'with_manager', 'With manager', 'review', 'violet', true, 10),
+  stageRow(3, 'approved', 'Approved', 'review', 'teal', false, 20),
+  stageRow(4, 'with_client', 'With client', 'review', 'amber', true, 30),
+  stageRow(5, 'client_approved', 'Client approved', 'review', 'green', false, 40),
+]
+
+const feedbackFx = [
+  {
+    id: '00000000-0000-4000-8000-000000000fe1',
+    company_id: '00000000-0000-4000-8000-0000000000c0',
+    company_name: 'Mulberry Weddings',
+    user_id: '00000000-0000-4000-8000-0000000000e3',
+    user_name: 'Sana Khan',
+    user_email: 'sana@example.test',
+    body: 'Can the album selection link go on WhatsApp straight from the deliverable?',
+    voice_file_id: '00000000-0000-4000-8000-000000000fa1',
+    voice_seconds: 12,
+    screenshot_file_id: null,
+    page_url: '/projects/00000091-0000-4000-8000-000000000000?tab=deliverables',
+    user_agent: 'Mozilla/5.0',
+    status: 'new',
+    admin_note: null,
+    created_at: '2026-09-24T09:30:00Z',
+  },
+]
+
 function delv(
   id: string,
   title: string,
@@ -2134,6 +2187,8 @@ function delv(
   sourceShoots: { id: string; name: string }[] = [],
   extra: {
     status?: string
+    /** The studio's named stage inside the step. */
+    code?: string
     /** Days from today it is due; negative is late. */
     due?: number
     delivered?: number
@@ -2163,6 +2218,7 @@ function delv(
     show_on_quotation: visibility_scope === 'client',
     start_rule: sourceShoots.length > 0 ? ('specific_shoots' as const) : ('whole_project' as const),
     status: extra.status ?? 'pending',
+    custom_status_code: extra.code ?? null,
     estimated_date: extra.due !== undefined ? day(extra.due) : null,
     delivered_at: extra.delivered !== undefined ? `${day(extra.delivered)}T10:00:00Z` : null,
     assignee_id: extra.editor?.[0] ?? null,

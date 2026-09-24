@@ -1,7 +1,13 @@
 import type { ComponentProps } from 'react'
 import { cn } from './cn'
+import { DateField } from './date-field'
 
 export function Input({ className, ...props }: ComponentProps<'input'>) {
+  // Every date box in the app opens our calendar instead of the browser's.
+  if (props.type === 'date') {
+    const { type: _type, ...rest } = props
+    return <DateField className={className} {...rest} />
+  }
   return (
     <input
       className={cn(

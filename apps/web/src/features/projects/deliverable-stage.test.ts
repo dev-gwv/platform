@@ -26,7 +26,7 @@ const d = (over: Partial<Deliverable>): Deliverable =>
   }) as Deliverable
 
 describe('stages', () => {
-  it('walks To do → Editing → With client → Delivered, and back', () => {
+  it('walks To do → Editing → Review → Delivered, and back', () => {
     expect(nextStage('pending')).toBe('in_progress')
     expect(nextStage('in_progress')).toBe('review')
     expect(nextStage('review')).toBe('completed')

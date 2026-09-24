@@ -161,9 +161,11 @@ export function useSetDeliverableStage() {
   return useMutation({
     mutationFn: ({ deliverableId, ...body }: { deliverableId: string } & SetDeliverableStageRequest) =>
       callApi(`/projects/deliverables/${deliverableId}/stage`, { method: 'POST', body, responseSchema: anySchema }),
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
       toast.success('Deliverable updated')
       void qc.invalidateQueries({ queryKey: ['projects'] })
+      // The move is written into the deliverable's timeline too.
+      void qc.invalidateQueries({ queryKey: ['deliverable-notes', v.deliverableId] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

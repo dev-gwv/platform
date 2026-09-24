@@ -15,18 +15,21 @@ export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s
  */
 export function VoiceNotePlayer({
   fileId,
+  path,
   src,
   seconds,
   tone = 'default',
 }: {
   fileId?: string | null | undefined
+  /** Where to fetch it from, when not /files/:id (the platform inbox). */
+  path?: string | undefined
   /** A local recording, before it is sent. */
   src?: string | null | undefined
   seconds?: number | null | undefined
   tone?: 'default' | 'inverse' | undefined
 }) {
   const [wanted, setWanted] = useState(false)
-  const remote = useFileBlobUrl(src ? null : fileId, wanted)
+  const remote = useFileBlobUrl(src ? null : fileId, wanted, path)
   const url = src ?? remote.url
   const audio = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)

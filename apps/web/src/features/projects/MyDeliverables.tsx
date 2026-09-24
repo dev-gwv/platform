@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Film, MessageSquare, Mic } from 'lucide-react'
+import { Film, MessageSquare, Mic, Upload } from 'lucide-react'
 import type { Deliverable, MyDeliverable } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMyDeliverables } from '@/features/projects/api'
-import { DueChip, KindTile, NextStageButton } from '@/features/projects/DeliverableCard'
+import { DueChip, KindTile, MoveToMenu, NextStageButton } from '@/features/projects/DeliverableCard'
+import { SubmitWorkDialog } from '@/features/work/SubmitWorkDialog'
+import { Button } from '@/shared/ui/button'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { StageStepper, STAGE_STYLE } from '@/features/projects/StageStepper'
 import { isLate, stageOf } from '@/features/projects/deliverable-stage'
@@ -31,6 +33,7 @@ function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string |
     assignee_id: me.id,
     assignee_name: me.name,
     delivery_link: d.delivery_link ?? null,
+    custom_status_code: d.custom_status_code ?? null,
     notes_count: d.notes_count,
     voice_count: d.voice_count,
   }
@@ -48,6 +51,7 @@ export function MyDeliverables() {
   const { session } = useAuth()
   const canOpenProjects = useAccess().hasModule('projects')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [openAction, setOpenAction] = useState<'voice' | null>(null)
   if (!data?.length) return null
   const me = { id: session?.user_id ?? null, name: session?.display_name ?? null }
   const open = data.find((d) => d.id === openId)
@@ -96,12 +100,23 @@ export function MyDeliverables() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5">
-                    <StageStepper status={d.status} />
+                  <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                    <MoveToMenu d={d} canEdit={false}>
+                      <StageStepper status={d.status} code={d.custom_status_code} />
+                    </MoveToMenu>
                   </div>
                 </div>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <NextStageButton id={d.id} status={d.status} link={d.delivery_link} />
+                <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <SubmitWorkDialog
+                    deliverableId={d.id}
+                    projectId={d.project_id}
+                    trigger={
+                      <Button size="sm" variant="ghost">
+                        <Upload /> Submit work
+                      </Button>
+                    }
+                  />
+                  <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} canEdit={false} />
                 </div>
               </li>
             )
@@ -111,7 +126,11 @@ export function MyDeliverables() {
       <DeliverableDrawer
         deliverable={open ? asDeliverable(open, me) : null}
         canEdit={false}
-        onClose={() => setOpenId(null)}
+        action={openAction}
+        onClose={() => {
+          setOpenId(null)
+          setOpenAction(null)
+        }}
         onEdit={() => undefined}
         onDelete={() => undefined}
       />

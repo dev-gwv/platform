@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ExternalLink, FileCheck, Folder, HardDrive, Undo2 } from 'lucide-react'
+import { Check, ExternalLink, FileCheck, Folder, HardDrive, Package, Undo2 } from 'lucide-react'
 import { WORK_STATUS_LABEL, type WorkSubmission } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -82,9 +82,18 @@ function Submission({ s, canReview }: { s: WorkSubmission; canReview: boolean })
         <div className="flex flex-wrap items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-medium">
-              {s.title ?? 'Untitled work'}
+              {s.title ?? s.deliverable_title ?? 'Untitled work'}
               {s.version > 1 && <span className="ml-1 text-xs text-muted-foreground">· version {s.version}</span>}
             </p>
+            {s.deliverable_id && s.project_id && (
+              // Approving or sending back moves that deliverable too.
+              <a
+                href={`/projects/${s.project_id}?tab=deliverables&d=${s.deliverable_id}`}
+                className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-tone-violet-soft px-2 py-0.5 text-[11px] font-semibold text-tone-violet hover:underline"
+              >
+                <Package className="size-3" aria-hidden /> {s.title ? `For ${s.deliverable_title ?? 'a deliverable'}` : 'Open the deliverable'}
+              </a>
+            )}
             <p className="text-xs text-muted-foreground">
               {[s.submitted_by_name && `From ${s.submitted_by_name}`, day(s.created_at), s.work_type].filter(Boolean).join(' · ')}
             </p>

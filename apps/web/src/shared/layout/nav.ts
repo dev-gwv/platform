@@ -23,6 +23,8 @@ import {
   Users,
   Clock,
   Settings,
+  ListOrdered,
+  Lightbulb,
   ShieldCheck,
   Building2,
   Activity,
@@ -106,6 +108,7 @@ export const NAV: NavEntry[] = [
       leaf('Project Tracking', '/project-tracking', Target, { module: 'projects' }),
       leaf('Templates', '/settings/project-templates', Package, { module: 'projects' }),
       leaf('Documents', '/project-documents', FileSignature, { module: 'projects' }),
+      leaf('Delivery Stages', '/projects/stages', ListOrdered, { module: 'projects' }),
     ],
   },
 
@@ -187,6 +190,7 @@ export const NAV: NavEntry[] = [
     children: [
       leaf('Studios', '/platform/studios', Building2, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
+      leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
     ],
   },
 ]

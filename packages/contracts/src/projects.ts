@@ -80,6 +80,8 @@ export type UpdateDeliverableRequest = z.infer<typeof updateDeliverableRequest>
  */
 export const setDeliverableStageRequest = z.object({
   status: deliverableStatus,
+  /** The studio's own name for where it stands inside that step, if any. */
+  custom_status_code: z.string().trim().max(40).nullish(),
   delivery_link: deliveryLink.nullish(),
 })
 export type SetDeliverableStageRequest = z.infer<typeof setDeliverableStageRequest>
@@ -250,6 +252,8 @@ export const deliverableNote = z.object({
   duration_seconds: z.number().int().nullish(),
   author_id: uuid.nullish(),
   author_name: z.string().nullish(),
+  /** For a submitted / approved / sent-back event: the work's link. */
+  link: z.string().nullish(),
   created_at: isoDateTime,
 })
 export type DeliverableNote = z.infer<typeof deliverableNote>
@@ -278,6 +282,7 @@ export const myDeliverable = z.object({
   shoot_name: z.string().nullish(),
   delivery_link: z.string().nullish(),
   visibility_scope: deliverableVisibility,
+  custom_status_code: z.string().nullish(),
   notes_count: z.number().int().default(0),
   voice_count: z.number().int().default(0),
 })
@@ -443,3 +448,40 @@ export const saveDeliverableSetRequest = z.object({
   items: z.array(deliverableSetItem).min(1).max(60),
 })
 export type SaveDeliverableSetRequest = z.infer<typeof saveDeliverableSetRequest>
+
+/**
+ * A studio's own stage inside one of the four steps -- "With manager",
+ * "Approved", "Colour grading". `stage` is the step it sits in; `code` is
+ * what a deliverable stores and never changes, so renaming is safe.
+ */
+export const stepKey = z.enum(['pending', 'in_progress', 'review', 'completed'])
+export type StepKey = z.infer<typeof stepKey>
+export const stageTone = z.enum(['slate', 'blue', 'violet', 'amber', 'green', 'rose', 'teal'])
+export type StageTone = z.infer<typeof stageTone>
+
+export const deliverableStage = z.object({
+  id: uuid,
+  code: z.string(),
+  label: z.string(),
+  stage: stepKey,
+  color: z.string().nullish(),
+  team_allowed: z.boolean(),
+  sort_order: z.number().int(),
+})
+export type DeliverableStage = z.infer<typeof deliverableStage>
+
+export const createDeliverableStageRequest = z.object({
+  label: z.string().trim().min(2, 'Give the stage a name.').max(40),
+  stage: stepKey,
+  color: stageTone.default('slate'),
+  team_allowed: z.boolean().default(true),
+})
+export type CreateDeliverableStageRequest = z.infer<typeof createDeliverableStageRequest>
+
+export const updateDeliverableStageRequest = z.object({
+  label: z.string().trim().min(2, 'Give the stage a name.').max(40).optional(),
+  color: stageTone.optional(),
+  team_allowed: z.boolean().optional(),
+  sort_order: z.number().int().min(0).max(1000).optional(),
+})
+export type UpdateDeliverableStageRequest = z.infer<typeof updateDeliverableStageRequest>

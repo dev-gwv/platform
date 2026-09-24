@@ -167,7 +167,7 @@ export const publicFilesRouter = new Hono<AppEnv>().get('/files/:id', async (c) 
   return serve(rows[0]!, true)
 })
 
-function serve(row: { name: string; mime: string; bytes: Buffer }, immutable = false): Response {
+export function serve(row: { name: string; mime: string; bytes: Buffer }, immutable = false): Response {
   const body = row.bytes instanceof Uint8Array ? row.bytes : Buffer.from(row.bytes)
   return new Response(new Uint8Array(body), {
     headers: {

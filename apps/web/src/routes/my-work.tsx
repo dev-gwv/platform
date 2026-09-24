@@ -1,18 +1,15 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink, Layers, Mic, Plus, Pencil, Send } from 'lucide-react'
-import { WORK_STATUS_LABEL, shootListItem, workSubmission, type SubmitWorkRequest, type TaskListItem, type TaskStatus, type UpdateWorkSubmissionRequest, type WorkSubmission, z } from '@ipc/contracts'
-import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
+import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink, Layers, Mic, Pencil, Send } from 'lucide-react'
+import { WORK_STATUS_LABEL, shootListItem, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
-import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { Input, Label, Select } from '@/shared/ui/input'
+import { Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { humanize } from '@/shared/ui/format'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
@@ -21,6 +18,7 @@ import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
 import { MyDeliverables } from '@/features/projects/MyDeliverables'
+import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
 import { useConfirm } from '@/shared/ui/confirm'
 import { todayISO } from '@/features/tasks/board'
 
@@ -53,43 +51,13 @@ function useMyShoots() {
   })
 }
 
-function useSubmitWork() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: SubmitWorkRequest) =>
-      callApi('/work/submissions', {
-        method: 'POST',
-        body: input,
-        responseSchema: z.object({ id: z.string() }),
-      }),
-    onSuccess: () => {
-      toast.success('Work submitted')
-      void qc.invalidateQueries({ queryKey: ['work', 'submissions'] })
-    },
-  })
-}
-
-function useUpdateWorkSubmission() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateWorkSubmissionRequest }) =>
-      callApi(`/work/submissions/${id}`, {
-        method: 'PATCH',
-        body: patch,
-        responseSchema: z.unknown(),
-      }),
-    onSuccess: () => {
-      toast.success('Submission updated')
-      void qc.invalidateQueries({ queryKey: ['work', 'submissions'] })
-    },
-  })
-}
-
 export function MyWorkPage() {
   return (
-    <AuthedPage module="projects">
+    // Your own work is yours to see, whatever modules the studio has on --
+    // the same as My Tasks, which has no gate.
+    <>
       <MyWork />
-    </AuthedPage>
+    </>
   )
 }
 
@@ -478,131 +446,5 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
         </Card>
       ))}
     </div>
-  )
-}
-
-function SubmitDialog({ submission, trigger, taskId, projectId }: { submission?: WorkSubmission; trigger?: React.ReactNode; taskId?: string; projectId?: string | null } = {}) {
-  const isEdit = !!submission
-  const submit = useSubmitWork()
-  const update = useUpdateWorkSubmission()
-  const { data: myTasks } = useMyTasks()
-  const [open, setOpen] = useState(false)
-  const [task, setTask] = useState(taskId ?? '')
-  const [link, setLink] = useState(submission?.submission_link ?? '')
-  const [workType, setWorkType] = useState(submission?.work_type ?? '')
-  const [method, setMethod] = useState(submission?.method ?? '')
-  const [storageRef, setStorageRef] = useState(submission?.storage_ref ?? submission?.location_note ?? '')
-  const [notes, setNotes] = useState(submission?.notes ?? '')
-  const [error, setError] = useState<string | null>(null)
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    try {
-      const extra = {
-        ...(workType.trim() ? { work_type: workType.trim() } : {}),
-        ...(method.trim() ? { method: method.trim() } : {}),
-        ...(storageRef.trim() ? { storage_ref: storageRef.trim(), location_note: storageRef.trim() } : {}),
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
-      }
-      if (isEdit) {
-        await update.mutateAsync({
-          id: submission.id,
-          patch: {
-            submission_link: link.trim(),
-            review_required: submission.review_required ?? true,
-            ...extra,
-          },
-        })
-      } else {
-        const found = (myTasks ?? []).find((t) => t.id === task)
-        await submit.mutateAsync({
-          task_id: task || null,
-          project_id: found?.project_id ?? projectId ?? null,
-          submission_link: link.trim(),
-          review_required: true,
-          ...extra,
-        })
-      }
-      setOpen(false)
-      if (!isEdit) {
-        setTask(taskId ?? '')
-        setLink('')
-        setWorkType('')
-        setMethod('')
-        setStorageRef('')
-        setNotes('')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Could not ${isEdit ? 'update' : 'submit'}.`)
-    }
-  }
-
-  const busy = submit.isPending || update.isPending
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus /> Submit work
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent title={isEdit ? 'Edit submission' : 'Submit work'} description="Share a link or drive location for review.">
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          {!isEdit && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Task</Label>
-              <Select value={task} onChange={(e) => setTask(e.target.value)}>
-                <option value="">Not linked to a task</option>
-                {(myTasks ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label>Link</Label>
-            <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/…" required autoFocus />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Work type</Label>
-              <Input value={workType} onChange={(e) => setWorkType(e.target.value)} placeholder="e.g. Edited photos" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Method</Label>
-              <Input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="e.g. Drive link" />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Storage / drive location</Label>
-            <Input value={storageRef} onChange={(e) => setStorageRef(e.target.value)} placeholder="e.g. Backup HDD 3, /Weddings/Sharma" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Notes</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What is this?" />
-          </div>
-          {error && (
-            <p id="form-error" role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="mt-2 flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Submit'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
