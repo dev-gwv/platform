@@ -20,6 +20,7 @@ import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
+import { MyDeliverables } from '@/features/projects/MyDeliverables'
 import { useConfirm } from '@/shared/ui/confirm'
 import { todayISO } from '@/features/tasks/board'
 
@@ -293,6 +294,8 @@ function MyWork() {
         <SummaryCard label="Overdue" value={summary.overdue} icon={AlertCircle} warn={summary.overdue > 0} />
         <SummaryCard label="Completed" value={summary.completed} icon={CheckCircle2} />
       </div>
+
+      <MyDeliverables />
 
       {reminderDays.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5 text-xs">

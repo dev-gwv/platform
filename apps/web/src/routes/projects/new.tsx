@@ -120,6 +120,7 @@ import {
   stepErrors,
   stepIndex,
   toProjectRequest,
+  shootDeliverables,
   toShootRequests,
   withDeliverables,
   withShoots,
@@ -253,10 +254,19 @@ function NewProject() {
       // A failure here leaves a real project behind — say so rather than
       // pretending the whole thing failed.
       const shoots = toShootRequests(draft, id)
+      const perShoot = shootDeliverables(draft)
       const failed: string[] = []
-      for (const shoot of shoots) {
+      for (const { draftIndex, ...shoot } of shoots) {
         try {
-          await createShoot.mutateAsync(shoot)
+          const made = await createShoot.mutateAsync(shoot)
+          // That shoot's own team work, now that there is a shoot to tie it to.
+          for (const d of perShoot.get(draftIndex) ?? []) {
+            await callApi(`/projects/${id}/deliverables`, {
+              method: 'POST',
+              body: { ...d, shoot_id: made.id },
+              responseSchema: z.object({ id: z.string() }),
+            })
+          }
         } catch {
           failed.push(shoot.name)
         }
@@ -291,7 +301,7 @@ function NewProject() {
         <CreatedDialog
           projectId={created.id}
           warning={created.warning}
-          onClose={() => void navigate({ to: '/projects/', params: { id: created.id } })}
+          onClose={() => void navigate({ to: '/projects/$id', params: { id: created.id } })}
         />
       )}
       <Breadcrumbs items={[{ label: 'Home', to: '/dashboard' }, { label: 'Projects', to: '/projects' }, { label: 'New' }]} />
@@ -443,11 +453,7 @@ function CreatedDialog({
   const backToSetup = useBackToSetup()
 
   const openProject = (quotation?: boolean) =>
-    void navigate({
-      to: '/projects/$id',
-      params: { id: projectId },
-      ...(quotation ? { search: { quotation: '1' } } : {}),
-    })
+    void navigate({ to: quotation ? '/projects/$id/quotation' : '/projects/$id', params: { id: projectId } })
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -2130,46 +2136,6 @@ function DeliverableRow({
           </Field>
         )}
 
-        <Field label="When can this work start?">
-          <Select
-            value={item.start_rule}
-            onChange={(e) => set({ start_rule: e.target.value as DeliverableDraft['start_rule'] })}
-          >
-            {START_RULE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        {item.start_rule === 'this_shoot' && (
-          <Field label="Which shoot">
-            <Select
-              value={item.shoot_index ?? ''}
-              onChange={(e) => set({ shoot_index: e.target.value === '' ? null : Number(e.target.value) })}
-            >
-              <option value="">— Pick a shoot —</option>
-              {draft.shoots.map((s, idx) => (
-                <option key={idx} value={idx}>
-                  {s.name || `Shoot ${idx + 1}`}
-                  {s.shoot_date ? ` · ${prettyDate(s.shoot_date)}` : ''}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-
-        {item.start_rule !== 'no_data' && (
-          <Field label="Days after work can start">
-            <Input
-              inputMode="numeric"
-              value={item.lead_days}
-              onChange={(e) => set({ lead_days: e.target.value })}
-              placeholder="7"
-            />
-          </Field>
-        )}
       </div>
 
       <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -2201,18 +2167,6 @@ function DeliverableRow({
             />
           </Field>
         )}
-        <Switch
-          className="w-auto"
-          checked={item.show_on_quotation}
-          onChange={(v) => set({ show_on_quotation: v })}
-          label="Show on quotation"
-        />
-        <Switch
-          className="w-auto"
-          checked={item.visibility_scope === 'client'}
-          onChange={(v) => set({ visibility_scope: v ? 'client' : 'internal' })}
-          label="Visible to the client"
-        />
       </div>
     </div>
   )
@@ -2469,14 +2423,6 @@ const countLabel = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's
 
 const summarise = (names: string[]) => (names.length === 0 ? 'None' : names.join(', '))
 
-/** What a piece of internal work is waiting on before it can begin. */
-const START_RULE_OPTIONS: { value: DeliverableDraft['start_rule']; label: string }[] = [
-  { value: 'this_shoot', label: "After this shoot's data is received" },
-  { value: 'whole_project', label: 'After whole project data is received' },
-  { value: 'specific_shoots', label: 'I will choose specific shoots' },
-  { value: 'no_data', label: 'No shoot data needed' },
-]
-
 /** The one-word version of a start rule, for a row that has no space. */
 function startRuleShortLabel(rule: DeliverableDraft['start_rule']): string {
   switch (rule) {
@@ -2535,10 +2481,9 @@ function AddDeliverableDialog({
   const [dueBasis, setDueBasis] = useState<DueBasis>('after_wedding_day')
   const [customDate, setCustomDate] = useState('')
   const [description, setDescription] = useState('')
-  const [onQuotation, setOnQuotation] = useState(false)
-  const [startRule, setStartRule] = useState<DeliverableDraft['start_rule']>('this_shoot')
+  // Work tied to a shoot is the team's own; client promises are added under
+  // Client deliverables. The lead time follows the title, not a form field.
   const [leadDays, setLeadDays] = useState('7')
-  const [advanced, setAdvanced] = useState(false)
   const [confirmDuplicate, setConfirmDuplicate] = useState(false)
   /** Whether the title has been typed into since the dialog opened. */
   const [typed, setTyped] = useState(false)
@@ -2552,10 +2497,7 @@ function AddDeliverableDialog({
     setDueBasis(initial?.due_basis ?? 'after_wedding_day')
     setCustomDate(initial?.custom_date ?? '')
     setDescription(initial?.description ?? '')
-    setOnQuotation(initial?.show_on_quotation ?? false)
-    setStartRule(initial?.start_rule ?? 'this_shoot')
     setLeadDays(initial?.lead_days || '7')
-    setAdvanced(initial?.start_rule === 'specific_shoots')
     setConfirmDuplicate(false)
     setTyped(false)
   }, [open, initial])
@@ -2584,12 +2526,10 @@ function AddDeliverableDialog({
       due_days: dueDays.trim(),
       due_basis: dueBasis,
       custom_date: dueBasis === 'custom' || dueBasis === 'custom_after' ? customDate : '',
-      visibility_scope: onQuotation ? 'client' : 'internal',
-      show_on_quotation: onQuotation,
-      // Only internal work waits on data. A client line is a promise, not a
-      // production step, so it carries no readiness rule.
-      start_rule: onQuotation ? 'no_data' : startRule,
-      lead_days: onQuotation ? '' : leadDays.trim(),
+      visibility_scope: 'internal',
+      show_on_quotation: false,
+      start_rule: 'this_shoot',
+      lead_days: leadDays.trim(),
     })
     onOpenChange(false)
   }
@@ -2605,7 +2545,7 @@ function AddDeliverableDialog({
           <>
             Linked to{' '}
             <span className="font-medium text-foreground">{shootName.trim() || 'this shoot'}</span>.
-            Will appear in the project deliverables list automatically.
+            Team work — not shown to the client.
           </>
         }
       >
@@ -2677,62 +2617,6 @@ function AddDeliverableDialog({
               className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
-
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <Switch
-              checked={onQuotation}
-              onChange={setOnQuotation}
-              label={onQuotation ? 'Show on quotation' : 'Internal only'}
-              description={
-                onQuotation
-                  ? 'Visible to the client and can affect the quotation.'
-                  : 'Used by your team and hidden from client quotation.'
-              }
-            />
-          </div>
-
-          {!onQuotation && (
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>When can this work start?</Label>
-                <Select
-                  value={startRule}
-                  onChange={(e) => setStartRule(e.target.value as DeliverableDraft['start_rule'])}
-                >
-                  {START_RULE_OPTIONS.filter((o) => advanced || o.value !== 'specific_shoots').map(
-                    (o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ),
-                  )}
-                </Select>
-                {!advanced && (
-                  <button
-                    type="button"
-                    onClick={() => setAdvanced(true)}
-                    className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  >
-                    Change / advanced
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Delivery time</Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Due in</span>
-                  <Input
-                    inputMode="numeric"
-                    value={leadDays}
-                    onChange={(e) => setLeadDays(e.target.value)}
-                    className="w-20"
-                    aria-label="Days after work can start"
-                  />
-                  <span className="text-xs text-muted-foreground">days after work can start</span>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="mt-1 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -29,7 +29,9 @@ import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useBoard, useLaneColors, useSetBoardOrder, useSetLaneColor, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
-import { useBoardDeliverables, type BoardDeliverable } from '@/features/projects/api'
+import { useBoardDeliverables } from '@/features/projects/api'
+import { DueChip } from '@/features/projects/DeliverableRow'
+import { STAGE_LABEL, STAGE_ORDER, stageOf } from '@/features/projects/deliverable-stage'
 
 /**
  * Lane configuration: the four task stages plus the attention lenses the
@@ -40,22 +42,6 @@ const LANES: { key: TaskStatus; label: string; hint: string }[] = [
   { key: 'in_progress', label: 'In progress', hint: 'Being worked on' },
   { key: 'completed', label: 'Completed', hint: 'Done and approved' },
   { key: 'cancelled', label: 'Cancelled', hint: 'Dropped work' },
-]
-
-/**
- * Lovable parity: the seven production buckets (unassigned → sent to client).
- * Task rows only carry the four stages above, so each bucket maps onto the
- * stage its cards live in; deliverables (which carry their own board_status)
- * group under these buckets directly in the strip below the filters.
- */
-const LOVABLE_LANES_7: { key: string; label: string; stage: TaskStatus | null; hint: string }[] = [
-  { key: 'unassigned', label: 'Unassigned', stage: 'to_do', hint: 'No owner yet' },
-  { key: 'assigned', label: 'Assigned / Not Started', stage: 'to_do', hint: 'Waiting to start' },
-  { key: 'in_progress', label: 'In Progress', stage: 'in_progress', hint: 'Being worked on' },
-  { key: 'pending_review', label: 'Pending Review', stage: 'in_progress', hint: 'Waiting for review' },
-  { key: 'revision_required', label: 'Revision Required', stage: 'in_progress', hint: 'Changes requested' },
-  { key: 'completed', label: 'Completed / Approved', stage: 'completed', hint: 'Done and approved' },
-  { key: 'sent_to_client', label: 'Sent to Client', stage: 'completed', hint: 'Delivered to client' },
 ]
 
 type BoardView = 'status' | 'people' | 'data'
@@ -469,17 +455,15 @@ function DeliverablesStrip() {
   const { data, isLoading } = useBoardDeliverables()
   const [open, setOpen] = useState(false)
 
-  const groups = useMemo(() => {
-    const m = new Map<string, BoardDeliverable[]>()
-    for (const d of data ?? []) {
-      const bucket = (d.board_status ?? d.status ?? 'unassigned').toLowerCase()
-      m.set(bucket, [...(m.get(bucket) ?? []), d])
-    }
-    return LOVABLE_LANES_7.map((lane) => ({
-      lane,
-      items: m.get(lane.key) ?? [],
-    })).filter((g) => g.items.length > 0)
-  }, [data])
+  // The same four stages as the project page, so nothing falls between lanes.
+  const groups = useMemo(
+    () =>
+      STAGE_ORDER.map((stage) => ({
+        lane: { key: stage, label: STAGE_LABEL[stage] },
+        items: (data ?? []).filter((d) => stageOf(d.status) === stage),
+      })).filter((g) => g.items.length > 0),
+    [data],
+  )
 
   const total = (data ?? []).length
   if (isLoading || total === 0) return null
@@ -505,10 +489,10 @@ function DeliverablesStrip() {
           </span>
         </button>
         {open && (
-          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             {groups.map((g) => (
               <div key={g.lane.key} className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-2.5">
-                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground" title={g.lane.hint}>
+                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {g.lane.label} ({g.items.length})
                 </p>
                 {g.items.slice(0, 6).map((d) => (
@@ -517,13 +501,15 @@ function DeliverablesStrip() {
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {d.project_name ?? 'No project'}
                       {d.shoot_name ? ` · ${d.shoot_name}` : ''}
-                      {d.due_date ? ` · due ${d.due_date}` : ''}
+                      {` · ${d.assignee_name ?? 'No editor'}`}
                     </p>
+                    <DueChip d={{ status: d.status, estimated_date: d.due_date }} />
                     {d.project_id && (
                       <Link
                         to="/projects/$id"
                         params={{ id: d.project_id }}
-                        className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+                        search={{ tab: 'deliverables' }}
+                        className="mt-1 block text-xs font-medium text-primary hover:underline"
                       >
                         Open project
                       </Link>

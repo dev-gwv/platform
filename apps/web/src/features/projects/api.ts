@@ -4,6 +4,7 @@ import { z } from '@ipc/contracts'
 import {
   createProjectRequest,
   deliverableSet,
+  myDeliverable,
   issuedLink,
   projectDetail,
   projectListItem,
@@ -14,6 +15,7 @@ import {
   type PaymentInput,
   type SaveDeliverableSetRequest,
   type SetDeliverableSourcesRequest,
+  type SetDeliverableStageRequest,
   type UpdateDeliverableRequest,
   type UpdateProjectRequest,
 } from '@ipc/contracts'
@@ -151,6 +153,31 @@ export function useDeleteDeliverable(id: string) {
   })
 }
 
+/** Deliverables the signed-in person is the editor on. */
+export function useMyDeliverables() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['projects', 'my-deliverables'],
+    queryFn: () => callApi('/projects/deliverables/mine', { responseSchema: myDeliverable.array() }),
+    enabled: !!session,
+    staleTime: 30_000,
+  })
+}
+
+/** Move a deliverable to a stage (with the link sent); the editor on it may too. */
+export function useSetDeliverableStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ deliverableId, ...body }: { deliverableId: string } & SetDeliverableStageRequest) =>
+      callApi(`/projects/deliverables/${deliverableId}/stage`, { method: 'POST', body, responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Deliverable updated')
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useAddPayment(id: string) {
   return useMutation({
     mutationFn: (input: PaymentInput) =>
@@ -193,6 +220,7 @@ const boardDeliverable = z.object({
   project_name: z.string().nullable(),
   due_date: z.string().nullable().default(null),
   shoot_name: z.string().nullable().default(null),
+  assignee_name: z.string().nullable().default(null),
 })
 export type BoardDeliverable = z.infer<typeof boardDeliverable>
 

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Input, Select } from '@/shared/ui/input'
+import { useClients } from '@/features/clients/api'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Badge } from '@/shared/ui/badge'
@@ -42,6 +43,8 @@ function ProjectTemplatesContent() {
   const saveTemplate = useSaveProjectTemplate()
   const deleteTemplate = useDeleteProjectTemplate()
   const applyTemplate = useApplyProjectTemplate()
+  const { data: clientsData } = useClients()
+  const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
 
   const templates = data?.items ?? []
 
@@ -70,7 +73,7 @@ function ProjectTemplatesContent() {
   }
 
   function handleApply() {
-    if (!applyingTemplateId || !applyForm.name.trim()) return
+    if (!applyingTemplateId || !applyForm.name.trim() || !applyForm.client_id) return
     applyTemplate.mutate(
       { templateId: applyingTemplateId, body: { name: applyForm.name, client_id: applyForm.client_id || undefined, start_date: applyForm.start_date || undefined } },
       { onSuccess: () => setApplyDialogOpen(false) },
@@ -318,6 +321,22 @@ function ProjectTemplatesContent() {
               />
             </div>
             <div>
+              <label className="text-sm font-medium" htmlFor="apply-client">Client</label>
+              {/* Every project belongs to a client; without one the project could not be created. */}
+              <Select
+                id="apply-client"
+                value={applyForm.client_id}
+                onChange={(e) => setApplyForm({ ...applyForm, client_id: e.target.value })}
+              >
+                <option value="">Pick a client</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
               <label className="text-sm font-medium">Start Date (optional)</label>
               <Input
                 type="date"
@@ -328,7 +347,7 @@ function ProjectTemplatesContent() {
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setApplyDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleApply} disabled={!applyForm.name.trim() || applyTemplate.isPending}>
+            <Button onClick={handleApply} disabled={!applyForm.name.trim() || !applyForm.client_id || applyTemplate.isPending}>
               {applyTemplate.isPending ? 'Creating...' : 'Create Project'}
             </Button>
           </div>

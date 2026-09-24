@@ -769,5 +769,112 @@ if (listed) {
   )
 }
 
+// ── Deliverables: editor, stage, link, studio boundary (0161) ────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Deliverable Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', {
+    token: aToken,
+    method: 'POST',
+    body: { name: 'Deliverables project', client_id: client.json.id, package_cost: 50000 },
+  })
+  const pid = project.json.id
+  const shoot = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Wedding day' } })
+
+  // An editor with their own login, who cannot edit projects.
+  const edEmail = `editor-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Priya Editor', email: edEmail, role: 'employee' } })
+  const invToken = /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? ''
+  const joined = await api('/auth/accept-invite', { method: 'POST', body: { token: invToken, password: 'Editor12345!' } })
+  const edToken = joined.json.access_token
+  const edUid = (await api('/auth/session', { token: edToken })).json.user_id
+  check('deliverables: an editor joins with their own login', joined.status === 200 && !!edUid, joined.json)
+
+  const added = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Highlight film', shoot_id: shoot.json.id, assignee_id: edUid, visibility_scope: 'client' },
+  })
+  const detail = await api(`/projects/${pid}`, { token: aToken })
+  const film = (detail.json.deliverables ?? []).find((d) => d.id === added.json.id)
+  check(
+    'deliverables: one is tied to its shoot and its editor',
+    added.status === 201 && film?.shoot_name === 'Wedding day' && film?.assignee_name === 'Priya Editor' && film?.status === 'pending',
+    film ?? added.json,
+  )
+
+  const mine = await api('/projects/deliverables/mine', { token: edToken })
+  check(
+    'deliverables: the editor sees it on their own list',
+    mine.status === 200 && mine.json.some((d) => d.id === added.json.id && d.project_name === 'Deliverables project'),
+    mine.json,
+  )
+
+  const sent = await api(`/projects/deliverables/${added.json.id}/stage`, {
+    token: edToken,
+    method: 'POST',
+    body: { status: 'review', delivery_link: 'https://drive.example.com/film' },
+  })
+  const after = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === added.json.id)
+  check(
+    'deliverables: the editor can say it is with the client, with the link',
+    sent.status === 204 && after?.status === 'review' && after?.delivery_link === 'https://drive.example.com/film',
+    { sent: sent.json, after },
+  )
+  const delivered = await api(`/projects/deliverables/${added.json.id}/stage`, { token: aToken, method: 'POST', body: { status: 'completed' } })
+  const done = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === added.json.id)
+  check('deliverables: delivering stamps when', delivered.status === 204 && !!done?.delivered_at, done)
+
+  // Work the editor is not on is not theirs to move.
+  const other = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Album' } })
+  const notTheirs = await api(`/projects/deliverables/${other.json.id}/stage`, { token: edToken, method: 'POST', body: { status: 'in_progress' } })
+  check('deliverables: someone else cannot move work they are not on (403)', notTheirs.status === 403, notTheirs.json)
+
+  const internal = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Data sorting', visibility_scope: 'internal', show_on_quotation: true },
+  })
+  const internalRow = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === internal.json.id)
+  check('deliverables: team work never goes on the quotation', internalRow?.show_on_quotation === false, internalRow)
+
+  const foreignShoot = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Teaser', shoot_id: '00000000-0000-4000-8000-000000000000' },
+  })
+  check('deliverables: a shoot from elsewhere is refused (422)', foreignShoot.status === 422, foreignShoot.json)
+
+  const cross = await api(`/projects/${pid}/deliverables`, {
+    token: newPw.json.access_token,
+    method: 'POST',
+    body: { title: 'Sneaky', is_additional_charge: true, additional_charge_amount: 99999 },
+  })
+  const total = (await api(`/projects/${pid}`, { token: aToken })).json.total_cost
+  check(
+    "deliverables: another studio cannot add to this project or change its total",
+    cross.status === 404 && Number(total) === 50000,
+    { cross: cross.status, total },
+  )
+
+  // A project template creates a real project now -- and asks for a client.
+  const tpl = await api('/projects/templates', {
+    token: aToken,
+    method: 'POST',
+    body: { name: `Wedding ${rand()}`, deliverables_json: [{ name: 'Album', quantity: 2 }], shoots_json: [{ name: 'Haldi' }], tasks_json: [{ title: 'Call client' }] },
+  })
+  const noClient = await api(`/projects/templates/${tpl.json.id}/apply`, { token: aToken, method: 'POST', body: { name: 'From template' } })
+  const applied = await api(`/projects/templates/${tpl.json.id}/apply`, {
+    token: aToken,
+    method: 'POST',
+    body: { name: 'From template', client_id: client.json.id, start_date: '2026-12-01' },
+  })
+  const made = await api(`/projects/${applied.json.project_id}`, { token: aToken })
+  check(
+    'templates: applying one makes the project with its deliverables',
+    noClient.status === 422 && applied.status === 201 && made.json.deliverables?.[0]?.title === 'Album ×2',
+    { noClient: noClient.status, applied: applied.json, made: made.json.deliverables },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

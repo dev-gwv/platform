@@ -6,12 +6,10 @@ import {
   Circle,
   Clock,
   Eye,
-  FolderOpen,
   ListChecks,
   Package,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
 } from 'lucide-react'
 import type { DirectoryMember, TaskListItem, TaskPriority, TaskStatus } from '@ipc/contracts'
@@ -136,18 +134,6 @@ function Tasks() {
           title="Task bundles"
           description="Reusable checklists for the work you repeat — wedding editing, album delivery, client onboarding, shoot prep."
           action={<BundlesDialog trigger={<Button variant="outline">Manage bundles</Button>} />}
-        />
-        <FeatureCard
-          icon={Sparkles}
-          title="Generate tasks from deliverables"
-          description="Open a project and turn its deliverables into tasks in one step, instead of typing them out again."
-          action={
-            <Button variant="outline" asChild>
-              <Link to="/projects">
-                <FolderOpen /> Go to projects
-              </Link>
-            </Button>
-          }
         />
       </div>
 

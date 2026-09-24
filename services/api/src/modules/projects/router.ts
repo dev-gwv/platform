@@ -3,6 +3,8 @@ import {
   createProjectRequest,
   deliverableInput,
   updateDeliverableRequest,
+  setDeliverableStageRequest,
+  myDeliverable,
   setDeliverableSourcesRequest,
   deliverableSet,
   paymentInput,
@@ -30,6 +32,20 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+
+/** postgres.js writes `undefined` as a column; leave those out instead. */
+function withoutUndefined<T extends Record<string, unknown>>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
+/** The deliverable trigger's own refusals (0161), said plainly. */
+function deliverableRuleBroken(code: string, err: unknown): never | undefined {
+  if (code !== '23514') return undefined
+  const msg = err instanceof Error ? err.message : ''
+  if (msg.includes('shoot')) fail(422, 'That shoot is not part of this project.')
+  if (msg.includes('team')) fail(422, 'That person is not on your team.')
+  return undefined
+}
 
 export const projectsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -348,8 +364,11 @@ export const projectsRouter = new Hono<AppEnv>()
       if (!dc.success) fail(422, 'Invalid start date.')
     }
     const auth = c.get('auth')
-    const rows = await attempt(c, 'projects.template_apply', () =>
-      withUser(c.env, auth.userId, async (sql) => {
+    if (body.client_id == null) fail(422, 'Pick a client for this project.')
+    const rows = await attempt(
+      c,
+      'projects.template_apply',
+      () => withUser(c.env, auth.userId, async (sql) => {
         const result = await sql<{ create_project_from_template: string }[]>`
           select create_project_from_template(
             p_template_id => ${templateId}::uuid,
@@ -359,6 +378,7 @@ export const projectsRouter = new Hono<AppEnv>()
           ) as create_project_from_template`
         return result
       }),
+      { onCode: (code) => (code === '23514' ? fail(422, 'Pick a client for this project.') : undefined) },
     )
     if (!rows?.[0]) fail(400, 'We could not create the project from this template.')
     await audit(c, { action: 'project_template.apply', entityType: 'project_template', entityId: templateId, after: { project_id: rows[0].create_project_from_template } })
@@ -370,11 +390,15 @@ export const projectsRouter = new Hono<AppEnv>()
   .get('/board/deliverables', requireAction('projects', 'view'), async (c) => {
     const rows = await attempt(c, 'projects.board_deliverables', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select d.id, d.title, d.status, coalesce(d.custom_status_code, d.status) as board_status,
+        select d.id, d.title, d.status, d.status as board_status,
                d.project_id, p.name as project_name, d.estimated_date as due_date,
-               coalesce((select s.name from deliverable_shoot_links l join shoots s on s.id = l.shoot_id where l.deliverable_id = d.id order by s.name limit 1), null) as shoot_name
-        from deliverables d join projects p on p.id = d.project_id
-        order by d.created_at desc limit 500`),
+               s.name as shoot_name, u.name as assignee_name
+        from deliverables d
+        join projects p on p.id = d.project_id
+        left join shoots s on s.id = d.shoot_id
+        left join users u on u.user_id = d.assignee_id
+        where d.status <> 'cancelled'
+        order by d.estimated_date nulls last, d.created_at desc limit 500`),
     )
     if (!rows) fail(400, 'We could not load board deliverables.')
     return c.json(rows)
@@ -454,6 +478,65 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.json(workflowPresetItem.parse(row), 201)
   })
 
+  /**
+   * What the caller is editing: every open deliverable they are the editor on,
+   * soonest due first. Any member -- an editor need not see whole projects to
+   * see their own work.
+   */
+  .get('/deliverables/mine', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'projects.deliverables_mine', () =>
+      withUser(c.env, auth.userId, (sql) => sql`
+        select d.id, d.project_id, p.name as project_name, cl.name as client_name,
+               d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
+               d.delivery_link, d.visibility_scope
+        from deliverables d
+        join projects p on p.id = d.project_id
+        left join clients cl on cl.id = p.client_id
+        left join shoots s on s.id = d.shoot_id
+        where d.assignee_id = ${auth.userId} and d.status not in ('completed', 'cancelled')
+        order by d.estimated_date nulls last, d.created_at
+        limit 200`),
+    )
+    if (!rows) fail(400, 'We could not load your deliverables.')
+    return c.json(myDeliverable.array().parse(rows))
+  })
+
+  /**
+   * Move a deliverable to a stage, with the link that was sent. The editor on
+   * it may do this as well as anyone who can edit projects.
+   */
+  .post('/deliverables/:did/stage', async (c) => {
+    const parsed = setDeliverableStageRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please pick a stage.')
+    const did = uuidParam(c, 'did')
+    const auth = c.get('auth')
+    const canEdit = auth.access.hasAction('projects', 'edit')
+    const outcome = await attempt(c, 'projects.deliverable_stage', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const found = await sql<{ project_id: string; assignee_id: string | null }[]>`
+          select project_id, assignee_id from deliverables where id = ${did}`
+        const d = found[0]
+        if (!d) return 'missing' as const
+        if (!canEdit && d.assignee_id !== auth.userId) return 'forbidden' as const
+        const patch: Record<string, unknown> = { status: parsed.data.status }
+        if (parsed.data.delivery_link !== undefined) patch.delivery_link = parsed.data.delivery_link || null
+        await sql`update deliverables set ${sql(patch)} where id = ${did}`
+        return d.project_id
+      }),
+    )
+    if (outcome === 'missing') fail(404, 'That deliverable was not found.')
+    if (outcome === 'forbidden') fail(403, 'Only the editor on it, or a manager, can move this.')
+    if (!outcome) fail(400, 'We could not update the deliverable.')
+    await audit(c, {
+      action: 'deliverable.stage',
+      entityType: 'project',
+      entityId: outcome,
+      after: { deliverable_id: did, ...parsed.data },
+    })
+    return c.body(null, 204)
+  })
+
   .get('/:id', requireAction('projects', 'view'), async (c) => {
     const id = uuidParam(c)
     const row = await attempt(c, 'projects.get', () =>
@@ -467,6 +550,9 @@ export const projectsRouter = new Hono<AppEnv>()
                  coalesce((
                    select jsonb_agg(
                      to_jsonb(d) || jsonb_build_object(
+                       'shoot_name', (select s.name from shoots s where s.id = d.shoot_id),
+                       'shoot_date', (select s.shoot_date from shoots s where s.id = d.shoot_id),
+                       'assignee_name', (select u.name from users u where u.user_id = d.assignee_id),
                        'source_shoots', coalesce((
                          select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name) order by s.name)
                          from deliverable_shoot_links dsl
@@ -557,14 +643,23 @@ export const projectsRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, 'Please check the deliverable details.')
     const auth = c.get('auth')
     const projectId = uuidParam(c)
-    const row = await attempt(c, 'projects.deliverable_add', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        const rows = await sql<{ id: string }[]>`
-          insert into deliverables ${sql({ ...parsed.data, project_id: projectId, company_id: auth.companyId })}
-          returning id`
-        return rows[0] ?? null
-      }),
+    const row = await attempt(
+      c,
+      'projects.deliverable_add',
+      () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          // The project must be this studio's -- RLS hides others, and the
+          // row's trigger refuses them too, but a plain 404 is the answer.
+          const owns = await sql`select 1 from projects where id = ${projectId}`
+          if (!owns.length) return 'missing' as const
+          const rows = await sql<{ id: string }[]>`
+            insert into deliverables ${sql(withoutUndefined({ ...parsed.data, project_id: projectId, company_id: auth.companyId }))}
+            returning id`
+          return rows[0] ?? null
+        }),
+      { onCode: deliverableRuleBroken },
     )
+    if (row === 'missing') fail(404, 'That project was not found.')
     if (!row) fail(400, 'We could not add the deliverable.')
     await audit(c, { action: 'deliverable.add', entityType: 'project', entityId: projectId, after: parsed.data })
     return c.json({ id: row.id }, 201)
@@ -573,22 +668,21 @@ export const projectsRouter = new Hono<AppEnv>()
   .patch('/:id/deliverables/:did', requireAction('projects', 'edit'), async (c) => {
     const parsed = updateDeliverableRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the deliverable details.')
-    // due_days is the form-level alias for delivery_days_after_start; fold it in.
-    const { due_days, due_basis, ...rest } = parsed.data
-    const patch: Record<string, unknown> = { ...rest }
-    if (due_days !== undefined) patch.delivery_days_after_start = due_days
-    // due_basis is resolved to estimated_date client-side; ignore server-side (kept for compat).
-    void due_basis
+    const patch = withoutUndefined(parsed.data)
     if (Object.keys(patch).length === 0) fail(422, 'Nothing to change.')
     const projectId = uuidParam(c)
     const did = uuidParam(c, 'did')
-    const rows = await attempt(c, 'projects.deliverable_update', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
-        (sql) => sql<{ id: string }[]>`
-          update deliverables set ${sql(patch)} where id = ${did} and project_id = ${projectId} returning id`,
-      ),
+    const rows = await attempt(
+      c,
+      'projects.deliverable_update',
+      () =>
+        withUser(
+          c.env,
+          c.get('auth').userId,
+          (sql) => sql<{ id: string }[]>`
+            update deliverables set ${sql(patch)} where id = ${did} and project_id = ${projectId} returning id`,
+        ),
+      { onCode: deliverableRuleBroken },
     )
     if (!rows) fail(400, 'We could not update the deliverable.')
     if (!rows.length) fail(404, 'That deliverable was not found.')

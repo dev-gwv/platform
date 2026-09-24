@@ -5,7 +5,11 @@ export const projectStatus = z.enum(['active', 'completed', 'cancelled', 'on_hol
 export type ProjectStatus = z.infer<typeof projectStatus>
 
 export const deliverableVisibility = z.enum(['client', 'internal'])
-export const deliverableStatus = z.enum(['pending', 'in_progress', 'completed', 'cancelled'])
+/**
+ * Where a deliverable stands. The labels the studio sees are To do, Editing,
+ * With client, Delivered and Dropped; the stored values predate 'review'.
+ */
+export const deliverableStatus = z.enum(['pending', 'in_progress', 'review', 'completed', 'cancelled'])
 export type DeliverableStatus = z.infer<typeof deliverableStatus>
 export const deliverableStartRule = z.enum([
   'this_shoot',
@@ -28,6 +32,12 @@ export const deliverableInput = z.object({
   delivery_days_after_start: z.number().int().min(0).optional(),
   work_type: z.string().max(80).optional(),
   internal_notes: z.string().max(2000).optional(),
+  /** The one shoot it comes from; none means the whole project. */
+  shoot_id: uuid.nullish(),
+  /** The editor or designer on it. */
+  assignee_id: uuid.nullish(),
+  status: deliverableStatus.optional(),
+  delivery_link: z.string().trim().max(1000).nullish(),
 })
 export type DeliverableInput = z.infer<typeof deliverableInput>
 
@@ -42,17 +52,26 @@ export const updateDeliverableRequest = z.object({
   estimated_date: isoDate.nullable().optional(),
   start_rule: deliverableStartRule.optional(),
   delivery_days_after_start: z.number().int().min(0).nullable().optional(),
-  // Lovable parity: post-create due editing. due_days maps to
-  // delivery_days_after_start; due_basis is a UI-level basis resolved to
-  // estimated_date client-side before PATCH (kept here for form binding).
-  due_days: z.number().int().min(0).nullable().optional(),
-  due_basis: z.string().max(40).nullable().optional(),
   work_type: z.string().max(80).nullable().optional(),
   internal_notes: z.string().max(2000).nullable().optional(),
   status: deliverableStatus.optional(),
   custom_status_code: z.string().max(40).nullable().optional(),
+  shoot_id: uuid.nullable().optional(),
+  assignee_id: uuid.nullable().optional(),
+  delivery_link: z.string().trim().max(1000).nullable().optional(),
 })
 export type UpdateDeliverableRequest = z.infer<typeof updateDeliverableRequest>
+
+/**
+ * Move a deliverable along. The editor on it may do this too -- not only
+ * someone who can edit the project -- so the link reaches the record from the
+ * person who sent it.
+ */
+export const setDeliverableStageRequest = z.object({
+  status: deliverableStatus,
+  delivery_link: z.string().trim().max(1000).nullish(),
+})
+export type SetDeliverableStageRequest = z.infer<typeof setDeliverableStageRequest>
 
 /** One shoot a deliverable is waiting on data from (`start_rule: 'specific_shoots'`). */
 export const deliverableSourceShoot = z.object({ id: uuid, name: z.string() })
@@ -176,8 +195,31 @@ export const deliverable = z.object({
   custom_status_code: z.string().nullish(),
   /** Shoots this is waiting on data from — only meaningful when start_rule is 'specific_shoots'. */
   source_shoots: z.array(deliverableSourceShoot),
+  shoot_id: uuid.nullish(),
+  shoot_name: z.string().nullish(),
+  shoot_date: isoDate.nullish(),
+  assignee_id: uuid.nullish(),
+  assignee_name: z.string().nullish(),
+  delivery_link: z.string().nullish(),
+  delivered_at: isoDateTime.nullish(),
 })
 export type Deliverable = z.infer<typeof deliverable>
+
+/** A deliverable on someone's own list: what, for whom, and by when. */
+export const myDeliverable = z.object({
+  id: uuid,
+  project_id: uuid,
+  project_name: z.string(),
+  client_name: z.string().nullish(),
+  title: z.string(),
+  description: z.string().nullish(),
+  status: z.string(),
+  estimated_date: isoDate.nullish(),
+  shoot_name: z.string().nullish(),
+  delivery_link: z.string().nullish(),
+  visibility_scope: deliverableVisibility,
+})
+export type MyDeliverable = z.infer<typeof myDeliverable>
 
 // ── Granular catalog (Lovable parity): separate from generic project_templates ──
 export const shootTypeItem = z.object({

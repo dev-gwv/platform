@@ -108,6 +108,7 @@ function ProjectQuotation() {
   if (isLoading) return <SkeletonCards count={2} />
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />
   const project = data
+  const quoted = project.deliverables.filter((d) => d.visibility_scope === 'client' && d.show_on_quotation)
 
   /**
    * What the client will notice is absent. Named in the studio's words rather
@@ -383,12 +384,13 @@ function ProjectQuotation() {
 
         {show('showDeliverables') && (
           <section className="mt-4">
+            {/* Only what was promised to the client -- never the team's own work. */}
             <h3 className="text-sm font-semibold">Deliverables</h3>
-            {project.deliverables.length === 0 ? (
+            {quoted.length === 0 ? (
               <EmptyState title="No deliverables yet" description="Deliverables will appear here once added." />
             ) : (
               <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-                {project.deliverables.map((d) => (
+                {quoted.map((d) => (
                   <li key={d.id} className="flex items-center justify-between gap-4 px-3 py-2.5 text-sm">
                     <span className="min-w-0 flex-1">
                       {d.title}
