@@ -172,6 +172,12 @@ export const projectListPage = z.object({
   total: z.number().int(),
   page: z.number().int(),
   page_size: z.number().int(),
+  /** Money across every project the filter matches, not just this page. */
+  summary: z
+    .object({ value: money, received: money, due: money })
+    .default({ value: 0, received: 0, due: 0 }),
+  /** Projects per status for the current search, for the status tabs. */
+  status_counts: z.record(z.string(), z.number().int()).default({}),
 })
 export type ProjectListPage = z.infer<typeof projectListPage>
 

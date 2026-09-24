@@ -95,7 +95,7 @@ describe('stepErrors', () => {
 
   it('refuses to record more money than the project is worth', () => {
     const over = named({ package_cost: '50000', payments: [{ ...newPayment(), amount: '60000' }] })
-    expect(stepErrors(over).billing).toBe('Payments received exceed the project total.')
+    expect(stepErrors(over).billing).toBe('The payments add up to more than the project total.')
     // With no price set yet there is nothing to exceed — that is step 4's job.
     expect(stepErrors(named({ payments: [{ ...newPayment(), amount: '60000' }] })).billing).toBeUndefined()
   })
@@ -125,8 +125,28 @@ describe('draftTotals', () => {
       addOns: 15000,
       total: 115000,
       received: 40000,
+      promised: 0,
       balance: 75000,
     })
+  })
+
+  it('keeps a promised payment out of received, but counts it against the total', () => {
+    const d = named({
+      package_cost: '100000',
+      payments: [
+        { ...newPayment(), amount: '30000' },
+        { ...newPayment(), amount: '20000', status: 'pending' as const },
+      ],
+    })
+    expect(draftTotals(d)).toMatchObject({ received: 30000, promised: 20000, balance: 70000 })
+    const over = named({
+      package_cost: '40000',
+      payments: [
+        { ...newPayment(), amount: '30000' },
+        { ...newPayment(), amount: '20000', status: 'pending' as const },
+      ],
+    })
+    expect(stepErrors(over).billing).toBe('The payments add up to more than the project total.')
   })
 
   it('follows the domain rule: internal and unquoted extras never add to price', () => {

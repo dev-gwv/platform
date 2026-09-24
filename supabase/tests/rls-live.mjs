@@ -1013,5 +1013,32 @@ if (listed) {
   check('terms: sending clears the draft', sent.status === 201 && gone.json === null, { sent: sent.status, gone: gone.json })
 }
 
+// ── Create Project: a promised advance stays promised ───────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Wizard Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', {
+    token: aToken, method: 'POST',
+    body: {
+      name: `Wizard project ${rand()}`, client_id: client.json.id, package_cost: 100000,
+      payments: [
+        { amount: 25000, mode: 'UPI' },
+        { amount: 25000, status: 'pending', description: 'Before the shoot' },
+      ],
+    },
+  })
+  const detail = await api(`/projects/${project.json.id}`, { token: aToken })
+  const pays = detail.json.payments ?? []
+  const promised = pays.find((x) => x.status === 'pending')
+  check(
+    'create project: a promised advance is saved as promised, with its client',
+    project.status === 201 && pays.length === 2 && !!promised && promised.description === 'Before the shoot' && pays.every((x) => x.client_id === client.json.id || x.client_id === undefined),
+    { status: project.status, pays },
+  )
+  const page = await api(`/projects?q=Wizard%20project&page_size=100`, { token: aToken })
+  const items = Array.isArray(page.json) ? page.json : (page.json.items ?? [])
+  const row = items.find((x) => x.id === project.json.id)
+  check('create project: only the paid advance counts as received', Number(row?.received) === 25000, { row })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
