@@ -62,6 +62,18 @@ describe('nextActionFor', () => {
     expect(nextActionFor(c, 0)).toBe('plan_work')
   })
 
+  it('treats a late deliverable like an overdue task', () => {
+    const c = counters({ deliverables_total: 2, deliverables_late: 1 })
+    expect(nextActionFor(c, 0.2)).toBe('clear_overdue')
+    expect(projectHealth(c, TODAY).flags.overdue).toBe(true)
+    expect(scoreOf(c, 0.2, TODAY)).toBeGreaterThan(scoreOf(counters({ deliverables_total: 2 }), 0.2, TODAY))
+  })
+
+  it('does not ask for tasks when the deliverables are the plan', () => {
+    const c = counters({ shoots_total: 2, shoots_done: 2, deliverables_total: 3 })
+    expect(nextActionFor(c, 0)).toBe('keep_going')
+  })
+
   it('says deliver once everything is ticked', () => {
     const c = counters({ tasks_total: 3, tasks_done: 3, deliverables_total: 1, deliverables_done: 1 })
     expect(nextActionFor(c, 1)).toBe('deliver')

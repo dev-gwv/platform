@@ -5,8 +5,9 @@ import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * Deliverables (0161): an editor, a "with client" stage, a delivery link --
- * and the studio boundary checked on every write, whoever the caller is.
+ * Deliverables (0161, 0162): an editor, a "with client" stage, a delivery
+ * link -- the studio boundary checked on every write, dropped extras no
+ * longer billed, and the editor told when they are on one and when it is due.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
@@ -175,5 +176,72 @@ describe('create_project_from_template', () => {
     await expect(
       db.query(`select create_project_from_template('${TEMPLATE}', 'Theirs', '${OTHER_CLIENT}')`),
     ).rejects.toThrow(/Pick a client/)
+  })
+})
+
+describe('billing and quotations (0162)', () => {
+  it('stops charging an extra once the client drops it', async () => {
+    const id = await add('is_additional_charge, additional_charge_amount', 'true, 15000')
+    const total = async () =>
+      Number((await one<{ t: string }>(`select total_cost as t from projects where id = '${PROJECT}'`)).t)
+    expect(await total()).toBe(115000)
+    await db.exec(`update deliverables set status = 'cancelled' where id = '${id}'`)
+    expect(await total()).toBe(100000)
+    await db.exec(`update deliverables set status = 'pending' where id = '${id}'`)
+    expect(await total()).toBe(115000)
+  })
+
+  it('leaves dropped items and team work off an issued quotation', async () => {
+    await add('is_additional_charge, additional_charge_amount', 'true, 5000')
+    await add('status', `'cancelled'`)
+    await add('visibility_scope', `'internal'`)
+    await db.query(`select * from issue_project_quotation('${PROJECT}')`)
+    const { snapshot } = await one<{ snapshot: { items: { title: string }[] } }>(
+      `select snapshot from project_quotations where project_id = '${PROJECT}' order by created_at desc limit 1`,
+    )
+    expect(snapshot.items.map((i) => i.title)).toEqual(['Album'])
+  })
+
+  it('the public reader never returns the editor’s brief, team work or dropped rows', async () => {
+    const sql = readFileSync(join(migDir, '0162_deliverables_billing_and_reminders.sql'), 'utf8')
+    const reader = sql.slice(sql.indexOf('create or replace function get_quotation_for_token'))
+    expect(reader).not.toContain("'description', d.description")
+    expect(reader.match(/d\.visibility_scope = 'client' and d\.status <> 'cancelled'/g)).toHaveLength(2)
+  })
+})
+
+describe('telling the editor (0162)', () => {
+  beforeEach(async () => {
+    await db.exec(`delete from notifications;`)
+  })
+  const notes = () =>
+    q<{ type: string; recipient_uid: string; title: string }>(
+      `select type, recipient_uid, title from notifications order by created_at`,
+    )
+
+  it('notifies someone put on a deliverable, once', async () => {
+    const id = await add('assignee_id', `'${EDITOR}'`)
+    await db.exec(`update deliverables set title = 'Album v2' where id = '${id}'`)
+    expect(await notes()).toEqual([{ type: 'deliverable_assigned', recipient_uid: EDITOR, title: 'You are on Album' }])
+  })
+
+  it('does not notify you for putting yourself on one', async () => {
+    await add('assignee_id', `'${OWNER}'`)
+    expect(await notes()).toEqual([])
+  })
+
+  it('reminds the editor the day before, on the day and once late -- not earlier, not twice', async () => {
+    const day = (n: number) => `current_date + ${n}`
+    await add('assignee_id, estimated_date', `'${EDITOR}', ${day(1)}`)
+    await add('assignee_id, estimated_date', `'${EDITOR}', ${day(0)}`)
+    await add('assignee_id, estimated_date', `'${EDITOR}', ${day(-1)}`)
+    await add('assignee_id, estimated_date', `'${EDITOR}', ${day(5)}`)
+    await add('assignee_id, estimated_date, status', `'${EDITOR}', ${day(0)}, 'completed'`)
+    await db.exec(`delete from notifications;`)
+    const { s } = await one<{ s: { deliverables_due: number } }>(`select run_deliverable_due_cron() as s`)
+    expect(s.deliverables_due).toBe(3)
+    await db.query(`select run_deliverable_due_cron()`)
+    const titles = (await notes()).map((n) => n.title).sort()
+    expect(titles).toEqual(['Album is due today', 'Album is due tomorrow', 'Album is late'])
   })
 })

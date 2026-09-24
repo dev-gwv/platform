@@ -13,7 +13,6 @@ import {
   FileText,
   Send,
   Clock,
-  Eye,
   MapPin,
   Package,
   Plus,
@@ -1515,14 +1514,15 @@ function InternalWorkBlock({
             >
               <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-hidden />
               <span className="font-medium">{item.title.trim() || 'Untitled'}</span>
-              <span className="text-muted-foreground">· Starts after:</span>
-              <span>{startRuleShortLabel(item.start_rule)}</span>
-              {item.lead_days.trim() && (
-                <span className="text-muted-foreground">
-                  · Due in {item.lead_days.trim()} {item.lead_days.trim() === '1' ? 'day' : 'days'}
-                </span>
-              )}
-              {item.show_on_quotation && <StatusBadge tone="info">On quotation</StatusBadge>}
+              {/* The date it will be saved with -- the same rule the client list uses. */}
+              {(() => {
+                const due = estimatedDateFor(draft, item)
+                return (
+                  <span className="text-muted-foreground">
+                    · {due ? `Due ${prettyDate(due)}` : 'Due date once the shoot has a date'}
+                  </span>
+                )
+              })()}
               <span className="ml-auto flex items-center gap-0.5">
                 <Button variant="ghost" size="icon" onClick={() => setEditing(at)}>
                   <Pencil />
@@ -1838,7 +1838,7 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
       <SubCard
         icon={Package}
         title="Client deliverables"
-        hint="The final items promised to the client, shown on the quotation when enabled."
+        hint="What you promise the client. Everything here appears on the quotation."
         actions={
           <Button
             size="sm"
@@ -1849,11 +1849,6 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
           </Button>
         }
       >
-        <p className="mb-3 flex items-start gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
-          <Eye className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Only items with “Show on quotation” on will appear in the client quotation.
-        </p>
-
         <div className="mb-3 rounded-lg border border-border bg-muted/30 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -1995,7 +1990,7 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
       <SubCard
         icon={Wallet}
         title="Additional client services"
-        hint="Optional add-ons billed on top of the package. Turn off “Show on quotation” to keep one internal."
+        hint="Add-ons billed on top of the package, listed on the quotation with their price."
         actions={
           <Button
             size="sm"
@@ -2422,20 +2417,6 @@ function ReviewTile({
 const countLabel = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 const summarise = (names: string[]) => (names.length === 0 ? 'None' : names.join(', '))
-
-/** The one-word version of a start rule, for a row that has no space. */
-function startRuleShortLabel(rule: DeliverableDraft['start_rule']): string {
-  switch (rule) {
-    case 'this_shoot':
-      return 'This shoot data'
-    case 'whole_project':
-      return 'Whole project data'
-    case 'specific_shoots':
-      return 'Selected shoots'
-    case 'no_data':
-      return 'No data needed'
-  }
-}
 
 export interface AddedDeliverable {
   title: string

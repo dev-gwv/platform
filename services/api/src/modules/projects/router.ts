@@ -5,7 +5,6 @@ import {
   updateDeliverableRequest,
   setDeliverableStageRequest,
   myDeliverable,
-  setDeliverableSourcesRequest,
   deliverableSet,
   paymentInput,
   projectDetail,
@@ -17,11 +16,7 @@ import {
   createProjectTemplateRequest,
   projectTemplateList,
   createShootTypeRequest,
-  createDeliverableTemplateRequest,
-  createWorkflowPresetRequest,
   shootTypeItem,
-  deliverableTemplateItem,
-  workflowPresetItem,
   z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -146,6 +141,7 @@ export const projectsRouter = new Hono<AppEnv>()
             coalesce(t.overdue, 0)::int      as tasks_overdue,
             coalesce(d.total, 0)::int        as deliverables_total,
             coalesce(d.done, 0)::int         as deliverables_done,
+            coalesce(d.late, 0)::int         as deliverables_late,
             coalesce(dr.total, 0)::int       as data_records_total,
             coalesce(dr.unverified, 0)::int  as data_records_unverified,
             coalesce(w.pending, 0)::int      as pending_reviews,
@@ -166,8 +162,14 @@ export const projectsRouter = new Hono<AppEnv>()
             from tasks where project_id = p.id
           ) t on true
           left join lateral (
-            select count(*) as total,
-                   count(*) filter (where status = 'completed') as done
+            -- A dropped deliverable is no longer owed, so it neither counts
+            -- toward the total nor holds the project short of 100%.
+            select count(*) filter (where status <> 'cancelled') as total,
+                   count(*) filter (where status = 'completed') as done,
+                   count(*) filter (
+                     where status not in ('completed', 'cancelled')
+                       and estimated_date is not null and estimated_date < current_date
+                   ) as late
             from deliverables where project_id = p.id
           ) d on true
           left join lateral (
@@ -397,7 +399,10 @@ export const projectsRouter = new Hono<AppEnv>()
         join projects p on p.id = d.project_id
         left join shoots s on s.id = d.shoot_id
         left join users u on u.user_id = d.assignee_id
-        where d.status <> 'cancelled'
+        -- Open work, plus what was delivered in the last fortnight: years of
+        -- delivered history must not crowd today's work out of the limit.
+        where d.status not in ('cancelled', 'completed')
+           or (d.status = 'completed' and d.delivered_at > now() - interval '14 days')
         order by d.estimated_date nulls last, d.created_at desc limit 500`),
     )
     if (!rows) fail(400, 'We could not load board deliverables.')
@@ -428,54 +433,6 @@ export const projectsRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not add this shoot type.')
     await audit(c, { action: 'shoot_type.create', entityType: 'shoot_type', entityId: row.id, after: parsed.data })
     return c.json(shootTypeItem.parse(row), 201)
-  })
-
-  .get('/catalog/deliverable-templates', requireAction('projects', 'view'), async (c) => {
-    const rows = await attempt(c, 'projects.catalog.deliverable_templates.list', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select id, title, shoot_type, delivery_days, due_basis, brief, is_combined, usage_count, is_archived from deliverable_templates order by usage_count desc, title asc`),
-    )
-    if (!rows) fail(400, 'We could not load deliverable templates.')
-    return c.json(deliverableTemplateItem.array().parse(rows))
-  })
-
-  .post('/catalog/deliverable-templates', requireAction('projects', 'edit'), async (c) => {
-    const parsed = createDeliverableTemplateRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please check the template.')
-    const auth = c.get('auth')
-    const row = await attempt(c, 'projects.catalog.deliverable_templates.create', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        const rows = await sql`insert into deliverable_templates ${sql({ company_id: auth.companyId, title: parsed.data.title, shoot_type: parsed.data.shoot_type ?? null, delivery_days: parsed.data.delivery_days ?? null, due_basis: parsed.data.due_basis ?? null, brief: parsed.data.brief ?? null, is_combined: parsed.data.is_combined ?? false })} returning id, title, shoot_type, delivery_days, due_basis, brief, is_combined, usage_count, is_archived`
-        return rows[0] ?? null
-      }),
-    )
-    if (!row) fail(400, 'We could not add this template.')
-    await audit(c, { action: 'deliverable_template.create', entityType: 'deliverable_template', entityId: row.id, after: parsed.data })
-    return c.json(deliverableTemplateItem.parse(row), 201)
-  })
-
-  .get('/catalog/workflow-presets', requireAction('projects', 'view'), async (c) => {
-    const rows = await attempt(c, 'projects.catalog.workflow_presets.list', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select id, name, shoot_type, shoot_time, shoot_city, requirements, deliverables, usage_count, is_archived from workflow_presets order by usage_count desc, name asc`),
-    )
-    if (!rows) fail(400, 'We could not load workflow presets.')
-    return c.json(workflowPresetItem.array().parse(rows))
-  })
-
-  .post('/catalog/workflow-presets', requireAction('projects', 'edit'), async (c) => {
-    const parsed = createWorkflowPresetRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please check the preset.')
-    const auth = c.get('auth')
-    const row = await attempt(c, 'projects.catalog.workflow_presets.create', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        const rows = await sql`insert into workflow_presets ${sql({ company_id: auth.companyId, name: parsed.data.name, shoot_type: parsed.data.shoot_type ?? null, shoot_time: parsed.data.shoot_time ?? null, shoot_city: parsed.data.shoot_city ?? null, requirements: sql.json(parsed.data.requirements ?? []), deliverables: sql.json(parsed.data.deliverables ?? []) })} returning id, name, shoot_type, shoot_time, shoot_city, requirements, deliverables, usage_count, is_archived`
-        return rows[0] ?? null
-      }),
-    )
-    if (!row) fail(400, 'We could not add this preset.')
-    await audit(c, { action: 'workflow_preset.create', entityType: 'workflow_preset', entityId: row.id, after: parsed.data })
-    return c.json(workflowPresetItem.parse(row), 201)
   })
 
   /**
@@ -552,13 +509,7 @@ export const projectsRouter = new Hono<AppEnv>()
                      to_jsonb(d) || jsonb_build_object(
                        'shoot_name', (select s.name from shoots s where s.id = d.shoot_id),
                        'shoot_date', (select s.shoot_date from shoots s where s.id = d.shoot_id),
-                       'assignee_name', (select u.name from users u where u.user_id = d.assignee_id),
-                       'source_shoots', coalesce((
-                         select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name) order by s.name)
-                         from deliverable_shoot_links dsl
-                         join shoots s on s.id = dsl.shoot_id
-                         where dsl.deliverable_id = d.id
-                       ), '[]'::jsonb)
+                       'assignee_name', (select u.name from users u where u.user_id = d.assignee_id)
                      )
                      order by d.created_at
                    )
@@ -704,35 +655,6 @@ export const projectsRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not remove the deliverable.')
     if (!rows.length) fail(404, 'That deliverable was not found.')
     await audit(c, { action: 'deliverable.remove', entityType: 'project', entityId: projectId, before: { deliverable_id: did } })
-    return c.body(null, 204)
-  })
-
-  // Replace the full set of shoots a "specific_shoots" deliverable is waiting on.
-  .put('/:id/deliverables/:did/shoots', requireAction('projects', 'edit'), async (c) => {
-    const parsed = setDeliverableSourcesRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please check the linked shoots.')
-    const projectId = uuidParam(c)
-    const did = uuidParam(c, 'did')
-    const auth = c.get('auth')
-    const ok = await attempt(c, 'projects.deliverable_sources.set', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        const owns = await sql<{ id: string }[]>`
-          select id from deliverables where id = ${did} and project_id = ${projectId}`
-        if (!owns.length) return null
-        await sql`delete from deliverable_shoot_links where deliverable_id = ${did}`
-        if (parsed.data.shoot_ids.length > 0) {
-          await sql`
-            insert into deliverable_shoot_links (company_id, deliverable_id, shoot_id)
-            select ${auth.companyId}, ${did}, s.id
-            from shoots s
-            where s.id = any(${sql.array(parsed.data.shoot_ids)}::uuid[]) and s.project_id = ${projectId}`
-        }
-        return true
-      }),
-    )
-    if (ok === null) fail(404, 'That deliverable was not found.')
-    if (!ok) fail(400, 'We could not update the linked shoots.')
-    await audit(c, { action: 'deliverable.set_sources', entityType: 'project', entityId: projectId, after: { deliverable_id: did, ...parsed.data } })
     return c.body(null, 204)
   })
 

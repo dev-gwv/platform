@@ -18,6 +18,17 @@ export const deliverableStartRule = z.enum([
   'no_data',
 ])
 
+/**
+ * The link sent to the client. Only web addresses: it is rendered as a link
+ * on screens other people open, so a `javascript:` value must never get in.
+ * Blank is allowed and means "no link".
+ */
+const deliveryLink = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'Links must start with http:// or https://')
+
 /** A deliverable as sent when creating a project. */
 export const deliverableInput = z.object({
   title: z.string().trim().min(1).max(200),
@@ -37,7 +48,7 @@ export const deliverableInput = z.object({
   /** The editor or designer on it. */
   assignee_id: uuid.nullish(),
   status: deliverableStatus.optional(),
-  delivery_link: z.string().trim().max(1000).nullish(),
+  delivery_link: deliveryLink.nullish(),
 })
 export type DeliverableInput = z.infer<typeof deliverableInput>
 
@@ -58,7 +69,7 @@ export const updateDeliverableRequest = z.object({
   custom_status_code: z.string().max(40).nullable().optional(),
   shoot_id: uuid.nullable().optional(),
   assignee_id: uuid.nullable().optional(),
-  delivery_link: z.string().trim().max(1000).nullable().optional(),
+  delivery_link: deliveryLink.nullable().optional(),
 })
 export type UpdateDeliverableRequest = z.infer<typeof updateDeliverableRequest>
 
@@ -69,16 +80,9 @@ export type UpdateDeliverableRequest = z.infer<typeof updateDeliverableRequest>
  */
 export const setDeliverableStageRequest = z.object({
   status: deliverableStatus,
-  delivery_link: z.string().trim().max(1000).nullish(),
+  delivery_link: deliveryLink.nullish(),
 })
 export type SetDeliverableStageRequest = z.infer<typeof setDeliverableStageRequest>
-
-/** One shoot a deliverable is waiting on data from (`start_rule: 'specific_shoots'`). */
-export const deliverableSourceShoot = z.object({ id: uuid, name: z.string() })
-export type DeliverableSourceShoot = z.infer<typeof deliverableSourceShoot>
-
-export const setDeliverableSourcesRequest = z.object({ shoot_ids: z.array(uuid).max(50) })
-export type SetDeliverableSourcesRequest = z.infer<typeof setDeliverableSourcesRequest>
 
 export const projectPaymentStatus = z.enum(['paid', 'pending'])
 export type ProjectPaymentStatus = z.infer<typeof projectPaymentStatus>
@@ -193,8 +197,6 @@ export const deliverable = z.object({
   // before this enum was tightened, and this must not 500 the whole list.
   status: z.string(),
   custom_status_code: z.string().nullish(),
-  /** Shoots this is waiting on data from — only meaningful when start_rule is 'specific_shoots'. */
-  source_shoots: z.array(deliverableSourceShoot),
   shoot_id: uuid.nullish(),
   shoot_name: z.string().nullish(),
   shoot_date: isoDate.nullish(),
@@ -339,6 +341,8 @@ export const projectTrackingRow = z.object({
   tasks_overdue: z.number().int(),
   deliverables_total: z.number().int(),
   deliverables_done: z.number().int(),
+  /** Open deliverables past their due date. */
+  deliverables_late: z.number().int().default(0),
   data_records_total: z.number().int(),
   data_records_unverified: z.number().int(),
   pending_reviews: z.number().int(),

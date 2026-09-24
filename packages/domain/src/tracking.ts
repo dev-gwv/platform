@@ -17,8 +17,11 @@ export interface ProjectCounters {
   tasks_total: number
   tasks_done: number
   tasks_overdue: number
+  /** Dropped deliverables are left out: they are no longer owed. */
   deliverables_total: number
   deliverables_done: number
+  /** Open deliverables past their due date. */
+  deliverables_late?: number
   /** Shoot-linked data records only — loose records aren't a custody risk. */
   data_records_total: number
   /** Records whose primary or backup copy is not yet verified. */
@@ -89,17 +92,20 @@ function daysSince(then: string, today: string): number {
  * missing card costs the shoot. After custody comes work that is already late,
  * then work waiting on someone else, then work that hasn't been planned at all.
  */
+/** Late work of either kind: an overdue task or a deliverable past its date. */
+export const lateOf = (c: ProjectCounters) => c.tasks_overdue + (c.deliverables_late ?? 0)
+
 export function nextActionFor(c: ProjectCounters, completion: number): NextActionKey {
   if (c.status === 'cancelled') return 'none'
   if (c.data_records_unverified > 0) return 'secure_data'
-  if (c.tasks_overdue > 0) return 'clear_overdue'
+  if (lateOf(c) > 0) return 'clear_overdue'
   if (c.pending_reviews > 0) return 'review_submissions'
   if (c.status === 'completed') return 'none'
   if (completion >= 1 && c.tasks_total + c.deliverables_total > 0) return 'deliver'
   if (c.shoots_total === 0) return 'schedule_shoot'
+  // Nothing owed at all -- no deliverable and no task. A project whose
+  // deliverables each have an editor is planned, tasks or not.
   if (c.tasks_total === 0 && c.deliverables_total === 0) return 'plan_work'
-  // Everything is shot and nothing is planned against it.
-  if (c.shoots_done === c.shoots_total && c.tasks_total === 0) return 'plan_work'
   return 'keep_going'
 }
 
@@ -120,7 +126,7 @@ export function scoreOf(c: ProjectCounters, completion: number, today: string): 
 
   return (
     c.data_records_unverified * 12 +
-    c.tasks_overdue * 10 +
+    lateOf(c) * 10 +
     c.pending_reviews * 4 +
     (shootingDone ? (1 - completion) * 30 : 0) +
     (c.status === 'on_hold' ? 8 : 0) +
@@ -144,14 +150,14 @@ export function projectHealth(c: ProjectCounters, today: string): ProjectHealth 
   // Late work and unverified footage are risks by their nature, not by their
   // arithmetic — one overdue task is worth flagging even though it scores below
   // the threshold on its own.
-  const urgent = c.data_records_unverified > 0 || c.tasks_overdue > 0
+  const urgent = c.data_records_unverified > 0 || lateOf(c) > 0
 
   const flags = {
     critical: !done && score >= CRITICAL_SCORE,
     high_risk: !done && score < CRITICAL_SCORE && (score >= HIGH_SCORE || urgent),
     low_progress: !done && shootingDone && completion < LOW_PROGRESS,
     data_missing: c.data_records_unverified > 0,
-    overdue: c.tasks_overdue > 0,
+    overdue: lateOf(c) > 0,
     pending_review: c.pending_reviews > 0,
     completed: done,
   }

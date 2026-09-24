@@ -108,7 +108,9 @@ function ProjectQuotation() {
   if (isLoading) return <SkeletonCards count={2} />
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />
   const project = data
-  const quoted = project.deliverables.filter((d) => d.visibility_scope === 'client' && d.show_on_quotation)
+  const quoted = project.deliverables.filter(
+    (d) => d.visibility_scope === 'client' && d.show_on_quotation && d.status !== 'cancelled',
+  )
 
   /**
    * What the client will notice is absent. Named in the studio's words rather
@@ -395,7 +397,9 @@ function ProjectQuotation() {
                     <span className="min-w-0 flex-1">
                       {d.title}
                       {show('showDeliverablesEstimated') && d.estimated_date && (
-                        <span className="block text-xs text-muted-foreground">Estimated {d.estimated_date}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Estimated {new Date(`${d.estimated_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
                       )}
                     </span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">

@@ -1,4 +1,4 @@
-import { projectHealth, type NextActionKey, type ProjectHealth } from '@ipc/domain'
+import { lateOf, projectHealth, type NextActionKey, type ProjectHealth } from '@ipc/domain'
 import type { ProjectTrackingRow } from '@ipc/contracts'
 
 /**
@@ -99,7 +99,7 @@ const SORTS: Record<TrackingSort, (a: TrackedProject, b: TrackedProject) => numb
   // Furthest along first — the "what can we close out" view.
   completion_desc: (a, b) => b.health.completion - a.health.completion || byName(a, b),
   // Most overdue work first; quiet projects sink below noisy ones.
-  overdue: (a, b) => b.tasks_overdue - a.tasks_overdue || b.health.score - a.health.score || byName(a, b),
+  overdue: (a, b) => lateOf(b) - lateOf(a) || b.health.score - a.health.score || byName(a, b),
   // Most work waiting on review first; nothing pending sinks.
   pending_review: (a, b) => b.pending_reviews - a.pending_reviews || b.health.score - a.health.score || byName(a, b),
   // A project with no shoot booked has no date to sort by; it sinks rather than
@@ -137,7 +137,7 @@ export function summary(projects: readonly TrackedProject[]) {
     critical: projects.filter((p) => p.health.flags.critical).length,
     low_progress: projects.filter((p) => p.health.flags.low_progress).length,
     data_missing: projects.reduce((n, p) => n + p.data_records_unverified, 0),
-    overdue: projects.reduce((n, p) => n + p.tasks_overdue, 0),
+    overdue: projects.reduce((n, p) => n + lateOf(p), 0),
     pending_review: projects.reduce((n, p) => n + p.pending_reviews, 0),
   }
 }
@@ -145,9 +145,9 @@ export function summary(projects: readonly TrackedProject[]) {
 /** What the recommended action reads as on screen. */
 export const NEXT_ACTION_LABEL: Record<NextActionKey, string> = {
   secure_data: 'Back up and verify the shoot data',
-  clear_overdue: 'Clear the overdue tasks',
+  clear_overdue: 'Catch up on the late work',
   review_submissions: 'Review the submitted work',
-  plan_work: 'Break the deliverables into tasks',
+  plan_work: 'Add what you owe the client',
   schedule_shoot: 'Schedule the first shoot',
   deliver: 'Deliver and close the project',
   keep_going: 'On track — keep going',

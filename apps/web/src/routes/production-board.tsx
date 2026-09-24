@@ -447,8 +447,8 @@ function Board() {
 }
 
 /**
- * Deliverable cards across every project, grouped under the seven Lovable
- * buckets. Tasks are the drag destinations above; this strip answers "what is
+ * Deliverable cards across every project, in the four stages the project page
+ * uses. Tasks are the drag destinations above; this strip answers "what is
  * promised and where is it" without leaving the board.
  */
 function DeliverablesStrip() {

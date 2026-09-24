@@ -138,15 +138,19 @@ export function DeliverableRow({
       )}
     >
       <div className="min-w-[12rem] flex-1">
-        <p className={cn('flex items-center gap-2 text-sm font-semibold', dropped && 'line-through')}>
-          <span className="truncate">{d.title}</span>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold">
+          <span className={cn('min-w-0 break-words', dropped && 'line-through')}>{d.title}</span>
           {d.visibility_scope === 'internal' && (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
               Team only
             </span>
           )}
           {d.is_additional_charge && d.additional_charge_amount > 0 && (
-            <span className="shrink-0 text-xs font-medium text-tone-green">+{formatINR(d.additional_charge_amount)}</span>
+            // A dropped extra is no longer charged -- say so rather than
+            // leaving an amount that reads as still owed.
+            <span className={cn('shrink-0 text-xs font-medium', dropped ? 'text-muted-foreground' : 'text-tone-green')}>
+              {dropped ? `${formatINR(d.additional_charge_amount)} not charged` : `+${formatINR(d.additional_charge_amount)}`}
+            </span>
           )}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
@@ -173,7 +177,10 @@ export function DeliverableRow({
         </div>
       </div>
 
-      <StatusBadge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</StatusBadge>
+      {/* On a phone the next-step button already says where it stands. */}
+      <StatusBadge tone={STAGE_TONE[stage]} className={cn(canEdit && !dropped && stage !== 'completed' && 'hidden sm:inline-flex')}>
+        {STAGE_LABEL[stage]}
+      </StatusBadge>
 
       {canEdit && (
         <div className="flex items-center gap-1">

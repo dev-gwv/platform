@@ -66,6 +66,10 @@ export const cronRouter = new Hono<AppEnv>()
           select run_crm_followup_cron(p_dry_run => ${dryRun}) as summary`
         const workReminders = await sql<{ summary: unknown }[]>`
           select run_work_submission_reminder_cron(p_dry_run => ${dryRun}) as summary`
+        // Editors hear about their deliverables the day before, on the day,
+        // and once when late.
+        const deliverablesDue = await sql<{ summary: unknown }[]>`
+          select run_deliverable_due_cron(p_dry_run => ${dryRun}) as summary`
         // Rotation writes a refresh_tokens row every 30 minutes per active
         // user, so the table needs a sweep or it grows forever.
         const purged = dryRun
@@ -82,6 +86,7 @@ export const cronRouter = new Hono<AppEnv>()
           summary: rows[0]?.summary ?? {},
           crm_follow_ups: followUpSummary,
           work_submission_reminders: workReminders[0]?.summary ?? {},
+          deliverable_reminders: deliverablesDue[0]?.summary ?? {},
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,

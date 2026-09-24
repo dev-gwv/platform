@@ -22,7 +22,6 @@ const d = (over: Partial<Deliverable>): Deliverable =>
     show_on_quotation: true,
     start_rule: 'whole_project',
     status: 'pending',
-    source_shoots: [],
     ...over,
   }) as Deliverable
 

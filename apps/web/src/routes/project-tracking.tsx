@@ -312,7 +312,11 @@ function ProjectRow({ project: p }: { project: TrackedProject }) {
             short a copy or a review without expanding each of them. */}
         <div className="hidden shrink-0 gap-4 lg:flex">
           <Figure label="Tasks" value={`${p.tasks_done}/${p.tasks_total}`} />
-          <Figure label="Deliverables" value={`${p.deliverables_done}/${p.deliverables_total}`} />
+          <Figure
+            label="Deliverables"
+            value={`${p.deliverables_done}/${p.deliverables_total}${p.deliverables_late ? ` · ${p.deliverables_late} late` : ''}`}
+            tone={p.deliverables_late ? 'danger' : undefined}
+          />
           <Figure
             label="Data"
             value={
