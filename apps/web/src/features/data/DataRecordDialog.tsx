@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { HardDrive, Loader2, ShieldCheck } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { HardDrive, Loader2, Ruler, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CustodyStatus, DataRecord, ShootListItem, StorageLocationKind, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useMembers } from '@/features/allocation/api'
-import { useCreateDataRecord, useCreateStorageLocation, useStorageLocations, useUpdateDataRecord } from './api'
+import { useCreateDataRecord, useCreateStorageLocation, useDataRecords, useStorageLocations, useUpdateDataRecord } from './api'
+import { CreatableSelect, type CreatableOption } from '@/shared/ui/creatable-select'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
 
 const OTHER = '__other'
@@ -73,6 +74,18 @@ export function DataRecordDialog({
   })
 
   const who = slot.user_name ?? 'this booking'
+
+  // The built-in types, then any the studio has typed before -- a custom
+  // type is saved on the record, so it comes back as a choice here.
+  const records = useDataRecords()
+  const typeOptions = useMemo(() => {
+    const out: CreatableOption[] = DATA_TYPES.map((t) => ({ value: t.value, label: t.label }))
+    for (const r of records.data ?? []) {
+      const t = r.data_type?.trim()
+      if (t && !out.some((o) => o.value.toLowerCase() === t.toLowerCase())) out.push({ value: t, label: t })
+    }
+    return out
+  }, [records.data])
 
   async function save() {
     if (copiedBy === OTHER && !copiedByName.trim()) {
@@ -142,13 +155,15 @@ export function DataRecordDialog({
               <Label htmlFor="dr-type" className="text-xs">
                 Data type
               </Label>
-              <Select id="dr-type" value={type} onChange={(e) => setType(e.target.value)}>
-                {DATA_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </Select>
+              <CreatableSelect
+                id="dr-type"
+                aria-label="Data type"
+                value={type}
+                onChange={setType}
+                options={typeOptions}
+                addLabel="Add a type…"
+                inputPlaceholder="e.g. Reels, 360° video"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dr-received" className="text-xs">
@@ -205,22 +220,36 @@ export function DataRecordDialog({
             statuses={['pending', 'copied', 'verified', 'issue', 'not_required']}
           />
 
-          <details className="rounded-md border border-border px-3 py-2">
-            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-              More — size, cards, label, notes
-            </summary>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          {/* Size and cards are what gets asked about later ("how much did the
+              wedding come to?"), so they sit in view, not behind a toggle. */}
+          <section className="rounded-lg border border-tone-violet/30 bg-tone-violet-soft/40 p-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-tone-violet">
+              <Ruler className="size-4" /> Size, cards &amp; notes
+            </p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dr-size" className="text-xs">
                   Size (GB)
                 </Label>
-                <Input id="dr-size" inputMode="decimal" value={size} onChange={(e) => setSize(e.target.value.replace(/[^\d.]/g, ''))} />
+                <Input
+                  id="dr-size"
+                  inputMode="decimal"
+                  placeholder="e.g. 256"
+                  value={size}
+                  onChange={(e) => setSize(e.target.value.replace(/[^\d.]/g, ''))}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dr-cards" className="text-xs">
                   Cards
                 </Label>
-                <Input id="dr-cards" inputMode="numeric" value={cards} onChange={(e) => setCards(e.target.value.replace(/\D/g, ''))} />
+                <Input
+                  id="dr-cards"
+                  inputMode="numeric"
+                  placeholder="e.g. 3"
+                  value={cards}
+                  onChange={(e) => setCards(e.target.value.replace(/\D/g, ''))}
+                />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="dr-label" className="text-xs">
@@ -228,14 +257,20 @@ export function DataRecordDialog({
                 </Label>
                 <Input id="dr-label" value={label} onChange={(e) => setLabel(e.target.value)} />
               </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-4">
                 <Label htmlFor="dr-notes" className="text-xs">
                   Notes
                 </Label>
-                <Textarea id="dr-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Textarea
+                  id="dr-notes"
+                  rows={2}
+                  placeholder="Anything the editor should know — a corrupted card, a missing clip…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
-          </details>
+          </section>
         </div>
 
         <DialogFooter>
@@ -342,25 +377,43 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
   const create = useCreateStorageLocation()
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<StorageLocationKind>('drive')
+  const [kind, setKind] = useState<string>('drive')
+  // The four kinds the database knows, then any type the studio has named
+  // (saved as location_type on an "other" location) -- e.g. "Portable SSD".
+  const kindOptions: CreatableOption[] = [
+    ...KINDS,
+    ...[...new Set((locations.data ?? []).map((l) => l.location_type?.trim()).filter((t): t is string => !!t))]
+      .filter((t) => !KINDS.some((k) => k.label.toLowerCase() === t.toLowerCase()))
+      .map((t) => ({ value: t, label: t })),
+  ]
+  const isKind = (v: string): v is StorageLocationKind => KINDS.some((k) => k.value === v)
 
   if (adding) {
     return (
-      <div className="flex gap-1.5 sm:col-span-3">
-        <Input aria-label="New location name" placeholder="e.g. Studio HDD 4" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        <Select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as StorageLocationKind)} className="w-40">
-          {KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.label}
-            </option>
-          ))}
-        </Select>
+      <div className="flex flex-wrap items-center gap-1.5 sm:col-span-3">
+        <Input
+          aria-label="New location name"
+          placeholder="Name, e.g. Studio HDD 4"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="min-w-[12rem] flex-1"
+          autoFocus
+        />
+        <CreatableSelect
+          aria-label="Kind"
+          value={kind}
+          onChange={setKind}
+          options={kindOptions}
+          addLabel="Add a type…"
+          inputPlaceholder="e.g. Portable SSD"
+          className="w-64 shrink-0"
+        />
         <Button
           size="sm"
           disabled={!name.trim() || create.isPending}
           onClick={() =>
             create.mutate(
-              { name: name.trim(), kind },
+              isKind(kind) ? { name: name.trim(), kind } : { name: name.trim(), kind: 'other', location_type: kind },
               {
                 onSuccess: (loc) => {
                   onChange(loc.id)
