@@ -7,6 +7,8 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useAddLead, usePipelines } from './api'
 import { useMembers } from '@/features/allocation/api'
+import { LookupSelect } from '@/features/settings/LookupSelect'
+import { EVENT_TYPE_DEFAULTS } from './event-types'
 import { useCrmAccess } from './access'
 
 type Field = 'name' | 'phone' | 'email'
@@ -216,7 +218,16 @@ export function AddLeadDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label>Event type</Label>
-              <Input value={eventType} onChange={(e) => setEventType(e.target.value)} placeholder="Wedding, Pre-wedding…" />
+              <LookupSelect
+                category="project_type"
+                aria-label="Event type"
+                value={eventType}
+                onChange={setEventType}
+                defaults={EVENT_TYPE_DEFAULTS}
+                placeholder="—"
+                addLabel="Add an event type…"
+                inputPlaceholder="e.g. Baby shower"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Event date</Label>

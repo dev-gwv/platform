@@ -1,15 +1,16 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { HardDrive, Loader2, Ruler, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
-import type { CustodyStatus, DataRecord, ShootListItem, StorageLocationKind, TeamSlot } from '@ipc/contracts'
+import type { CustodyStatus, DataRecord, ShootListItem, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useMembers } from '@/features/allocation/api'
-import { useCreateDataRecord, useCreateStorageLocation, useDataRecords, useStorageLocations, useUpdateDataRecord } from './api'
-import { CreatableSelect, type CreatableOption } from '@/shared/ui/creatable-select'
+import { useCreateDataRecord, useCreateStorageLocation, useStorageLocations, useUpdateDataRecord } from './api'
+import { LookupSelect } from '@/features/settings/LookupSelect'
+import { LocationKindSelect, kindFields } from './LocationKindSelect'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
 
 const OTHER = '__other'
@@ -75,17 +76,6 @@ export function DataRecordDialog({
 
   const who = slot.user_name ?? 'this booking'
 
-  // The built-in types, then any the studio has typed before -- a custom
-  // type is saved on the record, so it comes back as a choice here.
-  const records = useDataRecords()
-  const typeOptions = useMemo(() => {
-    const out: CreatableOption[] = DATA_TYPES.map((t) => ({ value: t.value, label: t.label }))
-    for (const r of records.data ?? []) {
-      const t = r.data_type?.trim()
-      if (t && !out.some((o) => o.value.toLowerCase() === t.toLowerCase())) out.push({ value: t, label: t })
-    }
-    return out
-  }, [records.data])
 
   async function save() {
     if (copiedBy === OTHER && !copiedByName.trim()) {
@@ -155,12 +145,13 @@ export function DataRecordDialog({
               <Label htmlFor="dr-type" className="text-xs">
                 Data type
               </Label>
-              <CreatableSelect
+              <LookupSelect
+                category="data_type"
                 id="dr-type"
                 aria-label="Data type"
                 value={type}
                 onChange={setType}
-                options={typeOptions}
+                defaults={DATA_TYPES}
                 addLabel="Add a type…"
                 inputPlaceholder="e.g. Reels, 360° video"
               />
@@ -364,13 +355,6 @@ function CopySection({
   )
 }
 
-const KINDS: { value: StorageLocationKind; label: string }[] = [
-  { value: 'drive', label: 'Hard disk / SSD' },
-  { value: 'nas', label: 'NAS' },
-  { value: 'cloud', label: 'Cloud' },
-  { value: 'other', label: 'Other' },
-]
-
 /** Pick a saved disk/cloud, or name a new one on the spot. */
 function LocationPicker({ value, onChange, label }: { value: string; onChange: (id: string) => void; label: string }) {
   const locations = useStorageLocations()
@@ -378,15 +362,6 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [kind, setKind] = useState<string>('drive')
-  // The four kinds the database knows, then any type the studio has named
-  // (saved as location_type on an "other" location) -- e.g. "Portable SSD".
-  const kindOptions: CreatableOption[] = [
-    ...KINDS,
-    ...[...new Set((locations.data ?? []).map((l) => l.location_type?.trim()).filter((t): t is string => !!t))]
-      .filter((t) => !KINDS.some((k) => k.label.toLowerCase() === t.toLowerCase()))
-      .map((t) => ({ value: t, label: t })),
-  ]
-  const isKind = (v: string): v is StorageLocationKind => KINDS.some((k) => k.value === v)
 
   if (adding) {
     return (
@@ -399,21 +374,13 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
           className="min-w-[12rem] flex-1"
           autoFocus
         />
-        <CreatableSelect
-          aria-label="Kind"
-          value={kind}
-          onChange={setKind}
-          options={kindOptions}
-          addLabel="Add a type…"
-          inputPlaceholder="e.g. Portable SSD"
-          className="w-64 shrink-0"
-        />
+        <LocationKindSelect value={kind} onChange={setKind} className="w-64 shrink-0" />
         <Button
           size="sm"
           disabled={!name.trim() || create.isPending}
           onClick={() =>
             create.mutate(
-              isKind(kind) ? { name: name.trim(), kind } : { name: name.trim(), kind: 'other', location_type: kind },
+              { name: name.trim(), ...kindFields(kind), location_type: kindFields(kind).location_type ?? undefined },
               {
                 onSuccess: (loc) => {
                   onChange(loc.id)

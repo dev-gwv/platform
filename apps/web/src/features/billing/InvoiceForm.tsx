@@ -19,6 +19,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
 import { useClients } from '@/features/clients/api'
+import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
 import { useProjects, useProject } from '@/features/projects/api'
 import { useConfirm } from '@/shared/ui/confirm'
 import { toAmount, matchStudioState, deriveIntraState, type InvoiceLineDraft } from './invoice-math'
@@ -281,11 +282,14 @@ function ClientCombobox({
   onChange: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  // The client just added, shown by name until the refreshed list includes it.
+  const [added, setAdded] = useState<Client | null>(null)
   const [query, setQuery] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
 
-  const selected = clients.find((c) => c.id === value)
+  const selected = clients.find((c) => c.id === value) ?? (added?.id === value ? added : undefined)
 
   useEffect(() => {
     if (open) search.current?.focus()
@@ -357,8 +361,25 @@ function ClientCombobox({
               ))
             )}
           </div>
+          <div className="border-t border-border p-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setCreating(true)
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-muted"
+            >
+              <Plus className="size-4" aria-hidden /> New client
+            </button>
+          </div>
         </div>
       )}
+      {/* A client who isn't on the list yet is added here and picked, without leaving the invoice. */}
+      <ClientFormDialog open={creating} onOpenChange={setCreating} hideTrigger onCreated={(c) => {
+          setAdded(c)
+          onChange(c.id)
+        }} />
     </div>
   )
 }

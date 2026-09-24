@@ -162,7 +162,7 @@ export function useCreateCustomLookup() {
         responseSchema: z.object({ id: z.string().uuid() }),
       }),
     onSuccess: () => {
-      toast.success('Lookup created')
+      toast.success('Added to your list')
       void qc.invalidateQueries({ queryKey: ['settings', 'lookups'] })
     },
   })

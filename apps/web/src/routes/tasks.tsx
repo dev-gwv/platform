@@ -25,6 +25,7 @@ import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
+import { CreatableSelect } from '@/shared/ui/creatable-select'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -44,6 +45,7 @@ import {
   useSubtasks,
   useTask,
   useTaskPriorities,
+  useCreateTaskPriority,
   useTasks,
   useUpdateBundle,
   useUpdateTask,
@@ -746,19 +748,17 @@ function NewTaskDialog() {
               type="url"
             />
           </div>
-          {customPriorities && customPriorities.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Custom label (optional)</Label>
-              <Select value={customPriorityCode} onChange={(e) => setCustomPriorityCode(e.target.value)}>
-                <option value="">None — use {PRIORITY_LABEL[priority]}</option>
-                {customPriorities.map((p) => (
-                  <option key={p.id} value={p.code}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+          {/* Always shown: hidden while the list was empty, nobody ever found
+              out labels existed. A new one is added right here. */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Custom label (optional)</Label>
+            <TaskLabelPicker
+              value={customPriorityCode}
+              onChange={setCustomPriorityCode}
+              options={customPriorities ?? []}
+              noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
+            />
+          </div>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
               <Button type="button" variant="outline">
@@ -867,19 +867,17 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
               type="url"
             />
           </div>
-          {customPriorities && customPriorities.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Custom label (optional)</Label>
-              <Select value={customPriorityCode} onChange={(e) => setCustomPriorityCode(e.target.value)}>
-                <option value="">None — use {PRIORITY_LABEL[priority]}</option>
-                {customPriorities.map((p) => (
-                  <option key={p.id} value={p.code}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+          {/* Always shown: hidden while the list was empty, nobody ever found
+              out labels existed. A new one is added right here. */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Custom label (optional)</Label>
+            <TaskLabelPicker
+              value={customPriorityCode}
+              onChange={setCustomPriorityCode}
+              options={customPriorities ?? []}
+              noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
+            />
+          </div>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
               <Button type="button" variant="outline">
@@ -1070,5 +1068,41 @@ function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** A task's custom label, or a new one typed on the spot (saved for the studio). */
+function TaskLabelPicker({
+  value,
+  onChange,
+  options,
+  noneLabel,
+}: {
+  value: string
+  onChange: (code: string) => void
+  options: { id: string; code: string; label: string }[]
+  noneLabel: string
+}) {
+  const create = useCreateTaskPriority()
+  return (
+    <CreatableSelect
+      aria-label="Custom label"
+      value={value}
+      onChange={onChange}
+      options={options.map((p) => ({ value: p.code, label: p.label }))}
+      placeholder={noneLabel}
+      addLabel="Add a label…"
+      inputPlaceholder="e.g. Client waiting"
+      onCreate={async (label) => {
+        const code =
+          label
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 32) || 'label'
+        const made = await create.mutateAsync({ code: `${code}-${Date.now().toString(36).slice(-4)}`, label, tone: 'neutral' })
+        return made.code
+      }}
+    />
   )
 }

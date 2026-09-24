@@ -10,7 +10,7 @@ import type { FieldErrors } from '@/shared/forms/field-errors'
 import { scrollIntoView } from '@/shared/ui/motion'
 import { useAddMember, useCreateRole, useEmployeeRoles, useRoleLibrary } from './api'
 import { BUILT_IN_TYPES, CompensationFields, PAY_COMPONENTS } from './CompensationFields'
-import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE, stageOf } from './role-stages'
+import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE, stageOf, toRoleCode } from './role-stages'
 import { TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT } from '@/shared/ui/tone-chip'
 import {
   EMPTY_DRAFT,
@@ -573,15 +573,6 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
     </>
   )
 }
-
-/** "Drone Operator" → "drone_operator", the code the API stores alongside it. */
-const toRoleCode = (name: string): string =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 40)
 
 const ACCESS_HINT: Record<MemberDraft['role'], string> = {
   employee: 'Sees only their own work, shoots and tasks.',

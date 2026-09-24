@@ -81,3 +81,12 @@ export function byStage<T extends Pick<EmployeeRole, 'type_name' | 'stage'>>(
     roles: roles.filter((r) => stageOf(r) === stage),
   }))
 }
+
+/** "Drone Operator" → "drone_operator", the code the API stores alongside it. */
+export const toRoleCode = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40)

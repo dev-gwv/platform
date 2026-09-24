@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { useLostReasons } from './api'
+import { useAccess } from '@/shared/auth/useAccess'
+import { useCreateLostReason, useLostReasons } from './api'
 
 export interface LostDetails {
   lost_reason: string
@@ -35,6 +36,11 @@ export function LostReasonDialog({
   const [other, setOther] = useState('')
   const [competitor, setCompetitor] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // A reason typed under "Other" is usually one that will come up again;
+  // saving it here puts it in the list for next time instead of in Settings.
+  const canSave = useAccess().hasAction('crm', 'edit')
+  const [saveReason, setSaveReason] = useState(true)
+  const createReason = useCreateLostReason()
 
   useEffect(() => {
     if (!open) return
@@ -42,6 +48,7 @@ export function LostReasonDialog({
     setOther('')
     setCompetitor('')
     setError(null)
+    setSaveReason(true)
     // Reset only when the dialog opens; the picklist rarely changes underneath it.
   }, [open])
 
@@ -51,6 +58,10 @@ export function LostReasonDialog({
     if (reason.length < 3) {
       setError('Give a reason of at least 3 characters.')
       return
+    }
+    const typed = pick === '__other' || options.length === 0
+    if (typed && canSave && saveReason && !options.some((o) => o.label.toLowerCase() === reason.toLowerCase())) {
+      createReason.mutate({ label: reason.slice(0, 80) })
     }
     onConfirm({ lost_reason: reason, ...(competitor.trim() ? { lost_competitor: competitor.trim() } : {}) })
   }
@@ -86,6 +97,12 @@ export function LostReasonDialog({
                 aria-invalid={!!error}
                 autoFocus={options.length === 0}
               />
+              {canSave && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={saveReason} onChange={(e) => setSaveReason(e.target.checked)} />
+                  Add this to our list of reasons
+                </label>
+              )}
             </div>
           )}
           <div className="flex flex-col gap-1.5">
