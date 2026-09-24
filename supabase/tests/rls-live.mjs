@@ -561,6 +561,61 @@ if (listed) {
   )
 }
 
+// ── Billing in four heads (0170) ──────────────────────────────
+// Receipt numbers per financial year, one expenses ledger with bills and
+// "paid by", the accountant's GST summary -- and the screens that went away.
+{
+  const pid = ledgerProject.json.id
+  const p1 = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 1000, status: 'paid', paid_on: '2026-05-02', mode: 'UPI' } })
+  const d1 = await api(`/billing/payments/${p1.json.id}`, { token: aToken })
+  check('receipts: a received payment gets a number in the year\'s series', /^RCP-\d{4}-\d{2}-\d{4}$/.test(d1.json.receipt_number ?? ''), { n: d1.json.receipt_number, mode: d1.json.mode })
+  const promised = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 700, status: 'pending', paid_on: '2026-05-03' } })
+  const d2 = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  check('receipts: a promise has no number yet', d2.status === 200 && d2.json.receipt_number === null, { n: d2.json.receipt_number })
+  await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
+  const d3 = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  check('receipts: numbered the day it is received, after the one before', !!d3.json.receipt_number && d3.json.receipt_number > d1.json.receipt_number, { before: d1.json.receipt_number, after: d3.json.receipt_number })
+  const link = await api('/documents/receipts', { token: aToken, method: 'POST', body: { payment_id: p1.json.id } })
+  const rtoken = (link.json.link ?? '').split('token=')[1] ?? ''
+  const pub = await api(`/public/receipt/${rtoken}`)
+  check('receipts: the client\'s receipt carries the number', pub.status === 200 && pub.json.receipt_number === d1.json.receipt_number, { status: pub.status, n: pub.json.receipt_number })
+  const list = await api(`/billing/payments?search=${encodeURIComponent(d1.json.receipt_number ?? '')}&page=1&page_size=5`, { token: aToken })
+  check('receipts: the list finds a payment by its number and shows the year\'s tiles', (list.json.items ?? []).some((x) => x.id === p1.json.id) && typeof list.json.summary?.received_this_fy === 'number', { found: list.json.items?.length, tiles: list.json.summary })
+
+  const cleared = await api(`/billing/payments/${p1.json.id}/cleared`, { token: aToken, method: 'POST', body: { cleared: true } })
+  const recon = await api('/financials/reconciliation', { token: aToken })
+  const personal = await api('/personal-expenses', { token: aToken })
+  check('gone: banked, reconciliation and personal expenses no longer answer', cleared.status === 404 && recon.status === 404 && personal.status === 404, { cleared: cleared.status, recon: recon.status, personal: personal.status })
+
+  const me = await api('/auth/session', { token: aToken })
+  const myId = me.json.user_id ?? me.json.user?.user_id ?? null
+  const exp = await api('/financials/expenses', { token: aToken, method: 'POST', body: { amount: 500, category: 'Travel', description: 'Cab', expense_date: '2026-05-04', paid_by_user_id: myId } })
+  check('expenses: paid by a person is owed back by default', exp.status === 201 && exp.json.reimbursement_status === 'pending' && exp.json.paid_by_user_id === myId, { status: exp.status, body: exp.json, me: me.json })
+  const sum1 = await api('/financials/expenses/summary', { token: aToken })
+  check('expenses: the To reimburse tile counts it', Number(sum1.json.to_reimburse) >= 500, sum1.json)
+  const back = await api(`/financials/expenses/${exp.json.id}/reimbursed`, { token: aToken, method: 'POST', body: {} })
+  const sum2 = await api('/financials/expenses/summary', { token: aToken })
+  check('expenses: paid back clears it', back.status === 200 && Number(sum2.json.to_reimburse) === Number(sum1.json.to_reimburse) - 500, { back: back.status, before: sum1.json.to_reimburse, after: sum2.json.to_reimburse })
+
+  // A bill on the expense: uploaded privately, attached by id, invisible to another studio.
+  const png = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15, 0, 1, 1, 1, 0, 24, 221, 141, 176, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130])
+  const fd = new FormData()
+  fd.append('file', new Blob([png], { type: 'image/png' }), 'bill.png')
+  const up = await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${aToken}` }, body: fd })
+  const upJson = await up.json().catch(() => ({}))
+  const att = await api(`/financials/expenses/${exp.json.id}/attachments`, { token: aToken, method: 'POST', body: { file_id: upJson.id } })
+  const atts = await api(`/financials/expenses/${exp.json.id}/attachments`, { token: aToken })
+  check('expenses: a bill can be uploaded and attached', up.status === 200 && att.status === 201 && (atts.json ?? []).length === 1 && atts.json[0].mime_type === 'image/png', { up: up.status, att: att.status, body: att.json, n: atts.json?.length })
+  const theirs = await api(`/financials/expenses/${exp.json.id}/attachments`, { token: newPw.json.access_token })
+  const theirFile = await fetch(`${API}/files/${upJson.id}`, { headers: { Authorization: `Bearer ${newPw.json.access_token}` } })
+  check('expenses: another studio sees neither the bill nor the file', (theirs.status === 200 ? (theirs.json ?? []).length === 0 : theirs.status === 403 || theirs.status === 404) && theirFile.status === 404, { list: theirs.status, n: theirs.json?.length, file: theirFile.status })
+  const row = ((await api('/financials/expenses?page=1&page_size=50&paid_by=' + myId, { token: aToken })).json.items ?? []).find((x) => x.id === exp.json.id)
+  check('expenses: the list says who paid and how many bills', row?.paid_by_name != null && row?.attachment_count === 1 && row?.reimbursement_status === 'reimbursed', { row })
+
+  const gst = await api('/financials/gst-summary?from=2026-05-01&to=2026-05-31', { token: aToken })
+  check('for the CA: GST by month answers for the period', gst.status === 200 && Array.isArray(gst.json.months) && gst.json.months.length === 1 && gst.json.months[0].month === '2026-05', { status: gst.status, months: gst.json.months })
+}
+
 // ── One person, many studios, one email (0159) ─────────────────
 // A freelancer on two studios' teams: both studios add the same email, they
 // sign in once with their own password, see both studios, switch between

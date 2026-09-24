@@ -3,6 +3,7 @@ import type { InvoiceDetail } from '@ipc/contracts'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { invoiceBadge, shortDate } from './status'
+import { UpiQr, upiLink } from './UpiQr'
 
 /** Who the invoice is from, as printed at the top. */
 export interface InvoiceFrom {
@@ -16,6 +17,7 @@ export interface InvoiceFrom {
   invoice_phone?: string | null | undefined
   invoice_email?: string | null | undefined
   invoice_upi_id?: string | null | undefined
+  invoice_sac_code?: string | null | undefined
 }
 
 const NO_LAYOUT = {
@@ -140,6 +142,10 @@ export function InvoicePaper({ invoice, company }: { invoice: InvoiceDetail; com
           </tbody>
         </table>
 
+        {layout.show_gst && company.invoice_sac_code && (
+          <p className="mt-1 text-xs text-muted-foreground">SAC {company.invoice_sac_code} · Photography and videography services</p>
+        )}
+
         {/* Totals */}
         <div className="mt-4 flex justify-end">
           <div className="w-64 space-y-1 text-sm">
@@ -207,10 +213,17 @@ export function InvoicePaper({ invoice, company }: { invoice: InvoiceDetail; com
               )
             })()}
             {company.invoice_upi_id && invoice.balance_due > 0 && invoice.status !== 'cancelled' && (
-              <p>
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Pay by UPI: </span>
-                <span className="font-medium">{company.invoice_upi_id}</span>
-              </p>
+              <div className="flex items-center gap-4">
+                <UpiQr
+                  value={upiLink({ upi: company.invoice_upi_id, name: company.name ?? 'Studio', amount: invoice.balance_due, note: invoice.invoice_number })}
+                  className="shrink-0 rounded border border-border bg-white p-1"
+                />
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Scan to pay by UPI</p>
+                  <p className="font-medium">{company.invoice_upi_id}</p>
+                  <p className="text-xs text-muted-foreground">{formatINR(invoice.balance_due)} due · opens in any UPI app with the amount filled in</p>
+                </div>
+              </div>
             )}
             {layout.footer_text && <p className="text-center text-xs text-muted-foreground">{layout.footer_text}</p>}
           </div>

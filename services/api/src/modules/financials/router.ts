@@ -12,7 +12,10 @@ import {
   projectFinancials,
   profitabilityReportQuery,
   profitabilityReport,
-  reconciliationSummary,
+  expenseAttachment,
+  addExpenseAttachmentRequest,
+  expenseSummary,
+  gstSummary,
   pnlQuery,
   profitAndLoss,
 } from '@ipc/contracts'
@@ -48,6 +51,12 @@ function expenseFilters(c: Context<AppEnv>) {
     minAmount: numberQuery(c, 'min_amount', 'amount_min'),
     maxAmount: numberQuery(c, 'max_amount', 'amount_max'),
     gst: gstRaw || null,
+    paidBy: uuidQuery(c, 'paid_by'),
+    reimbursement: (() => {
+      const r = c.req.query('reimbursement')?.trim() ?? ''
+      if (r && !['none', 'pending', 'reimbursed'].includes(r)) fail(422, 'That reimbursement filter is not one we use.')
+      return r || null
+    })(),
   }
 }
 
@@ -61,6 +70,8 @@ function expenseWhere(sql: TransactionSql, f: ReturnType<typeof expenseFilters>)
       and (${f.search}::text is null or e.description ilike '%' || ${f.search} || '%' or e.invoice_number ilike '%' || ${f.search} || '%')
       and (${f.minAmount}::numeric is null or e.amount >= ${f.minAmount}::numeric)
       and (${f.maxAmount}::numeric is null or e.amount <= ${f.maxAmount}::numeric)
+      and (${f.paidBy}::uuid is null or e.paid_by_user_id = ${f.paidBy}::uuid)
+      and (${f.reimbursement}::text is null or e.reimbursement_status = ${f.reimbursement})
       and ${
         f.gst === 'reverse_charge'
           ? // Two columns say this: the treatment, and the boolean the tile counts.
@@ -69,6 +80,15 @@ function expenseWhere(sql: TransactionSql, f: ReturnType<typeof expenseFilters>)
             ? sql`e.gst_treatment = ${f.gst}`
             : sql`true`
       }`
+}
+
+/** A returned expense row as the contract reads it. */
+function shapeExpense(r: Record<string, unknown>) {
+  return {
+    ...r,
+    itemize_json: Array.isArray(r['itemize_json']) ? r['itemize_json'] : null,
+    reimbursed_at: r['reimbursed_at'] ? new Date(r['reimbursed_at'] as string).toISOString() : null,
+  }
 }
 
 interface FinancialRow {
@@ -104,9 +124,12 @@ export const financialsRouter = new Hono<AppEnv>()
         const rows = await sql`
           select e.id, e.project_id, e.party_id, p.name as party_name, e.category, e.description,
                   e.amount, e.expense_date, e.gst_treatment, e.gst_rate, e.is_fixed_overhead,
-                  e.invoice_number, e.amount_is, e.tax_name, e.tax_amount, e.reverse_charge, e.itemize_json
+                  e.invoice_number, e.amount_is, e.tax_name, e.tax_amount, e.reverse_charge, e.itemize_json,
+                  e.paid_by_user_id, u.name as paid_by_name, e.reimbursement_status, e.reimbursed_at,
+                  (select count(*)::int from expense_attachments a where a.expense_id = e.id) as attachment_count
           from expenses e
           left join parties p on p.id = e.party_id
+          left join users u on u.user_id = e.paid_by_user_id
           ${expenseWhere(sql, f)}
           order by ${sort === 'amount' ? sql`e.amount` : sql`e.expense_date`} ${dir === 'asc' ? sql`asc` : sql`desc`}
           limit ${pageSize} offset ${(page - 1) * pageSize}`
@@ -126,6 +149,7 @@ export const financialsRouter = new Hono<AppEnv>()
       tax_amount: typeof r['tax_amount'] === 'number' ? r['tax_amount'] : null,
       reverse_charge: typeof r['reverse_charge'] === 'boolean' ? r['reverse_charge'] : null,
       itemize_json: Array.isArray(r['itemize_json']) ? r['itemize_json'] : null,
+      reimbursed_at: r['reimbursed_at'] ? new Date(r['reimbursed_at'] as string).toISOString() : null,
     })))
     return wantsPage
       ? c.json({ items, total: result.total, page, page_size: pageSize })
@@ -138,17 +162,24 @@ export const financialsRouter = new Hono<AppEnv>()
     const row = await attempt(c, 'financials.expenses_summary', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const rows = await sql<Record<string, unknown>[]>`select
-            count(*)::int as count, coalesce(sum(e.amount), 0) as total,
-            coalesce(sum(e.tax_amount), 0) as tax_total,
-            coalesce(sum(e.amount) filter (where e.reverse_charge = true), 0) as rcm_total,
+            count(*)::int as count, coalesce(sum(e.amount), 0)::float as total,
+            coalesce(sum(e.tax_amount), 0)::float as tax_total,
+            coalesce(sum(e.amount) filter (where e.reverse_charge = true), 0)::float as rcm_total,
             count(*) filter (where e.project_id is not null)::int as linked_count,
             count(distinct e.category) filter (where e.category is not null)::int as category_count
           from expenses e ${expenseWhere(sql, f)}`
-        return rows[0] ?? null
+        // The tiles, over everything: this month, this year, and what is owed
+        // to people who paid from their own pocket.
+        const [tiles] = await sql<{ this_month: number; this_fy: number; to_reimburse: number }[]>`
+          select coalesce(sum(expense_cash_out(e)) filter (where e.expense_date >= date_trunc('month', current_date)), 0)::float as this_month,
+                 coalesce(sum(expense_cash_out(e)) filter (where fy_label(e.expense_date) = fy_label(current_date)), 0)::float as this_fy,
+                 coalesce(sum(expense_cash_out(e)) filter (where e.reimbursement_status = 'pending'), 0)::float as to_reimburse
+            from expenses e where e.company_id = ${c.get('auth').companyId}`
+        return { ...rows[0], ...tiles }
       }),
     )
     if (!row) fail(400, 'We could not load the expense summary.')
-    return c.json(row)
+    return c.json(expenseSummary.parse(row))
   })
 
   .post('/expenses', requireAction('company_expenses', 'create'), async (c) => {
@@ -168,17 +199,22 @@ export const financialsRouter = new Hono<AppEnv>()
         }
         if (parsed.data.itemize_json) values['itemize_json'] = sql.json(parsed.data.itemize_json as never)
         else delete values['itemize_json']
+        // Paid by a person and not said otherwise: it is owed back to them.
+        if (parsed.data.paid_by_user_id && !parsed.data.reimbursement_status) values['reimbursement_status'] = 'pending'
+        if (!parsed.data.paid_by_user_id) { delete values['paid_by_user_id']; if (!parsed.data.reimbursement_status) delete values['reimbursement_status'] }
         const rows = await sql`
           insert into expenses ${sql(values)}
           returning id, project_id, party_id,
                     (select name from parties where id = party_id) as party_name,
+                    (select name from users where user_id = expenses.paid_by_user_id) as paid_by_name,
                     category, description, amount, expense_date, gst_treatment, gst_rate, is_fixed_overhead,
-                    invoice_number, amount_is, tax_name, tax_amount, reverse_charge, itemize_json`
+                    invoice_number, amount_is, tax_name, tax_amount, reverse_charge, itemize_json,
+                    paid_by_user_id, reimbursement_status, reimbursed_at`
         return rows[0] ?? null
       }),
     )
     if (!row) fail(400, 'We could not add the expense.')
-    const created = expense.parse({ ...(row as Record<string, unknown>), itemize_json: Array.isArray((row as Record<string, unknown>)['itemize_json']) ? (row as Record<string, unknown>)['itemize_json'] : null })
+    const created = expense.parse(shapeExpense(row as Record<string, unknown>))
     await audit(c, { action: 'expense.create', entityType: 'expense', entityId: created.id, after: parsed.data })
     return c.json(created, 201)
   })
@@ -192,17 +228,22 @@ export const financialsRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const patch = { ...parsed.data } as Record<string, unknown>
         if (Array.isArray(patch['itemize_json'])) patch['itemize_json'] = sql.json(patch['itemize_json'] as never) as never
+        // Taking the person off an expense takes it off the "to reimburse" list.
+        if ('paid_by_user_id' in patch && patch['paid_by_user_id'] === null && !('reimbursement_status' in patch)) patch['reimbursement_status'] = 'none'
+        if (patch['paid_by_user_id'] && !('reimbursement_status' in patch)) patch['reimbursement_status'] = 'pending'
         const rows = await sql`
           update expenses set ${sql(patch)} where id = ${id}
           returning id, project_id, party_id,
                     (select name from parties where id = party_id) as party_name,
+                    (select name from users where user_id = expenses.paid_by_user_id) as paid_by_name,
                     category, description, amount, expense_date, gst_treatment, gst_rate, is_fixed_overhead,
-                    invoice_number, amount_is, tax_name, tax_amount, reverse_charge, itemize_json`
+                    invoice_number, amount_is, tax_name, tax_amount, reverse_charge, itemize_json,
+                    paid_by_user_id, reimbursement_status, reimbursed_at`
         return rows[0] ?? null
       }),
     )
     if (!row) fail(404, 'That expense was not found.')
-    const updated = expense.parse({ ...(row as Record<string, unknown>), itemize_json: Array.isArray((row as Record<string, unknown>)['itemize_json']) ? (row as Record<string, unknown>)['itemize_json'] : null })
+    const updated = expense.parse(shapeExpense(row as Record<string, unknown>))
     await audit(c, { action: 'expense.update', entityType: 'expense', entityId: id, after: parsed.data })
     return c.json(updated)
   })
@@ -217,6 +258,113 @@ export const financialsRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That expense was not found.')
     await audit(c, { action: 'expense.delete', entityType: 'expense', entityId: id })
     return c.body(null, 204)
+  })
+
+  /** The money is back with the person who paid. */
+  .post('/expenses/:id/reimbursed', requireAction('company_expenses', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'financials.expense_reimbursed', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update expenses set reimbursement_status = 'reimbursed', reimbursed_at = now()
+         where id = ${id} and paid_by_user_id is not null returning id`),
+    )
+    if (!rows) fail(400, 'We could not update this expense.')
+    if (!rows.length) fail(404, 'That expense was not found, or nobody is owed for it.')
+    await audit(c, { action: 'expense.reimbursed', entityType: 'expense', entityId: id })
+    return c.json({ ok: true })
+  })
+
+  // ── The bills behind an expense ─────────────────────────────
+  .get('/expenses/:id/attachments', requireModule('company_expenses'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'financials.expense_attachments', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, file_id, file_name, file_url, mime_type, file_size, created_at
+          from expense_attachments where expense_id = ${id} order by created_at`),
+    )
+    if (!rows) fail(400, 'We could not load the attachments.')
+    return c.json(expenseAttachment.array().parse(rows))
+  })
+
+  .post('/expenses/:id/attachments', requireAction('company_expenses', 'edit'), async (c) => {
+    const parsed = addExpenseAttachmentRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Upload the bill first, then attach it.')
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    const row = await attempt(c, 'financials.expense_attach', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        // The file has to be this studio's (RLS on files says so) and the expense too.
+        const file = await sql<{ id: string; name: string; mime: string; size_bytes: number }[]>`
+          select id, name, mime, size_bytes from files where id = ${parsed.data.file_id}`
+        if (!file[0]) return 'no_file' as const
+        const owns = await sql<{ id: string }[]>`select id from expenses where id = ${id}`
+        if (!owns[0]) return 'no_expense' as const
+        const rows = await sql`
+          insert into expense_attachments (company_id, expense_id, file_id, file_name, file_url, mime_type, file_size, created_by)
+          values (${auth.companyId}, ${id}, ${file[0].id}, ${file[0].name}, ${'/files/' + file[0].id}, ${file[0].mime}, ${file[0].size_bytes}, ${auth.userId})
+          returning id, file_id, file_name, file_url, mime_type, file_size, created_at`
+        return rows[0] ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not attach that bill.')
+    if (row === 'no_file') fail(404, 'That file was not found.')
+    if (row === 'no_expense') fail(404, 'That expense was not found.')
+    await audit(c, { action: 'expense.attach', entityType: 'expense', entityId: id, after: { file_id: parsed.data.file_id } })
+    return c.json(expenseAttachment.parse(row), 201)
+  })
+
+  .delete('/expenses/attachments/:attachmentId', requireAction('company_expenses', 'edit'), async (c) => {
+    const attachmentId = uuidParam(c, 'attachmentId')
+    const rows = await attempt(c, 'financials.expense_detach', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        delete from expense_attachments where id = ${attachmentId} returning id`),
+    )
+    if (!rows) fail(400, 'We could not remove that attachment.')
+    if (!rows.length) fail(404, 'That attachment was not found.')
+    return c.body(null, 204)
+  })
+
+  /**
+   * For the accountant: GST on what was sold (the invoices' own tax lines)
+   * and GST paid on what was bought, month by month. Reverse charge is
+   * shown apart, since it is owed rather than paid to a vendor.
+   */
+  .get('/gst-summary', requireModule('financials'), async (c) => {
+    const from = c.req.query('from') ?? ''
+    const to = c.req.query('to') ?? ''
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) fail(422, 'Pick a start and an end date.')
+    const rows = await attempt(c, 'financials.gst_summary', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        with months as (
+          select generate_series(date_trunc('month', ${from}::date), date_trunc('month', ${to}::date), interval '1 month')::date as m
+        ),
+        sales as (
+          select date_trunc('month', i.invoice_date)::date as m,
+                 sum(it.taxable) as taxable, sum(it.cgst) as cgst, sum(it.sgst) as sgst, sum(it.igst) as igst
+            from invoice_items it join invoices i on i.id = it.invoice_id
+           where i.status not in ('draft', 'cancelled') and i.invoice_date between ${from} and ${to}
+           group by 1
+        ),
+        buys as (
+          select date_trunc('month', e.expense_date)::date as m,
+                 sum(e.amount) as purchases,
+                 sum(case when e.gst_treatment = 'gst_applicable' and not e.reverse_charge
+                          then coalesce(nullif(e.tax_amount, 0), round(e.amount * coalesce(e.gst_rate, 0) / 100, 2)) else 0 end) as gst_paid,
+                 sum(case when e.gst_treatment = 'reverse_charge' or e.reverse_charge
+                          then coalesce(nullif(e.tax_amount, 0), round(e.amount * coalesce(e.gst_rate, 0) / 100, 2)) else 0 end) as rcm
+            from expenses e where e.expense_date between ${from} and ${to}
+           group by 1
+        )
+        select to_char(months.m, 'YYYY-MM') as month,
+               coalesce(s.taxable, 0)::float as taxable_sales, coalesce(s.cgst, 0)::float as cgst,
+               coalesce(s.sgst, 0)::float as sgst, coalesce(s.igst, 0)::float as igst,
+               (coalesce(s.cgst, 0) + coalesce(s.sgst, 0) + coalesce(s.igst, 0))::float as gst_collected,
+               coalesce(b.purchases, 0)::float as purchases, coalesce(b.gst_paid, 0)::float as gst_paid, coalesce(b.rcm, 0)::float as rcm
+          from months left join sales s on s.m = months.m left join buys b on b.m = months.m
+         order by months.m`),
+    )
+    if (!rows) fail(400, 'We could not work out the GST summary.')
+    return c.json(gstSummary.parse({ from, to, months: rows }))
   })
 
   // ── Profit summary (financials module) ──────────────────────
@@ -269,16 +417,9 @@ export const financialsRouter = new Hono<AppEnv>()
             from expenses where company_id = ${c.get('auth').companyId}
               and (${startDate}::date is null or expense_date >= ${startDate}::date)
               and (${endDate}::date is null or expense_date <= ${endDate}::date)`.catch(() => [{ company: '0', rcm: '0', uncategorized: '0', missing: '0' }] as { company: string; rcm: string; uncategorized: string; missing: string }[])
-        let personal = 0
-        let personalMissing = 0
-        try {
-          const pr = await sql<{ total: string; missing: string }[]>`select coalesce(sum(amount), 0)::text as total,
-              coalesce(count(*) filter (where invoice_number is null or invoice_number = ''), 0)::text as missing
-            from personal_expense
-            where company_id = ${c.get('auth').companyId}`
-          personal = Number(pr[0]?.total ?? 0)
-          personalMissing = Number(pr[0]?.missing ?? 0)
-        } catch { personal = 0 }
+        // Personal expenses were folded into `expenses` (0170); nothing separate to add.
+        const personal = 0
+        const personalMissing = 0
         let salaries = 0
         try {
           const sr = await sql<{ total: string }[]>`select coalesce(sum(amount), 0)::text as total from team_payouts
@@ -495,18 +636,6 @@ export const financialsRouter = new Hono<AppEnv>()
 
   // ── Reconciliation (financials module) ──────────────────────
   // One read, every difference. See 0147 for why this screen exists.
-  .get('/reconciliation', requireModule('financials'), async (c) => {
-    const row = await attempt(c, 'financials.reconciliation', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const rows = await sql<{ reconciliation_summary: unknown }[]>`
-          select reconciliation_summary() as reconciliation_summary`
-        return { data: rpcJson(rows[0]?.reconciliation_summary, null) }
-      }),
-    )
-    if (!row) fail(400, 'We could not work out the reconciliation.')
-    if (!row.data) fail(400, 'We could not work out the reconciliation.')
-    return c.json(reconciliationSummary.parse(row.data))
-  })
 
   /**
    * The Profit & Loss for a period (0167): cash or booked, every cost once,

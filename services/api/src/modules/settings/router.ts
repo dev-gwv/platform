@@ -30,6 +30,7 @@ const COMPANY_COLUMNS = [
   'country',
   'website',
   'invoice_gst_number',
+  'invoice_sac_code',
   'avatar_url',
   'invoice_number_prefix',
   'invoice_next_number',

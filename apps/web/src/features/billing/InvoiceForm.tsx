@@ -875,7 +875,7 @@ export function InvoiceFormFields({
           </Select>
           <p className="text-xs text-muted-foreground">
             Bank details and terms & conditions come from the layout — set them once in{' '}
-            <Link to="/billing/settings" search={{ tab: 'layouts' }} className="underline underline-offset-2 hover:text-foreground">
+            <Link to="/settings/invoicing" search={{ tab: 'layouts' }} className="underline underline-offset-2 hover:text-foreground">
               Invoice settings
             </Link>{' '}
             instead of retyping them on every invoice. Per-invoice text below overrides the layout for this invoice only.

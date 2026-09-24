@@ -15,7 +15,7 @@ export interface SystemProfile {
   permissions: ReadonlyArray<ModuleKey>
 }
 
-const BASE_EMPLOYEE: ReadonlyArray<ModuleKey> = ['dashboard', 'projects', 'personal_expenses']
+const BASE_EMPLOYEE: ReadonlyArray<ModuleKey> = ['dashboard', 'projects']
 
 const BASE_MANAGER: ReadonlyArray<ModuleKey> = [
   ...BASE_EMPLOYEE,

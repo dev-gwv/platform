@@ -21,6 +21,8 @@ export const companyProfile = z.object({
   invoice_phone: z.string().nullable().default(null),
   invoice_email: z.string().nullable().default(null),
   invoice_upi_id: z.string().nullable().default(null),
+  /** Services Accounting Code printed on GST invoices; 998387 is photography. */
+  invoice_sac_code: z.string().nullable().default(null),
   invoice_bank_details: z.string().nullable().default(null),
   invoice_default_notes: z.string().nullable().default(null),
   invoice_default_terms: z.string().nullable().default(null),
@@ -50,6 +52,7 @@ export const updateCompanyRequest = z.object({
   invoice_phone: z.string().trim().max(40).nullish(),
   invoice_email: z.string().trim().max(200).nullish(),
   invoice_upi_id: z.string().trim().max(120).nullish(),
+  invoice_sac_code: z.string().trim().max(12).nullish(),
   invoice_bank_details: z.string().trim().max(1000).nullish(),
   invoice_default_notes: z.string().trim().max(2000).nullish(),
   invoice_default_terms: z.string().trim().max(4000).nullish(),

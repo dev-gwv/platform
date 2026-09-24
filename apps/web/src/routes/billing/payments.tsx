@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Copy, Mail, MessageCircle, Landmark, Receipt } from 'lucide-react'
+import { Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Copy, Mail, MessageCircle, Receipt } from 'lucide-react'
 import type { ReceivedPayment } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -13,10 +13,12 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { formatINR } from '@/shared/ui/format'
+import { cn } from '@/shared/ui/cn'
+import { PERIOD_LABEL, periodFor, type PeriodKey } from '@/features/financials/period'
 import { Card, CardContent } from '@/shared/ui/card'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useReceivedPayments, useSetPaymentCleared, type ReceivedPaymentFilters } from '@/features/billing/api'
+import { useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
 import { useClients } from '@/features/clients/api'
 import { useProjects } from '@/features/projects/api'
 import {
@@ -31,7 +33,7 @@ import { shortDate } from '@/features/billing/status'
 export function PaymentsPage() {
   return (
     <AuthedPage module="billing">
-      <PageHeader title="Payments" description="Money received and promised, with the project and invoice each one belongs to." />
+      <PageHeader title="Payments received" description="Every rupee that came in, with its receipt number, project and invoice." />
       <PaymentsSection />
     </AuthedPage>
   )
@@ -39,36 +41,11 @@ export function PaymentsPage() {
 
 const PAYMENT_PAGE_SIZE = 25
 type PaymentStatusFilter = 'all' | 'paid' | 'pending' | 'gst'
+const PERIOD_KEYS = ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_fy', 'last_fy'] as const
+const PERIOD_PILLS = ['this_month', 'last_month', 'this_fy', 'last_fy', 'all', 'custom'] as const
+const MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
 
 const PAYMENT_TONE = { paid: 'success', pending: 'warning' } as const
-
-/** Standalone received-payments tab (Lovable billing parity). Invoices stay untouched above. */
-/**
- * Whether this money has been confirmed as reaching the bank.
- *
- * A separate fact from "paid": paid is what the studio recorded, banked is
- * what somebody checked against the account. Keeping them apart is what lets
- * the reconciliation screen show a payment that never actually arrived.
- * Only a paid row can be banked — there is nothing to confirm about a promise.
- */
-function BankedCell({ row }: { row: ReceivedPayment }) {
-  const set = useSetPaymentCleared()
-  if (row.status !== 'paid') return <span className="text-xs text-muted-foreground">—</span>
-  const banked = !!row.cleared_at
-  return (
-    <button
-      type="button"
-      disabled={set.isPending}
-      onClick={() => set.mutate({ id: row.id, cleared: !banked })}
-      className="inline-flex items-center gap-1.5 text-xs disabled:opacity-60"
-      title={banked ? 'Confirmed in the bank — click to undo' : 'Mark as reaching the bank'}
-    >
-      <StatusBadge tone={banked ? 'success' : 'neutral'}>
-        {banked ? <><Landmark className="size-3" /> Banked</> : 'Not confirmed'}
-      </StatusBadge>
-    </button>
-  )
-}
 
 function PaymentsSection() {
   const isMobile = useIsMobile()
@@ -79,10 +56,15 @@ function PaymentsSection() {
   const setStatus = (v: PaymentStatusFilter) => setStatusParam(v)
   const [clientId, setClientId] = useUrlParam('client')
   const [projectId, setProjectId] = useUrlParam('project')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [min, setMin] = useState('')
-  const [max, setMax] = useState('')
+  // The period is the filter people reach for first: this month, last month,
+  // the financial year. Custom dates stay for the odd question.
+  const [periodKey, setPeriodKey] = useUrlParam('period', 'this_fy')
+  const [customFrom, setCustomFrom] = useUrlParam('from')
+  const [customTo, setCustomTo] = useUrlParam('to')
+  const period = periodKey === 'custom' || periodKey === 'all' ? null : periodFor((PERIOD_KEYS.includes(periodKey as never) ? periodKey : 'this_fy') as Exclude<PeriodKey, 'custom'>)
+  const from = periodKey === 'custom' ? customFrom : (period?.from ?? '')
+  const to = periodKey === 'custom' ? customTo : (period?.to ?? '')
+  const [mode, setMode] = useUrlParam('mode')
   const [sortBy, setSortBy] = useState('date_received')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
@@ -110,8 +92,7 @@ function PaymentsSection() {
     project_id: projectId || undefined,
     date_from: from || undefined,
     date_to: to || undefined,
-    amount_min: min.trim() !== '' && Number.isFinite(Number(min)) ? Number(min) : undefined,
-    amount_max: max.trim() !== '' && Number.isFinite(Number(max)) ? Number(max) : undefined,
+    mode: mode || undefined,
     sort_by: sortBy,
     sort_direction: sortDir,
     page,
@@ -124,7 +105,7 @@ function PaymentsSection() {
   const totalPages = Math.max(1, Math.ceil(total / PAYMENT_PAGE_SIZE))
 
   const clientProjects = (projects ?? []).filter((p) => !clientId || p.client_id === clientId)
-  const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || !!from || !!to || !!min.trim() || !!max.trim()
+  const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || periodKey !== 'this_fy' || !!mode
 
   function resetFilters() {
     setSearchInput('')
@@ -132,17 +113,17 @@ function PaymentsSection() {
     setStatus('all')
     setClientId('')
     setProjectId('')
-    setFrom('')
-    setTo('')
-    setMin('')
-    setMax('')
+    setPeriodKey('this_fy')
+    setCustomFrom('')
+    setCustomTo('')
+    setMode('')
     setPage(1)
   }
 
   function exportCsv() {
     const csv = toCsv(
-      ['Date', 'Client', 'Project', 'Amount', 'Status', 'GST', 'Description'],
-      items.map((r) => [r.date_received ?? '', r.client_name ?? '', r.project_name ?? '', r.amount, r.status, r.is_gst ? (r.gst_number ?? 'GST') : '', r.description ?? '']),
+      ['Receipt', 'Date', 'Client', 'Project', 'Invoice', 'Amount', 'Mode', 'Reference', 'Status', 'GST', 'Description'],
+      items.map((r) => [r.receipt_number ?? '', r.date_received ?? '', r.client_name ?? '', r.project_name ?? '', r.invoice_number ?? '', r.amount, r.mode ?? '', r.reference ?? '', r.status, r.is_gst ? (r.gst_number ?? 'GST') : '', r.description ?? '']),
     )
     downloadCsv(`payments-${new Date().toISOString().slice(0, 10)}.csv`, csv)
   }
@@ -160,7 +141,7 @@ function PaymentsSection() {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Most payments are recorded on the project; they all show here.</p>
+        <p className="text-sm text-muted-foreground">Record payments on the project when you can; every one shows here with its receipt.</p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={items.length === 0}>
             <Download /> Export CSV
@@ -171,47 +152,70 @@ function PaymentsSection() {
         </div>
       </div>
 
-      {(summary || items.length > 0) && (
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Received</p><p className="mt-1 text-xl font-semibold tabular-nums text-tone-green">{formatINR(summary?.total_received_amount ?? 0)}</p><p className="text-xs text-muted-foreground">{summary?.paid_count ?? 0} payment{summary?.paid_count === 1 ? '' : 's'}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Promised, not yet in</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatINR(summary?.pending_amount ?? 0)}</p><p className="text-xs text-muted-foreground">{summary?.pending_count ?? 0} promised</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">GST receipts</p><p className="mt-1 text-xl font-semibold tabular-nums">{summary?.gst_count ?? 0}</p><p className="text-xs text-muted-foreground">Payments marked with a GST number</p></CardContent></Card>
+      {summary && (
+        <div className="mb-4 grid grid-cols-3 gap-3">
+          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">Received this month</p><p className="mt-1 text-lg font-semibold tabular-nums text-tone-green sm:text-xl">{formatINR(summary.received_this_month)}</p></CardContent></Card>
+          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">This financial year</p><p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.received_this_fy)}</p></CardContent></Card>
+          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">Promised, not yet in</p><p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.promised_amount)}</p><p className="hidden text-xs text-muted-foreground sm:block">{summary.pending_count} promised</p></CardContent></Card>
         </div>
       )}
 
-      <div className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search client, project, description, GST number…" className="flex-1" />
-          {anyFilter && (
-            <Button variant="ghost" size="sm" onClick={resetFilters}>
-              Clear
-            </Button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(['all', 'paid', 'pending', 'gst'] as PaymentStatusFilter[]).map((s) => (
-            <Button key={s} size="sm" variant={status === s ? 'default' : 'outline'} onClick={() => { setStatus(s); setPage(1) }}>
-              {s === 'all' ? 'All' : s === 'gst' ? 'GST' : humanize(s)}
-            </Button>
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Period">
+          {PERIOD_PILLS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={periodKey === k}
+              onClick={() => { setPeriodKey(k); setPage(1) }}
+              className={cn(
+                'rounded-full border px-3 py-1 text-sm transition-colors',
+                periodKey === k ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {k === 'custom' ? 'Custom' : k === 'all' ? 'All time' : PERIOD_LABEL[k]}
+            </button>
           ))}
+          {periodKey === 'custom' && (
+            <>
+              <Input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1) }} className="w-40" aria-label="From date" />
+              <Input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1) }} className="w-40" aria-label="To date" />
+            </>
+          )}
+          {period && <span className="text-xs text-muted-foreground">{period.label}</span>}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Select value={clientId} onChange={(e) => { setClientId(e.target.value); setProjectId(''); setPage(1) }} aria-label="Filter by client">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search receipt no., client, project, reference…" className="w-full sm:w-64" aria-label="Search payments" />
+          <Select value={status} onChange={(e) => { setStatus(e.target.value as PaymentStatusFilter); setPage(1) }} className="w-full sm:w-40" aria-label="Received or promised">
+            <option value="all">Received & promised</option>
+            <option value="paid">Received</option>
+            <option value="pending">Promised</option>
+            <option value="gst">With GST</option>
+          </Select>
+          <Select value={clientId} onChange={(e) => { setClientId(e.target.value); setProjectId(''); setPage(1) }} className="w-full sm:w-44" aria-label="Filter by client">
             <option value="">All clients</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
-          <Select value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1) }} aria-label="Filter by project">
+          <Select value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1) }} className="w-full sm:w-52" aria-label="Filter by project">
             <option value="">All projects</option>
             {clientProjects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </Select>
-          <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1) }} aria-label="From date" />
-          <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1) }} aria-label="To date" />
-          <Input inputMode="decimal" value={min} onChange={(e) => { setMin(e.target.value); setPage(1) }} placeholder="Min amount" aria-label="Min amount" />
-          <Input inputMode="decimal" value={max} onChange={(e) => { setMax(e.target.value); setPage(1) }} placeholder="Max amount" aria-label="Max amount" />
+          <Select value={mode} onChange={(e) => { setMode(e.target.value); setPage(1) }} className="w-full sm:w-36" aria-label="Filter by payment mode">
+            <option value="">Any mode</option>
+            {MODES.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </Select>
+          {anyFilter && (
+            <Button variant="ghost" size="sm" onClick={resetFilters}>
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 
@@ -223,7 +227,7 @@ function PaymentsSection() {
         anyFilter ? (
           <EmptyState title="No payments match" description="Try clearing the search or status filter." />
         ) : (
-          <EmptyState title="No payments yet" description="Record your first received payment." action={<Button onClick={() => setAddOpen(true)}><Plus /> Add Payment</Button>} />
+          <EmptyState title="Nothing received in this period" description="Record a payment on its project, or add one here." action={<Button onClick={() => setAddOpen(true)}><Plus /> Add Payment</Button>} />
         )
       ) : (
         <>
@@ -235,9 +239,10 @@ function PaymentsSection() {
                   key={r.id}
                   title={formatINR(r.amount)}
                   subtitle={`${r.client_name ?? '—'} · ${r.project_name ?? 'No project'}${r.invoice_number ? ` · ${r.invoice_number}` : ''}`}
-                  badge={<StatusBadge tone={PAYMENT_TONE[r.status]}>{humanize(r.status)}</StatusBadge>}
+                  badge={<StatusBadge tone={PAYMENT_TONE[r.status]}>{r.status === 'paid' ? 'Received' : 'Promised'}</StatusBadge>}
                   fields={[
                     { label: 'Date', value: shortDate(r.date_received) },
+                    { label: 'Receipt', value: r.receipt_number ?? '—' },
                     { label: 'GST', value: r.is_gst ? (r.gst_number ?? 'GST') : '—' },
                     ...(r.description ? [{ label: 'Note', value: r.description }] : []),
                   ]}
@@ -251,11 +256,11 @@ function PaymentsSection() {
                 <thead className="bg-muted/50 text-left text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium"><button type="button" onClick={() => toggleSort('date_received')} className="hover:text-foreground">Date {sortBy === 'date_received' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
+                    <th className="px-3 py-2 font-medium">Receipt</th>
                     <th className="px-3 py-2 font-medium"><button type="button" onClick={() => toggleSort('client_name')} className="hover:text-foreground">Client {sortBy === 'client_name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
                     <th className="px-3 py-2 font-medium"><button type="button" onClick={() => toggleSort('project_name')} className="hover:text-foreground">Project {sortBy === 'project_name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
                     <th className="px-3 py-2 text-right font-medium"><button type="button" onClick={() => toggleSort('amount')} className="hover:text-foreground">Amount {sortBy === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
                     <th className="px-3 py-2 font-medium"><button type="button" onClick={() => toggleSort('status')} className="hover:text-foreground">Status {sortBy === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
-                    <th className="px-3 py-2 font-medium">Banked</th>
                     <th className="px-3 py-2 font-medium">Invoice</th>
                     <th className="px-3 py-2 font-medium">GST</th>
                     <th className="px-3 py-2 text-right font-medium">Actions</th>
@@ -265,6 +270,7 @@ function PaymentsSection() {
                   {items.map((r) => (
                     <tr key={r.id} className="border-t border-border">
                       <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{shortDate(r.date_received)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{r.receipt_number ?? <span className="text-muted-foreground">—</span>}</td>
                       <td className="px-3 py-2 font-medium">{r.client_name ?? '—'}{r.client_phone && <div className="text-xs font-normal text-muted-foreground">{r.client_phone}</div>}</td>
                       <td className="px-3 py-2">
                         {r.project_id ? (
@@ -275,9 +281,8 @@ function PaymentsSection() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(r.amount)}</td>
-                      <td className="px-3 py-2"><StatusBadge tone={PAYMENT_TONE[r.status]}>{humanize(r.status)}</StatusBadge></td>
-                      <td className="px-3 py-2"><BankedCell row={r} /></td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(r.amount)}{r.mode && <div className="text-xs font-normal text-muted-foreground">{r.mode}</div>}</td>
+                      <td className="px-3 py-2"><StatusBadge tone={PAYMENT_TONE[r.status]}>{r.status === 'paid' ? 'Received' : 'Promised'}</StatusBadge></td>
                       <td className="px-3 py-2">
                         {r.invoice_id ? (
                           <Link to="/billing/invoices/$id" params={{ id: r.invoice_id }} className="text-primary hover:underline">

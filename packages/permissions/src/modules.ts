@@ -177,7 +177,7 @@ export const MODULES: Readonly<Record<ModuleKey, ModuleDef>> = {
     key: 'money',
     label: 'Billing',
     path: '/billing',
-    routePatterns: ['/billing', '/company-expenses', '/personal-expenses', '/financials'],
+    routePatterns: ['/billing', '/company-expenses', '/financials'],
     sensitive: true,
     defaultVisibility: allow(false, false, false),
     superAdminOnly: true,
@@ -212,10 +212,11 @@ export const MODULES: Readonly<Record<ModuleKey, ModuleDef>> = {
   personal_expenses: {
     key: 'personal_expenses',
     label: 'Personal Expenses',
-    path: '/personal-expenses',
-    routePatterns: ['/personal-expenses'],
+    path: '/company-expenses',
+    // Folded into Expenses (0170). The key stays because saved role
+    // permissions still name it; it no longer owns a screen.
+    routePatterns: [],
     sensitive: false,
-    // Everyone sees their OWN personal expenses.
     defaultVisibility: allow(true, true, true),
   },
   team_salaries: {

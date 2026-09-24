@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { Button } from '@/shared/ui/button'
 import { Input, Label } from '@/shared/ui/input'
@@ -76,7 +77,8 @@ function InvoiceSettings() {
   const [tab, setTab] = useUrlParam('tab', 'details')
   return (
     <>
-      <PageHeader title="Invoice settings" description="What every invoice says about you, how it looks, and the words at the bottom." />
+      <PageHeader title="Invoicing" description="What every invoice says about you, how it looks, and the words at the bottom." />
+      <SettingsTabs />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="details">Your details & bank</TabsTrigger>
@@ -338,6 +340,7 @@ function CompanyInvoiceDefaults() {
     invoice_email: '',
     invoice_gst_number: '',
     invoice_upi_id: '',
+    invoice_sac_code: '',
     invoice_bank_details: '',
     invoice_number_prefix: '',
     invoice_next_number: '',
@@ -354,6 +357,7 @@ function CompanyInvoiceDefaults() {
       invoice_email: data.invoice_email ?? '',
       invoice_gst_number: data.invoice_gst_number ?? '',
       invoice_upi_id: data.invoice_upi_id ?? '',
+      invoice_sac_code: data.invoice_sac_code ?? '998387',
       invoice_bank_details: data.invoice_bank_details ?? '',
       invoice_number_prefix: data.invoice_number_prefix ?? '',
       invoice_next_number: String(data.invoice_next_number ?? 1),
@@ -384,6 +388,7 @@ function CompanyInvoiceDefaults() {
       invoice_email: form.invoice_email.trim() || null,
       invoice_gst_number: form.invoice_gst_number.trim() ? form.invoice_gst_number.trim().toUpperCase() : undefined,
       invoice_upi_id: form.invoice_upi_id.trim() || null,
+      invoice_sac_code: form.invoice_sac_code.trim() || null,
       invoice_bank_details: form.invoice_bank_details.trim() || null,
       invoice_number_prefix: form.invoice_number_prefix.trim() || undefined,
       invoice_next_number: Number(form.invoice_next_number) || undefined,
@@ -437,6 +442,12 @@ function CompanyInvoiceDefaults() {
           <div>
             <Label>UPI ID</Label>
             <Input value={form.invoice_upi_id} onChange={(e) => set('invoice_upi_id', e.target.value)} placeholder="studio@upi" disabled={!isOwner} />
+            <p className="mt-1 text-xs text-muted-foreground">Printed on invoices as a scan-to-pay QR while money is due.</p>
+          </div>
+          <div>
+            <Label>SAC code</Label>
+            <Input value={form.invoice_sac_code} onChange={(e) => set('invoice_sac_code', e.target.value)} placeholder="998387" disabled={!isOwner} />
+            <p className="mt-1 text-xs text-muted-foreground">The services code GST invoices carry. 998387 is photography and videography.</p>
           </div>
           <div className="md:col-span-2">
             <Label>Bank fallback</Label>

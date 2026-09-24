@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Camera, ChevronRight, Eye, Facebook, FileText, FileSignature, MapPin, Shield, BarChart3, Users, Wallet } from 'lucide-react'
+import { Camera, ChevronRight, Eye, Facebook, FileText, FileSignature, MapPin, Shield, BarChart3, Users } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -31,7 +31,6 @@ function Advanced() {
     { to: '/shoots', title: 'Shoots', desc: 'Browse all shoots across every project.', icon: Camera, show: isManager },
     { to: '/settings/team-terms', title: 'Team Terms', desc: 'Manage acknowledged team terms and versions.', icon: FileSignature, show: access.hasModule('projects') },
     { to: '/team/work-preview', title: 'Team Work Preview', desc: 'Preview team submissions before sharing.', icon: Eye, show: access.hasModule('projects') },
-    { to: '/personal-expenses', title: 'Personal Expenses', desc: 'Personal expense reports and reimbursements.', icon: Wallet, show: true },
     { to: '/settings/attendance-location', title: 'Attendance Location', desc: 'Configure office location for attendance check-in.', icon: MapPin, show: isAdmin },
     { to: '/platform/studios', title: 'Studio Access', desc: 'Platform-level studio management.', icon: Shield, show: session?.is_platform_admin ?? false },
     { to: '/platform/usage', title: 'Usage Analytics', desc: 'Platform-level usage and analytics.', icon: BarChart3, show: session?.is_platform_admin ?? false },

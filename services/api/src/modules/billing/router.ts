@@ -4,7 +4,6 @@ import {
   createInvoiceBankAccountRequest,
   createInvoiceRequest,
   createReceivedPaymentRequest,
-  setPaymentClearedRequest,
   updateInvoiceRequest,
   updateReceivedPaymentRequest,
   gstState,
@@ -423,16 +422,6 @@ export const billingRouter = new Hono<AppEnv>()
               where rp.status = 'paid' and rp.paid_on >= date_trunc('month', current_date)), 0)::float as received_this_month,
             coalesce((select sum(i.total) from invoices i
               where i.status not in ('cancelled', 'draft') and i.invoice_date >= date_trunc('month', current_date)), 0)::float as invoiced_this_month`
-        const monthly = await sql`
-          select to_char(m, 'YYYY-MM') as month,
-                 coalesce((select sum(i.total) from invoices i
-                   where i.status not in ('cancelled', 'draft')
-                     and i.invoice_date >= m and i.invoice_date < m + interval '1 month'), 0)::float as invoiced,
-                 coalesce((select sum(rp.amount) from received_payments rp
-                   where rp.status = 'paid' and rp.paid_on >= m and rp.paid_on < m + interval '1 month'), 0)::float as received
-            from generate_series(date_trunc('month', current_date) - interval '5 months',
-                                 date_trunc('month', current_date), interval '1 month') m
-           order by m`
         const due = await sql`
           select i.id, i.invoice_number, i.invoice_date, i.due_date, i.total, i.balance_due, i.status,
                  cl.name as client_name, cl.phone as client_phone, i.project_id, pj.name as project_name
@@ -442,31 +431,6 @@ export const billingRouter = new Hono<AppEnv>()
            where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
            order by i.due_date nulls last, i.invoice_date
            limit 25`
-        const projects = await sql`
-          select * from (
-            select p.id as project_id, p.name as project_name, cl.name as client_name, cl.phone as client_phone,
-                   p.total_cost::float as total_cost,
-                   coalesce((select sum(rp.amount) from received_payments rp
-                     where rp.project_id = p.id and rp.status = 'paid'), 0)::float as received,
-                   coalesce((select sum(i.balance_due) from invoices i
-                     where i.project_id = p.id and i.balance_due > 0 and i.status not in ('cancelled', 'draft')), 0)::float as invoiced_open
-              from projects p left join clients cl on cl.id = p.client_id
-             where p.status <> 'cancelled'
-          ) x
-           where x.total_cost - x.received > 0
-           order by x.total_cost - x.received desc
-           limit 12`
-        const recent = await sql`
-          select rp.id, rp.amount, coalesce(rp.date_received, rp.paid_on) as paid_on, rp.mode,
-                 cl.name as client_name, rp.project_id, pj.name as project_name,
-                 rp.invoice_id, i.invoice_number
-            from received_payments rp
-            left join clients cl on cl.id = coalesce(rp.client_id, (select p.client_id from projects p where p.id = rp.project_id))
-            left join projects pj on pj.id = rp.project_id
-            left join invoices i on i.id = rp.invoice_id
-           where rp.status = 'paid'
-           order by coalesce(rp.date_received, rp.paid_on) desc, rp.created_at desc
-           limit 8`
         const h = head as Record<string, number>
         return {
           to_collect: h.to_collect,
@@ -474,10 +438,7 @@ export const billingRouter = new Hono<AppEnv>()
           due_soon: { count: h.due_soon_count, amount: h.due_soon_amount },
           received_this_month: h.received_this_month,
           invoiced_this_month: h.invoiced_this_month,
-          monthly,
           due_invoices: due,
-          projects_to_collect: projects.map((r) => ({ ...r, due: Math.max(0, Number(r.total_cost) - Number(r.received)) })),
-          recent_payments: recent,
         }
       }),
     )
@@ -613,19 +574,25 @@ export const billingRouter = new Hono<AppEnv>()
                  rp.amount, rp.description, rp.status,
                  coalesce(rp.is_gst, false) as is_gst, rp.gst_number,
                  coalesce(to_char(rp.date_received, 'YYYY-MM-DD'), to_char(rp.paid_on, 'YYYY-MM-DD')) as date_received,
-                 rp.file_url, rp.cleared_at, rp.created_at
+                 rp.file_url, rp.receipt_number, rp.mode, rp.reference, rp.created_at
             from received_payments rp
             left join projects p on p.id = rp.project_id
             left join invoices i on i.id = rp.invoice_id
             left join clients cl on cl.id = coalesce(rp.client_id, p.client_id, i.client_id)
            where rp.company_id = ${c.get('auth').companyId}`
+        // The tiles: over every payment, not the filtered set.
+        const [tiles] = await sql<{ this_month: number; this_fy: number; promised: number }[]>`
+          select coalesce(sum(amount) filter (where status = 'paid' and coalesce(date_received, paid_on) >= date_trunc('month', current_date)), 0)::float as this_month,
+                 coalesce(sum(amount) filter (where status = 'paid' and fy_label(coalesce(date_received, paid_on)) = fy_label(current_date)), 0)::float as this_fy,
+                 coalesce(sum(amount) filter (where status = 'pending'), 0)::float as promised
+            from received_payments where company_id = ${c.get('auth').companyId}`
         type R = {
           id: string; project_id: string | null; project_name: string | null;
           invoice_id: string | null; invoice_number: string | null; client_id: string | null;
           client_name: string | null; client_phone: string | null; client_email: string | null;
           amount: string | number; description: string | null; status: string;
           is_gst: boolean; gst_number: string | null; date_received: string | null;
-          file_url: string | null; cleared_at: string | null; created_at: string;
+          file_url: string | null; receipt_number: string | null; mode: string | null; reference: string | null; created_at: string;
         }
         let filtered = (base as unknown as R[]).filter((r) => {
           if (status === 'paid' || status === 'pending') {
@@ -636,13 +603,14 @@ export const billingRouter = new Hono<AppEnv>()
           if (q.is_gst !== undefined && !!r.is_gst !== q.is_gst) return false
           if (q.client_id && r.client_id !== q.client_id) return false
           if (q.project_id && r.project_id !== q.project_id) return false
+          if (q.mode && (r.mode ?? '').toLowerCase() !== q.mode.toLowerCase()) return false
           if (q.date_from && (!r.date_received || r.date_received < q.date_from)) return false
           if (q.date_to && (!r.date_received || r.date_received > q.date_to)) return false
           const amt = Number(r.amount)
           if (q.amount_min !== undefined && amt < q.amount_min) return false
           if (q.amount_max !== undefined && amt > q.amount_max) return false
           if (searchLike) {
-            const hay = [r.client_name ?? '', r.project_name ?? '', r.description ?? '', r.gst_number ?? '']
+            const hay = [r.client_name ?? '', r.project_name ?? '', r.description ?? '', r.gst_number ?? '', r.receipt_number ?? '', r.reference ?? '']
               .join(' ').toLowerCase()
             if (!hay.includes(search.toLowerCase())) return false
           }
@@ -667,7 +635,7 @@ export const billingRouter = new Hono<AppEnv>()
           if (typeof ka === 'number' && typeof kb === 'number') return (ka - kb) * dir
           return String(ka).localeCompare(String(kb)) * dir
         })
-        return filtered.map((r) => ({
+        const list = filtered.map((r) => ({
           id: r.id,
           project_id: r.project_id,
           project_name: r.project_name,
@@ -689,13 +657,16 @@ export const billingRouter = new Hono<AppEnv>()
           gst_number: r.gst_number,
           date_received: r.date_received,
           file_url: r.file_url,
-          cleared_at: r.cleared_at ? new Date(r.cleared_at).toISOString() : null,
+          receipt_number: r.receipt_number,
+          mode: r.mode,
+          reference: r.reference,
           created_at: new Date(r.created_at).toISOString(),
         }))
+        return { list, tiles: tiles ?? { this_month: 0, this_fy: 0, promised: 0 } }
       }),
     )
     if (!rows) fail(400, 'We could not load payments.')
-    const items = receivedPayment.array().parse(rows)
+    const items = receivedPayment.array().parse(rows.list)
     const totalReceived = items.filter((i) => i.status === 'paid').reduce((s, i) => s + i.amount, 0)
     const pendingAmt = items.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0)
     const summary = {
@@ -704,6 +675,9 @@ export const billingRouter = new Hono<AppEnv>()
       paid_count: items.filter((i) => i.status === 'paid').length,
       pending_count: items.filter((i) => i.status === 'pending').length,
       gst_count: items.filter((i) => i.is_gst).length,
+      received_this_month: rows.tiles.this_month,
+      received_this_fy: rows.tiles.this_fy,
+      promised_amount: rows.tiles.promised,
     }
     const start = (q.page - 1) * q.page_size
     const pageItems = items.slice(start, start + q.page_size)
@@ -733,7 +707,7 @@ export const billingRouter = new Hono<AppEnv>()
                  rp.amount, rp.description, rp.status,
                  coalesce(rp.is_gst, false) as is_gst, rp.gst_number,
                  coalesce(to_char(rp.date_received, 'YYYY-MM-DD'), to_char(rp.paid_on, 'YYYY-MM-DD')) as date_received,
-                 rp.file_url, rp.cleared_at, rp.created_at
+                 rp.file_url, rp.receipt_number, rp.mode, rp.reference, rp.created_at
             from received_payments rp
             left join projects p on p.id = rp.project_id
             left join invoices i on i.id = rp.invoice_id
@@ -752,39 +726,6 @@ export const billingRouter = new Hono<AppEnv>()
     )
     if (!row) fail(404, 'That payment was not found.')
     return c.json(receivedPayment.parse(row))
-  })
-
-  /**
-   * Confirm that a recorded payment actually reached the bank — or take that
-   * confirmation back.
-   *
-   * `received` is what the studio wrote down; `banked` is what it has checked.
-   * Keeping them apart is what lets the reconciliation screen show a cheque
-   * that never cleared, instead of counting it as money twice over.
-   */
-  .post('/payments/:id/cleared', requireAction('billing', 'edit'), async (c) => {
-    const parsed = setPaymentClearedRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Say whether this payment has cleared.')
-    const id = uuidParam(c)
-    const auth = c.get('auth')
-    const row = await attempt(c, 'billing.payment_cleared', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        // Only money the studio says it has can be confirmed as arrived.
-        const rows = await sql<{ id: string }[]>`
-          update received_payments
-             set cleared_at = ${parsed.data.cleared ? sql`now()` : sql`null`}
-           where id = ${id} and company_id = ${auth.companyId} and status = 'paid'
-          returning id`
-        return rows[0] ?? null
-      }),
-    )
-    if (!row) fail(404, 'That payment was not found, or is still pending.')
-    await audit(c, {
-      action: parsed.data.cleared ? 'received_payment.cleared' : 'received_payment.uncleared',
-      entityType: 'received_payment',
-      entityId: id,
-    })
-    return c.json({ ok: true })
   })
 
   .post('/payments', requireAction('billing', 'create'), async (c) => {

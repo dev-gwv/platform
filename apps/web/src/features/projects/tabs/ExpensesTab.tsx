@@ -11,7 +11,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeleteExpense, useProjectExpenses } from '@/features/financials/api'
-import { AddExpenseDialog } from '@/routes/company-expenses'
+import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 

@@ -213,22 +213,7 @@ export const billingOverview = z.object({
   due_soon: z.object({ count: z.number().int(), amount: money }),
   received_this_month: money,
   invoiced_this_month: money,
-  monthly: z.array(z.object({ month: z.string(), invoiced: money, received: money })),
   due_invoices: z.array(billingDueInvoice),
-  projects_to_collect: z.array(billingToCollect),
-  recent_payments: z.array(
-    z.object({
-      id: uuid,
-      amount: money,
-      paid_on: isoDate,
-      mode: z.string().nullable(),
-      client_name: z.string().nullable(),
-      project_id: uuid.nullable(),
-      project_name: z.string().nullable(),
-      invoice_id: uuid.nullable(),
-      invoice_number: z.string().nullable(),
-    }),
-  ),
 })
 export type BillingOverview = z.infer<typeof billingOverview>
 
@@ -246,6 +231,7 @@ export const publicInvoice = z.object({
     invoice_phone: z.string().nullable().default(null),
     invoice_email: z.string().nullable().default(null),
     invoice_upi_id: z.string().nullable().default(null),
+    invoice_sac_code: z.string().nullable().default(null),
     logo_url: z.string().nullable().default(null),
     document_footer_note: z.string().nullable().default(null),
   }),
@@ -342,21 +328,14 @@ export const receivedPayment = z.object({
   gst_number: z.string().nullable(),
   date_received: isoDate.nullable(),
   file_url: z.string().nullable(),
-  /**
-   * When a person confirmed this money reached the bank. Not a statement
-   * import — `received` is what the studio recorded, `banked` is what it has
-   * confirmed, and the gap between them is the point.
-   */
-  cleared_at: isoDateTime.nullable().default(null),
+  /** RCP-2026-27-0001: given the day the money is received, then never changed. */
+  receipt_number: z.string().nullable().default(null),
+  mode: z.string().nullable().default(null),
+  reference: z.string().nullable().default(null),
   created_at: isoDateTime,
 })
 export type ReceivedPayment = z.infer<typeof receivedPayment>
 
-export const setPaymentClearedRequest = z.object({
-  /** True marks it confirmed in the bank; false takes the confirmation back. */
-  cleared: z.boolean(),
-})
-export type SetPaymentClearedRequest = z.infer<typeof setPaymentClearedRequest>
 
 const booleanFromQuery = z.preprocess(
   (v) => {
@@ -379,6 +358,7 @@ export const receivedPaymentListQuery = z.object({
   date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   is_gst: booleanFromQuery,
+  mode: z.string().trim().max(40).optional(),
   amount_min: z.coerce.number().finite().nonnegative().optional(),
   amount_max: z.coerce.number().finite().nonnegative().optional(),
   sort_by: receivedPaymentSortBy.default('date_received'),
@@ -394,6 +374,10 @@ export const receivedPaymentListSummary = z.object({
   paid_count: z.number().int().nonnegative(),
   pending_count: z.number().int().nonnegative(),
   gst_count: z.number().int().nonnegative(),
+  /** Over every payment, whatever the filter: the tiles at the top. */
+  received_this_month: money.default(0),
+  received_this_fy: money.default(0),
+  promised_amount: money.default(0),
 })
 export type ReceivedPaymentListSummary = z.infer<typeof receivedPaymentListSummary>
 

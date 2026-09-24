@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowDownRight, ArrowUpRight, Download, Info, Landmark, Users, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Download, FileSpreadsheet, Info, Users, Wallet } from 'lucide-react'
 import type { PnlBasis, PnlLines, ProfitAndLoss } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -13,7 +13,7 @@ import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useProfitAndLoss } from '@/features/financials/api'
+import { useGstSummary, useProfitAndLoss } from '@/features/financials/api'
 import { OverheadsCard } from '@/features/financials/Overheads'
 import { PERIOD_LABEL, periodFor, rangeLabel, type PeriodKey } from '@/features/financials/period'
 
@@ -49,6 +49,21 @@ function ProfitAndLossPage() {
   const period = preset === 'custom' ? { ...custom, label: rangeLabel(custom.from, custom.to) } : periodFor(preset)
   const q = useProfitAndLoss({ from: period.from, to: period.to, basis })
   const data = q.data
+  const gst = useGstSummary(period.from, period.to)
+
+  /** GST collected and paid, month by month: what the accountant asks for at filing time. */
+  function exportGst() {
+    const g = gst.data
+    if (!g) return
+    downloadCsv(
+      `gst-${g.from}-to-${g.to}.csv`,
+      `GST summary ${period.label}\n` +
+        toCsv(
+          ['Month', 'Taxable sales', 'CGST', 'SGST', 'IGST', 'GST collected', 'Purchases', 'GST paid (input)', 'Reverse charge'],
+          g.months.map((m) => [m.month, m.taxable_sales, m.cgst, m.sgst, m.igst, m.gst_collected, m.purchases, m.gst_paid, m.rcm]),
+        ),
+    )
+  }
 
   function exportCsv() {
     if (!data) return
@@ -83,9 +98,14 @@ function ProfitAndLossPage() {
         title="Profit & Loss"
         description="What came in, what it cost, and what is left — every rupee counted once."
         actions={
-          <Button variant="outline" onClick={exportCsv} disabled={!data}>
-            <Download /> Download
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportGst} disabled={!gst.data} title="GST collected on invoices and paid on expenses, month by month">
+              <FileSpreadsheet /> For your CA
+            </Button>
+            <Button variant="outline" onClick={exportCsv} disabled={!data}>
+              <Download /> Download
+            </Button>
+          </div>
         }
       />
 
@@ -290,7 +310,6 @@ function Rail({ data }: { data: ProfitAndLoss }) {
         <p className="px-2 pt-1 text-sm font-semibold">Still to settle</p>
         {item(<Wallet className="size-4 text-tone-amber" aria-hidden />, 'Still to collect', r.still_to_collect, 'Project value not yet received', '/projects')}
         {item(<Users className="size-4 text-tone-violet" aria-hidden />, 'Owed to the team', r.owed_to_team, 'Crew booked, not yet paid', '/team-payouts')}
-        {item(<Landmark className="size-4 text-tone-blue" aria-hidden />, 'Not banked yet', r.unbanked, 'Received, not marked as in the bank', '/billing/payments')}
       </CardContent>
     </Card>
   )

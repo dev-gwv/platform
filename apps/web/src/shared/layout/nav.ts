@@ -14,7 +14,6 @@ import {
   ListTodo,
   CreditCard,
   Receipt,
-  Gauge,
   Banknote,
   Wallet,
   TrendingUp,
@@ -31,9 +30,7 @@ import {
   Building2,
   Activity,
   Package,
-  Scale,
   DollarSign,
-  FileText,
   FileSignature,
   Eye,
   Ellipsis,
@@ -121,14 +118,12 @@ export const NAV: NavEntry[] = [
     icon: CreditCard,
     match: '/billing',
     children: [
-      // What is owed and late, then the two lists behind it.
-      leaf('Overview', '/billing', Gauge, { module: 'billing' }),
+      // Four heads, like the old app: what is owed, what came in, what went
+      // out, what is left. Invoice settings live under Settings.
       leaf('Invoices', '/billing/invoices', Receipt, { module: 'billing' }),
-      leaf('Payments', '/billing/payments', Banknote, { module: 'billing' }),
+      leaf('Payments received', '/billing/payments', Banknote, { module: 'billing' }),
       leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
       leaf('Profit & Loss', '/financials', TrendingUp, { module: 'financials' }),
-      leaf('Reconciliation', '/financials/reconciliation', Scale, { module: 'financials' }),
-      leaf('Invoice Settings', '/billing/settings', FileText, { module: 'billing' }),
     ],
   },
   {
@@ -181,7 +176,6 @@ export const NAV: NavEntry[] = [
       leaf('Reminders', '/reminders', Bell),
       // Activity trail: see what's changed across the studio.
       leaf('Activity', '/activity', Activity),
-      leaf('Personal Expenses', '/personal-expenses', Wallet, { module: 'personal_expenses' }),
       leaf('Referrals', '/referrals', Target, { module: 'referrals' }),
     ],
   },

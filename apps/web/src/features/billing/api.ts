@@ -345,6 +345,7 @@ export interface ReceivedPaymentFilters {
   date_from?: string | undefined
   date_to?: string | undefined
   is_gst?: boolean | undefined
+  mode?: string | undefined
   amount_min?: number | undefined
   amount_max?: number | undefined
   sort_by?: string | undefined
@@ -362,6 +363,7 @@ function toPaymentsQueryString(f: ReceivedPaymentFilters): string {
   if (f.date_from) p.set('date_from', f.date_from)
   if (f.date_to) p.set('date_to', f.date_to)
   if (f.is_gst !== undefined) p.set('is_gst', String(f.is_gst))
+  if (f.mode) p.set('mode', f.mode)
   if (f.amount_min !== undefined && Number.isFinite(f.amount_min)) p.set('amount_min', String(f.amount_min))
   if (f.amount_max !== undefined && Number.isFinite(f.amount_max)) p.set('amount_max', String(f.amount_max))
   if (f.sort_by) p.set('sort_by', f.sort_by)
@@ -437,30 +439,6 @@ export function useDeleteReceivedPayment() {
 }
 
 export type { ReceivedPayment }
-
-/**
- * Confirm a recorded payment actually reached the bank, or take it back.
- *
- * `received` is what the studio wrote down; `banked` is what it has checked.
- * The reconciliation screen reads the gap between them, which is where a
- * cheque that never cleared shows up instead of being counted as money.
- */
-export function useSetPaymentCleared() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, cleared }: { id: string; cleared: boolean }) =>
-      callApi(`/billing/payments/${id}/cleared`, {
-        method: 'POST',
-        body: { cleared },
-        responseSchema: z.object({ ok: z.boolean() }),
-      }),
-    onSuccess: (_r, v) => {
-      toast.success(v.cleared ? 'Marked as banked.' : 'Bank confirmation removed.')
-      invalidateMoney(qc)
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
 
 const overviewSchema = billingOverview
 

@@ -19,6 +19,7 @@ import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useInvoices } from '@/features/billing/api'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
+import { BillingStrip } from '@/features/billing/BillingStrip'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { dueText, invoiceBadge, isOverdue, shortDate } from '@/features/billing/status'
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
@@ -38,10 +39,10 @@ const VIEWS = [
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
 
-export function InvoicesPage() {
+export function InvoicesPage({ newInvoice }: { newInvoice?: boolean } = {}) {
   return (
     <AuthedPage module="billing">
-      <Invoices />
+      <Invoices newInvoice={newInvoice} />
     </AuthedPage>
   )
 }
@@ -50,7 +51,7 @@ export function InvoicesPage() {
  * Every invoice, with its project beside it. Filters live in the address, so
  * "this project's invoices" or "what is overdue" is a link that can be sent.
  */
-function Invoices() {
+function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   const access = useAccess()
@@ -64,7 +65,7 @@ function Invoices() {
   const [search, setSearch] = useUrlParam('q')
   const [searchInput, setSearchInput] = useState(search)
   const [page, setPage] = useState(1)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(!!newInvoice)
   const [recording, setRecording] = useState<InvoiceListItem | null>(null)
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
@@ -163,6 +164,9 @@ function Invoices() {
         }
       />
       {creating && <NewInvoiceDialog initial={projectId && pickedProject ? { project_id: projectId, client_id: pickedProject.client_id } : undefined} onClose={() => setCreating(false)} />}
+
+      {/* What is owed and what is late, before the list: the reason most people open this page. */}
+      {!projectId && <BillingStrip />}
 
       <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Which invoices">
         {VIEWS.map((v) => (
