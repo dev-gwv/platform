@@ -153,6 +153,9 @@ export const projectsRouter = new Hono<AppEnv>()
             coalesce(d.total, 0)::int        as deliverables_total,
             coalesce(d.done, 0)::int         as deliverables_done,
             coalesce(d.late, 0)::int         as deliverables_late,
+            coalesce(d.with_client, 0)::int  as deliverables_with_client,
+            coalesce((select sum(rp.amount) from received_payments rp
+                       where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'), 0) as received,
             coalesce(dr.total, 0)::int       as data_records_total,
             coalesce(dr.unverified, 0)::int  as data_records_unverified,
             coalesce(w.pending, 0)::int      as pending_reviews,
@@ -163,7 +166,9 @@ export const projectsRouter = new Hono<AppEnv>()
           from projects p
           left join clients cl on cl.id = p.client_id
           left join lateral (
-            select count(*) as total,
+            -- A cancelled task is not owed: counting it would hold the
+            -- project short of 100% for ever.
+            select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
                      where status not in ('completed', 'cancelled')
@@ -178,9 +183,11 @@ export const projectsRouter = new Hono<AppEnv>()
             select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
-                     where status not in ('completed', 'cancelled')
+                     where status not in ('completed', 'cancelled', 'review')
                        and estimated_date is not null and estimated_date < current_date
-                   ) as late
+                   ) as late,
+                   -- Sent to the client and waiting on them: not late on us.
+                   count(*) filter (where status = 'review') as with_client
             from deliverables where project_id = p.id
           ) d on true
           left join lateral (

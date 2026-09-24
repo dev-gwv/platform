@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { useConfirm } from '@/shared/ui/confirm'
+import { SkeletonCards } from '@/shared/ui/skeleton'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -7,7 +10,7 @@ import { useClients } from '@/features/clients/api'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Badge } from '@/shared/ui/badge'
-import { ErrorState } from '@/shared/ui/states'
+import { EmptyState, ErrorState } from '@/shared/ui/states'
 import {
   useProjectTemplates,
   useSaveProjectTemplate,
@@ -19,7 +22,7 @@ import {
   useCreateShootType,
 } from '@/features/projects/api'
 import { type CreateProjectTemplateRequest } from '@ipc/contracts'
-import { Plus, Trash2, Copy, Package, Camera, ListChecks, Calendar } from 'lucide-react'
+import { Plus, Trash2, Pencil, Package, Camera, ListChecks, Calendar, ArrowRight } from 'lucide-react'
 
 function ProjectTemplatesContent() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -39,6 +42,8 @@ function ProjectTemplatesContent() {
   const saveTemplate = useSaveProjectTemplate()
   const deleteTemplate = useDeleteProjectTemplate()
   const applyTemplate = useApplyProjectTemplate()
+  const navigate = useNavigate()
+  const confirm = useConfirm()
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
 
@@ -72,7 +77,14 @@ function ProjectTemplatesContent() {
     if (!applyingTemplateId || !applyForm.name.trim() || !applyForm.client_id) return
     applyTemplate.mutate(
       { templateId: applyingTemplateId, body: { name: applyForm.name, client_id: applyForm.client_id || undefined, start_date: applyForm.start_date || undefined } },
-      { onSuccess: () => setApplyDialogOpen(false) },
+      {
+        // Straight into the new project: that is where its price, dates and
+        // team get filled in.
+        onSuccess: (r) => {
+          setApplyDialogOpen(false)
+          void navigate({ to: '/projects/$id', params: { id: r.project_id } })
+        },
+      },
     )
   }
 
@@ -98,9 +110,17 @@ function ProjectTemplatesContent() {
   }
 
   function handleSubmit() {
-    if (!form.name.trim()) return
+    if (form.name.trim().length < 2) return
+    // Rows left empty are simply dropped, rather than failing the whole save.
+    const body: CreateProjectTemplateRequest = {
+      ...form,
+      name: form.name.trim(),
+      deliverables_json: form.deliverables_json.filter((d) => d.name.trim()),
+      shoots_json: form.shoots_json.filter((x) => x.name.trim()),
+      tasks_json: form.tasks_json.filter((t) => t.title.trim()),
+    }
     saveTemplate.mutate(
-      { id: editingId ?? undefined, body: form },
+      { id: editingId ?? undefined, body },
       { onSuccess: () => setDialogOpen(false) },
     )
   }
@@ -109,18 +129,16 @@ function ProjectTemplatesContent() {
     <div className="space-y-4">
       <PageHeader
         title="Project Templates"
-        description="Create reusable project configurations"
+        description="Your usual packages — shoots, deliverables and to-dos — ready to start a new project from."
         actions={
           <Button onClick={openCreate} size="sm">
-            <Plus className="mr-1 h-4 w-4" /> New Template
+            <Plus className="mr-1 h-4 w-4" /> New template
           </Button>
         }
       />
 
-      <CatalogManagers />
-
       {isLoading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
+        <SkeletonCards count={3} />
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : (
@@ -130,17 +148,6 @@ function ProjectTemplatesContent() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{template.name}</CardTitle>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openApply(template.id)}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(template)}>
-                    <Package className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteTemplate.mutate(template.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -158,23 +165,52 @@ function ProjectTemplatesContent() {
                   <ListChecks className="mr-1 h-3 w-3" /> {(template.tasks_json ?? []).length} tasks
                 </Badge>
               </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => openApply(template.id)}>
+                  Use for a new project <ArrowRight />
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openEdit(template)}>
+                  <Pencil /> Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={async () => {
+                    if (await confirm({ title: `Delete “${template.name}”?`, description: 'Projects already made from it stay as they are.', confirmLabel: 'Delete', destructive: true }))
+                      deleteTemplate.mutate(template.id)
+                  }}
+                >
+                  <Trash2 /> Delete
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
         {templates.length === 0 && (
-          <div className="col-span-full py-12 text-center text-muted-foreground">
-            No templates yet. Create one to speed up project setup.
+          <div className="col-span-full">
+            <EmptyState
+              title="No templates yet"
+              description="Save your usual package once — e.g. “Wedding: Haldi, Mehendi, Wedding, Reception · Album, Film, Reel” — and start every similar project from it."
+              action={
+                <Button onClick={openCreate}>
+                  <Plus /> New template
+                </Button>
+              }
+            />
           </div>
         )}
       </div>
       )}
+
+      <CatalogManagers />
 
       {/* Create/Edit Template Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" title={editingId ? 'Edit Template' : 'New Template'}>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Template Name</label>
+              <label className="text-sm font-medium">Template name</label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -248,16 +284,6 @@ function ProjectTemplatesContent() {
                       setForm({ ...form, shoots_json: shoots })
                     }}
                   />
-                  <Input
-                    placeholder="Kind (e.g. wedding)"
-                    className="w-32"
-                    value={s.kind ?? ''}
-                    onChange={(e) => {
-                      const shoots = [...form.shoots_json]
-                      shoots[i] = { ...s, kind: e.target.value || null }
-                      setForm({ ...form, shoots_json: shoots })
-                    }}
-                  />
                   <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => {
                     setForm({ ...form, shoots_json: form.shoots_json.filter((_, j) => j !== i) })
                   }}>
@@ -297,7 +323,7 @@ function ProjectTemplatesContent() {
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={!form.name.trim() || saveTemplate.isPending}>
+            <Button onClick={handleSubmit} disabled={form.name.trim().length < 2 || saveTemplate.isPending}>
               {saveTemplate.isPending ? 'Saving...' : 'Save'}
             </Button>
           </div>
@@ -306,7 +332,7 @@ function ProjectTemplatesContent() {
 
       {/* Apply Template Dialog */}
       <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>
-        <DialogContent title="Create Project from Template">
+        <DialogContent title="Start a project from this template" description="Its shoots, deliverables and to-dos are added. You set the price and dates on the project.">
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Project Name</label>
@@ -383,11 +409,11 @@ function ShootTypeManager() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Calendar className="h-4 w-4 text-primary" /> Shoot types
+          <Calendar className="h-4 w-4 text-primary" /> Shoot names
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">Reusable shoot names for the create-project wizard.</p>
+        <p className="text-xs text-muted-foreground">Offered when you add a shoot in Create Project.</p>
         <div className="mt-2 flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haldi" aria-label="Shoot type name" />
           <Button size="sm" onClick={() => void onAdd()} disabled={!name.trim() || create.isPending}>

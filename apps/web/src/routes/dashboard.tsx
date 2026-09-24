@@ -237,10 +237,10 @@ function StudioCommandCenter() {
       {sections.stats && (
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <Tile icon={Activity} value={activeProjects} label="Active projects" tone="primary" to="/projects" />
-        <Tile icon={AlertTriangle} value={totals.critical} label="Critical projects" tone="danger" to="/project-tracking" />
-        <Tile icon={CircleAlert} value={totals.overdue} label="Overdue tasks" hint="Across every project" tone="warning" to="/tasks" />
-        <Tile icon={Database} value={totals.data_missing} label="Data missing" tone="warning" to="/data-management" />
-        <Tile icon={Eye} value={totals.pending_review} label="Pending review" tone="success" to="/project-tracking" />
+        <Tile icon={AlertTriangle} value={totals.attention} label="Projects needing attention" tone="danger" to="/project-tracking" search={{ tab: 'attention' }} />
+        <Tile icon={CircleAlert} value={totals.overdue} label="Projects with late work" tone="warning" to="/project-tracking" search={{ tab: 'overdue' }} />
+        <Tile icon={Database} value={totals.data_missing} label="Projects with data not safe" tone="warning" to="/data-management" />
+        <Tile icon={Eye} value={totals.pending_review} label="Projects with work to review" tone="success" to="/project-tracking" search={{ tab: 'pending_review' }} />
         {access.hasModule('billing') && (
           <Tile icon={Receipt} value={formatINR(outstanding)} label="Outstanding" tone="primary" to="/billing" />
         )}
@@ -352,6 +352,7 @@ function Tile({
   hint,
   tone,
   to,
+  search,
 }: {
   icon: typeof Activity
   value: number | string
@@ -359,6 +360,8 @@ function Tile({
   hint?: string
   tone: 'primary' | 'danger' | 'warning' | 'success'
   to?: string
+  /** Opens the target on a tab, e.g. { tab: 'overdue' }. */
+  search?: Record<string, string>
 }) {
   const body = (
     <CardContent className="flex items-start gap-3 p-4">
@@ -385,7 +388,7 @@ function Tile({
   )
   return to ? (
     <Card className="lift">
-      <Link to={to} className="block">
+      <Link to={to} search={search ?? {}} className="block">
         {body}
       </Link>
     </Card>

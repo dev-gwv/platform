@@ -1040,5 +1040,22 @@ if (listed) {
   check('create project: only the paid advance counts as received', Number(row?.received) === 25000, { row })
 }
 
+// ── Tracking: a cancelled task is not owed ──────────────────────────────
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Track Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Track project ${rand()}`, client_id: client.json.id, package_cost: 1000, payments: [{ amount: 400 }] } })
+  const pid = project.json.id
+  const mk = (title, status) => api('/tasks', { token: aToken, method: 'POST', body: { project_id: pid, title, status, priority: 'medium', assignees: [] } })
+  const t1 = await mk('Done one', 'completed')
+  const t2 = await mk('Dropped one', 'cancelled')
+  const tracking = await api('/projects/tracking', { token: aToken })
+  const row = (tracking.json ?? []).find((r) => r.id === pid)
+  check(
+    'tracking: a cancelled task does not hold the project short, and received is paid money',
+    t1.status < 300 && t2.status < 300 && row?.tasks_total === 1 && row?.tasks_done === 1 && Number(row?.received) === 400,
+    { t1: t1.status, t2: t2.status, row },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -365,6 +365,10 @@ export const projectTrackingRow = z.object({
   deliverables_done: z.number().int(),
   /** Open deliverables past their due date. */
   deliverables_late: z.number().int().default(0),
+  /** Sent to the client, waiting on them. */
+  deliverables_with_client: z.number().int().default(0),
+  /** Paid money only; a promised payment is not here. */
+  received: money.default(0),
   data_records_total: z.number().int(),
   data_records_unverified: z.number().int(),
   pending_reviews: z.number().int(),

@@ -1,4 +1,4 @@
-import { lateOf, projectHealth, type NextActionKey, type ProjectHealth } from '@ipc/domain'
+import { projectHealth, type NextActionKey, type ProjectHealth } from '@ipc/domain'
 import type { ProjectTrackingRow } from '@ipc/contracts'
 
 /**
@@ -9,45 +9,29 @@ import type { ProjectTrackingRow } from '@ipc/contracts'
  * counts and the list can never disagree — they are computed from the same
  * array in the same pass.
  */
-export type TrackingTab =
-  | 'all'
-  | 'critical'
-  | 'high_risk'
-  | 'low_progress'
-  | 'data_missing'
-  | 'overdue'
-  | 'pending_review'
-  | 'completed'
+export type TrackingTab = 'all' | 'attention' | 'overdue' | 'data_missing' | 'pending_review' | 'on_track' | 'completed'
 
+/**
+ * Six questions, each answered in projects: "which need me?", "where is work
+ * late?", "whose footage isn't safe yet?", "who has handed in work?", "which
+ * are fine?", "which are done?".
+ */
 export const TRACKING_TABS: ReadonlyArray<{ value: TrackingTab; label: string }> = [
   { value: 'all', label: 'All' },
-  { value: 'critical', label: 'Critical' },
-  { value: 'high_risk', label: 'High risk' },
-  { value: 'low_progress', label: 'Low progress' },
-  { value: 'data_missing', label: 'Data missing' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'pending_review', label: 'Pending review' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'attention', label: 'Needs attention' },
+  { value: 'overdue', label: 'Late work' },
+  { value: 'data_missing', label: 'Data not safe' },
+  { value: 'pending_review', label: 'Work to review' },
+  { value: 'on_track', label: 'On track' },
+  { value: 'completed', label: 'Done' },
 ]
 
-export type TrackingSort =
-  | 'risk'
-  | 'completion'
-  | 'completion_desc'
-  | 'next_shoot'
-  | 'name'
-  | 'overdue'
-  | 'pending_review'
-  | 'recent'
+export type TrackingSort = 'risk' | 'next_shoot' | 'completion' | 'name'
 
 export const TRACKING_SORTS: ReadonlyArray<{ value: TrackingSort; label: string }> = [
-  { value: 'risk', label: 'Highest risk first' },
-  { value: 'completion', label: 'Lowest completion first' },
-  { value: 'completion_desc', label: 'Highest completion first' },
-  { value: 'overdue', label: 'Most overdue first' },
-  { value: 'pending_review', label: 'Most pending reviews first' },
+  { value: 'risk', label: 'Most urgent first' },
   { value: 'next_shoot', label: 'Next shoot first' },
-  { value: 'recent', label: 'Recently active' },
+  { value: 'completion', label: 'Least done first' },
   { value: 'name', label: 'Name (A–Z)' },
 ]
 
@@ -65,18 +49,16 @@ export function matchesTab(p: TrackedProject, tab: TrackingTab): boolean {
   switch (tab) {
     case 'all':
       return true
-    case 'critical':
-      return f.critical
-    case 'high_risk':
-      return f.high_risk
-    case 'low_progress':
-      return f.low_progress
-    case 'data_missing':
-      return f.data_missing
+    case 'attention':
+      return f.critical || f.high_risk || f.low_progress
     case 'overdue':
       return f.overdue
+    case 'data_missing':
+      return f.data_missing
     case 'pending_review':
       return f.pending_review
+    case 'on_track':
+      return p.health.band === 'healthy'
     case 'completed':
       return f.completed
   }
@@ -96,12 +78,6 @@ const byName = (a: TrackedProject, b: TrackedProject) => a.name.localeCompare(b.
 const SORTS: Record<TrackingSort, (a: TrackedProject, b: TrackedProject) => number> = {
   risk: (a, b) => b.health.score - a.health.score || byName(a, b),
   completion: (a, b) => a.health.completion - b.health.completion || byName(a, b),
-  // Furthest along first — the "what can we close out" view.
-  completion_desc: (a, b) => b.health.completion - a.health.completion || byName(a, b),
-  // Most overdue work first; quiet projects sink below noisy ones.
-  overdue: (a, b) => lateOf(b) - lateOf(a) || b.health.score - a.health.score || byName(a, b),
-  // Most work waiting on review first; nothing pending sinks.
-  pending_review: (a, b) => b.pending_reviews - a.pending_reviews || b.health.score - a.health.score || byName(a, b),
   // A project with no shoot booked has no date to sort by; it sinks rather than
   // sorting as "soonest".
   next_shoot: (a, b) => {
@@ -110,8 +86,6 @@ const SORTS: Record<TrackingSort, (a: TrackedProject, b: TrackedProject) => numb
     if (!b.next_shoot_date) return -1
     return a.next_shoot_date.localeCompare(b.next_shoot_date)
   },
-  // Freshest activity first — the board's "what moved" view.
-  recent: (a, b) => b.last_activity_at.localeCompare(a.last_activity_at) || byName(a, b),
   name: byName,
 }
 
@@ -131,18 +105,25 @@ export function mostUrgent(projects: readonly TrackedProject[]): TrackedProject 
   return ranked[0] ?? null
 }
 
-/** Board-wide totals for the tiles across the top. */
+/** The tiles across the top: the same counts as the tabs, so a tile and its tab always agree. */
 export function summary(projects: readonly TrackedProject[]) {
-  return {
-    critical: projects.filter((p) => p.health.flags.critical).length,
-    low_progress: projects.filter((p) => p.health.flags.low_progress).length,
-    data_missing: projects.reduce((n, p) => n + p.data_records_unverified, 0),
-    overdue: projects.reduce((n, p) => n + lateOf(p), 0),
-    pending_review: projects.reduce((n, p) => n + p.pending_reviews, 0),
-  }
+  const c = tabCounts(projects)
+  return { attention: c.attention, overdue: c.overdue, data_missing: c.data_missing, pending_review: c.pending_review }
 }
 
 /** What the recommended action reads as on screen. */
+/** Where the next action is done: the project tab that fixes it. */
+export const NEXT_ACTION_TAB: Record<NextActionKey, string | null> = {
+  secure_data: 'shoots',
+  clear_overdue: 'deliverables',
+  review_submissions: 'completed_work',
+  plan_work: 'deliverables',
+  schedule_shoot: 'shoots',
+  deliver: 'deliverables',
+  keep_going: null,
+  none: null,
+}
+
 export const NEXT_ACTION_LABEL: Record<NextActionKey, string> = {
   secure_data: 'Back up and verify the shoot data',
   clear_overdue: 'Catch up on the late work',
