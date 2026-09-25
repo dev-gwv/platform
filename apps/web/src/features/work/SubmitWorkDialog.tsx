@@ -10,6 +10,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useMyTasks } from '@/features/tasks/api'
 import { useMyDeliverables } from '@/features/projects/api'
+import { revisionHint, submittedMessage } from '@/features/projects/revisions'
 
 function useSubmitWork() {
   const qc = useQueryClient()
@@ -18,10 +19,11 @@ function useSubmitWork() {
       callApi('/work/submissions', {
         method: 'POST',
         body: input,
-        responseSchema: z.object({ id: z.string() }),
+        // The database numbers a deliverable's versions; a revision says which it was.
+        responseSchema: z.object({ id: z.string(), version: z.number().int().nullish() }),
       }),
-    onSuccess: () => {
-      toast.success('Work submitted')
+    onSuccess: (data) => {
+      toast.success(submittedMessage(data.version))
       void qc.invalidateQueries({ queryKey: ['work', 'submissions'] })
       // A submission for a deliverable moves it to Review.
       void qc.invalidateQueries({ queryKey: ['projects'] })
@@ -51,6 +53,10 @@ function useUpdateWorkSubmission() {
  * deliverable it is for. Submitting for a deliverable moves it to Review
  * ("With manager") and puts the link in its timeline, where the reviewer
  * approves it or sends it back.
+ *
+ * A revision -- work sent back and done again -- is the same hand-in for the
+ * same deliverable. It opens with what the reviewer asked for above the form,
+ * so the editor can check it off before sending.
  */
 export function SubmitWorkDialog({
   submission,
@@ -58,6 +64,7 @@ export function SubmitWorkDialog({
   taskId,
   projectId,
   deliverableId,
+  revision,
 }: {
   submission?: WorkSubmission
   trigger?: ReactNode
@@ -65,6 +72,8 @@ export function SubmitWorkDialog({
   projectId?: string | null
   /** Open already pointed at one deliverable -- from its card. */
   deliverableId?: string
+  /** Handing in again what was sent back: the last version, and what to change. */
+  revision?: { lastVersion: number | null; note: string | null }
 } = {}) {
   const isEdit = !!submission
   const submit = useSubmitWork()
@@ -153,9 +162,19 @@ export function SubmitWorkDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent title={isEdit ? 'Edit submission' : 'Submit work'} description="Share a link or drive location for review.">
+      <DialogContent
+        title={isEdit ? 'Edit submission' : revision ? 'Upload revision' : 'Submit work'}
+        description={revision ? revisionHint(revision.lastVersion) : 'Share a link or drive location for review.'}
+      >
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          {!isEdit && (myDeliverables?.length ?? 0) > 0 && (
+          {revision?.note && (
+            <div className="rounded-lg border-l-2 border-tone-rose bg-tone-rose-soft px-3 py-2 text-sm">
+              <p className="text-xs font-semibold text-tone-rose">What to change</p>
+              <p className="mt-0.5 max-h-32 overflow-y-auto whitespace-pre-line break-words">{revision.note}</p>
+            </div>
+          )}
+          {/* A revision is for the deliverable it came back on; nothing to pick. */}
+          {!isEdit && !revision && (myDeliverables?.length ?? 0) > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label>For which deliverable</Label>
               <Select value={deliverable} onChange={(e) => setDeliverable(e.target.value)} aria-label="For which deliverable">
@@ -171,7 +190,7 @@ export function SubmitWorkDialog({
               {deliverable && <p className="text-xs text-muted-foreground">It moves to Review, and your manager is told.</p>}
             </div>
           )}
-          {!isEdit && (
+          {!isEdit && !revision && (
             <div className="flex flex-col gap-1.5">
               <Label>Task</Label>
               <Select value={task} onChange={(e) => setTask(e.target.value)}>
@@ -204,7 +223,11 @@ export function SubmitWorkDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Notes</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What is this?" />
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={revision ? 'What did you change?' : 'What is this?'}
+            />
           </div>
           {error && (
             <p id="form-error" role="alert" className="text-sm text-destructive">
@@ -218,7 +241,7 @@ export function SubmitWorkDialog({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Submit'}
+              {busy ? 'Saving…' : isEdit ? 'Save changes' : revision ? 'Send for review' : 'Submit'}
             </Button>
           </div>
         </form>

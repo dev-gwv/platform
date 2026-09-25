@@ -881,7 +881,8 @@ export const projectsRouter = new Hono<AppEnv>()
   /**
    * What the caller is editing: every open deliverable they are the editor on,
    * soonest due first. Any member -- an editor need not see whole projects to
-   * see their own work.
+   * see their own work. Each says whether it was sent back, what the reviewer
+   * said and the last version handed in (0180), so a revision is one tap.
    */
   .get('/deliverables/mine', async (c) => {
     const auth = c.get('auth')
@@ -895,11 +896,13 @@ export const projectsRouter = new Hono<AppEnv>()
                -- The studio's own work days for this name, when it has set them (0179).
                company_start_by(${auth.companyId}::uuid, d.estimated_date, d.title, d.delivery_days_after_start) as start_by,
                company_work_days(${auth.companyId}::uuid, d.title, d.delivery_days_after_start) as work_days,
-               d.started_at
+               d.started_at,
+               coalesce(rv.changes_requested, false) as changes_requested, rv.review_note, rv.last_version
         from deliverables d
         join projects p on p.id = d.project_id
         left join clients cl on cl.id = p.client_id
         left join shoots s on s.id = d.shoot_id
+        left join lateral deliverable_revision_state(d.id) rv on true
         where d.assignee_id = ${auth.userId} and d.status not in ('completed', 'cancelled')
         order by d.estimated_date nulls last, d.created_at
         limit 200`),

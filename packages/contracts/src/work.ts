@@ -75,10 +75,20 @@ export type SubmitWorkRequest = z.infer<typeof submitWorkRequest>
 export const updateWorkSubmissionRequest = submitWorkRequest.omit({ task_id: true, project_id: true, deliverable_id: true })
 export type UpdateWorkSubmissionRequest = z.infer<typeof updateWorkSubmissionRequest>
 
-export const reviewWorkRequest = z.object({
-  approve: z.boolean(),
-  review_notes: z.string().max(1000).optional(),
-})
+/**
+ * Work sent back always says what to change: the editor gets those words with
+ * the notification and on their list, and work sent back without them only
+ * comes back the same.
+ */
+export const reviewWorkRequest = z
+  .object({
+    approve: z.boolean(),
+    review_notes: z.string().trim().max(1000).optional(),
+  })
+  .refine((r) => r.approve || !!r.review_notes, {
+    message: 'Say what needs changing.',
+    path: ['review_notes'],
+  })
 export type ReviewWorkRequest = z.infer<typeof reviewWorkRequest>
 
 export const workReminderSettings = z.object({

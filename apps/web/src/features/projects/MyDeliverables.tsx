@@ -4,6 +4,7 @@ import { Film, MessageSquare, Mic, Upload } from 'lucide-react'
 import type { Deliverable, MyDeliverable } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
+import { StatusBadge } from '@/shared/ui/status-badge'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMyDeliverables } from '@/features/projects/api'
@@ -14,6 +15,7 @@ import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { StageStepper, STAGE_STYLE } from '@/features/projects/StageStepper'
 import { isLate, stageOf } from '@/features/projects/deliverable-stage'
 import { RemindMe } from '@/features/reminders/RemindMe'
+import { changesFirst } from '@/features/projects/revisions'
 
 /** An item on my list, in the shape the panel reads. I am its editor. */
 function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string | null }): Deliverable {
@@ -41,11 +43,13 @@ function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string |
 }
 
 /**
- * What the signed-in person is editing, soonest due first. Each one shows
- * where it stands and how many notes are waiting; tapping it opens the same
- * panel the project page has, so an editor can listen to a voice note, reply
- * with one, and say "sent to client" -- without editing the whole project.
- * Renders nothing for someone with no deliverables.
+ * What the signed-in person is editing, soonest due first -- and above that,
+ * anything sent back for changes, with what the reviewer said and one button
+ * to upload the revision. Each one shows where it stands and how many notes
+ * are waiting; tapping it opens the same panel the project page has, so an
+ * editor can listen to a voice note, reply with one, and say "sent to client"
+ * -- without editing the whole project. Renders nothing for someone with no
+ * deliverables.
  */
 export function MyDeliverables() {
   const { data } = useMyDeliverables()
@@ -56,6 +60,7 @@ export function MyDeliverables() {
   if (!data?.length) return null
   const me = { id: session?.user_id ?? null, name: session?.display_name ?? null }
   const open = data.find((d) => d.id === openId)
+  const rows = changesFirst(data)
 
   return (
     <Card className="mt-4">
@@ -65,20 +70,24 @@ export function MyDeliverables() {
           <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{data.length}</span>
         </p>
         <ul className="flex flex-col gap-2">
-          {data.map((d) => {
+          {rows.map((d) => {
             const stage = stageOf(d.status)
+            const sentBack = d.changes_requested
             return (
               <li
                 key={d.id}
                 className={cn(
                   'flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-l-4 border-border bg-card px-3 py-2.5 transition-shadow hover:shadow-md',
-                  isLate(d) ? 'border-l-destructive' : STAGE_STYLE[stage].border,
+                  isLate(d) ? 'border-l-destructive' : sentBack ? 'border-l-tone-rose' : STAGE_STYLE[stage].border,
                 )}
                 onClick={() => setOpenId(d.id)}
               >
                 <KindTile title={d.title} status={d.status} />
                 <div className="min-w-[12rem] flex-1">
-                  <p className="truncate text-sm font-semibold">{d.title}</p>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-0 truncate text-sm font-semibold">{d.title}</span>
+                    {sentBack && <StatusBadge tone="danger">Changes requested</StatusBadge>}
+                  </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                     {/* An editor may not be able to open projects; then it is just a name. */}
                     {canOpenProjects ? (
@@ -101,23 +110,46 @@ export function MyDeliverables() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-                    <MoveToMenu d={d} canEdit={false}>
-                      <StageStepper status={d.status} code={d.custom_status_code} />
-                    </MoveToMenu>
-                  </div>
+                  {sentBack ? (
+                    // What to fix, where the eye already is. The badge says where
+                    // it stands, so the stepper steps aside; the panel still has it.
+                    <p className="mt-1.5 line-clamp-2 break-words rounded-lg border-l-2 border-tone-rose bg-tone-rose-soft px-2.5 py-1.5 text-xs">
+                      {d.review_note ?? <span className="text-muted-foreground">Open it to see what to change.</span>}
+                    </p>
+                  ) : (
+                    <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                      <MoveToMenu d={d} canEdit={false}>
+                        <StageStepper status={d.status} code={d.custom_status_code} />
+                      </MoveToMenu>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  <SubmitWorkDialog
-                    deliverableId={d.id}
-                    projectId={d.project_id}
-                    trigger={
-                      <Button size="sm" variant="ghost">
-                        <Upload /> Submit work
-                      </Button>
-                    }
-                  />
-                  <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} canEdit={false} />
+                  {sentBack ? (
+                    <SubmitWorkDialog
+                      deliverableId={d.id}
+                      projectId={d.project_id}
+                      revision={{ lastVersion: d.last_version, note: d.review_note }}
+                      trigger={
+                        <Button size="sm">
+                          <Upload /> Upload revision
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <>
+                      <SubmitWorkDialog
+                        deliverableId={d.id}
+                        projectId={d.project_id}
+                        trigger={
+                          <Button size="sm" variant="ghost">
+                            <Upload /> Submit work
+                          </Button>
+                        }
+                      />
+                      <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} canEdit={false} />
+                    </>
+                  )}
                   {stage !== 'completed' && stage !== 'cancelled' && (
                     <RemindMe entityType="deliverable" entityId={d.id} name={d.title} context={d.project_name} />
                   )}

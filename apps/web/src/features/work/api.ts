@@ -61,10 +61,13 @@ export function useReviewWork() {
     onSuccess: (_data, { approve }) => {
       toast.success(approve ? 'Work approved' : 'Work sent back for changes')
       void qc.invalidateQueries({ queryKey: ['work', 'submissions'] })
+      // Team Work Preview keeps its own copy of one person's submissions.
+      void qc.invalidateQueries({ queryKey: ['team-work-preview'] })
       // Approving or sending back moves the deliverable it was for (0166).
       void qc.invalidateQueries({ queryKey: ['projects'] })
       void qc.invalidateQueries({ queryKey: ['deliverable-notes'] })
     },
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

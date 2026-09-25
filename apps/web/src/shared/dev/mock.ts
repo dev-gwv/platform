@@ -374,7 +374,15 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/projects/deliverables/mine')
     return projectDetail.deliverables
       .filter((d) => d.assignee_id === uid(1) && !['completed', 'cancelled'].includes(d.status))
-      .map((d) => ({ ...d, project_name: 'Sharma Wedding', client_name: 'Priya Sharma' }))
+      .map((d) => ({
+        ...d,
+        project_name: 'Sharma Wedding',
+        client_name: 'Priya Sharma',
+        // "Edited Photos" was sent back, so the preview shows a revision to upload.
+        changes_requested: d.custom_status_code === 'changes_requested',
+        review_note: d.custom_status_code === 'changes_requested' ? 'Skin tones in the haldi set look too orange. Warm them down a little.' : null,
+        last_version: d.custom_status_code === 'changes_requested' ? 1 : null,
+      }))
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
@@ -685,6 +693,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && /^\/data\/[^/]+$/.test(path)) return {}
   if (method === 'GET' && (path === '/work/submissions' || path.startsWith('/work/submissions?'))) return workSubs
   if (method === 'POST' && path === '/work/submissions') return { id: uid(0x8a) }
+  if (method === 'POST' && /^\/work\/submissions\/[^/]+\/review$/.test(path)) return {}
   if (method === 'GET' && path === '/billing/states') return states
   if (method === 'GET' && path === '/billing/invoices') return atStage(invoices2, 'full')
   if (method === 'GET' && path.startsWith('/billing/invoices/')) return invoiceDetailFx

@@ -67,13 +67,14 @@ export const workRouter = new Hono<AppEnv>()
   .post('/submissions', async (c) => {
     const parsed = submitWorkRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please add a link to your work.')
-    const id = await attempt(
+    const row = await attempt(
       c,
       'work.submit',
       () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         // submit_work RPC predates handover columns; insert directly so disk fields persist.
-        const rows = await sql<{ id: string }[]>`
+        // The version is counted by the database (0180): a revision is the last one plus one.
+        const rows = await sql<{ id: string; version: number }[]>`
           insert into team_work_submissions ${sql({
             company_id: c.get('auth').companyId,
             task_id: parsed.data.task_id,
@@ -92,8 +93,8 @@ export const workRouter = new Hono<AppEnv>()
             disk_name: parsed.data.disk_name ?? null,
             disk_location: parsed.data.disk_location ?? null,
             folder_path: parsed.data.folder_path ?? null,
-          })} returning id`
-        return rows[0]?.id ?? null
+          })} returning id, version`
+        return rows[0] ?? null
       }),
       {
         // The deliverable must be this studio's and from the same project (0166).
@@ -101,9 +102,9 @@ export const workRouter = new Hono<AppEnv>()
           code === '42501' || code === '23514' ? fail(422, 'That deliverable is not part of this project.') : undefined,
       },
     )
-    if (!id) fail(400, 'We could not submit your work.')
-    await audit(c, { action: 'work.submit', entityType: 'work_submission', entityId: id, after: { task_id: parsed.data.task_id, project_id: parsed.data.project_id, deliverable_id: parsed.data.deliverable_id } })
-    return c.json({ id }, 201)
+    if (!row) fail(400, 'We could not submit your work.')
+    await audit(c, { action: 'work.submit', entityType: 'work_submission', entityId: row.id, after: { task_id: parsed.data.task_id, project_id: parsed.data.project_id, deliverable_id: parsed.data.deliverable_id, version: row.version } })
+    return c.json({ id: row.id, version: row.version }, 201)
   })
 
   // The RPC itself checks the caller is the submitter (or an admin/manager)
@@ -130,9 +131,10 @@ export const workRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  // Sending back needs a note (the contract says so): the editor is told it.
   .post('/submissions/:id/review', requireAction('team_work_preview', 'edit'), async (c) => {
     const parsed = reviewWorkRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Invalid review.')
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Invalid review.')
     const id = uuidParam(c)
     const ok = await attempt(c, 'work.review', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {

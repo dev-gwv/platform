@@ -159,8 +159,11 @@ describe('submitted work moves the deliverable', () => {
     expect(await events()).toContain(`sent_back:${id}`)
     const notes = await q<{ body: string; author_id: string }>(`select body, author_id from deliverable_notes where kind = 'text'`)
     expect(notes).toEqual([{ body: 'Trim the first dance to 3 minutes', author_id: OWNER }])
-    const told = await q<{ type: string }>(`select type from notifications where recipient_uid = '${EDITOR}'`)
-    expect(told.map((t) => t.type)).toContain('deliverable_note')
+    // One alert that says what to change (0180), not a second "left a note".
+    const told = await q<{ type: string; title: string }>(
+      `select type, title from notifications where recipient_uid = '${EDITOR}' and type <> 'deliverable_assigned'`,
+    )
+    expect(told).toEqual([{ type: 'deliverable_changes_requested', title: 'Changes requested: Wedding Film' }])
   })
 
   it('refuses a deliverable from another studio or another project', async () => {

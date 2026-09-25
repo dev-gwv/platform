@@ -276,6 +276,12 @@ export const myDeliverable = z.object({
   work_days: z.number().int().nullish(),
   /** When the editor said they started (or handed work in). */
   started_at: isoDateTime.nullish(),
+  /** Sent back: the reviewer asked for changes and it is with the editor again. */
+  changes_requested: z.boolean().default(false),
+  /** What the reviewer said since it last went for review, if anything. */
+  review_note: z.string().nullable().default(null),
+  /** The latest version handed in for it; a revision is the next one. */
+  last_version: z.number().int().nullable().default(null),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 
