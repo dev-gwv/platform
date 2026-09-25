@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DesignPreview } from '@/features/billing/DesignPreview'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { SavedItemsManager } from '@/features/billing/SavedItemsManager'
 import { ACCENTS, DESIGN_INFO } from '@/features/billing/InvoicePaper'
 import { cn } from '@/shared/ui/cn'
@@ -119,12 +120,15 @@ function TemplatesContent() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateInvoiceTemplateRequest>(emptyForm())
+  // A design half-made survives a refresh or a stray click.
+  const designDraft = useFormDraft(dialogOpen ? `invoice-design:${editingId ?? 'new'}` : null, form, setForm)
 
   const create = useMutation({
     mutationFn: (body: CreateInvoiceTemplateRequest) =>
       callApi('/billing/templates', { method: 'POST', body, responseSchema: invoiceTemplateList.shape.items.element }),
     onSuccess: () => {
-      toast.success('Template created')
+      toast.success('Design saved')
+      designDraft.clear()
       void qc.invalidateQueries({ queryKey: ['billing', 'templates'] })
       setDialogOpen(false)
     },
@@ -135,7 +139,8 @@ function TemplatesContent() {
     mutationFn: ({ id, body }: { id: string; body: CreateInvoiceTemplateRequest }) =>
       callApi(`/billing/templates/${id}`, { method: 'PATCH', body, responseSchema: z.object({ ok: z.boolean() }) }),
     onSuccess: () => {
-      toast.success('Template updated')
+      toast.success('Design saved')
+      designDraft.clear()
       void qc.invalidateQueries({ queryKey: ['billing', 'templates'] })
       setDialogOpen(false)
     },
@@ -244,6 +249,19 @@ function TemplatesContent() {
       )}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent title={editingId ? 'Edit design' : 'New design'} className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          {designDraft.restoredAt && (
+            <div className="mb-4">
+              <DraftRestoredBanner
+                at={designDraft.restoredAt}
+                onDismiss={designDraft.dismissRestored}
+                onDiscard={() => {
+                  designDraft.clear()
+                  const t = items.find((x) => x.id === editingId)
+                  setForm(t ? { name: t.name, layout_json: t.layout_json, is_default: t.is_default } : emptyForm())
+                }}
+              />
+            </div>
+          )}
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="space-y-4">
             <div>

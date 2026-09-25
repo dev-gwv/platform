@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useCreateInvoice } from './api'
 import { emptyInvoiceForm, type InvoiceFormValues } from './InvoiceForm'
 import { InvoiceEditor } from './InvoiceEditor'
@@ -51,10 +52,18 @@ export function NewInvoiceDialog({
     <FullScreen onClose={onClose}>
       <InvoiceEditor
         initial={{ ...emptyInvoiceForm(), ...initial }}
+        draftKey={`invoice:new${initial?.project_id ? `:project:${initial.project_id}` : ''}`}
         busy={create.isPending}
         onCancel={onClose}
         onSubmit={async (req) => {
           const made = await create.mutateAsync(req)
+          toast.success(
+            req.status === 'draft'
+              ? `${made.invoice_number} saved as a draft. Send it when you are ready.`
+              : req.payment
+                ? `${made.invoice_number} saved, and the payment is recorded.`
+                : `${made.invoice_number} saved. Share it on WhatsApp or email.`,
+          )
           onClose()
           if (openAfter) void navigate({ to: '/billing/invoices/$id', params: { id: made.id } })
         }}

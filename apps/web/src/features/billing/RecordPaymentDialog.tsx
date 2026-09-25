@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import type { ProjectDetail } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -73,6 +74,23 @@ export function RecordPaymentDialog({
   const [isGst, setIsGst] = useState(payment?.is_gst ?? false)
   const [gstNumber, setGstNumber] = useState(payment?.gst_number ?? '')
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    `payment:${target.kind === 'invoice' ? target.invoiceId : target.projectId}:${payment?.id ?? 'new'}`,
+    { invoiceId, amount, paidOn, mode, received, reference, description, isGst, gstNumber },
+    (v) => {
+      setInvoiceId(v.invoiceId)
+      setAmount(v.amount)
+      setPaidOn(v.paidOn)
+      setMode(v.mode)
+      setReceived(v.received)
+      setReference(v.reference)
+      setDescription(v.description)
+      setIsGst(v.isGst)
+      setGstNumber(v.gstNumber)
+      if (v.reference || v.description || v.isGst) setMore(true)
+    },
+  )
   const busy = add.isPending || update.isPending || recordOnInvoice.isPending
   const value = Number(amount) || 0
   const needsReference = mode === 'UPI' || mode === 'Bank transfer'
@@ -84,7 +102,13 @@ export function RecordPaymentDialog({
       setError('Enter the amount.')
       return
     }
-    const done = { onSuccess: onClose, onError: (err: Error) => setError(err.message) }
+    const done = {
+      onSuccess: () => {
+        draft.clear()
+        onClose()
+      },
+      onError: (err: Error) => setError(err.message),
+    }
     if (target.kind === 'invoice') {
       recordOnInvoice.mutate(
         {

@@ -1425,6 +1425,15 @@ if (listed) {
   const afterEdit = await api(`/billing/invoices/${draft.json.id}`, { token: aToken })
   const draftPaid = await api('/billing/invoices', { token: aToken, method: 'POST', body: { ...body, status: 'draft', payment: { amount: 1000 } } })
   const dp = await api(`/billing/invoices/${draftPaid.json.id}`, { token: aToken })
+  // A draft is sent with one action; another studio cannot send it.
+  const theirSend = await api(`/billing/invoices/${draft.json.id}/send`, { token: bTok, method: 'POST', body: {} })
+  const sent = await api(`/billing/invoices/${draft.json.id}/send`, { token: aToken, method: 'POST', body: {} })
+  const afterSend = await api(`/billing/invoices/${draft.json.id}`, { token: aToken })
+  check(
+    'invoice: a draft is sent in one step, and only by its own studio',
+    theirSend.status === 404 && sent.status === 200 && afterSend.json.status === 'sent',
+    { theirs: theirSend.status, sent: sent.status, status: afterSend.json.status },
+  )
   check(
     'invoice: an edit can remove the files; money recorded at creation makes it a sent invoice, never a paid draft',
     edited.status === 200 && afterEdit.json.attachments.length === 0 && dp.json.status !== 'draft' && dp.json.amount_paid === 1000,
