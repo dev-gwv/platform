@@ -32,6 +32,8 @@ export const invoiceLineInput = z.object({
   quantity: z.number().positive(),
   rate: money,
   gst_rate: gstRate,
+  /** HSN (goods) or SAC (services) code printed on a tax invoice. */
+  hsn_sac: z.string().trim().max(12).regex(/^[0-9]*$/, 'HSN/SAC is digits only').optional(),
 })
 export type InvoiceLineInput = z.infer<typeof invoiceLineInput>
 
@@ -64,12 +66,27 @@ export const createInvoiceRequest = z.object({
   template_id: uuid.nullable().optional(),
   /** Overrides the auto-numbered sequence, which is left untouched when this is blank. Create only -- a number never changes on edit. */
   invoice_number: z.string().trim().max(40).optional(),
+  /** A line under the client's name telling them what this invoice is for. */
+  subject: z.string().trim().max(250).optional(),
+  /** "Due on receipt", "Net 15", ... -- the due date follows from it on screen. */
+  payment_terms: z.string().trim().max(40).optional(),
+  /** Files that go out with the invoice (a quotation, a shot list). Replaces the set on an edit. */
+  attachment_file_ids: z.array(uuid).max(3).optional(),
+  /** Money already in hand, recorded against the invoice as it is created. */
+  payment: z
+    .object({
+      amount: money.refine((v) => v > 0, 'amount must be positive'),
+      paid_on: isoDate.optional(),
+      mode: z.string().max(40).optional(),
+      reference: z.string().max(120).optional(),
+    })
+    .optional(),
   lines: z.array(invoiceLineInput).min(1),
 })
 export type CreateInvoiceRequest = z.infer<typeof createInvoiceRequest>
 
 /** Same shape as creation minus the number override, which only ever applies once, at creation. */
-export const updateInvoiceRequest = createInvoiceRequest.omit({ invoice_number: true })
+export const updateInvoiceRequest = createInvoiceRequest.omit({ invoice_number: true, payment: true })
 export type UpdateInvoiceRequest = z.infer<typeof updateInvoiceRequest>
 
 export const recordPaymentRequest = z.object({
@@ -91,6 +108,8 @@ export const invoiceDetail = z.object({
   due_date: isoDate.nullable(),
   status: invoiceStatus,
   gst_number: z.string().nullable().default(null),
+  subject: z.string().nullable().default(null),
+  payment_terms: z.string().nullable().default(null),
   place_of_supply: z.string().nullable(),
   intra_state: z.boolean(),
   client_id: uuid.nullable(),
@@ -130,8 +149,13 @@ export const invoiceDetail = z.object({
       cgst: money,
       sgst: money,
       igst: money,
+      hsn_sac: z.string().nullable().default(null),
     }),
   ),
+  /** Files sent with the invoice. */
+  attachments: z
+    .array(z.object({ id: uuid, name: z.string(), mime: z.string(), size_bytes: z.number() }))
+    .default([]),
   payments: z.array(
     z.object({
       id: uuid,
@@ -460,3 +484,29 @@ export function formatBankSnapshot(b: {
   if (b.notes) lines.push(b.notes)
   return lines.join('\n')
 }
+
+/**
+ * An item a studio bills again and again -- "Candid photography, per day",
+ * "Drone coverage" -- with its rate, HSN/SAC and GST rate, picked into an
+ * invoice line in one tap instead of being typed from memory every time.
+ */
+export const invoiceItemPreset = z.object({
+  id: uuid,
+  name: z.string(),
+  description: z.string().nullable(),
+  rate: money,
+  hsn_sac: z.string().nullable(),
+  gst_rate: z.number(),
+  kind: z.enum(['service', 'goods']),
+})
+export type InvoiceItemPreset = z.infer<typeof invoiceItemPreset>
+
+export const upsertInvoiceItemPresetRequest = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(200).nullish(),
+  rate: money.default(0),
+  hsn_sac: z.string().trim().max(12).regex(/^[0-9]*$/).nullish(),
+  gst_rate: gstRate.default(0),
+  kind: z.enum(['service', 'goods']).default('service'),
+})
+export type UpsertInvoiceItemPresetRequest = z.infer<typeof upsertInvoiceItemPresetRequest>

@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react'
+import { DesignPreview } from '@/features/billing/DesignPreview'
+import { SavedItemsManager } from '@/features/billing/SavedItemsManager'
+import { ACCENTS, DESIGN_INFO } from '@/features/billing/InvoicePaper'
+import { cn } from '@/shared/ui/cn'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
@@ -14,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { callApi } from '@/shared/api/client'
 import {
   invoiceTemplateList,
+  INVOICE_DESIGNS,
   createInvoiceTemplateRequest,
   companyProfile,
   formatBankSnapshot,
@@ -56,6 +61,9 @@ const emptyForm = (): CreateInvoiceTemplateRequest => ({
     footer_text: null,
     bank_details: null,
     terms_and_conditions: null,
+    design: 'classic',
+    accent: '#4f46e5',
+    show_logo: true,
   },
   is_default: false,
 })
@@ -82,7 +90,8 @@ function InvoiceSettings() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="details">Your details & bank</TabsTrigger>
-          <TabsTrigger value="layouts">Print layouts</TabsTrigger>
+          <TabsTrigger value="layouts">Designs</TabsTrigger>
+          <TabsTrigger value="items">Saved items</TabsTrigger>
           <TabsTrigger value="text">Terms & notes</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="space-y-8">
@@ -91,6 +100,9 @@ function InvoiceSettings() {
         </TabsContent>
         <TabsContent value="layouts">
           <TemplatesContent />
+        </TabsContent>
+        <TabsContent value="items">
+          <SavedItemsManager />
         </TabsContent>
         <TabsContent value="text" className="space-y-8">
           <TextLibrarySection type="terms" />
@@ -167,9 +179,9 @@ function TemplatesContent() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Saved print layouts. Pick one per invoice, or set a default.</p>
+        <p className="text-sm text-muted-foreground">How your invoices look: a design, your colour and logo. Pick one per invoice, or set a default.</p>
         <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-1 h-4 w-4" /> New layout
+          <Plus className="mr-1 h-4 w-4" /> New design
         </Button>
       </div>
       {isLoading ? (
@@ -207,19 +219,32 @@ function TemplatesContent() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  Header: {t.layout_json.show_header ? 'Yes' : 'No'} · GST: {t.layout_json.show_gst ? 'Yes' : 'No'} · Bank details:{' '}
-                  {t.layout_json.show_bank_details ? 'Yes' : 'No'}
+              <CardContent className="space-y-2">
+                <button type="button" onClick={() => openEdit(t)} className="block w-full text-left" aria-label={`Edit ${t.name}`}>
+                  <DesignPreview layout={t.layout_json} scale={0.36} />
+                </button>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-block size-3 rounded-full" style={{ background: t.layout_json.accent }} />
+                  {DESIGN_INFO[t.layout_json.design].label} · GST {t.layout_json.show_gst ? 'shown' : 'hidden'} · Bank details{' '}
+                  {t.layout_json.show_bank_details ? 'shown' : 'hidden'}
                 </p>
               </CardContent>
             </Card>
           ))}
-          {items.length === 0 && <div className="col-span-full py-12 text-center text-muted-foreground">No templates yet.</div>}
+          {items.length === 0 && (
+            <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center">
+              <p className="font-medium">No designs saved yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Invoices print in Classic. Make a design to choose your look, colour and logo.</p>
+              <Button size="sm" className="mt-3" onClick={openCreate}>
+                <Plus className="mr-1 h-4 w-4" /> New design
+              </Button>
+            </div>
+          )}
         </div>
       )}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent title={editingId ? 'Edit Template' : 'New Template'} className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogContent title={editingId ? 'Edit design' : 'New design'} className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Name</label>
@@ -228,6 +253,63 @@ function TemplatesContent() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={!!form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
               Set as company default
+            </label>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">Design</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {INVOICE_DESIGNS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setForm({ ...form, layout_json: { ...form.layout_json, design: d } })}
+                    className={cn(
+                      'rounded-lg border p-2 text-left transition-colors',
+                      form.layout_json.design === d ? 'border-primary bg-primary/5 ring-2 ring-primary/30' : 'border-border hover:border-primary/40',
+                    )}
+                    aria-pressed={form.layout_json.design === d}
+                  >
+                    <p className="text-sm font-semibold">{DESIGN_INFO[d].label}</p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">{DESIGN_INFO[d].hint}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">Colour</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {ACCENTS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setForm({ ...form, layout_json: { ...form.layout_json, accent: c } })}
+                    className={cn('size-8 rounded-full border-2 transition-transform hover:scale-110', form.layout_json.accent === c ? 'border-foreground' : 'border-transparent')}
+                    style={{ background: c }}
+                    aria-label={`Colour ${c}`}
+                    aria-pressed={form.layout_json.accent === c}
+                  />
+                ))}
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="color"
+                    value={form.layout_json.accent}
+                    onChange={(e) => setForm({ ...form, layout_json: { ...form.layout_json, accent: e.target.value } })}
+                    className="size-8 cursor-pointer rounded border border-border bg-transparent"
+                    aria-label="Your own colour"
+                  />
+                  Your own
+                </label>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.layout_json.show_logo}
+                onChange={(e) => setForm({ ...form, layout_json: { ...form.layout_json, show_logo: e.target.checked } })}
+              />
+              Show the studio logo (set it in Your details &amp; bank)
             </label>
 
             <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
@@ -306,6 +388,11 @@ function TemplatesContent() {
                 placeholder="Shown centered at the very bottom"
               />
             </div>
+          </div>
+          <div className="lg:sticky lg:top-0 lg:self-start">
+            <p className="mb-2 text-sm font-medium">Preview</p>
+            <DesignPreview layout={form.layout_json} scale={0.55} />
+          </div>
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>

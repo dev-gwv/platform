@@ -18,6 +18,10 @@ export interface InvoiceLineDraft {
   quantity: string
   rate: string
   gst_rate: number
+  /** HSN (goods) or SAC (services), digits only. */
+  hsn_sac?: string | undefined
+  /** The saved item this line was picked from, if any. */
+  preset_id?: string | undefined
 }
 
 /** Blank and half-typed values ("", "12.") are 0 so far — not an error. */

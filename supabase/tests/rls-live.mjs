@@ -1349,5 +1349,88 @@ if (listed) {
   )
 }
 
+
+// ── Invoice editor: HSN/SAC, subject, terms, saved items, files, paid on creation ──
+{
+  const bTok = newPw.json.access_token
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `GST Co ${rand()}`, phone: randPhone(), gstin: '09ABWFA5316N1ZQ' } })
+  // Saved items: one studio's catalogue, invisible to another.
+  const item = await api('/billing/items', { token: aToken, method: 'POST', body: { name: `Drone coverage ${rand()}`, rate: 15000, hsn_sac: '998383', gst_rate: 18, kind: 'service' } })
+  const mine = await api('/billing/items', { token: aToken })
+  const theirs = await api('/billing/items', { token: bTok })
+  const theirEdit = await api(`/billing/items/${item.json.id}`, { token: bTok, method: 'PATCH', body: { name: 'Stolen', rate: 1 } })
+  check(
+    'items: a saved item is kept with its SAC and rate; another studio neither sees nor edits it',
+    item.status === 201 && mine.json.some((x) => x.id === item.json.id && x.hsn_sac === '998383' && x.rate === 15000) &&
+      !theirs.json.some((x) => x.id === item.json.id) && theirEdit.status === 404,
+    { item: item.status, theirs: theirs.json?.length, theirEdit: theirEdit.status },
+  )
+
+  // A quotation PDF goes out with the invoice.
+  const pdf = new TextEncoder().encode('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n')
+  const fd = new FormData()
+  fd.append('file', new Blob([pdf], { type: 'application/pdf' }), 'quotation.pdf')
+  const up = await (await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${aToken}` }, body: fd })).json()
+  const fdB = new FormData()
+  fdB.append('file', new Blob([pdf], { type: 'application/pdf' }), 'other.pdf')
+  const upB = await (await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${bTok}` }, body: fdB })).json()
+
+  const body = {
+    client_id: client.json.id,
+    place_of_supply: '09',
+    intra_state: false,
+    gst_number: '09ABWFA5316N1ZQ',
+    subject: 'Wedding coverage, December',
+    payment_terms: 'Net 15',
+    status: 'sent',
+    lines: [
+      { description: 'Candid photography', quantity: 1, rate: 100000, gst_rate: 18, hsn_sac: '998383' },
+      { description: 'Album', quantity: 1, rate: 20000, gst_rate: 12, hsn_sac: '4911' },
+    ],
+  }
+  const borrowed = await api('/billing/invoices', { token: aToken, method: 'POST', body: { ...body, attachment_file_ids: [upB.id] } })
+  const made = await api('/billing/invoices', {
+    token: aToken,
+    method: 'POST',
+    body: { ...body, attachment_file_ids: [up.id], payment: { amount: 50000, mode: 'UPI', reference: 'UTR123' } },
+  })
+  const inv = await api(`/billing/invoices/${made.json.id}`, { token: aToken })
+  check(
+    'invoice: HSN/SAC per line in typed order, subject, terms, IGST, the file and the payment are all saved in one go',
+    made.status === 201 && inv.json.items.map((i) => i.hsn_sac).join(',') === '998383,4911' && inv.json.subject === 'Wedding coverage, December' &&
+      inv.json.payment_terms === 'Net 15' && inv.json.intra_state === false && inv.json.items[0].igst === 18000 &&
+      inv.json.attachments.length === 1 && inv.json.attachments[0].name === 'quotation.pdf' && inv.json.amount_paid === 50000 && inv.json.status === 'partial',
+    { made: made.status, inv: { ...inv.json, template_layout: undefined } },
+  )
+  check("invoice: another studio's file cannot be attached", borrowed.status === 422 || borrowed.status === 400, { borrowed: borrowed.status, body: borrowed.json })
+
+  // The client's link carries the file, and downloads it without an account.
+  const share = await api(`/billing/invoices/${made.json.id}/share`, { token: aToken, method: 'POST', body: {} })
+  const token = /[?&]token=([^&]+)/.exec(share.json.link ?? '')?.[1] ?? ''
+  const pub = await api(`/public/invoice/${token}`)
+  const dl = await fetch(`${API}/public/invoice/${token}/files/${up.id}`)
+  const dlBytes = new Uint8Array(await dl.arrayBuffer())
+  const wrongFile = await fetch(`${API}/public/invoice/${token}/files/${upB.id}`)
+  const badToken = await fetch(`${API}/public/invoice/nope-${rand()}/files/${up.id}`)
+  check(
+    'public invoice: shows HSN and the attachment, downloads it by the link, and nothing else',
+    pub.status === 200 && pub.json.invoice.items[1].hsn_sac === '4911' && pub.json.invoice.attachments.length === 1 &&
+      dl.status === 200 && dlBytes.length === pdf.length && wrongFile.status === 404 && badToken.status === 404,
+    { pub: pub.status, dl: dl.status, wrong: wrongFile.status, bad: badToken.status },
+  )
+
+  // Editing replaces the files; an invoice with a payment can no longer be edited.
+  const draft = await api('/billing/invoices', { token: aToken, method: 'POST', body: { ...body, status: 'draft', attachment_file_ids: [up.id] } })
+  const edited = await api(`/billing/invoices/${draft.json.id}`, { token: aToken, method: 'PATCH', body: { ...body, status: 'draft', attachment_file_ids: [] } })
+  const afterEdit = await api(`/billing/invoices/${draft.json.id}`, { token: aToken })
+  const draftPaid = await api('/billing/invoices', { token: aToken, method: 'POST', body: { ...body, status: 'draft', payment: { amount: 1000 } } })
+  const dp = await api(`/billing/invoices/${draftPaid.json.id}`, { token: aToken })
+  check(
+    'invoice: an edit can remove the files; money recorded at creation makes it a sent invoice, never a paid draft',
+    edited.status === 200 && afterEdit.json.attachments.length === 0 && dp.json.status !== 'draft' && dp.json.amount_paid === 1000,
+    { edited: edited.status, n: afterEdit.json.attachments?.length, dp: dp.json.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
