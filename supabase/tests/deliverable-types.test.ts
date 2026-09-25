@@ -155,6 +155,35 @@ describe('the morning start reminder', () => {
     )
     expect(titles.map((t) => t.title)).toEqual(['Start Photo Album by Tue 29 Sep'])
   })
+
+  it('chases a deliverable with no lead of its own on the studio’s days too (0182)', async () => {
+    await addType(COMPANY, 'Couple Film', 15)
+    await db.exec(`
+      insert into deliverables (company_id, project_id, title, estimated_date, assignee_id)
+        values ('${COMPANY}', '${PROJECT}', 'Couple Film', '2026-11-20', '${EDITOR}');`)
+    // Due 20 Nov, 15 days of work, a day for review: start by 4 Nov, so the
+    // first nudge is on the 2nd. The built-in guess (film, 30 days) said 19 Oct.
+    await q(`select run_start_reminder_cron(false, '2026-11-02T04:00:00Z')`)
+    await q(`select run_start_reminder_cron(false, '2026-10-17T04:00:00Z')`)
+    const titles = await q<{ title: string }>(
+      `select title from notifications where recipient_uid = '${EDITOR}' and title like '%Couple Film%'`,
+    )
+    expect(titles.map((t) => t.title)).toEqual(['Start Couple Film by Wed 04 Nov'])
+  })
+})
+
+describe('reminders generator (0182)', () => {
+  it('reads due reminders again, and never alerts twice with the hourly job', async () => {
+    await db.exec(`
+      insert into reminders (company_id, user_id, title, status, due_at)
+        values ('${COMPANY}', '${EDITOR}', 'Call the florist', 'active', now() - interval '1 hour');`)
+    await db.exec(`set request.jwt.claim.sub = '${OWNER}'`)
+    const [r] = await q<{ s: { generated: number } }>(`select run_notification_generator('reminders', false) as s`)
+    expect(r!.s.generated).toBe(1)
+    await q(`select run_reminder_cron(false)`)
+    const alerts = await q(`select id from notifications where recipient_uid = '${EDITOR}' and type = 'reminder'`)
+    expect(alerts).toHaveLength(1)
+  })
 })
 
 describe('the list itself', () => {

@@ -1543,6 +1543,28 @@ if (listed) {
     payOwner.status === 200 && payOwner.json.upi_id === 'priya@okhdfc' && payMgr.status === 403 && paySelfOther.status === 403,
     { owner: payOwner.status, mgr: payMgr.status, other: paySelfOther.status },
   )
+  // ── Stored files: not everyone's by id any more (0183) ──
+  const upAs = async (tok, name) => {
+    const fd = new FormData()
+    fd.append('file', new Blob(['%PDF-1.4\n%%EOF\n'], { type: 'application/pdf' }), name)
+    return (await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${tok}` }, body: fd })).json()
+  }
+  const ownerFile = await upAs(aToken, 'salary-sheet.pdf')
+  const edFile = await upAs(edToken, 'my-bill.pdf')
+  const fGet = async (tok, id) => (await fetch(`${API}/files/${id}`, { headers: { Authorization: `Bearer ${tok}` } })).status
+  const fDel = async (tok, id) => (await fetch(`${API}/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } })).status
+  const edReadsOwners = await fGet(edToken, ownerFile.id)
+  const ownerReads = await fGet(aToken, ownerFile.id)
+  const edReadsOwn = await fGet(edToken, edFile.id)
+  const ownerReadsEds = await fGet(aToken, edFile.id)
+  const edDeletesOwners = await fDel(edToken, ownerFile.id)
+  const stillThere = await fGet(aToken, ownerFile.id)
+  check(
+    "files: a member opens their own uploads, not someone else's by id, and can't delete them; the owner opens both",
+    edReadsOwners === 404 && ownerReads === 200 && edReadsOwn === 200 && ownerReadsEds === 200 && edDeletesOwners === 404 && stillThere === 200,
+    { edReadsOwners, ownerReads, edReadsOwn, ownerReadsEds, edDeletesOwners, stillThere },
+  )
+
   const termsEd = await api('/team-terms/templates', { token: edToken })
   const termsMgr = await api('/team-terms/templates', { token: tmToken })
   check('team terms: gated on the Team Terms module, not just on projects', termsEd.status === 403 && termsMgr.status === 200, {
