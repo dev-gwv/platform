@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { publicInvoice, type PublicInvoice } from '@ipc/contracts'
 import { Printer } from 'lucide-react'
 import { callApi } from '@/shared/api/client'
+import { config } from '@/shared/config'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
@@ -52,7 +53,7 @@ export function PublicInvoicePage() {
 
   const inv = doc.invoice
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
       <div className="paper-toolbar flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm">
           {inv.balance_due > 0 ? (
@@ -71,7 +72,11 @@ export function PublicInvoicePage() {
           </Button>
         </div>
       </div>
-      <InvoicePaper invoice={inv} company={doc.company} />
+      <InvoicePaper
+        invoice={inv}
+        company={doc.company}
+        attachmentHref={(id) => `${config.apiBaseUrl}/public/invoice/${encodeURIComponent(token)}/files/${id}`}
+      />
       {doc.company.document_footer_note && (
         <p className="paper-toolbar text-center text-xs text-muted-foreground">{doc.company.document_footer_note}</p>
       )}

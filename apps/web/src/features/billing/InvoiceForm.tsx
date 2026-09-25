@@ -1,34 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { Check, Plus, Search, Trash2 } from 'lucide-react'
+import { Check, Plus, Search } from 'lucide-react'
 import { computeInvoice, type GstSlab } from '@ipc/domain'
-import {
-  GSTIN_REGEX,
-  companyProfile,
-  formatBankSnapshot,
-  type Client,
-  type CreateInvoiceRequest,
-  type GstState,
-} from '@ipc/contracts'
+import { formatBankSnapshot, type Client, type CreateInvoiceRequest } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Button } from '@/shared/ui/button'
-import { Input, Label, Select } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
-import { callApi } from '@/shared/api/client'
-import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
-import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
-import { useClients } from '@/features/clients/api'
+import { Input, Select } from '@/shared/ui/input'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
-import { useProjects, useProject } from '@/features/projects/api'
-import { useConfirm } from '@/shared/ui/confirm'
-import { toAmount, matchStudioState, deriveIntraState, type InvoiceLineDraft } from './invoice-math'
-import {
-  useInvoiceBankAccounts,
-  useInvoiceTemplates,
-  useInvoiceNoteTemplates,
-  useCreateInvoiceNoteTemplate,
-} from './api'
+import { toAmount, type InvoiceLineDraft } from './invoice-math'
+import { useInvoiceBankAccounts, useInvoiceNoteTemplates, useCreateInvoiceNoteTemplate } from './api'
 
 export { toAmount, type InvoiceLineDraft } from './invoice-math'
 
@@ -67,6 +46,14 @@ export interface InvoiceFormValues {
   template_id: string
   /** Create only -- blank means auto-numbered. Never sent on an edit. */
   invoice_number: string
+  /** A line telling the client what this invoice is for. */
+  subject: string
+  /** "Due on receipt", "Net 15"... the due date follows from it. */
+  payment_terms: string
+  /** Files sent with the invoice. */
+  attachments: { id: string; name: string }[]
+  /** Money already in hand, recorded as the invoice is created (create only). */
+  payment: { on: boolean; amount: string; paid_on: string; mode: string; reference: string }
   lines: InvoiceLineDraft[]
 }
 
@@ -97,6 +84,10 @@ export function emptyInvoiceForm(): InvoiceFormValues {
     terms: '',
     template_id: '',
     invoice_number: '',
+    subject: '',
+    payment_terms: 'Due on receipt',
+    attachments: [],
+    payment: { on: false, amount: '', paid_on: todayISO(), mode: '', reference: '' },
     lines: [{ description: '', quantity: '1', rate: '', gst_rate: 0 }],
   }
 }
@@ -145,6 +136,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
         quantity: toAmount(l.quantity),
         rate: toAmount(l.rate),
         gst_rate: l.gst_rate as GstSlab,
+        ...(l.hsn_sac?.trim() ? { hsn_sac: l.hsn_sac.trim() } : {}),
       })),
     [values.lines],
   )
@@ -187,6 +179,12 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
       out.push('Quantity must be more than 0 on every line.')
     }
     if (typed.length > 0 && totals.total <= 0) out.push('The invoice total must be more than ₹0.')
+    if (typed.some((l) => l.hsn_sac && !/^\d{4,8}$/.test(l.hsn_sac.trim()))) out.push('An HSN/SAC code is 4 to 8 digits.')
+    if (values.payment.on) {
+      const amt = toAmount(values.payment.amount)
+      if (amt <= 0) out.push('Enter the payment amount received, or untick “Payment received”.')
+      else if (amt > totals.total) out.push('The payment received is more than the invoice total.')
+    }
     return out
   }
 
@@ -208,6 +206,19 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
       terms: values.terms.trim() || undefined,
       template_id: values.template_id || null,
       invoice_number: values.invoice_number.trim() || undefined,
+      subject: values.subject.trim() || undefined,
+      payment_terms: values.payment_terms.trim() || undefined,
+      attachment_file_ids: values.attachments.map((a) => a.id),
+      ...(values.payment.on && toAmount(values.payment.amount) > 0
+        ? {
+            payment: {
+              amount: toAmount(values.payment.amount),
+              paid_on: values.payment.paid_on || undefined,
+              mode: values.payment.mode || undefined,
+              reference: values.payment.reference.trim() || undefined,
+            },
+          }
+        : {}),
       // Only lines someone actually filled in — a spare empty row at the
       // bottom is not an error, it is just an empty row.
       lines: lineInputs.filter((l) => l.description || l.rate > 0),
@@ -221,58 +232,8 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
   return { values, set, patchLine, setGstEnabled, totals, problems, toRequest, reset }
 }
 
-/** A studio-defined shortcut that appends one line item with that name, without leaving the form. */
-function QuickAddLine({ onAdd }: { onAdd: (description: string) => void }) {
-  const canAdd = useCanAddLookup('invoice_line_preset')
-  const { data: presets } = useActiveLookups('invoice_line_preset')
-  const createLookup = useCreateCustomLookup()
-  const [adding, setAdding] = useState(false)
-  const [name, setName] = useState('')
-
-  async function onSaveNew() {
-    if (!name.trim()) return
-    await createLookup.mutateAsync({ category: 'invoice_line_preset', value: name.trim() })
-    onAdd(name.trim())
-    setAdding(false)
-    setName('')
-  }
-
-  if (adding) {
-    return (
-      <div className="flex items-center gap-2">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Second Photographer" autoFocus className="w-56" />
-        <Button type="button" size="sm" onClick={() => void onSaveNew()} disabled={!name.trim() || createLookup.isPending}>
-          Add
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setAdding(false)}>
-          Cancel
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <Select
-      value=""
-      onChange={(e) => {
-        if (e.target.value === '__add__') setAdding(true)
-        else if (e.target.value) onAdd(e.target.value)
-      }}
-      className="w-56"
-    >
-      <option value="">Quick add…</option>
-      {(presets ?? []).map((p) => (
-        <option key={p.id} value={p.value}>
-          {p.value}
-        </option>
-      ))}
-      {canAdd && <option value="__add__">+ Add new preset…</option>}
-    </Select>
-  )
-}
-
 /** A searchable dropdown over the client list -- matches by name, phone or email. */
-function ClientCombobox({
+export function ClientCombobox({
   clients,
   value,
   onChange,
@@ -385,7 +346,7 @@ function ClientCombobox({
 }
 
 /** A "Templates ▾" picker that fills Notes from a saved snippet, plus a "+ Save" to add the current text as one. */
-function NoteTemplatePicker({ notes, onFill }: { notes: string; onFill: (content: string) => void }) {
+export function NoteTemplatePicker({ notes, onFill }: { notes: string; onFill: (content: string) => void }) {
   const { data } = useInvoiceNoteTemplates()
   const createTemplate = useCreateInvoiceNoteTemplate()
   const [saving, setSaving] = useState(false)
@@ -440,7 +401,7 @@ function NoteTemplatePicker({ notes, onFill }: { notes: string; onFill: (content
 }
 
 /** Same picker for the Terms field (template_type = 'terms'). */
-function TermsTemplatePicker({ terms, onFill }: { terms: string; onFill: (content: string) => void }) {
+export function TermsTemplatePicker({ terms, onFill }: { terms: string; onFill: (content: string) => void }) {
   const { data } = useInvoiceNoteTemplates()
   const createTemplate = useCreateInvoiceNoteTemplate()
   const [saving, setSaving] = useState(false)
@@ -495,7 +456,7 @@ function TermsTemplatePicker({ terms, onFill }: { terms: string; onFill: (conten
 }
 
 /** Bank account picker — fills the per-invoice bank_details snapshot. */
-function BankAccountPicker({ onFill }: { onFill: (snapshot: string) => void }) {
+export function BankAccountPicker({ onFill }: { onFill: (snapshot: string) => void }) {
   const { data } = useInvoiceBankAccounts()
   const items = data?.items ?? []
   if (items.length === 0) return null
@@ -516,533 +477,5 @@ function BankAccountPicker({ onFill }: { onFill: (snapshot: string) => void }) {
         </option>
       ))}
     </Select>
-  )
-}
-
-/** Every field the create form sets, shared verbatim by the edit dialog. */
-export function InvoiceFormFields({
-  form,
-  states,
-  isEdit = false,
-}: {
-  form: ReturnType<typeof useInvoiceForm>
-  states: GstState[] | undefined
-  /** A number only ever applies once, at creation -- hides the override field on an edit. */
-  isEdit?: boolean
-}) {
-  const { values, set, patchLine, setGstEnabled, totals } = form
-  /** The rarely-needed half of the form, folded away until asked for. */
-  const [showMore, setShowMore] = useState(false)
-  /** Why an Import button did nothing, when it did nothing. */
-  const [importNote, setImportNote] = useState<string | null>(null)
-  const { data: clientsData } = useClients()
-  const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
-  const { data: projects } = useProjects()
-  const { data: templateData } = useInvoiceTemplates()
-  const { data: noteData } = useInvoiceNoteTemplates()
-  const { data: bankData } = useInvoiceBankAccounts()
-  const { data: company } = useQuery({
-    queryKey: ['settings', 'company'],
-    queryFn: () => callApi('/settings/company', { responseSchema: companyProfile }),
-    staleTime: 60_000,
-  })
-  const templates = templateData?.items
-
-  const studioState = matchStudioState(states, company?.state)
-  const studioStateName = studioState?.name ?? null
-
-  // Place of supply starts at the studio's own state, which is the common
-  // case, rather than a hardcoded '27'.
-  useEffect(() => {
-    if (!values.place_of_supply && studioState) set('place_of_supply', studioState.code)
-  }, [studioState?.code, values.place_of_supply])
-
-  // CGST+SGST or IGST follows from the two states, and is never asked.
-  useEffect(() => {
-    const intra = deriveIntraState(values.place_of_supply, studioState?.code)
-    if (intra !== null && intra !== values.intra_state) set('intra_state', intra)
-  }, [values.place_of_supply, studioState?.code, values.intra_state])
-  const selectedClient = clients.find((c) => c.id === values.client_id)
-  const clientGstin = (selectedClient?.gstin ?? '').trim().toUpperCase()
-  const clientGstinValid = !clientGstin || GSTIN_REGEX.test(clientGstin)
-  const clientProjects = (projects ?? []).filter((p) => !values.client_id || p.client_id === values.client_id)
-  const linkedProject = useProject(values.project_id)
-  const confirm = useConfirm()
-
-  // Branding prefill (new invoices only): company defaults fill blank
-  // notes/terms/bank_details once, without stomping what was typed.
-  useEffect(() => {
-    if (isEdit || !company) return
-    const defNote = (noteData?.items ?? []).find((t) => (t.template_type ?? 'note') === 'note' && t.is_default)
-    const defTerms = (noteData?.items ?? []).find((t) => (t.template_type ?? 'note') === 'terms' && t.is_default)
-    const defBank = (bankData?.items ?? []).find((b) => b.is_default)
-    if (!values.notes && (defNote?.content || company.invoice_default_notes)) {
-      set('notes', defNote?.content ?? company.invoice_default_notes ?? '')
-    }
-    if (!values.terms && (defTerms?.content || company.invoice_default_terms)) {
-      set('terms', defTerms?.content ?? company.invoice_default_terms ?? '')
-    }
-    if (!values.bank_details && (defBank ? formatBankSnapshot(defBank) : company.invoice_bank_details)) {
-      set('bank_details', defBank ? formatBankSnapshot(defBank) : (company.invoice_bank_details ?? ''))
-    }
-  }, [company?.invoice_default_notes, company?.invoice_default_terms, company?.invoice_bank_details, noteData, bankData, isEdit])
-
-  // Smart autofill when a project is picked: due +7d and `Invoice for X`
-  // fill blanks only, so an explicit choice is never overwritten.
-  useEffect(() => {
-    const p = linkedProject.data
-    if (!p || isEdit) return
-    if (!values.due_date && values.invoice_date) {
-      set('due_date', addDaysISO(values.invoice_date, 7))
-    }
-    if (!values.notes.trim()) {
-      set('notes', `Invoice for ${p.name}`)
-    }
-  }, [linkedProject.data?.id])
-
-  // Appends rather than replaces, so importing twice (package, then balance) builds
-  // one invoice out of both — but a second import onto lines someone already typed
-  // by hand is worth a check first.
-  async function importFromProject(kind: 'package' | 'deliverables' | 'balance') {
-    const p = linkedProject.data
-    if (!p) return
-    if (values.lines.some((l) => l.description.trim())) {
-      const yes = await confirm({
-        title: 'Add to the existing line items?',
-        description: 'This adds new lines alongside what is already here, rather than replacing them.',
-        confirmLabel: 'Add',
-      })
-      if (!yes) return
-    }
-    // One rate for all three. 'balance' used to hardcode 0% while the other
-    // two used 18%, so an invoice built from Balance due came out untaxed on a
-    // GST invoice without saying so.
-    const rate = values.no_gst ? 0 : 18
-    if (kind === 'package') {
-      // Each path used to `return` silently when there was nothing to import,
-      // so the button simply did nothing and left the studio wondering.
-      if (p.package_cost <= 0) return setImportNote('This project has no package cost set yet.')
-      set('lines', [
-        ...values.lines,
-        { description: `${p.name} — Package`, quantity: '1', rate: String(p.package_cost), gst_rate: rate },
-      ])
-    } else if (kind === 'deliverables') {
-      const extra = p.deliverables.filter(
-        (d) =>
-          d.visibility_scope === 'client' &&
-          d.show_on_quotation &&
-          d.status !== 'cancelled' &&
-          d.is_additional_charge &&
-          d.additional_charge_amount > 0,
-      )
-      if (extra.length === 0) return setImportNote('This project has no billable deliverables.')
-      set('lines', [
-        ...values.lines,
-        ...extra.map((d) => ({
-          description: d.title,
-          quantity: '1',
-          rate: String(d.additional_charge_amount),
-          gst_rate: rate,
-        })),
-      ])
-    } else {
-      // Only money actually received counts. Summing every payment row
-      // included the pending ones, which migration 0146 established are a
-      // promise rather than money — so the balance came out too low.
-      const received = p.payments.filter((pay) => pay.status !== 'pending').reduce((s, pay) => s + pay.amount, 0)
-      const balance = Math.max(0, p.total_cost - received)
-      if (balance <= 0) return setImportNote('Nothing is outstanding on this project.')
-      set('lines', [
-        ...values.lines,
-        { description: `${p.name} — Balance due`, quantity: '1', rate: String(balance), gst_rate: rate },
-      ])
-    }
-    setImportNote(null)
-  }
-
-  // Fills the first blank row rather than always appending, so picking a preset
-  // right after opening the form (still just the one empty starter line) does
-  // the obvious thing instead of leaving an empty row above the new one.
-  function quickAdd(description: string) {
-    const blank = values.lines.findIndex((l) => !l.description.trim())
-    set(
-      'lines',
-      blank !== -1
-        ? values.lines.map((l, i) => (i === blank ? { ...l, description } : l))
-        : [...values.lines, { description, quantity: '1', rate: '', gst_rate: values.no_gst ? 0 : 18 }],
-    )
-  }
-
-  const discountAmount = toAmount(values.discount)
-  const overDiscount =
-    values.discount_type === 'none'
-      ? false
-      : values.discount_type === 'percent'
-        ? discountAmount > 100
-        : discountAmount > totals.subtotal && totals.subtotal > 0
-
-  // Lovable parity gates: GSTIN format, place-of-supply when tax applies,
-  // and at least one taxed line on a GST invoice.
-  const gstNumberTrimmed = values.gst_number.trim().toUpperCase()
-  const gstNumberError = !values.no_gst && gstNumberTrimmed
-    ? (GSTIN_REGEX.test(gstNumberTrimmed) ? null : 'GSTIN format looks invalid. Expected 15-char GSTIN like 27ABCDE1234F1Z5.')
-    : null
-
-  return (
-    <>
-      {!isEdit && company && (company.invoice_default_notes || company.invoice_default_terms || company.invoice_bank_details) && (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Prefilled from Invoice Settings — edit freely, this invoice keeps its own copy.
-        </p>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label>
-            Client <span className="text-destructive">*</span>
-          </Label>
-          <ClientCombobox
-            clients={clients}
-            value={values.client_id}
-            onChange={(id) => {
-              set('client_id', id)
-              set('project_id', '')
-            }}
-          />
-          {selectedClient && (
-            <p className={cn('text-xs', clientGstin && !clientGstinValid ? 'text-destructive' : 'text-muted-foreground')}>
-              {clientGstin ? `GSTIN: ${clientGstin}` : 'No GSTIN on file for this client.'}{' '}
-              {clientGstin && !clientGstinValid && '— 15-char format like 27ABCDE1234F1Z5.'}
-              {!clientGstin && 'Format: 2-digit state + 10-char PAN + entity + Z + checksum (15 chars).'}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Project (optional)</Label>
-          <Select value={values.project_id} onChange={(e) => set('project_id', e.target.value)} disabled={!values.client_id}>
-            <option value="">Not linked to a project</option>
-            {clientProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      {values.project_id && linkedProject.data && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Import from project</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void importFromProject('package')}>
-            Package
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => void importFromProject('deliverables')}>
-            Billable deliverables
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => void importFromProject('balance')}>
-            Balance due
-          </Button>
-          {importNote && <span className="text-xs text-muted-foreground">{importNote}</span>}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label>Invoice date</Label>
-          <Input type="date" value={values.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} />
-        </div>
-        {showMore && (
-          <div className="flex flex-col gap-1.5">
-            <Label>Due date (optional)</Label>
-            <Input
-              type="date"
-              value={values.due_date}
-              onChange={(e) => set('due_date', e.target.value)}
-              min={values.invoice_date || undefined}
-            />
-            {!isEdit && !values.due_date && (
-              <button
-                type="button"
-                className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                onClick={() => values.invoice_date && set('due_date', addDaysISO(values.invoice_date, 7))}
-              >
-                Set due +7 days
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!isEdit && showMore && (
-        <div className="flex flex-col gap-1.5">
-          <Label>Invoice number (optional)</Label>
-          <Input
-            value={values.invoice_number}
-            onChange={(e) => set('invoice_number', e.target.value)}
-            placeholder="Leave blank to auto-number"
-          />
-        </div>
-      )}
-
-      {/*
-        * One switch, instead of four controls that could contradict each other.
-        *
-        * This used to be a GSTIN box, a place-of-supply select, a "Same state
-        * as studio" checkbox and a "No GST" checkbox — all on screen for every
-        * invoice, taxed or not. For a studio whose clients are mostly families
-        * paying for a wedding, that put the rare case in front of the common
-        * one, every time.
-        */}
-      <div className="rounded-md border border-border p-3">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={!values.no_gst}
-            onChange={(e) => setGstEnabled(e.target.checked)}
-          />
-          Add GST to this invoice
-        </label>
-        {values.no_gst ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Off — a plain invoice with no tax. Turn this on for a client who needs a tax invoice.
-          </p>
-        ) : (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Place of supply</Label>
-              <Select value={values.place_of_supply} onChange={(e) => set('place_of_supply', e.target.value)}>
-                {(states ?? []).map((st) => (
-                  <option key={st.code} value={st.code}>
-                    {st.name}
-                  </option>
-                ))}
-              </Select>
-              {/*
-                * Worked out, not asked. Whether the tax splits into CGST+SGST
-                * or becomes IGST follows from the client's state against the
-                * studio's; it was a checkbox that could disagree with the
-                * state chosen right beside it, and being wrong is silent.
-                */}
-              <p className="text-xs text-muted-foreground">
-                {values.intra_state ? 'Same state — CGST + SGST.' : 'Other state — IGST.'}
-                {studioStateName ? ` Studio is in ${studioStateName}.` : ''}
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Client GSTIN (optional)</Label>
-              <Input
-                value={values.gst_number}
-                onChange={(e) => set('gst_number', e.target.value.toUpperCase())}
-                placeholder="27ABCDE1234F1Z5"
-                aria-invalid={!!gstNumberError}
-              />
-              {gstNumberError && <p className="text-xs text-destructive">{gstNumberError}</p>}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setShowMore((v) => !v)}
-        className="self-start text-sm font-medium text-primary hover:underline"
-      >
-        {showMore ? 'Fewer options' : 'More options'}
-      </button>
-
-      {showMore && (
-      <div className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <div className="flex flex-col gap-1.5">
-          <Label>Status</Label>
-          <Select value={values.status} onChange={(e) => set('status', e.target.value as InvoiceFormValues['status'])}>
-            <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
-          </Select>
-        </div>
-
-      {templates && templates.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Label>Print layout</Label>
-          <Select value={values.template_id} onChange={(e) => set('template_id', e.target.value)}>
-            <option value="">
-              {templates.some((t) => t.is_default) ? "Company default" : 'Plain layout'}
-            </option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {t.is_default ? ' (default)' : ''}
-              </option>
-            ))}
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Bank details and terms & conditions come from the layout — set them once in{' '}
-            <Link to="/settings/invoicing" search={{ tab: 'layouts' }} className="underline underline-offset-2 hover:text-foreground">
-              Invoice settings
-            </Link>{' '}
-            instead of retyping them on every invoice. Per-invoice text below overrides the layout for this invoice only.
-          </p>
-        </div>
-      )}
-      </div>
-      )}
-
-
-      <div className="rounded-md border border-border">
-        {values.lines.map((l, i) => (
-          <div key={i} className="flex flex-col gap-2 border-b border-border p-2 last:border-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                placeholder="Description"
-                value={l.description}
-                onChange={(e) => patchLine(i, { description: e.target.value })}
-                className="min-w-40 flex-1"
-              />
-              <Input
-                inputMode="decimal"
-                value={l.quantity}
-                onChange={(e) => patchLine(i, { quantity: e.target.value })}
-                className="w-16"
-                aria-label="Quantity"
-              />
-              <Input
-                inputMode="decimal"
-                value={l.rate}
-                onChange={(e) => patchLine(i, { rate: e.target.value })}
-                className="w-28"
-                placeholder="Rate"
-                aria-label="Rate"
-              />
-              <span className="w-24 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-                {formatINR(toAmount(l.quantity) * toAmount(l.rate))}
-              </span>
-              {!values.no_gst && (
-                <Select value={l.gst_rate} onChange={(e) => patchLine(i, { gst_rate: Number(e.target.value) as GstSlab })} className="w-20">
-                  {GST_SLABS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}%
-                    </option>
-                  ))}
-                </Select>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => set('lines', values.lines.filter((_, idx) => idx !== i))}
-              >
-                <Trash2 />
-              </Button>
-            </div>
-            {/*
-              * The subtext doubled the height of every row for something
-              * almost never used, so it is shown only once it has content or
-              * the extra fields are open.
-              */}
-            {(showMore || (l.subtext ?? '').length > 0) && (
-              <Input
-                placeholder="Details shown under the description (optional)"
-                value={l.subtext ?? ''}
-                onChange={(e) => patchLine(i, { subtext: e.target.value || undefined })}
-                className="ml-0"
-              />
-            )}
-          </div>
-        ))}
-        <div className="flex flex-wrap items-center gap-2 p-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => set('lines', [...values.lines, { description: '', quantity: '1', rate: '', gst_rate: values.no_gst ? 0 : 18 }])}
-          >
-            <Plus /> Add line
-          </Button>
-          <QuickAddLine onAdd={quickAdd} />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Label>Discount</Label>
-            <Input
-              inputMode="decimal"
-              value={values.discount_type === 'none' ? '' : values.discount}
-              onChange={(e) => set('discount', e.target.value)}
-              className="w-28"
-              disabled={values.discount_type === 'none'}
-            />
-            <Select
-              value={values.discount_type}
-              onChange={(e) => {
-                const next = e.target.value as InvoiceFormValues['discount_type']
-                set('discount_type', next)
-                if (next === 'none') set('discount', '')
-              }}
-              className="w-24"
-            >
-              <option value="none">None</option>
-              <option value="flat">₹</option>
-              <option value="percent">%</option>
-            </Select>
-          </div>
-          {overDiscount && (
-            <p className="text-xs text-destructive">
-              {values.discount_type === 'percent' ? 'Percent cannot exceed 100%.' : 'Discount cannot exceed the subtotal.'}
-            </p>
-          )}
-        </div>
-        <div className="text-right text-sm">
-          <p className="text-muted-foreground">
-            Subtotal {formatINR(totals.subtotal)}{!values.no_gst && <> · Tax {formatINR(totals.tax)}</>}
-          </p>
-          <p className="text-lg font-semibold">{formatINR(totals.total)}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <Label>Notes (optional)</Label>
-          <NoteTemplatePicker notes={values.notes} onFill={(content) => set('notes', content)} />
-        </div>
-        <textarea
-          value={values.notes}
-          onChange={(e) => set('notes', e.target.value)}
-          rows={2}
-          placeholder="Shown on the invoice, below the line items."
-          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-        />
-      </div>
-
-      {showMore && (
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <Label>Bank details (optional)</Label>
-            <BankAccountPicker onFill={(s) => set('bank_details', s)} />
-          </div>
-          <textarea
-            value={values.bank_details}
-            onChange={(e) => set('bank_details', e.target.value)}
-            rows={3}
-            placeholder="Blank = layout default. Saved per invoice."
-            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <Label>Terms (optional)</Label>
-            <TermsTemplatePicker terms={values.terms} onFill={(content) => set('terms', content)} />
-          </div>
-          <textarea
-            value={values.terms}
-            onChange={(e) => set('terms', e.target.value)}
-            rows={3}
-            placeholder="Blank = layout default. Saved per invoice."
-            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-          />
-        </div>
-      </div>
-      )}
-    </>
   )
 }

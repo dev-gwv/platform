@@ -10,7 +10,20 @@ const layoutJsonDefaults = {
   footer_text: null as string | null,
   bank_details: null as string | null,
   terms_and_conditions: null as string | null,
+  design: 'classic' as InvoiceDesign,
+  accent: '#4f46e5',
+  show_logo: true,
 }
+
+/**
+ * How a printed invoice looks. Each design is a whole page style -- header,
+ * table and totals -- painted in the studio's accent colour, so a studio can
+ * pick a look without learning a layout editor.
+ */
+export const INVOICE_DESIGNS = ['classic', 'modern', 'minimal', 'bold', 'elegant'] as const
+export const invoiceDesign = z.enum(INVOICE_DESIGNS)
+export type InvoiceDesign = z.infer<typeof invoiceDesign>
+const hexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 
 export const invoiceTemplateLayout = z.object({
   show_header: z.boolean().default(true),
@@ -21,6 +34,9 @@ export const invoiceTemplateLayout = z.object({
   footer_text: z.string().nullable().default(null),
   bank_details: z.string().nullable().default(null),
   terms_and_conditions: z.string().nullable().default(null),
+  design: invoiceDesign.catch('classic').default('classic'),
+  accent: hexColour.catch('#4f46e5').default('#4f46e5'),
+  show_logo: z.boolean().default(true),
 })
 export type InvoiceTemplateLayout = z.infer<typeof invoiceTemplateLayout>
 
@@ -50,6 +66,9 @@ export const createInvoiceTemplateRequest = z.object({
     footer_text: z.string().trim().max(500).nullish(),
     bank_details: z.string().trim().max(500).nullish(),
     terms_and_conditions: z.string().trim().max(1000).nullish(),
+    design: invoiceDesign.default('classic'),
+    accent: hexColour.default('#4f46e5'),
+    show_logo: z.boolean().default(true),
   }).default(layoutJsonDefaults),
   is_default: z.boolean().default(false),
 })

@@ -24,7 +24,11 @@ import {
   createInvoiceNoteTemplateRequest,
   invoiceNoteTemplateList,
   paymentReceipt,
+  invoiceItemPreset,
+  upsertInvoiceItemPresetRequest,
+  z,
 } from '@ipc/contracts'
+import type { TransactionSql } from 'postgres'
 import { computeInvoice, type GstSlab } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -36,6 +40,51 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 
 const list = invoiceListItem.array()
+
+/**
+ * What an invoice carries beyond its totals, written after create_invoice /
+ * update_invoice so those atomic RPCs stay as they are: draft or sent, the
+ * GSTIN, CGST+SGST versus IGST, subject and terms, each line's HSN/SAC (by
+ * the order the lines were typed in) and the files sent with it.
+ */
+async function writeInvoiceExtras(
+  sql: TransactionSql,
+  id: string,
+  req: {
+    status: string
+    intra_state: boolean
+    subject?: string | undefined
+    payment_terms?: string | undefined
+    attachment_file_ids?: string[] | undefined
+    lines: { hsn_sac?: string | undefined }[]
+  },
+  gstNumber: string,
+): Promise<'bad_file' | true> {
+  await sql`update invoices set
+      status = ${req.status},
+      gst_number = ${gstNumber || null},
+      intra_state = ${req.intra_state},
+      subject = ${req.subject?.trim() || null},
+      payment_terms = ${req.payment_terms?.trim() || null}
+    where id = ${id}`
+  const codes = req.lines.map((l, i) => ({ i, hsn: l.hsn_sac?.trim() || null }))
+  await sql`update invoice_items it set hsn_sac = x.hsn
+      from jsonb_to_recordset(${sql.json(codes)}::jsonb) as x(i int, hsn text)
+     where it.invoice_id = ${id} and it.sort_order = x.i`
+  if (req.attachment_file_ids) {
+    const ids = [...new Set(req.attachment_file_ids)]
+    if (ids.length) {
+      const mine = await sql<{ id: string }[]>`select id from files where id = any(${ids}::uuid[])`
+      if (mine.length !== ids.length) return 'bad_file'
+    }
+    await sql`delete from invoice_attachments where invoice_id = ${id} and not (file_id = any(${ids}::uuid[]))`
+    for (const f of ids) {
+      await sql`insert into invoice_attachments (company_id, invoice_id, file_id)
+                values (get_current_company_id(), ${id}, ${f}) on conflict (invoice_id, file_id) do nothing`
+    }
+  }
+  return true
+}
 
 export const billingRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -225,18 +274,28 @@ export const billingRouter = new Hono<AppEnv>()
     )
     if (row === 'taken') fail(409, 'An invoice with this number already exists.')
     if (!row) fail(400, 'We could not create the invoice.')
-    // Lovable parity extras: draft status + per-invoice GSTIN snapshot.
-    // Kept as a follow-up UPDATE so the atomic create_invoice() RPC stays untouched.
-    if (req.status === 'draft' || gstNumber) {
-      await attempt(c, 'billing.invoice_extras', () =>
+    // Money already received goes on the invoice as it is made, so it is
+    // never a draft: a draft cannot be paid.
+    const status = req.payment ? 'sent' : req.status
+    const extras = await attempt(c, 'billing.invoice_extras', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, row.id, { ...req, status }, gstNumber)),
+    )
+    if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
+    if (req.payment) {
+      const pay = req.payment
+      const paid = await attempt(c, 'billing.invoice_create_payment', () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          await sql`update invoices set
-              status = ${req.status},
-              gst_number = ${gstNumber || null}
-            where id = ${row.id}`
+          await sql`select record_invoice_payment(
+            p_invoice_id => ${row.id},
+            p_amount => ${pay.amount},
+            p_paid_on => ${pay.paid_on ?? null},
+            p_mode => ${pay.mode ?? null},
+            p_reference => ${pay.reference ?? null},
+            p_notes => ${null})`
           return true
         }),
       )
+      if (!paid) fail(400, `Invoice ${row.invoice_number} was created, but the payment could not be recorded. Record it from the invoice.`)
     }
     await audit(c, {
       action: 'invoice.create',
@@ -255,7 +314,7 @@ export const billingRouter = new Hono<AppEnv>()
           select i.id, i.invoice_number, i.invoice_date, i.due_date, i.status, i.place_of_supply,
                  i.intra_state, i.client_id, i.project_id, i.template_id,
                  i.subtotal, i.discount, i.discount_type, i.taxable, i.tax, i.total, i.amount_paid, i.balance_due,
-                 i.notes, i.bank_details, i.terms, i.created_at, i.gst_number,
+                 i.notes, i.bank_details, i.terms, i.created_at, i.gst_number, i.subject, i.payment_terms,
                  cl.name as client_name, cl.gstin as client_gstin, cl.address as client_address,
                  cl.phone as client_phone, cl.email as client_email,
                  pj.name as project_name,
@@ -267,9 +326,16 @@ export const billingRouter = new Hono<AppEnv>()
                    select jsonb_agg(jsonb_build_object(
                      'id', it.id, 'description', it.description, 'subtext', it.subtext, 'quantity', it.quantity,
                      'rate', it.rate, 'amount', it.amount, 'gst_rate', it.gst_rate,
-                     'cgst', it.cgst, 'sgst', it.sgst, 'igst', it.igst) order by it.id)
+                     'cgst', it.cgst, 'sgst', it.sgst, 'igst', it.igst, 'hsn_sac', it.hsn_sac)
+                     order by it.sort_order, it.id)
                    from invoice_items it where it.invoice_id = i.id
                  ), '[]'::jsonb) as items,
+                 coalesce((
+                   select jsonb_agg(jsonb_build_object('id', f.id, 'name', f.name, 'mime', f.mime, 'size_bytes', f.size_bytes)
+                                    order by ia.created_at)
+                     from invoice_attachments ia join files f on f.id = ia.file_id
+                    where ia.invoice_id = i.id
+                 ), '[]'::jsonb) as attachments,
                   -- From the ledger (0145), not the retired invoice_payments
                   -- table: a payment recorded on the project against this
                   -- invoice has to appear here too, or the two screens go on
@@ -362,17 +428,12 @@ export const billingRouter = new Hono<AppEnv>()
     )
     if (ok === 'has_payment') fail(409, 'A payment has already been recorded against this invoice — it can no longer be edited.')
     if (!ok) fail(400, 'We could not update this invoice.')
-    // Preserve the extras from creation: status transitions (draft↔sent) and
-    // the GSTIN snapshot ride alongside the totals resend.
-    await attempt(c, 'billing.invoice_extras_update', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        await sql`update invoices set
-            status = ${req.status},
-            gst_number = ${patchGstNumber || null}
-          where id = ${id}`
-        return true
-      }),
+    // Preserve the extras from creation: status transitions (draft↔sent),
+    // the GSTIN snapshot, subject, terms, HSN/SAC and attachments.
+    const extras = await attempt(c, 'billing.invoice_extras_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, id, req, patchGstNumber)),
     )
+    if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
     await audit(c, { action: 'invoice.update', entityType: 'invoice', entityId: id, after: { total: totals.total, client_id: req.client_id } })
     return c.json({ ok: true })
   })
@@ -534,6 +595,70 @@ export const billingRouter = new Hono<AppEnv>()
     if (!ok) fail(400, 'We could not record the payment.')
     await audit(c, { action: 'invoice.payment', entityType: 'invoice', entityId: id, after: d })
     return c.body(null, 204)
+  })
+
+  // ── Saved items: what the studio bills again and again ─────────────
+  .get('/items', async (c) => {
+    const rows = await attempt(c, 'billing.items', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, name, description, rate, hsn_sac, gst_rate, kind
+          from invoice_item_presets where company_id = ${c.get('auth').companyId}
+         order by lower(name)`),
+    )
+    if (!rows) fail(400, 'We could not load your saved items.')
+    return c.json(z.array(invoiceItemPreset).parse(rows.map((r) => ({ ...r, rate: Number(r.rate), gst_rate: Number(r.gst_rate) }))))
+  })
+
+  .post('/items', requireAction('billing', 'create'), async (c) => {
+    const parsed = upsertInvoiceItemPresetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the item details.')
+    const d = parsed.data
+    const auth = c.get('auth')
+    const rows = await attempt(
+      c,
+      'billing.item_create',
+      () =>
+        withUser(c.env, auth.userId, (sql) => sql<{ id: string }[]>`
+          insert into invoice_item_presets (company_id, name, description, rate, hsn_sac, gst_rate, kind, created_by)
+          values (${auth.companyId}, ${d.name}, ${d.description?.trim() || null}, ${d.rate}, ${d.hsn_sac?.trim() || null},
+                  ${d.gst_rate}, ${d.kind}, ${auth.userId})
+          returning id`),
+      { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+    )
+    if (rows === 'taken') fail(409, 'An item with this name is already saved.')
+    if (!rows?.[0]) fail(400, 'We could not save the item.')
+    return c.json({ id: rows[0].id }, 201)
+  })
+
+  .patch('/items/:id', requireAction('billing', 'edit'), async (c) => {
+    const parsed = upsertInvoiceItemPresetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the item details.')
+    const d = parsed.data
+    const id = uuidParam(c)
+    const rows = await attempt(
+      c,
+      'billing.item_update',
+      () =>
+        withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+          update invoice_item_presets set name = ${d.name}, description = ${d.description?.trim() || null}, rate = ${d.rate},
+                 hsn_sac = ${d.hsn_sac?.trim() || null}, gst_rate = ${d.gst_rate}, kind = ${d.kind}
+           where id = ${id} and company_id = ${c.get('auth').companyId}
+          returning id`),
+      { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+    )
+    if (rows === 'taken') fail(409, 'An item with this name is already saved.')
+    if (!rows?.[0]) fail(404, 'That item was not found.')
+    return c.json({ ok: true })
+  })
+
+  .delete('/items/:id', requireAction('billing', 'delete'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'billing.item_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        delete from invoice_item_presets where id = ${id} and company_id = ${c.get('auth').companyId} returning id`),
+    )
+    if (!rows?.[0]) fail(404, 'That item was not found.')
+    return c.json({ ok: true })
   })
 
   // ── Standalone received_payments module (Lovable billing parity) ──

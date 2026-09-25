@@ -22,6 +22,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail } from '../../lib/email'
+import { serve } from '../files/router'
 
 const okResponse = z.object({ ok: z.boolean() })
 
@@ -301,6 +302,20 @@ export const publicDocumentsRouter = new Hono<AppEnv>()
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]?.doc) fail(404, 'This link is invalid or has expired.')
     return c.json(publicInvoice.parse(rows[0].doc))
+  })
+
+  // A file the studio attached to the invoice, downloaded by the client
+  // through the invoice link itself: no account, nothing else reachable.
+  .get('/invoice/:token/files/:file', async (c) => {
+    const token = textParam(c, 'token', 400)
+    const file = uuidParam(c, 'file')
+    const rows = await attempt(c, 'documents.public_invoice_file', () =>
+      withService(c.env, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select * from invoice_attachment_for_token(p_raw => ${token}, p_file => ${file})`),
+    )
+    if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    if (!rows[0]) fail(404, 'This file is not available.')
+    return serve(rows[0])
   })
 
   .get('/delivery/:token', async (c) => {

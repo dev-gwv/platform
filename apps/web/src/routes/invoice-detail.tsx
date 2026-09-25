@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react'
-import { companyProfile, friendlyInvoiceError, type InvoiceDetail } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Paperclip, Pencil, Printer, Trash2 } from 'lucide-react'
+import { companyProfile, type InvoiceDetail } from '@ipc/contracts'
+import { callApi, downloadFile } from '@/shared/api/client'
+import { toast } from 'sonner'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { useAccess } from '@/shared/auth/useAccess'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +13,6 @@ import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState } from '@/shared/ui/states'
-import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useConfirm } from '@/shared/ui/confirm'
 import { formatINR } from '@/shared/ui/format'
@@ -22,10 +22,11 @@ import {
   useInvoice,
   useReceivedPayment,
   useRevokeInvoiceLink,
-  useStates,
   useUpdateInvoice,
 } from '@/features/billing/api'
-import { useInvoiceForm, InvoiceFormFields } from '@/features/billing/InvoiceForm'
+import { emptyInvoiceForm } from '@/features/billing/InvoiceForm'
+import { InvoiceEditor } from '@/features/billing/InvoiceEditor'
+import { FullScreen } from '@/features/billing/NewInvoiceDialog'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { DeleteReceivedPaymentDialog, ReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
@@ -132,6 +133,7 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
         invoice={data}
         company={{
           name: company?.display_name ?? company?.name ?? null,
+          legal_name: company?.legal_name,
           logo_url: company?.invoice_logo_url ?? company?.avatar_url,
           city: company?.city,
           state: company?.state,
@@ -144,6 +146,25 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
           invoice_sac_code: company?.invoice_sac_code,
         }}
       />
+
+      {data.attachments.length > 0 && (
+        <Card className="paper-toolbar mx-auto mt-4 w-full max-w-4xl">
+          <CardContent className="p-4">
+            <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+              <Paperclip className="size-4" /> Sent with this invoice
+            </p>
+            <ul className="flex flex-wrap gap-2">
+              {data.attachments.map((f) => (
+                <li key={f.id}>
+                  <Button size="sm" variant="outline" onClick={() => void downloadFile(`/files/${f.id}`, f.name).catch((e: Error) => toast.error(e.message))}>
+                    <Paperclip /> {f.name}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <InvoicePayments invoice={data} />
 
@@ -272,78 +293,50 @@ function InvoicePayments({ invoice }: { invoice: InvoiceDetail }) {
 
 function EditInvoiceDialog({ invoice, onClose }: { invoice: InvoiceDetail; onClose: () => void }) {
   const update = useUpdateInvoice(invoice.id)
-  const { data: states } = useStates()
   const allZeroGst = invoice.items.every((i) => Number(i.gst_rate) === 0)
-  const form = useInvoiceForm({
-    client_id: invoice.client_id ?? '',
-    project_id: invoice.project_id ?? '',
-    place_of_supply: invoice.place_of_supply ?? '27',
-    intra_state: invoice.intra_state,
-    no_gst: allZeroGst,
-    gst_number: invoice.gst_number ?? '',
-    status: invoice.status === 'draft' ? 'draft' : 'sent',
-    invoice_date: invoice.invoice_date,
-    due_date: invoice.due_date ?? '',
-    discount: invoice.discount ? String(invoice.discount) : '',
-    // Preserve the original discount type on edit — including 'none'.
-    discount_type: (invoice.discount_type ?? 'flat') as 'flat' | 'percent' | 'none',
-    notes: invoice.notes ?? '',
-    bank_details: invoice.bank_details ?? '',
-    terms: invoice.terms ?? '',
-    template_id: invoice.template_id ?? '',
-    invoice_number: '',
-    lines: invoice.items.map((i) => ({
-      description: i.description,
-      subtext: i.subtext ?? undefined,
-      quantity: String(i.quantity),
-      rate: String(i.rate),
-      gst_rate: Number(i.gst_rate),
-    })),
-  })
-  const [error, setError] = useState<string | null>(null)
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    const problems = form.problems()
-    if (problems.length > 0) {
-      setError(problems[0] ?? 'This invoice is not ready yet.')
-      return
-    }
-    try {
-      await update.mutateAsync(form.toRequest())
-      onClose()
-    } catch (err) {
-      setError(friendlyInvoiceError(err))
-    }
-  }
-
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        title="Edit invoice"
-        description="No payment is recorded yet, so the whole invoice can still be corrected."
-        className="max-w-2xl"
-      >
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <InvoiceFormFields form={form} states={states} isEdit />
-          {error && (
-            <p id="form-error" role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FullScreen onClose={onClose}>
+      <InvoiceEditor
+        isEdit
+        editNumber={invoice.invoice_number}
+        busy={update.isPending}
+        onCancel={onClose}
+        onSubmit={async (req) => {
+          const { invoice_number: _n, payment: _p, ...rest } = req
+          await update.mutateAsync(rest)
+          onClose()
+        }}
+        initial={{
+          ...emptyInvoiceForm(),
+          client_id: invoice.client_id ?? '',
+          project_id: invoice.project_id ?? '',
+          place_of_supply: invoice.place_of_supply ?? '',
+          intra_state: invoice.intra_state,
+          no_gst: allZeroGst,
+          gst_number: invoice.gst_number ?? '',
+          status: invoice.status === 'draft' ? 'draft' : 'sent',
+          invoice_date: invoice.invoice_date,
+          due_date: invoice.due_date ?? '',
+          discount: invoice.discount ? String(invoice.discount) : '',
+          // Preserve the original discount type on edit, including 'none'.
+          discount_type: (invoice.discount_type ?? 'flat') as 'flat' | 'percent' | 'none',
+          notes: invoice.notes ?? '',
+          bank_details: invoice.bank_details ?? '',
+          terms: invoice.terms ?? '',
+          template_id: invoice.template_id ?? '',
+          subject: invoice.subject ?? '',
+          payment_terms: invoice.payment_terms ?? 'Custom',
+          attachments: invoice.attachments.map((a) => ({ id: a.id, name: a.name })),
+          lines: invoice.items.map((i) => ({
+            description: i.description,
+            subtext: i.subtext ?? undefined,
+            quantity: String(i.quantity),
+            rate: String(i.rate),
+            gst_rate: Number(i.gst_rate),
+            hsn_sac: i.hsn_sac ?? undefined,
+          })),
+        }}
+      />
+    </FullScreen>
   )
 }

@@ -11,6 +11,8 @@ import {
   invoiceTemplateList,
   invoiceNoteTemplateList,
   paymentReceipt,
+  invoiceItemPreset,
+  type UpsertInvoiceItemPresetRequest,
   receivedPayment,
   receivedPaymentListResponse,
   type CreateInvoiceBankAccountRequest,
@@ -495,6 +497,45 @@ export function useCancelInvoice() {
     onSuccess: () => {
       toast.success('Invoice cancelled')
       invalidateMoney(qc)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** The studio's saved items -- what it bills again and again. */
+export function useInvoiceItems() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['billing', 'items'],
+    queryFn: () => callApi('/billing/items', { responseSchema: z.array(invoiceItemPreset) }),
+    enabled: !!session && access.hasModule('billing'),
+    staleTime: 60_000,
+  })
+}
+
+export function useSaveInvoiceItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string | undefined; body: UpsertInvoiceItemPresetRequest }) =>
+      id
+        ? callApi(`/billing/items/${id}`, { method: 'PATCH', body, responseSchema: anySchema })
+        : callApi('/billing/items', { method: 'POST', body, responseSchema: z.object({ id: z.string() }) }),
+    onSuccess: () => {
+      toast.success('Item saved')
+      void qc.invalidateQueries({ queryKey: ['billing', 'items'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useDeleteInvoiceItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/billing/items/${id}`, { method: 'DELETE', responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Item removed')
+      void qc.invalidateQueries({ queryKey: ['billing', 'items'] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
