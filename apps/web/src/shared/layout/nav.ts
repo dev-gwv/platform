@@ -2,6 +2,7 @@ import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import type { AppRole } from '@ipc/permissions'
 import {
+  CalendarOff,
   LayoutDashboard,
   KanbanSquare,
   CalendarClock,
@@ -83,6 +84,7 @@ export const NAV: NavEntry[] = [
   leaf('My Work', '/my-work', ListTodo, { roles: ['employee'] }),
   leaf('My Tasks', '/tasks/my', ListTodo, { roles: ['employee'] }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
+  leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
   {
     kind: 'group',
@@ -153,6 +155,7 @@ export const NAV: NavEntry[] = [
     children: [
       leaf('Team Directory', '/employees', Users, { module: 'team_directory' }),
       leaf('Attendance', '/attendance', Clock, { module: 'attendance' }),
+      leaf('Leave & Holidays', '/leave', CalendarOff, { module: 'attendance' }),
       leaf('Roles & Access', '/settings/roles', ShieldCheck, { module: 'team_roles' }),
       leaf('Team Terms', '/settings/team-terms', FileSignature, { module: 'team_terms' }),
       leaf('Team Payouts', '/team-payouts', DollarSign, { module: 'team_payouts' }),

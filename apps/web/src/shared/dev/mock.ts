@@ -819,6 +819,17 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'PATCH' && path === '/hr/location')
     return { ...(body as Record<string, unknown>), timezone: 'Asia/Kolkata' }
   if (method === 'GET' && path.startsWith('/hr/attendance?')) return atStage(rosterFx, 'partial')
+  if (method === 'GET' && path.startsWith('/hr/leave')) return path.includes('scope=team') ? leaveFx : leaveFx.filter((l) => l.user_id === uid(0xe1))
+  if (method === 'POST' && path === '/hr/leave') return { id: uid(0xc8) }
+  if (method === 'POST' && /^\/hr\/leave\/[^/]+\/(decide|cancel)$/.test(path)) return {}
+  if (method === 'GET' && path.startsWith('/hr/corrections')) return correctionsFx
+  if (method === 'POST' && path === '/hr/corrections') return { id: uid(0xc9) }
+  if (method === 'POST' && /^\/hr\/corrections\/[^/]+\/decide$/.test(path)) return {}
+  if (method === 'GET' && path.startsWith('/hr/holidays')) return holidaysFx
+  if (method === 'POST' && path === '/hr/holidays') return { id: uid(0xca), ...(body as Record<string, unknown>) }
+  if (method === 'DELETE' && path.startsWith('/hr/holidays/')) return {}
+  if (method === 'GET' && path === '/hr/policy') return { weekly_off: [0] }
+  if (method === 'PATCH' && path === '/hr/policy') return body
   if (method === 'POST' && path === '/hr/check-out') return { id: uid(0xc1) }
   if (method === 'POST' && path === '/hr/check-in') return { id: uid(0xc0) }
   if (method === 'GET' && path === '/notifications') return notifs
@@ -1074,6 +1085,71 @@ const rosterFx = [
     check_in_at: null,
     check_out_at: null,
   },
+  {
+    user_id: uid(0xe5),
+    name: 'Meera Iyer',
+    email: 'meera@demostudio.in',
+    phone: '9855555555',
+    engagement_type: 'in_house',
+    status: 'absent',
+    on_leave: true,
+    check_in_at: null,
+    check_out_at: null,
+  },
+]
+
+const leaveFx = [
+  {
+    id: uid(0xd5),
+    user_id: uid(0xe3),
+    user_name: 'Sana Khan',
+    kind: 'sick',
+    start_date: '2026-09-29',
+    end_date: '2026-09-30',
+    half_day: false,
+    reason: 'Fever -- doctor says two days of rest.',
+    status: 'pending',
+    decided_by_name: null,
+    decided_at: null,
+    decision_note: null,
+    created_at: '2026-09-25T04:10:00Z',
+  },
+  {
+    id: uid(0xd6),
+    user_id: uid(0xe1),
+    user_name: 'Rahul Sharma',
+    kind: 'casual',
+    start_date: '2026-10-06',
+    end_date: '2026-10-06',
+    half_day: true,
+    reason: 'Bank work in the morning.',
+    status: 'approved',
+    decided_by_name: 'Priya Mehta',
+    decided_at: '2026-09-24T06:00:00Z',
+    decision_note: null,
+    created_at: '2026-09-23T09:30:00Z',
+  },
+]
+
+const correctionsFx = [
+  {
+    id: uid(0xd7),
+    user_id: uid(0xe2),
+    user_name: 'Anita Desai',
+    a_date: '2026-09-22',
+    check_in_at: '2026-09-22T04:25:00Z',
+    check_out_at: '2026-09-22T12:40:00Z',
+    reason: 'Was at the Bandra shoot all day; the app did not load at the venue.',
+    status: 'pending',
+    decision_note: null,
+    created_at: '2026-09-23T05:00:00Z',
+  },
+]
+
+const holidaysFx = [
+  { id: uid(0xd8), holiday_date: '2026-10-02', name: 'Gandhi Jayanti' },
+  { id: uid(0xd9), holiday_date: '2026-10-20', name: 'Dussehra' },
+  { id: uid(0xda), holiday_date: '2026-11-08', name: 'Diwali' },
 ]
 
 const attendanceFx = [

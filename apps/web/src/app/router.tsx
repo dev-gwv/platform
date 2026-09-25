@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
 import { MyProfilePage } from '@/routes/my-profile'
+import { LeavePage } from '@/routes/leave'
 import { ContactPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
@@ -198,6 +199,7 @@ const routeTree = rootRoute.addChildren([
   route('/tasks/my', MyTasksPage),
   route('/my-work', MyWorkPage),
   route('/profile', MyProfilePage),
+  route('/leave', LeavePage),
   route('/my-work/project/$projectId', MyWorkProjectPage),
   route('/production-board', ProductionBoardPage),
   route('/data-management', DataManagementPage),

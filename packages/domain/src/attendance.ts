@@ -12,7 +12,7 @@
  * than storing a fourth status means it can never disagree with the times
  * shown beside it.
  */
-export type DisplayStatus = 'present' | 'late' | 'absent' | 'not_checked_out'
+export type DisplayStatus = 'present' | 'late' | 'absent' | 'not_checked_out' | 'on_leave' | 'day_off'
 
 /** The row shape this needs — the API's query result satisfies it too. */
 export interface RosterRow {
@@ -23,12 +23,26 @@ export interface RosterRow {
   name?: string | null
   email?: string | null
   phone?: string | null
+  /** On approved leave that day. */
+  on_leave?: boolean
+  /** A holiday's name or 'Weekly off': nobody was expected in. */
+  day_off?: string | null
 }
 
+/**
+ * Someone who came in is present (or still inside) whatever else the day
+ * was; someone who did not, on approved leave or a day off, was never
+ * expected -- they are not absent.
+ */
 export function displayStatus(row: RosterRow): DisplayStatus {
   if (row.check_in_at && !row.check_out_at) return 'not_checked_out'
+  if (!row.check_in_at && row.on_leave) return 'on_leave'
+  if (!row.check_in_at && row.day_off) return 'day_off'
   return row.status as DisplayStatus
 }
+
+/** Expected in that day: not on leave and not a day off (unless they came in anyway). */
+const expected = (r: RosterRow) => r.check_in_at !== null || (!r.on_leave && !r.day_off)
 
 export interface RosterFilters {
   /** '' or 'all' means every status. */
@@ -56,6 +70,8 @@ export interface AttendanceSummary {
   present: number
   absent: number
   notCheckedOut: number
+  /** Away on approved leave (not counted as absent). */
+  onLeave: number
   /** Whole percent of the team that turned up at all. */
   percent: number
 }
@@ -65,13 +81,17 @@ export interface AttendanceSummary {
  * turning up, and someone who has not checked out has certainly arrived.
  */
 export function summariseRoster(rows: readonly RosterRow[]): AttendanceSummary {
-  const total = rows.length
+  // The percentage is of the people expected in: leave and days off are not
+  // missing, so they neither count against it nor as absent.
+  const due = rows.filter(expected)
+  const total = due.length
   const turnedUp = rows.filter((r) => r.check_in_at !== null).length
   return {
     total,
     present: turnedUp,
-    absent: rows.filter((r) => r.check_in_at === null).length,
+    absent: due.filter((r) => r.check_in_at === null).length,
     notCheckedOut: rows.filter((r) => displayStatus(r) === 'not_checked_out').length,
+    onLeave: rows.filter((r) => displayStatus(r) === 'on_leave').length,
     // An empty roster is 0%, not a division by zero dressed up as NaN.
     percent: total === 0 ? 0 : Math.round((turnedUp / total) * 100),
   }

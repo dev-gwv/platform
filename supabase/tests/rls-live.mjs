@@ -1376,6 +1376,71 @@ if (listed) {
     { reel2: reel2.status, mineBefore, notMineStart: notMineStart.status, started: started.status },
   )
 
+  // ── Leave, holidays, weekly off, day fixes (0177) ──
+  const lvDay = new Date(Date.now() + 40 * 864e5).toISOString().slice(0, 10)
+  const lvBad = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'casual', start_date: lvDay, end_date: '2020-01-01' } })
+  const lvAsk = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'sick', start_date: lvDay, end_date: lvDay, reason: 'Doctor' } })
+  const lvTwice = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'casual', start_date: lvDay, end_date: lvDay } })
+  const lvSelf = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: edToken, method: 'POST', body: { approve: true } })
+  const lvOther = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: newPw.json.access_token, method: 'POST', body: { approve: true } })
+  const lvTeam = await api('/hr/leave?scope=team&status=pending', { token: aToken })
+  const lvEdTeam = await api('/hr/leave?scope=team', { token: edToken })
+  const lvNoNote = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: false } })
+  const lvOk = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: true } })
+  const lvMine = await api('/hr/leave', { token: edToken })
+  const lvRow = (lvMine.json ?? []).find((l) => l.id === lvAsk.json.id)
+  check(
+    'leave: a member asks, cannot approve their own or be approved by another studio; the owner approves',
+    lvBad.status === 422 && lvAsk.status === 201 && lvTwice.status === 422 && lvSelf.status === 403 && lvOther.status === 404 &&
+      lvTeam.status === 200 && (lvTeam.json ?? []).some((l) => l.id === lvAsk.json.id && l.user_name === 'Priya Editor') &&
+      (lvEdTeam.json ?? []).every((l) => l.user_id === edUid) && lvNoNote.status === 422 && lvOk.status === 204 &&
+      lvRow?.status === 'approved' && !!lvRow?.decided_by_name,
+    { bad: lvBad.status, ask: lvAsk.status, twice: lvTwice.status, self: lvSelf.status, other: lvOther.status, noNote: lvNoNote.status, ok: lvOk.status, row: lvRow },
+  )
+  const lvRoster = await api(`/hr/attendance?date=${lvDay}`, { token: aToken })
+  const lvEdRow = (lvRoster.json ?? []).find((r) => r.user_id === edUid)
+  check('leave: the roster marks the member on leave that day', lvEdRow?.on_leave === true, { row: lvEdRow })
+
+  const hDay = new Date(Date.now() + 50 * 864e5).toISOString().slice(0, 10)
+  const hEd = await api('/hr/holidays', { token: edToken, method: 'POST', body: { holiday_date: hDay, name: 'Not mine to add' } })
+  const hAdd = await api('/hr/holidays', { token: aToken, method: 'POST', body: { holiday_date: hDay, name: 'Studio day' } })
+  const hDup = await api('/hr/holidays', { token: aToken, method: 'POST', body: { holiday_date: hDay, name: 'Studio day off' } })
+  const hList = await api(`/hr/holidays?year=${hDay.slice(0, 4)}`, { token: edToken })
+  const hOther = await api(`/hr/holidays?year=${hDay.slice(0, 4)}`, { token: newPw.json.access_token })
+  const hRoster = await api(`/hr/attendance?date=${hDay}`, { token: aToken })
+  const pol = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { weekly_off: [0] } })
+  const polEd = await api('/hr/policy', { token: edToken, method: 'PATCH', body: { weekly_off: [] } })
+  check(
+    'holidays: the owner adds one (the same date again renames it), the studio sees it and nobody else; weekly off is the owner’s call',
+    hEd.status === 403 && hAdd.status === 201 && hDup.status === 201 && hDup.json.id === hAdd.json.id &&
+      (hList.json ?? []).filter((h) => h.holiday_date === hDay).length === 1 &&
+      !(hOther.json ?? []).some((h) => h.holiday_date === hDay) && (hRoster.json ?? []).every((r) => r.day_off === 'Studio day off') &&
+      pol.status === 200 && pol.json.weekly_off.join() === '0' && polEd.status === 403,
+    { ed: hEd.status, add: hAdd.status, dup: hDup.status, other: hOther.json?.length, pol: pol.status, polEd: polEd.status },
+  )
+
+  const fixDay = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10)
+  const fixAsk = await api('/hr/corrections', {
+    token: edToken,
+    method: 'POST',
+    body: { a_date: fixDay, check_in_at: `${fixDay}T10:05:00+05:30`, check_out_at: `${fixDay}T19:00:00+05:30`, reason: 'At the venue all day' },
+  })
+  const fixOld = await api('/hr/corrections', {
+    token: edToken,
+    method: 'POST',
+    body: { a_date: '2020-01-01', check_in_at: '2020-01-01T10:00:00+05:30', reason: 'Long ago' },
+  })
+  const fixSelf = await api(`/hr/corrections/${fixAsk.json.id}/decide`, { token: edToken, method: 'POST', body: { approve: true } })
+  const fixOk = await api(`/hr/corrections/${fixAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: true } })
+  const fixDayRoster = await api(`/hr/attendance?date=${fixDay}`, { token: aToken })
+  const fixRow = (fixDayRoster.json ?? []).find((r) => r.user_id === edUid)
+  check(
+    'day fix: a member asks to fix a recent day; only a manager applies it, and the day then shows the times',
+    fixAsk.status === 201 && fixOld.status === 422 && fixSelf.status === 403 && fixOk.status === 204 &&
+      !!fixRow?.check_in_at && !!fixRow?.check_out_at && ['present', 'late'].includes(fixRow?.status),
+    { ask: fixAsk.status, old: fixOld.status, self: fixSelf.status, ok: fixOk.status, row: fixRow },
+  )
+
   // ── Tracking health from the server (Tracking v2) ──
   const trk = await api('/projects/tracking', { token: aToken })
   const trkRow = (trk.json ?? []).find((r) => r.id === pid)

@@ -217,6 +217,7 @@ const pagedDay = z.object({
       present: z.number().int(),
       absent: z.number().int(),
       not_checked_out: z.number().int(),
+      on_leave: z.number().int().default(0),
       percent: z.number(),
     })
     .optional(),
@@ -268,6 +269,7 @@ function TeamDashboard() {
             present: data.summary.present,
             absent: data.summary.absent,
             notCheckedOut: data.summary.not_checked_out,
+            onLeave: data.summary.on_leave,
             percent: data.summary.percent,
           }
         : summarise(rows),
@@ -315,6 +317,14 @@ function TeamDashboard() {
         <Tile label="Not checked out" value={totals.notCheckedOut} tone="info" />
         <Tile label="Attendance" value={`${totals.percent}%`} tone="neutral" />
       </div>
+      {totals.onLeave > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {totals.onLeave} on approved leave -- not counted as absent.{' '}
+          <Link to="/leave" className="underline underline-offset-2">
+            Leave &amp; holidays
+          </Link>
+        </p>
+      )}
 
       <div className="mt-4 grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="flex flex-col gap-1.5">
@@ -348,7 +358,7 @@ function TeamDashboard() {
             }
           >
             <option value="all">All</option>
-            {(['present', 'late', 'absent', 'not_checked_out'] as DisplayStatus[]).map((s) => (
+            {(['present', 'late', 'absent', 'not_checked_out', 'on_leave'] as DisplayStatus[]).map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABEL[s]}
               </option>

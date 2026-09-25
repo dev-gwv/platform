@@ -81,6 +81,17 @@ describe('summariseRoster', () => {
     expect(s.percent).toBe(80)
   })
 
+  it('does not count leave or a day off as absent, nor against the percentage', () => {
+    const away: RosterRow[] = [
+      { status: 'present', check_in_at: '2026-09-01T03:30:00Z', check_out_at: '2026-09-01T12:00:00Z' },
+      { status: 'absent', check_in_at: null, check_out_at: null, on_leave: true },
+      { status: 'absent', check_in_at: null, check_out_at: null, day_off: 'Diwali' },
+      { status: 'absent', check_in_at: null, check_out_at: null },
+    ]
+    expect(away.map(displayStatus)).toEqual(['present', 'on_leave', 'day_off', 'absent'])
+    expect(summariseRoster(away)).toMatchObject({ total: 2, present: 1, absent: 1, onLeave: 1, percent: 50 })
+  })
+
   it('reports 0% for an empty roster rather than NaN', () => {
     const s = summariseRoster([])
     expect(s.percent).toBe(0)
