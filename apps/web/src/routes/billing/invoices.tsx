@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Trash2 } from 'lucide-react'
+import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Send, Trash2 } from 'lucide-react'
 import type { InvoiceListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -16,7 +16,8 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useBillingOverview, useDeleteInvoice, useInvoices } from '@/features/billing/api'
+import { useBillingOverview, useDeleteInvoice, useInvoices, useSendInvoice } from '@/features/billing/api'
+import { toast } from 'sonner'
 import { MoneyTile } from '@/features/billing/MoneyTile'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import { BillingStrip } from '@/features/billing/BillingStrip'
@@ -73,6 +74,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const { data: projects } = useProjects()
   const { data: overview } = useBillingOverview()
   const del = useDeleteInvoice()
+  const sendInvoice = useSendInvoice()
   const confirm = useConfirm()
   const canDelete = access.hasAction('billing', 'delete')
   const canEdit = access.hasAction('billing', 'edit')
@@ -142,6 +144,18 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
     const late = owed && isOverdue(inv)
     const open = (search?: { print: string }) => void navigate({ to: '/billing/invoices/$id', params: { id: inv.id }, ...(search ? { search: search as never } : {}) })
     const actions = [
+      {
+        key: 'send',
+        label: 'Send',
+        title: 'Send this draft',
+        icon: Send,
+        onClick: async () => {
+          await sendInvoice.mutateAsync(inv.id)
+          toast.success(`${inv.invoice_number} is sent. Share it on WhatsApp or email.`)
+        },
+        show: inv.status === 'draft' && canEdit,
+        className: 'text-primary',
+      },
       { key: 'view', label: 'View', title: 'Open invoice', icon: Eye, onClick: () => open(), show: true },
       { key: 'record', label: 'Record', title: 'Record a payment', icon: IndianRupee, onClick: () => setRecording(inv), show: owed && canRecord, className: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' },
       { key: 'whatsapp', label: late ? 'Remind' : 'WhatsApp', title: late ? 'WhatsApp reminder' : 'Send on WhatsApp', icon: MessageCircle, onClick: () => void whatsappInvoice(inv, late), show: sendable, className: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' },

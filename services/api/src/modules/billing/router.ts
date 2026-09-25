@@ -512,6 +512,22 @@ export const billingRouter = new Hono<AppEnv>()
    * A link the client can open without logging in (or, with revoke, one that
    * stops working). Each call replaces the previous link.
    */
+  // A draft becomes a sent invoice: its link can now be shared and it can be paid.
+  .post('/invoices/:id/send', requireAction('billing', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'billing.invoice_send', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ status: string }[]>`
+        update invoices set status = case when status = 'draft' then 'sent' else status end
+         where id = ${id} and company_id = ${c.get('auth').companyId}
+        returning status`),
+    )
+    if (!rows) fail(400, 'We could not send this invoice.')
+    if (!rows[0]) fail(404, 'That invoice was not found.')
+    if (rows[0].status === 'cancelled') fail(409, 'This invoice is cancelled.')
+    await audit(c, { action: 'invoice.send', entityType: 'invoice', entityId: id })
+    return c.json({ ok: true, status: rows[0].status })
+  })
+
   .post('/invoices/:id/share', requireAction('billing', 'view'), async (c) => {
     const id = uuidParam(c)
     const body = (await c.req.json().catch(() => ({}))) as { revoke?: unknown }

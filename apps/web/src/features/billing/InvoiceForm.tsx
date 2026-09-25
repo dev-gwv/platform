@@ -229,7 +229,12 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
     setValues(emptyInvoiceForm())
   }
 
-  return { values, set, patchLine, setGstEnabled, totals, problems, toRequest, reset }
+  /** Put back a whole saved state at once (a restored draft). */
+  function replace(next: InvoiceFormValues) {
+    setValues(next)
+  }
+
+  return { values, set, patchLine, setGstEnabled, totals, problems, toRequest, reset, replace }
 }
 
 /** A searchable dropdown over the client list -- matches by name, phone or email. */

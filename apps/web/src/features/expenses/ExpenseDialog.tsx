@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus } from 'lucide-react'
 import type { CreateExpenseRequest, Expense } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -66,6 +67,27 @@ export function AddExpenseDialog({
   const projectMode = !!presetProjectId && !isEdit
   const [showTax, setShowTax] = useState(!!(expense && (expense.gst_treatment !== 'non_gst' || expense.invoice_number || expense.tax_amount)))
   // A person whose name the studio can pick: the team, or whoever is signed in.
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `expense:${expense?.id ?? `new${presetProjectId ? `:${presetProjectId}` : ''}`}` : null,
+    { category, description, amount, expenseDate, projectId, partyId, paidBy, gstTreatment, gstRate, amountIs, invoiceNumber, taxAmount, reverse },
+    (v) => {
+      setCategory(v.category)
+      setDescription(v.description)
+      setAmount(v.amount)
+      setExpenseDate(v.expenseDate)
+      setProjectId(v.projectId)
+      setPartyId(v.partyId)
+      setPaidBy(v.paidBy)
+      setGstTreatment(v.gstTreatment)
+      setGstRate(v.gstRate)
+      setAmountIs(v.amountIs)
+      setInvoiceNumber(v.invoiceNumber)
+      setTaxAmount(v.taxAmount)
+      setReverse(v.reverse)
+      if (v.gstTreatment !== 'non_gst' || v.invoiceNumber || v.taxAmount) setShowTax(true)
+    },
+  )
   const payers = (people ?? []).map((m) => ({ id: m.user_id, name: m.name }))
   if (session && !payers.some((p) => p.id === session.user_id)) payers.unshift({ id: session.user_id, name: session.display_name || 'Me' })
 
@@ -121,6 +143,7 @@ export function AddExpenseDialog({
           ...(description.trim() ? { description: description.trim() } : {}),
         })
       }
+      draft.clear()
       setOpen(false)
       if (!isEdit) reset()
     } catch (err) {

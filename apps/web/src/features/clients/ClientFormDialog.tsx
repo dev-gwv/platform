@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus, Pencil } from 'lucide-react'
 import type { Client } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -45,6 +46,22 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
   const [gstin, setGstin] = useState(client?.gstin ?? '')
   const [notes, setNotes] = useState(client?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `client:${client?.id ?? 'new'}` : null,
+    { name, phone, alternatePhone, email, city, address, relation, gstin, notes },
+    (v) => {
+      setName(v.name)
+      setPhone(v.phone)
+      setAlternatePhone(v.alternatePhone)
+      setEmail(v.email)
+      setCity(v.city)
+      setAddress(v.address)
+      setRelation(v.relation)
+      setGstin(v.gstin)
+      setNotes(v.notes)
+    },
+  )
 
   function reset() {
     setName('')
@@ -94,6 +111,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         })
       }
+      draft.clear()
       setOpen(false)
       if (!isEdit) {
         reset()

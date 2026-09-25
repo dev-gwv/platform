@@ -293,10 +293,8 @@ export function useCreateInvoice() {
         body: input,
         responseSchema: z.object({ id: z.string(), invoice_number: z.string() }),
       }),
-    onSuccess: () => {
-      toast.success('Invoice created')
-      invalidateMoney(qc)
-    },
+    // The caller says what happened: "saved as a draft" or "saved and ready to send".
+    onSuccess: () => invalidateMoney(qc),
   })
 }
 
@@ -305,10 +303,17 @@ export function useUpdateInvoice(invoiceId: string) {
   return useMutation({
     mutationFn: (input: UpdateInvoiceRequest) =>
       callApi(`/billing/invoices/${invoiceId}`, { method: 'PATCH', body: input, responseSchema: anySchema }),
-    onSuccess: () => {
-      toast.success('Invoice updated')
-      invalidateMoney(qc)
-    },
+    onSuccess: () => invalidateMoney(qc),
+  })
+}
+
+/** Turn a draft into a sent invoice, so it can be shared and paid. */
+export function useSendInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invoiceId: string) => callApi(`/billing/invoices/${invoiceId}/send`, { method: 'POST', body: {}, responseSchema: anySchema }),
+    onSuccess: () => invalidateMoney(qc),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

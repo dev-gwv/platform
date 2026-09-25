@@ -23,6 +23,8 @@ import {
   useReceivedPayment,
   useRevokeInvoiceLink,
   useUpdateInvoice,
+  useSendInvoice,
+  useRecordPayment,
 } from '@/features/billing/api'
 import { emptyInvoiceForm } from '@/features/billing/InvoiceForm'
 import { InvoiceEditor } from '@/features/billing/InvoiceEditor'
@@ -47,10 +49,14 @@ export function InvoiceDetailPage({ edit }: { edit?: boolean } = {}) {
  * (edit, cancel, stop the link) under "more". It links back to its project.
  */
 function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
-  const { id } = useParams({ from: '/authed/billing/invoices/$id' })
+  // Not strict: the same screen serves /billing/invoices/$id and its /edit address.
+  const { id = '' } = useParams({ strict: false }) as { id?: string }
   const { data, isLoading, isError, refetch } = useInvoice(id)
   const access = useAccess()
   const [recording, setRecording] = useState(false)
+  const [editing, setEditing] = useState(!!edit)
+  const send = useSendInvoice()
+  const navigate = useNavigate()
   const { data: company } = useQuery({
     queryKey: ['settings', 'company'],
     queryFn: () => callApi('/settings/company', { responseSchema: companyProfile }),
@@ -70,8 +76,19 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
 
   const cancelled = data.status === 'cancelled'
   const editable = data.amount_paid === 0 && !cancelled && data.payments.length === 0
-  const sendable = !cancelled && data.status !== 'draft'
+  const isDraft = data.status === 'draft'
+  const sendable = !cancelled && !isDraft
   const late = isOverdue(data)
+  const canEdit = access.hasAction('billing', 'edit')
+
+  /** A draft is sent first, then shared or paid: a client cannot open or pay a draft. */
+  async function asSent(then: () => void | Promise<void>) {
+    if (isDraft) {
+      await send.mutateAsync(data!.id)
+      toast.success(`${data!.invoice_number} is now sent.`)
+    }
+    await then()
+  }
 
   return (
     <>
@@ -92,9 +109,14 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {data.balance_due > 0 && !cancelled && access.hasAction('billing', 'edit') && (
-              <Button size="sm" onClick={() => setRecording(true)}>
+            {data.balance_due > 0 && !cancelled && canEdit && (
+              <Button size="sm" onClick={() => void asSent(() => setRecording(true))} disabled={send.isPending}>
                 <IndianRupee /> Record payment
+              </Button>
+            )}
+            {editable && canEdit && (
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil /> Edit
               </Button>
             )}
             {sendable && (
@@ -114,13 +136,31 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               <Printer /> Print
             </Button>
-            <MoreActions invoice={data} editable={editable} autoEdit={edit} />
+            <MoreActions invoice={data} editable={editable} />
           </div>
         </div>
-        {data.status === 'draft' && (
-          <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-            This is a draft. Edit it and mark it as sent to share it with the client.
-          </p>
+        {isDraft && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-tone-amber/40 bg-tone-amber-soft px-4 py-3">
+            <div>
+              <p className="font-semibold text-foreground">Draft · not sent yet</p>
+              <p className="text-sm text-muted-foreground">Check it below, then send it. The client can open and pay it once it is sent.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {canEdit && (
+                <>
+                  <Button size="sm" onClick={() => void asSent(() => whatsappInvoice(data, false))} disabled={send.isPending}>
+                    <MessageCircle /> Send on WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void asSent(() => emailInvoice(data, false))} disabled={send.isPending}>
+                    <Mail /> Send by email
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void asSent(() => copyInvoiceLink(data.id))} disabled={send.isPending}>
+                    <Copy /> Mark sent &amp; copy link
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         )}
         {cancelled && (
           <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
@@ -168,6 +208,16 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
 
       <InvoicePayments invoice={data} />
 
+      {editing && editable && (
+        <EditInvoiceDialog
+          invoice={data}
+          onClose={() => {
+            setEditing(false)
+            if (edit) void navigate({ to: '/billing/invoices/$id', params: { id: data.id }, replace: true })
+          }}
+        />
+      )}
+
       {recording && (
         <RecordPaymentDialog
           target={{ kind: 'invoice', invoiceId: data.id, invoiceNumber: data.invoice_number }}
@@ -180,19 +230,15 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
 }
 
 /** Edit, delete (only while nothing is paid), stop the link and cancel -- out of the way of the everyday buttons. */
-function MoreActions({ invoice, editable, autoEdit }: { invoice: InvoiceDetail; editable: boolean; autoEdit?: boolean | undefined }) {
+function MoreActions({ invoice, editable }: { invoice: InvoiceDetail; editable: boolean }) {
   const access = useAccess()
   const del = useDeleteInvoice()
   const cancel = useCancelInvoice()
   const revoke = useRevokeInvoiceLink()
   const confirm = useConfirm()
   const navigate = useNavigate()
-  const [editing, setEditing] = useState(!!autoEdit && editable)
   const cancelled = invoice.status === 'cancelled'
   const items: RowMenuItem[] = []
-  if (editable && access.hasAction('billing', 'edit')) {
-    items.push({ label: 'Edit invoice', icon: <Pencil className="size-4" />, onSelect: () => setEditing(true) })
-  }
   if (!cancelled && invoice.status !== 'draft') {
     items.push({
       label: 'Stop the client link',
@@ -241,7 +287,6 @@ function MoreActions({ invoice, editable, autoEdit }: { invoice: InvoiceDetail; 
   return (
     <>
       {items.length > 0 && <RowMenu label="More for this invoice" items={items} />}
-      {editing && <EditInvoiceDialog invoice={invoice} onClose={() => setEditing(false)} />}
     </>
   )
 }
@@ -293,17 +338,29 @@ function InvoicePayments({ invoice }: { invoice: InvoiceDetail }) {
 
 function EditInvoiceDialog({ invoice, onClose }: { invoice: InvoiceDetail; onClose: () => void }) {
   const update = useUpdateInvoice(invoice.id)
+  const pay = useRecordPayment(invoice.id)
   const allZeroGst = invoice.items.every((i) => Number(i.gst_rate) === 0)
   return (
     <FullScreen onClose={onClose}>
       <InvoiceEditor
         isEdit
         editNumber={invoice.invoice_number}
-        busy={update.isPending}
+        editStatus={invoice.status}
+        draftKey={`invoice:edit:${invoice.id}`}
+        busy={update.isPending || pay.isPending}
         onCancel={onClose}
         onSubmit={async (req) => {
-          const { invoice_number: _n, payment: _p, ...rest } = req
-          await update.mutateAsync(rest)
+          const { invoice_number: _n, payment, ...rest } = req
+          // Money in hand means the invoice is sent: a draft cannot be paid.
+          await update.mutateAsync(payment ? { ...rest, status: 'sent' } : rest)
+          if (payment) await pay.mutateAsync(payment)
+          toast.success(
+            rest.status === 'draft' && !payment
+              ? `${invoice.invoice_number} saved as a draft.`
+              : payment
+                ? `${invoice.invoice_number} saved, and the payment is recorded.`
+                : `${invoice.invoice_number} saved.`,
+          )
           onClose()
         }}
         initial={{

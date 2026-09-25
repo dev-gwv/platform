@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
@@ -83,6 +84,11 @@ export function ReceivedPaymentDialog({
     }
   }, [open, initial])
 
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? `received-payment:${initial?.id ?? 'new'}` : null, form, setForm, {
+    isBlank: (v) => JSON.stringify(v) === JSON.stringify(initial ? toForm(initial) : emptyForm()),
+  })
+
   const { data: invoices } = useInvoices()
   const pending = create.isPending || update.isPending
   const clientProjects = (projects ?? []).filter((p) => !form.client_id || p.client_id === form.client_id)
@@ -136,6 +142,7 @@ export function ReceivedPaymentDialog({
       } else {
         await create.mutateAsync(payload)
       }
+      draft.clear()
       onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the payment.')

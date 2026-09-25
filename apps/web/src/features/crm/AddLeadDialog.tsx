@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus } from 'lucide-react'
 import { createLeadRequest, type CreateLeadRequest, type LeadQuality } from '@ipc/contracts'
 import { fieldErrors, type FieldErrors } from '@/shared/forms/field-errors'
@@ -77,6 +78,30 @@ export function AddLeadDialog({
    */
   const [quality, setQuality] = useState<LeadQuality | ''>('')
   const [errors, setErrors] = useState<FieldErrors<Field>>({})
+  // A lead half-typed during a call survives a refresh or a closed tab.
+  const draft = useFormDraft(
+    open ? 'lead:new' : null,
+    { name, phone, email, source, notes, value, closeDate, eventType, eventDate, eventLocation, alternatePhone, city, assignedTo, followUpAt, groupName, stageId, quality },
+    (v) => {
+      setName(v.name)
+      setPhone(v.phone)
+      setEmail(v.email)
+      setSource(v.source)
+      setNotes(v.notes)
+      setValue(v.value)
+      setCloseDate(v.closeDate)
+      setEventType(v.eventType)
+      setEventDate(v.eventDate)
+      setEventLocation(v.eventLocation)
+      setAlternatePhone(v.alternatePhone)
+      setCity(v.city)
+      setAssignedTo(v.assignedTo)
+      setFollowUpAt(v.followUpAt)
+      setGroupName(v.groupName)
+      setStageId(v.stageId)
+      setQuality(v.quality)
+    },
+  )
 
   function reset() {
     setName('')
@@ -127,6 +152,7 @@ export function AddLeadDialog({
 
     add.mutate(createLeadRequest.parse(body), {
       onSuccess: (r) => {
+        draft.clear()
         setOpen(false)
         reset()
         onAdded?.(r.lead.id)

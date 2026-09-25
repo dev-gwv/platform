@@ -49,6 +49,7 @@ import { matchStudioState, deriveIntraState, toAmount, type InvoiceLineDraft } f
 import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } from './api'
 import { HsnSearchDialog } from './HsnSearchDialog'
 import { DESIGN_INFO } from './InvoicePaper'
+import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-form-draft'
 
 /** Payment terms as a studio says them, and how many days each allows. */
 export const PAYMENT_TERMS: { label: string; days: number | null }[] = [
@@ -92,12 +93,18 @@ export function InvoiceEditor({
   initial,
   isEdit = false,
   editNumber,
+  editStatus,
+  draftKey,
   busy,
   onSubmit,
   onCancel,
 }: {
   initial: InvoiceFormValues
   isEdit?: boolean | undefined
+  /** Status of the invoice being edited: a sent one is saved as sent, a draft can be saved or sent. */
+  editStatus?: string | undefined
+  /** Where the unsaved form is kept on this device, so a refresh or stray click loses nothing. */
+  draftKey: string
   /** The number of the invoice being edited, for the heading. */
   editNumber?: string | undefined
   busy: boolean
@@ -106,6 +113,9 @@ export function InvoiceEditor({
 }) {
   const form = useInvoiceForm(initial)
   const { values, set, patchLine, setGstEnabled, totals } = form
+  const initialJson = useMemo(() => JSON.stringify(initial), [])
+  const draft = useFormDraft(draftKey, values, form.replace, { isBlank: (v) => JSON.stringify(v) === initialJson })
+  const sentAlready = isEdit && !!editStatus && editStatus !== 'draft'
   const access = useAccess()
   const confirm = useConfirm()
   const { data: states } = useStates()
@@ -286,13 +296,14 @@ export function InvoiceEditor({
     const problems = form.problems()
     if (gstNumberError) problems.unshift(gstNumberError)
     if (gst && !values.place_of_supply) problems.unshift('Choose the place of supply for this tax invoice.')
-    if (status === 'draft' && values.payment.on) problems.unshift('A draft cannot be paid. Use “Save and send” to record the payment.')
+    if (status === 'draft' && values.payment.on) problems.unshift('A draft cannot take a payment. Use “Save and send” to record it.')
     if (problems.length) {
       setError(problems[0] ?? 'This invoice is not ready yet.')
       return
     }
     try {
       await onSubmit({ ...form.toRequest(), status })
+      draft.clear()
     } catch (err) {
       setError(friendlyInvoiceError(err))
     }
@@ -312,7 +323,10 @@ export function InvoiceEditor({
           </span>
           <div>
             <h1 className="text-lg font-semibold leading-tight">{isEdit ? `Edit ${editNumber ?? 'invoice'}` : 'New invoice'}</h1>
-            <p className="text-xs text-muted-foreground">{gst ? 'Tax invoice · GST worked out line by line' : 'Plain invoice · no GST'}</p>
+            <p className="text-xs text-muted-foreground">
+              {gst ? 'Tax invoice · GST worked out line by line' : 'Plain invoice · no GST'}
+              {draft.savedAt ? ` · Kept on this device ${agoText(draft.savedAt)}` : ''}
+            </p>
           </div>
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onCancel} aria-label="Close">
@@ -321,6 +335,18 @@ export function InvoiceEditor({
       </div>
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 pb-32 pt-6 sm:px-8">
+        {draft.restoredAt && (
+          <div className="mb-4">
+            <DraftRestoredBanner
+              at={draft.restoredAt}
+              onDismiss={draft.dismissRestored}
+              onDiscard={() => {
+                form.replace(initial)
+                draft.clear()
+              }}
+            />
+          </div>
+        )}
         {/* Customer */}
         <section className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
           <div className="grid gap-4 md:grid-cols-[10rem_minmax(0,28rem)_1fr] md:items-start">
@@ -679,7 +705,7 @@ export function InvoiceEditor({
         </section>
 
         {/* Payment now */}
-        {!isEdit && access.hasAction('billing', 'edit') && (
+        {access.hasAction('billing', 'edit') && (
           <section className={cn('mt-6 rounded-xl border p-4 sm:p-5', values.payment.on ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-border')}>
             <label className="flex cursor-pointer items-center gap-3">
               <input
@@ -692,9 +718,11 @@ export function InvoiceEditor({
               />
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <IndianRupee className="size-4 text-emerald-600" /> I have received payment for this invoice
+                  <IndianRupee className="size-4 text-emerald-600" /> {isEdit ? 'Record an advance or token amount received' : 'I have received payment (full, advance or token amount)'}
                 </span>
-                <span className="block text-xs text-muted-foreground">Recorded with the invoice, with its receipt number. No second step later.</span>
+                <span className="block text-xs text-muted-foreground">
+                  Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' Once money is recorded, the lines are locked.' : ''}
+                </span>
               </span>
             </label>
             {values.payment.on && (
@@ -730,11 +758,19 @@ export function InvoiceEditor({
       <div className="sticky bottom-0 z-20 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void submit('draft')} disabled={busy}>
-              Save as draft
-            </Button>
+            {!sentAlready && (
+              <Button type="button" variant="outline" onClick={() => void submit('draft')} disabled={busy}>
+                Save as draft
+              </Button>
+            )}
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : values.payment.on ? 'Save, send and record payment' : 'Save and send'}
+              {busy
+                ? 'Saving…'
+                : values.payment.on
+                  ? 'Save and record payment'
+                  : sentAlready
+                    ? 'Save changes'
+                    : 'Save and send'}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
