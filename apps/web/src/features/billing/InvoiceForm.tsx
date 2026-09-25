@@ -16,8 +16,8 @@ import { Button } from '@/shared/ui/button'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
 import { callApi } from '@/shared/api/client'
-import { useAuth } from '@/shared/auth/AuthProvider'
 import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
+import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
 import { useClients } from '@/features/clients/api'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
 import { useProjects, useProject } from '@/features/projects/api'
@@ -223,7 +223,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
 
 /** A studio-defined shortcut that appends one line item with that name, without leaving the form. */
 function QuickAddLine({ onAdd }: { onAdd: (description: string) => void }) {
-  const { session } = useAuth()
+  const canAdd = useCanAddLookup('invoice_line_preset')
   const { data: presets } = useActiveLookups('invoice_line_preset')
   const createLookup = useCreateCustomLookup()
   const [adding, setAdding] = useState(false)
@@ -266,7 +266,7 @@ function QuickAddLine({ onAdd }: { onAdd: (description: string) => void }) {
           {p.value}
         </option>
       ))}
-      {session?.is_owner && <option value="__add__">+ Add new preset…</option>}
+      {canAdd && <option value="__add__">+ Add new preset…</option>}
     </Select>
   )
 }

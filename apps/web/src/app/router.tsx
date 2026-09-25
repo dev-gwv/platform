@@ -34,6 +34,7 @@ import { MyWorkPage } from '@/routes/my-work'
 import { BillingPage } from '@/routes/billing'
 import { InvoicesPage } from '@/routes/billing/invoices'
 import { PaymentsPage } from '@/routes/billing/payments'
+import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
@@ -215,12 +216,14 @@ const routeTree = rootRoute.addChildren([
   route('/billing', BillingPage),
   route('/billing/invoices', InvoicesPage),
   route('/billing/payments', PaymentsPage),
+  route('/billing/payments/$id', PaymentReceiptPage),
   route('/billing/templates', () => <Navigate to="/settings/invoicing" replace />),
   route('/billing/settings', () => <Navigate to="/settings/invoicing" replace />),
   route('/billing/invoices/new', () => <InvoicesPage newInvoice />),
   route('/billing/invoices/$id', InvoiceDetailPage),
   route('/billing/invoices/$id/edit', () => <InvoiceDetailPage edit />),
-  route('/billing/$id/invoice', InvoiceDetailPage),
+  // The old app's receipt address, kept so saved links still open the receipt.
+  route('/billing/$id/invoice', PaymentReceiptPage),
   route('/company-expenses', CompanyExpensesPage),
   route('/company-expenses/report', CompanyExpensesPage),
   route('/financials', FinancialsPage),

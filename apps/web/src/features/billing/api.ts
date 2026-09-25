@@ -10,6 +10,7 @@ import {
   invoiceListResponse,
   invoiceTemplateList,
   invoiceNoteTemplateList,
+  paymentReceipt,
   receivedPayment,
   receivedPaymentListResponse,
   type CreateInvoiceBankAccountRequest,
@@ -423,6 +424,17 @@ export function useUpdateReceivedPayment(id: string) {
       invalidateMoney(qc)
     },
     onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** A payment drawn as its receipt: letterhead, client, project value. */
+export function usePaymentReceipt(id: string | null) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['received-payments', id, 'receipt'],
+    queryFn: () => callApi(`/billing/payments/${id}/receipt`, { responseSchema: paymentReceipt }),
+    enabled: !!session && !!id && access.hasModule('billing'),
   })
 }
 

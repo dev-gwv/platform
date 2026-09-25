@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Copy, Download, Eye, IndianRupee, Mail, MessageCircle, Plus } from 'lucide-react'
+import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Trash2 } from 'lucide-react'
 import type { InvoiceListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -10,14 +10,14 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
-import { RowMenu } from '@/shared/ui/row-menu'
+import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useInvoices } from '@/features/billing/api'
+import { useBillingOverview, useDeleteInvoice, useInvoices } from '@/features/billing/api'
+import { MoneyTile } from '@/features/billing/MoneyTile'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import { BillingStrip } from '@/features/billing/BillingStrip'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
@@ -25,6 +25,7 @@ import { dueText, invoiceBadge, isOverdue, shortDate } from '@/features/billing/
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
 import { useClients } from '@/features/clients/api'
 import { useProjects } from '@/features/projects/api'
+import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
 
 const PAGE_SIZE = 25
 
@@ -70,6 +71,11 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
   const { data: projects } = useProjects()
+  const { data: overview } = useBillingOverview()
+  const del = useDeleteInvoice()
+  const confirm = useConfirm()
+  const canDelete = access.hasAction('billing', 'delete')
+  const canEdit = access.hasAction('billing', 'edit')
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -123,29 +129,56 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
     downloadCsv(`invoices-${new Date().toISOString().slice(0, 10)}.csv`, csv)
   }
 
-  const actionsFor = (inv: InvoiceListItem) => {
+  /**
+   * The things done with an invoice, each its own icon as in the old app:
+   * view, record a payment (green, while money is owed), WhatsApp, email,
+   * copy the client link, print, edit and delete. Edit and delete only while
+   * nothing has been paid against it; after that it is a record.
+   */
+  const actionsFor = (inv: InvoiceListItem, labelled = false) => {
     const sendable = inv.status !== 'draft' && inv.status !== 'cancelled'
     const owed = inv.balance_due > 0 && sendable
+    const untouched = inv.status !== 'cancelled' && inv.balance_due >= inv.total
+    const late = owed && isOverdue(inv)
+    const open = (search?: { print: string }) => void navigate({ to: '/billing/invoices/$id', params: { id: inv.id }, ...(search ? { search: search as never } : {}) })
+    const actions = [
+      { key: 'view', label: 'View', title: 'Open invoice', icon: Eye, onClick: () => open(), show: true },
+      { key: 'record', label: 'Record', title: 'Record a payment', icon: IndianRupee, onClick: () => setRecording(inv), show: owed && canRecord, className: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' },
+      { key: 'whatsapp', label: late ? 'Remind' : 'WhatsApp', title: late ? 'WhatsApp reminder' : 'Send on WhatsApp', icon: MessageCircle, onClick: () => void whatsappInvoice(inv, late), show: sendable, className: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' },
+      { key: 'email', label: 'Email', title: 'Send by email', icon: Mail, onClick: () => void emailInvoice(inv, late), show: sendable },
+      { key: 'copy', label: 'Link', title: 'Copy client link', icon: Copy, onClick: () => void copyInvoiceLink(inv.id), show: sendable },
+      { key: 'print', label: 'Print', title: 'Print or save as PDF', icon: Printer, onClick: () => open({ print: '1' }), show: true },
+      { key: 'edit', label: 'Edit', title: 'Edit invoice', icon: Pencil, onClick: () => void navigate({ to: '/billing/invoices/$id/edit', params: { id: inv.id } }), show: canEdit && untouched },
+      {
+        key: 'delete',
+        label: 'Delete',
+        title: 'Delete invoice',
+        icon: Trash2,
+        onClick: async () => {
+          if (await confirm({ title: `Delete ${inv.invoice_number}?`, description: 'The invoice and its client link are removed. This cannot be undone.', destructive: true, confirmLabel: 'Delete' })) del.mutate(inv.id)
+        },
+        show: canDelete && untouched,
+        className: 'text-destructive hover:text-destructive',
+      },
+    ].filter((x) => x.show)
+    if (labelled) {
+      return (
+        <div className="grid w-full grid-cols-2 gap-2">
+          {actions.map((x) => (
+            <Button key={x.key} variant="outline" size="sm" onClick={() => void x.onClick()} className={cn('min-h-10', x.className)} aria-label={x.title}>
+              <x.icon /> {x.label}
+            </Button>
+          ))}
+        </div>
+      )
+    }
     return (
-      <div className="flex items-center justify-end gap-1">
-        {owed && canRecord && (
-          <Button size="sm" variant="outline" onClick={() => setRecording(inv)}>
-            <IndianRupee /> Record
+      <div className="flex items-center justify-end gap-0.5">
+        {actions.map((x) => (
+          <Button key={x.key} variant="ghost" size="icon" onClick={() => void x.onClick()} title={x.title} aria-label={`${x.title}: ${inv.invoice_number}`} className={cn('size-8', x.className)}>
+            <x.icon className="size-4" />
           </Button>
-        )}
-        <RowMenu
-          label={`More for ${inv.invoice_number}`}
-          items={[
-            { label: 'Open invoice', icon: <Eye className="size-4" />, onSelect: () => void navigate({ to: '/billing/invoices/$id', params: { id: inv.id } }) },
-            ...(sendable
-              ? [
-                  { label: owed && isOverdue(inv) ? 'WhatsApp reminder' : 'Send on WhatsApp', icon: <MessageCircle className="size-4" />, onSelect: () => void whatsappInvoice(inv, owed && isOverdue(inv)) },
-                  { label: 'Send by email', icon: <Mail className="size-4" />, onSelect: () => void emailInvoice(inv, owed && isOverdue(inv)) },
-                  { label: 'Copy client link', icon: <Copy className="size-4" />, onSelect: () => void copyInvoiceLink(inv.id) },
-                ]
-              : []),
-          ]}
-        />
+        ))}
       </div>
     )
   }
@@ -166,6 +199,23 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
       {creating && <NewInvoiceDialog initial={projectId && pickedProject ? { project_id: projectId, client_id: pickedProject.client_id } : undefined} onClose={() => setCreating(false)} />}
 
       {/* What is owed and what is late, before the list: the reason most people open this page. */}
+      {summary && (
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MoneyTile icon={FileText} tone="violet" value={formatINR(summary.billed)} label="Total invoiced" hint={`${summary.total_invoices} invoice${summary.total_invoices === 1 ? '' : 's'}`} onClick={() => change(() => setStatus('all'))} active={status === 'all'} />
+          <MoneyTile icon={CheckCircle2} tone="green" value={formatINR(summary.paid)} label="Amount paid" hint="Received against these invoices" onClick={() => change(() => setStatus('paid'))} active={status === 'paid'} />
+          <MoneyTile icon={Clock} tone="amber" value={formatINR(summary.pending)} label="Amount pending" hint="Waiting to be paid" onClick={() => change(() => setStatus('pending'))} active={status === 'pending'} />
+          <MoneyTile
+            icon={AlarmClock}
+            tone={overview?.overdue.count ? 'rose' : 'green'}
+            value={formatINR(overview?.overdue.amount ?? 0)}
+            label="Overdue"
+            hint={overview?.overdue.count ? `${overview.overdue.count} invoice${overview.overdue.count === 1 ? '' : 's'} past due` : 'Nothing late'}
+            onClick={() => change(() => setStatus('overdue'))}
+            active={status === 'overdue'}
+          />
+        </div>
+      )}
+
       {!projectId && <BillingStrip />}
 
       <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Which invoices">
@@ -225,13 +275,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
         </Button>
       </div>
 
-      {summary && (
-        <p className="mb-3 text-sm text-muted-foreground">
-          {summary.total_invoices} invoice{summary.total_invoices === 1 ? '' : 's'} · Billed <b className="text-foreground">{formatINR(summary.billed)}</b> · Paid{' '}
-          <b className="text-tone-green">{formatINR(summary.paid)}</b> · Unpaid <b className={cn(summary.pending > 0 && 'text-warning')}>{formatINR(summary.pending)}</b>
-          {isFetching ? ' · Refreshing…' : ''}
-        </p>
-      )}
+      {isFetching && !isLoading && <p className="mb-2 text-xs text-muted-foreground">Refreshing…</p>}
 
       {isLoading ? (
         <SkeletonList rows={5} columns={6} />
@@ -258,7 +302,6 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
           {isMobile ? (
             <RecordCards>
               {items.map((inv) => {
-                const badge = invoiceBadge(inv)
                 return (
                   <RecordCard
                     key={inv.id}
@@ -268,14 +311,15 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                       </Link>
                     }
                     subtitle={`${inv.client_name ?? '—'}${inv.project_name ? ` · ${inv.project_name}` : ''}`}
-                    badge={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+                    badge={<InvoiceBadge invoice={inv} />}
                     fields={[
                       { label: 'Total', value: formatINR(inv.total) },
+                      { label: 'Paid', value: formatINR(Math.max(0, inv.total - inv.balance_due)) },
                       { label: 'Balance', value: formatINR(inv.balance_due), strong: true },
                       { label: 'Date', value: shortDate(inv.invoice_date) },
                       { label: 'Due', value: dueText(inv) ?? shortDate(inv.due_date) },
                     ]}
-                    actions={actionsFor(inv)}
+                    actions={actionsFor(inv, true)}
                   />
                 )
               })}
@@ -290,6 +334,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                     <th className="px-3 py-2 font-medium">Date</th>
                     <th className="px-3 py-2 font-medium">Due</th>
                     <th className="px-3 py-2 text-right font-medium">Total</th>
+                    <th className="px-3 py-2 font-medium">Payment</th>
                     <th className="px-3 py-2 text-right font-medium">Balance</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 text-right font-medium">
@@ -299,7 +344,6 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                 </thead>
                 <tbody>
                   {items.map((inv) => {
-                    const badge = invoiceBadge(inv)
                     const late = isOverdue(inv)
                     return (
                       <tr key={inv.id} className="border-t border-border">
@@ -321,9 +365,21 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                           {dueText(inv) ?? shortDate(inv.due_date)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatINR(inv.total)}</td>
-                        <td className="px-3 py-2 text-right font-medium tabular-nums">{inv.status === 'cancelled' ? '—' : formatINR(inv.balance_due)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs tabular-nums">
+                          {inv.status === 'cancelled' ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <>
+                              <div className="text-tone-green">Rec: {formatINR(Math.max(0, inv.total - inv.balance_due))}</div>
+                              <div className={cn(inv.balance_due > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>Rem: {formatINR(inv.balance_due)}</div>
+                            </>
+                          )}
+                        </td>
+                        <td className={cn('px-3 py-2 text-right font-semibold tabular-nums', inv.balance_due > 0 ? (late ? 'text-destructive' : 'text-tone-amber') : 'text-tone-green')}>
+                          {inv.status === 'cancelled' ? '—' : formatINR(inv.balance_due)}
+                        </td>
                         <td className="px-3 py-2">
-                          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+                          <InvoiceBadge invoice={inv} />
                         </td>
                         <td className="px-3 py-2">{actionsFor(inv)}</td>
                       </tr>

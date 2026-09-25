@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins } from 'lucide-react'
+import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown } from 'lucide-react'
 import type { Expense } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -15,7 +15,6 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { RowMenu } from '@/shared/ui/row-menu'
-import { Card, CardContent } from '@/shared/ui/card'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { cn } from '@/shared/ui/cn'
 import { formatINR, humanize } from '@/shared/ui/format'
@@ -25,6 +24,7 @@ import { PERIOD_LABEL, periodFor, type PeriodKey } from '@/features/financials/p
 import { useProjects } from '@/features/projects/api'
 import { useDirectory } from '@/features/team/api'
 import { useActiveLookups } from '@/features/settings/api'
+import { MoneyTile } from '@/features/billing/MoneyTile'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
 import { CategoryManager } from '@/features/expenses/CategoryManager'
 import { ReceiptsPanel } from '@/features/expenses/ReceiptsPanel'
@@ -211,30 +211,17 @@ function Expenses() {
 
       {summary && (
         <div className="mb-4 grid grid-cols-3 gap-3">
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground sm:text-sm">Spent this month</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.this_month)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground sm:text-sm">This financial year</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.this_fy)}</p>
-            </CardContent>
-          </Card>
-          <button
-            type="button"
+          <MoneyTile icon={Receipt} tone="rose" value={formatINR(summary.this_month)} label="Spent this month" />
+          <MoneyTile icon={TrendingDown} tone="violet" value={formatINR(summary.this_fy)} label="This financial year" />
+          <MoneyTile
+            icon={HandCoins}
+            tone="amber"
+            value={formatINR(summary.to_reimburse)}
+            label="To reimburse"
+            hint={summary.to_reimburse > 0 ? 'Paid by the team, not yet paid back' : 'Nobody is owed'}
             onClick={() => change(() => setView(view === 'to_reimburse' ? 'all' : 'to_reimburse'))}
-            className={cn('rounded-xl border bg-card p-3 text-left transition-colors sm:p-4', view === 'to_reimburse' ? 'border-primary' : 'border-border hover:border-primary/40')}
-            aria-pressed={view === 'to_reimburse'}
-          >
-            <p className="flex items-center gap-1 text-xs text-muted-foreground sm:text-sm">
-              <HandCoins className="size-3.5" aria-hidden /> To reimburse
-            </p>
-            <p className={cn('mt-1 text-lg font-semibold tabular-nums sm:text-xl', summary.to_reimburse > 0 && 'text-warning')}>{formatINR(summary.to_reimburse)}</p>
-            <p className="hidden text-xs text-muted-foreground sm:block">{summary.to_reimburse > 0 ? 'Paid by the team, not yet paid back' : 'Nobody is owed'}</p>
-          </button>
+            active={view === 'to_reimburse'}
+          />
         </div>
       )}
 

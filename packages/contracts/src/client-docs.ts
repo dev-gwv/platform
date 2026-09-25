@@ -215,6 +215,20 @@ export const publicReceipt = z.object({
 })
 export type PublicReceipt = z.infer<typeof publicReceipt>
 
+/**
+ * The same receipt, read inside the app by the studio: everything the client
+ * sees plus the ids the toolbar needs (the project to open, the payment to
+ * edit). Read under the user's own access, so no link is minted to look.
+ */
+export const paymentReceipt = publicReceipt.extend({
+  id: uuid,
+  project_id: uuid.nullable(),
+  invoice_id: uuid.nullable(),
+  created_at: isoDateTime,
+  project_status: z.string().nullable(),
+})
+export type PaymentReceipt = z.infer<typeof paymentReceipt>
+
 export const publicDelivery = z.object({
   submission_link: z.string().nullable(),
   notes: z.string().nullable(),

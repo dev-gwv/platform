@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
 import type { ProjectBilling, ProjectDetail } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -17,7 +17,8 @@ import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/Record
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
 import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
-import { dueText, invoiceBadge, shortDate } from '@/features/billing/status'
+import { dueText, shortDate } from '@/features/billing/status'
+import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
 
 type Payment = ProjectDetail['payments'][number]
 
@@ -164,7 +165,6 @@ export function BillingTab({
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {invoices.map((inv) => {
-                  const badge = invoiceBadge(inv)
                   const due = dueText(inv)
                   return (
                     <li key={inv.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
@@ -181,7 +181,7 @@ export function BillingTab({
                           <span className="text-xs text-muted-foreground"> · {formatINR(inv.balance_due)} due</span>
                         )}
                       </span>
-                      <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+                      <InvoiceBadge invoice={inv} />
                       {canEdit && inv.balance_due > 0 && inv.status !== 'cancelled' && inv.status !== 'draft' && (
                         <Button size="sm" variant="ghost" onClick={() => setEditing({ invoiceId: inv.id, amount: inv.balance_due })}>
                           <IndianRupee /> Record
@@ -374,6 +374,7 @@ function PaymentItem({
   const update = useUpdatePayment(project.id)
   const del = useDeletePayment(project.id)
   const confirm = useConfirm()
+  const navigate = useNavigate()
   const canShareReceipt = canBill
 
   const summary = {
@@ -439,9 +440,9 @@ function PaymentItem({
               ...(paid && canShareReceipt
                 ? [
                     {
-                      label: 'Open receipt page',
+                      label: 'View receipt',
                       icon: <Receipt className="size-4" />,
-                      onSelect: () => void issueReceiptLink(p.id).then((l) => l && window.open(l, '_blank', 'noopener')),
+                      onSelect: () => void navigate({ to: '/billing/payments/$id', params: { id: p.id } }),
                     },
                   ]
                 : []),
