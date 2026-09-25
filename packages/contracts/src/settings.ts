@@ -132,7 +132,7 @@ export const updateMyProfileRequest = z.object({
   emergency_name: optText(120),
   emergency_relation: optText(60),
   emergency_phone: optText(20),
-  upi_id: optText(80).refine((v) => v == null || /^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(v), 'That UPI ID does not look right (name@bank).'),
+  upi_id: optText(80).refine((v) => v == null || /^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(v), 'That UPI ID does not look right (name@bank).'),
   bank_account_name: optText(120),
   bank_account_number: optText(30).refine((v) => v == null || /^\d{6,20}$/.test(v), 'Account number is 6–20 digits.'),
   bank_ifsc: optText(11)
