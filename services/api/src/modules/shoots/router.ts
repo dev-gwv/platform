@@ -5,6 +5,7 @@ import {
   saveShootPresetRequest,
   serviceOption,
   shootListItem,
+  myShoot,
   shootPreset,
   shootPresetKind,
   updateServiceRequest,
@@ -98,7 +99,23 @@ export const shootsRouter = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not load your shoots.')
-    return c.json(list.parse(rows))
+    // Who else is on each shoot: names and roles, never payouts.
+    const ids = rows.map((r) => (r as { id: string }).id)
+    const crew = ids.length
+      ? await attempt(c, 'shoots.my_crew', () =>
+          withUser(c.env, auth.userId, (sql) => sql<{ shoot_id: string; user_id: string; name: string; service_name: string | null }[]>`
+            select t.shoot_id, t.user_id, coalesce(u.name, 'Someone') as name, t.service_name
+              from team_assignment_slots t
+              left join users u on u.user_id = t.user_id
+             where t.shoot_id = any(${ids}::uuid[]) and t.status = 'booked'
+             order by t.start_at, u.name`),
+        )
+      : []
+    return c.json(
+      myShoot.array().parse(
+        rows.map((r) => ({ ...r, crew: (crew ?? []).filter((m) => m.shoot_id === (r as { id: string }).id) })),
+      ),
+    )
   })
 
   .get('/', requireAction('projects', 'view'), async (c) => {
@@ -303,6 +320,11 @@ export const shootsRouter = new Hono<AppEnv>()
     const id = uuidParam(c)
     const rows = await attempt(c, 'shoots.delete', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
+        // A booking for a shoot that no longer exists is not a booking: it
+        // is released (and says when), then unlinked.
+        await sql`
+          update team_assignment_slots set status = 'released', released_at = now()
+           where shoot_id = ${id} and status = 'booked'`
         await sql`update team_assignment_slots set shoot_id = null where shoot_id = ${id}`
         return sql<{ id: string }[]>`delete from shoots where id = ${id} returning id`
       }),

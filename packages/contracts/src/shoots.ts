@@ -40,6 +40,17 @@ export const shootListItem = z.object({
 })
 export type ShootListItem = z.infer<typeof shootListItem>
 
+/**
+ * A shoot on someone's own list: the shoot, and who else is on it -- names
+ * and roles only, never what anyone is paid.
+ */
+export const myShoot = shootListItem.extend({
+  crew: z
+    .array(z.object({ user_id: uuid, name: z.string(), service_name: z.string().nullable() }))
+    .default([]),
+})
+export type MyShoot = z.infer<typeof myShoot>
+
 /** A service this company has used before, offered as you type. */
 export const serviceOption = z.object({ id: uuid, name: z.string() })
 export type ServiceOption = z.infer<typeof serviceOption>

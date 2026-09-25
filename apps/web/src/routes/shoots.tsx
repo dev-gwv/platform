@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, Plus, MapPin, Pencil, Trash2, ExternalLink, CalendarDays, Eye, X } from 'lucide-react'
+import { Camera, Plus, MapPin, Pencil, Trash2, ExternalLink, CalendarDays, Eye, UserPlus, X } from 'lucide-react'
 import { shootListItem, shootRequirementInput, z, type CreateShootRequest, type ShootListItem, type ShootRequirementInput, type ShootStatus, type UpdateShootRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
@@ -24,6 +24,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useDeleteShoot, useUpdateShoot } from '@/features/shoots/api'
+import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 
 const list = shootListItem.array()
 const TONE: Record<ShootStatus, 'info' | 'success' | 'warning' | 'danger'> = {
@@ -75,6 +76,7 @@ function Shoots() {
   const canDelete = access.hasAction('projects', 'delete')
   const confirm = useConfirm()
   const del = useDeleteShoot()
+  const [assignTo, setAssignTo] = useState<ShootListItem | null>(null)
 
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ShootStatus>('all')
@@ -310,6 +312,11 @@ function Shoots() {
                       <Eye /> View
                     </Link>
                   </Button>
+                  {canEdit && s.status !== 'cancelled' && (
+                    <Button size="sm" onClick={() => setAssignTo(s)}>
+                      <UserPlus /> Assign team
+                    </Button>
+                  )}
                   {canEdit && <EditShootDialog shoot={s} />}
                   {canEdit && <SendTermsDialog shoot={s} />}
                   {canDelete && (
@@ -323,6 +330,7 @@ function Shoots() {
           ))}
         </div>
       )}
+      {assignTo && <AssignTeamDialog key={assignTo.id} shoot={assignTo} onClose={() => setAssignTo(null)} />}
     </>
   )
 }

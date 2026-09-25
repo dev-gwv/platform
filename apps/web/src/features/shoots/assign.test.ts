@@ -30,6 +30,15 @@ const member = (id: string, name: string, over: Partial<TeamMember> = {}): TeamM
 
 let n = 0
 const slot = (over: Partial<TeamSlot>): TeamSlot => ({
+  released_at: null,
+  shoot_name: null,
+  shoot_date: null,
+  shoot_status: null,
+  location: null,
+  map_link: null,
+  project_id: null,
+  project_name: null,
+  client_name: null,
   id: `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`,
   user_id: 'u1',
   user_name: null,

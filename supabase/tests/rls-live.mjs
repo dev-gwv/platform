@@ -1187,6 +1187,68 @@ if (listed) {
     { empty: bulkEmpty.status, two: bulkTwo.status, editor: bulkByEditor.status, other: bulkOtherStudio.status, otherJson: bulkOtherStudio.json },
   )
 
+  // ── Team Booking v2: bookings say what they are for, crew hear about it,
+  // and payout stays with whoever plans crew (0172)
+  const bookDay = new Date(Date.now() + 70 * 86_400_000).toISOString().slice(0, 10)
+  const nextDay = new Date(Date.now() + 71 * 86_400_000).toISOString().slice(0, 10)
+  const booked = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      user_id: edUid, shoot_id: shoot.json.id, service_name: 'Candid Photographer',
+      start_at: `${bookDay}T04:00:00.000Z`, end_at: `${bookDay}T10:00:00.000Z`, estimated_cost: 5000,
+    },
+  })
+  const inDay = await api(`/allocation?from=${bookDay}&to=${bookDay}`, { token: aToken })
+  const theSlot = (inDay.json ?? []).find((x) => x.id === booked.json.id)
+  const outOfDay = await api(`/allocation?from=${nextDay}&to=${nextDay}`, { token: aToken })
+  check(
+    'booking: a day window returns the booking with its shoot, project and client, and a later day does not',
+    booked.status === 201 && theSlot?.shoot_name === 'Wedding day' && theSlot?.project_name === 'Deliverables project' &&
+      !!theSlot?.client_name && Number(theSlot?.estimated_cost) === 5000 &&
+      !(outOfDay.json ?? []).some((x) => x.id === booked.json.id),
+    { theSlot, out: (outOfDay.json ?? []).length },
+  )
+  const edList = await api('/allocation', { token: edToken })
+  const edRows = Array.isArray(edList.json) ? edList.json : []
+  check(
+    'booking: a team member sees only their own bookings, with no payout',
+    edList.status === 200 && edRows.length > 0 && edRows.every((x) => x.user_id === edUid) &&
+      edRows.every((x) => x.estimated_cost === null && x.final_cost === null && x.cost_notes === null),
+    edRows.slice(0, 2),
+  )
+  const edNotes = await api('/notifications?type=shoot_assigned', { token: edToken })
+  const ownerNotes = await api('/notifications?type=shoot_assigned', { token: aToken })
+  check(
+    'booking: the person booked is told, the person booking is not',
+    (edNotes.json ?? []).some((n) => n.entity_id === shoot.json.id && /Wedding day/.test(n.title)) &&
+      !(ownerNotes.json ?? []).some((n) => n.entity_id === shoot.json.id),
+    { ed: (edNotes.json ?? []).length, owner: (ownerNotes.json ?? []).length },
+  )
+  const mineShoots = await api('/shoots/my', { token: edToken })
+  const wd = (mineShoots.json ?? []).find((x) => x.id === shoot.json.id)
+  check(
+    "booking: My Shoots lists who is on the shoot, by name and role",
+    (wd?.crew ?? []).some((m) => m.user_id === edUid && m.service_name === 'Candid Photographer') &&
+      (wd?.crew ?? []).every((m) => !('estimated_cost' in m)),
+    wd?.crew,
+  )
+  const noSlot = await api('/allocation/00000000-0000-4000-8000-000000000999/status', { token: aToken, method: 'POST', body: { status: 'released' } })
+  check('booking: releasing a booking that does not exist is 404', noSlot.status === 404, noSlot.status)
+  const sangeet = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Sangeet' } })
+  const goneSlot = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: edUid, shoot_id: sangeet.json.id, service_name: 'Cinematographer', start_at: `${nextDay}T12:00:00.000Z`, end_at: `${nextDay}T15:00:00.000Z` },
+  })
+  const del = await api(`/shoots/${sangeet.json.id}`, { token: aToken, method: 'DELETE' })
+  const afterDel = ((await api(`/allocation?user_id=${edUid}`, { token: aToken })).json ?? []).find((x) => x.id === goneSlot.json.id)
+  check(
+    "booking: deleting a shoot releases its bookings and says when",
+    del.status === 204 && afterDel?.status === 'released' && !!afterDel?.released_at && afterDel?.shoot_id === null,
+    afterDel,
+  )
+
   // A project template creates a real project now -- and asks for a client.
   const tpl = await api('/projects/templates', {
     token: aToken,

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { uuid, isoDateTime, money } from './shared/primitives'
+import { uuid, isoDate, isoDateTime, money } from './shared/primitives'
 
 export const slotStatus = z.enum(['booked', 'released', 'cancelled'])
 export type SlotStatus = z.infer<typeof slotStatus>
@@ -22,8 +22,31 @@ export const teamSlot = z.object({
   cost_notes: z.string().nullable(),
   data_required: z.boolean().default(false),
   data_not_required_reason: z.string().nullable().default(null),
+  released_at: isoDateTime.nullable().default(null),
+  // What the booking is for, so a list of bookings reads without a second
+  // lookup. Null for time blocked outside a shoot.
+  shoot_name: z.string().nullable().default(null),
+  shoot_date: isoDate.nullable().default(null),
+  shoot_status: z.string().nullable().default(null),
+  location: z.string().nullable().default(null),
+  map_link: z.string().nullable().default(null),
+  project_id: uuid.nullable().default(null),
+  project_name: z.string().nullable().default(null),
+  client_name: z.string().nullable().default(null),
 })
 export type TeamSlot = z.infer<typeof teamSlot>
+
+/**
+ * Bookings in a window. `from`/`to` are dates (inclusive) matched against the
+ * booking's own day; `user_id` narrows to one person. Someone who cannot plan
+ * crew only ever gets their own bookings, and never the payout.
+ */
+export const slotListQuery = z.object({
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+  user_id: uuid.optional(),
+})
+export type SlotListQuery = z.infer<typeof slotListQuery>
 
 /** Cost is bookkeeping the studio settles, kept separate from the booking itself. */
 export const setSlotCostRequest = z.object({

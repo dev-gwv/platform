@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { TransactionSql } from 'postgres'
 import type { BookSlotRequest } from '@ipc/contracts'
-import { bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, teamSlot, updateSlotRequest } from '@ipc/contracts'
+import { bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -44,19 +44,48 @@ async function bookOne(sql: TransactionSql, d: BookSlotRequest): Promise<string 
 export const allocationRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
+  /**
+   * Bookings, with what each is for. `from`/`to` (dates, inclusive) and
+   * `user_id` narrow it. Payout is bookkeeping for whoever plans crew: anyone
+   * who cannot edit projects gets only their own bookings, and no money.
+   */
   .get('/', requireAction('projects', 'view'), async (c) => {
+    const parsed = slotListQuery.safeParse({
+      from: c.req.query('from') || undefined,
+      to: c.req.query('to') || undefined,
+      user_id: c.req.query('user_id') || undefined,
+    })
+    if (!parsed.success) fail(422, 'Please check the dates.')
+    const auth = c.get('auth')
+    const canPlan = auth.access.hasAction('projects', 'edit')
+    const { from, to } = parsed.data
+    const onlyUser = canPlan ? (parsed.data.user_id ?? null) : auth.userId
     const rows = await attempt(c, 'allocation.list', () =>
       withUser(
         c.env,
-        c.get('auth').userId,
+        auth.userId,
         (sql) => sql`
           select s.id, s.user_id, s.shoot_id, s.service_name, s.start_at, s.end_at, s.status,
-                 s.estimated_cost, s.final_cost, s.cost_status, s.cost_notes,
+                 ${canPlan ? sql`s.estimated_cost` : sql`null::numeric`} as estimated_cost,
+                 ${canPlan ? sql`s.final_cost` : sql`null::numeric`} as final_cost,
+                 ${canPlan ? sql`s.cost_status` : sql`'not_decided'`} as cost_status,
+                 ${canPlan ? sql`s.cost_notes` : sql`null::text`} as cost_notes,
                  coalesce(s.data_required, false) as data_required,
-                 s.data_not_required_reason, u.name as user_name
+                 s.data_not_required_reason, s.released_at, u.name as user_name,
+                 sh.name as shoot_name, sh.shoot_date, sh.status as shoot_status,
+                 sh.location, sh.map_link,
+                 p.id as project_id, p.name as project_name, cl.name as client_name
           from team_assignment_slots s
           left join users u on u.user_id = s.user_id
-          order by s.start_at`,
+          left join shoots sh on sh.id = s.shoot_id
+          left join projects p on p.id = sh.project_id
+          left join clients cl on cl.id = p.client_id
+          where true
+            ${onlyUser ? sql`and s.user_id = ${onlyUser}` : sql``}
+            ${from ? sql`and (s.end_at at time zone 'Asia/Kolkata')::date >= ${from}::date` : sql``}
+            ${to ? sql`and (s.start_at at time zone 'Asia/Kolkata')::date <= ${to}::date` : sql``}
+          order by s.start_at
+          limit 5000`,
       ),
     )
     if (!rows) fail(400, 'We could not load the schedule.')
@@ -123,12 +152,18 @@ export const allocationRouter = new Hono<AppEnv>()
     const parsed = setSlotStatusRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Invalid status.')
     const id = uuidParam(c)
-    const ok = await attempt(c, 'allocation.status', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        await sql`select set_team_slot_status(p_slot_id => ${id}, p_status => ${parsed.data.status})`
-        return true
-      }),
+    const ok = await attempt(
+      c,
+      'allocation.status',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          await sql`select set_team_slot_status(p_slot_id => ${id}, p_status => ${parsed.data.status})`
+          return true as const
+        }),
+      { onCode: (code, err) => (code === 'P0002' ? ('missing' as const) : isDoubleBooking(code, err) ? ('clash' as const) : undefined) },
     )
+    if (ok === 'missing') fail(404, 'That booking was not found.')
+    if (ok === 'clash') fail(409, 'That member is already booked during this time.')
     if (!ok) fail(400, 'We could not update the booking.')
     await audit(c, { action: 'allocation.status', entityType: 'team_assignment_slot', entityId: id, after: parsed.data })
     return c.body(null, 204)

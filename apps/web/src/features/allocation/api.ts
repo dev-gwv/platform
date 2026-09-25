@@ -8,14 +8,30 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 const slots = teamSlot.array()
 const members = teamMember.array()
 
-export function useSlots() {
+/**
+ * Bookings. With no range, everything (the assign dialogs need every booking
+ * to see who is already out). With a range, just those days -- the booking
+ * page asks for one month at a time.
+ */
+export function useSlots(range?: { from?: string; to?: string; user_id?: string }) {
   const { session } = useAuth()
+  const qs = new URLSearchParams(Object.entries(range ?? {}).filter(([, v]) => !!v) as [string, string][]).toString()
   return useQuery({
-    queryKey: ['allocation'],
-    queryFn: () => callApi('/allocation', { responseSchema: slots }),
+    queryKey: ['allocation', qs || 'all'],
+    queryFn: () => callApi(`/allocation${qs ? `?${qs}` : ''}`, { responseSchema: slots }),
     enabled: !!session,
     staleTime: 15_000,
   })
+}
+
+/**
+ * After any booking change: every booking list, and the shoots (their crew
+ * counts) and the production board ("on shoot today") that read them.
+ */
+function refreshBookings(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['allocation'] })
+  void qc.invalidateQueries({ queryKey: ['shoots'] })
+  void qc.invalidateQueries({ queryKey: ['projects', 'board'] })
 }
 
 export function useMembers() {
@@ -39,7 +55,7 @@ export function useBookSlot() {
       }),
     onSuccess: () => {
       toast.success('Crew booked')
-      void qc.invalidateQueries({ queryKey: ['allocation'] })
+      refreshBookings(qc)
     },
   })
 }
@@ -57,7 +73,7 @@ export function useBookSlots() {
         body: { items },
         responseSchema: bookSlotsBatchResult,
       }),
-    onSettled: () => void qc.invalidateQueries({ queryKey: ['allocation'] }),
+    onSettled: () => refreshBookings(qc),
   })
 }
 
@@ -69,7 +85,7 @@ export function useSetSlotData() {
       callApi(`/allocation/${id}/data`, { method: 'POST', body, responseSchema: z.unknown() }),
     onSuccess: (_d, v) => {
       toast.success(v.data_required ? 'Data expected from this booking again' : 'Marked: no data needed')
-      void qc.invalidateQueries({ queryKey: ['allocation'] })
+      refreshBookings(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -81,7 +97,7 @@ export function useReleaseSlot() {
   return useMutation({
     mutationFn: (id: string) =>
       callApi(`/allocation/${id}/status`, { method: 'POST', body: { status: 'released' }, responseSchema: z.unknown() }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['allocation'] }),
+    onSuccess: () => refreshBookings(qc),
     onError: (e: Error) => toast.error(e.message),
   })
 }
@@ -93,7 +109,7 @@ export function useSetSlotStatus() {
       callApi(`/allocation/${id}/status`, { method: 'POST', body: { status }, responseSchema: z.unknown() }),
     onSuccess: () => {
       toast.success('Booking updated')
-      void qc.invalidateQueries({ queryKey: ['allocation'] })
+      refreshBookings(qc)
     },
   })
 }
@@ -106,7 +122,7 @@ export function useUpdateSlot() {
       callApi(`/allocation/${id}`, { method: 'PATCH', body: patch, responseSchema: z.unknown() }),
     onSuccess: () => {
       toast.success('Booking updated')
-      void qc.invalidateQueries({ queryKey: ['allocation'] })
+      refreshBookings(qc)
     },
   })
 }
@@ -118,7 +134,7 @@ export function useSetSlotCost() {
       callApi(`/allocation/${id}/cost`, { method: 'POST', body: patch, responseSchema: z.unknown() }),
     onSuccess: () => {
       toast.success('Cost updated')
-      void qc.invalidateQueries({ queryKey: ['allocation'] })
+      refreshBookings(qc)
     },
   })
 }

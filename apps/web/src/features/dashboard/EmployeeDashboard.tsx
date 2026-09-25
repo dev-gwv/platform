@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { CalendarCheck2, CalendarDays, CheckCircle2, ClipboardList, MapPin } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { hoursLabel } from '@/features/shoots/assign'
+import { localDay } from '@/features/booking/booking-model'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Button } from '@/shared/ui/button'
@@ -49,11 +51,14 @@ export function EmployeeDashboard() {
   const dueToday = openTasks.filter((t) => t.due_date === today)
   const overdue = openTasks.filter((t) => t.due_date && t.due_date < today)
 
-  const mySlots = (slots.data ?? []).slice(0, 5)
-  const todaySlots = mySlots.filter((s) => {
-    const d = String((s as unknown as Record<string, unknown>)['date'] ?? (s as unknown as Record<string, unknown>)['shoot_date'] ?? '')
-    return d.startsWith(today)
-  })
+  // My own upcoming bookings, soonest first. (The API already sends only
+  // yours to a team member; the filter keeps it right for a manager too.)
+  const now = new Date().toISOString()
+  const myUpcoming = (slots.data ?? [])
+    .filter((s) => s.user_id === session?.user_id && s.status === 'booked' && s.end_at >= now)
+    .sort((a, b) => a.start_at.localeCompare(b.start_at))
+  const mySlots = myUpcoming.slice(0, 5)
+  const todaySlots = myUpcoming.filter((s) => localDay(s.start_at) === localDay(now))
   const reminderItems = Array.isArray(reminders.data) ? reminders.data : (reminders.data?.items ?? [])
   const openReminders = reminderItems.filter((r) => r.status !== 'completed' && r.status !== 'dismissed').slice(0, 5)
   const todayAttendance = (attendance.data ?? []).find((a) => String(a.a_date ?? '').slice(0, 10) === today)
@@ -142,10 +147,11 @@ export function EmployeeDashboard() {
                   <li key={s.id} className="flex items-start gap-2 text-sm">
                     <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">
-                      <span className="font-medium">{(s as unknown as Record<string, unknown>)['title'] as string ?? (s as unknown as Record<string, unknown>)['service_name'] as string ?? 'Scheduled slot'}</span>
+                      <span className="font-medium">{s.shoot_name ?? s.service_name ?? 'Booked'}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {String((s as unknown as Record<string, unknown>)['date'] ?? (s as unknown as Record<string, unknown>)['shoot_date'] ?? '')}
-                        {(s as unknown as Record<string, unknown>)['status'] ? ` · ${String((s as unknown as Record<string, unknown>)['status'])}` : ''}
+                        {new Date(s.start_at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · {hoursLabel(s)}
+                        {s.service_name && s.shoot_name ? ` · ${s.service_name}` : ''}
+                        {s.location ? ` · ${s.location}` : ''}
                       </span>
                     </span>
                   </li>
