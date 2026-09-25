@@ -5,6 +5,7 @@ import { TEAM_TERMS_VARIABLES, teamTermsVariablesUsed } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SettingsTabs } from '@/features/settings/SettingsTabs'
+import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -344,6 +345,11 @@ function TemplateDialog({
   const editing = !!template
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<SaveTeamTermsTemplateRequest>(() => fromTemplate(template))
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // Opening resets the form to the saved terms, so those are the blank baseline.
+  const saved = useFormDraft(open ? `team-terms-template:${template?.id ?? 'new'}` : null, draft, setDraft, {
+    isBlank: (v) => JSON.stringify(v) === JSON.stringify(fromTemplate(template)),
+  })
 
   const used = teamTermsVariablesUsed(draft.body)
   // Roles already defaulting to another template — selecting one here moves
@@ -363,7 +369,12 @@ function TemplateDialog({
     e.preventDefault()
     save.mutate(
       { ...(editing ? { id: template.id } : {}), body: draft },
-      { onSuccess: () => setOpen(false) },
+      {
+        onSuccess: () => {
+          saved.clear()
+          setOpen(false)
+        },
+      },
     )
   }
 
@@ -391,6 +402,14 @@ function TemplateDialog({
         description="Write it once. Names, dates and roles fill in when you send it."
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          <DraftRestoredBanner
+            at={saved.restoredAt}
+            onDismiss={saved.dismissRestored}
+            onDiscard={() => {
+              saved.clear()
+              setDraft(fromTemplate(template))
+            }}
+          />
           <div className="flex flex-col gap-1.5">
             <Label>Title</Label>
             <Input

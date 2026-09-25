@@ -29,6 +29,7 @@ import { Input } from '@/shared/ui/input'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
 import { useMembers } from '@/features/allocation/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -96,6 +97,8 @@ export function NextStageButton({
   const next = nextPoint({ status, custom_status_code: code }, stages)
   const [asking, setAsking] = useState(false)
   const [url, setUrl] = useState(link ?? '')
+  // A pasted link survives a refresh or a closed tab until the stage moves.
+  const draft = useFormDraft(asking ? `deliverable-link:${id}` : null, { url }, (v) => setUrl(v.url))
   if (!next) return null
   if (!canEdit && !next.team_allowed) {
     return (
@@ -113,7 +116,12 @@ export function NextStageButton({
         custom_status_code: next.code,
         ...(delivery_link !== undefined ? { delivery_link } : {}),
       },
-      { onSuccess: () => setAsking(false) },
+      {
+        onSuccess: () => {
+          draft.clear()
+          setAsking(false)
+        },
+      },
     )
 
   if (asking) {

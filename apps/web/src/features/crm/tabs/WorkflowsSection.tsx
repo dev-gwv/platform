@@ -21,6 +21,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import {
   useCadences,
@@ -360,6 +361,8 @@ function WorkflowForm({ initial, existing, names, onClose }: { initial: Draft; e
   const update = useUpdateWorkflow()
   const [d, setD] = useState<Draft>(initial)
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`workflow:${existing?.id ?? 'new'}`, d, setD)
   const pending = create.isPending || update.isPending
 
   const preview = useMemo(() => {
@@ -381,8 +384,12 @@ function WorkflowForm({ initial, existing, names, onClose }: { initial: Draft; e
       setError(issue?.message ? `${issue.message}${issue.path?.length ? ` (${issue.path.join('.')})` : ''}` : 'Please check the workflow.')
       return
     }
-    if (existing) update.mutate({ id: existing.id, patch: body }, { onSuccess: onClose })
-    else create.mutate(body, { onSuccess: onClose })
+    const onSuccess = () => {
+      draft.clear()
+      onClose()
+    }
+    if (existing) update.mutate({ id: existing.id, patch: body }, { onSuccess })
+    else create.mutate(body, { onSuccess })
   }
 
   const setStep = (i: number, step: WorkflowStepInput) => setD((x) => ({ ...x, steps: x.steps.map((s, j) => (j === i ? step : s)) }))
@@ -418,6 +425,14 @@ function WorkflowForm({ initial, existing, names, onClose }: { initial: Draft; e
             <X /> Close
           </Button>
         </div>
+        <DraftRestoredBanner
+          at={draft.restoredAt}
+          onDismiss={draft.dismissRestored}
+          onDiscard={() => {
+            draft.clear()
+            setD(initial)
+          }}
+        />
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col gap-1 lg:col-span-2">

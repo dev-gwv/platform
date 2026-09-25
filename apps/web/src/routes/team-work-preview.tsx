@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, ClipboardList, Camera, FileCheck } from 'lucide-react'
 import { WORK_STATUS_LABEL, taskListItem, shootListItem, z } from '@ipc/contracts'
@@ -15,6 +14,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDirectory } from '@/features/team/api'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useReviewWork } from '@/features/work/api'
 
 const tasksList = taskListItem.array()
@@ -43,7 +43,8 @@ function TeamWorkPreview() {
   const { data: directory } = useDirectory()
   const { session } = useAuth()
   const access = useAccess()
-  const [userId, setUserId] = useState('')
+  // ?user= opens straight on one person -- the production board links here.
+  const [userId, setUserId] = useUrlParam('user')
   const members = (directory ?? []).filter((m) => m.status === 'active')
   const selected = members.find((m) => m.user_id === userId)
   const review = useReviewWork()

@@ -25,6 +25,7 @@ import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -382,6 +383,21 @@ function NewSourceDialog() {
   const [assignedTo, setAssignedTo] = useState('')
   const [created, setCreated] = useState<LeadSourceRow | null>(null)
   const [copied, setCopied] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is saved. Off
+  // once the source exists: the ready screen is not a form.
+  const draft = useFormDraft(
+    open && !created ? 'lead-source:new' : null,
+    { label, kind, sourceType, allowedOrigin, defaultSource, defaultQuality, assignedTo },
+    (v) => {
+      setLabel(v.label)
+      setKind(v.kind)
+      setSourceType(v.sourceType)
+      setAllowedOrigin(v.allowedOrigin)
+      setDefaultSource(v.defaultSource)
+      setDefaultQuality(v.defaultQuality)
+      setAssignedTo(v.assignedTo)
+    },
+  )
   const members = useMembers()
 
   const create = useMutation({
@@ -392,6 +408,7 @@ function NewSourceDialog() {
         responseSchema: leadSourceRow,
       }),
     onSuccess: (row) => {
+      draft.clear()
       setCreated(row)
       void qc.invalidateQueries({ queryKey: ['crm', 'sources'] })
     },

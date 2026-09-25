@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useConfirm } from '@/shared/ui/confirm'
 import { formatINR } from '@/shared/ui/format'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useCreateFixedOverhead, useDeleteFixedOverhead, useFixedOverheads, useUpdateFixedOverhead } from './api'
 
 const CATS = ['rent', 'salaries', 'utilities', 'internet', 'software', 'insurance', 'maintenance', 'marketing', 'other'] as const
@@ -140,14 +141,24 @@ function OverheadDialog({ month, editing, onDone }: { month: string; editing: Fi
   const [category, setCategory] = useState<Cat>((editing?.category as Cat) ?? 'rent')
   const [label, setLabel] = useState(editing?.label ?? '')
   const [amount, setAmount] = useState(editing ? String(editing.amount) : '')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`overhead:${month}:${editing?.id ?? 'new'}`, { category, label, amount }, (v) => {
+    setCategory(v.category)
+    setLabel(v.label)
+    setAmount(v.amount)
+  })
   const busy = create.isPending || update.isPending
   const n = Number(amount)
 
   function save() {
     if (!(n > 0)) return
     const body = { category, label: label.trim() || null, amount: n, alloc_basis: 'equal' as const, month }
-    if (editing) update.mutate({ id: editing.id, patch: body }, { onSuccess: onDone })
-    else create.mutate(body, { onSuccess: onDone })
+    const onSuccess = () => {
+      draft.clear()
+      onDone()
+    }
+    if (editing) update.mutate({ id: editing.id, patch: body }, { onSuccess })
+    else create.mutate(body, { onSuccess })
   }
 
   return (

@@ -11,6 +11,7 @@ import { Input, Label } from '@/shared/ui/input'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useBundles, useCreateBundle, useUpdateBundle, useDeleteBundle } from '@/features/tasks/api'
 
 export function TaskBundlesPage() {
@@ -109,6 +110,12 @@ function BundleDialog({ bundleId, onClose }: { bundleId: string | null; onClose:
   const update = useUpdateBundle()
   const [name, setName] = useState(existing?.name ?? '')
   const [itemsText, setItemsText] = useState((existing?.items ?? []).map((i) => i.title).join('\n'))
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // Mounted only while open, so the key is always on.
+  const draft = useFormDraft(`bundle:${bundleId ?? 'new'}`, { name, itemsText }, (v) => {
+    setName(v.name)
+    setItemsText(v.itemsText)
+  })
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -131,6 +138,7 @@ function BundleDialog({ bundleId, onClose }: { bundleId: string | null; onClose:
       } else {
         await create.mutateAsync({ name: name.trim(), items })
       }
+      draft.clear()
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save.')
@@ -144,6 +152,15 @@ function BundleDialog({ bundleId, onClose }: { bundleId: string | null; onClose:
       <DialogTrigger asChild><span className="hidden" /></DialogTrigger>
       <DialogContent title={isEdit ? 'Edit bundle' : 'New bundle'} description="One task per line. Applied to projects from the Tasks page.">
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          <DraftRestoredBanner
+            at={draft.restoredAt}
+            onDismiss={draft.dismissRestored}
+            onDiscard={() => {
+              draft.clear()
+              setName(existing?.name ?? '')
+              setItemsText((existing?.items ?? []).map((i) => i.title).join('\n'))
+            }}
+          />
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Wedding checklist" autoFocus />

@@ -314,10 +314,30 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/projects/deliverable-sets')
     return { id: uid(0xd5), ...(body as object) }
   if (method === 'DELETE' && path.startsWith('/projects/deliverable-sets/')) return {}
-  if (method === 'GET' && path === '/projects/board/deliverables')
-    return projectDetail.deliverables
+  if (method === 'GET' && path === '/projects/board') {
+    const items = projectDetail.deliverables
       .filter((d) => d.status !== 'cancelled')
-      .map((d) => ({ ...d, board_status: d.status, project_name: 'Sharma Wedding', due_date: d.estimated_date }))
+      .map((d) => ({ ...d, project_name: 'Sharma Wedding', client_name: 'Priya Sharma' }))
+    const open = items.filter((d) => d.status !== 'completed')
+    const today = new Date().toISOString().slice(0, 10)
+    return {
+      stages: deliverableStagesFx,
+      items,
+      people: [
+        { user_id: uid(1), name: 'Aarav Mehta', role: 'admin', on_shoot_today: false, open_tasks: 2 },
+        { user_id: uid(2), name: 'Sana Iyer', role: 'employee', on_shoot_today: true, open_tasks: 0 },
+      ],
+      counts: {
+        open: open.length,
+        late: open.filter((d) => !!d.estimated_date && d.estimated_date < today).length,
+        due_today: open.filter((d) => d.estimated_date === today).length,
+        in_review: open.filter((d) => d.status === 'review').length,
+        unassigned: open.filter((d) => !d.assignee_id).length,
+        dropped: 0,
+        truncated: false,
+      },
+    }
+  }
   if (method === 'GET' && path === '/projects/deliverables/mine')
     return projectDetail.deliverables
       .filter((d) => d.assignee_id === uid(1) && !['completed', 'cancelled'].includes(d.status))

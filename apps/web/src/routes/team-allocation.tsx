@@ -11,6 +11,7 @@ import { PageHeader } from '@/shared/layout/page-header'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -378,6 +379,28 @@ function EditSlotCostDialog({ slot }: { slot: TeamSlot }) {
     setNotes(slot.cost_notes ?? '')
     setError(null)
   }, [open, slot])
+  // What was typed survives a refresh or a closed tab until it is saved. The
+  // fields are reset from the slot as the dialog opens, so that is the blank.
+  const draft = useFormDraft(
+    open ? `team-slot-cost:${slot.id}` : null,
+    { estimated, final, status, notes },
+    (v) => {
+      setEstimated(v.estimated)
+      setFinal(v.final)
+      setStatus(v.status)
+      setNotes(v.notes)
+    },
+    {
+      isBlank: (v) =>
+        JSON.stringify(v) ===
+        JSON.stringify({
+          estimated: String(slot.estimated_cost ?? ''),
+          final: String(slot.final_cost ?? ''),
+          status: slot.cost_status,
+          notes: slot.cost_notes ?? '',
+        }),
+    },
+  )
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -392,6 +415,7 @@ function EditSlotCostDialog({ slot }: { slot: TeamSlot }) {
           cost_notes: notes.trim() || undefined,
         },
       })
+      draft.clear()
       setOpen(false)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'We could not save the cost.')
@@ -462,6 +486,13 @@ function EditSlotDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => void
   const [start, setStart] = useState(toLocalInput(slot.start_at))
   const [end, setEnd] = useState(toLocalInput(slot.end_at))
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`team-slot:${slot.id}`, { userId, service, start, end }, (v) => {
+    setUserId(v.userId)
+    setService(v.service)
+    setStart(v.start)
+    setEnd(v.end)
+  })
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -482,6 +513,7 @@ function EditSlotDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => void
           end_at: endIso,
         },
       })
+      draft.clear()
       onClose()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'We could not save these changes.')
@@ -1254,6 +1286,35 @@ function BookDialog({
     if (open && gap) setService((v) => v || gap)
   }, [open, gap])
 
+  // What was picked and typed survives a refresh or a closed tab until it is
+  // booked. The times and role filled in from the shoot are not worth keeping
+  // on their own: only a picked member, a cost or a real change is.
+  const draft = useFormDraft(
+    open ? `team-booking:${prefill?.id ?? 'new'}` : null,
+    { userIds, shootId, service, start, end, cost },
+    (v) => {
+      setUserIds(v.userIds)
+      setShootId(v.shootId)
+      setService(v.service)
+      setStart(v.start)
+      setEnd(v.end)
+      setCost(v.cost)
+    },
+    {
+      isBlank: (v) => {
+        const day = shoots.find((x) => x.id === v.shootId)?.shoot_date ?? null
+        return (
+          v.userIds.length === 0 &&
+          !v.cost.trim() &&
+          v.shootId === (prefill?.id ?? '') &&
+          (!v.start || v.start === `${day}T10:00`) &&
+          (!v.end || v.end === `${day}T22:00`) &&
+          (!v.service || v.service === gap)
+        )
+      },
+    },
+  )
+
   const conflicts = useMemo(() => {
     if (userIds.length === 0 || !start || !end) return []
     let startIso = ''
@@ -1308,6 +1369,7 @@ function BookDialog({
         done += 1
       }
       toast.success(done === 1 ? 'Crew booked' : `${done} crew booked`)
+      draft.clear()
       change(false)
       setUserIds([])
       setService('')

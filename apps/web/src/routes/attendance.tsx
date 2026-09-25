@@ -44,6 +44,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Avatar } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import {
   EMPTY_FILTERS,
   STATUS_LABEL,
@@ -799,11 +800,23 @@ function CorrectDialog({ row, date }: { row: AttendanceDayRow; date: string }) {
   const [checkOut, setCheckOut] = useState(toLocalInput(row.check_out_at))
   const [note, setNote] = useState(row.correction_note ?? '')
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `attendance-correct:${row.user_id}:${date}` : null,
+    { status, checkIn, checkOut, note },
+    (v) => {
+      setStatus(v.status)
+      setCheckIn(v.checkIn)
+      setCheckOut(v.checkOut)
+      setNote(v.note)
+    },
+  )
 
   const save = useMutation({
     mutationFn: (input: SetAttendanceRequest) =>
       callApi(`/hr/attendance/${row.user_id}/${date}`, { method: 'PUT', body: input, responseSchema: idOnly }),
     onSuccess: () => {
+      draft.clear()
       toast.success(`Attendance corrected for ${row.name}`)
       void qc.invalidateQueries({ queryKey: ['hr', 'attendance'] })
       setOpen(false)

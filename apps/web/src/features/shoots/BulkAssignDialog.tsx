@@ -5,6 +5,7 @@ import { shootListItem, type ShootListItem, type SlotCostStatus } from '@ipc/con
 import { useQuery } from '@tanstack/react-query'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -95,6 +96,23 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [rows, setRows] = useState<Record<string, Row>>({})
   const [showBlocked, setShowBlocked] = useState(false)
+  // Ticked shoots and their times and payouts survive a refresh or a closed
+  // tab until they are booked. Kept once at least one shoot is ticked.
+  const draft = useFormDraft(
+    `bulk-assign:${projectId ?? 'all'}`,
+    { from, to, memberId, role, bufferMin, defaultHours, picked: [...picked], rows },
+    (v) => {
+      setFrom(v.from)
+      setTo(v.to)
+      setMemberId(v.memberId)
+      setRole(v.role)
+      setBufferMin(v.bufferMin)
+      setDefaultHours(v.defaultHours)
+      setPicked(new Set(v.picked))
+      setRows(v.rows)
+    },
+    { isBlank: (v) => v.picked.length === 0 },
+  )
 
   const all = slots.data ?? []
   const member = (members.data ?? []).find((m) => m.user_id === memberId) ?? null
@@ -197,6 +215,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
       const skipped = results.length - ok
       if (ok > 0) toast.success(`${member.name} assigned to ${ok} shoot${ok === 1 ? '' : 's'}.${skipped ? ` ${skipped} could not be booked.` : ''}`)
       else toast.error('None of those could be booked — they clash with other bookings.')
+      if (ok > 0 && skipped === 0) draft.clear()
       setPicked(new Set(results.filter((r) => !r.id).map((r) => ready[r.index]!.shoot.id)))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'We could not book these.')

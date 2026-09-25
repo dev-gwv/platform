@@ -25,6 +25,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import { useClients } from '@/features/clients/api'
 import {
@@ -140,6 +141,12 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
     setNotes(lead.notes ?? '')
     setFollowUp(toLocalInput(lead.follow_up_at))
   }, [lead.id, lead.notes, lead.follow_up_at])
+
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // Blank means "same as the saved notes", so a refetch never looks like typing.
+  const notesDraft = useFormDraft(`lead-notes:${lead.id}`, { notes }, (v) => setNotes(v.notes), {
+    isBlank: (v) => v.notes === (lead.notes ?? ''),
+  })
 
   const patch = (p: Parameters<typeof update.mutate>[0]['patch']) => update.mutate({ id: lead.id, patch: p })
   const bucket = dueBucket(lead, new Date())
@@ -446,7 +453,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               />
               {canEdit && (
                 <div className="flex justify-end">
-                  <Button size="sm" variant="outline" disabled={update.isPending || notes === (lead.notes ?? '')} onClick={() => patch({ notes })}>
+                  <Button size="sm" variant="outline" disabled={update.isPending || notes === (lead.notes ?? '')} onClick={() => update.mutate({ id: lead.id, patch: { notes } }, { onSuccess: () => notesDraft.clear() })}>
                     Save notes
                   </Button>
                 </div>

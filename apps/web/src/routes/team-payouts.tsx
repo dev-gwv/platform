@@ -4,6 +4,7 @@ import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { StatCard } from '@/shared/ui/stat-card'
 import { Button } from '@/shared/ui/button'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Input, Label } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -48,6 +49,11 @@ function TeamPayoutsContent() {
   // field displays exactly what was typed instead of fighting a
   // type="number" input's leading-zero quirks.
   const [amountText, setAmountText] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(dialogOpen ? `team-payout:${editingId ?? 'new'}` : null, { form, amountText }, (v) => {
+    setForm(v.form)
+    setAmountText(v.amountText)
+  })
 
   const { data } = useTeamPayouts()
   const { data: members } = useDirectory()
@@ -81,13 +87,18 @@ function TeamPayoutsContent() {
     setDialogOpen(true)
   }
 
+  function onSaved() {
+    draft.clear()
+    setDialogOpen(false)
+  }
+
   function handleSubmit() {
     if (!form.user_id || form.amount <= 0 || !form.period_start || !form.period_end) return
     if (editingId) {
       const { user_id: _user_id, ...patch } = form
-      updatePayout.mutate({ id: editingId, patch }, { onSuccess: () => setDialogOpen(false) })
+      updatePayout.mutate({ id: editingId, patch }, { onSuccess: onSaved })
     } else {
-      createPayout.mutate(form, { onSuccess: () => setDialogOpen(false) })
+      createPayout.mutate(form, { onSuccess: onSaved })
     }
   }
 
@@ -576,6 +587,19 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
   const [notes, setNotes] = useState('')
   const [entryType, setEntryType] = useState<PayoutEntryType>('payment')
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `payout-settlement:${slot.id}` : null,
+    { amount, paidOn, mode, reference, notes, entryType },
+    (v) => {
+      setAmount(v.amount)
+      setPaidOn(v.paidOn)
+      setMode(v.mode)
+      setReference(v.reference)
+      setNotes(v.notes)
+      setEntryType(v.entryType)
+    },
+  )
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -592,6 +616,7 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
         notes: notes.trim() || undefined,
         entry_type: entryType,
       })
+      draft.clear()
       setOpen(false)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'We could not record this settlement.')

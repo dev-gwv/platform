@@ -4,6 +4,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { companyProfile } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -105,6 +106,18 @@ function ProjectQuotation() {
     }
   }, [data, prefsLoaded])
 
+  // Terms being written survive a refresh or a closed tab until they are
+  // saved; a restored draft reopens the editor so it is not missed.
+  const termsDraftSave = useFormDraft(
+    prefsLoaded && canEdit ? `quotation-terms:${id}` : null,
+    { terms: termsDraft },
+    (v) => {
+      setTermsDraft(v.terms)
+      setTermsOpen(true)
+    },
+    { isBlank: (v) => v.terms === (data?.quotation_terms ?? '') },
+  )
+
   if (isLoading) return <SkeletonCards count={2} />
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />
   const project = data
@@ -155,6 +168,7 @@ function ProjectQuotation() {
   async function saveTerms() {
     try {
       await update.mutateAsync({ quotation_terms: termsDraft.trim() ? termsDraft : null })
+      termsDraftSave.clear()
       setTermsOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save terms.')
@@ -445,6 +459,14 @@ function ProjectQuotation() {
             </div>
             {termsOpen ? (
               <div className="mt-3 flex flex-col gap-3">
+                <DraftRestoredBanner
+                  at={termsDraftSave.restoredAt}
+                  onDismiss={termsDraftSave.dismissRestored}
+                  onDiscard={() => {
+                    termsDraftSave.clear()
+                    setTermsDraft(project.quotation_terms ?? '')
+                  }}
+                />
                 <textarea
                   value={termsDraft}
                   onChange={(e) => setTermsDraft(e.target.value)}
@@ -472,7 +494,7 @@ function ProjectQuotation() {
                   )}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { setTermsDraft(project.quotation_terms ?? ''); setTermsOpen(false) }}>Cancel</Button>
+                  <Button variant="outline" size="sm" onClick={() => { termsDraftSave.clear(); setTermsDraft(project.quotation_terms ?? ''); setTermsOpen(false) }}>Cancel</Button>
                   <Button size="sm" onClick={() => void saveTerms()} disabled={update.isPending}>
                     {update.isPending ? 'Saving…' : 'Save terms'}
                   </Button>

@@ -186,24 +186,6 @@ export const projectListPage = z.object({
 })
 export type ProjectListPage = z.infer<typeof projectListPage>
 
-/** Production board card: a task or a deliverable rendered in one lane. */
-export const boardItemKind = z.enum(['task', 'deliverable'])
-export type BoardItemKind = z.infer<typeof boardItemKind>
-
-export const boardItem = z.object({
-  kind: boardItemKind,
-  id: uuid,
-  title: z.string(),
-  status: z.string(),
-  project_id: uuid.nullable(),
-  project_name: z.string().nullable(),
-  assignees: z.array(z.string()).default([]),
-  due_date: isoDate.nullable().default(null),
-  shoot_name: z.string().nullable().default(null),
-  sort_order: z.number().int().default(0),
-})
-export type BoardItem = z.infer<typeof boardItem>
-
 /** Deliverable as returned by the API — DB nulls tolerated (not input's optionals). */
 export const deliverable = z.object({
   id: uuid,
@@ -512,6 +494,83 @@ export const deliverableStage = z.object({
   sort_order: z.number().int(),
 })
 export type DeliverableStage = z.infer<typeof deliverableStage>
+
+// ── Production board ───────────────────────────────────────────
+/**
+ * One deliverable on the production board: what it is, whose it is, where it
+ * stands and by when. Open work, plus what was delivered in the last fortnight.
+ */
+export const boardDeliverable = z.object({
+  id: uuid,
+  project_id: uuid,
+  project_name: z.string(),
+  client_name: z.string().nullish(),
+  title: z.string(),
+  description: z.string().nullish(),
+  status: z.string(),
+  custom_status_code: z.string().nullish(),
+  estimated_date: isoDate.nullish(),
+  delivered_at: isoDateTime.nullish(),
+  delivery_link: z.string().nullish(),
+  visibility_scope: deliverableVisibility,
+  shoot_id: uuid.nullish(),
+  shoot_name: z.string().nullish(),
+  shoot_date: isoDate.nullish(),
+  assignee_id: uuid.nullish(),
+  assignee_name: z.string().nullish(),
+  notes_count: z.number().int().default(0),
+  voice_count: z.number().int().default(0),
+  last_activity_at: isoDateTime.nullish(),
+  last_activity_by: z.string().nullish(),
+  last_activity_kind: z.enum(['text', 'voice', 'event']).nullish(),
+  last_activity_body: z.string().nullish(),
+})
+export type BoardDeliverable = z.infer<typeof boardDeliverable>
+
+/** Someone in the studio who can carry production work. */
+export const boardPerson = z.object({
+  user_id: uuid,
+  name: z.string(),
+  role: z.string(),
+  /** Booked on a shoot that runs today: why an edit might not be moving. */
+  on_shoot_today: z.boolean(),
+  /** Their open tasks, for the "and N open tasks" line. */
+  open_tasks: z.number().int().default(0),
+})
+export type BoardPerson = z.infer<typeof boardPerson>
+
+export const productionBoard = z.object({
+  stages: z.array(deliverableStage),
+  people: z.array(boardPerson),
+  items: z.array(boardDeliverable),
+  counts: z.object({
+    open: z.number().int(),
+    late: z.number().int(),
+    due_today: z.number().int(),
+    in_review: z.number().int(),
+    unassigned: z.number().int(),
+    dropped: z.number().int(),
+    /** More open work exists than the board carries. */
+    truncated: z.boolean(),
+  }),
+})
+export type ProductionBoard = z.infer<typeof productionBoard>
+
+/** One change to many deliverables at once: an editor, a stage, or a due date. */
+export const bulkDeliverableRequest = z
+  .object({
+    ids: z.array(uuid).min(1, 'Pick at least one deliverable.').max(200),
+    assignee_id: uuid.nullable().optional(),
+    stage: z
+      .object({ status: deliverableStatus, custom_status_code: z.string().trim().max(40).nullish() })
+      .optional(),
+    estimated_date: isoDate.nullable().optional(),
+  })
+  .refine(
+    (v) => [v.assignee_id !== undefined, v.stage !== undefined, v.estimated_date !== undefined].filter(Boolean).length === 1,
+    'Change one thing at a time: the editor, the stage or the due date.',
+  )
+export type BulkDeliverableRequest = z.infer<typeof bulkDeliverableRequest>
 
 export const createDeliverableStageRequest = z.object({
   label: z.string().trim().min(2, 'Give the stage a name.').max(40),

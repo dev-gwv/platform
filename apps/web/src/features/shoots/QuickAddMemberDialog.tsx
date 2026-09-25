@@ -3,6 +3,7 @@ import { Loader2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { addMemberRequest, type EngagementType } from '@ipc/contracts'
 import { ApiError } from '@/shared/api/client'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -43,6 +44,15 @@ export function QuickAddMemberDialog({
   const [engagement, setEngagement] = useState<EngagementType>('freelancer')
   const [rate, setRate] = useState('')
   const [giveRole, setGiveRole] = useState(!!requirement)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`quick-add-member:${requirement || 'any'}`, { name, phone, email, engagement, rate, giveRole }, (v) => {
+    setName(v.name)
+    setPhone(v.phone)
+    setEmail(v.email)
+    setEngagement(v.engagement)
+    setRate(v.rate)
+    setGiveRole(v.giveRole)
+  })
   const busy = add.isPending || createRole.isPending
 
   const phoneOk = phone.replace(/\D/g, '').length >= 6
@@ -84,6 +94,7 @@ export function QuickAddMemberDialog({
             : {}),
         }),
       )
+      draft.clear()
       onCreated(out.user_id)
     } catch (e) {
       // The mutation hooks toast the server's own failures; what reaches here

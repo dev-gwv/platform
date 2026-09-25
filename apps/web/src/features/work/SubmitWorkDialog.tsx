@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { z, type SubmitWorkRequest, type UpdateWorkSubmissionRequest, type WorkSubmission } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -79,6 +80,20 @@ export function SubmitWorkDialog({
   const [storageRef, setStorageRef] = useState(submission?.storage_ref ?? submission?.location_note ?? '')
   const [notes, setNotes] = useState(submission?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `work-submission:${submission?.id ?? `new:${deliverableId ?? taskId ?? projectId ?? ''}`}` : null,
+    { task, deliverable, link, workType, method, storageRef, notes },
+    (v) => {
+      setTask(v.task)
+      setDeliverable(v.deliverable)
+      setLink(v.link)
+      setWorkType(v.workType)
+      setMethod(v.method)
+      setStorageRef(v.storageRef)
+      setNotes(v.notes)
+    },
+  )
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -111,6 +126,7 @@ export function SubmitWorkDialog({
           ...extra,
         })
       }
+      draft.clear()
       setOpen(false)
       if (!isEdit) {
         setTask(taskId ?? '')

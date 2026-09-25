@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Check, Copy, UserPlus } from 'lucide-react'
 import { createInvitationRequest } from '@ipc/contracts'
 import { fieldErrors, type FieldErrors } from '@/shared/forms/field-errors'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -40,6 +41,22 @@ export function InviteDialog() {
   const [errors, setErrors] = useState<FieldErrors<Field>>({})
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open && !link ? 'team-invite' : null,
+    { name, email, phone, alternatePhone, role, engagement, salary, address, roleIds },
+    (v) => {
+      setName(v.name)
+      setEmail(v.email)
+      setPhone(v.phone)
+      setAlternatePhone(v.alternatePhone)
+      setRole(v.role)
+      setEngagement(v.engagement)
+      setSalary(v.salary)
+      setAddress(v.address)
+      setRoleIds(v.roleIds)
+    },
+  )
 
   function toggleRole(id: string) {
     setRoleIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]))
@@ -78,7 +95,10 @@ export function InviteDialog() {
     if (Object.keys(found).length > 0) return
 
     invite.mutate(createInvitationRequest.parse(body), {
-      onSuccess: (res) => setLink(res.invite_link),
+      onSuccess: (res) => {
+        draft.clear()
+        setLink(res.invite_link)
+      },
     })
   }
 

@@ -10,6 +10,7 @@ import {
   companyTheme,
   myProfile,
   subscriptionStatus,
+  type CompanyProfile,
   type UpdateCompanyRequest,
   type UpdateMyProfileRequest,
 } from '@ipc/contracts'
@@ -19,6 +20,7 @@ import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useChangePassword } from '@/features/settings/api'
 import { callApi, uploadFile } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -176,6 +178,26 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
   }
   useEffect(reset, [company.data, profile.data])
 
+  // What was typed survives a refresh or a closed tab until it is saved. Only
+  // once both records are in, and only what differs from them, counts.
+  const serverProfile = {
+    companyName: company.data?.name ?? '',
+    name: profile.data?.name ?? '',
+    phone: profile.data?.phone ?? '',
+    avatarUrl: profile.data?.avatar_url ?? '',
+  }
+  const draft = useFormDraft(
+    company.data && profile.data ? 'settings:profile' : null,
+    { companyName, name, phone, avatarUrl },
+    (v) => {
+      setCompanyName(v.companyName)
+      setName(v.name)
+      setPhone(v.phone)
+      setAvatarUrl(v.avatarUrl)
+    },
+    { isBlank: (v) => JSON.stringify(v) === JSON.stringify(serverProfile) },
+  )
+
   const dirty =
     companyName !== (company.data?.name ?? '') ||
     name !== (profile.data?.name ?? '') ||
@@ -201,6 +223,7 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
       }
       await qc.invalidateQueries({ queryKey: ['settings'] })
       await refresh()
+      draft.clear()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
@@ -243,6 +266,14 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
         <p className="mt-0.5 text-sm text-muted-foreground">Editable fields are saved together.</p>
 
         <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
+          <DraftRestoredBanner
+            at={draft.restoredAt}
+            onDismiss={draft.dismissRestored}
+            onDiscard={() => {
+              draft.clear()
+              reset()
+            }}
+          />
           <Field
             label="Company name"
             required
@@ -284,7 +315,15 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
                 <Check className="size-4" /> Saved
               </span>
             )}
-            <Button type="button" variant="outline" onClick={reset} disabled={!dirty || busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                draft.clear()
+                reset()
+              }}
+              disabled={!dirty || busy}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={!dirty || busy || name.trim().length < 2}>
@@ -365,6 +404,32 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+/** The brand details as the server has them: what the form starts from, and what counts as unchanged. */
+function brandForm(data: CompanyProfile): UpdateCompanyRequest {
+  return {
+    display_name: data.display_name ?? '',
+    legal_name: data.legal_name ?? '',
+    invoice_gst_number: data.invoice_gst_number ?? '',
+    website: data.website ?? '',
+    city: data.city ?? '',
+    state: data.state ?? '',
+    country: data.country ?? '',
+    avatar_url: data.avatar_url ?? '',
+    invoice_logo_url: (data as unknown as Record<string, unknown>)['invoice_logo_url'] as string ?? '',
+    document_footer_note: (data as unknown as Record<string, unknown>)['document_footer_note'] as string ?? '',
+    // How a client reaches the studio. The old app keeps these under
+    // Settings → Contact Details; ours had them only on the invoice
+    // templates page, so the natural place to look did not have them.
+    invoice_phone: data.invoice_phone ?? '',
+    invoice_email: data.invoice_email ?? '',
+    invoice_address: data.invoice_address ?? '',
+    invoice_number_prefix: data.invoice_number_prefix,
+    invoice_next_number: data.invoice_next_number,
+    quote_number_prefix: data.quote_number_prefix,
+    quote_next_number: data.quote_next_number,
+  }
+}
+
 /** What clients see on quotations and invoices, as against the studio's own name. */
 function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
   const qc = useQueryClient()
@@ -386,29 +451,14 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   useEffect(() => {
     if (!data) return
-    setForm({
-      display_name: data.display_name ?? '',
-      legal_name: data.legal_name ?? '',
-      invoice_gst_number: data.invoice_gst_number ?? '',
-      website: data.website ?? '',
-      city: data.city ?? '',
-      state: data.state ?? '',
-      country: data.country ?? '',
-      avatar_url: data.avatar_url ?? '',
-      invoice_logo_url: (data as unknown as Record<string, unknown>)['invoice_logo_url'] as string ?? '',
-      document_footer_note: (data as unknown as Record<string, unknown>)['document_footer_note'] as string ?? '',
-      // How a client reaches the studio. The old app keeps these under
-      // Settings → Contact Details; ours had them only on the invoice
-      // templates page, so the natural place to look did not have them.
-      invoice_phone: data.invoice_phone ?? '',
-      invoice_email: data.invoice_email ?? '',
-      invoice_address: data.invoice_address ?? '',
-      invoice_number_prefix: data.invoice_number_prefix,
-      invoice_next_number: data.invoice_next_number,
-      quote_number_prefix: data.quote_number_prefix,
-      quote_next_number: data.quote_next_number,
-    })
+    setForm(brandForm(data))
   }, [data])
+
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // Unchanged server values are not a draft.
+  const brandDraft = useFormDraft(!readOnly && data ? 'settings:brand' : null, form, setForm, {
+    isBlank: (v) => !data || JSON.stringify(v) === JSON.stringify(brandForm(data)),
+  })
 
   if (isLoading) return null
   const set = (patch: UpdateCompanyRequest) => setForm((f) => ({ ...f, ...patch }))
@@ -421,10 +471,18 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          save.mutate(form)
+          save.mutate(form, { onSuccess: () => brandDraft.clear() })
         }}
         className="flex flex-col gap-4"
       >
+        <DraftRestoredBanner
+          at={brandDraft.restoredAt}
+          onDismiss={brandDraft.dismissRestored}
+          onDiscard={() => {
+            brandDraft.clear()
+            if (data) setForm(brandForm(data))
+          }}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Display name" hint="The name clients see.">
             <Input

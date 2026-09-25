@@ -40,6 +40,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useShootTypes } from '@/features/projects/api'
 import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/features/shoots/api'
 import { useReleaseSlot, useSlots } from '@/features/allocation/api'
@@ -240,10 +241,16 @@ export function ShootsTab({ projectId }: { projectId: string }) {
 
       {customOpen && (
         <CustomShootDialog
+          projectId={projectId}
           busy={create.isPending}
           onClose={() => setCustomOpen(false)}
-          onCreate={(v) => {
-            create.mutate(v, { onSuccess: () => setCustomOpen(false) })
+          onCreate={(v, saved) => {
+            create.mutate(v, {
+              onSuccess: () => {
+                saved()
+                setCustomOpen(false)
+              },
+            })
           }}
         />
       )}
@@ -714,6 +721,16 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
   const [location, setLocation] = useState(shoot.location ?? '')
   const [mapLink, setMapLink] = useState(shoot.map_link ?? '')
   const [status, setStatus] = useState<ShootStatus>(shoot.status)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, date, start, end, location, mapLink, status }, (v) => {
+    setName(v.name)
+    setDate(v.date)
+    setStart(v.start)
+    setEnd(v.end)
+    setLocation(v.location)
+    setMapLink(v.mapLink)
+    setStatus(v.status)
+  })
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -781,7 +798,12 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
                       map_link: mapLink.trim(),
                     },
                   },
-                  { onSuccess: onClose },
+                  {
+                    onSuccess: () => {
+                      draft.clear()
+                      onClose()
+                    },
+                  },
                 )
               }
             >
@@ -796,17 +818,26 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
 
 /** The full form, for a shoot that is not one of the usual names. */
 function CustomShootDialog({
+  projectId,
   busy,
   onClose,
   onCreate,
 }: {
+  projectId: string
   busy: boolean
   onClose: () => void
-  onCreate: (v: { name: string; shoot_date?: string; location?: string }) => void
+  /** `saved` drops the kept draft once the shoot is really created. */
+  onCreate: (v: { name: string; shoot_date?: string; location?: string }, saved: () => void) => void
 }) {
   const [name, setName] = useState('')
   const [date, setDate] = useState(todayISO())
   const [location, setLocation] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, date, location }, (v) => {
+    setName(v.name)
+    setDate(v.date)
+    setLocation(v.location)
+  })
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -845,11 +876,14 @@ function CustomShootDialog({
             <Button
               disabled={!name.trim() || busy}
               onClick={() =>
-                onCreate({
-                  name: name.trim(),
-                  ...(date ? { shoot_date: date } : {}),
-                  ...(location.trim() ? { location: location.trim() } : {}),
-                })
+                onCreate(
+                  {
+                    name: name.trim(),
+                    ...(date ? { shoot_date: date } : {}),
+                    ...(location.trim() ? { location: location.trim() } : {}),
+                  },
+                  draft.clear,
+                )
               }
             >
               {busy ? 'Adding…' : 'Add shoot'}
