@@ -1339,6 +1339,56 @@ if (listed) {
     { used, removed: removed.json },
   )
 
+  // ── Profile completion (0175) ──
+  const pBlank = await api('/settings/profile', { token: edToken })
+  const pBadPan = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { pan: 'NOPE' } })
+  const pFilled = await api('/settings/profile', {
+    token: edToken,
+    method: 'PATCH',
+    body: { address: 'Jaipur', date_of_birth: '1995-04-02', emergency_name: 'Asha', emergency_phone: '9876500000', upi_id: 'priya@okhdfc', pan: 'abcde1234f' },
+  })
+  check(
+    'profile: says what is missing, refuses a bad PAN, and saves private details',
+    pBlank.status === 200 && pBlank.json.completeness.missing.includes('payout') && pBadPan.status === 422 &&
+      pFilled.status === 200 && pFilled.json.pan === 'ABCDE1234F' && !pFilled.json.completeness.missing.includes('payout') &&
+      pFilled.json.completeness.percent > pBlank.json.completeness.percent,
+    { pBlank: pBlank.json.completeness, pBadPan: pBadPan.status, pFilled: pFilled.json.completeness },
+  )
+  const pGaps = await api('/team/profile-gaps', { token: aToken })
+  const pEdGap = (Array.isArray(pGaps.json) ? pGaps.json : []).find((g) => g.user_id === edUid)
+  const pEdGaps = await api('/team/profile-gaps', { token: edToken })
+  check(
+    "profile: the owner sees each member's gaps by name only; a member cannot",
+    pGaps.status === 200 && !!pEdGap && pEdGap.percent === pFilled.json.completeness.percent && !('pan' in pEdGap) && pEdGaps.status === 403,
+    { gaps: pGaps.status, body: Array.isArray(pGaps.json) ? pGaps.json.length : pGaps.json, pEdGap, edGaps: pEdGaps.status },
+  )
+
+  // ── Start reminders (0174) ──
+  const reel2 = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Teaser reel', estimated_date: '2030-01-20', assignee_id: edUid } })
+  const mineBefore = ((await api('/projects/deliverables/mine', { token: edToken })).json ?? []).find((d) => d.id === reel2.json.id)
+  const notMineStart = await api(`/projects/deliverables/${reel2.json.id}/start`, { token: newPw.json.access_token, method: 'POST' })
+  const started = await api(`/projects/deliverables/${reel2.json.id}/start`, { token: edToken, method: 'POST' })
+  const mineAfter = ((await api('/projects/deliverables/mine', { token: edToken })).json ?? []).find((d) => d.id === reel2.json.id)
+  check(
+    'start: the editor sees when to start (due − work − a day for review) and marks it started; nobody else can',
+    reel2.status < 300 && mineBefore?.start_by === '2030-01-12' && mineBefore?.work_days === 7 && !mineBefore?.started_at &&
+      notMineStart.status === 404 && started.status === 204 && !!mineAfter?.started_at,
+    { reel2: reel2.status, mineBefore, notMineStart: notMineStart.status, started: started.status },
+  )
+
+  // ── Tracking health from the server (Tracking v2) ──
+  const trk = await api('/projects/tracking', { token: aToken })
+  const trkRow = (trk.json ?? []).find((r) => r.id === pid)
+  const trkEd = await api('/projects/tracking', { token: edToken })
+  const trkOne = await api(`/projects/tracking/${pid}`, { token: aToken })
+  check(
+    'tracking: each project carries its health and reasons; money only for Billing; the breakdown lists late work and shoots',
+    trk.status === 200 && !!trkRow?.health?.band && Array.isArray(trkRow?.health?.reasons) && trkRow.total_cost !== null &&
+      (trkEd.status === 403 || (trkEd.json ?? []).every((r) => r.total_cost === null && r.received === null)) &&
+      trkOne.status === 200 && Array.isArray(trkOne.json.deliverables) && Array.isArray(trkOne.json.shoots) && trkOne.json.money !== null,
+    { row: trkRow?.health, trEd: trkEd.status, one: trkOne.status },
+  )
+
   // A project template creates a real project now -- and asks for a client.
   const tpl = await api('/projects/templates', {
     token: aToken,
@@ -1353,7 +1403,7 @@ if (listed) {
   })
   const made = await api(`/projects/${applied.json.project_id}`, { token: aToken })
   check(
-    'templates: applying one makes the project with its deliverables',
+    'templates: applying trkOne makes the project with its deliverables',
     noClient.status === 422 && applied.status === 201 && made.json.deliverables?.[0]?.title === 'Album ×2',
     { noClient: noClient.status, applied: applied.json, made: made.json.deliverables },
   )

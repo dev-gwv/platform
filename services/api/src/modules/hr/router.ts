@@ -277,14 +277,5 @@ export const hrRouter = new Hono<AppEnv>()
     return c.json(rows)
   })
 
-  // ── Auto Check-in ───────────────────────────────────────────
-  .post('/attendance/auto-check-in', async (c) => {
-    const rows = await attempt(c, 'hr.auto_check_in', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const result = await sql<{ auto_check_in: string | null }[]>`
-          select auto_check_in() as auto_check_in`
-        return result[0]?.auto_check_in ?? null
-      }),
-    )
-    return c.json({ id: rows, checked_in: !!rows })
-  })
+  // (Auto check-in was removed: it marked someone present from anywhere,
+  // skipping the location check and the lateness rules, and nothing used it.)

@@ -10,6 +10,7 @@ import { useMyTasks, useBoard } from '@/features/tasks/api'
 import { useSlots } from '@/features/allocation/api'
 import { useMyData } from '@/features/data/api'
 import { StartNowCard } from '@/features/projects/StartNowCard'
+import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { todayIso } from '@/features/projects/deliverable-stage'
 import { optedOut } from '@/features/data/stage'
 import { useReminders } from '@/features/reminders/api'
@@ -95,6 +96,8 @@ export function EmployeeDashboard() {
           to="/attendance"
         />
       </div>
+
+      <ProfileBanner />
 
       <StartNowCard />
 

@@ -707,6 +707,10 @@ function FenceDialog() {
       radius_m: Number(radius),
       timezone: fence?.timezone ?? 'Asia/Kolkata',
       is_active: enforce,
+      // Saving the circle must not wipe the start-of-day rules set elsewhere.
+      expected_checkin_time: fence?.expected_checkin_time ?? null,
+      late_grace_minutes: fence?.late_grace_minutes ?? 15,
+      missed_cutoff_time: fence?.missed_cutoff_time ?? null,
     })
     if (!parsed.success) {
       setError('Check the coordinates and a radius between 20 and 5000 metres.')

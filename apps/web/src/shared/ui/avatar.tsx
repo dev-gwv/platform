@@ -20,13 +20,19 @@ export function Avatar({
   name,
   size = 'md',
   className,
+  src,
 }: {
   name: string | null | undefined
   size?: keyof typeof SIZES
   className?: string
+  /** Their photo, when they have added one; initials otherwise. */
+  src?: string | null | undefined
 }) {
   const { scheme } = useTheme()
   const colors = avatarColors(name, scheme === 'dark')
+  if (src) {
+    return <img src={src} alt="" title={name ?? undefined} className={cn('shrink-0 rounded-full object-cover', SIZES[size], className)} />
+  }
 
   return (
     <span

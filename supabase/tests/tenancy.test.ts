@@ -1054,15 +1054,15 @@ describe('HR — geo-fenced attendance + payout ledger (Phase 12)', () => {
     await expect(db.query(`select check_in(19.2, 72.9);`)).rejects.toThrow(/outside_fence/i)
   })
 
-  it('absent backstop marks the un-checked-in owner absent', async () => {
-    // The owner never checked in today → backstop marks them absent.
+  it('absent backstop never marks the owner, nor overwrites a day someone worked', async () => {
+    // The owner does not check in to their own studio (0176), and the sweep
+    // marks the day that has just ended, never the one someone is working.
     await db.query(`select mark_absent_backstop();`)
     await asUser(db, OWNER)
     const rows = await db.query<{ status: string }>(
       `select status from attendance where user_id = '${OWNER}';`,
     )
-    expect(rows.rows[0]?.status).toBe('absent')
-    // The employee who checked in is NOT overwritten to absent.
+    expect(rows.rows).toHaveLength(0)
     const e = await db.query<{ status: string }>(
       `select status from attendance where user_id = '${emp}';`,
     )

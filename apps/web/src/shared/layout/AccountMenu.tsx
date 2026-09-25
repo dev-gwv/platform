@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Building2, Check, ChevronDown, Loader2, LogOut, Palette, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Loader2, LogOut, Palette, UserRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { companyProfile, type StudioMembership } from '@ipc/contracts'
 import { callApi } from '../api/client'
@@ -98,6 +98,10 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
           {session.studios.length > 1 && (
             <StudioSwitcher studios={session.studios} current={session.user_id} />
           )}
+
+          <div className="border-t border-border p-1.5">
+            <Item to="/profile" icon={UserRound} label="My profile" />
+          </div>
 
           {canSettings && (
             <div className="border-t border-border p-1.5">

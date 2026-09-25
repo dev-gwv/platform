@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { TransactionSql } from 'postgres'
 import {
   auditLogPage,
   auditLogQuery,
@@ -48,6 +49,25 @@ const COMPANY_COLUMNS = [
   'invoice_logo_url',
 ]
 
+/** The profile fields that live on users (every member can read them). */
+const SHARED_FIELDS = new Set(['name', 'phone', 'avatar_url', 'address'])
+
+/** One person's profile, with what is still missing. */
+async function readProfile(sql: TransactionSql, userId: string) {
+  const [row] = await sql<Record<string, unknown>[]>`
+    select u.name, u.email, u.phone, u.role, u.status, u.avatar_url, u.address, u.engagement_type,
+           mp.date_of_birth, mp.blood_group, mp.joined_on, mp.emergency_name, mp.emergency_relation, mp.emergency_phone,
+           mp.upi_id, mp.bank_account_name, mp.bank_account_number, mp.bank_ifsc, mp.pan,
+           profile_missing(u.user_id) as missing, profile_required_count(u.user_id) as required
+      from users u
+      left join member_profiles mp on mp.user_id = u.user_id
+     where u.user_id = ${userId}`
+  if (!row) return null
+  const { missing, required, ...rest } = row as { missing: string[]; required: number }
+  const need = Math.max(1, Number(required))
+  return { ...rest, completeness: { percent: Math.round((100 * (need - missing.length)) / need), missing } }
+}
+
 export const settingsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
@@ -88,16 +108,13 @@ export const settingsRouter = new Hono<AppEnv>()
     return c.json(companyProfile.parse(result.after))
   })
 
-  // Your own row, not the studio's. No owner gate: everyone may edit their own
-  // name and phone, and RLS scopes the write to the caller either way.
+  // Your own profile: the shared row in users, and the private details in
+  // member_profiles (only you and the owner can read those). No owner gate:
+  // everyone keeps their own profile, and RLS scopes the write to the caller.
   .get('/profile', async (c) => {
     const auth = c.get('auth')
     const row = await attempt(c, 'settings.profile', () =>
-      withUser(c.env, auth.userId, async (sql) => {
-        const rows = await sql`
-          select name, email, phone, role, status, avatar_url from users where user_id = ${auth.userId}`
-        return rows[0] ?? null
-      }),
+      withUser(c.env, auth.userId, (sql) => readProfile(sql, auth.userId)),
     )
     if (!row) fail(404, 'We could not load your profile.')
     return c.json(myProfile.parse(row))
@@ -105,19 +122,30 @@ export const settingsRouter = new Hono<AppEnv>()
 
   .patch('/profile', async (c) => {
     const parsed = updateMyProfileRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please check your details.')
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check your details.')
     if (Object.keys(parsed.data).length === 0) fail(422, 'Nothing to change.')
     const auth = c.get('auth')
+    const shared: Record<string, unknown> = {}
+    const personal: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(parsed.data)) {
+      if (v === undefined) continue
+      if (SHARED_FIELDS.has(k)) shared[k] = v
+      else personal[k] = v
+    }
     const row = await attempt(c, 'settings.profile_update', () =>
       withUser(c.env, auth.userId, async (sql) => {
-        const rows = await sql`
-          update users set ${sql(parsed.data)} where user_id = ${auth.userId}
-          returning name, email, phone, role, status, avatar_url`
-        return rows[0] ?? null
+        if (Object.keys(shared).length) await sql`update users set ${sql(shared)} where user_id = ${auth.userId}`
+        if (Object.keys(personal).length) {
+          await sql`
+            insert into member_profiles ${sql({ ...personal, user_id: auth.userId, company_id: auth.companyId })}
+            on conflict (user_id) do update set ${sql(personal)}`
+        }
+        return readProfile(sql, auth.userId)
       }),
     )
     if (!row) fail(400, 'We could not save your changes.')
-    await audit(c, { action: 'profile.update', entityType: 'user', entityId: auth.userId, after: parsed.data })
+    // Which fields changed, never the values: bank and PAN stay out of the log.
+    await audit(c, { action: 'profile.update', entityType: 'user', entityId: auth.userId, after: { fields: Object.keys(parsed.data) } })
     return c.json(myProfile.parse(row))
   })
 

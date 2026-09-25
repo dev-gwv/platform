@@ -172,8 +172,10 @@ function Directory({ onAdd }: { onAdd: () => void }) {
 
   const isOwner = !!session?.is_owner
   const showSalary = access.hasModule('team_salaries')
-  const canEdit = isOwner || access.hasAction('team_directory', 'edit')
-  const canDelete = isOwner || access.hasAction('team_directory', 'delete')
+  // Changing members is the owner's (the server allows only the owner, so a
+  // delegated manager was shown bulk buttons that could only fail).
+  const canEdit = isOwner
+  const canDelete = isOwner
   const pageItems = useMemo(() => paged.data?.items ?? [], [paged.data])
   const total = paged.data?.total ?? 0
   const members = pageItems

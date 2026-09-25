@@ -1,6 +1,7 @@
 import type { TransactionSql } from 'postgres'
 import { Hono, type Context } from 'hono'
 import {
+  teamProfileGap,
   addMemberRequest,
   addMemberResponse,
   assignRolesRequest,
@@ -52,6 +53,24 @@ async function companyName(c: Context<AppEnv>): Promise<string> {
 /** Team directory. /members backs pickers; /directory is the full staff list. */
 export const teamRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+
+  // Owner: who still has an incomplete profile, and what is missing (field
+  // names only -- never the values, which stay private to the member).
+  .get('/profile-gaps', requireOwner(), async (c) => {
+    const rows = await attempt(c, 'team.profile_gaps', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ user_id: string; missing: string[]; required: number }[]>`
+        select user_id, missing, required from team_profile_gaps()`),
+    )
+    if (!rows) fail(400, 'We could not load profile gaps.')
+    return c.json(
+      teamProfileGap.array().parse(
+        rows.map((r) => {
+          const need = Math.max(1, Number(r.required))
+          return { user_id: r.user_id, missing: r.missing, percent: Math.round((100 * (need - r.missing.length)) / need) }
+        }),
+      ),
+    )
+  })
 
   // Every caller of this endpoint uses it as a "who can this go to" picker
   // (a deal owner, a distribution rota, a workflow step, a booking slot) --

@@ -16,14 +16,14 @@ const PROFILE_OPTIONS = [
 /** Module groups shown in the dialog (Lovable parity). */
 const MODULE_GROUPS: ReadonlyArray<{ label: string; keys: ModuleKey[] }> = [
   { label: 'Core', keys: ['dashboard', 'projects', 'tasks'] },
-  { label: 'People', keys: ['clients', 'team', 'team_directory', 'team_work_preview', 'team_terms', 'team_roles'] },
-  { label: 'Billing', keys: ['money', 'billing'] },
+  { label: 'People', keys: ['clients', 'team', 'team_directory', 'team_work_preview', 'team_terms', 'team_roles', 'attendance'] },
+  { label: 'Billing & pay', keys: ['money', 'billing', 'financials', 'company_expenses', 'team_salaries', 'team_payouts'] },
   { label: 'CRM', keys: ['crm', 'lead_sources'] },
   { label: 'Settings & Platform', keys: ['settings', 'studio_access', 'usage_analytics'] },
 ]
 
 /** Modules with per-action Add/Edit/Delete sub-keys in this iteration. */
-const ACTION_MODULES = new Set<ModuleKey>(['clients', 'team_directory', 'projects', 'tasks'])
+const ACTION_MODULES = new Set<ModuleKey>(['clients', 'team_directory', 'projects', 'tasks', 'attendance', 'team_salaries', 'team_payouts'])
 const ACTIONS: ReadonlyArray<{ key: 'create' | 'edit' | 'delete'; label: string }> = [
   { key: 'create', label: 'Add' },
   { key: 'edit', label: 'Edit' },

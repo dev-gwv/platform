@@ -1,4 +1,6 @@
 import { KeyRound, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
+import { PROFILE_FIELD_LABEL } from '@ipc/contracts'
+import { useTeamProfileGaps } from '@/features/profile/api'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import type { DirectoryMember, EmployeeRole } from '@ipc/contracts'
@@ -115,8 +117,15 @@ export function DirectoryFiltersBar({
  * reached and who cannot sign in.
  */
 export function ContactBadges({ member }: { member: DirectoryMember }) {
+  // Owner only (the query is off for everyone else): how complete their profile is.
+  const gap = useTeamProfileGaps().data?.find((g) => g.user_id === member.user_id)
   return (
     <span className="mt-1 flex flex-wrap gap-1">
+      {gap && gap.missing.length > 0 && (
+        <StatusBadge tone={gap.percent < 50 ? 'danger' : 'warning'} title={`Needs ${gap.missing.map((m) => PROFILE_FIELD_LABEL[m].toLowerCase()).join(', ')}`}>
+          Profile {gap.percent}%
+        </StatusBadge>
+      )}
       {!member.login_enabled && <StatusBadge>No login</StatusBadge>}
       {!member.email && !member.phone && <StatusBadge tone="danger">Contact missing</StatusBadge>}
       {!member.email && member.phone && <StatusBadge> Email missing</StatusBadge>}

@@ -79,6 +79,9 @@ export const cronRouter = new Hono<AppEnv>()
         // Whoever is on a deliverable or task hears when to start it.
         const startReminders = await sql<{ summary: unknown }[]>`
           select run_start_reminder_cron(p_dry_run => ${dryRun}) as summary`
+        // Anyone with gaps in their profile hears what is missing, every day.
+        const profileReminders = await sql<{ summary: unknown }[]>`
+          select run_profile_reminder_cron(p_dry_run => ${dryRun}) as summary`
         // Rotation writes a refresh_tokens row every 30 minutes per active
         // user, so the table needs a sweep or it grows forever.
         const purged = dryRun
@@ -99,6 +102,7 @@ export const cronRouter = new Hono<AppEnv>()
           shoot_reminders: shootsTomorrow[0]?.summary ?? {},
           data_reminders: dataReminders[0]?.summary ?? {},
           start_reminders: startReminders[0]?.summary ?? {},
+          profile_reminders: profileReminders[0]?.summary ?? {},
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
