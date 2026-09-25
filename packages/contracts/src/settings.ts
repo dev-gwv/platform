@@ -68,7 +68,16 @@ export type UpdateCompanyRequest = z.infer<typeof updateCompanyRequest>
  * belongs with verification, not a settings form.
  */
 /** What a complete profile needs, in the order the form asks. */
-export const profileField = z.enum(['photo', 'phone', 'address', 'date_of_birth', 'emergency_contact', 'payout', 'pan'])
+export const profileField = z.enum([
+  'photo',
+  'phone',
+  'address',
+  'date_of_birth',
+  'emergency_contact',
+  'payout',
+  'pan',
+  'id_document',
+])
 export type ProfileField = z.infer<typeof profileField>
 
 export const PROFILE_FIELD_LABEL: Record<ProfileField, string> = {
@@ -79,7 +88,50 @@ export const PROFILE_FIELD_LABEL: Record<ProfileField, string> = {
   emergency_contact: 'Emergency contact',
   payout: 'UPI or bank details',
   pan: 'PAN',
+  id_document: 'ID proof',
 }
+
+/**
+ * A member's ID proof. Kept apart from ordinary files, readable only by the
+ * member and the studio owner; for in-house staff one on file is part of a
+ * complete profile.
+ */
+export const idDocumentKind = z.enum(['aadhaar', 'pan_card', 'passport', 'driving_licence', 'voter_id', 'other'])
+export type IdDocumentKind = z.infer<typeof idDocumentKind>
+export const ID_DOCUMENT_LABEL: Record<IdDocumentKind, string> = {
+  aadhaar: 'Aadhaar card',
+  pan_card: 'PAN card',
+  passport: 'Passport',
+  driving_licence: 'Driving licence',
+  voter_id: 'Voter ID',
+  other: 'Other ID',
+}
+/** Photos or a PDF, up to 5 MB -- a phone picture of a card is the usual one. */
+export const ID_DOCUMENT_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+export const ID_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024
+
+export const memberDocument = z.object({
+  id: z.string().uuid(),
+  kind: idDocumentKind,
+  name: z.string(),
+  mime: z.string(),
+  size_bytes: z.number().int(),
+  created_at: z.string().datetime({ offset: true }),
+})
+export type MemberDocument = z.infer<typeof memberDocument>
+
+/**
+ * Where to send someone's pay, in full -- for whoever is paying them (the
+ * owner, or someone who edits salaries or payouts). Every read is audited.
+ */
+export const payTo = z.object({
+  name: z.string(),
+  upi_id: z.string().nullable(),
+  bank_account_name: z.string().nullable(),
+  bank_account_number: z.string().nullable(),
+  bank_ifsc: z.string().nullable(),
+})
+export type PayTo = z.infer<typeof payTo>
 
 export const profileCompleteness = z.object({
   percent: z.number().int(),

@@ -5,6 +5,7 @@ import {
   auditLogQuery,
   companyProfile,
   companyTheme,
+  memberDocument,
   myProfile,
   updateCompanyRequest,
   updateMyProfileRequest,
@@ -22,6 +23,8 @@ import { fail } from '../../middleware/errors'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { uuidParam } from '../../lib/params'
+import { listMemberDocs, readDocumentUpload, serveDocument } from '../../lib/member-docs'
 
 const COMPANY_COLUMNS = [
   'name',
@@ -147,6 +150,57 @@ export const settingsRouter = new Hono<AppEnv>()
     // Which fields changed, never the values: bank and PAN stay out of the log.
     await audit(c, { action: 'profile.update', entityType: 'user', entityId: auth.userId, after: { fields: Object.keys(parsed.data) } })
     return c.json(myProfile.parse(row))
+  })
+
+  // Your ID proof: private to you and the studio owner (member_documents RLS).
+  .get('/profile/documents', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'settings.documents', () => withUser(c.env, auth.userId, (sql) => listMemberDocs(sql, auth.userId)))
+    if (!rows) fail(400, 'We could not load your documents.')
+    return c.json(rows)
+  })
+
+  .post('/profile/documents', async (c) => {
+    const auth = c.get('auth')
+    const up = await readDocumentUpload(c)
+    const row = await attempt(c, 'settings.document_add', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [r] = await sql`
+          insert into member_documents (company_id, user_id, kind, name, mime, size_bytes, bytes, uploaded_by)
+          values (${auth.companyId}, ${auth.userId}, ${up.kind}, ${up.name}, ${up.mime}, ${up.bytes.length}, ${up.bytes}, ${auth.userId})
+          returning id, kind, name, mime, size_bytes, created_at`
+        return r ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not keep that document.')
+    // What kind, never the file or its name.
+    await audit(c, { action: 'profile.document_add', entityType: 'user', entityId: auth.userId, after: { kind: up.kind } })
+    return c.json(memberDocument.parse(row), 201)
+  })
+
+  .get('/profile/documents/:docId', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c, 'docId')
+    const rows = await attempt(c, 'settings.document_get', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select name, mime, bytes from member_documents where id = ${id} and user_id = ${auth.userId}`),
+    )
+    if (!rows) fail(400, 'We could not load that document.')
+    if (!rows.length) fail(404, 'That document was not found.')
+    return serveDocument(rows[0]!)
+  })
+
+  .delete('/profile/documents/:docId', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c, 'docId')
+    const rows = await attempt(c, 'settings.document_delete', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ id: string }[]>`
+        delete from member_documents where id = ${id} and user_id = ${auth.userId} returning id`),
+    )
+    if (!rows) fail(400, 'We could not remove that document.')
+    if (!rows.length) fail(404, 'That document was not found.')
+    await audit(c, { action: 'profile.document_remove', entityType: 'user', entityId: auth.userId })
+    return c.body(null, 204)
   })
 
   .get('/theme', async (c) => {

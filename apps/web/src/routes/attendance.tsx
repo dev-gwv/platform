@@ -319,7 +319,7 @@ function TeamDashboard() {
       </div>
       {totals.onLeave > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
-          {totals.onLeave} on approved leave -- not counted as absent.{' '}
+          {totals.onLeave} on approved leave — not counted as absent.{' '}
           <Link to="/leave" className="underline underline-offset-2">
             Leave &amp; holidays
           </Link>

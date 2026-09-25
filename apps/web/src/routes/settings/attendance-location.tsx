@@ -46,7 +46,14 @@ function AttendanceLocation() {
       late_grace_minutes: number
       missed_cutoff_time: string | null
     }) =>
-      callApi('/hr/location', { method: 'PATCH', body: setFenceRequest.parse({ ...body, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }), responseSchema: companyFence }),
+      // The studio's own time zone as stored (India unless set otherwise) --
+      // never the browser's, which made "late" follow whoever last saved this
+      // from abroad or from a laptop set to UTC.
+      callApi('/hr/location', {
+        method: 'PATCH',
+        body: setFenceRequest.parse({ ...body, timezone: fence.data?.timezone ?? 'Asia/Kolkata' }),
+        responseSchema: companyFence,
+      }),
     onSuccess: () => {
       toast.success('Attendance location updated.')
       void qc.invalidateQueries({ queryKey: ['hr', 'location'] })

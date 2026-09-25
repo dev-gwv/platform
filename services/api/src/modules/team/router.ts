@@ -3,6 +3,7 @@ import { Hono, type Context } from 'hono'
 import {
   teamProfileGap,
   memberOverview,
+  payTo,
   addMemberRequest,
   addMemberResponse,
   assignRolesRequest,
@@ -31,6 +32,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { hashPassword, newRawToken, sha256Hex } from '../../lib/auth-token'
 import { grantableRoles, mayGrantRole, mayManageMember } from '@ipc/permissions'
+import { listMemberDocs, serveDocument } from '../../lib/member-docs'
 import { sendInvitationEmail, sendPasswordResetEmail } from '../../lib/email'
 
 const INVITE_DAYS = 7
@@ -497,6 +499,50 @@ export const teamRouter = new Hono<AppEnv>()
         },
       }),
     )
+  })
+
+  // A member's ID proof, for the owner (RLS: the member and the owner only).
+  .get('/members/:id/documents', requireOwner(), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'team.member_documents', () => withUser(c.env, c.get('auth').userId, (sql) => listMemberDocs(sql, id)))
+    if (!rows) fail(400, 'We could not load their documents.')
+    return c.json(rows)
+  })
+
+  .get('/members/:id/documents/:docId', requireOwner(), async (c) => {
+    const id = uuidParam(c)
+    const docId = uuidParam(c, 'docId')
+    const rows = await attempt(c, 'team.member_document', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select name, mime, bytes from member_documents where id = ${docId} and user_id = ${id}`),
+    )
+    if (!rows) fail(400, 'We could not load that document.')
+    if (!rows.length) fail(404, 'That document was not found.')
+    await audit(c, { action: 'member.document_viewed', entityType: 'user', entityId: id })
+    return serveDocument(rows[0]!)
+  })
+
+  // Where to send someone's pay, in full, for whoever is paying them: the
+  // owner, or someone who edits salaries or payouts. member_profiles is the
+  // member's and the owner's under RLS, so the read goes through the service
+  // role after this check -- scoped to the caller's studio -- and is audited.
+  .get('/members/:id/pay-to', async (c) => {
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    if (!auth.isOwner && !auth.access.hasAction('team_salaries', 'edit') && !auth.access.hasAction('team_payouts', 'edit')) {
+      fail(403, 'Only whoever pays the team can see payment details.')
+    }
+    const rows = await attempt(c, 'team.member_pay_to', () =>
+      withService(c.env, (sql) => sql`
+        select u.name, mp.upi_id, mp.bank_account_name, mp.bank_account_number, mp.bank_ifsc
+          from users u
+          left join member_profiles mp on mp.user_id = u.user_id
+         where u.user_id = ${id} and u.company_id = ${auth.companyId} and u.deleted_at is null`),
+    )
+    if (!rows) fail(400, 'We could not load their payment details.')
+    if (!rows.length) fail(404, 'That team member was not found.')
+    await audit(c, { action: 'member.pay_details_viewed', entityType: 'user', entityId: id })
+    return c.json(payTo.parse(rows[0]))
   })
 
   // The catalogue behind the "add from the library" chips. Declared above

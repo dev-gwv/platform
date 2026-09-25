@@ -318,7 +318,7 @@ function Shoots() {
                     </Button>
                   )}
                   {canEdit && <EditShootDialog shoot={s} />}
-                  {canEdit && <SendTermsDialog shoot={s} />}
+                  {canEdit && access.hasModule('team_terms') && <SendTermsDialog shoot={s} />}
                   {canDelete && (
                     <Button size="sm" variant="ghost" title="Delete shoot" onClick={() => void onDelete(s)} disabled={del.isPending}>
                       <Trash2 />

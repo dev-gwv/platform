@@ -25,6 +25,7 @@ import {
 } from '@/features/team-payouts/api'
 import { useSlots } from '@/features/allocation/api'
 import { useDirectory } from '@/features/team/api'
+import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { type CreateTeamPayoutRequest, type PayoutEntryType, type TeamPayout, type TeamSlot } from '@ipc/contracts'
@@ -632,6 +633,7 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
       </DialogTrigger>
       <DialogContent title="Record a settlement" description={`Outstanding: ${formatINR(pending)}`}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          {open && <PayToCard userId={slot.user_id} />}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Amount (₹)</Label>

@@ -227,7 +227,7 @@ function Directory({ onAdd }: { onAdd: () => void }) {
       const skipped = selectedRows.length - editableSelected.length
       toast.success(
         `${editableSelected.length} member${editableSelected.length === 1 ? '' : 's'} ${status === 'active' ? 'activated' : 'deactivated'}.` +
-          (skipped > 0 ? ` ${skipped} left as they are -- only the owner can change them.` : ''),
+          (skipped > 0 ? ` ${skipped} left as they are — only the owner can change them.` : ''),
       )
       setSelected(new Set())
     } catch (err) {

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ArrowLeft, CalendarDays, Check, KeyRound, Lock, Mail, MapPin, Phone, Power } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Check, FileText, KeyRound, Lock, Mail, MapPin, Phone, Power } from 'lucide-react'
 import { toast } from 'sonner'
-import { PROFILE_FIELD_LABEL, type MemberOverview, type ProfileField } from '@ipc/contracts'
+import { ID_DOCUMENT_LABEL, PROFILE_FIELD_LABEL, type MemberOverview, type ProfileField } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -19,6 +19,7 @@ import { cn } from '@/shared/ui/cn'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useDirectory, useMemberOverview, useSendReset, useUpdateMember } from '@/features/team/api'
 import { EditMemberDialog } from '@/features/team/EditMemberDialog'
+import { openIdDocument, useIdDocuments } from '@/features/profile/api'
 
 /**
  * One team member, seen from every side: who they are and how complete their
@@ -264,13 +265,14 @@ function OverviewTab({ o, isSelf, onOpen }: { o: MemberOverview; isSelf: boolean
             </dl>
           </CardContent>
         </Card>
-        {o.private && <PrivateCard p={o.private} isSelf={isSelf} />}
+        {o.private && <PrivateCard p={o.private} isSelf={isSelf} userId={m.user_id} />}
       </div>
     </div>
   )
 }
 
-function PrivateCard({ p, isSelf }: { p: NonNullable<MemberOverview['private']>; isSelf: boolean }) {
+function PrivateCard({ p, isSelf, userId }: { p: NonNullable<MemberOverview['private']>; isSelf: boolean; userId: string }) {
+  const docs = useIdDocuments(isSelf ? undefined : userId)
   const payTo = p.upi_id
     ? `UPI ${p.upi_id}`
     : p.bank_account_last4
@@ -293,6 +295,22 @@ function PrivateCard({ p, isSelf }: { p: NonNullable<MemberOverview['private']>;
           <Line label="Pay to" value={payTo} />
           <Line label="PAN" value={p.pan_on_file ? 'On file' : null} />
         </dl>
+        <div className="mt-3 border-t border-border pt-3 text-sm">
+          <p className="text-xs text-muted-foreground">ID proof</p>
+          {(docs.data ?? []).length === 0 ? (
+            <p className="text-muted-foreground">{docs.isLoading ? '…' : 'Not added'}</p>
+          ) : (
+            <ul className="mt-1 flex flex-wrap gap-2">
+              {(docs.data ?? []).map((d) => (
+                <li key={d.id}>
+                  <Button variant="outline" size="sm" onClick={() => void openIdDocument(d.id, isSelf ? undefined : userId)}>
+                    <FileText className="size-4" /> {ID_DOCUMENT_LABEL[d.kind]}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

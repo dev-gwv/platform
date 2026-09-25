@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Camera, Check, Loader2, Lock } from 'lucide-react'
+import { Camera, Check, FileText, Loader2, Lock, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { PROFILE_FIELD_LABEL, type MyProfile, type ProfileField } from '@ipc/contracts'
+import {
+  ID_DOCUMENT_LABEL,
+  ID_DOCUMENT_MAX_BYTES,
+  ID_DOCUMENT_MIMES,
+  PROFILE_FIELD_LABEL,
+  type IdDocumentKind,
+  type MyProfile,
+  type ProfileField,
+} from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Avatar } from '@/shared/ui/avatar'
@@ -13,7 +21,15 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
 import { uploadFile } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
-import { useMyProfile, useSaveMyProfile } from '@/features/profile/api'
+import {
+  openIdDocument,
+  useIdDocuments,
+  useMyProfile,
+  useRemoveIdDocument,
+  useSaveMyProfile,
+  useUploadIdDocument,
+} from '@/features/profile/api'
+import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
 export function MyProfilePage() {
@@ -237,12 +253,108 @@ function MyProfileForm() {
         )}
       </Section>
 
+      <IdProofSection needed={missing.has('id_document')} />
+
       <div className="sticky bottom-3 flex justify-end">
         <Button onClick={submit} disabled={save.isPending} className="shadow-lg">
           {save.isPending ? <Loader2 className="animate-spin" /> : <Check />} Save profile
         </Button>
       </div>
     </section>
+  )
+}
+
+/**
+ * ID proof: a photo or PDF of an Aadhaar, PAN card, passport... Saved the
+ * moment it is picked (it is a file, not a form field), and kept apart from
+ * ordinary files: only you and the studio owner can open it.
+ */
+function IdProofSection({ needed }: { needed: boolean }) {
+  const docs = useIdDocuments()
+  const upload = useUploadIdDocument()
+  const remove = useRemoveIdDocument()
+  const confirm = useConfirm()
+  const [kind, setKind] = useState<IdDocumentKind>('aadhaar')
+  const pick = useRef<HTMLInputElement>(null)
+  const list = docs.data ?? []
+
+  function onFile(file: File | undefined) {
+    if (!file) return
+    if (!(ID_DOCUMENT_MIMES as readonly string[]).includes(file.type)) {
+      toast.error('Use a JPG, PNG or WEBP photo, or a PDF.')
+      return
+    }
+    if (file.size > ID_DOCUMENT_MAX_BYTES) {
+      toast.error('That file is larger than 5 MB.')
+      return
+    }
+    upload.mutate({ file, kind })
+    if (pick.current) pick.current.value = ''
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <h2 className="flex items-center gap-1.5 font-semibold">
+          ID proof
+          <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
+            <Lock className="size-3" aria-hidden /> private
+          </span>
+          {needed && <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-semibold text-warning">needed</span>}
+        </h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">A photo or PDF of one government ID. Only you and the studio owner can open it.</p>
+
+        {list.length > 0 && (
+          <ul className="mt-3 divide-y divide-border rounded-md border border-border">
+            {list.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                <FileText className="size-4 text-muted-foreground" aria-hidden />
+                <span className="font-medium">{ID_DOCUMENT_LABEL[d.kind]}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{d.name}</span>
+                <Button variant="ghost" size="sm" onClick={() => void openIdDocument(d.id)}>
+                  View
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={remove.isPending}
+                  onClick={async () => {
+                    const yes = await confirm({ title: 'Remove this ID proof?', confirmLabel: 'Remove', destructive: true })
+                    if (yes) remove.mutate(d.id)
+                  }}
+                >
+                  <Trash2 className="size-4" /> Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="id-kind">Which ID</Label>
+            <Select id="id-kind" value={kind} onChange={(e) => setKind(e.target.value as IdDocumentKind)} className="w-48">
+              {(Object.keys(ID_DOCUMENT_LABEL) as IdDocumentKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {ID_DOCUMENT_LABEL[k]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button variant="outline" onClick={() => pick.current?.click()} disabled={upload.isPending}>
+            {upload.isPending ? <Loader2 className="animate-spin" /> : <Upload />} {list.length ? 'Add another' : 'Upload'}
+          </Button>
+          <input
+            ref={pick}
+            type="file"
+            accept={ID_DOCUMENT_MIMES.join(',')}
+            className="hidden"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

@@ -1513,6 +1513,43 @@ if (listed) {
     { invite: tmInvite.status, admin: tmInviteAdmin.status, list: tmInvites.json?.map?.((i) => i.role), ov: tmOv.json?.can, ovOwner: tmOvOwner.json?.can, remove: tmRemove.status, removeOwner: tmRemoveOwner.status },
   )
 
+  // ── ID proof, payment details, Team Terms switch (0178) ──
+  const idForm = new FormData()
+  idForm.append('file', new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], { type: 'image/jpeg' }), 'aadhaar.jpg')
+  idForm.append('kind', 'aadhaar')
+  const idUp = await fetch(`${API}/settings/profile/documents`, { method: 'POST', headers: { Authorization: `Bearer ${edToken}` }, body: idForm })
+  const idDoc = await idUp.json()
+  const badForm = new FormData()
+  badForm.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'x.exe')
+  const idBad = await fetch(`${API}/settings/profile/documents`, { method: 'POST', headers: { Authorization: `Bearer ${edToken}` }, body: badForm })
+  const idOwnerList = await api(`/team/members/${edUid}/documents`, { token: aToken })
+  const idOwnerGet = await fetch(`${API}/team/members/${edUid}/documents/${idDoc.id}`, { headers: { Authorization: `Bearer ${aToken}` } })
+  const idMgrList = await api(`/team/members/${edUid}/documents`, { token: tmToken })
+  const idMgrGet = await fetch(`${API}/settings/profile/documents/${idDoc.id}`, { headers: { Authorization: `Bearer ${tmToken}` } })
+  const idSelfProfile = await api('/settings/profile', { token: edToken })
+  check(
+    'ID proof: the member uploads it (a photo or PDF only); the owner can open it; a manager cannot, even with its id',
+    idUp.status === 201 && idDoc.kind === 'aadhaar' && idBad.status === 422 && idOwnerList.status === 200 &&
+      (idOwnerList.json ?? []).some((d) => d.id === idDoc.id) && idOwnerGet.status === 200 &&
+      idOwnerGet.headers.get('cache-control') === 'private, no-store' && idMgrList.status === 403 && idMgrGet.status === 404 &&
+      !idSelfProfile.json.completeness.missing.includes('id_document'),
+    { up: idUp.status, bad: idBad.status, list: idOwnerList.status, get: idOwnerGet.status, mgrList: idMgrList.status, mgrGet: idMgrGet.status },
+  )
+  const payOwner = await api(`/team/members/${edUid}/pay-to`, { token: aToken })
+  const payMgr = await api(`/team/members/${edUid}/pay-to`, { token: tmToken })
+  const paySelfOther = await api(`/team/members/${aOwnerUid}/pay-to`, { token: edToken })
+  check(
+    'pay-to: whoever pays sees where to send it; nobody else does',
+    payOwner.status === 200 && payOwner.json.upi_id === 'priya@okhdfc' && payMgr.status === 403 && paySelfOther.status === 403,
+    { owner: payOwner.status, mgr: payMgr.status, other: paySelfOther.status },
+  )
+  const termsEd = await api('/team-terms/templates', { token: edToken })
+  const termsMgr = await api('/team-terms/templates', { token: tmToken })
+  check('team terms: gated on the Team Terms module, not just on projects', termsEd.status === 403 && termsMgr.status === 200, {
+    ed: termsEd.status,
+    mgr: termsMgr.status,
+  })
+
   // ── Tracking health from the server (Tracking v2) ──
   const trk = await api('/projects/tracking', { token: aToken })
   const trkRow = (trk.json ?? []).find((r) => r.id === pid)

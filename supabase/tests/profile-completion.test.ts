@@ -50,11 +50,12 @@ const missing = async (user: string) =>
   (await q<{ m: string[] }>(`select profile_missing('${user}') as m`))[0]!.m
 
 describe('profile completion', () => {
-  it('lists what is missing, asking PAN only of in-house staff', async () => {
+  it('lists what is missing, asking PAN and ID proof only of in-house staff', async () => {
     await db.exec(`update users set created_at = '2026-01-01' where user_id = '${PRIYA}'`)
-    expect(await missing(PRIYA)).toEqual(['photo', 'phone', 'address', 'date_of_birth', 'emergency_contact', 'payout', 'pan'])
+    expect(await missing(PRIYA)).toEqual(['photo', 'phone', 'address', 'date_of_birth', 'emergency_contact', 'payout', 'pan', 'id_document'])
     await db.exec(`update users set engagement_type = 'freelancer' where user_id = '${PRIYA}'`)
     expect(await missing(PRIYA)).not.toContain('pan')
+    expect(await missing(PRIYA)).not.toContain('id_document')
     await db.exec(`update users set engagement_type = 'in_house' where user_id = '${PRIYA}'`)
   })
 
@@ -67,6 +68,7 @@ describe('profile completion', () => {
     expect(mine).toHaveLength(2)
     expect(mine[0]!.title).toBe('Complete your profile (0% done)')
     expect(mine[0]!.body).toContain('UPI or bank details')
+    expect(mine[0]!.body).toContain('ID proof')
     expect(await notes(OWNER, 'profile_digest')).toHaveLength(1)
     // The owner's own profile is not chased.
     expect(await notes(OWNER, 'profile_incomplete')).toHaveLength(0)
@@ -77,6 +79,10 @@ describe('profile completion', () => {
       update users set avatar_url = 'https://x.test/p.jpg', phone = '9876543210', address = 'Jaipur' where user_id = '${PRIYA}';
       insert into member_profiles (user_id, company_id, date_of_birth, emergency_name, emergency_phone, upi_id, pan)
       values ('${PRIYA}', '${COMPANY}', '1995-04-02', 'Asha', '9876500000', 'priya@okhdfc', 'ABCDE1234F');`)
+    expect(await missing(PRIYA)).toEqual(['id_document'])
+    await db.exec(`
+      insert into member_documents (company_id, user_id, kind, name, mime, size_bytes, bytes)
+      values ('${COMPANY}', '${PRIYA}', 'aadhaar', 'a.jpg', 'image/jpeg', 3, '\\x010203');`)
     expect(await missing(PRIYA)).toEqual([])
     await run('2026-10-07T05:00:00Z')
     expect(await notes(PRIYA, 'profile_incomplete')).toHaveLength(2)

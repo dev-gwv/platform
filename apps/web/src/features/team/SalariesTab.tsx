@@ -14,6 +14,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv } from '@/shared/ui/csv'
 import { formatINR } from '@/shared/ui/format'
 import { useGenerateMonthlySalaries, useMonthlySalaries, useUpdateMonthlySalary } from './api'
+import { PayToCard } from './PayToCard'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -280,6 +281,7 @@ function UpdateSalaryDialog({ row, onClose }: { row: MonthlySalary; onClose: () 
         description={`Base ${formatINR(row.base_amount)} · currently ${formatINR(row.paid_amount)} paid.`}
       >
         <div className="flex flex-col gap-3">
+          <PayToCard userId={row.user_id} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="salary-paid">Paid amount (₹)</Label>
             <Input
