@@ -212,6 +212,9 @@ export const dataBoardRow = z.object({
   user_name: z.string().nullable(),
   phone: z.string().nullable(),
   role: z.string().nullable(),
+  /** The booking's hours (null for a record not tied to a booking). */
+  start_at: isoDateTime.nullable(),
+  end_at: isoDateTime.nullable(),
   /** Whole days since the shoot day (IST); 0 on the day. */
   age_days: z.number().int(),
 })

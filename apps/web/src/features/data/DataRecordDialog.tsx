@@ -9,7 +9,14 @@ import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useMembers } from '@/features/allocation/api'
-import { useCreateDataRecord, useCreateStorageLocation, useStorageLocations, useUpdateDataRecord } from './api'
+import {
+  useCreateDataPerson,
+  useCreateDataRecord,
+  useCreateStorageLocation,
+  useDataPeople,
+  useStorageLocations,
+  useUpdateDataRecord,
+} from './api'
 import { LookupSelect } from '@/features/settings/LookupSelect'
 import { LocationKindSelect, kindFields } from './LocationKindSelect'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
@@ -40,22 +47,28 @@ export function DataRecordDialog({
   record,
   onClose,
 }: {
-  projectId: string
-  shoot: ShootListItem
-  slot: TeamSlot
+  projectId: string | null
+  shoot: Pick<ShootListItem, 'id' | 'name'>
+  slot: Pick<TeamSlot, 'id' | 'user_id' | 'user_name' | 'service_name' | 'start_at' | 'end_at'>
   record?: DataRecord | undefined
   onClose: () => void
 }) {
   const { session } = useAuth()
   const members = useMembers()
+  const people = useDataPeople()
+  const addPerson = useCreateDataPerson()
   const create = useCreateDataRecord()
   const update = useUpdateDataRecord()
-  const busy = create.isPending || update.isPending
+  const busy = create.isPending || update.isPending || addPerson.isPending
 
   const [type, setType] = useState(record?.data_type ?? defaultDataType(slot.service_name))
   const [received, setReceived] = useState(record?.date_received ?? slotDay(slot))
+  // A team member's id, "p:<id>" for an outside helper, OTHER to type a new name.
   const [copiedBy, setCopiedBy] = useState(
-    record ? (record.copied_by_uid ?? (record.copied_by_name ? OTHER : '')) : (session?.user_id ?? ''),
+    record
+      ? (record.copied_by_uid ??
+          (record.copied_by_person_id ? `p:${record.copied_by_person_id}` : record.copied_by_name ? OTHER : ''))
+      : (session?.user_id ?? ''),
   )
   const [copiedByName, setCopiedByName] = useState(record && !record.copied_by_uid ? (record.copied_by_name ?? '') : '')
   const [size, setSize] = useState(record?.size_gb ? String(record.size_gb) : '')
@@ -109,6 +122,20 @@ export function DataRecordDialog({
       toast.error('Size and cards must be positive numbers.')
       return
     }
+    // An outside helper: picked from the list, or a typed name saved to it
+    // (the server hands back the same helper for a name it already has).
+    let helper: { id: string; name: string } | null = null
+    if (copiedBy.startsWith('p:')) {
+      const p = (people.data ?? []).find((x) => x.id === copiedBy.slice(2))
+      helper = p ? { id: p.id, name: p.name } : null
+    } else if (copiedBy === OTHER) {
+      try {
+        const p = await addPerson.mutateAsync({ name: copiedByName.trim() })
+        helper = { id: p.id, name: p.name }
+      } catch {
+        return
+      }
+    }
     const fields = {
       data_type: type,
       data_label: label.trim() || defaultLabel(shoot, slot),
@@ -116,8 +143,9 @@ export function DataRecordDialog({
       size_gb: sizeN,
       card_count: cardsN,
       notes: notes.trim() || null,
-      copied_by_uid: copiedBy && copiedBy !== OTHER ? copiedBy : null,
-      copied_by_name: copiedBy === OTHER ? copiedByName.trim() : null,
+      copied_by_uid: copiedBy && copiedBy !== OTHER && !copiedBy.startsWith('p:') ? copiedBy : null,
+      copied_by_person_id: helper?.id ?? null,
+      copied_by_name: helper?.name ?? null,
       primary_location_id: primary.location || null,
       folder_path: primary.folder.trim() || null,
       cloud_link: primary.link.trim() || null,
@@ -198,18 +226,38 @@ export function DataRecordDialog({
               </Label>
               <Select id="dr-copied" value={copiedBy} onChange={(e) => setCopiedBy(e.target.value)}>
                 <option value="">Not recorded</option>
-                {(members.data ?? []).map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}
-                  </option>
-                ))}
-                <option value={OTHER}>Someone else…</option>
+                {slot.user_id && (
+                  <optgroup label="On this shoot">
+                    <option value={slot.user_id}>{slot.user_name ?? 'The shooter'}</option>
+                  </optgroup>
+                )}
+                <optgroup label="Team">
+                  {(members.data ?? [])
+                    .filter((m) => m.user_id !== slot.user_id)
+                    .map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </optgroup>
+                {(people.data ?? []).some((p) => p.is_active || `p:${p.id}` === copiedBy) && (
+                  <optgroup label="Outside helpers">
+                    {(people.data ?? [])
+                      .filter((p) => p.is_active || `p:${p.id}` === copiedBy)
+                      .map((p) => (
+                        <option key={p.id} value={`p:${p.id}`}>
+                          {p.role ? `${p.name} · ${p.role}` : p.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                <option value={OTHER}>+ New helper…</option>
               </Select>
             </div>
             {copiedBy === OTHER && (
               <div className="flex flex-col gap-1.5 sm:col-span-3">
                 <Label htmlFor="dr-copied-name" className="text-xs">
-                  Their name
+                  Helper's name (saved for next time)
                 </Label>
                 <Input
                   id="dr-copied-name"

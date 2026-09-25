@@ -49,7 +49,8 @@ import { AssignmentRow } from '@/features/shoots/AssignmentRow'
 import { dataCounts, recordForSlot } from '@/features/data/stage'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
-import { useDataRecords } from '@/features/data/api'
+import { useProjectDataRecords } from '@/features/data/api'
+import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 
 /**
  * The shoots a wedding studio books over and over. Used as one-click chips so
@@ -112,7 +113,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   const shootTypes = useShootTypes()
   const presets = useShootPresets('shoot')
   const slots = useSlots()
-  const dataRecords = useDataRecords()
+  const dataRecords = useProjectDataRecords(projectId)
   const [customOpen, setCustomOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
@@ -163,6 +164,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="mt-4 flex flex-col gap-3">
+      {canEdit && <ProjectDataStrip projectId={projectId} />}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground">
           Plan every shoot day and assign crew per requirement

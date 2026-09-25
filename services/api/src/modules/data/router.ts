@@ -253,7 +253,7 @@ export const dataRouter = new Hono<AppEnv>()
           with slots as (
             select 's:' || t.id as key, t.id as slot_id, d.id as record_id, t.shoot_id,
                    s.name as shoot_name, s.shoot_date, s.project_id, p.name as project_name, cl.name as client_name,
-                   t.user_id, u.name as user_name, u.phone, t.service_name as role,
+                   t.user_id, u.name as user_name, u.phone, t.service_name as role, t.start_at, t.end_at,
                    ${today} - coalesce(s.shoot_date, (t.start_at at time zone 'Asia/Kolkata')::date) as age_days
               from team_assignment_slots t
               join shoots s on s.id = t.shoot_id
@@ -274,6 +274,7 @@ export const dataRouter = new Hono<AppEnv>()
             select 'r:' || d.id as key, null::uuid as slot_id, d.id as record_id, d.shoot_id,
                    s.name as shoot_name, s.shoot_date, d.project_id, p.name as project_name, cl.name as client_name,
                    d.user_id, coalesce(u.name, d.team_member_name) as user_name, u.phone, d.requirement_name as role,
+                   null::timestamptz as start_at, null::timestamptz as end_at,
                    ${today} - coalesce(s.shoot_date, d.date_received, (d.created_at at time zone 'Asia/Kolkata')::date) as age_days
               from shoot_data_records d
               left join shoots s on s.id = d.shoot_id

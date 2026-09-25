@@ -8,6 +8,8 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { Button } from '@/shared/ui/button'
 import { useMyTasks, useBoard } from '@/features/tasks/api'
 import { useSlots } from '@/features/allocation/api'
+import { useMyData } from '@/features/data/api'
+import { optedOut } from '@/features/data/stage'
 import { useReminders } from '@/features/reminders/api'
 import { useQuery } from '@tanstack/react-query'
 import { attendanceRecord } from '@ipc/contracts'
@@ -44,6 +46,7 @@ export function EmployeeDashboard() {
   const slots = useSlots()
   const reminders = useReminders()
   const attendance = useMyAttendanceToday()
+  const myData = useMyData()
 
   const tasks = myTasks.data ?? board.data?.slice(0, 10) ?? []
   const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
@@ -58,6 +61,13 @@ export function EmployeeDashboard() {
     .filter((s) => s.user_id === session?.user_id && s.status === 'booked' && s.end_at >= now)
     .sort((a, b) => a.start_at.localeCompare(b.start_at))
   const mySlots = myUpcoming.slice(0, 5)
+  // Shoots I have finished whose cards the studio has not got yet.
+  const handedIn = new Map((myData.data ?? []).filter((r) => r.slot_id).map((r) => [r.slot_id!, r.data_status]))
+  const toHandOver = (slots.data ?? []).filter(
+    (s) =>
+      s.user_id === session?.user_id && s.status === 'booked' && !!s.shoot_id && s.end_at < now && !optedOut(s) &&
+      (handedIn.get(s.id) ?? 'with_shooter') === 'with_shooter',
+  ).length
   const todaySlots = myUpcoming.filter((s) => localDay(s.start_at) === localDay(now))
   const reminderItems = Array.isArray(reminders.data) ? reminders.data : (reminders.data?.items ?? [])
   const openReminders = reminderItems.filter((r) => r.status !== 'completed' && r.status !== 'dismissed').slice(0, 5)
@@ -85,6 +95,20 @@ export function EmployeeDashboard() {
       </div>
 
       <MyDeliveryStrip />
+
+      {toHandOver > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm">
+            <span className="font-medium">
+              Cards from {toHandOver === 1 ? '1 shoot' : `${toHandOver} shoots`} to hand over
+            </span>
+            <span className="text-muted-foreground">— give them to the studio, then mark it in My Shoots.</span>
+            <Button asChild size="sm" variant="outline" className="ml-auto">
+              <Link to="/shoots/my">Hand over data</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {overdue.length > 0 && (
         <Card className="border-warning/40 bg-warning/5">

@@ -1,33 +1,29 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Plus, Check, Pencil, Trash2, Download, Settings2, AlertTriangle } from 'lucide-react'
-import { shootListItem, type CreateDataRecordRequest, type DataRecord, type DataStage } from '@ipc/contracts'
+import { Plus, Pencil, Trash2, Settings2 } from 'lucide-react'
+import { shootListItem, type CreateDataRecordRequest, type DataBoardRow, type DataRecord } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
-import { StatCard } from '@/shared/ui/stat-card'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { humanize } from '@/shared/ui/format'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
-import { FilterTabs } from '@/shared/layout/filter-tabs'
-import { HowToUse } from '@/shared/ui/how-to-use'
-import { toCsv, downloadCsv } from '@/shared/ui/csv'
+import { useAccess } from '@/shared/auth/useAccess'
 import {
-  useDataRecords,
-  useVerifyData,
+  useDataBoard,
   useCreateDataRecord,
   useUpdateDataRecord,
-  useDeleteDataRecord,
   useStorageLocations,
   useCreateStorageLocation,
   useUpdateStorageLocation,
   useDeleteStorageLocation,
 } from '@/features/data/api'
-import { DATA_TYPES, STAGE_LABEL, STAGE_TONE, TRACK_LABEL, TRACK_TONE } from '@/features/data/stage'
+import { DataBoardView } from '@/features/data/DataBoardView'
+import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { DATA_TYPES } from '@/features/data/stage'
 import { LocationKindSelect, kindFields, kindLabelOf, kindValueOf } from '@/features/data/LocationKindSelect'
 import { LookupSelect } from '@/features/settings/LookupSelect'
 import { useProjects } from '@/features/projects/api'
@@ -37,388 +33,106 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 
 const shootsList = shootListItem.array()
 
-// Labels and tones for a record's stage and each copy's status live with the
-// rules that derive them (features/data/stage.ts), so this page, the shoot
-// card and the database never describe the same record differently.
-const DATA_STATUS_LABELS: Record<string, string> = Object.fromEntries(
-  (['with_shooter', 'received', 'copied', 'backed_up', 'verified', 'issue', 'not_required'] as const).map((s) => [
-    s,
-    STAGE_LABEL[s],
-  ]),
-)
-
-function dataStatusLabel(s: DataStage): string {
-  return STAGE_LABEL[s]
-}
-
 type DmTab = 'records' | 'locations'
-
-type StatusFilter = 'all' | 'missing' | 'primary_pending' | 'backup_pending' | 'ready' | 'at_risk'
-
-/** Only one track verified while the other has no copy at all — a single point of failure. */
-function isAtRisk(r: DataRecord): boolean {
-  return (r.primary_status === 'verified' && r.backup_status === 'pending') ||
-    (r.backup_status === 'verified' && r.primary_status === 'pending')
-}
 
 export function DataManagementPage({ initialTab }: { initialTab?: DmTab } = {}) {
   return (
     <AuthedPage module="projects">
-      <DataBoard initialTab={initialTab} />
+      <DataPage initialTab={initialTab} />
     </AuthedPage>
   )
 }
 
-function DataBoard({ initialTab }: { initialTab?: DmTab | undefined }) {
-  const { data, isLoading, isError, refetch } = useDataRecords()
-  const { data: projects } = useProjects()
-  const verify = useVerifyData()
-  const updateRecord = useUpdateDataRecord()
-  const del = useDeleteDataRecord()
-  const confirm = useConfirm()
+/**
+ * Where every booked person's cards are, from the shoot day to the archive.
+ * A studio manager's page: the crew hand their own cards over from My Shoots,
+ * and see only their own records.
+ */
+function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
+  const canManage = useAccess().hasAction('projects', 'edit')
+  const board = useDataBoard()
   const [tab, setTab] = useState<DmTab>(initialTab ?? 'records')
-  const [status, setStatus] = useState<StatusFilter>('all')
-  const [search, setSearch] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [dataType, setDataType] = useState('')
-  // Built-in types plus whatever types are actually on records.
-  const typeFilterOptions = (() => {
-    const out: { value: string; label: string }[] = DATA_TYPES.map((t) => ({ value: t.value, label: t.label }))
-    for (const r of data ?? []) {
-      const t = r.data_type?.trim()
-      if (t && !out.some((o) => o.value === t)) out.push({ value: t, label: t })
-    }
-    return out
-  })()
-  /**
-   * The chips answer "is this card safe yet". These three answer the other
-   * questions a studio actually asks the screen: where is it in the eight-stage
-   * journey, is the second copy done, and what came off the shoots that week.
-   */
-  const [dataStatus, setDataStatus] = useState('')
-  const [backupStatus, setBackupStatus] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [opened, setOpened] = useState<DataBoardRow | null>(null)
 
-  const counts = useMemo(() => {
-    const rows = data ?? []
-    return {
-      missing: rows.filter((r) => r.primary_status === 'pending' && r.backup_status === 'pending').length,
-      primaryPending: rows.filter((r) => r.primary_status !== 'verified').length,
-      backupPending: rows.filter((r) => r.backup_status !== 'verified').length,
-      ready: rows.filter((r) => r.primary_status === 'verified' && r.backup_status === 'verified').length,
-      atRisk: rows.filter(isAtRisk).length,
-    }
-  }, [data])
-
-  const filtered = useMemo(() => {
-    return (data ?? [])
-      .filter((r) => {
-        if (status === 'missing') return r.primary_status === 'pending' && r.backup_status === 'pending'
-        if (status === 'primary_pending') return r.primary_status !== 'verified'
-        if (status === 'backup_pending') return r.backup_status !== 'verified'
-        if (status === 'ready') return r.primary_status === 'verified' && r.backup_status === 'verified'
-        if (status === 'at_risk') return isAtRisk(r)
-        return true
-      })
-      .filter((r) => !projectId || r.project_id === projectId)
-      .filter((r) => !dataType || r.data_type === dataType)
-      .filter((r) => !dataStatus || r.data_status === dataStatus)
-      .filter((r) => !backupStatus || r.backup_status === backupStatus)
-      .filter((r) => {
-        // Date received is the date a studio means; a card logged before it
-        // came back has none yet, so fall back to when it was logged.
-        if (!from && !to) return true
-        const d = (r.date_received ?? r.created_at).slice(0, 10)
-        return (!from || d >= from) && (!to || d <= to)
-      })
-      .filter((r) => {
-        if (!search.trim()) return true
-        const q = search.trim().toLowerCase()
-        return r.data_label.toLowerCase().includes(q) || (r.project_name ?? '').toLowerCase().includes(q)
-      })
-  }, [data, status, projectId, dataType, dataStatus, backupStatus, from, to, search])
-
-  function onExport() {
-    downloadCsv(
-      'data-records.csv',
-      toCsv(
-        ['Card / drive', 'Type', 'Project', 'Size (GB)', 'Cards', 'Primary status', 'Primary location', 'Backup status', 'Backup location', 'Verified at'],
-        filtered.map((r) => [
-          r.data_label,
-          r.data_type ?? '',
-          r.project_name ?? '',
-          r.size_gb,
-          r.card_count,
-          r.primary_status,
-          r.primary_location_name ?? '',
-          r.backup_status,
-          r.backup_location_name ?? '',
-          r.verified_at ?? '',
-        ]),
-      ),
+  if (!canManage) {
+    return (
+      <>
+        <PageHeader title="Data management" description="Where every shoot's cards are." />
+        <EmptyState
+          title="For studio managers"
+          description="Hand your own cards over from My Shoots -- the studio sees them there."
+        />
+      </>
     )
   }
 
-  async function onDelete(r: DataRecord) {
-    const yes = await confirm({
-      title: 'Delete this record?',
-      description: `${r.data_label}. This cannot be undone.`,
-      destructive: true,
-      confirmLabel: 'Delete',
-    })
-    if (yes) del.mutate(r.id)
-  }
-
-  function markReceived(r: DataRecord) {
-    updateRecord.mutate({
-      id: r.id,
-      // The stage follows from the date (0160); "received" is not set directly.
-      patch: { date_received: new Date().toISOString().slice(0, 10) },
-    })
-  }
+  const rows = board.data?.rows ?? []
 
   return (
     <>
       <PageHeader
         title="Data management"
-        description="Track every card from shoot to primary and backup copy."
+        description="Every booked person's cards, from the shoot day to the archive."
         actions={
           <div className="flex gap-2">
             <ManageLocationsDialog />
-            <Button variant="outline" onClick={onExport} disabled={filtered.length === 0}>
-              <Download /> Export CSV
-            </Button>
             <AddRecordDialog />
           </div>
         }
       />
-      {isLoading ? (
-        <SkeletonList rows={5} columns={6} />
-      ) : isError ? (
-        <ErrorState onRetry={() => void refetch()} />
+      <div className="inline-flex w-fit rounded-lg border border-border bg-card p-0.5 text-xs" role="tablist" aria-label="Data views">
+        {(['records', 'locations'] as DmTab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={t === tab ? 'rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground' : 'rounded-md px-3 py-1.5 font-medium text-muted-foreground hover:text-foreground'}
+          >
+            {t === 'records' ? 'Board' : 'Locations'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'locations' ? (
+        <LocationsTab />
+      ) : board.isLoading ? (
+        <SkeletonList rows={5} columns={5} />
+      ) : board.isError ? (
+        <ErrorState onRetry={() => void board.refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No shoots to collect data from yet"
+          description="Once a shoot day has passed, everyone booked on it shows up here until their cards are safe."
+          action={<AddRecordDialog />}
+        />
       ) : (
-        <>
-          <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs" role="tablist" aria-label="Data views">
-            {(['records', 'locations'] as DmTab[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={t === tab ? 'rounded-md bg-primary px-3 py-1.5 font-medium capitalize text-primary-foreground' : 'rounded-md px-3 py-1.5 font-medium capitalize text-muted-foreground hover:text-foreground'}
-              >
-                {t === 'records' ? `Records (${(data ?? []).length})` : 'Locations'}
-              </button>
-            ))}
-          </div>
-
-          <HowToUse
-            title="Track your shoot data"
-            description="Know exactly where every shoot's photos, video and drone footage live."
-            steps={[
-              'Log each card or drive as it comes off a shoot.',
-              'Set who is holding it and which disk the primary copy is on.',
-              'Mark the backup done once it is copied somewhere else.',
-            ]}
-          />
-
-          {tab === 'locations' ? (
-            <LocationsTab />
-          ) : !data || data.length === 0 ? (
-            <EmptyState title="No data logged" description="Log memory cards as they come off a shoot." action={<AddRecordDialog />} />
-          ) : (
-            <RecordsView />
-          )}
-        </>
+        <DataBoardView rows={rows} truncated={board.data?.truncated ?? false} onOpen={setOpened} />
       )}
+
+      {opened &&
+        (opened.slot_id && opened.shoot_id ? (
+          <DataRecordDialog
+            projectId={opened.project_id}
+            shoot={{ id: opened.shoot_id, name: opened.shoot_name ?? 'Shoot' }}
+            slot={{
+              id: opened.slot_id,
+              user_id: opened.user_id ?? '',
+              user_name: opened.user_name,
+              service_name: opened.role,
+              start_at: opened.start_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+              end_at: opened.end_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+            }}
+            record={opened.record ?? undefined}
+            onClose={() => setOpened(null)}
+          />
+        ) : opened.record ? (
+          <AddRecordDialog record={opened.record} open onOpenChange={(v) => !v && setOpened(null)} />
+        ) : null)}
     </>
   )
-
-  function RecordsView() {
-    return (
-        <div className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Missing" value={String(counts.missing)} icon={HardDrive} />
-            <StatCard label="Primary pending" value={String(counts.primaryPending)} icon={HardDrive} />
-            <StatCard label="Backup pending" value={String(counts.backupPending)} icon={HardDrive} />
-            <StatCard label="Ready" value={String(counts.ready)} icon={Check} />
-            <StatCard label="At risk" value={String(counts.atRisk)} icon={AlertTriangle} />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <FilterTabs
-              tabs={[
-                { value: 'all', label: 'All', count: (data ?? []).length },
-                { value: 'missing', label: 'Missing', count: counts.missing },
-                { value: 'primary_pending', label: 'Primary pending', count: counts.primaryPending },
-                { value: 'backup_pending', label: 'Backup pending', count: counts.backupPending },
-                { value: 'ready', label: 'Ready', count: counts.ready },
-                { value: 'at_risk', label: 'At risk', count: counts.atRisk },
-              ]}
-              value={status}
-              onChange={setStatus}
-            />
-            <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-44" aria-label="Filter by project">
-              <option value="">All projects</option>
-              {(projects ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-            <Select value={dataType} onChange={(e) => setDataType(e.target.value)} className="w-40" aria-label="Filter by type">
-              <option value="">All types</option>
-              {/* Every type actually on a record, so a studio's own types filter too. */}
-              {typeFilterOptions.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={dataStatus}
-              onChange={(e) => setDataStatus(e.target.value)}
-              className="w-44"
-              aria-label="Filter by data status"
-            >
-              <option value="">All data statuses</option>
-              {Object.entries(DATA_STATUS_LABELS).map(([v, label]) => (
-                <option key={v} value={v}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={backupStatus}
-              onChange={(e) => setBackupStatus(e.target.value)}
-              className="w-44"
-              aria-label="Filter by backup status"
-            >
-              <option value="">All backup statuses</option>
-              {(['pending', 'copied', 'verified'] as const).map((v) => (
-                <option key={v} value={v}>
-                  {humanize(v)}
-                </option>
-              ))}
-            </Select>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-40"
-              aria-label="Received from"
-            />
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-40"
-              aria-label="Received up to"
-            />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search card or project…"
-              className="w-56"
-              aria-label="Search data records"
-            />
-          </div>
-
-          {filtered.length === 0 ? (
-            <EmptyState title="No records match" description="Try a different filter." />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Card / drive</th>
-                    <th className="px-4 py-2 font-medium">Project</th>
-                    <th className="px-4 py-2 font-medium">Size</th>
-                    <th className="px-4 py-2 font-medium">Status</th>
-                    <th className="px-4 py-2 font-medium">Primary</th>
-                    <th className="px-4 py-2 font-medium">Backup</th>
-                    <th className="px-4 py-2 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id} className="border-t border-border">
-                      <td className="px-4 py-2">
-                        <span className="flex items-center gap-2 font-medium">
-                          <HardDrive className="size-4 text-muted-foreground" />
-                          {r.data_label}
-                        </span>
-                        {r.data_type && <span className="ml-6 text-xs text-muted-foreground">{r.data_type}</span>}
-                        {(r.user_name ?? r.team_member_name) && (
-                          <span className="ml-6 block text-xs text-muted-foreground">
-                            {r.user_name ?? r.team_member_name}
-                            {r.requirement_name ? ` · ${r.requirement_name}` : ''}
-                            {r.shoot_name ? ` · ${r.shoot_name}` : ''}
-                            {r.shoot_date ? ` · ${r.shoot_date}` : ''}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground">{r.project_name ?? '—'}</td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {r.size_gb} GB · {r.card_count} card(s)
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex flex-col items-start gap-1">
-                          <StatusBadge tone={STAGE_TONE[r.data_status]}>{dataStatusLabel(r.data_status)}</StatusBadge>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <StatusBadge tone={TRACK_TONE[r.primary_status]}>{TRACK_LABEL[r.primary_status]}</StatusBadge>
-                        {r.primary_location_name && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">{r.primary_location_name}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <StatusBadge tone={TRACK_TONE[r.backup_status]}>{TRACK_LABEL[r.backup_status]}</StatusBadge>
-                        {r.backup_location_name && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">{r.backup_location_name}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <div className="flex justify-end gap-1">
-                          {r.data_status === 'with_shooter' && (
-                            <Button size="sm" variant="outline" disabled={updateRecord.isPending} onClick={() => markReceived(r)}>
-                              Mark Received
-                            </Button>
-                          )}
-                          {r.backup_status !== 'verified' && r.backup_status !== 'not_required' && (
-                            <Button size="sm" variant="outline" onClick={() => verify.mutate({ id: r.id, track: 'backup' })}>
-                              <Check /> Backup Done
-                            </Button>
-                          )}
-                          <AddRecordDialog
-                            record={r}
-                            trigger={
-                              <Button size="sm" variant="ghost" title="Edit">
-                                <Pencil />
-                              </Button>
-                            }
-                          />
-                          {r.primary_status === 'pending' && r.backup_status === 'pending' && (
-                            <Button size="sm" variant="ghost" title="Delete" onClick={() => void onDelete(r)}>
-                              <Trash2 />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-    )
-  }
 }
-
 
 /** Storage locations: capacity, holder and archive state at a glance. */
 function LocationsTab() {
@@ -445,7 +159,7 @@ function LocationsTab() {
   async function onDelete(id: string, name: string) {
     const yes = await confirm({
       title: `Remove "${name}"?`,
-      description: 'Records pointing at it will show no location instead.',
+      description: 'If any record points at it, it is archived instead, so those records still say where their copies went.',
       destructive: true,
       confirmLabel: 'Remove',
     })
@@ -464,7 +178,7 @@ function LocationsTab() {
           <tr>
             <th className="px-4 py-2 font-medium">Name</th>
             <th className="px-4 py-2 font-medium">Kind</th>
-            <th className="px-4 py-2 font-medium">Capacity</th>
+            <th className="px-4 py-2 font-medium">Used</th>
             <th className="px-4 py-2 font-medium">Holder</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium text-right">Actions</th>
@@ -475,7 +189,9 @@ function LocationsTab() {
             <tr key={loc.id} className="border-t border-border">
               <td className="px-4 py-2 font-medium">{loc.name}</td>
               <td className="px-4 py-2 text-muted-foreground">{kindLabelOf(loc)}</td>
-              <td className="px-4 py-2 text-muted-foreground">{loc.capacity_gb != null ? `${loc.capacity_gb} GB` : '—'}</td>
+              <td className="px-4 py-2">
+                <UsageBar used={loc.used_gb} capacity={loc.capacity_gb} records={loc.record_count} />
+              </td>
               <td className="px-4 py-2 text-muted-foreground">{loc.owner ?? '—'}</td>
               <td className="px-4 py-2">
                 <StatusBadge tone={loc.is_active ? 'success' : 'neutral'}>{loc.is_active ? 'Active' : 'Archived'}</StatusBadge>
@@ -498,6 +214,25 @@ function LocationsTab() {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** How full a disk is, from the sizes logged on the records that point at it. */
+function UsageBar({ used, capacity, records }: { used: number; capacity: number | null; records: number }) {
+  const gb = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} TB` : `${Math.round(n)} GB`)
+  const pct = capacity ? Math.min(100, Math.round((used / capacity) * 100)) : null
+  return (
+    <div className="flex min-w-[9rem] flex-col gap-1">
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {gb(used)}
+        {capacity ? ` of ${gb(capacity)}` : ''} · {records} record{records === 1 ? '' : 's'}
+      </span>
+      {pct != null && (
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-label={`${pct}% full`}>
+          <div className={pct >= 90 ? 'h-full bg-destructive' : pct >= 75 ? 'h-full bg-warning' : 'h-full bg-primary'} style={{ width: `${pct}%` }} />
+        </div>
+      )}
     </div>
   )
 }
@@ -665,13 +400,21 @@ function ManageLocationsDialog() {
   )
 }
 
-function AddRecordDialog({ record, trigger }: { record?: DataRecord; trigger?: React.ReactNode } = {}) {
+function AddRecordDialog({
+  record,
+  trigger,
+  open: openProp,
+  onOpenChange,
+}: { record?: DataRecord; trigger?: React.ReactNode; open?: boolean; onOpenChange?: (v: boolean) => void } = {}) {
   const isEdit = !!record
   const create = useCreateDataRecord()
   const update = useUpdateDataRecord()
   const { data: projects } = useProjects()
   const { session } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [openSelf, setOpenSelf] = useState(false)
+  // Opened from a board card, the page holds it open; otherwise its own button does.
+  const open = openProp ?? openSelf
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOpenSelf(v))
   const [label, setLabel] = useState(record?.data_label ?? '')
   const [dataType, setDataType] = useState(record?.data_type ?? '')
   const [cards, setCards] = useState(String(record?.card_count ?? 1))
@@ -746,13 +489,15 @@ function AddRecordDialog({ record, trigger }: { record?: DataRecord; trigger?: R
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus /> Log card
-          </Button>
-        )}
-      </DialogTrigger>
+      {openProp === undefined && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button>
+              <Plus /> Log other data
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent title={isEdit ? 'Edit card' : 'Log a card'} description="Record footage as it comes off a shoot.">
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
