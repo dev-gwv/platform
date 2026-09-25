@@ -316,6 +316,37 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/projects/deliverable-sets')
     return { id: uid(0xd5), ...(body as object) }
   if (method === 'DELETE' && path.startsWith('/projects/deliverable-sets/')) return {}
+  // The studio's deliverable types. The fixture is changed in place, so adding,
+  // editing and archiving on the Templates page behave as they would for real.
+  if (path === '/projects/catalog/deliverable-types') {
+    if (method === 'GET') return atStage(deliverableTypesFx, 'partial')
+    if (method === 'POST') {
+      const b = (body ?? {}) as { title?: string; due_days?: number | null; work_days?: number | null }
+      const title = (b.title ?? '').trim()
+      const same = deliverableTypesFx.find((t) => t.title.toLowerCase() === title.toLowerCase())
+      if (same) {
+        // Like the API: a live one is handed back as it is; an archived one comes
+        // back, with any number that was typed and its own for the rest.
+        if (same.is_archived) {
+          same.is_archived = false
+          if (b.due_days != null) same.due_days = b.due_days
+          if (b.work_days != null) same.work_days = b.work_days
+        }
+        return same
+      }
+      const row = { id: uid(0x7d0 + deliverableTypesFx.length + 1), title, due_days: b.due_days ?? null, due_basis: null, work_days: b.work_days ?? null, is_archived: false }
+      deliverableTypesFx.push(row)
+      return row
+    }
+  }
+  if (path.startsWith('/projects/catalog/deliverable-types/')) {
+    const row = deliverableTypesFx.find((t) => t.id === path.split('/')[4])
+    if (method === 'DELETE') {
+      if (row) row.is_archived = true
+      return {}
+    }
+    if (method === 'PATCH' && row) return Object.assign(row, body as object)
+  }
   if (method === 'GET' && path === '/projects/board') {
     const items = projectDetail.deliverables
       .filter((d) => d.status !== 'cancelled')
@@ -1665,6 +1696,21 @@ const deliverableSetsFx = [
       { title: 'Drone Shots', is_additional_charge: true, additional_charge_amount: 15000, show_on_quotation: true },
     ],
   },
+]
+
+/** Templates → Deliverable types: one number left blank, so the guess shows. */
+const deliverableTypesFx: {
+  id: string
+  title: string
+  due_days: number | null
+  due_basis: string | null
+  work_days: number | null
+  is_archived: boolean
+}[] = [
+  { id: uid(0x7d1), title: 'Photo Album', due_days: 90, due_basis: 'after_wedding_day', work_days: 20, is_archived: false },
+  { id: uid(0x7d2), title: 'Highlight Film', due_days: 30, due_basis: null, work_days: 12, is_archived: false },
+  { id: uid(0x7d3), title: 'Edited Photos', due_days: 21, due_basis: 'after_last_shoot', work_days: null, is_archived: false },
+  { id: uid(0x7d4), title: 'Instagram Reels Pack', due_days: 14, due_basis: null, work_days: 5, is_archived: false },
 ]
 
 const ROLE = { photographer: uid(0xf1), editor: uid(0xf2), drone: uid(0xf3) }

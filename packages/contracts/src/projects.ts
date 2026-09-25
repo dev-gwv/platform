@@ -295,28 +295,50 @@ export const createShootTypeRequest = z.object({
 })
 export type CreateShootTypeRequest = z.infer<typeof createShootTypeRequest>
 
-export const deliverableTemplateItem = z.object({
+/**
+ * What a deliverable type's days count from. A fixed date belongs to one
+ * project, never to a type, so the two custom bases are not offered here.
+ */
+export const deliverableTypeBasis = z.enum(['after_wedding_day', 'after_last_shoot', 'after_project_created'])
+export type DeliverableTypeBasis = z.infer<typeof deliverableTypeBasis>
+
+/** Up to a year: longer than any album, short enough to catch a typo. */
+const typeDays = z.number().int().min(0, 'Days cannot be negative.').max(365, 'Up to 365 days.')
+
+/**
+ * One of the studio's own deliverable types: what it delivers, when the
+ * client gets it, and how many days the work needs. A new project fills a
+ * deliverable of the same name from it, and its "Start by" date counts back
+ * from the due date by the work days.
+ */
+export const deliverableType = z.object({
   id: uuid,
   title: z.string(),
-  shoot_type: z.string().nullable().default(null),
-  delivery_days: z.number().int().nullable().default(null),
-  due_basis: z.string().nullable().default(null),
-  brief: z.string().nullable().default(null),
-  is_combined: z.boolean().default(false),
-  usage_count: z.number().int().default(0),
-  is_archived: z.boolean().default(false),
+  /** The client gets it this many days after the event. Null: not said. */
+  due_days: z.number().int().nullable(),
+  // Tolerant on read, like a deliverable's status: a row written before this
+  // list existed must not take the whole page down.
+  due_basis: z.string().nullable(),
+  /** Days of work it needs. Null: the usual guess for the name. */
+  work_days: z.number().int().nullable(),
+  is_archived: z.boolean(),
 })
-export type DeliverableTemplateItem = z.infer<typeof deliverableTemplateItem>
+export type DeliverableType = z.infer<typeof deliverableType>
 
-export const createDeliverableTemplateRequest = z.object({
-  title: z.string().trim().min(1).max(200),
-  shoot_type: z.string().trim().max(120).nullish(),
-  delivery_days: z.number().int().min(0).nullish(),
-  due_basis: z.string().trim().max(40).nullish(),
-  brief: z.string().trim().max(2000).nullish(),
-  is_combined: z.boolean().default(false),
+/** Add a type. The same name again (any case) hands back that one, live. */
+export const upsertDeliverableTypeRequest = z.object({
+  title: z.string().trim().min(1, 'Name the deliverable.').max(200),
+  due_days: typeDays.nullish(),
+  due_basis: deliverableTypeBasis.nullish(),
+  work_days: typeDays.nullish(),
 })
-export type CreateDeliverableTemplateRequest = z.infer<typeof createDeliverableTemplateRequest>
+export type UpsertDeliverableTypeRequest = z.infer<typeof upsertDeliverableTypeRequest>
+
+/** A change to one type: any of the same fields (null clears a number), or archiving it. */
+export const updateDeliverableTypeRequest = upsertDeliverableTypeRequest
+  .partial()
+  .extend({ is_archived: z.boolean().optional() })
+export type UpdateDeliverableTypeRequest = z.infer<typeof updateDeliverableTypeRequest>
 
 export const workflowPresetItem = z.object({
   id: uuid,

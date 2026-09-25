@@ -1,10 +1,10 @@
 import {
   deliverableDueDate,
-  deliverableRuleForTitle,
+  deliverableTimings,
   computeProjectTotals,
-  internalLeadDaysForTitle,
   type DeliverableForTotal,
   type DueBasis,
+  type StudioDeliverableType,
 } from '@ipc/domain'
 import type { CreateProjectRequest, CreateShootRequest, DeliverableInput } from '@ipc/contracts'
 
@@ -536,16 +536,23 @@ export function internalWorkSuggestions(shootName: string): string[] {
  * An internal deliverable belonging to one shoot: the team's own list, pinned
  * to that day so its dates follow the shoot, and off the quotation because a
  * client is not buying "data sorting" — they are buying the album it feeds.
+ *
+ * Timed like the studio's own type of the same name when it has one
+ * (Templates → Deliverable types), else like the trade usually does.
  */
-export function newInternalWork(shootIndex: number, title = ''): DeliverableDraft {
-  const rule = deliverableRuleForTitle(title)
+export function newInternalWork(
+  shootIndex: number,
+  title = '',
+  types: readonly StudioDeliverableType[] = [],
+): DeliverableDraft {
+  const timing = deliverableTimings(title, types)
   return {
     ...newDeliverable(),
     title,
     ...(title.trim()
-      ? { due_days: String(rule.due_days), due_basis: rule.due_basis }
+      ? { due_days: String(timing.due_days), due_basis: timing.due_basis }
       : {}),
-    lead_days: title.trim() ? String(internalLeadDaysForTitle(title)) : '',
+    lead_days: title.trim() ? String(timing.work_days) : '',
     visibility_scope: 'internal',
     show_on_quotation: false,
     start_rule: 'this_shoot',
@@ -774,17 +781,26 @@ export function quickDeliverables(learned: readonly string[]): { title: string; 
 }
 
 /**
- * A client line item, timed the way this studio times that thing: what they
- * used last, else what the trade generally does.
+ * A client line item, timed the way this studio times that thing: its own
+ * deliverable type of that name first — a decision made on purpose, so it
+ * beats this device's memory — then what they used last, else what the trade
+ * generally does. The type's work days travel with it for the start reminder.
  */
-export function newClientDeliverable(title = ''): DeliverableDraft {
-  const rule = deliverableRuleForTitle(title)
+export function newClientDeliverable(
+  title = '',
+  types: readonly StudioDeliverableType[] = [],
+): DeliverableDraft {
+  const timing = deliverableTimings(title, types)
+  const ownDays = timing.own?.due_days
+  const ownWork = timing.own?.work_days
   const remembered = recallDueDays(title)
   return {
     ...newDeliverable(),
     title,
-    due_days: remembered || (title.trim() ? String(rule.due_days) : ''),
-    due_basis: rule.due_basis,
+    due_days:
+      ownDays != null ? String(ownDays) : remembered || (title.trim() ? String(timing.due_days) : ''),
+    due_basis: timing.due_basis,
+    ...(ownWork != null ? { lead_days: String(ownWork) } : {}),
   }
 }
 
@@ -803,6 +819,7 @@ export function newAddOn(title = ''): DeliverableDraft {
 export function withDeliverables(
   existing: DeliverableDraft[],
   items: { title: string; is_additional_charge?: boolean; additional_charge_amount?: number; show_on_quotation?: boolean }[],
+  types: readonly StudioDeliverableType[] = [],
 ): DeliverableDraft[] {
   const taken = new Set(existing.map((d) => d.title.trim().toLowerCase()))
   const added: DeliverableDraft[] = []
@@ -811,7 +828,7 @@ export function withDeliverables(
     if (!key || taken.has(key)) continue
     taken.add(key)
     added.push({
-      ...newClientDeliverable(item.title.trim()),
+      ...newClientDeliverable(item.title.trim(), types),
       ...(item.is_additional_charge ? { is_additional_charge: true } : {}),
       ...(item.additional_charge_amount
         ? { additional_charge_amount: String(item.additional_charge_amount) }

@@ -4,6 +4,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { useClients } from '@/features/clients/api'
@@ -22,10 +23,38 @@ import {
   useShootTypes,
   useCreateShootType,
 } from '@/features/projects/api'
+import { PresetsTab } from '@/features/project-templates/PresetsTab'
+import { DeliverableTypesTab } from '@/features/project-templates/DeliverableTypesTab'
 import { type CreateProjectTemplateRequest } from '@ipc/contracts'
 import { Plus, Trash2, Pencil, Package, Camera, ListChecks, Calendar, ArrowRight } from 'lucide-react'
 
+type Tab = 'templates' | 'shoot-presets' | 'work-presets' | 'deliverable-types'
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'templates', label: 'Project templates' },
+  { value: 'shoot-presets', label: 'Shoot presets' },
+  { value: 'work-presets', label: 'Work presets' },
+  { value: 'deliverable-types', label: 'Deliverable types' },
+]
+
+/** The tab lives in the address (?tab=), so a link or a refresh lands on it. */
+function useTab(): [Tab, (t: Tab) => void] {
+  const [tab, setTabState] = useState<Tab>(() => {
+    const v = new URLSearchParams(window.location.search).get('tab')
+    return TABS.some((t) => t.value === v) ? (v as Tab) : 'templates'
+  })
+  const setTab = (t: Tab) => {
+    setTabState(t)
+    const url = new URL(window.location.href)
+    if (t === 'templates') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', t)
+    window.history.replaceState(window.history.state, '', url)
+  }
+  return [tab, setTab]
+}
+
 function ProjectTemplatesContent() {
+  const [tab, setTab] = useTab()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [applyDialogOpen, setApplyDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -143,15 +172,26 @@ function ProjectTemplatesContent() {
     <div className="space-y-4">
       <PageHeader
         title="Project Templates"
-        description="Your usual packages — shoots, deliverables and to-dos — ready to start a new project from."
+        description="Your usual packages, presets and deliverables — ready for every new project."
         actions={
-          <Button onClick={openCreate} size="sm">
-            <Plus className="mr-1 h-4 w-4" /> New template
-          </Button>
+          tab === 'templates' ? (
+            <Button onClick={openCreate} size="sm">
+              <Plus className="mr-1 h-4 w-4" /> New template
+            </Button>
+          ) : undefined
         }
       />
 
-      {isLoading ? (
+      {/* Wraps rather than scrolls: on a phone all four stay in sight, two by two. */}
+      <SectionTabs<Tab> label="Templates and presets" tabs={TABS} value={tab} onChange={setTab} className="flex-wrap" />
+
+      {tab === 'shoot-presets' ? (
+        <PresetsTab kind="shoot" />
+      ) : tab === 'work-presets' ? (
+        <PresetsTab kind="internal_work" />
+      ) : tab === 'deliverable-types' ? (
+        <DeliverableTypesTab />
+      ) : isLoading ? (
         <SkeletonCards count={3} />
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
@@ -217,7 +257,7 @@ function ProjectTemplatesContent() {
       </div>
       )}
 
-      <CatalogManagers />
+      {tab === 'templates' && <CatalogManagers />}
 
       {/* Create/Edit Template Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

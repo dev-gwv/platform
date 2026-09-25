@@ -241,3 +241,63 @@ export function internalLeadDaysForTitle(title: string): number {
   if (/(film|long\s*video|full\s*video|cinematic)/.test(t)) return 30
   return 7
 }
+
+/**
+ * One of the studio's own deliverable types, as far as timing goes: its name,
+ * when the client gets it, and the days of work it needs. Any number may be
+ * unset, and then the built-in guess answers for it.
+ */
+export interface StudioDeliverableType {
+  title: string
+  due_days: number | null
+  due_basis: string | null
+  work_days: number | null
+  is_archived?: boolean
+}
+
+/** A type's days count from an event, never from a date typed on one project. */
+const TYPE_BASES: ReadonlySet<string> = new Set<DueBasis>([
+  'after_wedding_day',
+  'after_last_shoot',
+  'after_project_created',
+])
+
+/**
+ * The studio's live type with this name, if it has one. The whole name must
+ * match, ignoring case and spaces at the ends -- the same way the database
+ * matches it (company_work_days, 0179), so both sides pick the same type.
+ */
+export function findStudioType<T extends StudioDeliverableType>(
+  types: ReadonlyArray<T>,
+  title: string,
+): T | null {
+  const key = title.trim().toLowerCase()
+  if (!key) return null
+  return types.find((t) => !t.is_archived && t.title.trim().toLowerCase() === key) ?? null
+}
+
+export interface DeliverableTimings {
+  due_days: number
+  due_basis: DueBasis
+  work_days: number
+  /** The studio's type the numbers came from, or null when none matched. */
+  own: StudioDeliverableType | null
+}
+
+/**
+ * The numbers a deliverable starts with, by its name: what the studio said
+ * that thing takes, and the trade's usual numbers for anything it left unset.
+ */
+export function deliverableTimings(
+  title: string,
+  types: ReadonlyArray<StudioDeliverableType> = [],
+): DeliverableTimings {
+  const own = findStudioType(types, title)
+  const rule = deliverableRuleForTitle(title)
+  return {
+    due_days: own?.due_days ?? rule.due_days,
+    due_basis: own?.due_basis && TYPE_BASES.has(own.due_basis) ? (own.due_basis as DueBasis) : rule.due_basis,
+    work_days: own?.work_days ?? internalLeadDaysForTitle(title),
+    own,
+  }
+}
