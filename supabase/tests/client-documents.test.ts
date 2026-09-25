@@ -155,7 +155,8 @@ describe('client-facing document readers', () => {
     expect(Number(row['amount'])).toBe(25000)
     expect(row['company_legal_name']).toBe('Studio Private Ltd')
     expect(row['client_phone']).toBe('8888888888')
-    expect(String(row['receipt_number'])).toMatch(/^R-[0-9A-F]{8}$/)
+    // 0170: a receipt number in the financial year's series, not the row's id.
+    expect(String(row['receipt_number'])).toMatch(/^RCP-\d{4}-\d{2}-\d{4}$/)
     expect(Number(row['received_total'])).toBe(25000)
   })
 
