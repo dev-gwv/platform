@@ -270,6 +270,12 @@ export const myDeliverable = z.object({
   custom_status_code: z.string().nullish(),
   notes_count: z.number().int().default(0),
   voice_count: z.number().int().default(0),
+  /** The day to begin so it is done on time: due, minus the work, minus a day for review. */
+  start_by: isoDate.nullish(),
+  /** Roughly how many days the work needs. */
+  work_days: z.number().int().nullish(),
+  /** When the editor said they started (or handed work in). */
+  started_at: isoDateTime.nullish(),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 

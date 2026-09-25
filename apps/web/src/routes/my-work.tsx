@@ -18,6 +18,7 @@ import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
 import { MyDeliverables } from '@/features/projects/MyDeliverables'
+import { StartNowCard } from '@/features/projects/StartNowCard'
 import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
 import { useConfirm } from '@/shared/ui/confirm'
 import { todayISO } from '@/features/tasks/board'
@@ -264,6 +265,7 @@ function MyWork() {
         <SummaryCard label="Completed" value={summary.completed} icon={CheckCircle2} />
       </div>
 
+      <StartNowCard />
       <MyDeliverables />
 
       {reminderDays.length > 0 && (

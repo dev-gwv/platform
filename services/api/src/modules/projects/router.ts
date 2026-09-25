@@ -786,7 +786,10 @@ export const projectsRouter = new Hono<AppEnv>()
                d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
                d.delivery_link, d.visibility_scope, d.custom_status_code,
                (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
-               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count
+               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count,
+               deliverable_start_by(d.estimated_date, d.title, d.delivery_days_after_start) as start_by,
+               deliverable_work_days(d.title, d.delivery_days_after_start) as work_days,
+               d.started_at
         from deliverables d
         join projects p on p.id = d.project_id
         left join clients cl on cl.id = p.client_id
@@ -797,6 +800,23 @@ export const projectsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not load your deliverables.')
     return c.json(myDeliverable.array().parse(rows))
+  })
+
+  // The editor on it says "I've started" -- which stops the start reminders.
+  .post('/deliverables/:did/start', async (c) => {
+    const id = uuidParam(c, 'did')
+    const ok = await attempt(
+      c,
+      'projects.deliverables_start',
+      () => withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`select start_deliverable(${id})`
+        return true
+      }),
+      { onCode: (code) => (code === 'P0002' ? fail(404, 'That deliverable was not found.') : undefined) },
+    )
+    if (!ok) fail(400, 'We could not start that.')
+    await audit(c, { action: 'deliverable.start', entityType: 'deliverable', entityId: id })
+    return c.body(null, 204)
   })
 
   /**
