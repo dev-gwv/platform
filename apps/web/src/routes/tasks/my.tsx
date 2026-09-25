@@ -11,6 +11,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { HowToUse } from '@/shared/ui/how-to-use'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
+import { RemindMe } from '@/features/reminders/RemindMe'
 import {
   PRIORITY_LABEL,
   STATUS_LABEL,
@@ -183,6 +184,9 @@ function MyTasks() {
           <Button size="sm" variant="outline" onClick={() => openVoice(t)}>
             <Mic /> Voice note
           </Button>
+          {t.status !== 'completed' && t.status !== 'cancelled' && (
+            <RemindMe entityType="task" entityId={t.id} name={t.title} context={t.project_name} />
+          )}
         </div>
       </div>
     )

@@ -25,6 +25,7 @@ import { humanize } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useDeleteShoot, useUpdateShoot } from '@/features/shoots/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
+import { RemindMe } from '@/features/reminders/RemindMe'
 
 const list = shootListItem.array()
 const TONE: Record<ShootStatus, 'info' | 'success' | 'warning' | 'danger'> = {
@@ -323,6 +324,9 @@ function Shoots() {
                     <Button size="sm" variant="ghost" title="Delete shoot" onClick={() => void onDelete(s)} disabled={del.isPending}>
                       <Trash2 />
                     </Button>
+                  )}
+                  {s.status !== 'cancelled' && (
+                    <RemindMe entityType="shoot" entityId={s.id} name={s.name} context={s.project_name} className="ml-auto" />
                   )}
                 </div>
               </CardContent>

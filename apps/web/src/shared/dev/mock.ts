@@ -873,8 +873,59 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'PATCH' && path === '/hr/policy') return body
   if (method === 'POST' && path === '/hr/check-out') return { id: uid(0xc1) }
   if (method === 'POST' && path === '/hr/check-in') return { id: uid(0xc0) }
-  if (method === 'GET' && path === '/notifications') return notifs
+  if (method === 'GET' && (path === '/notifications' || path.startsWith('/notifications?')))
+    return notificationsFor(path)
+  if (method === 'GET' && path === '/notifications/unread-count')
+    return { unread_count: notifs.filter((n) => !n.read_at && !n.dismissed_at).length }
+  if (method === 'POST' && path === '/notifications/read-all') {
+    for (const n of notifs) n.read_at ??= new Date().toISOString()
+    return {}
+  }
+  {
+    const m = /^\/notifications\/([^/]+)\/(read|dismiss)$/.exec(path)
+    const n = m && method === 'POST' ? notifs.find((x) => x.id === m[1]) : undefined
+    if (m && n) {
+      if (m[2] === 'read') n.read_at ??= new Date().toISOString()
+      else n.dismissed_at ??= new Date().toISOString()
+      return {}
+    }
+  }
   if (method === 'POST' && path.includes('/notifications/')) return {}
+  if (method === 'GET' && (path === '/reminders' || path.startsWith('/reminders?'))) return remindersList()
+  if (method === 'POST' && path === '/reminders') {
+    const b = (body ?? {}) as Partial<(typeof remindersFx)[number]> & { assigned_to?: string | null }
+    // A counter, not the list length: after a delete the length repeats an id.
+    const id = uid(++reminderSeq)
+    remindersFx.push({
+      id,
+      company_id: uid(0xaa),
+      user_id: b.assigned_to ?? uid(1),
+      created_by: uid(1),
+      title: b.title ?? 'Reminder',
+      description: b.description ?? null,
+      priority: b.priority ?? 'medium',
+      status: 'active',
+      entity_type: b.entity_type ?? null,
+      entity_id: b.entity_id ?? null,
+      entity_name: null,
+      due_at: b.due_at ?? null,
+      created_at: new Date().toISOString(),
+    })
+    return { id }
+  }
+  {
+    // Edit, complete, delete: kept, so the board shows what was just done.
+    const m = /^\/reminders\/([^/]+)(\/status)?$/.exec(path)
+    const at = m ? remindersFx.findIndex((r) => r.id === m[1]) : -1
+    const r = remindersFx[at]
+    if (m && r && (method === 'PATCH' || method === 'DELETE')) {
+      const b = (body ?? {}) as Partial<(typeof remindersFx)[number]>
+      if (method === 'DELETE') remindersFx.splice(at, 1)
+      else if (m[2]) r.status = b.status ?? r.status
+      else Object.assign(r, { ...b, entity_name: b.entity_id === r.entity_id ? r.entity_name : null })
+      return { ok: true }
+    }
+  }
   if (method === 'GET' && path === '/subscription/plans') return plansFx
   if (method === 'POST' && path === '/subscription/order')
     return { order_id: uid(0xd0), amount: 5900 }
@@ -1054,32 +1105,133 @@ const plansFx = [
   },
 ]
 
-const notifs = [
+/** An ISO time this long before the preview was opened, so the bell reads "25m ago", not a date. */
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+
+/**
+ * Alerts, one of each look the bell's panel has to draw: unread and read, each
+ * severity, with and without a body and a link. Like the theme, reads and
+ * dismissals are remembered, so the badge and the list move when pressed.
+ */
+const notifs: {
+  id: string
+  type: string
+  severity: 'info' | 'warning' | 'critical'
+  title: string
+  body: string | null
+  read_at: string | null
+  dismissed_at: string | null
+  deep_link: string | null
+  created_at: string
+}[] = [
   {
     id: uid(0xf1),
     type: 'reminder',
-    title: 'Call Priya about wedding date',
-    body: null,
+    severity: 'info',
+    title: 'Follow up: Wedding album (40 sheets) · Sharma Wedding',
+    body: 'Ask Priya which cover photo she picked',
     read_at: null,
-    created_at: '2026-07-06T06:00:00Z',
+    dismissed_at: null,
+    deep_link: `/projects/${PROJ.p1}?tab=deliverables&d=${uid(0xd1)}`,
+    created_at: minutesAgo(25),
   },
   {
     id: uid(0xf2),
     type: 'work',
+    severity: 'info',
     title: 'Album v1 was approved',
     body: 'Great work',
     read_at: null,
-    created_at: '2026-07-05T10:00:00Z',
+    dismissed_at: null,
+    deep_link: '/my-work',
+    created_at: minutesAgo(2 * 60 + 10),
+  },
+  {
+    id: uid(0xf4),
+    type: 'shoot.upcoming',
+    severity: 'warning',
+    title: 'Shoot coming up',
+    body: 'Engagement shoot on 28 Sep',
+    read_at: null,
+    dismissed_at: null,
+    deep_link: '/shoots/my',
+    created_at: minutesAgo(26 * 60),
   },
   {
     id: uid(0xf3),
-    type: 'billing',
+    type: 'invoice.overdue',
+    severity: 'critical',
     title: 'INV-0001 is overdue',
     body: null,
-    read_at: '2026-07-04T10:00:00Z',
-    created_at: '2026-07-03T10:00:00Z',
+    read_at: minutesAgo(3 * 24 * 60),
+    dismissed_at: null,
+    deep_link: '/billing',
+    created_at: minutesAgo(12 * 24 * 60),
   },
 ]
+
+/** GET /notifications with the filters the bell and the Alerts page send. */
+function notificationsFor(path: string) {
+  const q = new URLSearchParams(path.split('?')[1] ?? '')
+  const flag = (k: string) => q.get(k) === '1' || q.get(k) === 'true'
+  const limit = Number(q.get('limit')) || 50
+  return notifs
+    .filter((n) => flag('include_dismissed') || !n.dismissed_at)
+    .filter((n) => !flag('unread_only') || !n.read_at)
+    .filter((n) => !q.get('severity') || n.severity === q.get('severity'))
+    .filter((n) => !q.get('type_prefix') || n.type.startsWith(q.get('type_prefix')!))
+    .slice(0, limit)
+}
+
+/** Reminders set in the preview, "Remind me" included, so the board shows them. */
+const remindersFx: {
+  id: string
+  company_id: string
+  user_id: string
+  created_by: string
+  title: string
+  description: string | null
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  status: 'active' | 'completed' | 'dismissed'
+  entity_type: string | null
+  entity_id: string | null
+  entity_name: string | null
+  due_at: string | null
+  created_at: string
+}[] = [
+  {
+    id: uid(0x7e1),
+    company_id: uid(0xaa),
+    user_id: uid(1),
+    created_by: uid(1),
+    title: 'Follow up: Sharma Wedding',
+    description: 'Balance payment before the album goes out',
+    priority: 'high',
+    status: 'active',
+    entity_type: 'project',
+    entity_id: PROJ.p1,
+    entity_name: 'Sharma Wedding',
+    due_at: minutesAgo(-2 * 24 * 60),
+    created_at: minutesAgo(3 * 24 * 60),
+  },
+]
+
+let reminderSeq = 0x7e1
+
+function remindersList() {
+  const now = Date.now()
+  const active = remindersFx.filter((r) => r.status === 'active')
+  const today = new Date().toDateString()
+  return {
+    items: remindersFx,
+    summary: {
+      total_count: remindersFx.length,
+      active_count: active.length,
+      overdue_count: active.filter((r) => r.due_at && Date.parse(r.due_at) < now).length,
+      due_today_count: active.filter((r) => r.due_at && new Date(r.due_at).toDateString() === today).length,
+    },
+  }
+}
 
 /** One of each shape the roster has to render: closed, still in, late, absent. */
 const rosterFx = [

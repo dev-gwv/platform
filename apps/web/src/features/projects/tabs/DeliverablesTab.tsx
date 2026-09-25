@@ -43,11 +43,14 @@ const matches = (d: Deliverable, f: PipelineFilter) =>
  */
 export function DeliverablesTab({
   projectId,
+  projectName,
   deliverables,
   shoots,
   canEdit,
 }: {
   projectId: string
+  /** For the reminders set from a card: "Follow up: Photo Album · Sharma Wedding". */
+  projectName?: string | undefined
   deliverables: readonly Deliverable[]
   shoots: readonly ShootRef[]
   canEdit: boolean
@@ -158,6 +161,7 @@ export function DeliverablesTab({
                     key={d.id}
                     d={d}
                     canEdit={canEdit}
+                    projectName={projectName}
                     onOpen={(action) => {
                       setOpenAction(action ?? null)
                       setOpenId(d.id)

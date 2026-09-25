@@ -13,6 +13,7 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import { useCreateTask, useDeleteTask, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { todayISO } from '@/features/tasks/board'
+import { RemindMe } from '@/features/reminders/RemindMe'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
@@ -226,6 +227,9 @@ function TaskRow({ t, canEdit, deliverableTitle }: { t: TaskListItem; canEdit: b
           {t.due_date ? `${late ? 'Late · ' : ''}${day(t.due_date)}` : canEdit && !done ? 'Add date' : ''}
         </button>
       )}
+
+      {/* Anyone who can see the task can ask to be reminded of it. */}
+      {!done && <RemindMe entityType="task" entityId={t.id} name={t.title} context={t.project_name} />}
 
       {canEdit && (
         <RowMenu

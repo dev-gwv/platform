@@ -7,7 +7,24 @@ export type ReminderPriority = z.infer<typeof reminderPriority>
 export const reminderStatus = z.enum(['active', 'completed', 'dismissed'])
 export type ReminderStatus = z.infer<typeof reminderStatus>
 
-export const reminderEntityType = z.enum(['lead', 'project', 'client', 'invoice', 'enquiry', 'task', 'shoot', 'custom', 'general'])
+/**
+ * What a reminder can be about. Mirrors the reminders_entity_type_check
+ * constraint (last widened in 0181, for deliverables): a value here that the
+ * constraint does not allow passes validation and then fails the insert.
+ * supabase/tests/remind-me.test.ts fails if the two lists ever differ.
+ */
+export const reminderEntityType = z.enum([
+  'lead',
+  'project',
+  'client',
+  'invoice',
+  'enquiry',
+  'task',
+  'shoot',
+  'deliverable',
+  'custom',
+  'general',
+])
 export type ReminderEntityType = z.infer<typeof reminderEntityType>
 
 export const reminder = z.object({

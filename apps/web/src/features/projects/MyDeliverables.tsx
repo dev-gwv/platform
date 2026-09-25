@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { StageStepper, STAGE_STYLE } from '@/features/projects/StageStepper'
 import { isLate, stageOf } from '@/features/projects/deliverable-stage'
+import { RemindMe } from '@/features/reminders/RemindMe'
 
 /** An item on my list, in the shape the panel reads. I am its editor. */
 function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string | null }): Deliverable {
@@ -117,6 +118,9 @@ export function MyDeliverables() {
                     }
                   />
                   <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} canEdit={false} />
+                  {stage !== 'completed' && stage !== 'cancelled' && (
+                    <RemindMe entityType="deliverable" entityId={d.id} name={d.title} context={d.project_name} />
+                  )}
                 </div>
               </li>
             )

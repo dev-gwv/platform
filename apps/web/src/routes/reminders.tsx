@@ -66,7 +66,10 @@ function EntityPicker({
   const tasks = useTasks()
   const shoots = useShootsPicker(entityType === 'shoot')
 
-  if (!entityType || entityType === 'custom') return null
+  // A deliverable is linked from its own card ("Remind me"), not picked from
+  // a list here; that link is kept as it is. Anything without a list of its
+  // own used to fall through to the shoots list below.
+  if (!entityType || entityType === 'custom' || entityType === 'general' || entityType === 'deliverable') return null
 
   const options =
     entityType === 'lead'
@@ -236,6 +239,7 @@ function RemindersContent() {
             <option value="enquiry">Enquiry</option>
             <option value="task">Task</option>
             <option value="shoot">Shoot</option>
+            <option value="deliverable">Deliverable</option>
             <option value="custom">Not linked</option>
           </Select>
         </div>
@@ -427,6 +431,9 @@ function RemindersContent() {
                 <option value="enquiry">An enquiry</option>
                 <option value="task">A task</option>
                 <option value="shoot">A shoot</option>
+                {/* Only ever set from a deliverable's own card, so only shown
+                    when editing one — otherwise the box would read "Nothing". */}
+                {form.entity_type === 'deliverable' && <option value="deliverable">A deliverable</option>}
               </Select>
             </div>
             <EntityPicker

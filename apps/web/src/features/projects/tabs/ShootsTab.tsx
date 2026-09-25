@@ -51,6 +51,7 @@ import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
 import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
+import { RemindMe } from '@/features/reminders/RemindMe'
 
 /**
  * The shoots a wedding studio books over and over. Used as one-click chips so
@@ -356,10 +357,22 @@ function ShootPlanner({
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="flex items-center gap-2 text-base font-semibold">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold">
               <Camera className="size-4 text-muted-foreground" />
               {shoot.name}
               <StatusBadge tone={TONE[shoot.status]}>{humanize(shoot.status)}</StatusBadge>
+              {/* Beside the name rather than among the edit buttons: crew who
+                  cannot edit the shoot can still ask to be reminded of it. */}
+              {shoot.status !== 'cancelled' && (
+                <RemindMe
+                  entityType="shoot"
+                  entityId={shoot.id}
+                  name={shoot.name}
+                  context={shoot.project_name}
+                  align="start"
+                  className="-my-1"
+                />
+              )}
             </span>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               {shoot.shoot_date && <span>{shoot.shoot_date}</span>}
