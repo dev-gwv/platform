@@ -12,25 +12,13 @@ const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
 const OWNER = 'b0000000-0000-4000-8000-000000000001'
 const PRIYA = 'b0000000-0000-4000-8000-000000000002'
-const AMAN = 'b0000000-0000-4000-8000-000000000003'
 const COMPANY = 'b0000000-0000-4000-8000-0000000000aa'
 const CLIENT = 'b0000000-0000-4000-8000-0000000000c1'
 const PROJECT = 'b0000000-0000-4000-8000-0000000000b1'
-const SHOOT = 'b0000000-0000-4000-8000-0000000000d1'
-const DISK = 'b0000000-0000-4000-8000-0000000000e1'
-const CLOUD = 'b0000000-0000-4000-8000-0000000000e2'
 
 let db: PGlite
 const q = async <T>(sql: string) => (await db.query<T>(sql)).rows
 const as = (user: string) => db.exec(`set request.jwt.claim.sub = '${user}';`)
-const fails = async (sql: string) => {
-  try {
-    await db.query(sql)
-  } catch (e) {
-    return (e as Error).message
-  }
-  return null
-}
 
 beforeAll(async () => {
   db = new PGlite()
