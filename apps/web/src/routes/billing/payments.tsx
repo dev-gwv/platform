@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Copy, Mail, MessageCircle, Receipt } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Mail, MessageCircle, Receipt, Printer, CalendarCheck, TrendingUp, Hourglass, CheckCircle2, Clock } from 'lucide-react'
 import type { ReceivedPayment } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -11,23 +11,19 @@ import { Input, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
-import { RowMenu } from '@/shared/ui/row-menu'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { PERIOD_LABEL, periodFor, type PeriodKey } from '@/features/financials/period'
-import { Card, CardContent } from '@/shared/ui/card'
+import { MoneyTile } from '@/features/billing/MoneyTile'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
 import { useClients } from '@/features/clients/api'
+import { useActiveLookups } from '@/features/settings/api'
 import { useProjects } from '@/features/projects/api'
-import {
-  ReceivedPaymentDialog,
-  ViewReceivedPaymentDialog,
-  DeleteReceivedPaymentDialog,
-} from '@/features/billing/ReceivedPaymentDialogs'
+import { ReceivedPaymentDialog, DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
 import { SendReceiptDialog } from '@/features/billing/SendReceiptDialog'
-import { copyReceiptLink, openReceiptWhatsApp, receiptShareText, issueReceiptLink } from '@/features/billing/receiptShare'
+import { openReceiptWhatsApp, receiptShareText, issueReceiptLink } from '@/features/billing/receiptShare'
 import { shortDate } from '@/features/billing/status'
 
 export function PaymentsPage() {
@@ -69,13 +65,15 @@ function PaymentsSection() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
-  const [viewId, setViewId] = useState<string | null>(null)
   const [editTarget, setEditTarget] = useState<ReceivedPayment | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ReceivedPayment | null>(null)
   const [emailTarget, setEmailTarget] = useState<ReceivedPayment | null>(null)
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
   const { data: projects } = useProjects()
+  // The built-in modes plus any the studio has added of its own.
+  const { data: customModes } = useActiveLookups('payment_type')
+  const modes = [...MODES, ...(customModes ?? []).map((m) => m.value).filter((v) => !MODES.some((x) => x.toLowerCase() === v.toLowerCase()))]
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -154,9 +152,17 @@ function PaymentsSection() {
 
       {summary && (
         <div className="mb-4 grid grid-cols-3 gap-3">
-          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">Received this month</p><p className="mt-1 text-lg font-semibold tabular-nums text-tone-green sm:text-xl">{formatINR(summary.received_this_month)}</p></CardContent></Card>
-          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">This financial year</p><p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.received_this_fy)}</p></CardContent></Card>
-          <Card><CardContent className="p-3 sm:p-4"><p className="text-xs text-muted-foreground sm:text-sm">Promised, not yet in</p><p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{formatINR(summary.promised_amount)}</p><p className="hidden text-xs text-muted-foreground sm:block">{summary.pending_count} promised</p></CardContent></Card>
+          <MoneyTile icon={CalendarCheck} tone="green" value={formatINR(summary.received_this_month)} label="Received this month" />
+          <MoneyTile icon={TrendingUp} tone="blue" value={formatINR(summary.received_this_fy)} label="This financial year" />
+          <MoneyTile
+            icon={Hourglass}
+            tone="amber"
+            value={formatINR(summary.promised_amount)}
+            label="Promised, not yet in"
+            hint={`${summary.pending_count} promised`}
+            onClick={() => { setStatus(status === 'pending' ? 'all' : 'pending'); setPage(1) }}
+            active={status === 'pending'}
+          />
         </div>
       )}
 
@@ -207,7 +213,7 @@ function PaymentsSection() {
           </Select>
           <Select value={mode} onChange={(e) => { setMode(e.target.value); setPage(1) }} className="w-full sm:w-36" aria-label="Filter by payment mode">
             <option value="">Any mode</option>
-            {MODES.map((m) => (
+            {modes.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </Select>
@@ -239,14 +245,14 @@ function PaymentsSection() {
                   key={r.id}
                   title={formatINR(r.amount)}
                   subtitle={`${r.client_name ?? '—'} · ${r.project_name ?? 'No project'}${r.invoice_number ? ` · ${r.invoice_number}` : ''}`}
-                  badge={<StatusBadge tone={PAYMENT_TONE[r.status]}>{r.status === 'paid' ? 'Received' : 'Promised'}</StatusBadge>}
+                  badge={<PaymentBadge status={r.status} />}
                   fields={[
                     { label: 'Date', value: shortDate(r.date_received) },
                     { label: 'Receipt', value: r.receipt_number ?? '—' },
                     { label: 'GST', value: r.is_gst ? (r.gst_number ?? 'GST') : '—' },
                     ...(r.description ? [{ label: 'Note', value: r.description }] : []),
                   ]}
-                  actions={<PaymentRowActions row={r} onView={() => setViewId(r.id)} onEdit={() => setEditTarget(r)} onDelete={() => setDeleteTarget(r)} onEmail={() => setEmailTarget(r)} />}
+                  actions={<PaymentRowActions row={r} onEdit={() => setEditTarget(r)} onDelete={() => setDeleteTarget(r)} onEmail={() => setEmailTarget(r)} labelled />}
                 />
               ))}
             </RecordCards>
@@ -270,7 +276,15 @@ function PaymentsSection() {
                   {items.map((r) => (
                     <tr key={r.id} className="border-t border-border">
                       <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{shortDate(r.date_received)}</td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{r.receipt_number ?? <span className="text-muted-foreground">—</span>}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs font-medium tabular-nums text-muted-foreground">
+                        {r.receipt_number ? (
+                          <Link to="/billing/payments/$id" params={{ id: r.id }} className="hover:text-primary hover:underline">
+                            {r.receipt_number}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td className="px-3 py-2 font-medium">{r.client_name ?? '—'}{r.client_phone && <div className="text-xs font-normal text-muted-foreground">{r.client_phone}</div>}</td>
                       <td className="px-3 py-2">
                         {r.project_id ? (
@@ -282,7 +296,7 @@ function PaymentsSection() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(r.amount)}{r.mode && <div className="text-xs font-normal text-muted-foreground">{r.mode}</div>}</td>
-                      <td className="px-3 py-2"><StatusBadge tone={PAYMENT_TONE[r.status]}>{r.status === 'paid' ? 'Received' : 'Promised'}</StatusBadge></td>
+                      <td className="px-3 py-2"><PaymentBadge status={r.status} /></td>
                       <td className="px-3 py-2">
                         {r.invoice_id ? (
                           <Link to="/billing/invoices/$id" params={{ id: r.invoice_id }} className="text-primary hover:underline">
@@ -294,8 +308,8 @@ function PaymentsSection() {
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{r.is_gst ? (<span className="inline-flex items-center gap-1 text-xs"><Receipt className="size-3" /> {r.gst_number ?? 'GST'}</span>) : '—'}</td>
                       <td className="px-3 py-2">
-                        <div className="flex justify-end gap-1">
-                          <PaymentRowActions row={r} onView={() => setViewId(r.id)} onEdit={() => setEditTarget(r)} onDelete={() => setDeleteTarget(r)} onEmail={() => setEmailTarget(r)} />
+                        <div className="flex justify-end gap-0.5">
+                          <PaymentRowActions row={r} onEdit={() => setEditTarget(r)} onDelete={() => setDeleteTarget(r)} onEmail={() => setEmailTarget(r)} />
                         </div>
                       </td>
                     </tr>
@@ -320,48 +334,82 @@ function PaymentsSection() {
 
       <ReceivedPaymentDialog open={addOpen} onOpenChange={setAddOpen} initial={null} />
       <ReceivedPaymentDialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)} initial={editTarget} />
-      <ViewReceivedPaymentDialog paymentId={viewId} onOpenChange={(v) => !v && setViewId(null)} onEdit={(p) => { setViewId(null); setEditTarget(p) }} />
       <DeleteReceivedPaymentDialog payment={deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)} />
       <SendReceiptDialog open={!!emailTarget} onOpenChange={(v) => !v && setEmailTarget(null)} payment={emailTarget} />
     </>
   )
 }
 
-function PaymentRowActions({ row, onView, onEdit, onDelete, onEmail }: { row: ReceivedPayment; onView: () => void; onEdit: () => void; onDelete: () => void; onEmail: () => void }) {
-  async function onCopy() {
-    await copyReceiptLink(row.id)
-  }
+/** Paid in green with a tick, promised in amber with a clock: readable from across the room. */
+function PaymentBadge({ status }: { status: ReceivedPayment['status'] }) {
+  const paid = status === 'paid'
+  return (
+    <StatusBadge tone={PAYMENT_TONE[status]} className="gap-1 border-current/20 font-semibold">
+      {paid ? <CheckCircle2 className="size-3.5" /> : <Clock className="size-3.5" />}
+      {paid ? 'Paid' : 'Promised'}
+    </StatusBadge>
+  )
+}
+
+/**
+ * Every receipt action as its own icon, as the studio knew them: view, edit,
+ * print, email, WhatsApp, delete. On a phone they become labelled buttons in
+ * a grid, big enough for a thumb.
+ */
+function PaymentRowActions({
+  row,
+  onEdit,
+  onDelete,
+  onEmail,
+  labelled = false,
+}: {
+  row: ReceivedPayment
+  onEdit: () => void
+  onDelete: () => void
+  onEmail: () => void
+  labelled?: boolean
+}) {
+  const navigate = useNavigate()
+  const paid = row.status === 'paid'
 
   async function onWhatsApp() {
-    const link = (await issueReceiptLink(row.id)) ?? row.file_url ?? window.location.href
+    const link = (await issueReceiptLink(row.id)) ?? window.location.href
     openReceiptWhatsApp(
       row.client_phone,
       receiptShareText(
-        { clientName: row.client_name, projectName: row.project_name, amountFormatted: formatINR(row.amount), paymentDate: row.date_received ?? '' },
+        { clientName: row.client_name, projectName: row.project_name, amountFormatted: formatINR(row.amount), paymentDate: shortDate(row.date_received) },
         link,
       ),
     )
   }
 
+  const actions = [
+    { key: 'view', label: 'View', title: 'View receipt', icon: Eye, onClick: () => void navigate({ to: '/billing/payments/$id', params: { id: row.id } }), show: true },
+    { key: 'edit', label: 'Edit', title: 'Edit payment', icon: Pencil, onClick: onEdit, show: true },
+    { key: 'print', label: 'Print', title: 'Print or save the receipt as PDF', icon: Printer, onClick: () => void navigate({ to: '/billing/payments/$id', params: { id: row.id }, search: { print: '1' } as never }), show: true },
+    { key: 'email', label: 'Email', title: 'Email receipt', icon: Mail, onClick: onEmail, show: paid },
+    { key: 'whatsapp', label: 'WhatsApp', title: 'Send receipt on WhatsApp', icon: MessageCircle, onClick: () => void onWhatsApp(), show: paid, className: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' },
+    { key: 'delete', label: 'Delete', title: 'Delete payment', icon: Trash2, onClick: onDelete, show: true, className: 'text-destructive hover:text-destructive' },
+  ].filter((a) => a.show)
+
+  if (labelled) {
+    return (
+      <div className="grid w-full grid-cols-2 gap-2">
+        {actions.map((a) => (
+          <Button key={a.key} variant="outline" size="sm" onClick={a.onClick} className={cn('min-h-10', a.className)} aria-label={a.title}>
+            <a.icon /> {a.label}
+          </Button>
+        ))}
+      </div>
+    )
+  }
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={onView} title="View receipt" aria-label="View receipt">
-        <Eye />
-      </Button>
-      <RowMenu
-        label={`More for the ${formatINR(row.amount)} payment`}
-        items={[
-          { label: 'Edit', icon: <Pencil className="size-4" />, onSelect: onEdit },
-          ...(row.status === 'paid'
-            ? [
-                { label: 'Send receipt on WhatsApp', icon: <MessageCircle className="size-4" />, onSelect: () => void onWhatsApp() },
-                { label: 'Email receipt', icon: <Mail className="size-4" />, onSelect: onEmail },
-                { label: 'Copy receipt link', icon: <Copy className="size-4" />, onSelect: () => void onCopy() },
-              ]
-            : []),
-          { label: 'Delete', icon: <Trash2 className="size-4" />, onSelect: onDelete },
-        ]}
-      />
+      {actions.map((a) => (
+        <Button key={a.key} variant="ghost" size="icon" onClick={a.onClick} title={a.title} aria-label={a.title} className={cn('size-8', a.className)}>
+          <a.icon className="size-4" />
+        </Button>
+      ))}
     </>
   )
 }

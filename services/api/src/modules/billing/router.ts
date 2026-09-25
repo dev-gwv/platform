@@ -23,6 +23,7 @@ import {
   invoiceTemplateList,
   createInvoiceNoteTemplateRequest,
   invoiceNoteTemplateList,
+  paymentReceipt,
 } from '@ipc/contracts'
 import { computeInvoice, type GstSlab } from '@ipc/domain'
 import type { AppEnv } from '../../context'
@@ -726,6 +727,54 @@ export const billingRouter = new Hono<AppEnv>()
     )
     if (!row) fail(404, 'That payment was not found.')
     return c.json(receivedPayment.parse(row))
+  })
+
+  // The receipt as the client sees it, for the studio's own receipt page:
+  // letterhead, client, project value and the invoice lines it paid for.
+  .get('/payments/:id/receipt', async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(c, 'billing.payment_receipt', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = await sql<Record<string, unknown>[]>`
+          select rp.id, rp.project_id, rp.invoice_id, rp.created_at,
+                 rp.amount, coalesce(to_char(rp.date_received, 'YYYY-MM-DD'), to_char(rp.paid_on, 'YYYY-MM-DD'),
+                                     to_char(rp.created_at, 'YYYY-MM-DD')) as paid_on,
+                 rp.mode, rp.reference,
+                 p.name as project_name, p.status::text as project_status,
+                 cl.name as client_name, cl.phone as client_phone, cl.email as client_email, cl.address as client_address,
+                 coalesce(co.display_name, co.name) as company_name,
+                 coalesce(p.total_cost, i.total, 0) as total_cost,
+                 case when p.id is not null
+                      then (select coalesce(sum(x.amount), 0) from received_payments x where x.project_id = p.id and x.status = 'paid')
+                      else (select coalesce(sum(x.amount), 0) from received_payments x where x.invoice_id = i.id and x.status = 'paid')
+                 end as received_total,
+                 coalesce(co.invoice_logo_url, co.avatar_url) as logo_url, co.invoice_gst_number as gstin,
+                 co.invoice_phone as company_phone, co.invoice_email as company_email, co.invoice_address as company_address,
+                 co.legal_name as company_legal_name, co.website as company_website, co.document_footer_note,
+                 coalesce(rp.description, rp.notes) as description,
+                 case when rp.status = 'pending' then 'pending' else 'paid' end as status,
+                 rp.receipt_number, coalesce(rp.is_gst, false) as is_gst, rp.gst_number as payment_gst_number,
+                 i.invoice_number
+            from received_payments rp
+            left join projects p on p.id = rp.project_id
+            left join invoices i on i.id = rp.invoice_id
+            left join clients cl on cl.id = coalesce(rp.client_id, p.client_id, i.client_id)
+            left join companies co on co.id = rp.company_id
+           where rp.id = ${id} and rp.company_id = ${c.get('auth').companyId}`
+        const r = rows[0]
+        if (!r) return null
+        const num = (v: unknown) => (v == null ? 0 : Number(v))
+        return {
+          ...r,
+          amount: num(r.amount),
+          total_cost: num(r.total_cost),
+          received_total: num(r.received_total),
+          created_at: new Date(r.created_at as string).toISOString(),
+        }
+      }),
+    )
+    if (!row) fail(404, 'That payment was not found.')
+    return c.json(paymentReceipt.parse(row))
   })
 
   .post('/payments', requireAction('billing', 'create'), async (c) => {

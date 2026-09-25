@@ -1,9 +1,9 @@
 import { amountInWords } from '@ipc/domain'
 import type { InvoiceDetail } from '@ipc/contracts'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { invoiceBadge, shortDate } from './status'
 import { UpiQr, upiLink } from './UpiQr'
+import { InvoiceBadge } from './InvoiceBadge'
 
 /** Who the invoice is from, as printed at the top. */
 export interface InvoiceFrom {
@@ -44,9 +44,14 @@ export function InvoicePaper({ invoice, company }: { invoice: InvoiceDetail; com
   const taxed = invoice.tax > 0 || invoice.items.some((i) => i.gst_rate > 0)
   const layout = { ...base, show_gst: base.show_gst && taxed }
   const received = invoice.payments.filter((p) => (p.status ?? 'paid') === 'paid')
-  const badge = invoiceBadge(invoice)
+  const paid = invoiceBadge(invoice).label === 'Paid'
   return (
-      <div className="paper mx-auto w-full max-w-3xl rounded-lg border border-border bg-card p-8">
+      <div className="paper relative mx-auto w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-card p-8">
+        {paid && (
+          <div className="absolute right-[-44px] top-5 rotate-45 bg-emerald-600 px-12 py-1 text-xs font-bold uppercase tracking-[0.2em] text-white shadow-md">
+            Paid
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
           {layout.show_header ? (
@@ -76,7 +81,7 @@ export function InvoicePaper({ invoice, company }: { invoice: InvoiceDetail; com
             <p className="text-sm">{invoice.invoice_number}</p>
             <p className="text-sm text-muted-foreground">{shortDate(invoice.invoice_date)}</p>
             {invoice.due_date && <p className="text-xs text-muted-foreground">Due {shortDate(invoice.due_date)}</p>}
-            <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+            <InvoiceBadge invoice={invoice} />
           </div>
         </div>
 

@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { formatINR } from '@/shared/ui/format'
 import { sendReceiptEmails, type ReceiptShareSummary } from './receiptShare'
 import type { ReceivedPayment } from './api'
+import { shortDate } from './status'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -33,7 +34,7 @@ export function SendReceiptDialog({
     clientName: payment?.client_name ?? null,
     projectName: payment?.project_name ?? null,
     amountFormatted: payment ? formatINR(payment.amount) : '',
-    paymentDate: payment?.date_received ?? '',
+    paymentDate: shortDate(payment?.date_received),
   }
 
   useEffect(() => {

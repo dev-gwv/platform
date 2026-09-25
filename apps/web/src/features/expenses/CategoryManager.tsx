@@ -1,65 +1,15 @@
 import { useState } from 'react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
-import { Input, Label, Select } from '@/shared/ui/input'
+import { Input } from '@/shared/ui/input'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { LookupPicker } from '@/features/settings/LookupPicker'
+import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
 import { useActiveLookups, useCreateCustomLookup, useUpdateCustomLookup, useDeleteCustomLookup } from '@/features/settings/api'
 
-/** Pick a studio-defined expense category, or add one inline without leaving the form (owner only). */
+/** Pick a studio-defined expense category, or add one inline without leaving the form. */
 export function ExpenseCategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { session } = useAuth()
-  const { data: categories } = useActiveLookups('expense_category')
-  const createLookup = useCreateCustomLookup()
-  const [adding, setAdding] = useState(false)
-  const [name, setName] = useState('')
-
-  async function onAdd() {
-    if (!name.trim()) return
-    await createLookup.mutateAsync({ category: 'expense_category', value: name.trim() })
-    onChange(name.trim())
-    setAdding(false)
-    setName('')
-  }
-
-  if (adding) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <Label>New category</Label>
-        <div className="flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Travel" autoFocus />
-          <Button type="button" size="sm" onClick={() => void onAdd()} disabled={!name.trim() || createLookup.isPending}>
-            Add
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAdding(false)}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor="exp-category">Category</Label>
-      <Select
-        id="exp-category"
-        value={value}
-        onChange={(e) => {
-          if (e.target.value === '__add__') setAdding(true)
-          else onChange(e.target.value)
-        }}
-      >
-        <option value="">Choose…</option>
-        {value && !(categories ?? []).some((c) => c.value === value) && <option value={value}>{value}</option>}
-        {(categories ?? []).map((c) => (
-          <option key={c.id} value={c.value}>
-            {c.value}
-          </option>
-        ))}
-        {session?.is_owner && <option value="__add__">+ Add new category…</option>}
-      </Select>
-    </div>
-  )
+  return <LookupPicker category="expense_category" id="exp-category" value={value} onChange={onChange} label="Category" noun="category" example="Travel" />
 }
 
 export function CategoryManager({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -71,6 +21,7 @@ export function CategoryManager({ open, onOpenChange }: { open: boolean; onOpenC
   const [name, setName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const canAdd = useCanAddLookup('expense_category')
 
   async function onAdd() {
     if (!name.trim()) return
@@ -83,7 +34,7 @@ export function CategoryManager({ open, onOpenChange }: { open: boolean; onOpenC
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Expense categories" description="The studio's own words for where money goes: travel, prints, rent, gear.">
         <div className="flex flex-col gap-3">
-          {session?.is_owner && (
+          {canAdd && (
             <div className="flex gap-2">
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="New category name" />
               <Button size="sm" onClick={() => void onAdd()} disabled={!name.trim() || create.isPending}>

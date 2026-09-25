@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react'
@@ -54,6 +54,15 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
     queryKey: ['settings', 'company'],
     queryFn: () => callApi('/settings/company', { responseSchema: companyProfile }),
   })
+  // `?print=1` (the Print icon on the invoice list) opens the print dialog once the sheet has drawn.
+  const printed = useRef(false)
+  useEffect(() => {
+    if (!data || printed.current) return
+    if (new URLSearchParams(window.location.search).get('print') !== '1') return
+    printed.current = true
+    const t = setTimeout(() => window.print(), 400)
+    return () => clearTimeout(t)
+  }, [data])
 
   if (isLoading) return <SkeletonCards count={3} />
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />

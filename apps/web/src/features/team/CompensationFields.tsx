@@ -5,8 +5,8 @@ import type { PayComponent, PaymentStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
-import { useAuth } from '@/shared/auth/AuthProvider'
 import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
+import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
 
 /**
  * "How is this person paid?" as two questions instead of one enum.
@@ -115,9 +115,9 @@ export function CompensationFields({
   showLoginToggle?: boolean
   errors?: Partial<Record<keyof CompensationDraft, string>>
 }) {
-  const { session } = useAuth()
   const { data: customTypes } = useActiveLookups(LOOKUP_CATEGORY)
   const createLookup = useCreateCustomLookup()
+  const canAddType = useCanAddLookup(LOOKUP_CATEGORY)
   const [addOpen, setAddOpen] = useState(false)
   const [newLabel, setNewLabel] = useState('')
 
@@ -175,7 +175,7 @@ export function CompensationFields({
                 </option>
               ))}
             </Select>
-            {session?.is_owner && (
+            {canAddType && (
               <Button type="button" variant="outline" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" aria-hidden />
                 <span className="hidden sm:inline">Add new</span>

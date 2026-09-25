@@ -937,6 +937,16 @@ if (listed) {
   const edUid = (await api('/auth/session', { token: edToken })).json.user_id
   check('deliverables: an editor joins with their own login', joined.status === 200 && !!edUid, joined.json)
 
+  // Growing a studio list from a form: a list tied to a module the person can
+  // create in is open to them; any other list stays with the owner.
+  const edLead = await api('/settings/lookups', { token: edToken, method: 'POST', body: { category: 'lead_source', value: `Fair ${rand()}` } })
+  const ownerCat = await api('/settings/lookups', { token: aToken, method: 'POST', body: { category: 'expense_category', value: `Drone hire ${rand()}` } })
+  check(
+    'lookups: an employee cannot add to an owner-only list; the owner adds an expense category',
+    edLead.status === 403 && ownerCat.status === 201,
+    { edLead: edLead.status, ownerCat: ownerCat.status },
+  )
+
   const added = await api(`/projects/${pid}/deliverables`, {
     token: aToken,
     method: 'POST',
@@ -1219,6 +1229,15 @@ if (listed) {
     zero: zero.status, before,
   })
   const marked = await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
+  // The studio's own receipt page reads the payment as the client sees it.
+  const rc = await api(`/billing/payments/${promised.json.id}/receipt`, { token: aToken })
+  const rcOther = await api(`/billing/payments/${promised.json.id}/receipt`, { token: newPw.json.access_token })
+  check(
+    'receipt: the studio reads a payment as its receipt, with number and project value; another studio cannot',
+    rc.status === 200 && /^RCP-\d{4}-\d{2}-\d{4}$/.test(rc.json.receipt_number ?? '') && Number(rc.json.amount) === 20000 &&
+      Number(rc.json.total_cost) > 0 && rc.json.project_id === pid && rcOther.status === 404,
+    { rc: rc.json, other: rcOther.status },
+  )
   const after = await listed()
   const detail = await api(`/projects/${pid}`, { token: aToken })
   check(

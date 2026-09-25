@@ -1,24 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Copy, Mail, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { buildMailtoUrl } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
-import { StatusBadge } from '@/shared/ui/status-badge'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { formatINR } from '@/shared/ui/format'
 import { useClients } from '@/features/clients/api'
 import { useProjects } from '@/features/projects/api'
 import {
   useCreateReceivedPayment,
-  useReceivedPayment,
   useUpdateReceivedPayment,
   useDeleteReceivedPayment,
   type ReceivedPayment,
   useInvoices,
 } from './api'
-import { SendReceiptDialog } from './SendReceiptDialog'
-import { copyReceiptLink, issueReceiptLink, openReceiptWhatsApp, receiptShareText } from './receiptShare'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
@@ -276,118 +270,14 @@ export function ReceivedPaymentDialog({
   )
 }
 
-/** Read-only view with Copy link / Email / WhatsApp share (Lovable InvoiceActions parity). */
-export function ViewReceivedPaymentDialog({
-  paymentId,
-  onOpenChange,
-  onEdit,
-}: {
-  paymentId: string | null
-  onOpenChange: (open: boolean) => void
-  onEdit?: (p: ReceivedPayment) => void
-}) {
-  const { data } = useReceivedPayment(paymentId)
-  const [emailOpen, setEmailOpen] = useState(false)
-
-  async function onCopy() {
-    if (!paymentId) return
-    await copyReceiptLink(paymentId)
-  }
-
-  async function onWhatsApp() {
-    if (!data) return
-    const link = (await issueReceiptLink(data.id)) ?? data.file_url ?? window.location.href
-    openReceiptWhatsApp(
-      data.client_phone,
-      receiptShareText(
-        {
-          clientName: data.client_name,
-          projectName: data.project_name,
-          amountFormatted: formatINR(data.amount),
-          paymentDate: data.date_received ?? '',
-        },
-        link,
-      ),
-    )
-  }
-
-  function onMailto() {
-    if (!data) return
-    const subject = `Payment Receipt - ${formatINR(data.amount)}`
-    const body = `Hi ${data.client_name || 'there'}, here is your payment receipt of ${formatINR(data.amount)}.`
-    window.location.href = buildMailtoUrl(data.client_email, subject, body)
-  }
-
-  return (
-    <>
-      <Dialog open={!!paymentId} onOpenChange={onOpenChange}>
-        <DialogContent title="Payment receipt" description={data ? `${data.client_name ?? '—'} · ${data.date_received ?? ''}` : undefined}>
-          {!data ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xl font-semibold tabular-nums">{formatINR(data.amount)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {data.project_name ?? '—'}
-                    {data.description ? ` · ${data.description}` : ''}
-                  </p>
-                </div>
-                <StatusBadge tone={data.status === 'paid' ? 'success' : 'warning'}>{humanize(data.status)}</StatusBadge>
-              </div>
-              <dl className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Client</dt>
-                  <dd>{data.client_name ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Date</dt>
-                  <dd>{data.date_received ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">GST</dt>
-                  <dd>{data.is_gst ? (data.gst_number ?? 'GST') : '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Receipt file</dt>
-                  <dd className="truncate">{data.file_url ? <a href={data.file_url} target="_blank" rel="noreferrer" className="underline">Open</a> : '—'}</dd>
-                </div>
-              </dl>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => void onCopy()}>
-                  <Copy className="mr-1 size-4" /> Copy link
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setEmailOpen(true)}>
-                  <Mail className="mr-1 size-4" /> Email
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void onWhatsApp()}>
-                  <MessageCircle className="mr-1 size-4" /> WhatsApp
-                </Button>
-                <Button size="sm" variant="outline" onClick={onMailto}>
-                  Email app
-                </Button>
-                {onEdit && (
-                  <Button size="sm" variant="outline" onClick={() => onEdit(data)}>
-                    Edit
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      <SendReceiptDialog open={emailOpen} onOpenChange={setEmailOpen} payment={data ?? null} />
-    </>
-  )
-}
-
 export function DeleteReceivedPaymentDialog({
   payment,
   onOpenChange,
+  onDeleted,
 }: {
-  payment: ReceivedPayment | null
+  payment: Pick<ReceivedPayment, 'id'> | null
   onOpenChange: (open: boolean) => void
+  onDeleted?: () => void
 }) {
   const del = useDeleteReceivedPayment()
 
@@ -396,6 +286,7 @@ export function DeleteReceivedPaymentDialog({
     try {
       await del.mutateAsync(payment.id)
       onOpenChange(false)
+      onDeleted?.()
     } catch {
       toast.error('Could not delete the payment.')
     }

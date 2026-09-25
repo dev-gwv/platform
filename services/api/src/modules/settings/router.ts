@@ -13,6 +13,7 @@ import {
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireOwner } from '../../middleware/permissions'
+import { canQuickAddLookup } from '@ipc/permissions'
 import { razorpayConfigured } from '../../lib/env'
 import { whatsappConfigured } from '../../lib/whatsapp'
 import { twilioConfigured } from '../../lib/twilio'
@@ -337,12 +338,16 @@ export const settingsRouter = new Hono<AppEnv>()
     return c.json(rows)
   })
 
-  .post('/lookups', requireOwner(), async (c) => {
+  // Adding one value is open to whoever may create records where the list is
+  // used (an expense category to anyone who logs expenses); renaming,
+  // hiding and removing stay with the owner.
+  .post('/lookups', async (c) => {
     const body = await c.req.json().catch(() => ({}))
     const category = typeof body.category === 'string' ? body.category.trim() : ''
     const value = typeof body.value === 'string' ? body.value.trim() : ''
     if (!category || !value) fail(422, 'Category and value are required.')
     const auth = c.get('auth')
+    if (!canQuickAddLookup(auth.access, auth.isOwner, category)) fail(403, 'You do not have access to this action.')
     const rows = await attempt(c, 'settings.lookup_create', () =>
       withUser(c.env, auth.userId, async (sql) => {
         const made = await sql<{ id: string }[]>`
