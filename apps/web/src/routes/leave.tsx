@@ -53,7 +53,9 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 const span = (l: Pick<LeaveRequest, 'start_date' | 'end_date' | 'half_day'>) =>
   (l.end_date > l.start_date ? `${day(l.start_date)} – ${day(l.end_date)}` : day(l.start_date)) + (l.half_day ? ' · half day' : '')
-const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '—')
+/** Clock times in India time, whatever the device is set to -- the studio's day. */
+const time = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '—'
 /** Today where the studio is (India). */
 const todayIST = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
 
