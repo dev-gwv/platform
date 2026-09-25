@@ -11,6 +11,7 @@ import type { FieldErrors } from '@/shared/forms/field-errors'
 import { scrollIntoView } from '@/shared/ui/motion'
 import { useAddMember, useCreateRole, useEmployeeRoles, useRoleLibrary } from './api'
 import { BUILT_IN_TYPES, CompensationFields, PAY_COMPONENTS } from './CompensationFields'
+import { ROLE_LABEL, useTeamPowers, withoutPay } from './powers'
 import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE, stageOf, toRoleCode } from './role-stages'
 import { TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT } from '@/shared/ui/tone-chip'
 import {
@@ -62,6 +63,8 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
   const index = stepIndex(step)
   const isLast = step === 'review'
 
+  const powers = useTeamPowers()
+
   function onContinue() {
     if (!isStepValid(step, draft)) {
       setShowErrors(true)
@@ -72,7 +75,7 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
       goToStep(nextStep(step))
       return
     }
-    add.mutate(toRequest(draft), {
+    add.mutate(powers.canPay ? toRequest(draft) : withoutPay(toRequest(draft)), {
       onSuccess: () => {
         saved.clear()
         onDone()
@@ -420,6 +423,9 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
 
   const toggle = (id: string) =>
     set('role_ids', draft.role_ids.includes(id) ? draft.role_ids.filter((r) => r !== id) : [...draft.role_ids, id])
+  // Adding to the studio's list of job roles is the owner's; anyone else
+  // picks from the roles the studio already has.
+  const powers = useTeamPowers()
 
   const owned = roles ?? []
   const taken = new Set(owned.map((r) => r.role_code))
@@ -440,7 +446,7 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
       role_code: r.role_code,
       stage: stageOf(r),
     })),
-    ...(library ?? [])
+    ...(powers.canAddJobRoles ? (library ?? []) : [])
       .filter((r) => !taken.has(r.role_code))
       .map((r) => ({ key: r.role_code, type_name: r.type_name, role_code: r.role_code, stage: r.stage })),
   ]
@@ -487,18 +493,24 @@ function RoleStep({ draft, set }: { draft: MemberDraft; set: Setter }) {
       <div className="flex flex-col gap-4">
         <Field label="Access level" required hint={ACCESS_HINT[draft.role]}>
           <Select value={draft.role} onChange={(e) => set('role', e.target.value as MemberDraft['role'])}>
-            <option value="employee">Employee</option>
-            <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
+            {(['employee', 'manager', 'admin'] as const)
+              .filter((r) => powers.mayGrant(r) || r === draft.role)
+              .map((r) => (
+                <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
           </Select>
         </Field>
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <Label>Role / designation</Label>
-            <Button size="sm" variant={adding ? 'outline' : 'default'} onClick={() => setAdding((v) => !v)}>
-              {adding ? 'Cancel' : '+ Add new role'}
-            </Button>
+            {powers.canAddJobRoles && (
+              <Button size="sm" variant={adding ? 'outline' : 'default'} onClick={() => setAdding((v) => !v)}>
+                {adding ? 'Cancel' : '+ Add new role'}
+              </Button>
+            )}
           </div>
 
           {adding && (
@@ -614,11 +626,18 @@ function DetailsStep({
   set: Setter
   errors: FieldErrors<keyof MemberDraft>
 }) {
+  // Pay is for the owner or whoever edits salaries; the server refuses it
+  // from anyone else, so the form does not ask them.
+  const { canPay } = useTeamPowers()
   return (
     <>
       <StepHeader
         title="Anything else on record?"
-        description="Both sections are optional — you can fill them in later from the directory."
+        description={
+          canPay
+            ? 'Both sections are optional — you can fill them in later from the directory.'
+            : 'Optional. Pay is set by whoever handles salaries.'
+        }
       />
       <div className="flex flex-col gap-4">
         <Field label="Address" error={errors.address}>
@@ -631,21 +650,25 @@ function DetailsStep({
           />
         </Field>
 
-        <hr className="border-border" />
+        {canPay && (
+          <>
+            <hr className="border-border" />
 
-        <CompensationFields
-          value={draft}
-          onChange={(key, value) => {
-            set(key as keyof MemberDraft, value as never)
-            // The login toggle mirrors the wizard's login step answer.
-            if (key === 'has_login_access') set('create_login', value as never)
-          }}
-          showLoginToggle
-          errors={{
-            ...(errors.payment_type ? { payment_type: errors.payment_type } : {}),
-            ...(errors.pay_effective_from ? { pay_effective_from: errors.pay_effective_from } : {}),
-          }}
-        />
+            <CompensationFields
+              value={draft}
+              onChange={(key, value) => {
+                set(key as keyof MemberDraft, value as never)
+                // The login toggle mirrors the wizard's login step answer.
+                if (key === 'has_login_access') set('create_login', value as never)
+              }}
+              showLoginToggle
+              errors={{
+                ...(errors.payment_type ? { payment_type: errors.payment_type } : {}),
+                ...(errors.pay_effective_from ? { pay_effective_from: errors.pay_effective_from } : {}),
+              }}
+            />
+          </>
+        )}
       </div>
     </>
   )

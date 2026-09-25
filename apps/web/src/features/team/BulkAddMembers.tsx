@@ -23,6 +23,7 @@ import {
   type PickableRole,
   type RowField,
 } from './bulk'
+import { ROLE_LABEL, useTeamPowers } from './powers'
 
 const START_ROWS = 3
 /** Members sent at once. Small enough to be gentle on the API, big enough that forty people is not a long wait. */
@@ -67,7 +68,13 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
     .map(({ name, phone, email, role, engagement, roleKeys }) => ({ name, phone, email, role, engagement, roleKeys }))
   const draft = useFormDraft('team-bulk-add', typedRows, (v) => setRows(v.map((r) => ({ ...newRow(), ...r }))))
 
-  const pickable = useMemo(() => pickableRoles(roles ?? [], library ?? []), [roles, library])
+  // Library roles the studio has not added yet would be created on send --
+  // which only the owner may do, so anyone else picks from the studio's own.
+  const { canAddJobRoles } = useTeamPowers()
+  const pickable = useMemo(
+    () => pickableRoles(roles ?? [], canAddJobRoles ? (library ?? []) : []),
+    [roles, library, canAddJobRoles],
+  )
   const roleName = useMemo(() => new Map(pickable.map((r) => [r.key, r.type_name])), [pickable])
   const errors = useMemo(() => validateRows(rows), [rows])
   const todo = pendingRows(rows)
@@ -380,6 +387,7 @@ function Row({
   onPickRoles: () => void
   onRemove: () => void
 }) {
+  const powers = useTeamPowers()
   const noLogin = !row.email.trim()
   const names = row.roleKeys.map((k) => roleName.get(k)).filter(Boolean) as string[]
 
@@ -478,9 +486,13 @@ function Row({
             aria-label={`Row ${index + 1} access`}
             disabled={locked}
           >
-            <option value="employee">Employee</option>
-            <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
+            {(['employee', 'manager', 'admin'] as const)
+                    .filter((r) => powers.mayGrant(r) || r === row.role)
+                    .map((r) => (
+                      <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                        {ROLE_LABEL[r]}
+                      </option>
+                    ))}
           </Select>
         </td>
         <td className="px-2 py-1.5 align-top">

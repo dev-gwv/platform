@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link } from '@tanstack/react-router'
 import { Camera, Check, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { PROFILE_FIELD_LABEL, type MyProfile, type ProfileField } from '@ipc/contracts'
@@ -13,6 +14,7 @@ import { cn } from '@/shared/ui/cn'
 import { uploadFile } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMyProfile, useSaveMyProfile } from '@/features/profile/api'
+import { useAuth } from '@/shared/auth/AuthProvider'
 
 export function MyProfilePage() {
   return (
@@ -68,6 +70,7 @@ const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
  * reminder say what is still missing.
  */
 function MyProfileForm() {
+  const { session } = useAuth()
   const profile = useMyProfile()
   const save = useSaveMyProfile()
   const [form, setForm] = useState<Form | null>(null)
@@ -112,7 +115,19 @@ function MyProfileForm() {
 
   return (
     <section className="flex flex-col gap-4">
-      <PageHeader title="My profile" description="Your details for the studio. The personal parts are private to you and the studio owner." />
+      <PageHeader
+        title="My profile"
+        description="Your details for the studio. The personal parts are private to you and the studio owner."
+        actions={
+          session?.user_id && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/employees/$id" params={{ id: session.user_id }}>
+                My work, attendance &amp; pay
+              </Link>
+            </Button>
+          )
+        }
+      />
 
       <Card className={cn(p.completeness.percent === 100 ? 'border-success/40 bg-success/5' : 'border-primary/30 bg-primary/5')}>
         <CardContent className="flex flex-wrap items-center gap-4 p-4">

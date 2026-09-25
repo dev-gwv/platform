@@ -1441,6 +1441,78 @@ if (listed) {
     { ask: fixAsk.status, old: fixOld.status, self: fixSelf.status, ok: fixOk.status, row: fixRow },
   )
 
+  // ── The member page (one person, seen from every side) ──
+  const ovOwner = await api(`/team/members/${edUid}/overview`, { token: aToken })
+  const ovSelf = await api(`/team/members/${edUid}/overview`, { token: edToken })
+  const aOwnerUid = (await api('/auth/session', { token: aToken })).json.user_id
+  const ovUp = await api(`/team/members/${aOwnerUid}/overview`, { token: edToken })
+  const ovOther = await api(`/team/members/${edUid}/overview`, { token: newPw.json.access_token })
+  check(
+    'member page: the owner sees work, attendance, leave and private details (masked); the member sees their own; nobody else',
+    ovOwner.status === 200 && ovOwner.json.member.name === 'Priya Editor' && ovOwner.json.private?.upi_id === 'priya@okhdfc' &&
+      ovOwner.json.private?.pan_on_file === true && !('pan' in (ovOwner.json.private ?? {})) &&
+      Array.isArray(ovOwner.json.work?.deliverables) && ovOwner.json.work.deliverables.some((d) => d.title === 'Teaser reel') &&
+      ovOwner.json.attendance !== null && (ovOwner.json.leave ?? []).some((l) => l.status === 'approved') &&
+      ovOwner.json.can.manage_access === true &&
+      ovSelf.status === 200 && ovSelf.json.private?.upi_id === 'priya@okhdfc' && Array.isArray(ovSelf.json.salaries) &&
+      ovSelf.json.can.edit === false && ovUp.status === 403 && ovOther.status === 404,
+    { owner: ovOwner.status, self: ovSelf.status, up: ovUp.status, other: ovOther.status, priv: ovOwner.json.private, work: ovOwner.json.work && Object.keys(ovOwner.json.work) },
+  )
+
+  // ── Delegated team management: a Team Manager runs the team, within limits ──
+  const tmEmail = `team-mgr-${rand()}@example.com`
+  const tmInv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Tara Manager', email: tmEmail, role: 'manager' } })
+  const tmJoin = await api('/auth/accept-invite', {
+    method: 'POST',
+    body: { token: /[?&]token=([^&]+)/.exec(tmInv.json.invite_link ?? '')?.[1] ?? '', password: 'Manager12345!' },
+  })
+  const tmToken = tmJoin.json.access_token
+  const tmUid = (await api('/auth/session', { token: tmToken })).json.user_id
+  // A plain employee has no Team Directory rights at all.
+  const tmBefore = await api('/team/members', { token: edToken, method: 'POST', body: { name: 'Early Try', phone: randPhone(), create_login: false } })
+  const tmGrant = await api(`/access/${tmUid}`, { token: aToken, method: 'PUT', body: { profile_key: 'team_manager', overrides: [] } })
+  const tmAdd = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Ravi Assistant', phone: randPhone(), create_login: false } })
+  const tmAddMgr = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Another Manager', phone: randPhone(), create_login: false, role: 'manager' } })
+  const tmAddPay = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Paid Person', phone: randPhone(), create_login: false, salary: 50000 } })
+  check(
+    'delegation: a Team Manager adds people (an employee cannot), never a manager or anyone with pay',
+    tmJoin.status === 200 && tmBefore.status === 403 && tmGrant.status === 204 && tmAdd.status === 201 &&
+      tmAddMgr.status === 403 && tmAddPay.status === 403,
+    { join: tmJoin.status, before: tmBefore.status, grant: tmGrant.status, add: tmAdd.status, mgr: tmAddMgr.status, pay: tmAddPay.status },
+  )
+  const raviUid = tmAdd.json.user_id
+  const tmEdit = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'PATCH', body: { phone: '9876543210' } })
+  const tmEditPay = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'PATCH', body: { salary: null } })
+  const tmPromote = await api(`/team/members/${edUid}`, { token: tmToken, method: 'PATCH', body: { role: 'admin' } })
+  const tmOwner = await api(`/team/members/${aOwnerUid}`, { token: tmToken, method: 'PATCH', body: { name: 'Hijacked' } })
+  const tmSelf = await api(`/team/members/${tmUid}`, { token: tmToken, method: 'PATCH', body: { status: 'active' } })
+  const tmOwnerReset = await api(`/team/members/${aOwnerUid}/reset-password`, { token: tmToken, method: 'POST' })
+  const tmOtherStudio = await api(`/team/members/${(await api('/auth/session', { token: newPw.json.access_token })).json.user_id}`, {
+    token: tmToken, method: 'PATCH', body: { name: 'Across' },
+  })
+  check(
+    'delegation: edits people below them; never pay, never an admin, never the owner, never themselves, never another studio',
+    tmEdit.status === 200 && tmEditPay.status === 403 && tmPromote.status === 403 && tmOwner.status === 403 &&
+      tmSelf.status === 409 && tmOwnerReset.status === 403 && tmOtherStudio.status === 404,
+    { edit: tmEdit.status, pay: tmEditPay.status, promote: tmPromote.status, owner: tmOwner.status, self: tmSelf.status, reset: tmOwnerReset.status, other: tmOtherStudio.status },
+  )
+  const tmInvite = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Neha Editor', email: `neha-${rand()}@example.com`, role: 'employee' } })
+  const tmInviteAdmin = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Big Boss', email: `boss-${rand()}@example.com`, role: 'admin' } })
+  const tmInvites = await api('/team/invitations', { token: tmToken })
+  const tmOv = await api(`/team/members/${raviUid}/overview`, { token: tmToken })
+  const tmOvOwner = await api(`/team/members/${aOwnerUid}/overview`, { token: tmToken })
+  const tmRemove = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'DELETE' })
+  const tmRemoveOwner = await api(`/team/members/${aOwnerUid}`, { token: tmToken, method: 'DELETE' })
+  const ownerStill = await api(`/team/members/${aOwnerUid}/overview`, { token: aToken })
+  check(
+    'delegation: invites employees (not admins), sees only those invitations, removes people below them but not the owner',
+    tmInvite.status === 201 && tmInviteAdmin.status === 403 && tmInvites.status === 200 &&
+      (tmInvites.json ?? []).length > 0 && (tmInvites.json ?? []).every((i) => i.role === 'employee') &&
+      tmOv.json?.can?.edit === true && tmOvOwner.json?.can?.edit === false && tmOvOwner.json?.can?.manage_access === false &&
+      tmRemove.status === 200 && tmRemoveOwner.status === 403 && ownerStill.json?.member?.name !== 'Hijacked',
+    { invite: tmInvite.status, admin: tmInviteAdmin.status, list: tmInvites.json?.map?.((i) => i.role), ov: tmOv.json?.can, ovOwner: tmOvOwner.json?.can, remove: tmRemove.status, removeOwner: tmRemoveOwner.status },
+  )
+
   // ── Tracking health from the server (Tracking v2) ──
   const trk = await api('/projects/tracking', { token: aToken })
   const trkRow = (trk.json ?? []).find((r) => r.id === pid)

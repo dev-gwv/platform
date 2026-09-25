@@ -143,9 +143,12 @@ export function DirectoryTable({
   onToggleAll,
   onDelete,
   onManageAccess,
+  rowAccess,
 }: {
   rows: readonly DirectoryMember[]
   canManage: boolean
+  /** Which rows this person may edit and remove (everyone, when omitted). */
+  rowAccess?: ((member: DirectoryMember) => { edit: boolean; remove: boolean }) | undefined
   showSalary: boolean
   /** Selection for the bulk bar. Omit to hide checkboxes. */
   selected?: ReadonlySet<string> | undefined
@@ -197,7 +200,7 @@ export function DirectoryTable({
             <p className="mt-2 text-xs text-muted-foreground">Joined {m.created_at.slice(0, 10)}</p>
             {canManage && (
               <div className="mt-3">
-                <RowActions member={m} onDelete={onDelete} onManageAccess={onManageAccess} />
+                <RowActions member={m} onDelete={onDelete} onManageAccess={onManageAccess} allowed={rowAccess?.(m)} />
               </div>
             )}
           </div>
@@ -299,7 +302,7 @@ export function DirectoryTable({
               <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">{m.created_at.slice(0, 10)}</td>
               {canManage && (
                 <td className="col-pinned-end px-2 py-2">
-                  <RowActions member={m} onDelete={onDelete} onManageAccess={onManageAccess} />
+                  <RowActions member={m} onDelete={onDelete} onManageAccess={onManageAccess} allowed={rowAccess?.(m)} />
                 </td>
               )}
             </tr>
@@ -322,10 +325,12 @@ function RowActions({
   member,
   onDelete,
   onManageAccess,
+  allowed = { edit: true, remove: true },
 }: {
   member: DirectoryMember
   onDelete?: ((member: DirectoryMember) => void) | undefined
   onManageAccess?: ((member: DirectoryMember) => void) | undefined
+  allowed?: { edit: boolean; remove: boolean } | undefined
 }) {
   const update = useUpdateMember()
   const remove = useRemoveMember()
@@ -350,6 +355,9 @@ function RowActions({
   }
 
   if (isOwnerRow) return <span className="px-2 text-xs text-muted-foreground">Owner</span>
+  if (!allowed.edit && !allowed.remove) {
+    return <span className="px-2 text-xs text-muted-foreground" title="Only the owner can change this member">Owner only</span>
+  }
 
   // Edit and Delete are what people look for on a team list, so they are the
   // two named buttons. The rest are real but occasional, and live in the menu.
@@ -381,20 +389,22 @@ function RowActions({
 
   return (
     <div className="row-actions flex items-center justify-end gap-0.5">
-      <EditMemberDialog member={member} />
-      <RowMenu items={more} label={`More actions for ${member.name}`} />
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={remove.isPending}
-        title={`Delete ${member.name} from the team`}
-        className="text-destructive hover:text-destructive"
-        onClick={() => void onRemove()}
-      >
-        <Trash2 />
-        Delete
-        <span className="sr-only"> {member.name}</span>
-      </Button>
+      {allowed.edit && <EditMemberDialog member={member} />}
+      {allowed.edit && <RowMenu items={more} label={`More actions for ${member.name}`} />}
+      {allowed.remove && (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={remove.isPending}
+          title={`Delete ${member.name} from the team`}
+          className="text-destructive hover:text-destructive"
+          onClick={() => void onRemove()}
+        >
+          <Trash2 />
+          Delete
+          <span className="sr-only"> {member.name}</span>
+        </Button>
+      )}
     </div>
   )
 }

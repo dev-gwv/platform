@@ -10,6 +10,7 @@ import {
   employeeRole,
   generateMonthlySalariesRequest,
   libraryRole,
+  memberOverview,
   invitation,
   invitationLink,
   monthlySalaryList,
@@ -26,7 +27,7 @@ import {
   type UpdateMonthlySalaryRequest,
   type UpsertEmployeeRoleRequest,
 } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { ApiError, callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
@@ -35,6 +36,19 @@ const rolesList = employeeRole.array()
 const libraryList = libraryRole.array()
 const invitationsList = invitation.array()
 const ok = z.object({ ok: z.boolean() })
+
+/**
+ * One member, seen from every side. The server trims each section for the
+ * person asking, so the page renders whatever comes back and nothing more.
+ */
+export function useMemberOverview(userId: string) {
+  return useQuery({
+    queryKey: ['team', 'overview', userId],
+    queryFn: () => callApi(`/team/members/${userId}/overview`, { responseSchema: memberOverview }),
+    staleTime: 30_000,
+    retry: (n, e) => n < 2 && !(e instanceof ApiError && [403, 404].includes(e.status)),
+  })
+}
 
 /** Everything the Team page reads and writes. One key prefix: ['team']. */
 export function useDirectory() {

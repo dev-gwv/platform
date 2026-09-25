@@ -396,6 +396,11 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   // gets back is paged client-side by useDirectoryPaged.
   if (method === 'GET' && (path === '/team/directory' || path.startsWith('/team/directory?')))
     return atStage(directory, 'partial')
+  if (method === 'GET' && /^\/team\/members\/[^/]+\/overview$/.test(path)) {
+    const id = path.split('/')[3]!
+    const row = (directory as { user_id: string; name: string }[]).find((d) => d.user_id === id)
+    return memberOverviewFx(id, row?.name ?? 'Rahul Sharma')
+  }
   if (method === 'GET' && (path === '/enquiries' || path.startsWith('/enquiries?')))
     return atStage(enquiriesFx, 'partial').length
       ? { items: enquiriesFx, summary: enquirySummaryFx }
@@ -2852,3 +2857,73 @@ const crmCadencesFx = [
     created_at: '2026-08-01T09:00:00Z',
   },
 ]
+
+/** The member page, filled in the way a busy in-house photographer's would be. */
+function memberOverviewFx(id: string, name: string) {
+  const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+  const dayOffset = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
+  return {
+    member: {
+      user_id: id,
+      name,
+      email: `${name.split(' ')[0]!.toLowerCase()}@demostudio.in`,
+      phone: '9811111111',
+      alternate_phone: null,
+      address: 'Flat 4B, Sea View, Bandra West, Mumbai 400050',
+      avatar_url: null,
+      role: 'employee',
+      status: 'active',
+      engagement_type: 'in_house',
+      login_enabled: true,
+      is_owner: id === uid(0x1),
+      created_at: '2026-05-14T10:00:00Z',
+      role_names: ['Photographer'],
+      salary: 45000,
+      freelancer_rate: null,
+    },
+    profile: { percent: 71, missing: ['photo', 'pan'] },
+    private: {
+      date_of_birth: '1996-03-18',
+      blood_group: 'B+',
+      joined_on: '2026-05-14',
+      emergency_name: 'Sunita Sharma',
+      emergency_relation: 'Mother',
+      emergency_phone: '9822222222',
+      upi_id: 'rahul@okhdfc',
+      bank_account_name: null,
+      bank_account_last4: null,
+      bank_ifsc: null,
+      pan_on_file: false,
+    },
+    attendance: {
+      month: today.slice(0, 7),
+      present: 14,
+      late: 3,
+      absent: 1,
+      leave_days: 1.5,
+      late_minutes: 55,
+      today: { status: 'present', check_in_at: `${today}T04:32:00Z`, check_out_at: null, on_leave: false },
+    },
+    work: {
+      shoots: [
+        { id: uid(0xf1), shoot_id: uid(0xf2), shoot_name: 'Haldi', service_name: 'Candid Photographer', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', start_at: daysFromNow(2, 9), end_at: daysFromNow(2, 14), location: 'Taj Lands End' },
+        { id: uid(0xf3), shoot_id: uid(0xf4), shoot_name: 'Reception', service_name: 'Candid Photographer', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', start_at: daysFromNow(4, 18), end_at: daysFromNow(4, 23), location: 'ITC Maratha' },
+      ],
+      deliverables: [
+        { id: uid(0xf5), title: 'Pre-wedding teaser', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'in_progress', estimated_date: dayOffset(-2), started_at: daysFromNow(-6), late: true },
+        { id: uid(0xf6), title: 'Engagement album', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'pending', estimated_date: dayOffset(12), started_at: null, late: false },
+      ],
+      tasks: [
+        { id: uid(0xf7), title: 'Cull haldi photos', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'to_do', priority: 'high', due_date: dayOffset(3), late: false },
+      ],
+      shoots_this_month: 6,
+    },
+    leave: [{ id: uid(0xd6), kind: 'casual', start_date: dayOffset(11), end_date: dayOffset(11), half_day: true, status: 'approved' }],
+    salaries: [
+      { id: uid(0xf8), month: 8, year: 2026, base_amount: 45000, paid_amount: 45000, status: 'paid' },
+      { id: uid(0xf9), month: 7, year: 2026, base_amount: 45000, paid_amount: 45000, status: 'paid' },
+    ],
+    payouts: [],
+    can: { edit: true, see_pay: true, manage_access: true },
+  }
+}
