@@ -270,6 +270,18 @@ export const myDeliverable = z.object({
   custom_status_code: z.string().nullish(),
   notes_count: z.number().int().default(0),
   voice_count: z.number().int().default(0),
+  /** The day to begin so it is done on time: due, minus the work, minus a day for review. */
+  start_by: isoDate.nullish(),
+  /** Roughly how many days the work needs. */
+  work_days: z.number().int().nullish(),
+  /** When the editor said they started (or handed work in). */
+  started_at: isoDateTime.nullish(),
+  /** Sent back: the reviewer asked for changes and it is with the editor again. */
+  changes_requested: z.boolean().default(false),
+  /** What the reviewer said since it last went for review, if anything. */
+  review_note: z.string().nullable().default(null),
+  /** The latest version handed in for it; a revision is the next one. */
+  last_version: z.number().int().nullable().default(null),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 
@@ -289,28 +301,50 @@ export const createShootTypeRequest = z.object({
 })
 export type CreateShootTypeRequest = z.infer<typeof createShootTypeRequest>
 
-export const deliverableTemplateItem = z.object({
+/**
+ * What a deliverable type's days count from. A fixed date belongs to one
+ * project, never to a type, so the two custom bases are not offered here.
+ */
+export const deliverableTypeBasis = z.enum(['after_wedding_day', 'after_last_shoot', 'after_project_created'])
+export type DeliverableTypeBasis = z.infer<typeof deliverableTypeBasis>
+
+/** Up to a year: longer than any album, short enough to catch a typo. */
+const typeDays = z.number().int().min(0, 'Days cannot be negative.').max(365, 'Up to 365 days.')
+
+/**
+ * One of the studio's own deliverable types: what it delivers, when the
+ * client gets it, and how many days the work needs. A new project fills a
+ * deliverable of the same name from it, and its "Start by" date counts back
+ * from the due date by the work days.
+ */
+export const deliverableType = z.object({
   id: uuid,
   title: z.string(),
-  shoot_type: z.string().nullable().default(null),
-  delivery_days: z.number().int().nullable().default(null),
-  due_basis: z.string().nullable().default(null),
-  brief: z.string().nullable().default(null),
-  is_combined: z.boolean().default(false),
-  usage_count: z.number().int().default(0),
-  is_archived: z.boolean().default(false),
+  /** The client gets it this many days after the event. Null: not said. */
+  due_days: z.number().int().nullable(),
+  // Tolerant on read, like a deliverable's status: a row written before this
+  // list existed must not take the whole page down.
+  due_basis: z.string().nullable(),
+  /** Days of work it needs. Null: the usual guess for the name. */
+  work_days: z.number().int().nullable(),
+  is_archived: z.boolean(),
 })
-export type DeliverableTemplateItem = z.infer<typeof deliverableTemplateItem>
+export type DeliverableType = z.infer<typeof deliverableType>
 
-export const createDeliverableTemplateRequest = z.object({
-  title: z.string().trim().min(1).max(200),
-  shoot_type: z.string().trim().max(120).nullish(),
-  delivery_days: z.number().int().min(0).nullish(),
-  due_basis: z.string().trim().max(40).nullish(),
-  brief: z.string().trim().max(2000).nullish(),
-  is_combined: z.boolean().default(false),
+/** Add a type. The same name again (any case) hands back that one, live. */
+export const upsertDeliverableTypeRequest = z.object({
+  title: z.string().trim().min(1, 'Name the deliverable.').max(200),
+  due_days: typeDays.nullish(),
+  due_basis: deliverableTypeBasis.nullish(),
+  work_days: typeDays.nullish(),
 })
-export type CreateDeliverableTemplateRequest = z.infer<typeof createDeliverableTemplateRequest>
+export type UpsertDeliverableTypeRequest = z.infer<typeof upsertDeliverableTypeRequest>
+
+/** A change to one type: any of the same fields (null clears a number), or archiving it. */
+export const updateDeliverableTypeRequest = upsertDeliverableTypeRequest
+  .partial()
+  .extend({ is_archived: z.boolean().optional() })
+export type UpdateDeliverableTypeRequest = z.infer<typeof updateDeliverableTypeRequest>
 
 export const workflowPresetItem = z.object({
   id: uuid,
@@ -420,12 +454,36 @@ export type ProjectBilling = z.infer<typeof projectBilling>
  * re-sort and re-filter without another round trip. The server's job here is
  * only to count what is true.
  */
+export const trackingReason = z.object({
+  code: z.enum(['data', 'late', 'review', 'short_crew', 'invoice_overdue', 'low_progress', 'no_work', 'no_shoot']),
+  count: z.number().int(),
+  action: z.string(),
+})
+
+export const projectHealthSchema = z.object({
+  completion: z.number(),
+  band: z.enum(['critical', 'high', 'low_progress', 'healthy', 'completed']),
+  score: z.number(),
+  flags: z.object({
+    critical: z.boolean(),
+    high_risk: z.boolean(),
+    low_progress: z.boolean(),
+    data_missing: z.boolean(),
+    overdue: z.boolean(),
+    pending_review: z.boolean(),
+    completed: z.boolean(),
+  }),
+  next_action: z.string(),
+  reasons: trackingReason.array(),
+})
+
 export const projectTrackingRow = z.object({
   id: uuid,
   name: z.string(),
   status: projectStatus,
   client_name: z.string().nullable(),
-  total_cost: money,
+  /** Money is only sent to someone who can see Billing. */
+  total_cost: money.nullable().default(null),
   tasks_total: z.number().int(),
   tasks_done: z.number().int(),
   tasks_overdue: z.number().int(),
@@ -435,17 +493,79 @@ export const projectTrackingRow = z.object({
   deliverables_late: z.number().int().default(0),
   /** Sent to the client, waiting on them. */
   deliverables_with_client: z.number().int().default(0),
-  /** Paid money only; a promised payment is not here. */
-  received: money.default(0),
+  /** Paid money only; a promised payment is not here. Null without Billing access. */
+  received: money.nullable().default(null),
+  /** Owed on invoices past their due date. Null without Billing access. */
+  overdue_amount: money.nullable().default(null),
+  invoices_overdue: z.number().int().default(0),
   data_records_total: z.number().int(),
+  /** Records not yet in two places. */
   data_records_unverified: z.number().int(),
+  /** Booked crew, shoot day passed, owe data, handed in none. */
+  data_missing: z.number().int().default(0),
+  data_issues: z.number().int().default(0),
   pending_reviews: z.number().int(),
   shoots_total: z.number().int(),
   shoots_done: z.number().int(),
+  /** Upcoming shoots with fewer people booked than the roles need. */
+  shoots_short: z.number().int().default(0),
   next_shoot_date: isoDate.nullable(),
+  /** Earliest due date among open deliverables. */
+  next_due_date: isoDate.nullable().default(null),
   last_activity_at: isoDateTime,
+  /** Worked out on the server by @ipc/domain projectHealth -- one answer everywhere. */
+  health: projectHealthSchema,
 })
 export type ProjectTrackingRow = z.infer<typeof projectTrackingRow>
+
+/** One project opened up on the tracking page: what is late or waiting, and on whom. */
+export const trackingBreakdown = z.object({
+  deliverables: z
+    .object({
+      id: uuid,
+      title: z.string(),
+      stage: z.string(),
+      assignee_name: z.string().nullable(),
+      estimated_date: isoDate.nullable(),
+      days_late: z.number().int(),
+    })
+    .array(),
+  tasks: z
+    .object({
+      id: uuid,
+      title: z.string(),
+      due_date: isoDate.nullable(),
+      days_late: z.number().int(),
+      assignee_names: z.string().array(),
+    })
+    .array(),
+  submissions: z
+    .object({ id: uuid, title: z.string().nullable(), submitted_by_name: z.string().nullable(), created_at: isoDateTime })
+    .array(),
+  shoots: z
+    .object({
+      id: uuid,
+      name: z.string(),
+      shoot_date: isoDate.nullable(),
+      needed: z.number().int(),
+      booked: z.number().int(),
+      data_missing: z.number().int(),
+      data_unsafe: z.number().int(),
+    })
+    .array(),
+  /** Null without Billing access. */
+  money: z
+    .object({
+      total_cost: money,
+      received: money,
+      balance: money,
+      invoices_overdue: z
+        .object({ id: uuid, invoice_number: z.string().nullable(), due_date: isoDate.nullable(), balance_due: money })
+        .array(),
+    })
+    .nullable(),
+})
+export type TrackingBreakdown = z.infer<typeof trackingBreakdown>
 
 /**
  * One line of a saved package. A set is a template, so it carries what the

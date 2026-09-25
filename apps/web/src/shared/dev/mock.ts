@@ -259,6 +259,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/projects/tracking') return atStage(trackingRows, 'partial')
+  if (method === 'GET' && path.startsWith('/projects/tracking/'))
+    return { deliverables: [], tasks: [], submissions: [], shoots: [], money: null }
   // A deliverable's timeline: notes, voice notes and stage changes.
   if (path.startsWith('/projects/deliverables/') && path.includes('/notes')) {
     if (method === 'DELETE') return {}
@@ -314,6 +316,37 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/projects/deliverable-sets')
     return { id: uid(0xd5), ...(body as object) }
   if (method === 'DELETE' && path.startsWith('/projects/deliverable-sets/')) return {}
+  // The studio's deliverable types. The fixture is changed in place, so adding,
+  // editing and archiving on the Templates page behave as they would for real.
+  if (path === '/projects/catalog/deliverable-types') {
+    if (method === 'GET') return atStage(deliverableTypesFx, 'partial')
+    if (method === 'POST') {
+      const b = (body ?? {}) as { title?: string; due_days?: number | null; work_days?: number | null }
+      const title = (b.title ?? '').trim()
+      const same = deliverableTypesFx.find((t) => t.title.toLowerCase() === title.toLowerCase())
+      if (same) {
+        // Like the API: a live one is handed back as it is; an archived one comes
+        // back, with any number that was typed and its own for the rest.
+        if (same.is_archived) {
+          same.is_archived = false
+          if (b.due_days != null) same.due_days = b.due_days
+          if (b.work_days != null) same.work_days = b.work_days
+        }
+        return same
+      }
+      const row = { id: uid(0x7d0 + deliverableTypesFx.length + 1), title, due_days: b.due_days ?? null, due_basis: null, work_days: b.work_days ?? null, is_archived: false }
+      deliverableTypesFx.push(row)
+      return row
+    }
+  }
+  if (path.startsWith('/projects/catalog/deliverable-types/')) {
+    const row = deliverableTypesFx.find((t) => t.id === path.split('/')[4])
+    if (method === 'DELETE') {
+      if (row) row.is_archived = true
+      return {}
+    }
+    if (method === 'PATCH' && row) return Object.assign(row, body as object)
+  }
   if (method === 'GET' && path === '/projects/board') {
     const items = projectDetail.deliverables
       .filter((d) => d.status !== 'cancelled')
@@ -341,11 +374,19 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/projects/deliverables/mine')
     return projectDetail.deliverables
       .filter((d) => d.assignee_id === uid(1) && !['completed', 'cancelled'].includes(d.status))
-      .map((d) => ({ ...d, project_name: 'Sharma Wedding', client_name: 'Priya Sharma' }))
+      .map((d) => ({
+        ...d,
+        project_name: 'Sharma Wedding',
+        client_name: 'Priya Sharma',
+        // "Edited Photos" was sent back, so the preview shows a revision to upload.
+        changes_requested: d.custom_status_code === 'changes_requested',
+        review_note: d.custom_status_code === 'changes_requested' ? 'Skin tones in the haldi set look too orange. Warm them down a little.' : null,
+        last_version: d.custom_status_code === 'changes_requested' ? 1 : null,
+      }))
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
-  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my'))
+  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?')))
     return atStage(boardTasks, 'full')
   if (method === 'GET' && path === '/tasks/bundles') return atStage(bundlesFx, 'partial')
   if (method === 'POST' && path === '/tasks/bundles') return { id: uid(0xd8) }
@@ -394,6 +435,16 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   // gets back is paged client-side by useDirectoryPaged.
   if (method === 'GET' && (path === '/team/directory' || path.startsWith('/team/directory?')))
     return atStage(directory, 'partial')
+  if (method === 'GET' && (path === '/settings/profile/documents' || /^\/team\/members\/[^/]+\/documents$/.test(path)))
+    return [{ id: uid(0xfa), kind: 'aadhaar', name: 'aadhaar-front.jpg', mime: 'image/jpeg', size_bytes: 412_000, created_at: '2026-09-20T06:00:00Z' }]
+  if (method === 'DELETE' && path.startsWith('/settings/profile/documents/')) return {}
+  if (method === 'GET' && /^\/team\/members\/[^/]+\/pay-to$/.test(path))
+    return { name: 'Rahul Sharma', upi_id: 'rahul@okhdfc', bank_account_name: null, bank_account_number: null, bank_ifsc: null }
+  if (method === 'GET' && /^\/team\/members\/[^/]+\/overview$/.test(path)) {
+    const id = path.split('/')[3]!
+    const row = (directory as { user_id: string; name: string }[]).find((d) => d.user_id === id)
+    return memberOverviewFx(id, row?.name ?? 'Rahul Sharma')
+  }
   if (method === 'GET' && (path === '/enquiries' || path.startsWith('/enquiries?')))
     return atStage(enquiriesFx, 'partial').length
       ? { items: enquiriesFx, summary: enquirySummaryFx }
@@ -642,6 +693,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && /^\/data\/[^/]+$/.test(path)) return {}
   if (method === 'GET' && (path === '/work/submissions' || path.startsWith('/work/submissions?'))) return workSubs
   if (method === 'POST' && path === '/work/submissions') return { id: uid(0x8a) }
+  if (method === 'POST' && /^\/work\/submissions\/[^/]+\/review$/.test(path)) return {}
   if (method === 'GET' && path === '/billing/states') return states
   if (method === 'GET' && path === '/billing/invoices') return atStage(invoices2, 'full')
   if (method === 'GET' && path.startsWith('/billing/invoices/')) return invoiceDetailFx
@@ -817,10 +869,72 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'PATCH' && path === '/hr/location')
     return { ...(body as Record<string, unknown>), timezone: 'Asia/Kolkata' }
   if (method === 'GET' && path.startsWith('/hr/attendance?')) return atStage(rosterFx, 'partial')
+  if (method === 'GET' && path.startsWith('/hr/leave')) return path.includes('scope=team') ? leaveFx : leaveFx.filter((l) => l.user_id === uid(0xe1))
+  if (method === 'POST' && path === '/hr/leave') return { id: uid(0xc8) }
+  if (method === 'POST' && /^\/hr\/leave\/[^/]+\/(decide|cancel)$/.test(path)) return {}
+  if (method === 'GET' && path.startsWith('/hr/corrections')) return correctionsFx
+  if (method === 'POST' && path === '/hr/corrections') return { id: uid(0xc9) }
+  if (method === 'POST' && /^\/hr\/corrections\/[^/]+\/decide$/.test(path)) return {}
+  if (method === 'GET' && path.startsWith('/hr/holidays')) return holidaysFx
+  if (method === 'POST' && path === '/hr/holidays') return { id: uid(0xca), ...(body as Record<string, unknown>) }
+  if (method === 'DELETE' && path.startsWith('/hr/holidays/')) return {}
+  if (method === 'GET' && path === '/hr/policy') return { weekly_off: [0] }
+  if (method === 'PATCH' && path === '/hr/policy') return body
   if (method === 'POST' && path === '/hr/check-out') return { id: uid(0xc1) }
   if (method === 'POST' && path === '/hr/check-in') return { id: uid(0xc0) }
-  if (method === 'GET' && path === '/notifications') return notifs
+  if (method === 'GET' && (path === '/notifications' || path.startsWith('/notifications?')))
+    return notificationsFor(path)
+  if (method === 'GET' && path === '/notifications/unread-count')
+    return { unread_count: notifs.filter((n) => !n.read_at && !n.dismissed_at).length }
+  if (method === 'POST' && path === '/notifications/read-all') {
+    for (const n of notifs) n.read_at ??= new Date().toISOString()
+    return {}
+  }
+  {
+    const m = /^\/notifications\/([^/]+)\/(read|dismiss)$/.exec(path)
+    const n = m && method === 'POST' ? notifs.find((x) => x.id === m[1]) : undefined
+    if (m && n) {
+      if (m[2] === 'read') n.read_at ??= new Date().toISOString()
+      else n.dismissed_at ??= new Date().toISOString()
+      return {}
+    }
+  }
   if (method === 'POST' && path.includes('/notifications/')) return {}
+  if (method === 'GET' && (path === '/reminders' || path.startsWith('/reminders?'))) return remindersList()
+  if (method === 'POST' && path === '/reminders') {
+    const b = (body ?? {}) as Partial<(typeof remindersFx)[number]> & { assigned_to?: string | null }
+    // A counter, not the list length: after a delete the length repeats an id.
+    const id = uid(++reminderSeq)
+    remindersFx.push({
+      id,
+      company_id: uid(0xaa),
+      user_id: b.assigned_to ?? uid(1),
+      created_by: uid(1),
+      title: b.title ?? 'Reminder',
+      description: b.description ?? null,
+      priority: b.priority ?? 'medium',
+      status: 'active',
+      entity_type: b.entity_type ?? null,
+      entity_id: b.entity_id ?? null,
+      entity_name: null,
+      due_at: b.due_at ?? null,
+      created_at: new Date().toISOString(),
+    })
+    return { id }
+  }
+  {
+    // Edit, complete, delete: kept, so the board shows what was just done.
+    const m = /^\/reminders\/([^/]+)(\/status)?$/.exec(path)
+    const at = m ? remindersFx.findIndex((r) => r.id === m[1]) : -1
+    const r = remindersFx[at]
+    if (m && r && (method === 'PATCH' || method === 'DELETE')) {
+      const b = (body ?? {}) as Partial<(typeof remindersFx)[number]>
+      if (method === 'DELETE') remindersFx.splice(at, 1)
+      else if (m[2]) r.status = b.status ?? r.status
+      else Object.assign(r, { ...b, entity_name: b.entity_id === r.entity_id ? r.entity_name : null })
+      return { ok: true }
+    }
+  }
   if (method === 'GET' && path === '/subscription/plans') return plansFx
   if (method === 'POST' && path === '/subscription/order')
     return { order_id: uid(0xd0), amount: 5900 }
@@ -1000,32 +1114,133 @@ const plansFx = [
   },
 ]
 
-const notifs = [
+/** An ISO time this long before the preview was opened, so the bell reads "25m ago", not a date. */
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+
+/**
+ * Alerts, one of each look the bell's panel has to draw: unread and read, each
+ * severity, with and without a body and a link. Like the theme, reads and
+ * dismissals are remembered, so the badge and the list move when pressed.
+ */
+const notifs: {
+  id: string
+  type: string
+  severity: 'info' | 'warning' | 'critical'
+  title: string
+  body: string | null
+  read_at: string | null
+  dismissed_at: string | null
+  deep_link: string | null
+  created_at: string
+}[] = [
   {
     id: uid(0xf1),
     type: 'reminder',
-    title: 'Call Priya about wedding date',
-    body: null,
+    severity: 'info',
+    title: 'Follow up: Wedding album (40 sheets) · Sharma Wedding',
+    body: 'Ask Priya which cover photo she picked',
     read_at: null,
-    created_at: '2026-07-06T06:00:00Z',
+    dismissed_at: null,
+    deep_link: `/projects/${PROJ.p1}?tab=deliverables&d=${uid(0xd1)}`,
+    created_at: minutesAgo(25),
   },
   {
     id: uid(0xf2),
     type: 'work',
+    severity: 'info',
     title: 'Album v1 was approved',
     body: 'Great work',
     read_at: null,
-    created_at: '2026-07-05T10:00:00Z',
+    dismissed_at: null,
+    deep_link: '/my-work',
+    created_at: minutesAgo(2 * 60 + 10),
+  },
+  {
+    id: uid(0xf4),
+    type: 'shoot.upcoming',
+    severity: 'warning',
+    title: 'Shoot coming up',
+    body: 'Engagement shoot on 28 Sep',
+    read_at: null,
+    dismissed_at: null,
+    deep_link: '/shoots/my',
+    created_at: minutesAgo(26 * 60),
   },
   {
     id: uid(0xf3),
-    type: 'billing',
+    type: 'invoice.overdue',
+    severity: 'critical',
     title: 'INV-0001 is overdue',
     body: null,
-    read_at: '2026-07-04T10:00:00Z',
-    created_at: '2026-07-03T10:00:00Z',
+    read_at: minutesAgo(3 * 24 * 60),
+    dismissed_at: null,
+    deep_link: '/billing',
+    created_at: minutesAgo(12 * 24 * 60),
   },
 ]
+
+/** GET /notifications with the filters the bell and the Alerts page send. */
+function notificationsFor(path: string) {
+  const q = new URLSearchParams(path.split('?')[1] ?? '')
+  const flag = (k: string) => q.get(k) === '1' || q.get(k) === 'true'
+  const limit = Number(q.get('limit')) || 50
+  return notifs
+    .filter((n) => flag('include_dismissed') || !n.dismissed_at)
+    .filter((n) => !flag('unread_only') || !n.read_at)
+    .filter((n) => !q.get('severity') || n.severity === q.get('severity'))
+    .filter((n) => !q.get('type_prefix') || n.type.startsWith(q.get('type_prefix')!))
+    .slice(0, limit)
+}
+
+/** Reminders set in the preview, "Remind me" included, so the board shows them. */
+const remindersFx: {
+  id: string
+  company_id: string
+  user_id: string
+  created_by: string
+  title: string
+  description: string | null
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  status: 'active' | 'completed' | 'dismissed'
+  entity_type: string | null
+  entity_id: string | null
+  entity_name: string | null
+  due_at: string | null
+  created_at: string
+}[] = [
+  {
+    id: uid(0x7e1),
+    company_id: uid(0xaa),
+    user_id: uid(1),
+    created_by: uid(1),
+    title: 'Follow up: Sharma Wedding',
+    description: 'Balance payment before the album goes out',
+    priority: 'high',
+    status: 'active',
+    entity_type: 'project',
+    entity_id: PROJ.p1,
+    entity_name: 'Sharma Wedding',
+    due_at: minutesAgo(-2 * 24 * 60),
+    created_at: minutesAgo(3 * 24 * 60),
+  },
+]
+
+let reminderSeq = 0x7e1
+
+function remindersList() {
+  const now = Date.now()
+  const active = remindersFx.filter((r) => r.status === 'active')
+  const today = new Date().toDateString()
+  return {
+    items: remindersFx,
+    summary: {
+      total_count: remindersFx.length,
+      active_count: active.length,
+      overdue_count: active.filter((r) => r.due_at && Date.parse(r.due_at) < now).length,
+      due_today_count: active.filter((r) => r.due_at && new Date(r.due_at).toDateString() === today).length,
+    },
+  }
+}
 
 /** One of each shape the roster has to render: closed, still in, late, absent. */
 const rosterFx = [
@@ -1072,6 +1287,71 @@ const rosterFx = [
     check_in_at: null,
     check_out_at: null,
   },
+  {
+    user_id: uid(0xe5),
+    name: 'Meera Iyer',
+    email: 'meera@demostudio.in',
+    phone: '9855555555',
+    engagement_type: 'in_house',
+    status: 'absent',
+    on_leave: true,
+    check_in_at: null,
+    check_out_at: null,
+  },
+]
+
+const leaveFx = [
+  {
+    id: uid(0xd5),
+    user_id: uid(0xe3),
+    user_name: 'Sana Khan',
+    kind: 'sick',
+    start_date: '2026-09-29',
+    end_date: '2026-09-30',
+    half_day: false,
+    reason: 'Fever -- doctor says two days of rest.',
+    status: 'pending',
+    decided_by_name: null,
+    decided_at: null,
+    decision_note: null,
+    created_at: '2026-09-25T04:10:00Z',
+  },
+  {
+    id: uid(0xd6),
+    user_id: uid(0xe1),
+    user_name: 'Rahul Sharma',
+    kind: 'casual',
+    start_date: '2026-10-06',
+    end_date: '2026-10-06',
+    half_day: true,
+    reason: 'Bank work in the morning.',
+    status: 'approved',
+    decided_by_name: 'Priya Mehta',
+    decided_at: '2026-09-24T06:00:00Z',
+    decision_note: null,
+    created_at: '2026-09-23T09:30:00Z',
+  },
+]
+
+const correctionsFx = [
+  {
+    id: uid(0xd7),
+    user_id: uid(0xe2),
+    user_name: 'Anita Desai',
+    a_date: '2026-09-22',
+    check_in_at: '2026-09-22T04:25:00Z',
+    check_out_at: '2026-09-22T12:40:00Z',
+    reason: 'Was at the Bandra shoot all day; the app did not load at the venue.',
+    status: 'pending',
+    decision_note: null,
+    created_at: '2026-09-23T05:00:00Z',
+  },
+]
+
+const holidaysFx = [
+  { id: uid(0xd8), holiday_date: '2026-10-02', name: 'Gandhi Jayanti' },
+  { id: uid(0xd9), holiday_date: '2026-10-20', name: 'Dussehra' },
+  { id: uid(0xda), holiday_date: '2026-11-08', name: 'Diwali' },
 ]
 
 const attendanceFx = [
@@ -1577,6 +1857,21 @@ const deliverableSetsFx = [
       { title: 'Drone Shots', is_additional_charge: true, additional_charge_amount: 15000, show_on_quotation: true },
     ],
   },
+]
+
+/** Templates → Deliverable types: one number left blank, so the guess shows. */
+const deliverableTypesFx: {
+  id: string
+  title: string
+  due_days: number | null
+  due_basis: string | null
+  work_days: number | null
+  is_archived: boolean
+}[] = [
+  { id: uid(0x7d1), title: 'Photo Album', due_days: 90, due_basis: 'after_wedding_day', work_days: 20, is_archived: false },
+  { id: uid(0x7d2), title: 'Highlight Film', due_days: 30, due_basis: null, work_days: 12, is_archived: false },
+  { id: uid(0x7d3), title: 'Edited Photos', due_days: 21, due_basis: 'after_last_shoot', work_days: null, is_archived: false },
+  { id: uid(0x7d4), title: 'Instagram Reels Pack', due_days: 14, due_basis: null, work_days: 5, is_archived: false },
 ]
 
 const ROLE = { photographer: uid(0xf1), editor: uid(0xf2), drone: uid(0xf3) }
@@ -2774,3 +3069,73 @@ const crmCadencesFx = [
     created_at: '2026-08-01T09:00:00Z',
   },
 ]
+
+/** The member page, filled in the way a busy in-house photographer's would be. */
+function memberOverviewFx(id: string, name: string) {
+  const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+  const dayOffset = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
+  return {
+    member: {
+      user_id: id,
+      name,
+      email: `${name.split(' ')[0]!.toLowerCase()}@demostudio.in`,
+      phone: '9811111111',
+      alternate_phone: null,
+      address: 'Flat 4B, Sea View, Bandra West, Mumbai 400050',
+      avatar_url: null,
+      role: 'employee',
+      status: 'active',
+      engagement_type: 'in_house',
+      login_enabled: true,
+      is_owner: id === uid(0x1),
+      created_at: '2026-05-14T10:00:00Z',
+      role_names: ['Photographer'],
+      salary: 45000,
+      freelancer_rate: null,
+    },
+    profile: { percent: 71, missing: ['photo', 'pan'] },
+    private: {
+      date_of_birth: '1996-03-18',
+      blood_group: 'B+',
+      joined_on: '2026-05-14',
+      emergency_name: 'Sunita Sharma',
+      emergency_relation: 'Mother',
+      emergency_phone: '9822222222',
+      upi_id: 'rahul@okhdfc',
+      bank_account_name: null,
+      bank_account_last4: null,
+      bank_ifsc: null,
+      pan_on_file: false,
+    },
+    attendance: {
+      month: today.slice(0, 7),
+      present: 14,
+      late: 3,
+      absent: 1,
+      leave_days: 1.5,
+      late_minutes: 55,
+      today: { status: 'present', check_in_at: `${today}T04:32:00Z`, check_out_at: null, on_leave: false },
+    },
+    work: {
+      shoots: [
+        { id: uid(0xf1), shoot_id: uid(0xf2), shoot_name: 'Haldi', service_name: 'Candid Photographer', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', start_at: daysFromNow(2, 9), end_at: daysFromNow(2, 14), location: 'Taj Lands End' },
+        { id: uid(0xf3), shoot_id: uid(0xf4), shoot_name: 'Reception', service_name: 'Candid Photographer', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', start_at: daysFromNow(4, 18), end_at: daysFromNow(4, 23), location: 'ITC Maratha' },
+      ],
+      deliverables: [
+        { id: uid(0xf5), title: 'Pre-wedding teaser', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'in_progress', estimated_date: dayOffset(-2), started_at: daysFromNow(-6), late: true },
+        { id: uid(0xf6), title: 'Engagement album', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'pending', estimated_date: dayOffset(12), started_at: null, late: false },
+      ],
+      tasks: [
+        { id: uid(0xf7), title: 'Cull haldi photos', project_id: PROJ.p1, project_name: 'Sharma Wedding', status: 'to_do', priority: 'high', due_date: dayOffset(3), late: false },
+      ],
+      shoots_this_month: 6,
+    },
+    leave: [{ id: uid(0xd6), kind: 'casual', start_date: dayOffset(11), end_date: dayOffset(11), half_day: true, status: 'approved' }],
+    salaries: [
+      { id: uid(0xf8), month: 8, year: 2026, base_amount: 45000, paid_amount: 45000, status: 'paid' },
+      { id: uid(0xf9), month: 7, year: 2026, base_amount: 45000, paid_amount: 45000, status: 'paid' },
+    ],
+    payouts: [],
+    can: { edit: true, see_pay: true, manage_access: true },
+  }
+}

@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Check, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
@@ -274,6 +275,11 @@ function Subscription() {
           })}
         </div>
       )}
+      <p className="mt-3 text-xs text-muted-foreground">
+        Prices exclude 18% GST. Paying means you agree to the{' '}
+        <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}
+        <Link to="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
+      </p>
 
       {status.data?.history && status.data.history.length > 0 && (
         <Card className="mt-6">

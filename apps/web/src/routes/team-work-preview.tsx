@@ -3,7 +3,6 @@ import { Eye, ClipboardList, Camera, FileCheck } from 'lucide-react'
 import { WORK_STATUS_LABEL, taskListItem, shootListItem, z } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { Button } from '@/shared/ui/button'
 import { Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState } from '@/shared/ui/states'
@@ -15,7 +14,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDirectory } from '@/features/team/api'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
-import { useReviewWork } from '@/features/work/api'
+import { ReviewButtons } from '@/features/work/ReviewButtons'
 
 const tasksList = taskListItem.array()
 const shootsList = shootListItem.array()
@@ -47,7 +46,6 @@ function TeamWorkPreview() {
   const [userId, setUserId] = useUrlParam('user')
   const members = (directory ?? []).filter((m) => m.status === 'active')
   const selected = members.find((m) => m.user_id === userId)
-  const review = useReviewWork()
   const canReview = access.hasAction('team_work_preview', 'edit')
 
   const tasks = useQuery({
@@ -153,7 +151,9 @@ function TeamWorkPreview() {
                       {s.notes || s.submission_link || 'Submission'}
                     </a>
                     {s.review_notes && (
-                      <p className="mt-1 text-xs text-muted-foreground">Review: {s.review_notes}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {s.status === 'rejected' ? 'What to change' : 'Review'}: {s.review_notes}
+                      </p>
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <StatusBadge
@@ -161,26 +161,7 @@ function TeamWorkPreview() {
                       >
                         {WORK_STATUS_LABEL[s.status]}
                       </StatusBadge>
-                      {canReview && s.status === 'submitted' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={review.isPending}
-                            onClick={() => review.mutate({ id: s.id, approve: true })}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={review.isPending}
-                            onClick={() => review.mutate({ id: s.id, approve: false })}
-                          >
-                            Request changes
-                          </Button>
-                        </>
-                      )}
+                      {canReview && s.status === 'submitted' && <ReviewButtons submissionId={s.id} editorName={selected?.name} />}
                     </div>
                   </li>
                 ))}

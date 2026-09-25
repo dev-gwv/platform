@@ -9,6 +9,9 @@ import {
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
+import { MyProfilePage } from '@/routes/my-profile'
+import { LeavePage } from '@/routes/leave'
+import { ContactPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
@@ -156,6 +159,11 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
+  // The vendor's policy pages (payment-gateway requirement).
+  publicRoute('/terms-and-conditions', TermsPage),
+  publicRoute('/privacy-policy', PrivacyPage),
+  publicRoute('/refund-policy', RefundPage),
+  publicRoute('/contact-us', ContactPage),
 
   renewalLayout.addChildren([
     createRoute({
@@ -190,6 +198,8 @@ const routeTree = rootRoute.addChildren([
   route('/tasks', TasksPage),
   route('/tasks/my', MyTasksPage),
   route('/my-work', MyWorkPage),
+  route('/profile', MyProfilePage),
+  route('/leave', LeavePage),
   route('/my-work/project/$projectId', MyWorkProjectPage),
   route('/production-board', ProductionBoardPage),
   route('/data-management', DataManagementPage),

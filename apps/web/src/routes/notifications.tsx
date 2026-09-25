@@ -12,6 +12,7 @@ import {
   unreadCount,
   type NotificationFilters,
 } from '@/features/crm/notifications'
+import { splitDeepLink } from '@/features/crm/notification-view'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -109,7 +110,10 @@ function Notifications({ generate }: { generate?: boolean | undefined }) {
               <option value="task.">Tasks</option>
               <option value="shoot.">Shoots</option>
               <option value="invoice.">Invoices</option>
-              <option value="reminder.">Reminders</option>
+              {/* No dot: a due reminder's type is plain "reminder" (the
+                  generator's is "reminder.due"), and a prefix of "reminder."
+                  matched neither the one most people get. */}
+              <option value="reminder">Reminders</option>
               <option value="data.">Data</option>
               <option value="crm.">CRM</option>
               <option value="allocation.">Allocation</option>
@@ -332,22 +336,17 @@ function GeneratorCentre() {
 }
 
 /**
- * "Open" on a notification.
- *
- * A deep link is a plain string written by whatever raised the notification --
- * a SQL generator, usually -- so it can carry a query string. TanStack Router
- * matches `to` against route paths and does not split one off, so
- * `/follow-ups?lead=abc` would look for a route literally named that and land
- * on the not-found page. Split it here, once, rather than forbidding every
- * caller from pointing at a particular record.
+ * "Open" on a notification. The link is split the same way the bell's panel
+ * splits it (see splitDeepLink), so a query string reaches the page instead
+ * of the not-found screen; anything outside the app gets no button.
  */
 function DeepLink({ to }: { to: string }) {
-  const [path, query] = to.split('?')
-  const search = query ? Object.fromEntries(new URLSearchParams(query)) : undefined
+  const target = splitDeepLink(to)
+  if (!target) return null
   return (
     <Link
-      to={path ?? to}
-      {...(search ? { search: search as never } : {})}
+      to={target.to}
+      {...(target.search ? { search: target.search as never } : {})}
       className="mt-1 inline-block text-sm text-primary hover:underline"
     >
       Open

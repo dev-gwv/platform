@@ -12,7 +12,7 @@ import {
 import { renderTeamTerms } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
-import { requireAction } from '../../middleware/permissions'
+import { requireAction, requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { textParam, uuidParam, uuidQuery } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
@@ -32,11 +32,14 @@ const DEFAULT_TTL_HOURS = 336
  * Team terms — the crew-facing half of what 0017 built for clients.
  *
  * Templates and sends are gated on `projects.edit`: whoever books the shoot is
- * who puts the terms in front of the person booked. The public reader below is
- * gated on nothing at all, because the crew member reading it has no account.
+ * who puts the terms in front of the person booked -- and on the Team Terms
+ * module itself, so a studio (or a person) with it switched off has none of
+ * it. The public reader below is gated on nothing at all, because the crew
+ * member reading it has no account.
  */
 export const teamTermsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+  .use('*', requireModule('team_terms'))
 
   .get('/templates', requireAction('projects', 'view'), async (c) => {
     const archived = c.req.query('archived') === '1'

@@ -7,10 +7,13 @@ import {
   deliverableDueDate,
   deliverableEstimatedDate,
   deliverableRuleForTitle,
+  deliverableTimings,
+  findStudioType,
   findWeddingShoot,
   internalLeadDaysForTitle,
   qualifiesForCharge,
   type DeliverableForTotal,
+  type StudioDeliverableType,
 } from './projects'
 
 const d = (over: Partial<DeliverableForTotal> = {}): DeliverableForTotal => ({
@@ -206,5 +209,64 @@ describe('internalLeadDaysForTitle', () => {
     expect(internalLeadDaysForTitle('Raw Photos')).toBe(2)
     expect(internalLeadDaysForTitle('Wedding Film')).toBe(30)
     expect(internalLeadDaysForTitle('Edited Photos')).toBe(7)
+  })
+})
+
+describe('deliverableTimings', () => {
+  const type = (over: Partial<StudioDeliverableType> = {}): StudioDeliverableType => ({
+    title: 'Photo Album',
+    due_days: 120,
+    due_basis: 'after_last_shoot',
+    work_days: 20,
+    ...over,
+  })
+
+  it('takes the studio’s own numbers for a name it has set', () => {
+    expect(deliverableTimings('Photo Album', [type()])).toMatchObject({
+      due_days: 120,
+      due_basis: 'after_last_shoot',
+      work_days: 20,
+    })
+  })
+
+  it('matches the whole name, ignoring case and spaces at the ends', () => {
+    expect(findStudioType([type()], '  photo ALBUM ')?.title).toBe('Photo Album')
+    // "Photo Album Cover" is a different thing, whatever the built-in rules think.
+    expect(findStudioType([type()], 'Photo Album Cover')).toBeNull()
+    expect(findStudioType([type()], '   ')).toBeNull()
+  })
+
+  it('falls back to the built-in numbers for anything the type leaves unset', () => {
+    const t = deliverableTimings('Photo Album', [type({ due_days: null, due_basis: null, work_days: null })])
+    expect(t.own).not.toBeNull()
+    expect(t).toMatchObject({
+      due_days: deliverableRuleForTitle('Photo Album').due_days,
+      due_basis: deliverableRuleForTitle('Photo Album').due_basis,
+      work_days: internalLeadDaysForTitle('Photo Album'),
+    })
+  })
+
+  it('keeps zero as zero rather than reading it as unset', () => {
+    expect(deliverableTimings('Photo Album', [type({ work_days: 0, due_days: 0 })])).toMatchObject({
+      due_days: 0,
+      work_days: 0,
+    })
+  })
+
+  it('ignores an archived type and a basis a type cannot have', () => {
+    expect(deliverableTimings('Photo Album', [type({ is_archived: true })]).own).toBeNull()
+    expect(deliverableTimings('Photo Album', [type({ due_basis: 'custom' })]).due_basis).toBe(
+      deliverableRuleForTitle('Photo Album').due_basis,
+    )
+  })
+
+  it('is the built-in rule when the studio has no type of that name', () => {
+    expect(deliverableTimings('Cinematic Film', [type()])).toEqual({
+      due_days: 60,
+      due_basis: 'after_wedding_day',
+      work_days: 30,
+      own: null,
+    })
+    expect(deliverableTimings('Cinematic Film')).toEqual(deliverableTimings('Cinematic Film', [type()]))
   })
 })

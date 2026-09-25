@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useUpdateMember, useAssignRoles, useCreateRole, useEmployeeRoles } from './api'
 import { CompensationFields, type CompensationDraft } from './CompensationFields'
+import { ROLE_LABEL, useTeamPowers } from './powers'
 import { STAGE_LABEL, STAGE_ORDER, byStage, toRoleCode } from './role-stages'
 
 /** The pay fields as they are on record, for the form to start from. */
@@ -36,6 +37,7 @@ function compFrom(member: DirectoryMember): CompensationDraft {
  * contact-detail fixes, not salary revisions.
  */
 export function EditMemberDialog({ member }: { member: DirectoryMember }) {
+  const powers = useTeamPowers()
   const update = useUpdateMember()
   const assignRoles = useAssignRoles()
   const { data: roles } = useEmployeeRoles()
@@ -115,6 +117,24 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
   async function onSave() {
     setError(null)
     try {
+      // Pay goes only from someone who handles salaries, and the role only
+      // when it changed -- the server checks both against who is asking.
+      const pay = {
+        salary: comp.salary.trim() === '' ? null : Number(comp.salary),
+        freelancer_rate: comp.freelancer_rate.trim() === '' ? null : Number(comp.freelancer_rate),
+        payout_type: comp.payout_type ? (comp.payout_type as NonNullable<typeof member.payout_type>) : null,
+        commission_pct: comp.commission_pct.trim() === '' ? null : Number(comp.commission_pct),
+        commission_basis: comp.commission_basis
+          ? (comp.commission_basis as NonNullable<typeof member.commission_basis>)
+          : null,
+        stipend_amount: comp.stipend_amount.trim() === '' ? null : Number(comp.stipend_amount),
+        pay_effective_from: comp.pay_effective_from || null,
+        pay_effective_to: comp.pay_effective_to || null,
+        compensation_notes: comp.compensation_notes.trim() || null,
+        payment_type: comp.payment_type.trim() || null,
+        pay_components: comp.pay_components,
+        payment_status: comp.payment_status,
+      }
       await update.mutateAsync({
         userId: member.user_id,
         patch: {
@@ -122,22 +142,9 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
           phone: phone.trim() || null,
           alternate_phone: alternatePhone.trim() || null,
           address: address.trim() || null,
-          ...(role === 'super_admin' ? {} : { role }),
+          ...(role === 'super_admin' || role === member.role ? {} : { role }),
           engagement_type: engagementType,
-          salary: comp.salary.trim() === '' ? null : Number(comp.salary),
-          freelancer_rate: comp.freelancer_rate.trim() === '' ? null : Number(comp.freelancer_rate),
-          payout_type: comp.payout_type ? (comp.payout_type as NonNullable<typeof member.payout_type>) : null,
-          commission_pct: comp.commission_pct.trim() === '' ? null : Number(comp.commission_pct),
-          commission_basis: comp.commission_basis
-            ? (comp.commission_basis as NonNullable<typeof member.commission_basis>)
-            : null,
-          stipend_amount: comp.stipend_amount.trim() === '' ? null : Number(comp.stipend_amount),
-          pay_effective_from: comp.pay_effective_from || null,
-          pay_effective_to: comp.pay_effective_to || null,
-          compensation_notes: comp.compensation_notes.trim() || null,
-          payment_type: comp.payment_type.trim() || null,
-          pay_components: comp.pay_components,
-          payment_status: comp.payment_status,
+          ...(powers.canPay ? pay : {}),
         },
       })
       const currentIds = new Set(member.role_ids)
@@ -196,18 +203,24 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
             <Label>Access level</Label>
             <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)} disabled={role === 'super_admin'}>
               {role === 'super_admin' && <option value="super_admin">Owner</option>}
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="employee">Employee</option>
+              {(['admin', 'manager', 'employee'] as const)
+                .filter((r) => powers.mayGrant(r) || r === member.role)
+                .map((r) => (
+                  <option key={r} value={r} disabled={!powers.mayGrant(r) && r !== member.role}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
             </Select>
           </div>
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <Label>Job roles</Label>
-              <Button type="button" size="sm" variant="outline" onClick={() => setAddingRole((v) => !v)}>
-                {addingRole ? 'Cancel' : '+ Add new role'}
-              </Button>
+              {powers.canAddJobRoles && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setAddingRole((v) => !v)}>
+                  {addingRole ? 'Cancel' : '+ Add new role'}
+                </Button>
+              )}
             </div>
             {addingRole && (
               <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/30 p-3">
@@ -262,7 +275,7 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
 
           <hr className="border-border" />
 
-          <CompensationFields value={comp} onChange={setCompField} effectiveFromRequired={false} />
+          {powers.canPay && <CompensationFields value={comp} onChange={setCompField} effectiveFromRequired={false} />}
 
           <Card>
             <CardContent className="p-3 text-xs text-muted-foreground">

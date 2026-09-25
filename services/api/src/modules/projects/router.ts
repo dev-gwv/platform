@@ -17,12 +17,16 @@ import {
   projectListItem,
   projectListPage,
   projectTrackingRow,
+  trackingBreakdown,
   saveDeliverableSetRequest,
   updateProjectRequest,
   createProjectTemplateRequest,
   projectTemplateList,
   createShootTypeRequest,
   shootTypeItem,
+  deliverableType,
+  upsertDeliverableTypeRequest,
+  updateDeliverableTypeRequest,
   deliverableStage,
   createDeliverableStageRequest,
   updateDeliverableStageRequest,
@@ -30,6 +34,7 @@ import {
   bulkDeliverableRequest,
   z,
 } from '@ipc/contracts'
+import { projectHealth, type ProjectCounters } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -53,6 +58,9 @@ function deliverableRuleBroken(code: string, err: unknown): never | undefined {
   if (msg.includes('stage')) fail(422, 'That stage does not belong to this step. Pick one from the list.')
   return undefined
 }
+
+/** A deliverable type as the API names it; the table still says delivery_days (0109). */
+const DELIVERABLE_TYPE_COLUMNS = 'id, title, delivery_days as due_days, due_basis, work_days, is_archived'
 
 /** "Colour grading" -> "colour_grading", for a stage's stored code. */
 function stageCode(label: string): string {
@@ -155,18 +163,19 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.json(projectListPage.parse({ items: result.rows, total: result.total, page, page_size: pageSize, summary: result.summary, status_counts: result.statusCounts }))
   })
 
-  // Tracking: one aggregate row per project. Counting happens here — it is a
-  // handful of indexed rollups the database does far better than N round trips
-  // — but nothing is judged here. The scoring lives in @ipc/domain so the rules
-  // are testable and the client can re-sort without asking again.
+  // Tracking: one aggregate row per project, counted here and judged by
+  // @ipc/domain projectHealth -- on the server, so the page, the dashboard and
+  // anything else read one answer. "Today" is the studio's day (India).
   //
   // `/tracking` must be declared before `/:id`, or Hono matches it as an id.
   .get('/tracking', requireAction('projects', 'view'), async (c) => {
+    const seesMoney = c.get('auth').access.hasModule('billing')
     const rows = await attempt(c, 'projects.tracking', () =>
       withUser(
         c.env,
         c.get('auth').userId,
-        (sql) => sql`
+        (sql) => sql<(ProjectCounters & Record<string, unknown>)[]>`
+          with today as (select (now() at time zone 'Asia/Kolkata')::date as d)
           select
             p.id, p.name, p.status, p.total_cost, cl.name as client_name,
             coalesce(t.total, 0)::int        as tasks_total,
@@ -176,52 +185,68 @@ export const projectsRouter = new Hono<AppEnv>()
             coalesce(d.done, 0)::int         as deliverables_done,
             coalesce(d.late, 0)::int         as deliverables_late,
             coalesce(d.with_client, 0)::int  as deliverables_with_client,
+            d.next_due                       as next_due_date,
             coalesce((select sum(rp.amount) from received_payments rp
                        where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'), 0) as received,
+            coalesce(inv.n, 0)::int          as invoices_overdue,
+            coalesce(inv.amount, 0)          as overdue_amount,
             coalesce(dr.total, 0)::int       as data_records_total,
-            coalesce(dr.unverified, 0)::int  as data_records_unverified,
+            coalesce(dr.unsafe, 0)::int      as data_records_unverified,
+            coalesce(dr.issues, 0)::int      as data_issues,
+            coalesce(dm.n, 0)::int           as data_missing,
             coalesce(w.pending, 0)::int      as pending_reviews,
-            coalesce(s.total, 0)::int        as shoots_total,
-            coalesce(s.done, 0)::int         as shoots_done,
-            s.next_shoot_date,
-            greatest(p.updated_at, coalesce(t.last_touch, p.updated_at)) as last_activity_at
+            coalesce(sh.total, 0)::int       as shoots_total,
+            coalesce(sh.done, 0)::int        as shoots_done,
+            coalesce(short.n, 0)::int        as shoots_short,
+            sh.next_shoot_date,
+            greatest(p.updated_at, t.last_touch, d.last_touch, sh.last_touch, dr.last_touch) as last_activity_at
           from projects p
+          cross join today
           left join clients cl on cl.id = p.client_id
           left join lateral (
-            -- A cancelled task is not owed: counting it would hold the
-            -- project short of 100% for ever.
+            -- A task done for a deliverable is part of that deliverable, not
+            -- more work on top: counting both would count it twice.
             select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
                      where status not in ('completed', 'cancelled')
-                       and due_date is not null and due_date < current_date
+                       and due_date is not null and due_date < today.d
                    ) as overdue,
                    max(updated_at) as last_touch
-            from tasks where project_id = p.id
+            from tasks where project_id = p.id and deliverable_id is null
           ) t on true
           left join lateral (
-            -- A dropped deliverable is no longer owed, so it neither counts
-            -- toward the total nor holds the project short of 100%.
             select count(*) filter (where status <> 'cancelled') as total,
                    count(*) filter (where status = 'completed') as done,
                    count(*) filter (
                      where status not in ('completed', 'cancelled', 'review')
-                       and estimated_date is not null and estimated_date < current_date
+                       and estimated_date is not null and estimated_date < today.d
                    ) as late,
                    -- Sent to the client and waiting on them: not late on us.
-                   count(*) filter (where status = 'review') as with_client
+                   count(*) filter (where status = 'review') as with_client,
+                   min(estimated_date) filter (where status not in ('completed', 'cancelled')) as next_due,
+                   max(updated_at) as last_touch
             from deliverables where project_id = p.id
           ) d on true
           left join lateral (
-            -- Shoot-linked records only: a loose record is not a custody risk
-            -- against any particular shoot.
+            -- The data board's words: not in two places yet, or with a problem.
+            -- A record marked not needed is not owed.
             select count(*) as total,
-                   count(*) filter (
-                     -- A backup declared not needed is not a missing backup.
-                     where primary_status <> 'verified' or backup_status not in ('verified', 'not_required')
-                   ) as unverified
+                   count(*) filter (where data_status in ('with_shooter', 'received', 'copied')) as unsafe,
+                   count(*) filter (where data_status = 'issue') as issues,
+                   max(updated_at) as last_touch
             from shoot_data_records where project_id = p.id and shoot_id is not null
           ) dr on true
+          left join lateral (
+            -- Crew who owe data and handed in none -- invisible to a count of records.
+            select count(*) as n
+              from team_assignment_slots ts
+              join shoots s2 on s2.id = ts.shoot_id
+             where s2.project_id = p.id and ts.status = 'booked' and s2.status <> 'cancelled'
+               and coalesce(s2.shoot_date, (ts.start_at at time zone 'Asia/Kolkata')::date) < today.d
+               and not (not ts.data_required and nullif(btrim(ts.data_not_required_reason), '') is not null)
+               and not exists (select 1 from shoot_data_records r where r.slot_id = ts.id)
+          ) dm on true
           left join lateral (
             select count(*) filter (where status = 'submitted') as pending
             from team_work_submissions where project_id = p.id
@@ -229,15 +254,121 @@ export const projectsRouter = new Hono<AppEnv>()
           left join lateral (
             select count(*) as total,
                    count(*) filter (where status = 'completed') as done,
-                   min(shoot_date) filter (where shoot_date >= current_date) as next_shoot_date
+                   min(shoot_date) filter (where shoot_date >= today.d) as next_shoot_date,
+                   max(updated_at) as last_touch
             from shoots where project_id = p.id and status <> 'cancelled'
-          ) s on true
+          ) sh on true
+          left join lateral (
+            -- Upcoming shoots with fewer people booked than their roles need.
+            select count(*) as n
+              from shoots s3
+             where s3.project_id = p.id and s3.status not in ('cancelled', 'completed')
+               and s3.shoot_date >= today.d
+               and coalesce((select sum(quantity) from shoot_services ss where ss.shoot_id = s3.id), 0)
+                   > (select count(*) from team_assignment_slots ts where ts.shoot_id = s3.id and ts.status = 'booked')
+          ) short on true
+          left join lateral (
+            select count(*) as n, sum(balance_due) as amount
+              from invoices i
+             where i.project_id = p.id and i.status not in ('draft', 'paid', 'cancelled')
+               and i.balance_due > 0 and i.due_date is not null and i.due_date < today.d
+          ) inv on true
           where p.status <> 'cancelled'
           order by p.created_at desc`,
       ),
     )
     if (!rows) fail(400, 'We could not load project tracking.')
-    return c.json(projectTrackingRow.array().parse(rows))
+    const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+    const out = rows.map((r) => {
+      const counters = { ...r, total_cost: Number(r.total_cost ?? 0), received: Number(r.received ?? 0) }
+      const health = projectHealth(counters as ProjectCounters, today)
+      // Money only for someone who can see Billing -- the invoice count stays,
+      // since "an invoice is overdue" is a reason, not an amount.
+      return {
+        ...counters,
+        total_cost: seesMoney ? counters.total_cost : null,
+        received: seesMoney ? counters.received : null,
+        overdue_amount: seesMoney ? Number(r.overdue_amount ?? 0) : null,
+        health,
+      }
+    })
+    return c.json(projectTrackingRow.array().parse(out))
+  })
+
+  // One project opened up: what is late or waiting, on whom, the shoots and
+  // their crew and data, and (for Billing) the money.
+  .get('/tracking/:id', requireAction('projects', 'view'), async (c) => {
+    const id = uuidParam(c)
+    const seesMoney = c.get('auth').access.hasModule('billing')
+    const result = await attempt(c, 'projects.tracking.one', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const today = sql`(now() at time zone 'Asia/Kolkata')::date`
+        const [project] = await sql<{ id: string; total_cost: number }[]>`select id, total_cost from projects where id = ${id}`
+        if (!project) return null
+        const deliverables = await sql`
+          select d.id, d.title,
+                 coalesce(cs.label, initcap(replace(d.status::text, '_', ' '))) as stage,
+                 u.name as assignee_name, d.estimated_date,
+                 greatest(0, ${today} - d.estimated_date)::int as days_late
+            from deliverables d
+            left join company_deliverable_statuses cs on cs.company_id = d.company_id and cs.code = d.custom_status_code
+            left join users u on u.user_id = d.assignee_id
+           where d.project_id = ${id} and d.status not in ('completed', 'cancelled')
+           order by d.estimated_date nulls last, d.title
+           limit 50`
+        const tasks = await sql`
+          select t.id, t.title, t.due_date, greatest(0, ${today} - t.due_date)::int as days_late,
+                 coalesce(array_agg(u.name order by u.name) filter (where u.user_id is not null), '{}') as assignee_names
+            from tasks t
+            left join task_assignees a on a.task_id = t.id
+            left join users u on u.user_id = a.user_id
+           where t.project_id = ${id} and t.status not in ('completed', 'cancelled')
+             and t.due_date is not null and t.due_date < ${today}
+           group by t.id
+           order by t.due_date
+           limit 50`
+        const submissions = await sql`
+          select w.id, coalesce(w.title, d.title) as title, u.name as submitted_by_name, w.created_at
+            from team_work_submissions w
+            left join deliverables d on d.id = w.deliverable_id
+            left join users u on u.user_id = w.submitted_by
+           where w.project_id = ${id} and w.status = 'submitted'
+           order by w.created_at
+           limit 50`
+        const shoots = await sql`
+          select s.id, s.name, s.shoot_date,
+                 coalesce((select sum(quantity) from shoot_services ss where ss.shoot_id = s.id), 0)::int as needed,
+                 (select count(*) from team_assignment_slots ts where ts.shoot_id = s.id and ts.status = 'booked')::int as booked,
+                 (select count(*) from team_assignment_slots ts
+                   where ts.shoot_id = s.id and ts.status = 'booked'
+                     and coalesce(s.shoot_date, (ts.start_at at time zone 'Asia/Kolkata')::date) < ${today}
+                     and not (not ts.data_required and nullif(btrim(ts.data_not_required_reason), '') is not null)
+                     and not exists (select 1 from shoot_data_records r where r.slot_id = ts.id))::int as data_missing,
+                 (select count(*) from shoot_data_records r
+                   where r.shoot_id = s.id and r.data_status in ('with_shooter', 'received', 'copied', 'issue'))::int as data_unsafe
+            from shoots s
+           where s.project_id = ${id} and s.status <> 'cancelled'
+           order by s.shoot_date nulls last, s.name`
+        let money = null
+        if (seesMoney) {
+          const [m] = await sql<{ received: number }[]>`
+            select coalesce(sum(amount), 0) as received from received_payments
+             where project_id = ${id} and coalesce(status, 'paid') = 'paid'`
+          const overdue = await sql`
+            select id, invoice_number, due_date, balance_due from invoices
+             where project_id = ${id} and status not in ('draft', 'paid', 'cancelled')
+               and balance_due > 0 and due_date is not null and due_date < ${today}
+             order by due_date`
+          const total = Number(project.total_cost ?? 0)
+          const received = Number(m?.received ?? 0)
+          money = { total_cost: total, received, balance: Math.max(0, total - received), invoices_overdue: overdue }
+        }
+        return { deliverables, tasks, submissions, shoots, money }
+      }),
+    )
+    if (result === null) fail(404, 'That project was not found.')
+    if (!result) fail(400, 'We could not load this project.')
+    return c.json(trackingBreakdown.parse(result))
   })
 
   .post('/', requireAction('projects', 'create'), async (c) => {
@@ -569,6 +700,105 @@ export const projectsRouter = new Hono<AppEnv>()
   })
 
   /**
+   * The studio's deliverable types: what it delivers, when the client gets
+   * it, and how many days the work needs. Archived ones come back too, last,
+   * so a screen can offer to bring one back.
+   */
+  .get('/catalog/deliverable-types', requireAction('projects', 'view'), async (c) => {
+    const rows = await attempt(c, 'projects.catalog.deliverable_types.list', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select ${sql.unsafe(DELIVERABLE_TYPE_COLUMNS)} from deliverable_templates
+         order by is_archived, lower(btrim(title))`),
+    )
+    if (!rows) fail(400, 'We could not load your deliverable types.')
+    return c.json(deliverableType.array().parse(rows))
+  })
+
+  // Adding a name that is already on the list (any case) hands back that one
+  // rather than a second "Album". An archived one is brought back with what
+  // was just typed; a live one is left as it is -- adding is not editing.
+  .post('/catalog/deliverable-types', requireAction('projects', 'edit'), async (c) => {
+    const parsed = upsertDeliverableTypeRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the deliverable type.')
+    const auth = c.get('auth')
+    const d = parsed.data
+    // Only what was typed: a blank box bringing an archived type back must not
+    // wipe the number it had.
+    const fields = Object.fromEntries(
+      Object.entries({ delivery_days: d.due_days, due_basis: d.due_basis, work_days: d.work_days }).filter(
+        ([, v]) => v !== null && v !== undefined,
+      ),
+    )
+    const result = await attempt(
+      c,
+      'projects.catalog.deliverable_types.add',
+      () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          const [same] = await sql<{ id: string; is_archived: boolean }[]>`
+            select id, is_archived from deliverable_templates
+             where lower(btrim(title)) = lower(btrim(${d.title}))
+             order by is_archived, created_at desc
+             limit 1`
+          if (same && !same.is_archived) {
+            const rows = await sql`
+              select ${sql.unsafe(DELIVERABLE_TYPE_COLUMNS)} from deliverable_templates where id = ${same.id}`
+            return rows[0] ? { row: rows[0], existed: true } : null
+          }
+          const rows = same
+            ? await sql`
+                update deliverable_templates set ${sql({ ...fields, is_archived: false })}
+                 where id = ${same.id}
+                 returning ${sql.unsafe(DELIVERABLE_TYPE_COLUMNS)}`
+            : await sql`
+                insert into deliverable_templates ${sql({ ...fields, company_id: auth.companyId, title: d.title })}
+                returning ${sql.unsafe(DELIVERABLE_TYPE_COLUMNS)}`
+          return rows[0] ? { row: rows[0], existed: !!same } : null
+        }),
+      { onCode: (code) => (code === '23505' ? fail(409, 'That deliverable is already on your list.') : undefined) },
+    )
+    if (!result) fail(400, 'We could not add that deliverable type.')
+    const saved = deliverableType.parse(result.row)
+    await audit(c, { action: 'deliverable_type.create', entityType: 'deliverable_type', entityId: saved.id, after: d })
+    return c.json(saved, result.existed ? 200 : 201)
+  })
+
+  .patch('/catalog/deliverable-types/:id', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const parsed = updateDeliverableTypeRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the deliverable type.')
+    const { due_days, ...rest } = parsed.data
+    // The API says due_days, the table says delivery_days (0109). Null clears.
+    const patch = withoutUndefined({ ...rest, delivery_days: due_days })
+    if (!Object.keys(patch).length) fail(422, 'Nothing to change.')
+    const rows = await attempt(
+      c,
+      'projects.catalog.deliverable_types.update',
+      () =>
+        withUser(c.env, c.get('auth').userId, (sql) => sql`
+          update deliverable_templates set ${sql(patch)} where id = ${id}
+          returning ${sql.unsafe(DELIVERABLE_TYPE_COLUMNS)}`),
+      { onCode: (code) => (code === '23505' ? fail(409, 'You already have a deliverable type with that name.') : undefined) },
+    )
+    if (!rows) fail(400, 'We could not save that change.')
+    if (!rows.length) fail(404, 'That deliverable type was not found.')
+    await audit(c, { action: 'deliverable_type.update', entityType: 'deliverable_type', entityId: id, after: parsed.data })
+    return c.json(deliverableType.parse(rows[0]))
+  })
+
+  // Archived, never deleted: adding the name again brings it back with its numbers.
+  .delete('/catalog/deliverable-types/:id', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'projects.catalog.deliverable_types.archive', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update deliverable_templates set is_archived = true where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not archive that deliverable type.')
+    if (!rows.length) fail(404, 'That deliverable type was not found.')
+    await audit(c, { action: 'deliverable_type.archive', entityType: 'deliverable_type', entityId: id })
+    return c.body(null, 204)
+  })
+
+  /**
    * The studio's named stages, step by step. Anyone in the studio reads them:
    * an editor's own list shows them too.
    */
@@ -651,7 +881,8 @@ export const projectsRouter = new Hono<AppEnv>()
   /**
    * What the caller is editing: every open deliverable they are the editor on,
    * soonest due first. Any member -- an editor need not see whole projects to
-   * see their own work.
+   * see their own work. Each says whether it was sent back, what the reviewer
+   * said and the last version handed in (0180), so a revision is one tap.
    */
   .get('/deliverables/mine', async (c) => {
     const auth = c.get('auth')
@@ -661,17 +892,40 @@ export const projectsRouter = new Hono<AppEnv>()
                d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
                d.delivery_link, d.visibility_scope, d.custom_status_code,
                (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
-               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count
+               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count,
+               -- The studio's own work days for this name, when it has set them (0179).
+               company_start_by(${auth.companyId}::uuid, d.estimated_date, d.title, d.delivery_days_after_start) as start_by,
+               company_work_days(${auth.companyId}::uuid, d.title, d.delivery_days_after_start) as work_days,
+               d.started_at,
+               coalesce(rv.changes_requested, false) as changes_requested, rv.review_note, rv.last_version
         from deliverables d
         join projects p on p.id = d.project_id
         left join clients cl on cl.id = p.client_id
         left join shoots s on s.id = d.shoot_id
+        left join lateral deliverable_revision_state(d.id) rv on true
         where d.assignee_id = ${auth.userId} and d.status not in ('completed', 'cancelled')
         order by d.estimated_date nulls last, d.created_at
         limit 200`),
     )
     if (!rows) fail(400, 'We could not load your deliverables.')
     return c.json(myDeliverable.array().parse(rows))
+  })
+
+  // The editor on it says "I've started" -- which stops the start reminders.
+  .post('/deliverables/:did/start', async (c) => {
+    const id = uuidParam(c, 'did')
+    const ok = await attempt(
+      c,
+      'projects.deliverables_start',
+      () => withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`select start_deliverable(${id})`
+        return true
+      }),
+      { onCode: (code) => (code === 'P0002' ? fail(404, 'That deliverable was not found.') : undefined) },
+    )
+    if (!ok) fail(400, 'We could not start that.')
+    await audit(c, { action: 'deliverable.start', entityType: 'deliverable', entityId: id })
+    return c.body(null, 204)
   })
 
   /**

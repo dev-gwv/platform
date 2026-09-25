@@ -9,6 +9,7 @@ import { Input, Select } from '@/shared/ui/input'
 import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useInvitations, useResendInvitation, useRevokeInvitation, useUpdateInvitation } from './api'
+import { ROLE_LABEL, useTeamPowers } from './powers'
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
 
@@ -26,6 +27,7 @@ function expiryLabel(iso: string, expired: boolean): string {
  * went, and an empty panel is the answer to "did it send?".
  */
 export function InvitationsPanel() {
+  const powers = useTeamPowers()
   const { data, isLoading } = useInvitations()
   const resend = useResendInvitation()
   const revoke = useRevokeInvitation()
@@ -70,9 +72,13 @@ export function InvitationsPanel() {
                     onChange={(e) => setEditing({ ...editing, role: e.target.value as AssignableRole })}
                     className="h-8 w-32"
                   >
-                    <option value="admin">Admin</option>
-                    <option value="manager">Manager</option>
-                    <option value="employee">Employee</option>
+                    {(['employee', 'manager', 'admin'] as const)
+                    .filter((r) => powers.mayGrant(r) || r === editing.role)
+                    .map((r) => (
+                      <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                        {ROLE_LABEL[r]}
+                      </option>
+                    ))}
                   </Select>
                   <Button
                     size="sm"

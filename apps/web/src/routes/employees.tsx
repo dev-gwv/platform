@@ -26,6 +26,7 @@ import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTa
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
 import { InviteDialog } from '@/features/team/InviteDialog'
 import { ManageAccessDialog } from '@/features/team/ManageAccessDialog'
+import { useTeamPowers } from '@/features/team/powers'
 import { SalariesTab } from '@/features/team/SalariesTab'
 import {
   EMPTY_FILTERS,
@@ -54,16 +55,15 @@ function addModeFromUrl(): AddMode | null {
 
 function TeamPage() {
   const navigate = useNavigate()
-  const { session } = useAuth()
-  const isOwner = !!session?.is_owner
+  const powers = useTeamPowers()
   // ?section=salaries opens the salaries straight away (linked from Profit & Loss).
   const [section, setSection] = useState<Section>(() =>
     new URLSearchParams(window.location.search).get('section') === 'salaries' ? 'salaries' : 'directory',
   )
-  // Adding is owner-only on the server, so only an owner is ever put into it —
-  // a manager following an old link lands on the directory, not on a form
-  // that would refuse them at the last step.
-  const [adding, setAddingState] = useState<AddMode | null>(() => (isOwner ? addModeFromUrl() : null))
+  // Only someone allowed to add people is ever put into it -- anyone else
+  // following an old link lands on the directory, not on a form that would
+  // refuse them at the last step.
+  const [adding, setAddingState] = useState<AddMode | null>(() => (powers.canCreate ? addModeFromUrl() : null))
   // Set once people have just been added: the "add more?" question.
   const [justAdded, setJustAdded] = useState(false)
   const fromSetup = useFromSetup()
@@ -172,8 +172,11 @@ function Directory({ onAdd }: { onAdd: () => void }) {
 
   const isOwner = !!session?.is_owner
   const showSalary = access.hasModule('team_salaries')
-  const canEdit = isOwner || access.hasAction('team_directory', 'edit')
-  const canDelete = isOwner || access.hasAction('team_directory', 'delete')
+  // The owner, or someone given Team Directory actions -- who then manages
+  // only the people below them (useTeamPowers; the server holds the same rule).
+  const powers = useTeamPowers()
+  const canEdit = powers.canEdit
+  const canDelete = powers.canDelete
   const pageItems = useMemo(() => paged.data?.items ?? [], [paged.data])
   const total = paged.data?.total ?? 0
   const members = pageItems
@@ -199,6 +202,9 @@ function Directory({ onAdd }: { onAdd: () => void }) {
   }
 
   const selectedRows = useMemo(() => rows.filter((m) => selected.has(m.user_id)), [rows, selected])
+  // Bulk actions touch only the selected people this person may manage.
+  const editableSelected = selectedRows.filter((m) => powers.row(m).edit)
+  const removableSelected = selectedRows.filter((m) => powers.row(m).remove)
 
   const exportCsv = (onlySelected = false) => {
     const list = onlySelected ? selectedRows : rows
@@ -213,13 +219,15 @@ function Directory({ onAdd }: { onAdd: () => void }) {
   }
 
   async function bulkStatus(status: 'active' | 'inactive') {
-    if (selectedRows.length === 0) return
+    if (editableSelected.length === 0) return
     try {
       await Promise.all(
-        selectedRows.map((m) => updateMember.mutateAsync({ userId: m.user_id, patch: { status } })),
+        editableSelected.map((m) => updateMember.mutateAsync({ userId: m.user_id, patch: { status } })),
       )
+      const skipped = selectedRows.length - editableSelected.length
       toast.success(
-        `${selectedRows.length} member${selectedRows.length === 1 ? '' : 's'} ${status === 'active' ? 'activated' : 'deactivated'}.`,
+        `${editableSelected.length} member${editableSelected.length === 1 ? '' : 's'} ${status === 'active' ? 'activated' : 'deactivated'}.` +
+          (skipped > 0 ? ` ${skipped} left as they are — only the owner can change them.` : ''),
       )
       setSelected(new Set())
     } catch (err) {
@@ -283,8 +291,8 @@ function Directory({ onAdd }: { onAdd: () => void }) {
           <Button variant="outline" onClick={() => exportCsv(false)} disabled={rows.length === 0}>
             <Download /> Export CSV
           </Button>
-          {isOwner && <InviteDialog />}
-          {isOwner && (
+          {powers.canCreate && <InviteDialog />}
+          {powers.canCreate && (
             <Button onClick={onAdd}>
               <Plus /> Add Team Member
             </Button>
@@ -313,12 +321,12 @@ function Directory({ onAdd }: { onAdd: () => void }) {
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
           <span className="text-sm">{selected.size} selected</span>
           <div className="ml-auto flex flex-wrap gap-2">
-            {canEdit && (
+            {canEdit && editableSelected.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => void bulkStatus('active')}>
                 Activate
               </Button>
             )}
-            {canEdit && (
+            {canEdit && editableSelected.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => void bulkStatus('inactive')}>
                 Deactivate
               </Button>
@@ -326,11 +334,11 @@ function Directory({ onAdd }: { onAdd: () => void }) {
             <Button size="sm" variant="outline" onClick={() => exportCsv(true)}>
               Export selected
             </Button>
-            {canDelete && (
+            {canDelete && removableSelected.length > 0 && (
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={() => setDeleteTargets(selectedRows.filter((m) => m.user_id !== session?.user_id))}
+                onClick={() => setDeleteTargets(removableSelected)}
               >
                 Delete selected
               </Button>
@@ -357,7 +365,7 @@ function Directory({ onAdd }: { onAdd: () => void }) {
                 <EmptyState
                   title="No employees found yet."
                   description="Add your first employee to start building your team."
-                  action={isOwner ? <Button onClick={onAdd}>Add Employee</Button> : undefined}
+                  action={powers.canCreate ? <Button onClick={onAdd}>Add Employee</Button> : undefined}
                 />
               ) : (
                 <EmptyState
@@ -378,7 +386,8 @@ function Directory({ onAdd }: { onAdd: () => void }) {
           <>
             <DirectoryTable
               rows={rows}
-              canManage={isOwner}
+              canManage={canEdit || canDelete}
+              rowAccess={powers.row}
               showSalary={showSalary}
               selected={selected}
               onToggle={onToggle}
@@ -447,7 +456,7 @@ function Directory({ onAdd }: { onAdd: () => void }) {
         }}
       />
 
-      {isOwner && <InvitationsPanel />}
+      {powers.canCreate && <InvitationsPanel />}
     </>
   )
 }

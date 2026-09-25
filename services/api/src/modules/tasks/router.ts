@@ -158,8 +158,13 @@ export const tasksRouter = new Hono<AppEnv>()
 
   // ── Employee subset (any active member) ─────────────────────
   .get('/my', async (c) => {
-    // RLS already restricts employees to their assigned tasks.
-    const rows = await attempt(c, 'tasks.my', () => withUser(c.env, c.get('auth').userId, selectTasks))
+    // Mine means assigned to me -- for everyone. RLS caps an employee to their
+    // assigned tasks anyway, but it lets a manager see all of them, and "My
+    // tasks" listed the whole studio's work for a manager as their own.
+    // ?project_id narrows to one project (My Work's project page).
+    const me = c.get('auth').userId
+    const project = uuidQuery(c, 'project_id') ?? undefined
+    const rows = await attempt(c, 'tasks.my', () => withUser(c.env, me, (sql) => selectTasks(sql, me, project)))
     if (!rows) fail(400, 'We could not load your tasks.')
     return c.json(list.parse(toItems(rows, new Map())))
   })

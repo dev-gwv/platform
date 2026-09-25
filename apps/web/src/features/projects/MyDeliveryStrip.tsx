@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, ArrowRight, Film } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Film, Undo2 } from 'lucide-react'
 import type { StepKey } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
@@ -7,6 +7,7 @@ import { useMyDeliverables } from './api'
 import { DueChip, KindTile } from './DeliverableCard'
 import { StageStepper } from './StageStepper'
 import { daysToDue, isLate, stageOf } from './deliverable-stage'
+import { changesFirst, needChangesCount, needChangesLabel } from './revisions'
 import { STEP_LABEL, STEP_TONE, TONE_CLASSES, namedStage, toneOf } from './stages'
 import { useDeliverableStages } from './stages-api'
 
@@ -15,8 +16,9 @@ const OPEN_STEPS: StepKey[] = ['pending', 'in_progress', 'review']
 /**
  * A team member's deliverables, on their dashboard: how many are waiting,
  * being edited and in review -- with the studio's own stage names inside
- * each -- what is late, and the next three due. Tapping goes to My Work,
- * where each one opens with its notes and voice notes.
+ * each -- what was sent back for changes, what is late, and the next three:
+ * sent-back ones first, then the soonest due. Tapping goes to My Work, where
+ * each one opens with its notes and voice notes.
  */
 export function MyDeliveryStrip() {
   const { data } = useMyDeliverables()
@@ -25,16 +27,22 @@ export function MyDeliveryStrip() {
   if (!mine.length) return null
 
   const late = mine.filter((d) => isLate(d)).length
-  const soonest = [...mine]
-    .sort((a, b) => (daysToDue(a) ?? 9999) - (daysToDue(b) ?? 9999))
-    .slice(0, 3)
+  const sentBack = needChangesCount(mine)
+  const soonest = changesFirst(
+    [...mine].sort((a, b) => (daysToDue(a) ?? 9999) - (daysToDue(b) ?? 9999)),
+  ).slice(0, 3)
 
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="flex items-center gap-2 text-sm font-semibold">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <Film className="size-4 text-tone-violet" aria-hidden /> Your deliverables
+            {sentBack > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-tone-rose-soft px-2 py-0.5 text-[11px] font-semibold text-tone-rose">
+                <Undo2 className="size-3" aria-hidden /> {needChangesLabel(sentBack)}
+              </span>
+            )}
             {late > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
                 <AlertTriangle className="size-3" aria-hidden /> {late} late
@@ -87,7 +95,10 @@ export function MyDeliveryStrip() {
                 <KindTile title={d.title} status={d.status} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{d.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{d.project_name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {d.changes_requested && <span className="font-semibold text-tone-rose">Needs changes · </span>}
+                    {d.project_name}
+                  </span>
                 </span>
                 <span className="hidden sm:block">
                   <StageStepper status={d.status} code={d.custom_status_code} />

@@ -37,6 +37,8 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
   late: 'Late',
   absent: 'Absent',
   not_checked_out: 'Not checked out',
+  on_leave: 'On leave',
+  day_off: 'Day off',
 }
 
 export const STATUS_TONE: Record<DisplayStatus, 'success' | 'warning' | 'danger' | 'info'> = {
@@ -44,6 +46,8 @@ export const STATUS_TONE: Record<DisplayStatus, 'success' | 'warning' | 'danger'
   late: 'warning',
   absent: 'danger',
   not_checked_out: 'info',
+  on_leave: 'info',
+  day_off: 'info',
 }
 
 export interface AttendanceSummary {
@@ -51,6 +55,7 @@ export interface AttendanceSummary {
   present: number
   absent: number
   notCheckedOut: number
+  onLeave: number
   /** Whole percent of the team that turned up at all. */
   percent: number
 }

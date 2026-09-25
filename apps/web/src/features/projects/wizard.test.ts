@@ -553,6 +553,44 @@ describe('adding deliverables', () => {
   })
 })
 
+// Templates → Deliverable types: what the studio said its own things take.
+describe('the studio’s deliverable types', () => {
+  const album = { title: 'Photo Album', due_days: 120, due_basis: 'after_last_shoot', work_days: 20, is_archived: false }
+  const types = [album]
+
+  it('times a client deliverable the studio’s way, work days included', () => {
+    expect(newClientDeliverable('photo album', types)).toMatchObject({
+      due_days: '120',
+      due_basis: 'after_last_shoot',
+      lead_days: '20',
+    })
+    // A name the studio has not set keeps the trade's numbers and no work days.
+    expect(newClientDeliverable('Drone Shots', types)).toMatchObject({ due_days: '14', lead_days: '' })
+  })
+
+  it('fills a whole set from the studio’s list', () => {
+    const [row] = withDeliverables([], [{ title: 'Photo Album' }], types)
+    expect(row).toMatchObject({ due_days: '120', lead_days: '20' })
+  })
+
+  it('times a shoot’s team work the studio’s way, else the built-in way', () => {
+    expect(newInternalWork(0, 'Photo Album', types)).toMatchObject({
+      due_days: '120',
+      due_basis: 'after_last_shoot',
+      lead_days: '20',
+    })
+    expect(newInternalWork(0, 'Photo Album', [{ ...album, is_archived: true }])).toMatchObject(
+      newInternalWork(0, 'Photo Album'),
+    )
+    expect(newInternalWork(0, 'Data Sorting', types).lead_days).toBe('1')
+  })
+
+  it('sends the work days on as the deliverable’s own lead', () => {
+    const d = named({ deliverables: [newClientDeliverable('Photo Album', types)] })
+    expect(toProjectRequest(d, 'c1').deliverables[0]!.delivery_days_after_start).toBe(20)
+  })
+})
+
 // The wizard reads storage through globalThis and copes with it missing; the
 // node test env has none, so the memory tests bring their own.
 describe('lead-time memory', () => {
@@ -585,6 +623,15 @@ describe('lead-time memory', () => {
     rememberDueDays('  ', '45')
     rememberDueDays('Teaser', '  ')
     expect(recallDueDays('Teaser')).toBe('')
+  })
+
+  // The type was set on purpose for the whole studio; the memory is one
+  // device's habit, so it only speaks when the type says nothing.
+  it('gives way to the studio’s own deliverable type', () => {
+    rememberDueDays('Photo Album', '45')
+    const album = { title: 'Photo Album', due_days: 120, due_basis: null, work_days: null, is_archived: false }
+    expect(newClientDeliverable('Photo Album', [album]).due_days).toBe('120')
+    expect(newClientDeliverable('Photo Album', [{ ...album, due_days: null }]).due_days).toBe('45')
   })
 })
 

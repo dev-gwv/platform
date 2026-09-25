@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useCreateInvitation, useEmployeeRoles } from './api'
 import { byStage } from './role-stages'
+import { ROLE_LABEL, useTeamPowers } from './powers'
 
 type Field = 'name' | 'email' | 'role' | 'phone'
 
@@ -26,6 +27,7 @@ const LABELS: Record<Field, string> = {
  * the channel that reaches crew: most of this gets pasted into WhatsApp.
  */
 export function InviteDialog() {
+  const powers = useTeamPowers()
   const invite = useCreateInvitation()
   const { data: roles } = useEmployeeRoles()
   const [open, setOpen] = useState(false)
@@ -87,7 +89,7 @@ export function InviteDialog() {
       role_ids: roleIds,
       ...(phone.trim() ? { phone: phone.trim() } : {}),
       ...(alternatePhone.trim() ? { alternate_phone: alternatePhone.trim() } : {}),
-      ...(salary.trim() ? { salary: Number(salary) } : {}),
+      ...(salary.trim() && powers.canPay ? { salary: Number(salary) } : {}),
       ...(address.trim() ? { address: address.trim() } : {}),
     }
     const found = fieldErrors<Field>(createInvitationRequest, body, { labels: LABELS })
@@ -171,9 +173,13 @@ export function InviteDialog() {
               <div className="flex flex-col gap-1.5">
                 <Label>Access level</Label>
                 <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
+                  {(['employee', 'manager', 'admin'] as const)
+                    .filter((r) => powers.mayGrant(r) || r === role)
+                    .map((r) => (
+                      <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                        {ROLE_LABEL[r]}
+                      </option>
+                    ))}
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -204,10 +210,12 @@ export function InviteDialog() {
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>{engagement === 'freelancer' ? 'Standard rate (₹)' : 'Monthly salary (₹)'}</Label>
-                <Input inputMode="numeric" value={salary} onChange={(e) => setSalary(e.target.value)} placeholder="Optional" />
-              </div>
+              {powers.canPay && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>{engagement === 'freelancer' ? 'Standard rate (₹)' : 'Monthly salary (₹)'}</Label>
+                  <Input inputMode="numeric" value={salary} onChange={(e) => setSalary(e.target.value)} placeholder="Optional" />
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label>Address</Label>
                 <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="City or full address" />

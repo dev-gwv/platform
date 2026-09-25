@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { LegalLinks } from '@/features/legal/LegalPage'
 import { useNavigate } from '@tanstack/react-router'
 import { MailCheck } from 'lucide-react'
 import {
@@ -621,6 +622,7 @@ export function LoginPage() {
                 </>
               )}
             </p>
+            <LegalLinks className="mt-4" />
           </>
         )}
       </TiltCard>

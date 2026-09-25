@@ -41,6 +41,8 @@ import { useInvoices } from '@/features/billing/api'
 import { useDataRecords } from '@/features/data/api'
 import { useBoard } from '@/features/tasks/api'
 import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
+import { ProfileBanner } from '@/features/profile/ProfileBanner'
+import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
 import { buildJourney } from '@/features/onboarding/journey'
 import { dashboardSections } from '@/features/onboarding/dashboard-sections'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
@@ -232,6 +234,7 @@ function StudioCommandCenter() {
 
       {!hideBody && (
       <>
+      <ProfileBanner />
       <QuickActions />
 
       {sections.stats && (
@@ -248,6 +251,7 @@ function StudioCommandCenter() {
       )}
 
       {access.hasModule('projects') && sections.stats && <NeedsAttention projects={tracked} />}
+      {session?.is_owner && <TeamProfilesCard />}
 
       {sections.stats && (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">

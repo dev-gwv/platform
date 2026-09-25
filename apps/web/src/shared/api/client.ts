@@ -245,6 +245,31 @@ export async function fetchFileBlob(path: string, signal?: AbortSignal): Promise
 }
 
 /**
+ * A multipart POST to a route of its own (an ID proof goes to the profile, not
+ * to /files). Same token handling as uploadFile; the browser sets the boundary.
+ */
+export async function postForm(path: string, makeForm: () => FormData): Promise<unknown> {
+  const send = () => {
+    const token = getToken()
+    return fetch(`${config.apiBaseUrl}${path}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: makeForm(),
+    })
+  }
+  let res = await send()
+  if (res.status === 401 && (await rotateTokens())) res = await send()
+  const json: unknown = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg =
+      typeof json === 'object' && json && 'error' in json ? String((json as { error: unknown }).error) : 'We could not upload that file.'
+    throw new ApiError(res.status, msg, res.headers.get('X-Correlation-Id'))
+  }
+  return json
+}
+
+/**
  * Upload one file to /files and get back the URL to store.
  *
  * Separate from `callApi` because that one sets `Content-Type: application/json`

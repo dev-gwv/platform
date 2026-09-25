@@ -1,4 +1,4 @@
-import { projectHealth, type NextActionKey, type ProjectHealth } from '@ipc/domain'
+import { projectHealth, type NextActionKey, type ProjectHealth, type ReasonCode } from '@ipc/domain'
 import type { ProjectTrackingRow } from '@ipc/contracts'
 
 /**
@@ -26,22 +26,39 @@ export const TRACKING_TABS: ReadonlyArray<{ value: TrackingTab; label: string }>
   { value: 'completed', label: 'Done' },
 ]
 
-export type TrackingSort = 'risk' | 'next_shoot' | 'completion' | 'name'
+export type TrackingSort = 'risk' | 'next_shoot' | 'next_due' | 'late' | 'completion' | 'name'
 
 export const TRACKING_SORTS: ReadonlyArray<{ value: TrackingSort; label: string }> = [
   { value: 'risk', label: 'Most urgent first' },
+  { value: 'next_due', label: 'Next delivery due' },
   { value: 'next_shoot', label: 'Next shoot first' },
+  { value: 'late', label: 'Most late work' },
   { value: 'completion', label: 'Least done first' },
   { value: 'name', label: 'Name (A–Z)' },
 ]
 
+type Row = Omit<ProjectTrackingRow, 'health'> & { health?: ProjectTrackingRow['health'] }
+
 /** A row with its verdict attached, which is what the page renders. */
-export interface TrackedProject extends ProjectTrackingRow {
+export interface TrackedProject extends Omit<ProjectTrackingRow, 'health'> {
   health: ProjectHealth
 }
 
-export function track(rows: readonly ProjectTrackingRow[], today: string): TrackedProject[] {
-  return rows.map((row) => ({ ...row, health: projectHealth(row, today) }))
+/**
+ * The server sends each row's health (one answer for every screen). A row
+ * without one -- the preview, a test -- is scored here with the same rules.
+ */
+export function track(rows: readonly Row[], today: string): TrackedProject[] {
+  return rows.map((row) => ({
+    ...row,
+    health: (row.health as ProjectHealth | undefined) ?? projectHealth(row, today),
+  }))
+}
+
+/** Project or client name. */
+export function matchesSearch(p: Pick<TrackedProject, 'name' | 'client_name'>, q: string): boolean {
+  const needle = q.trim().toLowerCase()
+  return !needle || p.name.toLowerCase().includes(needle) || (p.client_name ?? '').toLowerCase().includes(needle)
 }
 
 export function matchesTab(p: TrackedProject, tab: TrackingTab): boolean {
@@ -86,6 +103,14 @@ const SORTS: Record<TrackingSort, (a: TrackedProject, b: TrackedProject) => numb
     if (!b.next_shoot_date) return -1
     return a.next_shoot_date.localeCompare(b.next_shoot_date)
   },
+  next_due: (a, b) => {
+    if (a.next_due_date === b.next_due_date) return byName(a, b)
+    if (!a.next_due_date) return 1
+    if (!b.next_due_date) return -1
+    return a.next_due_date.localeCompare(b.next_due_date)
+  },
+  late: (a, b) =>
+    b.tasks_overdue + b.deliverables_late - (a.tasks_overdue + a.deliverables_late) || b.health.score - a.health.score || byName(a, b),
   name: byName,
 }
 
@@ -119,6 +144,8 @@ export const NEXT_ACTION_TAB: Record<NextActionKey, string | null> = {
   review_submissions: 'completed_work',
   plan_work: 'deliverables',
   schedule_shoot: 'shoots',
+  staff_shoot: 'shoots',
+  chase_payment: 'billing',
   deliver: 'deliverables',
   keep_going: null,
   none: null,
@@ -130,6 +157,8 @@ export const NEXT_ACTION_LABEL: Record<NextActionKey, string> = {
   review_submissions: 'Review the submitted work',
   plan_work: 'Add what you owe the client',
   schedule_shoot: 'Schedule the first shoot',
+  staff_shoot: 'Book crew for the next shoot',
+  chase_payment: 'Follow up the overdue invoice',
   deliver: 'Deliver and close the project',
   keep_going: 'On track — keep going',
   none: 'Nothing to do',
@@ -150,3 +179,37 @@ export const BAND_TONE = {
   healthy: 'success',
   completed: 'neutral',
 } as const
+
+/** The chip for each reason, worded with its count. */
+export function reasonLabel(code: ReasonCode, n: number): string {
+  const s = (one: string, many: string) => (n === 1 ? one : many)
+  switch (code) {
+    case 'data':
+      return `${n} ${s('card', 'cards')} of data not safe`
+    case 'late':
+      return `${n} late`
+    case 'review':
+      return `${n} to review`
+    case 'short_crew':
+      return `${n} ${s('shoot', 'shoots')} short of crew`
+    case 'invoice_overdue':
+      return `${n} ${s('invoice', 'invoices')} overdue`
+    case 'low_progress':
+      return 'Shooting done, little delivered'
+    case 'no_work':
+      return 'Nothing to deliver added yet'
+    case 'no_shoot':
+      return 'No shoot scheduled'
+  }
+}
+
+export const REASON_TONE: Record<ReasonCode, 'danger' | 'warning' | 'info' | 'neutral'> = {
+  data: 'danger',
+  late: 'danger',
+  review: 'warning',
+  short_crew: 'warning',
+  invoice_overdue: 'warning',
+  low_progress: 'info',
+  no_work: 'neutral',
+  no_shoot: 'neutral',
+}

@@ -1,6 +1,9 @@
 import type { TransactionSql } from 'postgres'
 import { Hono, type Context } from 'hono'
 import {
+  teamProfileGap,
+  memberOverview,
+  payTo,
   addMemberRequest,
   addMemberResponse,
   assignRolesRequest,
@@ -28,6 +31,8 @@ import { withUser, withService } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { hashPassword, newRawToken, sha256Hex } from '../../lib/auth-token'
+import { grantableRoles, mayGrantRole, mayManageMember } from '@ipc/permissions'
+import { listMemberDocs, serveDocument } from '../../lib/member-docs'
 import { sendInvitationEmail, sendPasswordResetEmail } from '../../lib/email'
 
 const INVITE_DAYS = 7
@@ -49,9 +54,117 @@ async function companyName(c: Context<AppEnv>): Promise<string> {
   return rows?.[0]?.name ?? 'Your studio'
 }
 
+// ── Running the team without being the owner ─────────────────────────────
+// The owner can always add, edit and remove people. Anyone else can too when
+// their access includes that Team Directory action -- with limits the owner
+// does not have: never the owner or an admin, never their own record (that is
+// My profile), never a role at or above their own (so nobody is made an
+// admin), and never pay unless they also edit salaries. RLS lets only the
+// owner write these tables, so a delegate's write goes through the service
+// role AFTER these checks, always scoped to the caller's own studio.
+
+const DENIED_TEAM = 'You do not have access to this action.'
+
+/** Pay fields: a delegate needs team_salaries edit to set any of them. */
+const PAY_KEYS = [
+  'salary', 'freelancer_rate', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
+  'pay_effective_from', 'pay_effective_to', 'compensation_notes', 'payment_type', 'pay_components', 'payment_status',
+] as const
+
+function teamGate(action: 'create' | 'edit' | 'delete') {
+  return async (c: Context<AppEnv>, next: () => Promise<void>) => {
+    const auth = c.get('auth')
+    if (!auth.isOwner && !auth.access.hasAction('team_directory', action)) fail(403, DENIED_TEAM)
+    await next()
+  }
+}
+
+const actorOf = (c: Context<AppEnv>) => {
+  const auth = c.get('auth')
+  return { userId: auth.userId, role: auth.role, isOwner: auth.isOwner }
+}
+
+/** A delegate may hand out the base role, or one strictly below their own -- never admin. */
+function mayGrant(c: Context<AppEnv>, role: string | undefined): boolean {
+  return !role || mayGrantRole(actorOf(c), role)
+}
+
+/** Does this body set pay? Defaults the form always sends (no components, 'active') do not count. */
+function setsPay(body: Record<string, unknown>): boolean {
+  return PAY_KEYS.some((k) => {
+    const v = body[k]
+    if (v === undefined) return false
+    if (k === 'pay_components') return Array.isArray(v) && v.length > 0
+    if (k === 'payment_status') return v !== 'active'
+    return v !== null
+  })
+}
+
+function mayTouchPay(c: Context<AppEnv>): boolean {
+  const auth = c.get('auth')
+  return auth.isOwner || auth.access.hasAction('team_salaries', 'edit')
+}
+
+/**
+ * For a delegate: refuse the owner, an admin, themselves, or anyone at or
+ * above their own level (see mayManageMember). Hands back the member's current
+ * role. The owner passes straight through -- RLS already keeps them to their
+ * own studio -- and gets null.
+ */
+async function guardTarget(c: Context<AppEnv>, id: string, self = 'Change your own details from My profile.'): Promise<string | null> {
+  const auth = c.get('auth')
+  if (auth.isOwner) return null
+  if (id === auth.userId) fail(409, self)
+  const rows = await attempt(c, 'team.guard_target', () =>
+    withService(c.env, (sql) => sql<{ role: string; is_owner: boolean }[]>`
+      select u.role, (co.owner_user_id = u.user_id) as is_owner
+        from users u join companies co on co.id = u.company_id
+       where u.user_id = ${id} and u.company_id = ${auth.companyId} and u.deleted_at is null`),
+  )
+  if (!rows) fail(400, 'We could not check that team member.')
+  const t = rows[0]
+  if (!t) fail(404, 'We could not find that team member.')
+  if (!mayManageMember(actorOf(c), { user_id: id, role: t.role, is_owner: t.is_owner })) {
+    fail(403, t.is_owner || t.role === 'admin' || t.role === 'super_admin'
+      ? 'Only the owner can change the owner or an admin.'
+      : 'Only the owner or someone above them can change this member.')
+  }
+  return t.role
+}
+
+/** Invitations a delegate may see and act on: only for roles they could hand out. */
+function inviteScope(c: Context<AppEnv>, sql: TransactionSql) {
+  const auth = c.get('auth')
+  return auth.isOwner ? sql`true` : sql`role::text = any(${sql.array(grantableRoles(actorOf(c)), 1009)})`
+}
+
+/** The owner writes under RLS as always; a delegate, checked above, through the service role. */
+function asCaller<T>(c: Context<AppEnv>, fn: (sql: TransactionSql) => Promise<T>): Promise<T> {
+  const auth = c.get('auth')
+  return auth.isOwner ? withUser(c.env, auth.userId, fn) : withService(c.env, fn)
+}
+
 /** Team directory. /members backs pickers; /directory is the full staff list. */
 export const teamRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+
+  // Owner: who still has an incomplete profile, and what is missing (field
+  // names only -- never the values, which stay private to the member).
+  .get('/profile-gaps', requireOwner(), async (c) => {
+    const rows = await attempt(c, 'team.profile_gaps', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ user_id: string; missing: string[]; required: number }[]>`
+        select user_id, missing, required from team_profile_gaps()`),
+    )
+    if (!rows) fail(400, 'We could not load profile gaps.')
+    return c.json(
+      teamProfileGap.array().parse(
+        rows.map((r) => {
+          const need = Math.max(1, Number(r.required))
+          return { user_id: r.user_id, missing: r.missing, percent: Math.round((100 * (need - r.missing.length)) / need) }
+        }),
+      ),
+    )
+  })
 
   // Every caller of this endpoint uses it as a "who can this go to" picker
   // (a deal owner, a distribution rota, a workflow step, a booking slot) --
@@ -209,6 +322,229 @@ export const teamRouter = new Hono<AppEnv>()
     return c.json({ items: shaped, total, page, page_size: pageSize })
   })
 
+  // One member, seen from every side (the member page). Open to the member
+  // themself and to whoever holds team_directory; every section is trimmed
+  // here for the person asking, so nothing they may not see leaves the server.
+  .get('/members/:id/overview', async (c) => {
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    const self = auth.userId === id
+    const access = auth.access
+    if (!self && !access.hasModule('team_directory')) fail(403, 'You do not have access to this member.')
+    // Leave and other people's attendance are for whoever decides them (RLS
+    // agrees: anyone else would read an empty month and think it was real).
+    const decides = auth.isOwner || ['super_admin', 'admin', 'manager'].includes(auth.role)
+    const see = {
+      private: self || auth.isOwner,
+      salary: self || access.hasModule('team_salaries'),
+      payouts: self || access.hasModule('team_payouts'),
+      work: self || access.hasAction('projects', 'view'),
+      tasks: self || decides,
+      attendance: self || (decides && access.hasModule('attendance')),
+      leave: self || decides,
+    }
+
+    const data = await attempt(c, 'team.member_overview', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [m] = await sql`
+          select u.user_id, u.name, u.email, u.phone, u.alternate_phone, u.address, u.avatar_url, u.role,
+                 coalesce(u.status, 'active') as status, u.engagement_type, coalesce(u.login_enabled, true) as login_enabled,
+                 (co.owner_user_id = u.user_id) as is_owner, u.created_at,
+                 u.salary::float8 as salary, u.freelancer_rate::float8 as freelancer_rate,
+                 coalesce((select array_agg(er.type_name order by er.type_name)
+                             from employee_role_assignments era join employee_roles er on er.id = era.role_id
+                            where era.user_id = u.user_id), '{}'::text[]) as role_names,
+                 profile_missing(u.user_id) as missing, profile_required_count(u.user_id) as required
+            from users u
+            join companies co on co.id = u.company_id
+           where u.user_id = ${id} and u.deleted_at is null`
+        if (!m) return 'missing' as const
+
+        const today = sql`(now() at time zone 'Asia/Kolkata')::date`
+        const monthStart = sql`date_trunc('month', (now() at time zone 'Asia/Kolkata'))::date`
+
+        const priv = see.private
+          ? (await sql`
+              select date_of_birth, blood_group, joined_on, emergency_name, emergency_relation, emergency_phone,
+                     upi_id, bank_account_name, right(nullif(btrim(bank_account_number), ''), 4) as bank_account_last4,
+                     bank_ifsc, pan is not null as pan_on_file
+                from member_profiles where user_id = ${id}`)[0] ?? {
+              date_of_birth: null, blood_group: null, joined_on: null, emergency_name: null, emergency_relation: null,
+              emergency_phone: null, upi_id: null, bank_account_name: null, bank_account_last4: null, bank_ifsc: null, pan_on_file: false,
+            }
+          : null
+
+        let attendance = null
+        if (see.attendance) {
+          const [a] = await sql`
+            select to_char(${monthStart}, 'YYYY-MM') as month,
+                   count(*) filter (where status = 'present')::int as present,
+                   count(*) filter (where status = 'late')::int as late,
+                   count(*) filter (where status = 'absent')::int as absent,
+                   coalesce(sum(late_minutes) filter (where status = 'late'), 0)::int as late_minutes
+              from attendance
+             where user_id = ${id} and a_date between ${monthStart} and ${today}`
+          const [l] = await sql`
+            select coalesce(sum(case when half_day then 0.5
+                                     else (least(end_date, ${today}) - greatest(start_date, ${monthStart}) + 1) end), 0)::float8 as days
+              from leave_requests
+             where user_id = ${id} and status = 'approved' and end_date >= ${monthStart} and start_date <= ${today}`
+          const [t] = await sql`
+            select a.status, a.check_in_at, a.check_out_at, on_leave(${id}, ${today}) as on_leave
+              from (select 1) x
+              left join attendance a on a.user_id = ${id} and a.a_date = ${today}`
+          attendance = { ...a, leave_days: Number(l?.days ?? 0), today: t ?? null }
+        }
+
+        let work = null
+        if (see.work) {
+          const shoots = await sql`
+            select s.id, s.shoot_id, sh.name as shoot_name, s.service_name, p.id as project_id, p.name as project_name,
+                   cl.name as client_name, s.start_at, s.end_at, sh.location
+              from team_assignment_slots s
+              left join shoots sh on sh.id = s.shoot_id
+              left join projects p on p.id = sh.project_id
+              left join clients cl on cl.id = p.client_id
+             where s.user_id = ${id} and s.status = 'booked' and s.end_at >= now()
+             order by s.start_at
+             limit 8`
+          const [month] = await sql`
+            select count(*)::int as n from team_assignment_slots
+             where user_id = ${id} and status = 'booked'
+               and (start_at at time zone 'Asia/Kolkata')::date >= ${monthStart}
+               and (start_at at time zone 'Asia/Kolkata')::date < (${monthStart} + interval '1 month')::date`
+          const deliverables = await sql`
+            select d.id, d.title, d.project_id, p.name as project_name, d.status, d.estimated_date, d.started_at,
+                   coalesce(d.estimated_date < ${today}, false) as late
+              from deliverables d
+              join projects p on p.id = d.project_id
+             where d.assignee_id = ${id} and d.status not in ('completed', 'cancelled')
+             order by d.estimated_date nulls last, d.created_at
+             limit 20`
+          const tasks = see.tasks
+            ? await sql`
+                select t.id, t.title, t.project_id, p.name as project_name, t.status::text as status,
+                       t.priority::text as priority, t.due_date, coalesce(t.due_date < ${today}, false) as late
+                  from tasks t
+                  join task_assignees ta on ta.task_id = t.id and ta.user_id = ${id}
+                  left join projects p on p.id = t.project_id
+                 where t.status not in ('completed', 'cancelled')
+                 order by t.due_date nulls last, t.created_at
+                 limit 20`
+            : null
+          work = { shoots, deliverables, tasks, shoots_this_month: month?.n ?? 0 }
+        }
+
+        const leave = see.leave
+          ? await sql`
+              select id, kind, start_date, end_date, half_day, status
+                from leave_requests
+               where user_id = ${id} and status in ('pending', 'approved') and end_date >= ${today}
+               order by start_date
+               limit 10`
+          : null
+
+        const payouts = see.payouts
+          ? await sql`
+              select id, amount::float8 as amount, period_start, period_end, status, payment_mode, reference, created_at
+                from team_payouts
+               where user_id = ${id}
+               order by period_end desc, created_at desc
+               limit 12`
+          : null
+
+        return { m, priv, attendance, work, leave, payouts }
+      }),
+    )
+    if (data === 'missing') fail(404, 'That team member was not found.')
+    if (!data) fail(400, 'We could not load this member.')
+
+    // Salaries are readable by owners, admins and managers under RLS; the
+    // member reads their own here, with the check above standing in for it.
+    const salaries = see.salary
+      ? await attempt(c, 'team.member_overview_salaries', () =>
+          withService(c.env, (sql) => sql`
+            select id, pay_month as month, pay_year as year, coalesce(base_amount, 0)::float8 as base_amount,
+                   coalesce(paid_amount, 0)::float8 as paid_amount, status
+              from monthly_salaries
+             where company_id = ${auth.companyId} and user_id = ${id} and pay_month is not null and pay_year is not null
+             order by pay_year desc, pay_month desc
+             limit 12`),
+        )
+      : null
+
+    const { m, priv, attendance, work, leave, payouts } = data
+    const need = Math.max(1, Number(m.required))
+    const missing = (m.missing as string[]) ?? []
+    return c.json(
+      memberOverview.parse({
+        member: {
+          ...m,
+          salary: see.salary ? m.salary : null,
+          freelancer_rate: see.salary || access.hasAction('projects', 'edit') ? m.freelancer_rate : null,
+        },
+        profile: { missing, percent: Math.round((100 * (need - missing.length)) / need) },
+        private: priv,
+        attendance,
+        work,
+        leave,
+        salaries: salaries ?? (see.salary ? [] : null),
+        payouts,
+        can: {
+          edit:
+            (auth.isOwner || access.hasAction('team_directory', 'edit')) &&
+            mayManageMember(actorOf(c), { user_id: id, role: String(m.role), is_owner: Boolean(m.is_owner) }),
+          see_pay: see.salary || see.payouts,
+          manage_access: auth.isOwner,
+        },
+      }),
+    )
+  })
+
+  // A member's ID proof, for the owner (RLS: the member and the owner only).
+  .get('/members/:id/documents', requireOwner(), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'team.member_documents', () => withUser(c.env, c.get('auth').userId, (sql) => listMemberDocs(sql, id)))
+    if (!rows) fail(400, 'We could not load their documents.')
+    return c.json(rows)
+  })
+
+  .get('/members/:id/documents/:docId', requireOwner(), async (c) => {
+    const id = uuidParam(c)
+    const docId = uuidParam(c, 'docId')
+    const rows = await attempt(c, 'team.member_document', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select name, mime, bytes from member_documents where id = ${docId} and user_id = ${id}`),
+    )
+    if (!rows) fail(400, 'We could not load that document.')
+    if (!rows.length) fail(404, 'That document was not found.')
+    await audit(c, { action: 'member.document_viewed', entityType: 'user', entityId: id })
+    return serveDocument(rows[0]!)
+  })
+
+  // Where to send someone's pay, in full, for whoever is paying them: the
+  // owner, or someone who edits salaries or payouts. member_profiles is the
+  // member's and the owner's under RLS, so the read goes through the service
+  // role after this check -- scoped to the caller's studio -- and is audited.
+  .get('/members/:id/pay-to', async (c) => {
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    if (!auth.isOwner && !auth.access.hasAction('team_salaries', 'edit') && !auth.access.hasAction('team_payouts', 'edit')) {
+      fail(403, 'Only whoever pays the team can see payment details.')
+    }
+    const rows = await attempt(c, 'team.member_pay_to', () =>
+      withService(c.env, (sql) => sql`
+        select u.name, mp.upi_id, mp.bank_account_name, mp.bank_account_number, mp.bank_ifsc
+          from users u
+          left join member_profiles mp on mp.user_id = u.user_id
+         where u.user_id = ${id} and u.company_id = ${auth.companyId} and u.deleted_at is null`),
+    )
+    if (!rows) fail(400, 'We could not load their payment details.')
+    if (!rows.length) fail(404, 'That team member was not found.')
+    await audit(c, { action: 'member.pay_details_viewed', entityType: 'user', entityId: id })
+    return c.json(payTo.parse(rows[0]))
+  })
+
   // The catalogue behind the "add from the library" chips. Declared above
   // '/roles' shapes for clarity; it is platform data, so there is nothing
   // tenant-specific to gate beyond being signed in and holding the module.
@@ -329,22 +665,25 @@ export const teamRouter = new Hono<AppEnv>()
 
   // Replace a member's job roles wholesale — the dialog sends the full set, so
   // a partial write would silently drop the ones it didn't mention.
-  .patch('/members/:id/roles', requireOwner(), async (c) => {
+  .patch('/members/:id/roles', teamGate('edit'), async (c) => {
     const id = uuidParam(c)
     const parsed = assignRolesRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the selected roles.')
     const companyId = c.get('auth').companyId
+    await guardTarget(c, id)
 
     const done = await attempt(c, 'team.assign_roles', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
+      asCaller(c, async (sql) => {
         const [member] = await sql<{ user_id: string }[]>`
-          select user_id from users where user_id = ${id} and deleted_at is null`
+          select user_id from users where user_id = ${id} and company_id = ${companyId} and deleted_at is null`
         if (!member) return 'missing' as const
-        await sql`delete from employee_role_assignments where user_id = ${id}`
+        await sql`delete from employee_role_assignments where user_id = ${id} and company_id = ${companyId}`
         for (const roleId of parsed.data.role_ids) {
+          // Only this studio's own job roles.
           await sql`
             insert into employee_role_assignments (user_id, role_id, company_id)
-            values (${id}, ${roleId}, ${companyId})
+            select ${id}, ${roleId}, ${companyId}
+             where exists (select 1 from employee_roles where id = ${roleId} and company_id = ${companyId})
             on conflict do nothing`
         }
         return 'ok' as const
@@ -362,9 +701,11 @@ export const teamRouter = new Hono<AppEnv>()
   // person — bookable and assignable, with no credential to leak). Both need an
   // identity row, because `users.user_id` is the auth id; the offline one simply
   // has no password, which is what `/auth/login` already refuses on.
-  .post('/members', requireOwner(), async (c) => {
+  .post('/members', teamGate('create'), async (c) => {
     const parsed = addMemberRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the member details.')
+    if (!mayGrant(c, parsed.data.role)) fail(403, 'Only the owner can give that access level.')
+    if (setsPay(parsed.data) && !mayTouchPay(c)) fail(403, 'Only someone who handles salaries can set pay.')
     const {
       name,
       email,
@@ -511,17 +852,25 @@ export const teamRouter = new Hono<AppEnv>()
     )
   })
 
-  .patch('/members/:id', requireOwner(), async (c) => {
+  .patch('/members/:id', teamGate('edit'), async (c) => {
     const id = uuidParam(c)
     const parsed = updateMemberRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the details.')
     const { pay_components, ...patch } = parsed.data
     if (Object.keys(parsed.data).length === 0) return c.json({ ok: true })
+    const current = await guardTarget(c, id)
+    if (patch.role !== undefined && patch.role !== current && !mayGrant(c, patch.role)) {
+      fail(403, 'Only the owner can give that access level.')
+    }
+    // Any pay key at all -- clearing a salary is changing it.
+    if (PAY_KEYS.some((k) => parsed.data[k] !== undefined) && !mayTouchPay(c)) {
+      fail(403, 'Only someone who handles salaries can change pay.')
+    }
+    const companyId = c.get('auth').companyId
 
     const rows = await attempt(c, 'team.member_update', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql<{ user_id: string }[]>`
           update users set ${sql({
             ...patch,
@@ -530,7 +879,7 @@ export const teamRouter = new Hono<AppEnv>()
             // rather than left to the generic spread's type inference.
             ...(pay_components !== undefined ? { pay_components: sql.array(pay_components, 1009) } : {}),
           })}
-          where user_id = ${id} and deleted_at is null
+          where user_id = ${id} and company_id = ${companyId} and deleted_at is null
           returning user_id`,
       ),
     )
@@ -560,9 +909,11 @@ export const teamRouter = new Hono<AppEnv>()
   // Soft delete: the person stays on past shoots, tasks and payouts. Their
   // access dies at the next `authenticate()`, which reads deleted_at.
   // An optional { reason } body is recorded in the audit trail (Lovable parity).
-  .delete('/members/:id', requireOwner(), async (c) => {
+  .delete('/members/:id', teamGate('delete'), async (c) => {
     const id = uuidParam(c)
     if (id === c.get('auth').userId) fail(409, 'You cannot remove your own account.')
+    await guardTarget(c, id, 'You cannot remove your own account.')
+    const companyId = c.get('auth').companyId
     const body = await c.req.json().catch(() => ({}))
     const reason =
       body && typeof body === 'object' && typeof (body as { reason?: unknown }).reason === 'string'
@@ -570,13 +921,12 @@ export const teamRouter = new Hono<AppEnv>()
         : null
 
     const rows = await attempt(c, 'team.member_remove', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql<{ user_id: string }[]>`
           update users
              set deleted_at = now(), deleted_by = ${c.get('auth').userId}, status = 'inactive'
-           where user_id = ${id} and deleted_at is null
+           where user_id = ${id} and company_id = ${companyId} and deleted_at is null
            returning user_id`,
       ),
     )
@@ -596,8 +946,9 @@ export const teamRouter = new Hono<AppEnv>()
   // fix, without the owner ever handling their password.
   // Issuing supersedes the member's own outstanding link, and it sends mail, so
   // it needs a ceiling of its own — /team/* is outside the global /auth/* limit.
-  .post('/members/:id/reset-password', requireOwner(), rateLimit({ windowMs: 60_000, limit: 5 }), async (c) => {
+  .post('/members/:id/reset-password', teamGate('edit'), rateLimit({ windowMs: 60_000, limit: 5 }), async (c) => {
     const targetId = uuidParam(c)
+    await guardTarget(c, targetId, 'Change your own password from your account.')
 
     // Read the target through the CALLER's RLS scope, so an owner can only ever
     // trigger this for someone in their own studio. A thrown query is a real
@@ -636,11 +987,11 @@ export const teamRouter = new Hono<AppEnv>()
   // The other way in: instead of the owner choosing a password and passing it
   // along, the invitee sets their own by following a 7-day link. Only the hash
   // is stored, so a database read never yields a usable invitation.
-  .get('/invitations', requireOwner(), async (c) => {
+  .get('/invitations', teamGate('create'), async (c) => {
+    const companyId = c.get('auth').companyId
     const rows = await attempt(c, 'team.invitations', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql`
           select id, email, pending_name as name, role,
                  pending_phone as phone, expires_at, created_at,
@@ -652,6 +1003,7 @@ export const teamRouter = new Hono<AppEnv>()
                    else 'pending'
                  end as status
           from user_invitations
+          where company_id = ${companyId} and ${inviteScope(c, sql)}
           order by created_at desc
           limit 200`,
       ),
@@ -660,10 +1012,12 @@ export const teamRouter = new Hono<AppEnv>()
     return c.json(invitation.array().parse(rows))
   })
 
-  .post('/invitations', requireOwner(), rateLimit({ windowMs: 60_000, limit: 10 }), async (c) => {
+  .post('/invitations', teamGate('create'), rateLimit({ windowMs: 60_000, limit: 10 }), async (c) => {
     const parsed = createInvitationRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the invitation details.')
     const v = parsed.data
+    if (!mayGrant(c, v.role)) fail(403, 'Only the owner can give that access level.')
+    if (v.salary !== undefined && !mayTouchPay(c)) fail(403, 'Only someone who handles salaries can set pay.')
     const companyId = c.get('auth').companyId
     const raw = newRawToken()
     const hash = await sha256Hex(raw)
@@ -672,9 +1026,9 @@ export const teamRouter = new Hono<AppEnv>()
       c,
       'team.invite',
       () =>
-        withUser(c.env, c.get('auth').userId, async (sql) => {
+        asCaller(c, async (sql) => {
           const [taken] = await sql<{ user_id: string }[]>`
-            select user_id from users where lower(email) = ${v.email} and deleted_at is null`
+            select user_id from users where company_id = ${companyId} and lower(email) = ${v.email} and deleted_at is null`
           if (taken) return 'member' as const
           const [row] = await sql<{ id: string; expires_at: string }[]>`
             insert into user_invitations ${sql({
@@ -716,22 +1070,23 @@ export const teamRouter = new Hono<AppEnv>()
 
   // Resending rotates the token, so the previous link dies here rather than
   // living on beside its replacement.
-  .post('/invitations/:id/resend', requireOwner(), rateLimit({ windowMs: 60_000, limit: 10 }), async (c) => {
+  .post('/invitations/:id/resend', teamGate('create'), rateLimit({ windowMs: 60_000, limit: 10 }), async (c) => {
     const id = uuidParam(c)
     const raw = newRawToken()
     const hash = await sha256Hex(raw)
+    const companyId = c.get('auth').companyId
 
     const rows = await attempt(c, 'team.invite_resend', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql<{ email: string; expires_at: string }[]>`
           update user_invitations
              set token_hash = ${hash},
                  expires_at = ${new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString()},
                  send_count = send_count + 1,
                  last_sent_at = now()
-           where id = ${id} and accepted_at is null and revoked_at is null
+           where id = ${id} and company_id = ${companyId} and ${inviteScope(c, sql)}
+             and accepted_at is null and revoked_at is null
            returning email, expires_at`,
       ),
     )
@@ -746,22 +1101,24 @@ export const teamRouter = new Hono<AppEnv>()
     )
   })
 
-  .patch('/invitations/:id', requireOwner(), async (c) => {
+  .patch('/invitations/:id', teamGate('create'), async (c) => {
     const parsed = updateInvitationRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the invitation details.')
     const { name, role } = parsed.data
     if (name === undefined && role === undefined) fail(422, 'Nothing to change.')
+    if (!mayGrant(c, role)) fail(403, 'Only the owner can give that access level.')
     const id = uuidParam(c)
+    const companyId = c.get('auth').companyId
     const rows = await attempt(c, 'team.invite_update', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql<{ id: string }[]>`
           update user_invitations set ${sql({
             ...(name !== undefined ? { pending_name: name } : {}),
             ...(role !== undefined ? { role } : {}),
           })}
-          where id = ${id} and accepted_at is null and revoked_at is null
+          where id = ${id} and company_id = ${companyId} and ${inviteScope(c, sql)}
+            and accepted_at is null and revoked_at is null
           returning id`,
       ),
     )
@@ -771,15 +1128,16 @@ export const teamRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
-  .delete('/invitations/:id', requireOwner(), async (c) => {
+  .delete('/invitations/:id', teamGate('create'), async (c) => {
     const id = uuidParam(c)
+    const companyId = c.get('auth').companyId
     const rows = await attempt(c, 'team.invite_revoke', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
+      asCaller(
+        c,
         (sql) => sql<{ id: string }[]>`
           update user_invitations set revoked_at = now()
-          where id = ${id} and accepted_at is null and revoked_at is null
+          where id = ${id} and company_id = ${companyId} and ${inviteScope(c, sql)}
+            and accepted_at is null and revoked_at is null
           returning id`,
       ),
     )

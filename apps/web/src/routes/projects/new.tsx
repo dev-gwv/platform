@@ -31,8 +31,7 @@ import {
 } from 'lucide-react'
 import {
   DUE_BASIS_OPTIONS,
-  deliverableRuleForTitle,
-  internalLeadDaysForTitle,
+  deliverableTimings,
   type DueBasis,
 } from '@ipc/domain'
 import {
@@ -62,6 +61,7 @@ import {
   useCreateProject,
   useDeleteDeliverableSet,
   useDeliverableSets,
+  useDeliverableTypeList,
   useIssueQuotation,
   useSaveDeliverableSet,
   useShootTypes,
@@ -928,6 +928,7 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
   const services = useServices()
   const shootPresets = useShootPresets('shoot')
   const shootTypes = useShootTypes()
+  const deliverableTypes = useDeliverableTypeList()
   // Library first, hardcoded fallback: QUICK_SHOOTS stays when the catalog is empty.
   const quickShoots = (shootTypes.data ?? []).filter((t) => !t.is_archived).slice(0, 8).map((t) => t.name)
   const quickList = quickShoots.length ? quickShoots : [...QUICK_SHOOTS]
@@ -968,7 +969,7 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
       ],
       deliverables: [
         ...draft.deliverables,
-        ...preset.payload.internal_work.map((title) => newInternalWork(at, title)),
+        ...preset.payload.internal_work.map((title) => newInternalWork(at, title, deliverableTypes)),
       ],
     })
   }
@@ -1484,6 +1485,7 @@ function InternalWorkBlock({
     (s) => !titles.has(s.toLowerCase()),
   )
   const presets = useShootPresets('internal_work')
+  const deliverableTypes = useDeliverableTypeList()
   /** Null = closed, -1 = adding, else the index in draft.deliverables to edit. */
   const [editing, setEditing] = useState<number | null>(null)
 
@@ -1493,7 +1495,7 @@ function InternalWorkBlock({
         ...draft.deliverables,
         ...names
           .filter((n) => n.trim() && !titles.has(n.trim().toLowerCase()))
-          .map((n) => newInternalWork(index, n.trim())),
+          .map((n) => newInternalWork(index, n.trim(), deliverableTypes)),
       ],
     })
 
@@ -1588,7 +1590,7 @@ function InternalWorkBlock({
                 ? draft.deliverables.map((d, i) => (i === editing ? { ...d, ...v } : d))
                 : [
                     ...draft.deliverables,
-                    { ...newInternalWork(index, v.title), ...v, shoot_index: index },
+                    { ...newInternalWork(index, v.title, deliverableTypes), ...v, shoot_index: index },
                   ],
           })
         }
@@ -1834,6 +1836,7 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
   const sets = useDeliverableSets()
   const saveSet = useSaveDeliverableSet()
   const deleteSet = useDeleteDeliverableSet()
+  const deliverableTypes = useDeliverableTypeList()
   const [naming, setNaming] = useState(false)
   const [setName, setSetName] = useState('')
 
@@ -1845,7 +1848,7 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
   const loose = deliverablesIn(draft, 'internal').filter(({ item }) => item.shoot_index === null)
 
   const add = (items: { title: string }[]) =>
-    patch({ deliverables: withDeliverables(draft.deliverables, items) })
+    patch({ deliverables: withDeliverables(draft.deliverables, items, deliverableTypes) })
 
   const saveable = [...client, ...addOns].map(({ item }) => ({
     title: item.title.trim(),
@@ -1892,7 +1895,7 @@ function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch 
               >
                 <button
                   type="button"
-                  onClick={() => patch({ deliverables: withDeliverables(draft.deliverables, s.items) })}
+                  onClick={() => patch({ deliverables: withDeliverables(draft.deliverables, s.items, deliverableTypes) })}
                   title={s.items.map((i) => i.title).join(', ')}
                   className="flex items-center gap-1 rounded-full px-3 py-1 transition-colors hover:text-primary"
                 >
@@ -2479,6 +2482,7 @@ function AddDeliverableDialog({
   initial?: DeliverableDraft | undefined
   onSubmit: (value: AddedDeliverable) => void
 }) {
+  const deliverableTypes = useDeliverableTypeList()
   const [title, setTitle] = useState('')
   const [dueDays, setDueDays] = useState('30')
   const [dueBasis, setDueBasis] = useState<DueBasis>('after_wedding_day')
@@ -2505,16 +2509,17 @@ function AddDeliverableDialog({
     setTyped(false)
   }, [open, initial])
 
-  // Typing a name the trade knows fills in the timings behind it — but only
-  // once someone types, so reopening a row does not overwrite its numbers.
+  // Typing a name the studio or the trade knows fills in the timings behind
+  // it — the studio's own deliverable type first — but only once someone
+  // types, so reopening a row does not overwrite its numbers.
   useEffect(() => {
     const t = title.trim()
     if (!typed || !t) return
-    const rule = deliverableRuleForTitle(t)
-    setDueDays(String(rule.due_days))
-    setDueBasis(rule.due_basis)
-    setLeadDays(String(internalLeadDaysForTitle(t)))
-  }, [title, typed])
+    const timing = deliverableTimings(t, deliverableTypes)
+    setDueDays(String(timing.due_days))
+    setDueBasis(timing.due_basis)
+    setLeadDays(String(timing.work_days))
+  }, [title, typed, deliverableTypes])
 
   const trimmed = title.trim()
   const duplicate = trimmed.length > 0 && existingTitles.has(trimmed.toLowerCase())

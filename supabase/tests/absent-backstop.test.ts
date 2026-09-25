@@ -40,6 +40,11 @@ let db: PGlite
  * marked today absent.
  */
 const TODAY = `(now() at time zone 'Asia/Kolkata')::date`
+/**
+ * The day the sweep marks: the one that has just ended where the studio is
+ * (it runs at midnight India time, so "today" there has only just begun).
+ */
+const SWEPT = `((now() at time zone 'Asia/Kolkata') - interval '12 hours')::date`
 
 const sweep = async () => {
   const r = await db.query<{ n: number }>(`select mark_absent_backstop() as n;`)
@@ -78,15 +83,26 @@ beforeAll(async () => {
       ('${OWNER_B}', '${COMPANY_B}', 'super_admin', 'B Owner', 'b@s.test',  'active'),
       ('${STAFF_B}', '${COMPANY_B}', 'employee',    'B Staff', 'sb@s.test', 'active'),
       ('${LEFT}',    '${COMPANY_A}', 'employee',    'Departed','x@s.test',  'inactive');
+    -- Everyone here joined long ago; someone added today is not absent yesterday.
+    update users set created_at = '2020-01-01';
   `)
 })
 
 describe('mark_absent_backstop', () => {
   it('reports the total across every company, not the last one', async () => {
-    // Four active people across two studios; the departed one does not count.
-    // The old counter returned Studio B's two and lost Studio A's.
-    expect(await sweep()).toBe(4)
-    expect(await rows()).toBe(4)
+    // Two staff across two studios; the departed one and the owners do not
+    // count. The old counter returned Studio B's alone and lost Studio A's.
+    expect(await sweep()).toBe(2)
+    expect(await rows()).toBe(2)
+  })
+
+  it('marks the day that has just ended, and never the owner', async () => {
+    const r = await db.query<{ ok: boolean; owners: string }>(
+      `select bool_and(a_date = ${SWEPT}) as ok,
+              count(*) filter (where user_id in ('${OWNER_A}', '${OWNER_B}'))::text as owners
+         from attendance where status = 'absent';`,
+    )
+    expect(r.rows[0]).toEqual({ ok: true, owners: '0' })
   })
 
   it('leaves someone who has been marked inactive alone', async () => {
@@ -99,17 +115,17 @@ describe('mark_absent_backstop', () => {
   it('writes nothing on a second run the same night', async () => {
     // A retried cron, or two schedulers, must not double the day.
     expect(await sweep()).toBe(0)
-    expect(await rows()).toBe(4)
+    expect(await rows()).toBe(2)
   })
 
   it('does not overwrite a day someone was actually present', async () => {
     await db.exec(`delete from attendance;`)
     await db.exec(`
       insert into attendance (company_id, user_id, a_date, status)
-      values ('${COMPANY_A}', '${STAFF_A}', ${TODAY}, 'present');`)
-    expect(await sweep()).toBe(3)
+      values ('${COMPANY_A}', '${STAFF_A}', ${SWEPT}, 'present');`)
+    expect(await sweep()).toBe(1)
     const r = await db.query<{ status: string }>(
-      `select status from attendance where user_id = '${STAFF_A}' and a_date = ${TODAY};`,
+      `select status from attendance where user_id = '${STAFF_A}' and a_date = ${SWEPT};`,
     )
     expect(r.rows[0]!.status).toBe('present')
   })

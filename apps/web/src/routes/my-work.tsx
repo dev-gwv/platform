@@ -18,6 +18,7 @@ import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
 import { MyDeliverables } from '@/features/projects/MyDeliverables'
+import { StartNowCard } from '@/features/projects/StartNowCard'
 import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
 import { useConfirm } from '@/shared/ui/confirm'
 import { todayISO } from '@/features/tasks/board'
@@ -34,8 +35,9 @@ const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, l
 function useMySubmissions() {
   const { session } = useAuth()
   return useQuery({
-    queryKey: ['work', 'submissions'],
-    queryFn: () => callApi('/work/submissions', { responseSchema: list }),
+    queryKey: ['work', 'submissions', 'mine'],
+    // Only mine, even for someone allowed to see everyone's.
+    queryFn: () => callApi('/work/submissions?mine=1', { responseSchema: list }),
     enabled: !!session,
     staleTime: 15_000,
   })
@@ -263,6 +265,7 @@ function MyWork() {
         <SummaryCard label="Completed" value={summary.completed} icon={CheckCircle2} />
       </div>
 
+      <StartNowCard />
       <MyDeliverables />
 
       {reminderDays.length > 0 && (

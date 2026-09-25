@@ -33,6 +33,7 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
 import { useMembers } from '@/features/allocation/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { RemindMe } from '@/features/reminders/RemindMe'
 import { STAGE_LABEL, dueLabel, isLate, previousStage, relativeDue, stageOf } from './deliverable-stage'
 import { TONE_CLASSES, actionLabel, allPoints, movedLabel, nextPoint, wantsLinkAt } from './stages'
 import { useDeliverableStages } from './stages-api'
@@ -308,12 +309,15 @@ export function activityWhat(kind: string, body: string | null | undefined, stag
 export function DeliverableCard({
   d,
   canEdit,
+  projectName,
   onOpen,
   onEdit,
   onDelete,
 }: {
   d: Deliverable
   canEdit: boolean
+  /** Said in a reminder set from here, so "Photo Album" is not just any album. */
+  projectName?: string | undefined
   /** Open the panel; 'voice' opens it with the recorder already listening. */
   onOpen: (action?: 'voice') => void
   onEdit: () => void
@@ -441,9 +445,11 @@ export function DeliverableCard({
           </div>
         </div>
 
-        {canEdit && (
+        {(canEdit || !dropped) && (
           <div className="flex shrink-0 items-center justify-end gap-1" onClick={keepControlClicks}>
-            {!dropped && (
+            {/* Anyone looking at it can ask to be reminded; the rest is the editor's. */}
+            {!dropped && <RemindMe entityType="deliverable" entityId={d.id} name={d.title} context={projectName} />}
+            {canEdit && !dropped && (
               <button
                 type="button"
                 onClick={() => onOpen('voice')}
@@ -456,8 +462,8 @@ export function DeliverableCard({
                 <span className="hidden sm:inline">Voice note</span>
               </button>
             )}
-            {!dropped && <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} />}
-            <RowMenu label={`More for ${d.title}`} items={items} />
+            {canEdit && !dropped && <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} />}
+            {canEdit && <RowMenu label={`More for ${d.title}`} items={items} />}
           </div>
         )}
       </div>

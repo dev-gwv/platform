@@ -1049,6 +1049,23 @@ if (listed) {
       inReview?.delivery_link === 'https://drive.example.com/reel-v1' && submittedEvent?.link === 'https://drive.example.com/reel-v1',
     { submitted: submitted.json, inReview, reelTimeline },
   )
+
+  // "Mine" is mine for a manager too: My Work never shows someone else's work as yours.
+  const ownerMine = await api(`/work/submissions?mine=1&project_id=${pid}`, { token: aToken })
+  const ownerAll = await api(`/work/submissions?project_id=${pid}`, { token: aToken })
+  const edSubs = await api('/work/submissions', { token: edToken })
+  const edTask = await api('/tasks', { token: aToken, method: 'POST', body: { project_id: pid, title: 'Colour grade the reel', status: 'to_do', priority: 'medium', assignees: [edUid] } })
+  const ownerTasks = await api(`/tasks/my?project_id=${pid}`, { token: aToken })
+  const edTasks = await api(`/tasks/my?project_id=${pid}`, { token: edToken })
+  check(
+    "my work: a manager's own lists hold only their own tasks and submissions; reviewing still shows everyone's",
+    ownerMine.status === 200 && !(ownerMine.json ?? []).some((x) => x.id === submitted.json.id) &&
+      (ownerAll.json ?? []).some((x) => x.id === submitted.json.id) &&
+      (edSubs.json ?? []).length > 0 && (edSubs.json ?? []).every((x) => x.submitted_by_name === (edSubs.json ?? [])[0].submitted_by_name) &&
+      edTask.status < 300 && !(ownerTasks.json ?? []).some((t) => t.id === edTask.json.id) &&
+      (edTasks.json ?? []).some((t) => t.id === edTask.json.id) && (edTasks.json ?? []).every((t) => t.project_id === pid),
+    { ownerMine: (ownerMine.json ?? []).length, ownerAll: (ownerAll.json ?? []).length, edTask: edTask.status, ownerTasks: (ownerTasks.json ?? []).map((t) => t.title), edTasks: (edTasks.json ?? []).map((t) => t.title) },
+  )
   const sentBack = await api(`/work/submissions/${submitted.json.id}/review`, {
     token: aToken, method: 'POST', body: { approve: false, review_notes: 'Shorter intro, please' },
   })
@@ -1322,6 +1339,230 @@ if (listed) {
     { used, removed: removed.json },
   )
 
+  // ── Profile completion (0175) ──
+  const pBlank = await api('/settings/profile', { token: edToken })
+  const pBadPan = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { pan: 'NOPE' } })
+  const pFilled = await api('/settings/profile', {
+    token: edToken,
+    method: 'PATCH',
+    body: { address: 'Jaipur', date_of_birth: '1995-04-02', emergency_name: 'Asha', emergency_phone: '9876500000', upi_id: 'priya@okhdfc', pan: 'abcde1234f' },
+  })
+  check(
+    'profile: says what is missing, refuses a bad PAN, and saves private details',
+    pBlank.status === 200 && pBlank.json.completeness.missing.includes('payout') && pBadPan.status === 422 &&
+      pFilled.status === 200 && pFilled.json.pan === 'ABCDE1234F' && !pFilled.json.completeness.missing.includes('payout') &&
+      pFilled.json.completeness.percent > pBlank.json.completeness.percent,
+    { pBlank: pBlank.json.completeness, pBadPan: pBadPan.status, pFilled: pFilled.json.completeness },
+  )
+  const pGaps = await api('/team/profile-gaps', { token: aToken })
+  const pEdGap = (Array.isArray(pGaps.json) ? pGaps.json : []).find((g) => g.user_id === edUid)
+  const pEdGaps = await api('/team/profile-gaps', { token: edToken })
+  check(
+    "profile: the owner sees each member's gaps by name only; a member cannot",
+    pGaps.status === 200 && !!pEdGap && pEdGap.percent === pFilled.json.completeness.percent && !('pan' in pEdGap) && pEdGaps.status === 403,
+    { gaps: pGaps.status, body: Array.isArray(pGaps.json) ? pGaps.json.length : pGaps.json, pEdGap, edGaps: pEdGaps.status },
+  )
+
+  // ── Start reminders (0174) ──
+  const reel2 = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Teaser reel', estimated_date: '2030-01-20', assignee_id: edUid } })
+  const mineBefore = ((await api('/projects/deliverables/mine', { token: edToken })).json ?? []).find((d) => d.id === reel2.json.id)
+  const notMineStart = await api(`/projects/deliverables/${reel2.json.id}/start`, { token: newPw.json.access_token, method: 'POST' })
+  const started = await api(`/projects/deliverables/${reel2.json.id}/start`, { token: edToken, method: 'POST' })
+  const mineAfter = ((await api('/projects/deliverables/mine', { token: edToken })).json ?? []).find((d) => d.id === reel2.json.id)
+  check(
+    'start: the editor sees when to start (due − work − a day for review) and marks it started; nobody else can',
+    reel2.status < 300 && mineBefore?.start_by === '2030-01-12' && mineBefore?.work_days === 7 && !mineBefore?.started_at &&
+      notMineStart.status === 404 && started.status === 204 && !!mineAfter?.started_at,
+    { reel2: reel2.status, mineBefore, notMineStart: notMineStart.status, started: started.status },
+  )
+
+  // ── Leave, holidays, weekly off, day fixes (0177) ──
+  const lvDay = new Date(Date.now() + 40 * 864e5).toISOString().slice(0, 10)
+  const lvBad = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'casual', start_date: lvDay, end_date: '2020-01-01' } })
+  const lvAsk = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'sick', start_date: lvDay, end_date: lvDay, reason: 'Doctor' } })
+  const lvTwice = await api('/hr/leave', { token: edToken, method: 'POST', body: { kind: 'casual', start_date: lvDay, end_date: lvDay } })
+  const lvSelf = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: edToken, method: 'POST', body: { approve: true } })
+  const lvOther = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: newPw.json.access_token, method: 'POST', body: { approve: true } })
+  const lvTeam = await api('/hr/leave?scope=team&status=pending', { token: aToken })
+  const lvEdTeam = await api('/hr/leave?scope=team', { token: edToken })
+  const lvNoNote = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: false } })
+  const lvOk = await api(`/hr/leave/${lvAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: true } })
+  const lvMine = await api('/hr/leave', { token: edToken })
+  const lvRow = (lvMine.json ?? []).find((l) => l.id === lvAsk.json.id)
+  check(
+    'leave: a member asks, cannot approve their own or be approved by another studio; the owner approves',
+    lvBad.status === 422 && lvAsk.status === 201 && lvTwice.status === 422 && lvSelf.status === 403 && lvOther.status === 404 &&
+      lvTeam.status === 200 && (lvTeam.json ?? []).some((l) => l.id === lvAsk.json.id && l.user_name === 'Priya Editor') &&
+      (lvEdTeam.json ?? []).every((l) => l.user_id === edUid) && lvNoNote.status === 422 && lvOk.status === 204 &&
+      lvRow?.status === 'approved' && !!lvRow?.decided_by_name,
+    { bad: lvBad.status, ask: lvAsk.status, twice: lvTwice.status, self: lvSelf.status, other: lvOther.status, noNote: lvNoNote.status, ok: lvOk.status, row: lvRow },
+  )
+  const lvRoster = await api(`/hr/attendance?date=${lvDay}`, { token: aToken })
+  const lvEdRow = (lvRoster.json ?? []).find((r) => r.user_id === edUid)
+  check('leave: the roster marks the member on leave that day', lvEdRow?.on_leave === true, { row: lvEdRow })
+
+  const hDay = new Date(Date.now() + 50 * 864e5).toISOString().slice(0, 10)
+  const hEd = await api('/hr/holidays', { token: edToken, method: 'POST', body: { holiday_date: hDay, name: 'Not mine to add' } })
+  const hAdd = await api('/hr/holidays', { token: aToken, method: 'POST', body: { holiday_date: hDay, name: 'Studio day' } })
+  const hDup = await api('/hr/holidays', { token: aToken, method: 'POST', body: { holiday_date: hDay, name: 'Studio day off' } })
+  const hList = await api(`/hr/holidays?year=${hDay.slice(0, 4)}`, { token: edToken })
+  const hOther = await api(`/hr/holidays?year=${hDay.slice(0, 4)}`, { token: newPw.json.access_token })
+  const hRoster = await api(`/hr/attendance?date=${hDay}`, { token: aToken })
+  const pol = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { weekly_off: [0] } })
+  const polEd = await api('/hr/policy', { token: edToken, method: 'PATCH', body: { weekly_off: [] } })
+  check(
+    'holidays: the owner adds one (the same date again renames it), the studio sees it and nobody else; weekly off is the owner’s call',
+    hEd.status === 403 && hAdd.status === 201 && hDup.status === 201 && hDup.json.id === hAdd.json.id &&
+      (hList.json ?? []).filter((h) => h.holiday_date === hDay).length === 1 &&
+      !(hOther.json ?? []).some((h) => h.holiday_date === hDay) && (hRoster.json ?? []).every((r) => r.day_off === 'Studio day off') &&
+      pol.status === 200 && pol.json.weekly_off.join() === '0' && polEd.status === 403,
+    { ed: hEd.status, add: hAdd.status, dup: hDup.status, other: hOther.json?.length, pol: pol.status, polEd: polEd.status },
+  )
+
+  const fixDay = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10)
+  const fixAsk = await api('/hr/corrections', {
+    token: edToken,
+    method: 'POST',
+    body: { a_date: fixDay, check_in_at: `${fixDay}T10:05:00+05:30`, check_out_at: `${fixDay}T19:00:00+05:30`, reason: 'At the venue all day' },
+  })
+  const fixOld = await api('/hr/corrections', {
+    token: edToken,
+    method: 'POST',
+    body: { a_date: '2020-01-01', check_in_at: '2020-01-01T10:00:00+05:30', reason: 'Long ago' },
+  })
+  const fixSelf = await api(`/hr/corrections/${fixAsk.json.id}/decide`, { token: edToken, method: 'POST', body: { approve: true } })
+  const fixOk = await api(`/hr/corrections/${fixAsk.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: true } })
+  const fixDayRoster = await api(`/hr/attendance?date=${fixDay}`, { token: aToken })
+  const fixRow = (fixDayRoster.json ?? []).find((r) => r.user_id === edUid)
+  check(
+    'day fix: a member asks to fix a recent day; only a manager applies it, and the day then shows the times',
+    fixAsk.status === 201 && fixOld.status === 422 && fixSelf.status === 403 && fixOk.status === 204 &&
+      !!fixRow?.check_in_at && !!fixRow?.check_out_at && ['present', 'late'].includes(fixRow?.status),
+    { ask: fixAsk.status, old: fixOld.status, self: fixSelf.status, ok: fixOk.status, row: fixRow },
+  )
+
+  // ── The member page (one person, seen from every side) ──
+  const ovOwner = await api(`/team/members/${edUid}/overview`, { token: aToken })
+  const ovSelf = await api(`/team/members/${edUid}/overview`, { token: edToken })
+  const aOwnerUid = (await api('/auth/session', { token: aToken })).json.user_id
+  const ovUp = await api(`/team/members/${aOwnerUid}/overview`, { token: edToken })
+  const ovOther = await api(`/team/members/${edUid}/overview`, { token: newPw.json.access_token })
+  check(
+    'member page: the owner sees work, attendance, leave and private details (masked); the member sees their own; nobody else',
+    ovOwner.status === 200 && ovOwner.json.member.name === 'Priya Editor' && ovOwner.json.private?.upi_id === 'priya@okhdfc' &&
+      ovOwner.json.private?.pan_on_file === true && !('pan' in (ovOwner.json.private ?? {})) &&
+      Array.isArray(ovOwner.json.work?.deliverables) && ovOwner.json.work.deliverables.some((d) => d.title === 'Teaser reel') &&
+      ovOwner.json.attendance !== null && (ovOwner.json.leave ?? []).some((l) => l.status === 'approved') &&
+      ovOwner.json.can.manage_access === true &&
+      ovSelf.status === 200 && ovSelf.json.private?.upi_id === 'priya@okhdfc' && Array.isArray(ovSelf.json.salaries) &&
+      ovSelf.json.can.edit === false && ovUp.status === 403 && ovOther.status === 404,
+    { owner: ovOwner.status, self: ovSelf.status, up: ovUp.status, other: ovOther.status, priv: ovOwner.json.private, work: ovOwner.json.work && Object.keys(ovOwner.json.work) },
+  )
+
+  // ── Delegated team management: a Team Manager runs the team, within limits ──
+  const tmEmail = `team-mgr-${rand()}@example.com`
+  const tmInv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Tara Manager', email: tmEmail, role: 'manager' } })
+  const tmJoin = await api('/auth/accept-invite', {
+    method: 'POST',
+    body: { token: /[?&]token=([^&]+)/.exec(tmInv.json.invite_link ?? '')?.[1] ?? '', password: 'Manager12345!' },
+  })
+  const tmToken = tmJoin.json.access_token
+  const tmUid = (await api('/auth/session', { token: tmToken })).json.user_id
+  // A plain employee has no Team Directory rights at all.
+  const tmBefore = await api('/team/members', { token: edToken, method: 'POST', body: { name: 'Early Try', phone: randPhone(), create_login: false } })
+  const tmGrant = await api(`/access/${tmUid}`, { token: aToken, method: 'PUT', body: { profile_key: 'team_manager', overrides: [] } })
+  const tmAdd = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Ravi Assistant', phone: randPhone(), create_login: false } })
+  const tmAddMgr = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Another Manager', phone: randPhone(), create_login: false, role: 'manager' } })
+  const tmAddPay = await api('/team/members', { token: tmToken, method: 'POST', body: { name: 'Paid Person', phone: randPhone(), create_login: false, salary: 50000 } })
+  check(
+    'delegation: a Team Manager adds people (an employee cannot), never a manager or anyone with pay',
+    tmJoin.status === 200 && tmBefore.status === 403 && tmGrant.status === 204 && tmAdd.status === 201 &&
+      tmAddMgr.status === 403 && tmAddPay.status === 403,
+    { join: tmJoin.status, before: tmBefore.status, grant: tmGrant.status, add: tmAdd.status, mgr: tmAddMgr.status, pay: tmAddPay.status },
+  )
+  const raviUid = tmAdd.json.user_id
+  const tmEdit = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'PATCH', body: { phone: '9876543210' } })
+  const tmEditPay = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'PATCH', body: { salary: null } })
+  const tmPromote = await api(`/team/members/${edUid}`, { token: tmToken, method: 'PATCH', body: { role: 'admin' } })
+  const tmOwner = await api(`/team/members/${aOwnerUid}`, { token: tmToken, method: 'PATCH', body: { name: 'Hijacked' } })
+  const tmSelf = await api(`/team/members/${tmUid}`, { token: tmToken, method: 'PATCH', body: { status: 'active' } })
+  const tmOwnerReset = await api(`/team/members/${aOwnerUid}/reset-password`, { token: tmToken, method: 'POST' })
+  const tmOtherStudio = await api(`/team/members/${(await api('/auth/session', { token: newPw.json.access_token })).json.user_id}`, {
+    token: tmToken, method: 'PATCH', body: { name: 'Across' },
+  })
+  check(
+    'delegation: edits people below them; never pay, never an admin, never the owner, never themselves, never another studio',
+    tmEdit.status === 200 && tmEditPay.status === 403 && tmPromote.status === 403 && tmOwner.status === 403 &&
+      tmSelf.status === 409 && tmOwnerReset.status === 403 && tmOtherStudio.status === 404,
+    { edit: tmEdit.status, pay: tmEditPay.status, promote: tmPromote.status, owner: tmOwner.status, self: tmSelf.status, reset: tmOwnerReset.status, other: tmOtherStudio.status },
+  )
+  const tmInvite = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Neha Editor', email: `neha-${rand()}@example.com`, role: 'employee' } })
+  const tmInviteAdmin = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Big Boss', email: `boss-${rand()}@example.com`, role: 'admin' } })
+  const tmInvites = await api('/team/invitations', { token: tmToken })
+  const tmOv = await api(`/team/members/${raviUid}/overview`, { token: tmToken })
+  const tmOvOwner = await api(`/team/members/${aOwnerUid}/overview`, { token: tmToken })
+  const tmRemove = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'DELETE' })
+  const tmRemoveOwner = await api(`/team/members/${aOwnerUid}`, { token: tmToken, method: 'DELETE' })
+  const ownerStill = await api(`/team/members/${aOwnerUid}/overview`, { token: aToken })
+  check(
+    'delegation: invites employees (not admins), sees only those invitations, removes people below them but not the owner',
+    tmInvite.status === 201 && tmInviteAdmin.status === 403 && tmInvites.status === 200 &&
+      (tmInvites.json ?? []).length > 0 && (tmInvites.json ?? []).every((i) => i.role === 'employee') &&
+      tmOv.json?.can?.edit === true && tmOvOwner.json?.can?.edit === false && tmOvOwner.json?.can?.manage_access === false &&
+      tmRemove.status === 200 && tmRemoveOwner.status === 403 && ownerStill.json?.member?.name !== 'Hijacked',
+    { invite: tmInvite.status, admin: tmInviteAdmin.status, list: tmInvites.json?.map?.((i) => i.role), ov: tmOv.json?.can, ovOwner: tmOvOwner.json?.can, remove: tmRemove.status, removeOwner: tmRemoveOwner.status },
+  )
+
+  // ── ID proof, payment details, Team Terms switch (0178) ──
+  const idForm = new FormData()
+  idForm.append('file', new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], { type: 'image/jpeg' }), 'aadhaar.jpg')
+  idForm.append('kind', 'aadhaar')
+  const idUp = await fetch(`${API}/settings/profile/documents`, { method: 'POST', headers: { Authorization: `Bearer ${edToken}` }, body: idForm })
+  const idDoc = await idUp.json()
+  const badForm = new FormData()
+  badForm.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'x.exe')
+  const idBad = await fetch(`${API}/settings/profile/documents`, { method: 'POST', headers: { Authorization: `Bearer ${edToken}` }, body: badForm })
+  const idOwnerList = await api(`/team/members/${edUid}/documents`, { token: aToken })
+  const idOwnerGet = await fetch(`${API}/team/members/${edUid}/documents/${idDoc.id}`, { headers: { Authorization: `Bearer ${aToken}` } })
+  const idMgrList = await api(`/team/members/${edUid}/documents`, { token: tmToken })
+  const idMgrGet = await fetch(`${API}/settings/profile/documents/${idDoc.id}`, { headers: { Authorization: `Bearer ${tmToken}` } })
+  const idSelfProfile = await api('/settings/profile', { token: edToken })
+  check(
+    'ID proof: the member uploads it (a photo or PDF only); the owner can open it; a manager cannot, even with its id',
+    idUp.status === 201 && idDoc.kind === 'aadhaar' && idBad.status === 422 && idOwnerList.status === 200 &&
+      (idOwnerList.json ?? []).some((d) => d.id === idDoc.id) && idOwnerGet.status === 200 &&
+      idOwnerGet.headers.get('cache-control') === 'private, no-store' && idMgrList.status === 403 && idMgrGet.status === 404 &&
+      !idSelfProfile.json.completeness.missing.includes('id_document'),
+    { up: idUp.status, bad: idBad.status, list: idOwnerList.status, get: idOwnerGet.status, mgrList: idMgrList.status, mgrGet: idMgrGet.status },
+  )
+  const payOwner = await api(`/team/members/${edUid}/pay-to`, { token: aToken })
+  const payMgr = await api(`/team/members/${edUid}/pay-to`, { token: tmToken })
+  const paySelfOther = await api(`/team/members/${aOwnerUid}/pay-to`, { token: edToken })
+  check(
+    'pay-to: whoever pays sees where to send it; nobody else does',
+    payOwner.status === 200 && payOwner.json.upi_id === 'priya@okhdfc' && payMgr.status === 403 && paySelfOther.status === 403,
+    { owner: payOwner.status, mgr: payMgr.status, other: paySelfOther.status },
+  )
+  const termsEd = await api('/team-terms/templates', { token: edToken })
+  const termsMgr = await api('/team-terms/templates', { token: tmToken })
+  check('team terms: gated on the Team Terms module, not just on projects', termsEd.status === 403 && termsMgr.status === 200, {
+    ed: termsEd.status,
+    mgr: termsMgr.status,
+  })
+
+  // ── Tracking health from the server (Tracking v2) ──
+  const trk = await api('/projects/tracking', { token: aToken })
+  const trkRow = (trk.json ?? []).find((r) => r.id === pid)
+  const trkEd = await api('/projects/tracking', { token: edToken })
+  const trkOne = await api(`/projects/tracking/${pid}`, { token: aToken })
+  check(
+    'tracking: each project carries its health and reasons; money only for Billing; the breakdown lists late work and shoots',
+    trk.status === 200 && !!trkRow?.health?.band && Array.isArray(trkRow?.health?.reasons) && trkRow.total_cost !== null &&
+      (trkEd.status === 403 || (trkEd.json ?? []).every((r) => r.total_cost === null && r.received === null)) &&
+      trkOne.status === 200 && Array.isArray(trkOne.json.deliverables) && Array.isArray(trkOne.json.shoots) && trkOne.json.money !== null,
+    { row: trkRow?.health, trEd: trkEd.status, one: trkOne.status },
+  )
+
   // A project template creates a real project now -- and asks for a client.
   const tpl = await api('/projects/templates', {
     token: aToken,
@@ -1336,7 +1577,7 @@ if (listed) {
   })
   const made = await api(`/projects/${applied.json.project_id}`, { token: aToken })
   check(
-    'templates: applying one makes the project with its deliverables',
+    'templates: applying trkOne makes the project with its deliverables',
     noClient.status === 422 && applied.status === 201 && made.json.deliverables?.[0]?.title === 'Album ×2',
     { noClient: noClient.status, applied: applied.json, made: made.json.deliverables },
   )

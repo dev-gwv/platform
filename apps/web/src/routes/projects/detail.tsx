@@ -46,6 +46,7 @@ import {
   useUpdateProject,
 } from '@/features/projects/api'
 import { EntityReminders } from '@/features/reminders/EntityReminders'
+import { RemindMe } from '@/features/reminders/RemindMe'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { CompletedWorkTab } from '@/features/projects/tabs/CompletedWorkTab'
 import { TermsTab } from '@/features/projects/tabs/TermsTab'
@@ -187,6 +188,8 @@ function ProjectDetail() {
               <StatusIcon className="mr-1 size-3" aria-hidden />
               {humanize(data.status)}
             </StatusBadge>
+            {/* For everyone on the project, not only those who can edit it. */}
+            <RemindMe entityType="project" entityId={id} name={data.name} align="start" className="-my-1" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Created {prettyDate(data.created_at)}
@@ -359,6 +362,7 @@ function ProjectDetail() {
       {tab === 'deliverables' && (
         <DeliverablesTab
           projectId={id}
+          projectName={data.name}
           deliverables={data.deliverables}
           shoots={(projectShoots.data ?? []).map((s) => ({ id: s.id, name: s.name, shoot_date: s.shoot_date }))}
           canEdit={canEdit}

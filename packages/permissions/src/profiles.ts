@@ -12,8 +12,20 @@ export interface SystemProfile {
   description: string
   /** For UX display only. */
   accessLevel: 'admin' | 'manager' | 'employee' | 'custom'
-  permissions: ReadonlyArray<ModuleKey>
+  /** Module keys (View) and "{module}.{action}" keys (create / edit / delete). */
+  permissions: ReadonlyArray<string>
 }
+
+/**
+ * A profile that runs an area can change things in it, not only look. A bare
+ * module key only grants View, so a "Project Manager" used to lose the right
+ * to create or edit projects the moment it was assigned. The dashboard is
+ * read-only everywhere.
+ */
+const withWrites = (keys: ReadonlyArray<ModuleKey>): string[] => [
+  ...keys,
+  ...keys.filter((k) => k !== 'dashboard').flatMap((k) => [`${k}.create`, `${k}.edit`, `${k}.delete`]),
+]
 
 const BASE_EMPLOYEE: ReadonlyArray<ModuleKey> = ['dashboard', 'projects']
 
@@ -35,21 +47,25 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     label: 'Project Manager',
     description: 'Projects, team, clients, CRM. No money, no settings.',
     accessLevel: 'manager',
-    permissions: BASE_MANAGER,
+    permissions: withWrites(BASE_MANAGER),
   },
   finance_manager: {
     key: 'finance_manager',
     label: 'Finance Manager',
     description: 'Money, billing, finance, company expenses. No team admin.',
     accessLevel: 'custom',
-    permissions: [...BASE_EMPLOYEE, 'clients', 'money', 'billing', 'financials', 'company_expenses'],
+    // Payroll is finance work: salaries and payouts come with it.
+    permissions: [
+      ...BASE_EMPLOYEE,
+      ...withWrites(['clients', 'money', 'billing', 'financials', 'company_expenses', 'team_salaries', 'team_payouts']),
+    ],
   },
   crm_executive: {
     key: 'crm_executive',
     label: 'CRM Executive',
     description: 'CRM + lead sources + clients only.',
     accessLevel: 'custom',
-    permissions: [...BASE_EMPLOYEE, 'clients', 'crm', 'lead_sources'],
+    permissions: [...BASE_EMPLOYEE, ...withWrites(['clients', 'crm', 'lead_sources'])],
   },
   team_manager: {
     key: 'team_manager',
@@ -58,11 +74,7 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     accessLevel: 'manager',
     permissions: [
       ...BASE_EMPLOYEE,
-      'team',
-      'team_directory',
-      'team_work_preview',
-      'team_terms',
-      'team_roles',
+      ...withWrites(['team', 'team_directory', 'team_work_preview', 'team_terms', 'team_roles', 'attendance']),
     ],
   },
   photographer: {
@@ -77,7 +89,7 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     label: 'Custom Admin',
     description: 'Start from base manager, then customise with overrides.',
     accessLevel: 'custom',
-    permissions: BASE_MANAGER,
+    permissions: withWrites(BASE_MANAGER),
   },
 }
 

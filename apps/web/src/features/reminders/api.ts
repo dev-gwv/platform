@@ -63,6 +63,20 @@ export function useSaveReminder() {
   )
 }
 
+/**
+ * One reminder, set in passing from a task, shoot, deliverable or project.
+ * No toast of its own: the caller says what was set ("I'll remind you
+ * tomorrow at 9 am"), and a failure is toasted by the app's mutation cache.
+ */
+export function useCreateReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateReminderRequest) =>
+      callApi('/reminders', { method: 'POST', body, responseSchema: created }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
 export function useUpdateReminderStatus() {
   const qc = useQueryClient()
   return useMutation({

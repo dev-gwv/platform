@@ -24,6 +24,8 @@ const row = (name: string, over: Partial<AttendanceDayRow> = {}): AttendanceDayR
   check_out_at: '2026-09-01T12:04:00Z',
   corrected_by: null,
   correction_note: null,
+  on_leave: false,
+  day_off: null,
   ...over,
 })
 
@@ -70,7 +72,7 @@ describe('summarise', () => {
   })
 
   it('reports an empty roster as zero, not NaN', () => {
-    expect(summarise([])).toEqual({ total: 0, present: 0, absent: 0, notCheckedOut: 0, percent: 0 })
+    expect(summarise([])).toEqual({ total: 0, present: 0, absent: 0, notCheckedOut: 0, onLeave: 0, percent: 0 })
   })
 
   it('rounds the percentage to a whole number', () => {

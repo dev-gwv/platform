@@ -67,23 +67,138 @@ export type UpdateCompanyRequest = z.infer<typeof updateCompanyRequest>
  * Email is read-only: it is the login, and changing it is an identity move that
  * belongs with verification, not a settings form.
  */
+/** What a complete profile needs, in the order the form asks. */
+export const profileField = z.enum([
+  'photo',
+  'phone',
+  'address',
+  'date_of_birth',
+  'emergency_contact',
+  'payout',
+  'pan',
+  'id_document',
+])
+export type ProfileField = z.infer<typeof profileField>
+
+export const PROFILE_FIELD_LABEL: Record<ProfileField, string> = {
+  photo: 'Photo',
+  phone: 'Phone number',
+  address: 'Address',
+  date_of_birth: 'Date of birth',
+  emergency_contact: 'Emergency contact',
+  payout: 'UPI or bank details',
+  pan: 'PAN',
+  id_document: 'ID proof',
+}
+
+/**
+ * A member's ID proof. Kept apart from ordinary files, readable only by the
+ * member and the studio owner; for in-house staff one on file is part of a
+ * complete profile.
+ */
+export const idDocumentKind = z.enum(['aadhaar', 'pan_card', 'passport', 'driving_licence', 'voter_id', 'other'])
+export type IdDocumentKind = z.infer<typeof idDocumentKind>
+export const ID_DOCUMENT_LABEL: Record<IdDocumentKind, string> = {
+  aadhaar: 'Aadhaar card',
+  pan_card: 'PAN card',
+  passport: 'Passport',
+  driving_licence: 'Driving licence',
+  voter_id: 'Voter ID',
+  other: 'Other ID',
+}
+/** Photos or a PDF, up to 5 MB -- a phone picture of a card is the usual one. */
+export const ID_DOCUMENT_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+export const ID_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024
+
+export const memberDocument = z.object({
+  id: z.string().uuid(),
+  kind: idDocumentKind,
+  name: z.string(),
+  mime: z.string(),
+  size_bytes: z.number().int(),
+  created_at: z.string().datetime({ offset: true }),
+})
+export type MemberDocument = z.infer<typeof memberDocument>
+
+/**
+ * Where to send someone's pay, in full -- for whoever is paying them (the
+ * owner, or someone who edits salaries or payouts). Every read is audited.
+ */
+export const payTo = z.object({
+  name: z.string(),
+  upi_id: z.string().nullable(),
+  bank_account_name: z.string().nullable(),
+  bank_account_number: z.string().nullable(),
+  bank_ifsc: z.string().nullable(),
+})
+export type PayTo = z.infer<typeof payTo>
+
+export const profileCompleteness = z.object({
+  percent: z.number().int(),
+  missing: profileField.array(),
+})
+export type ProfileCompleteness = z.infer<typeof profileCompleteness>
+
 export const myProfile = z.object({
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string().nullable(),
   role: z.string(),
   status: z.string(),
-  /** A plain URL, not an upload — same as the company logo. */
   avatar_url: z.string().nullable(),
+  address: z.string().nullable().default(null),
+  engagement_type: z.string().nullable().default(null),
+  // Private: only you and the studio owner can read these.
+  date_of_birth: z.string().nullable().default(null),
+  blood_group: z.string().nullable().default(null),
+  joined_on: z.string().nullable().default(null),
+  emergency_name: z.string().nullable().default(null),
+  emergency_relation: z.string().nullable().default(null),
+  emergency_phone: z.string().nullable().default(null),
+  upi_id: z.string().nullable().default(null),
+  bank_account_name: z.string().nullable().default(null),
+  bank_account_number: z.string().nullable().default(null),
+  bank_ifsc: z.string().nullable().default(null),
+  pan: z.string().nullable().default(null),
+  completeness: profileCompleteness,
 })
 export type MyProfile = z.infer<typeof myProfile>
 
+const optText = (max: number) =>
+  z.string().trim().max(max).nullable().optional().transform((v) => (v === '' ? null : v))
+const isoDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .nullable()
+  .optional()
+  .or(z.literal('').transform(() => null))
+
 export const updateMyProfileRequest = z.object({
   name: z.string().trim().min(2).max(120).optional(),
-  phone: z.string().trim().max(20).nullable().optional(),
-  avatar_url: z.string().trim().max(500).nullable().optional(),
+  phone: optText(20),
+  avatar_url: optText(500),
+  address: optText(500),
+  date_of_birth: isoDay,
+  blood_group: optText(5),
+  joined_on: isoDay,
+  emergency_name: optText(120),
+  emergency_relation: optText(60),
+  emergency_phone: optText(20),
+  upi_id: optText(80).refine((v) => v == null || /^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(v), 'That UPI ID does not look right (name@bank).'),
+  bank_account_name: optText(120),
+  bank_account_number: optText(30).refine((v) => v == null || /^\d{6,20}$/.test(v), 'Account number is 6–20 digits.'),
+  bank_ifsc: optText(11)
+    .transform((v) => (v ? v.toUpperCase() : v))
+    .refine((v) => v == null || /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v), 'IFSC looks like ABCD0123456.'),
+  pan: optText(10)
+    .transform((v) => (v ? v.toUpperCase() : v))
+    .refine((v) => v == null || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v), 'PAN looks like ABCDE1234F.'),
 })
-export type UpdateMyProfileRequest = z.infer<typeof updateMyProfileRequest>
+export type UpdateMyProfileRequest = z.input<typeof updateMyProfileRequest>
+
+/** Owner view: each member's gaps (field names only, never values). */
+export const teamProfileGap = z.object({ user_id: z.string().uuid(), percent: z.number().int(), missing: profileField.array() })
+export type TeamProfileGap = z.infer<typeof teamProfileGap>
 
 /**
  * The allow-listed theme presets. The palette itself lives in the web app; this

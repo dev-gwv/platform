@@ -9,6 +9,9 @@ import { Button } from '@/shared/ui/button'
 import { useMyTasks, useBoard } from '@/features/tasks/api'
 import { useSlots } from '@/features/allocation/api'
 import { useMyData } from '@/features/data/api'
+import { StartNowCard } from '@/features/projects/StartNowCard'
+import { ProfileBanner } from '@/features/profile/ProfileBanner'
+import { todayIso } from '@/features/projects/deliverable-stage'
 import { optedOut } from '@/features/data/stage'
 import { useReminders } from '@/features/reminders/api'
 import { useQuery } from '@tanstack/react-query'
@@ -50,7 +53,7 @@ export function EmployeeDashboard() {
 
   const tasks = myTasks.data ?? board.data?.slice(0, 10) ?? []
   const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayIso()
   const dueToday = openTasks.filter((t) => t.due_date === today)
   const overdue = openTasks.filter((t) => t.due_date && t.due_date < today)
 
@@ -93,6 +96,10 @@ export function EmployeeDashboard() {
           to="/attendance"
         />
       </div>
+
+      <ProfileBanner />
+
+      <StartNowCard />
 
       <MyDeliveryStrip />
 

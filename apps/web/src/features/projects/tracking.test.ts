@@ -11,7 +11,7 @@ import {
 
 const TODAY = '2026-09-01'
 
-const row = (name: string, over: Partial<ProjectTrackingRow> = {}): ProjectTrackingRow => ({
+const row = (name: string, over: Partial<ProjectTrackingRow> = {}): Omit<ProjectTrackingRow, 'health'> => ({
   id: `id-${name}`,
   name,
   status: 'active',
@@ -32,6 +32,12 @@ const row = (name: string, over: Partial<ProjectTrackingRow> = {}): ProjectTrack
   shoots_done: 1,
   next_shoot_date: '2026-09-20',
   last_activity_at: '2026-08-30T10:00:00Z',
+  data_missing: 0,
+  data_issues: 0,
+  shoots_short: 0,
+  invoices_overdue: 0,
+  overdue_amount: null,
+  next_due_date: null,
   ...over,
 })
 

@@ -5,6 +5,7 @@ import {
   projectBilling,
   createProjectRequest,
   deliverableSet,
+  deliverableType,
   myDeliverable,
   issuedLink,
   projectDetail,
@@ -12,13 +13,16 @@ import {
   projectListPage,
   type CreateProjectRequest,
   type DeliverableInput,
+  type DeliverableType,
   type IssueQuotationRequest,
   type PaymentInput,
   type SaveDeliverableSetRequest,
   type SetDeliverableStageRequest,
   type UpdateDeliverableRequest,
+  type UpdateDeliverableTypeRequest,
   type UpdatePaymentRequest,
   type UpdateProjectRequest,
+  type UpsertDeliverableTypeRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { invalidateMoney } from '@/features/billing/invalidate'
@@ -227,6 +231,57 @@ export function useCreateShootType() {
     onSuccess: () => { toast.success('Shoot type added'); void qc.invalidateQueries({ queryKey: ['catalog', 'shoot-types'] }) },
   })
 }
+
+// ── Deliverable types: what the studio delivers and how long each takes ──
+const TYPES_KEY = ['catalog', 'deliverable-types'] as const
+const NO_TYPES: DeliverableType[] = []
+
+export function useDeliverableTypes() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: TYPES_KEY,
+    queryFn: () => callApi('/projects/catalog/deliverable-types', { responseSchema: deliverableType.array() }),
+    enabled: !!session && access.hasModule('projects'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/**
+ * The list the wizard fills new deliverables from. Empty while it loads or if
+ * it cannot: the built-in timings still answer then.
+ */
+export function useDeliverableTypeList(): DeliverableType[] {
+  return useDeliverableTypes().data ?? NO_TYPES
+}
+
+export function useAddDeliverableType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: UpsertDeliverableTypeRequest) =>
+      callApi('/projects/catalog/deliverable-types', { method: 'POST', body, responseSchema: deliverableType }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: TYPES_KEY }),
+  })
+}
+
+export function useUpdateDeliverableType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & UpdateDeliverableTypeRequest) =>
+      callApi(`/projects/catalog/deliverable-types/${id}`, { method: 'PATCH', body, responseSchema: deliverableType }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: TYPES_KEY }),
+  })
+}
+
+export function useArchiveDeliverableType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      callApi(`/projects/catalog/deliverable-types/${id}`, { method: 'DELETE', responseSchema: anySchema }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: TYPES_KEY }),
+  })
+}
+
 const setsList = deliverableSet.array()
 
 /**

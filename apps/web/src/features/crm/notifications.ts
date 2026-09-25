@@ -18,6 +18,8 @@ export interface NotificationFilters {
   typePrefix?: string
   dateFrom?: string
   dateTo?: string
+  /** Newest first, at most this many. The server's own default is fifty. */
+  limit?: number
 }
 
 function toQuery(f: NotificationFilters): string {
@@ -28,18 +30,19 @@ function toQuery(f: NotificationFilters): string {
   if (f.typePrefix) p.set('type_prefix', f.typePrefix)
   if (f.dateFrom) p.set('date_from', new Date(f.dateFrom).toISOString())
   if (f.dateTo) p.set('date_to', new Date(f.dateTo).toISOString())
+  if (f.limit) p.set('limit', String(f.limit))
   const s = p.toString()
   return s ? `?${s}` : ''
 }
 
 /**
- * One cache entry behind both readers of this list: the header bell, which is
- * mounted on every screen, and the Alerts page. Sharing the key means opening
- * Alerts costs no request when the bell has already fetched, and marking one
- * read updates the badge without a second round trip.
+ * The list, for the Alerts page and the bell's panel. The panel asks for the
+ * latest ten only while it is open; the badge beside it never reads this —
+ * it has its own count (below).
  *
- * Filters are part of the key, so the bell (no filters) and a filtered Alerts
- * view never overwrite each other's cache.
+ * Filters are part of the key, so the panel's ten and a filtered Alerts view
+ * never overwrite each other's cache, and marking one read (which invalidates
+ * everything under ['notifications']) refreshes whichever is on screen.
  */
 export function useNotifications(filters: NotificationFilters = {}) {
   const { session } = useAuth()
@@ -62,6 +65,11 @@ export function useNotifications(filters: NotificationFilters = {}) {
  *
  * It also stops the header fetching fifty rows on every page just to show a
  * digit.
+ *
+ * Polled once a minute. The shell stays mounted across pages and window
+ * focus does not refetch in this app, so without it a reminder that came due
+ * mid-morning showed no badge until a reload. One count query a minute, and
+ * only while the tab is in front (react-query pauses the poll behind it).
  */
 export function useUnreadCount() {
   const { session } = useAuth()
@@ -73,6 +81,7 @@ export function useUnreadCount() {
       }),
     enabled: !!session,
     staleTime: 30_000,
+    refetchInterval: 60_000,
   })
 }
 

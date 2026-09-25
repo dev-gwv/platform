@@ -1,13 +1,11 @@
-import { useState } from 'react'
-import { Check, ExternalLink, FileCheck, Folder, HardDrive, Package, Undo2 } from 'lucide-react'
+import { ExternalLink, FileCheck, Folder, HardDrive, Package } from 'lucide-react'
 import { WORK_STATUS_LABEL, type WorkSubmission } from '@ipc/contracts'
-import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Textarea } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { useProjectWorkSubmissions, useReviewWork } from '@/features/work/api'
+import { useProjectWorkSubmissions } from '@/features/work/api'
+import { ReviewButtons } from '@/features/work/ReviewButtons'
 
 const TONE: Record<WorkSubmission['status'], 'warning' | 'success' | 'danger'> = {
   submitted: 'warning',
@@ -20,8 +18,9 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'n
 
 /**
  * Work the team handed in for this project. What is waiting for a decision
- * comes first, each with Approve or Send back (and a line saying what to
- * change); everything already decided sits underneath as the record.
+ * comes first, each with Approve or Send back for changes (which needs a line
+ * saying what to change); everything already decided sits underneath as the
+ * record.
  */
 export function CompletedWorkTab({ projectId, canReview }: { projectId: string; canReview: boolean }) {
   const { data, isLoading, isError, refetch } = useProjectWorkSubmissions(projectId)
@@ -71,9 +70,6 @@ export function CompletedWorkTab({ projectId, canReview }: { projectId: string; 
 }
 
 function Submission({ s, canReview }: { s: WorkSubmission; canReview: boolean }) {
-  const review = useReviewWork()
-  const [sendingBack, setSendingBack] = useState(false)
-  const [note, setNote] = useState('')
   const where = s.disk_name ?? s.hard_disk_label
 
   return (
@@ -126,47 +122,7 @@ function Submission({ s, canReview }: { s: WorkSubmission; canReview: boolean })
         {s.notes && <p className="text-sm text-muted-foreground">“{s.notes}”</p>}
         {s.review_notes && s.status === 'rejected' && <p className="text-sm text-destructive">What to change: {s.review_notes}</p>}
 
-        {canReview && !sendingBack && (
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={review.isPending} onClick={() => review.mutate({ id: s.id, approve: true })}>
-              <Check /> Approve
-            </Button>
-            <Button size="sm" variant="outline" disabled={review.isPending} onClick={() => setSendingBack(true)}>
-              <Undo2 /> Send back
-            </Button>
-          </div>
-        )}
-        {canReview && sendingBack && (
-          <div className="flex flex-col gap-2">
-            <Textarea
-              autoFocus
-              rows={2}
-              maxLength={1000}
-              aria-label="What needs changing"
-              placeholder="What needs changing? e.g. Colour on the reception photos is too warm"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={review.isPending}
-                onClick={() =>
-                  review.mutate(
-                    { id: s.id, approve: false, ...(note.trim() ? { review_notes: note.trim() } : {}) },
-                    { onSuccess: () => setSendingBack(false) },
-                  )
-                }
-              >
-                Send back
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSendingBack(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
+        {canReview && <ReviewButtons submissionId={s.id} editorName={s.submitted_by_name} />}
       </CardContent>
     </Card>
   )
