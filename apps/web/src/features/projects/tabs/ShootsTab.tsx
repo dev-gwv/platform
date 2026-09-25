@@ -417,7 +417,7 @@ function ShootPlanner({
                 onClick={async () => {
                   const yes = await confirm({
                     title: `Delete ${shoot.name}?`,
-                    description: 'Its crew bookings go with it. This cannot be undone.',
+                    description: 'Anyone booked on it is released. This cannot be undone.',
                     destructive: true,
                     confirmLabel: 'Delete',
                   })

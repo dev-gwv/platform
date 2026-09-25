@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, MapPin } from 'lucide-react'
-import { shootListItem, type ShootListItem } from '@ipc/contracts'
+import { CalendarDays, CalendarPlus, MapPin, Users } from 'lucide-react'
+import { myShoot, type MyShoot, type TeamSlot } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -12,8 +12,10 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { HowToUse } from '@/shared/ui/how-to-use'
 import { humanize } from '@/shared/ui/format'
 import { useSlots } from '@/features/allocation/api'
+import { Button } from '@/shared/ui/button'
+import { downloadIcs } from '@/features/booking/share'
 
-const list = shootListItem.array()
+const list = myShoot.array()
 
 const TONE = { planned: 'info', confirmed: 'warning', completed: 'success', cancelled: 'danger' } as const
 
@@ -45,12 +47,10 @@ function MyShoots() {
 
   // My own slots, keyed by shoot, so each card can say when I am needed.
   const mySlots = useMemo(() => {
-    const map = new Map<string, { start: string; end: string; service: string | null; status: string }[]>()
+    const map = new Map<string, TeamSlot[]>()
     for (const s of slots.data ?? []) {
-      if (s.user_id !== session?.user_id || !s.shoot_id) continue
-      const arr = map.get(s.shoot_id) ?? []
-      arr.push({ start: s.start_at, end: s.end_at, service: s.service_name, status: s.status })
-      map.set(s.shoot_id, arr)
+      if (s.user_id !== session?.user_id || !s.shoot_id || s.status === 'cancelled') continue
+      map.set(s.shoot_id, [...(map.get(s.shoot_id) ?? []), s].sort((a, b) => a.start_at.localeCompare(b.start_at)))
     }
     return map
   }, [slots.data, session?.user_id])
@@ -81,8 +81,8 @@ function MyShoots() {
           </Card>
         ) : (
           <>
-            <Section title="Upcoming" shoots={upcoming} mySlots={mySlots} emptyText="Nothing coming up." />
-            {past.length > 0 && <Section title="Past" shoots={past} mySlots={mySlots} muted />}
+            <Section title="Upcoming" shoots={upcoming} mySlots={mySlots} me={session?.user_id ?? null} emptyText="Nothing coming up." />
+            {past.length > 0 && <Section title="Past" shoots={past} mySlots={mySlots} me={session?.user_id ?? null} muted />}
           </>
         )}
       </div>
@@ -94,12 +94,14 @@ function Section({
   title,
   shoots,
   mySlots,
+  me,
   emptyText,
   muted,
 }: {
   title: string
-  shoots: ShootListItem[]
-  mySlots: Map<string, { start: string; end: string; service: string | null; status: string }[]>
+  shoots: MyShoot[]
+  mySlots: Map<string, TeamSlot[]>
+  me: string | null
   emptyText?: string
   muted?: boolean
 }) {
@@ -129,22 +131,46 @@ function Section({
                     </span>
                     {s.location && (
                       <span className="flex items-center gap-2">
-                        <MapPin className="size-4 shrink-0" /> {s.location}
+                        <MapPin className="size-4 shrink-0" />
+                        {s.map_link ? (
+                          <a href={s.map_link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                            {s.location}
+                          </a>
+                        ) : (
+                          s.location
+                        )}
                       </span>
                     )}
                   </div>
                   {slotsFor.length > 0 && (
-                    <ul className="mt-3 flex flex-col gap-1 border-t border-border pt-3 text-sm">
-                      {slotsFor.map((sl, i) => (
-                        <li key={i} className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium tabular-nums">
-                            {timeFormat.format(new Date(sl.start))} – {timeFormat.format(new Date(sl.end))}
+                    <ul className="mt-3 flex flex-col gap-2 border-t border-border pt-3 text-sm">
+                      {slotsFor.map((sl) => (
+                        <li key={sl.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold tabular-nums">
+                            {timeFormat.format(new Date(sl.start_at))} – {timeFormat.format(new Date(sl.end_at))}
                           </span>
-                          <span className="text-muted-foreground">{sl.service ?? 'Crew'}</span>
+                          <span className="text-muted-foreground">{sl.service_name ?? 'Crew'}</span>
                           <StatusBadge tone={sl.status === 'booked' ? 'success' : 'neutral'}>{humanize(sl.status)}</StatusBadge>
+                          {sl.status === 'booked' && !muted && (
+                            <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => downloadIcs(sl)}>
+                              <CalendarPlus /> Add to calendar
+                            </Button>
+                          )}
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {s.crew.filter((c) => c.user_id !== me).length > 0 && (
+                    <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+                      <Users className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      <span>
+                        With{' '}
+                        {s.crew
+                          .filter((c) => c.user_id !== me)
+                          .map((c) => (c.service_name ? `${c.name} (${c.service_name})` : c.name))
+                          .join(', ')}
+                      </span>
+                    </p>
                   )}
                 </CardContent>
               </Card>
