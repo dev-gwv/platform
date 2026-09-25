@@ -259,6 +259,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/projects/tracking') return atStage(trackingRows, 'partial')
+  if (method === 'GET' && path.startsWith('/projects/tracking/'))
+    return { deliverables: [], tasks: [], submissions: [], shoots: [], money: null }
   // A deliverable's timeline: notes, voice notes and stage changes.
   if (path.startsWith('/projects/deliverables/') && path.includes('/notes')) {
     if (method === 'DELETE') return {}
