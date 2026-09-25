@@ -500,7 +500,8 @@ describe('data custody (Phase 7)', () => {
     expect(row.rows[0]!.verified_at).toBeNull()
 
     // Copy + verify backup — now verified_at stamps.
-    await db.query(`update shoot_data_records set backup_status = 'copied' where id = '${id}';`)
+    // A backup copy says where it went (0173).
+    await db.query(`update shoot_data_records set backup_status = 'copied', backup_folder_path = '/backup/CF-A' where id = '${id}';`)
     await db.query(`select verify_data_record('${id}', 'backup');`)
     row = await db.query(
       `select primary_status, backup_status, verified_at, copied_by_uid from shoot_data_records where id = '${id}';`,
@@ -5399,8 +5400,8 @@ describe('Lovable parity round 5: editing a team member and a company expense', 
        values ('${companyId}', 'CF Card Pending', 1, 10, '${OWNER}') returning id;`,
     )
     const verified = await db.query<{ id: string }>(
-      `insert into shoot_data_records (company_id, data_label, card_count, size_gb, copied_by_uid, primary_status)
-       values ('${companyId}', 'CF Card Verified', 1, 10, '${OWNER}', 'verified') returning id;`,
+      `insert into shoot_data_records (company_id, data_label, card_count, size_gb, copied_by_uid, primary_status, folder_path)
+       values ('${companyId}', 'CF Card Verified', 1, 10, '${OWNER}', 'verified', '/2026/CF') returning id;`,
     )
     const guardedDelete = `delete from shoot_data_records
       where id = $1 and primary_status = 'pending' and backup_status = 'pending' returning id;`

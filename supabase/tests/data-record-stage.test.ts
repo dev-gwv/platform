@@ -64,8 +64,8 @@ beforeEach(async () => {
 const insert = async (extra = '') =>
   (
     await one<{ id: string }>(`
-      insert into shoot_data_records (company_id, project_id, shoot_id, slot_id, user_id, data_label ${extra ? ', ' + extra.split('=')[0] : ''})
-      values ('${COMPANY}', '${PROJECT}', '${SHOOT}', '${SLOT}', '${SHOOTER}', 'Haldi · Candid · Rahul'
+      insert into shoot_data_records (company_id, project_id, shoot_id, slot_id, user_id, folder_path, backup_folder_path, data_label ${extra ? ', ' + extra.split('=')[0] : ''})
+      values ('${COMPANY}', '${PROJECT}', '${SHOOT}', '${SLOT}', '${SHOOTER}', '/2026/Haldi', '/backup/Haldi', 'Haldi · Candid · Rahul'
               ${extra ? ', ' + extra.split('=').slice(1).join('=') : ''})
       returning id`)
   ).id

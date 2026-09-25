@@ -9,14 +9,16 @@ import { hoursLabel, isLive } from '@/features/shoots/assign'
  * before it is saved, and the mock preview agrees with the real API.
  */
 
-type StageInput = Pick<DataRecord, 'primary_status' | 'backup_status' | 'date_received' | 'issue_found' | 'is_not_required'>
+type StageInput = Pick<DataRecord, 'primary_status' | 'backup_status' | 'date_received' | 'issue_found' | 'is_not_required'> &
+  Partial<Pick<DataRecord, 'archived_at'>>
 
-/** Same order as data_record_stage() in 0160 -- keep the two in step. */
+/** Same order as data_record_stage() in 0173 -- keep the two in step. */
 export function deriveStage(r: StageInput): DataStage {
   const p = r.primary_status
   const b = r.backup_status
   if (r.is_not_required || (b === 'not_required' && p === 'pending')) return 'not_required'
   if (r.issue_found || p === 'issue' || b === 'issue') return 'issue'
+  if (r.archived_at && (p === 'copied' || p === 'verified')) return 'archived'
   if (p === 'verified' && (b === 'verified' || b === 'not_required')) return 'verified'
   if ((p === 'copied' || p === 'verified') && (b === 'copied' || b === 'verified' || b === 'not_required'))
     return 'backed_up'
@@ -38,6 +40,7 @@ export const STAGE_LABEL: Record<SlotStage, string> = {
   copied: 'Copied · no backup yet',
   backed_up: 'Backed up',
   verified: 'Verified',
+  archived: 'Archived',
   issue: 'Issue',
   not_required: 'No data needed',
 }
@@ -50,6 +53,7 @@ export const STAGE_TONE: Record<SlotStage, Tone> = {
   copied: 'info',
   backed_up: 'success',
   verified: 'success',
+  archived: 'neutral',
   issue: 'danger',
   not_required: 'neutral',
 }
@@ -102,7 +106,8 @@ export function slotStage(slot: TeamSlot, record: DataRecord | undefined): SlotS
 }
 
 /** Data is in hand for a booking once it is copied and backed up. */
-const isDone = (s: SlotStage) => s === 'backed_up' || s === 'verified' || s === 'not_required' || s === 'opted_out'
+const isDone = (s: SlotStage) =>
+  s === 'backed_up' || s === 'verified' || s === 'archived' || s === 'not_required' || s === 'opted_out'
 
 /** "Data 2/3" on a shoot or a role: bookings whose data is safe, of those that owe it. */
 export function dataCounts(slots: readonly TeamSlot[], records: readonly DataRecord[]) {

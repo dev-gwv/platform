@@ -553,7 +553,39 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     if (loc) Object.assign(loc, body as object)
     return loc ?? { id, name: 'Location', kind: 'drive' }
   }
-  if (method === 'DELETE' && path.startsWith('/data/locations/')) return {}
+  if (method === 'DELETE' && path.startsWith('/data/locations/')) return { archived: false }
+  // The data board: every fixture record as a row of its own (no bookings in the preview).
+  if (method === 'GET' && path.startsWith('/data/board')) {
+    const recs = atStage(dataRecords, 'full') as { id: string; shoot_id: string | null; project_id: string | null; project_name: string | null; data_status: string; team_member_name?: string | null; requirement_name?: string | null; shoot_name?: string | null; shoot_date?: string | null; user_id?: string | null }[]
+    return {
+      rows: recs.map((r, i) => ({
+        key: `r:${r.id}`,
+        slot_id: null,
+        record: r,
+        stage: r.data_status,
+        shoot_id: r.shoot_id,
+        shoot_name: r.shoot_name ?? null,
+        shoot_date: r.shoot_date ?? null,
+        project_id: r.project_id,
+        project_name: r.project_name,
+        client_name: null,
+        user_id: r.user_id ?? null,
+        user_name: r.team_member_name ?? null,
+        phone: null,
+        role: r.requirement_name ?? null,
+        start_at: null,
+        end_at: null,
+        age_days: 2 + i * 3,
+      })),
+      truncated: false,
+    }
+  }
+  if (method === 'GET' && path === '/data/mine') return []
+  if (method === 'GET' && path === '/data/people') return []
+  if (method === 'POST' && path === '/data/bulk') {
+    const b = body as { slot_ids?: string[]; record_ids?: string[] } | undefined
+    return { updated: (b?.slot_ids?.length ?? 0) + (b?.record_ids?.length ?? 0), created: 0, skipped: 0 }
+  }
   if (method === 'GET' && (path === '/data' || path.startsWith('/data?')))
     return atStage(dataRecords, 'full')
   if (method === 'POST' && path.includes('/verify')) return {}
