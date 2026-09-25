@@ -42,6 +42,17 @@ export function useProjectWorkSubmissions(projectId: string) {
   })
 }
 
+/** My own submissions on one project -- My Work's project page. */
+export function useMyProjectWorkSubmissions(projectId: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['work', 'submissions', 'mine', projectId],
+    queryFn: () => callApi(`/work/submissions?mine=1&project_id=${projectId}`, { responseSchema: list }),
+    enabled: !!session && !!projectId,
+    staleTime: 15_000,
+  })
+}
+
 export function useReviewWork() {
   const qc = useQueryClient()
   return useMutation({

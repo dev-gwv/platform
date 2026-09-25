@@ -345,7 +345,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
-  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my'))
+  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?')))
     return atStage(boardTasks, 'full')
   if (method === 'GET' && path === '/tasks/bundles') return atStage(bundlesFx, 'partial')
   if (method === 'POST' && path === '/tasks/bundles') return { id: uid(0xd8) }

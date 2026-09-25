@@ -34,8 +34,9 @@ const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, l
 function useMySubmissions() {
   const { session } = useAuth()
   return useQuery({
-    queryKey: ['work', 'submissions'],
-    queryFn: () => callApi('/work/submissions', { responseSchema: list }),
+    queryKey: ['work', 'submissions', 'mine'],
+    // Only mine, even for someone allowed to see everyone's.
+    queryFn: () => callApi('/work/submissions?mine=1', { responseSchema: list }),
     enabled: !!session,
     staleTime: 15_000,
   })

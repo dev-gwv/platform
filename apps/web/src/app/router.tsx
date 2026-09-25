@@ -9,6 +9,7 @@ import {
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
+import { ContactPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
@@ -156,6 +157,11 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
+  // The vendor's policy pages (payment-gateway requirement).
+  publicRoute('/terms-and-conditions', TermsPage),
+  publicRoute('/privacy-policy', PrivacyPage),
+  publicRoute('/refund-policy', RefundPage),
+  publicRoute('/contact-us', ContactPage),
 
   renewalLayout.addChildren([
     createRoute({

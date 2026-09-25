@@ -258,6 +258,17 @@ export function useApplyBundle() {
 }
 
 /** The signed-in person's own tasks — RLS hands employees only what they are on. */
+/** My own tasks on one project -- My Work's project page. */
+export function useMyProjectTasks(projectId: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['tasks', 'my', 'project', projectId],
+    queryFn: () => callApi(`/tasks/my?project_id=${projectId}`, { responseSchema: tasksList }),
+    enabled: !!session && !!projectId,
+    staleTime: 15_000,
+  })
+}
+
 export function useMyTasks() {
   const { session } = useAuth()
   return useQuery({

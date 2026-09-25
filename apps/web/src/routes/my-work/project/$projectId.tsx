@@ -7,12 +7,12 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
-import { useProjectTasks } from '@/features/tasks/api'
-import { useProjectWorkSubmissions } from '@/features/work/api'
+import { useMyProjectTasks } from '@/features/tasks/api'
+import { useMyProjectWorkSubmissions } from '@/features/work/api'
 
 /**
- * One project's slice of my work (Lovable parity with
- * _app.my-work.project.$projectId): my tasks and submissions on it.
+ * One project's slice of my work: my tasks and my submissions on it -- only
+ * mine, even for a manager (it listed everyone's, labelled as mine).
  */
 export function MyWorkProjectPage() {
   return (
@@ -25,8 +25,8 @@ export function MyWorkProjectPage() {
 function ProjectWork() {
   const { projectId } = useParams({ from: '/authed/my-work/project/$projectId' })
   const navigate = useNavigate()
-  const tasks = useProjectTasks(projectId)
-  const subs = useProjectWorkSubmissions(projectId)
+  const tasks = useMyProjectTasks(projectId)
+  const subs = useMyProjectWorkSubmissions(projectId)
 
   const myTasks = (tasks.data ?? []).slice(0, 50)
 

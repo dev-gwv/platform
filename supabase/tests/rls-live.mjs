@@ -1049,6 +1049,23 @@ if (listed) {
       inReview?.delivery_link === 'https://drive.example.com/reel-v1' && submittedEvent?.link === 'https://drive.example.com/reel-v1',
     { submitted: submitted.json, inReview, reelTimeline },
   )
+
+  // "Mine" is mine for a manager too: My Work never shows someone else's work as yours.
+  const ownerMine = await api(`/work/submissions?mine=1&project_id=${pid}`, { token: aToken })
+  const ownerAll = await api(`/work/submissions?project_id=${pid}`, { token: aToken })
+  const edSubs = await api('/work/submissions', { token: edToken })
+  const edTask = await api('/tasks', { token: aToken, method: 'POST', body: { project_id: pid, title: 'Colour grade the reel', status: 'to_do', priority: 'medium', assignees: [edUid] } })
+  const ownerTasks = await api(`/tasks/my?project_id=${pid}`, { token: aToken })
+  const edTasks = await api(`/tasks/my?project_id=${pid}`, { token: edToken })
+  check(
+    "my work: a manager's own lists hold only their own tasks and submissions; reviewing still shows everyone's",
+    ownerMine.status === 200 && !(ownerMine.json ?? []).some((x) => x.id === submitted.json.id) &&
+      (ownerAll.json ?? []).some((x) => x.id === submitted.json.id) &&
+      (edSubs.json ?? []).length > 0 && (edSubs.json ?? []).every((x) => x.submitted_by_name === (edSubs.json ?? [])[0].submitted_by_name) &&
+      edTask.status < 300 && !(ownerTasks.json ?? []).some((t) => t.id === edTask.json.id) &&
+      (edTasks.json ?? []).some((t) => t.id === edTask.json.id) && (edTasks.json ?? []).every((t) => t.project_id === pid),
+    { ownerMine: (ownerMine.json ?? []).length, ownerAll: (ownerAll.json ?? []).length, edTask: edTask.status, ownerTasks: (ownerTasks.json ?? []).map((t) => t.title), edTasks: (edTasks.json ?? []).map((t) => t.title) },
+  )
   const sentBack = await api(`/work/submissions/${submitted.json.id}/review`, {
     token: aToken, method: 'POST', body: { approve: false, review_notes: 'Shorter intro, please' },
   })

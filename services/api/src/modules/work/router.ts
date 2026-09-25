@@ -28,11 +28,17 @@ const deliverResponse = z.object({ token: z.string(), link: z.string() })
 export const workRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
-  // Any active member: RLS returns their own submissions (+ all for admin/manager).
-  // `user_id` narrows to one person's — RLS still caps a non-admin to their own
-  // regardless of what they pass, so this is a display filter, not a grant.
+  // Any active member sees their own submissions. Everyone's is for someone
+  // who reviews work (team_work_preview) or runs projects -- decided here, not
+  // left to RLS alone, which goes by users.role and so let a "manager" with a
+  // photographer's access read the whole studio's work. ?mine=1 asks for only
+  // one's own even when allowed more (My Work). `user_id` narrows to one person.
   .get('/submissions', async (c) => {
-    const userId = c.req.query('user_id')
+    const access = c.get('auth').access
+    const seesAll = access.hasAction('team_work_preview', 'view') || access.hasAction('projects', 'edit')
+    const onlyMine = !seesAll || c.req.query('mine') === '1'
+    const me = c.get('auth').userId
+    const userId = onlyMine ? me : c.req.query('user_id')
     const uc = userId ? z.string().uuid().safeParse(userId) : null
     if (userId && !uc?.success) fail(422, 'Invalid user id.')
     const project = uuidQuery(c, 'project_id')
