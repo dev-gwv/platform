@@ -852,6 +852,7 @@ if (listed) {
       slot_id: slotId,
       data_label: 'Drone cards',
       copied_by_name: 'Aman (intern)',
+      folder_path: '/2026/Drone',
       primary_status: 'copied',
       backup_status: 'not_required',
       size_gb: 128,
@@ -1247,6 +1248,78 @@ if (listed) {
     "booking: deleting a shoot releases its bookings and says when",
     del.status === 204 && afterDel?.status === 'released' && !!afterDel?.released_at && afterDel?.shoot_id === null,
     afterDel,
+  )
+
+  // ── Data v2 (0173): the board, crew handover, bulk, locations ──
+  const pastDay = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10)
+  const ownerUid = (await api('/auth/session', { token: aToken })).json.user_id
+  const reception = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Reception', shoot_date: pastDay } })
+  const bookPast = (user, role, h) =>
+    api('/allocation', {
+      token: aToken,
+      method: 'POST',
+      body: { user_id: user, shoot_id: reception.json.id, service_name: role, start_at: `${pastDay}T${h}:00:00.000Z`, end_at: `${pastDay}T${h + 2}:00:00.000Z` },
+    })
+  const edPast = await bookPast(edUid, 'Candid Photographer', 10)
+  const ownerPast = await bookPast(ownerUid, 'Drone Operator', 13)
+  const dBoard = await api('/data/board', { token: aToken })
+  const dRow = (dBoard.json?.rows ?? []).find((r) => r.slot_id === edPast.json.id)
+  check(
+    'data v2: the board shows a past booking with no cards as missing, with its age and phone column',
+    dBoard.status === 200 && dRow?.stage === 'missing' && dRow?.record === null && dRow?.age_days >= 1 && dRow?.shoot_name === 'Reception',
+    dRow ?? dBoard.json,
+  )
+  const edBoard = await api('/data/board', { token: edToken })
+  const edBulk = await api('/data/bulk', { token: edToken, method: 'POST', body: { slot_ids: [edPast.json.id], action: 'received' } })
+  check('data v2: a team member cannot open the board or make bulk changes', edBoard.status === 403 && edBulk.status === 403, {
+    board: edBoard.status,
+    bulk: edBulk.status,
+  })
+  const notMine = await api(`/data/mine/${ownerPast.json.id}`, { token: edToken, method: 'POST', body: { card_count: 1 } })
+  const handed = await api(`/data/mine/${edPast.json.id}`, {
+    token: edToken,
+    method: 'POST',
+    body: { card_count: 2, size_gb: 256, handed_to_uid: ownerUid, notes: 'Both cards in the office drawer' },
+  })
+  check(
+    "data v2: crew hand over their own cards, not someone else's",
+    notMine.status === 404 && handed.status === 200 && handed.json.data_status === 'received' && handed.json.card_count === 2 &&
+      handed.json.slot_id === edPast.json.id && handed.json.user_id === edUid,
+    { notMine: notMine.status, handed: handed.json },
+  )
+  const edData = await api('/data', { token: edToken })
+  const edMine = await api('/data/mine', { token: edToken })
+  check(
+    'data v2: a team member reads only their own records',
+    edData.status === 200 && (edData.json ?? []).length > 0 && (edData.json ?? []).every((r) => r.user_id === edUid) &&
+      (edMine.json ?? []).some((r) => r.id === handed.json.id),
+    { data: (edData.json ?? []).map((r) => r.user_id), mine: (edMine.json ?? []).length },
+  )
+  const diskName = `Disk ${rand()}`
+  const disk = await api('/data/locations', { token: aToken, method: 'POST', body: { name: diskName } })
+  const again = await api('/data/locations', { token: aToken, method: 'POST', body: { name: diskName.toLowerCase() } })
+  check('data v2: adding a location name that exists hands back that one', disk.status === 201 && again.status === 200 && again.json.id === disk.json.id, {
+    disk: disk.json,
+    again: again.json,
+  })
+  const noWhere = await api('/data/bulk', { token: aToken, method: 'POST', body: { slot_ids: [ownerPast.json.id], action: 'copied' } })
+  const copied = await api('/data/bulk', {
+    token: aToken,
+    method: 'POST',
+    body: { slot_ids: [edPast.json.id, ownerPast.json.id], action: 'copied', location_id: disk.json.id, folder: '/2026/Reception' },
+  })
+  check(
+    'data v2: bulk copy needs a location, creates the missing record and moves both',
+    noWhere.status === 422 && copied.status === 200 && copied.json.updated === 2 && copied.json.created === 1,
+    { noWhere: noWhere.json, copied: copied.json },
+  )
+  const locs = await api('/data/locations', { token: aToken })
+  const used = (locs.json ?? []).find((l) => l.id === disk.json.id)
+  const removed = await api(`/data/locations/${disk.json.id}`, { token: aToken, method: 'DELETE' })
+  check(
+    'data v2: a location shows what is on it, and one in use is archived, not deleted',
+    used?.record_count === 2 && used?.used_gb === 256 && removed.status === 200 && removed.json.archived === true,
+    { used, removed: removed.json },
   )
 
   // A project template creates a real project now -- and asks for a client.
