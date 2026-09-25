@@ -166,3 +166,41 @@ describe('projectHealth', () => {
     expect(h.next_action).toBe('keep_going')
   })
 })
+
+describe('reasons: one order for why and what next', () => {
+  const base = {
+    status: 'active' as const,
+    tasks_total: 4, tasks_done: 1, tasks_overdue: 0,
+    deliverables_total: 2, deliverables_done: 0, deliverables_late: 0,
+    data_records_total: 2, data_records_unverified: 0,
+    pending_reviews: 0, shoots_total: 2, shoots_done: 1,
+    next_shoot_date: '2026-10-02', last_activity_at: '2026-09-24T10:00:00Z',
+  }
+
+  it('puts footage first, then late work, review, crew and money', () => {
+    const h = projectHealth(
+      { ...base, data_missing: 2, deliverables_late: 1, pending_reviews: 3, shoots_short: 1, invoices_overdue: 1 },
+      '2026-09-25',
+    )
+    expect(h.reasons.map((r) => [r.code, r.count])).toEqual([
+      ['data', 2],
+      ['late', 1],
+      ['review', 3],
+      ['short_crew', 1],
+      ['invoice_overdue', 1],
+    ])
+    expect(h.next_action).toBe('secure_data')
+    expect(h.flags.data_missing).toBe(true)
+  })
+
+  it('counts crew who never handed data in as a data problem, even with every record safe', () => {
+    const h = projectHealth({ ...base, data_missing: 1 }, '2026-09-25')
+    expect(h.flags.data_missing).toBe(true)
+    expect(h.band).not.toBe('healthy')
+  })
+
+  it('asks to staff a short shoot, then to chase an overdue invoice', () => {
+    expect(projectHealth({ ...base, shoots_short: 1 }, '2026-09-25').next_action).toBe('staff_shoot')
+    expect(projectHealth({ ...base, invoices_overdue: 2 }, '2026-09-25').next_action).toBe('chase_payment')
+  })
+})

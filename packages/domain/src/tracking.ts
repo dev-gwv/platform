@@ -24,9 +24,17 @@ export interface ProjectCounters {
   deliverables_late?: number
   /** Shoot-linked data records only — loose records aren't a custody risk. */
   data_records_total: number
-  /** Records whose primary or backup copy is not yet verified. */
+  /** Records not yet in two places (with the shooter, received, or copied once). */
   data_records_unverified: number
+  /** Booked crew whose shoot day has passed, who owe data and handed in none. */
+  data_missing?: number
+  /** Records with a problem on either copy. */
+  data_issues?: number
   pending_reviews: number
+  /** Upcoming shoots with fewer people booked than the roles need. */
+  shoots_short?: number
+  /** Sent invoices past their due date with money still owed. */
+  invoices_overdue?: number
   shoots_total: number
   shoots_done: number
   /** Earliest upcoming shoot, or null when nothing is scheduled ahead. */
@@ -40,6 +48,8 @@ export type NextActionKey =
   | 'secure_data'
   | 'clear_overdue'
   | 'review_submissions'
+  | 'staff_shoot'
+  | 'chase_payment'
   | 'plan_work'
   | 'schedule_shoot'
   | 'deliver'
@@ -63,7 +73,21 @@ export interface ProjectHealth {
     completed: boolean
   }
   next_action: NextActionKey
+  /** Why it needs attention, most important first; each has the action that fixes it. */
+  reasons: Reason[]
 }
+
+export type ReasonCode = 'data' | 'late' | 'review' | 'short_crew' | 'invoice_overdue' | 'low_progress' | 'no_work' | 'no_shoot'
+
+export interface Reason {
+  code: ReasonCode
+  /** How many things are behind it (0 when it is a yes/no). */
+  count: number
+  action: NextActionKey
+}
+
+/** Every piece of footage not yet safe: never handed in, not in two places, or with a problem. */
+export const dataProblemsOf = (c: ProjectCounters) => c.data_records_unverified + (c.data_missing ?? 0) + (c.data_issues ?? 0)
 
 /**
  * Completion counts tasks and deliverables together: a project with every task
@@ -95,17 +119,42 @@ function daysSince(then: string, today: string): number {
 /** Late work of either kind: an overdue task or a deliverable past its date. */
 export const lateOf = (c: ProjectCounters) => c.tasks_overdue + (c.deliverables_late ?? 0)
 
+/**
+ * Why a project needs attention, in the one order the whole app uses: footage
+ * first (a missing card costs the shoot), then late work, work waiting on us,
+ * a shoot short of crew, money overdue, and last whether the work is planned.
+ * The next action is simply the first reason's action.
+ */
+export function reasonsFor(c: ProjectCounters, completion: number): Reason[] {
+  if (c.status === 'cancelled') return []
+  const out: Reason[] = []
+  const data = dataProblemsOf(c)
+  if (data > 0) out.push({ code: 'data', count: data, action: 'secure_data' })
+  if (lateOf(c) > 0) out.push({ code: 'late', count: lateOf(c), action: 'clear_overdue' })
+  if (c.pending_reviews > 0) out.push({ code: 'review', count: c.pending_reviews, action: 'review_submissions' })
+  if (c.status === 'completed') return out
+  if ((c.shoots_short ?? 0) > 0) out.push({ code: 'short_crew', count: c.shoots_short ?? 0, action: 'staff_shoot' })
+  if ((c.invoices_overdue ?? 0) > 0) out.push({ code: 'invoice_overdue', count: c.invoices_overdue ?? 0, action: 'chase_payment' })
+  const owed = c.tasks_total + c.deliverables_total
+  const shootingDone = c.shoots_total > 0 && c.shoots_done === c.shoots_total
+  if (owed > 0 && completion < 1 && shootingDone && completion < LOW_PROGRESS) {
+    out.push({ code: 'low_progress', count: 0, action: 'keep_going' })
+  }
+  if (owed === 0) out.push({ code: 'no_work', count: 0, action: 'plan_work' })
+  if (c.shoots_total === 0) out.push({ code: 'no_shoot', count: 0, action: 'schedule_shoot' })
+  return out
+}
+
 export function nextActionFor(c: ProjectCounters, completion: number): NextActionKey {
   if (c.status === 'cancelled') return 'none'
-  if (c.data_records_unverified > 0) return 'secure_data'
-  if (lateOf(c) > 0) return 'clear_overdue'
-  if (c.pending_reviews > 0) return 'review_submissions'
+  const first = reasonsFor(c, completion).find((r) => r.code !== 'low_progress')
+  if (first && (c.status !== 'completed' || ['data', 'late', 'review'].includes(first.code))) {
+    // Before the project is planned, schedule the shoot first, then say what is owed.
+    if (first.code === 'no_work' && c.shoots_total === 0) return 'schedule_shoot'
+    return first.action
+  }
   if (c.status === 'completed') return 'none'
   if (completion >= 1 && c.tasks_total + c.deliverables_total > 0) return 'deliver'
-  if (c.shoots_total === 0) return 'schedule_shoot'
-  // Nothing owed at all -- no deliverable and no task. A project whose
-  // deliverables each have an editor is planned, tasks or not.
-  if (c.tasks_total === 0 && c.deliverables_total === 0) return 'plan_work'
   return 'keep_going'
 }
 
@@ -125,9 +174,11 @@ export function scoreOf(c: ProjectCounters, completion: number, today: string): 
   const stale = Math.min(daysSince(c.last_activity_at, today), 60)
 
   return (
-    c.data_records_unverified * 12 +
+    dataProblemsOf(c) * 12 +
     lateOf(c) * 10 +
     c.pending_reviews * 4 +
+    (c.shoots_short ?? 0) * 6 +
+    (c.invoices_overdue ?? 0) * 5 +
     (shootingDone ? (1 - completion) * 30 : 0) +
     (c.status === 'on_hold' ? 8 : 0) +
     stale / 6
@@ -150,13 +201,13 @@ export function projectHealth(c: ProjectCounters, today: string): ProjectHealth 
   // Late work and unverified footage are risks by their nature, not by their
   // arithmetic — one overdue task is worth flagging even though it scores below
   // the threshold on its own.
-  const urgent = c.data_records_unverified > 0 || lateOf(c) > 0
+  const urgent = dataProblemsOf(c) > 0 || lateOf(c) > 0
 
   const flags = {
     critical: !done && score >= CRITICAL_SCORE,
     high_risk: !done && score < CRITICAL_SCORE && (score >= HIGH_SCORE || urgent),
     low_progress: !done && shootingDone && completion < LOW_PROGRESS,
-    data_missing: c.data_records_unverified > 0,
+    data_missing: dataProblemsOf(c) > 0,
     overdue: lateOf(c) > 0,
     pending_review: c.pending_reviews > 0,
     completed: done,
@@ -172,5 +223,5 @@ export function projectHealth(c: ProjectCounters, today: string): ProjectHealth 
           ? 'low_progress'
           : 'healthy'
 
-  return { completion, band, score, flags, next_action: nextActionFor(c, completion) }
+  return { completion, band, score, flags, next_action: nextActionFor(c, completion), reasons: reasonsFor(c, completion) }
 }
