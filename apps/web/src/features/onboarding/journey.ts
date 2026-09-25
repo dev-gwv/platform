@@ -101,7 +101,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     key: 'payment',
     title: 'Track payments / invoices',
     description: 'Track received payments, pending dues, invoices, and client billing.',
-    action: { label: 'Payments', to: '/billing', search: { from: 'setup' } },
+    action: { label: 'Payments', to: '/billing/invoices', search: { from: 'setup' } },
     module: 'billing',
     isDone: (s) => s.invoices > 0,
   },

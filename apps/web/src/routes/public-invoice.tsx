@@ -59,7 +59,6 @@ export function PublicInvoicePage() {
             <>
               <span className="text-muted-foreground">Amount due </span>
               <span className="text-lg font-semibold tabular-nums">{formatINR(inv.balance_due)}</span>
-              {doc.company.invoice_upi_id && <span className="text-muted-foreground"> · UPI {doc.company.invoice_upi_id}</span>}
             </>
           ) : (
             <span className="font-semibold text-tone-green">Paid in full. Thank you!</span>

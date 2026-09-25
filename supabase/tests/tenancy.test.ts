@@ -5186,21 +5186,20 @@ describe('Lovable parity round 3: parties and expense form completeness', () => 
     expect(row.rows[0]).toEqual({ category: 'Props', party_id: null })
   })
 
-  it('a personal expense carries its own date, party, and GST rate', async () => {
+  it('an expense someone paid from their own pocket carries its date, party, GST rate and who paid (0170)', async () => {
     const co = (await db.query<{ c: string }>(`select get_current_company_id() as c`)).rows[0]!.c
     const party = (
       await db.query<{ id: string }>(`insert into parties (company_id, name, kind) values ('${co}', 'Rental Co', 'vendor') returning id;`)
     ).rows[0]!.id
     await db.exec(`
-      insert into personal_expense (company_id, user_id, party_id, amount, expense_date, gst_treatment, gst_rate)
-        values ('${co}', '${OWNER}', '${party}', 750, '2026-03-01', 'gst_applicable', 5);
+      insert into expenses (company_id, party_id, amount, expense_date, gst_treatment, gst_rate, paid_by_user_id, reimbursement_status)
+        values ('${co}', '${party}', 750, '2026-03-01', 'gst_applicable', 5, '${OWNER}', 'pending');
     `)
-    const r = await db.query<{ v: { items: { party_name: string; expense_date: string; gst_rate: number }[] } }>(
-      `select list_personal_expenses(null, null, null, 10) as v;`,
+    const r = await db.query<{ party_name: string; gst_rate: number; paid_by: string; status: string }>(
+      `select p.name as party_name, e.gst_rate::float as gst_rate, e.paid_by_user_id as paid_by, e.reimbursement_status as status
+         from expenses e join parties p on p.id = e.party_id where e.expense_date = '2026-03-01' and e.amount = 750;`,
     )
-    const item = r.rows[0]!.v.items.find((i) => i.expense_date === '2026-03-01')
-    expect(item?.party_name).toBe('Rental Co')
-    expect(item?.gst_rate).toBe(5)
+    expect(r.rows[0]).toMatchObject({ party_name: 'Rental Co', gst_rate: 5, paid_by: OWNER, status: 'pending' })
   })
 })
 

@@ -242,7 +242,7 @@ function StudioCommandCenter() {
         <Tile icon={Database} value={totals.data_missing} label="Projects with data not safe" tone="warning" to="/data-management" />
         <Tile icon={Eye} value={totals.pending_review} label="Projects with work to review" tone="success" to="/project-tracking" search={{ tab: 'pending_review' }} />
         {access.hasModule('billing') && (
-          <Tile icon={Receipt} value={formatINR(outstanding)} label="Outstanding" tone="primary" to="/billing" />
+          <Tile icon={Receipt} value={formatINR(outstanding)} label="Outstanding" tone="primary" to="/billing/invoices" />
         )}
       </div>
       )}

@@ -24,7 +24,6 @@ const ROUTE_MODULE_MAP: { prefix: string; module: string }[] = [
   { prefix: '/clients', module: 'clients' },
   { prefix: '/financials', module: 'financials' },
   { prefix: '/enquiries', module: 'enquiries' },
-  { prefix: '/personal-expenses', module: 'expenses' },
   { prefix: '/company-expenses', module: 'expenses' },
   { prefix: '/notifications', module: 'notifications' },
   { prefix: '/settings', module: 'settings' },

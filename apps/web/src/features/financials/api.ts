@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   expense,
-  reconciliationSummary,
+  expenseAttachment,
+  expenseSummary,
+  gstSummary,
   fixedOverhead,
   profitAndLoss,
   z,
@@ -29,6 +31,9 @@ export interface ExpenseFilters {
   max_amount?: string | undefined
   /** 'with' | 'without' | 'rcm' — GST treatment, or reverse charge only. */
   gst?: string | undefined
+  /** Who paid from their own pocket. */
+  paid_by?: string | undefined
+  reimbursement?: 'none' | 'pending' | 'reimbursed' | undefined
   sort?: 'date' | 'amount' | undefined
   dir?: 'asc' | 'desc' | undefined
   page?: number | undefined
@@ -46,6 +51,8 @@ function expenseParams(f: ExpenseFilters): URLSearchParams {
   if (f.min_amount) p.set('min_amount', f.min_amount)
   if (f.max_amount) p.set('max_amount', f.max_amount)
   if (f.gst) p.set('gst', f.gst)
+  if (f.paid_by) p.set('paid_by', f.paid_by)
+  if (f.reimbursement) p.set('reimbursement', f.reimbursement)
   return p
 }
 
@@ -210,17 +217,6 @@ export function useDeleteFixedOverhead() {
   })
 }
 
-export const expenseSummary = z.object({
-  count: z.number().int(),
-  total: z.number(),
-  tax_total: z.number(),
-  rcm_total: z.number(),
-  // Counted in SQL over the whole filtered set. Computing these from the rows
-  // on screen made "Project-linked" and "Categories used" describe one page.
-  linked_count: z.coerce.number().int().default(0),
-  category_count: z.coerce.number().int().default(0),
-})
-export type ExpenseSummary = z.infer<typeof expenseSummary>
 
 /**
  * Totals over the whole date range, not the page on screen.
@@ -249,22 +245,6 @@ export function useExpenseSummary(filters: ExpenseFilters = {}) {
   })
 }
 
-/**
- * The reconciliation report: every figure a difference between two
- * independently-computed numbers. Short staleTime because the whole value of
- * the page is that a divergence is noticed the day it appears.
- */
-export function useReconciliation() {
-  const { session } = useAuth()
-  const access = useAccess()
-  return useQuery({
-    queryKey: ['financials', 'reconciliation'],
-    queryFn: () => callApi('/financials/reconciliation', { responseSchema: reconciliationSummary }),
-    enabled: !!session && access.hasModule('financials'),
-    staleTime: 30_000,
-  })
-}
-
 /** The Profit & Loss for a period (cash or booked), or one project's whole life. */
 export function useProfitAndLoss(q: PnlQuery, enabled = true) {
   const { session } = useAuth()
@@ -276,5 +256,68 @@ export function useProfitAndLoss(q: PnlQuery, enabled = true) {
     enabled: enabled && !!session && access.hasModule('financials'),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
+  })
+}
+
+/** The bills behind one expense. */
+export function useExpenseAttachments(expenseId: string | null) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['expenses', 'attachments', expenseId],
+    queryFn: () => callApi(`/financials/expenses/${expenseId}/attachments`, { responseSchema: expenseAttachment.array() }),
+    enabled: !!session && !!expenseId,
+    staleTime: 15_000,
+  })
+}
+
+export function useAddExpenseAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ expenseId, file_id }: { expenseId: string; file_id: string }) =>
+      callApi(`/financials/expenses/${expenseId}/attachments`, { method: 'POST', body: { file_id }, responseSchema: expenseAttachment }),
+    onSuccess: (_a, v) => {
+      void qc.invalidateQueries({ queryKey: ['expenses', 'attachments', v.expenseId] })
+      void qc.invalidateQueries({ queryKey: ['expenses', 'page'] })
+      void qc.invalidateQueries({ queryKey: ['expenses', 'project'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useDeleteExpenseAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ attachmentId }: { attachmentId: string; expenseId: string }) =>
+      callApi(`/financials/expenses/attachments/${attachmentId}`, { method: 'DELETE', responseSchema: z.unknown() }),
+    onSuccess: (_r, v) => {
+      void qc.invalidateQueries({ queryKey: ['expenses', 'attachments', v.expenseId] })
+      void qc.invalidateQueries({ queryKey: ['expenses', 'page'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** The money is back with the person who paid. */
+export function useMarkReimbursed() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/financials/expenses/${id}/reimbursed`, { method: 'POST', body: {}, responseSchema: z.object({ ok: z.boolean() }) }),
+    onSuccess: () => {
+      toast.success('Marked as paid back')
+      void qc.invalidateQueries({ queryKey: ['expenses'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** GST collected and paid, month by month, for the accountant. */
+export function useGstSummary(from: string, to: string, enabled = true) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['financials', 'gst-summary', from, to],
+    queryFn: () => callApi(`/financials/gst-summary?from=${from}&to=${to}`, { responseSchema: gstSummary }),
+    enabled: !!session && enabled && !!from && !!to && access.hasModule('financials'),
+    staleTime: 60_000,
   })
 }

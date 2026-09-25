@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { uuid, isoDate, money, gstRate } from './shared/primitives'
+import { uuid, isoDate, isoDateTime, money, gstRate } from './shared/primitives'
 
 export const gstTreatment = z.enum(['non_gst', 'gst_applicable', 'exempt', 'reverse_charge'])
 
@@ -22,8 +22,62 @@ export const expense = z.object({
   tax_amount: money.nullish(),
   reverse_charge: z.boolean().nullish(),
   itemize_json: z.array(z.record(z.string(), z.unknown())).nullish(),
+  /** Who paid, when it was not the studio's account: money to give back. */
+  paid_by_user_id: uuid.nullable().default(null),
+  paid_by_name: z.string().nullable().default(null),
+  reimbursement_status: z.enum(['none', 'pending', 'reimbursed']).default('none'),
+  reimbursed_at: isoDateTime.nullable().default(null),
+  attachment_count: z.number().int().nonnegative().default(0),
 })
 export type Expense = z.infer<typeof expense>
+
+export const expenseAttachment = z.object({
+  id: uuid,
+  file_id: uuid.nullable().default(null),
+  file_name: z.string().nullable(),
+  file_url: z.string().nullable(),
+  mime_type: z.string().nullable().default(null),
+  file_size: z.number().int().nullable().default(null),
+  created_at: isoDateTime,
+})
+export type ExpenseAttachment = z.infer<typeof expenseAttachment>
+
+export const addExpenseAttachmentRequest = z.object({ file_id: uuid })
+export type AddExpenseAttachmentRequest = z.infer<typeof addExpenseAttachmentRequest>
+
+/** The three tiles over the Expenses page, whatever the list is filtered to. */
+export const expenseSummary = z.object({
+  count: z.number().int(),
+  total: money,
+  tax_total: money,
+  rcm_total: money,
+  linked_count: z.number().int(),
+  category_count: z.number().int(),
+  this_month: money.default(0),
+  this_fy: money.default(0),
+  to_reimburse: money.default(0),
+})
+export type ExpenseSummary = z.infer<typeof expenseSummary>
+
+/** GST collected on invoices and paid on expenses, month by month, for the accountant. */
+export const gstSummary = z.object({
+  from: isoDate,
+  to: isoDate,
+  months: z.array(
+    z.object({
+      month: z.string(),
+      taxable_sales: money,
+      cgst: money,
+      sgst: money,
+      igst: money,
+      gst_collected: money,
+      purchases: money,
+      gst_paid: money,
+      rcm: money,
+    }),
+  ),
+})
+export type GstSummary = z.infer<typeof gstSummary>
 
 export const expenseItemLine = z.object({
   title: z.string().trim().max(200),
@@ -48,6 +102,8 @@ export const createExpenseRequest = z.object({
   tax_amount: money.nullish(),
   reverse_charge: z.boolean().nullish(),
   itemize_json: z.array(z.record(z.string(), z.unknown())).nullish(),
+  paid_by_user_id: uuid.nullable().optional(),
+  reimbursement_status: z.enum(['none', 'pending', 'reimbursed']).optional(),
 })
 export type CreateExpenseRequest = z.infer<typeof createExpenseRequest>
 
@@ -67,6 +123,8 @@ export const updateExpenseRequest = z.object({
   tax_amount: money.nullable().optional(),
   reverse_charge: z.boolean().optional(),
   itemize_json: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+  paid_by_user_id: uuid.nullable().optional(),
+  reimbursement_status: z.enum(['none', 'pending', 'reimbursed']).optional(),
 })
 export type UpdateExpenseRequest = z.infer<typeof updateExpenseRequest>
 
@@ -171,68 +229,7 @@ export type FinancialOverview = z.infer<typeof financialOverview>
  * settled. A split like the two payment ledgers shows up here as a column
  * rather than as two screens nobody compares.
  */
-const reconProject = z.object({
-  project_id: uuid,
-  name: z.string(),
-  status: z.string().nullable(),
-  project_value: money,
-  invoiced: money,
-  received: money,
-  banked: money,
-  outstanding: money,
-  unbilled: money,
-  unbanked: money,
-})
-export type ReconProject = z.infer<typeof reconProject>
 
-const reconMember = z.object({
-  user_id: uuid,
-  name: z.string().nullable(),
-  due: money,
-  settled: money,
-  outstanding: money,
-  overpaid: money,
-})
-export type ReconMember = z.infer<typeof reconMember>
-
-export const reconciliationSummary = z.object({
-  money_in: z.object({
-    project_value: money,
-    invoiced: money,
-    received: money,
-    banked: money,
-    /** Invoiced and not yet received — what clients still owe on sent bills. */
-    outstanding: money,
-    /** Sold and never billed. Nothing else in the app shows this. */
-    unbilled: money,
-    /** Recorded but not confirmed in the bank. */
-    unbanked: money,
-    /**
-     * Money tied to no project — a payment against a project-less invoice, or
-     * such an invoice itself. Both are ordinary since 0145, and the first
-     * version of this report could not see either.
-     */
-    unassigned_received: money.default(0),
-    unassigned_invoiced: money.default(0),
-    projects: z.array(reconProject).default([]),
-  }),
-  money_out: z.object({
-    due: money,
-    settled: money,
-    outstanding: money,
-    /** Settled beyond what the booking was costed at. */
-    overpaid: money,
-    members: z.array(reconMember).default([]),
-  }),
-  /** Rules the schema is supposed to hold, counted rather than trusted. */
-  health: z.object({
-    payments_linked_to_nothing: z.coerce.number().int().default(0),
-    invoices_paid_with_balance: z.coerce.number().int().default(0),
-    invoices_unpaid_but_settled: z.coerce.number().int().default(0),
-    payments_client_mismatch: z.coerce.number().int().default(0),
-  }),
-})
-export type ReconciliationSummary = z.infer<typeof reconciliationSummary>
 
 /**
  * The Profit & Loss statement (0167). `cash`: what came in and went out in
@@ -286,6 +283,6 @@ export const profitAndLoss = z.object({
       to_collect: z.number(),
     }),
   ),
-  rail: z.object({ still_to_collect: z.number(), owed_to_team: z.number(), unbanked: z.number() }),
+  rail: z.object({ still_to_collect: z.number(), owed_to_team: z.number() }),
 })
 export type ProfitAndLoss = z.infer<typeof profitAndLoss>

@@ -38,7 +38,6 @@ import { PublicInvoicePage } from '@/routes/public-invoice'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
-import { ReconciliationPage } from '@/routes/financials/reconciliation'
 import { FollowUpsPage } from '@/routes/follow-ups'
 import { CrmSetupPage } from '@/routes/follow-ups/setup'
 import { AttendancePage } from '@/routes/attendance'
@@ -55,7 +54,6 @@ import { TermsAcknowledgePage } from '@/routes/terms-acknowledge'
 import { QuoteAcceptPage } from '@/routes/quote-accept'
 import { TeamTermsAcknowledgePage } from '@/routes/team-terms-acknowledge'
 import { QuotationPage } from '@/routes/quotation'
-import { PersonalExpensesPage } from '@/routes/personal-expenses'
 import { ReceiptPage } from '@/routes/receipt'
 import { DeliveryPage } from '@/routes/delivery'
 import { ReferPage } from '@/routes/refer'
@@ -217,9 +215,9 @@ const routeTree = rootRoute.addChildren([
   route('/billing', BillingPage),
   route('/billing/invoices', InvoicesPage),
   route('/billing/payments', PaymentsPage),
-  route('/billing/templates', InvoiceTemplatesPage),
-  route('/billing/settings', InvoiceTemplatesPage),
-  route('/billing/invoices/new', () => <BillingPage newInvoice />),
+  route('/billing/templates', () => <Navigate to="/settings/invoicing" replace />),
+  route('/billing/settings', () => <Navigate to="/settings/invoicing" replace />),
+  route('/billing/invoices/new', () => <InvoicesPage newInvoice />),
   route('/billing/invoices/$id', InvoiceDetailPage),
   route('/billing/invoices/$id/edit', () => <InvoiceDetailPage edit />),
   route('/billing/$id/invoice', InvoiceDetailPage),
@@ -228,7 +226,7 @@ const routeTree = rootRoute.addChildren([
   route('/financials', FinancialsPage),
   // The two older profit screens now live in Profit & Loss.
   route('/financials/profit', () => <Navigate to="/financials" replace />),
-  route('/financials/reconciliation', ReconciliationPage),
+  route('/financials/reconciliation', () => <Navigate to="/billing/payments" replace />),
   route('/financials/calculated-expenses', () => <Navigate to="/financials" replace />),
   route('/notifications', NotificationsPage),
   route('/notifications/generate', () => <NotificationsPage generate />),
@@ -240,8 +238,8 @@ const routeTree = rootRoute.addChildren([
   route('/settings/attendance-location', AttendanceLocationPage),
   route('/settings/lookups', LookupsPage),
   route('/settings/advanced', AdvancedSettingsPage),
-  route('/personal-expenses', PersonalExpensesPage),
-  route('/personal-expenses/report', () => <PersonalExpensesPage report />),
+  route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),
+  route('/settings/invoicing', InvoiceTemplatesPage),
   route('/settings/appearance', AppearancePage),
   route('/settings/system', SystemPage),
   route('/settings/services', () => <SystemPage focus="services" />),

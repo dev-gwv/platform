@@ -10,6 +10,7 @@ const TABS: ReadonlyArray<{ to: string; label: string; module: ModuleKey }> = [
   { to: '/settings/team-terms', label: 'Team Terms', module: 'team_terms' },
   { to: '/settings/appearance', label: 'Theme & Branding', module: 'settings' },
   { to: '/settings/lookups', label: 'Lookups', module: 'settings' },
+  { to: '/settings/invoicing', label: 'Invoicing', module: 'billing' },
   { to: '/settings/attendance-location', label: 'Attendance Location', module: 'settings' },
   { to: '/settings/subscription', label: 'Subscription', module: 'settings_subscription' },
   { to: '/settings/system', label: 'System', module: 'settings' },

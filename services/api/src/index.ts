@@ -31,7 +31,6 @@ import { teamTermsRouter, publicTeamTermsRouter } from './modules/team-terms/rou
 import { documentsRouter, publicDocumentsRouter } from './modules/documents/router'
 import { filesRouter, publicFilesRouter } from './modules/files/router'
 import { enquiriesRouter } from './modules/enquiries/router'
-import { personalExpensesRouter } from './modules/personal-expenses/router'
 import { partiesRouter } from './modules/parties/router'
 import { settingsRouter } from './modules/settings/router'
 import { platformRouter } from './modules/platform/router'
@@ -149,7 +148,6 @@ app.route('/public', publicTermsRouter)
 app.route('/documents', documentsRouter)
 app.route('/files', filesRouter)
 app.route('/enquiries', enquiriesRouter)
-app.route('/personal-expenses', personalExpensesRouter)
 app.route('/parties', partiesRouter)
 app.route('/public', publicQuotesRouter)
 app.route('/public', publicTeamTermsRouter)
