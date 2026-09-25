@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { shootListItem, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { QuotationLinkDialog } from '@/features/projects/QuotationLinkDialog'
 import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
@@ -466,6 +467,16 @@ function EditProjectDialog({
     Number(form.package_cost ?? 0) !== initial.package_cost ||
     (form.show_quotation ?? false) !== initial.show_quotation
   const belowReceived = Number(form.package_cost ?? 0) < received
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `project-edit-dialog:${id}` : null,
+    { form, packageCostText },
+    (v) => {
+      setForm(v.form)
+      setPackageCostText(v.packageCostText)
+    },
+    { isBlank: (v) => JSON.stringify(v) === JSON.stringify({ form: initial, packageCostText: String(packageCost) }) },
+  )
 
   function reset() {
     setForm({ ...initial })
@@ -480,6 +491,7 @@ function EditProjectDialog({
         confirmLabel: 'Discard',
       })
       if (!leave) return
+      draft.clear()
       reset()
     }
     if (next) {
@@ -500,6 +512,7 @@ function EditProjectDialog({
       if (!yes) return
     }
     await update.mutateAsync(form)
+    draft.clear()
     setOpen(false)
   }
 

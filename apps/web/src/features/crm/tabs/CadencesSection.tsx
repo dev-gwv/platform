@@ -9,6 +9,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useCadences, useCreateCadence, useDeleteCadence, usePipelines, useTemplates, useUpdateCadence } from '../api'
 
 type Draft = { day: string; template_id: string; note: string }
@@ -31,6 +32,7 @@ const CADENCE_SOURCES: { value: string; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 const EMPTY_STEP: Draft = { day: '0', template_id: '', note: '' }
+const firstSteps = (): Draft[] => [{ ...EMPTY_STEP }, { ...EMPTY_STEP, day: '3' }]
 
 /**
  * Cadences: the follow-up sequence a lead is put on — day 0 call, day 3 send
@@ -149,8 +151,15 @@ function CadenceForm() {
   const [name, setName] = useState('')
   const [stageFilter, setStageFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
-  const [steps, setSteps] = useState<Draft[]>([{ ...EMPTY_STEP }, { ...EMPTY_STEP, day: '3' }])
+  const [steps, setSteps] = useState<Draft[]>(firstSteps)
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft('cadence:new', { name, stageFilter, sourceFilter, steps }, (v) => {
+    setName(v.name)
+    setStageFilter(v.stageFilter)
+    setSourceFilter(v.sourceFilter)
+    setSteps(v.steps)
+  })
 
   // Stage names across every pipeline, deduped — the filter is stored as text,
   // so two pipelines with a "Proposal sent" stage are one choice here.
@@ -179,18 +188,31 @@ function CadenceForm() {
     }
     create.mutate(parsed.data, {
       onSuccess: () => {
-        setName('')
-        setStageFilter('')
-        setSourceFilter('')
-        setSteps([{ ...EMPTY_STEP }, { ...EMPTY_STEP, day: '3' }])
+        draft.clear()
+        reset()
       },
     })
+  }
+
+  function reset() {
+    setName('')
+    setStageFilter('')
+    setSourceFilter('')
+    setSteps(firstSteps())
   }
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4 sm:p-4">
         <p className="font-medium">New cadence</p>
+        <DraftRestoredBanner
+          at={draft.restoredAt}
+          onDismiss={draft.dismissRestored}
+          onDiscard={() => {
+            draft.clear()
+            reset()
+          }}
+        />
         <div className="flex flex-col gap-1">
           <Label htmlFor="cad-name">Name</Label>
           <Input id="cad-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Wedding enquiry follow-up" aria-invalid={!!error && name.trim().length < 2} />

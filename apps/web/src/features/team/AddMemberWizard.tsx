@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
+import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
@@ -41,6 +42,11 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
   const cardRef = useRef<HTMLDivElement>(null)
   const add = useAddMember()
 
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // The starting password is never written to storage: it is typed again.
+  const { password: _pw, confirm_password: _cpw, ...typed } = draft
+  const saved = useFormDraft('team-add-member', typed, (v) => setDraft((d) => ({ ...d, ...v })))
+
   const goToStep = (next: WizardStep) => {
     setStep(next)
     scrollIntoView(cardRef.current)
@@ -66,7 +72,12 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
       goToStep(nextStep(step))
       return
     }
-    add.mutate(toRequest(draft), { onSuccess: onDone })
+    add.mutate(toRequest(draft), {
+      onSuccess: () => {
+        saved.clear()
+        onDone()
+      },
+    })
   }
 
   return (
@@ -82,6 +93,20 @@ export function AddMemberWizard({ onDone, onCancel }: { onDone: () => void; onCa
           Cancel
         </Button>
       </div>
+
+      {saved.restoredAt && (
+        <div className="mt-4">
+          <DraftRestoredBanner
+            at={saved.restoredAt}
+            onDismiss={saved.dismissRestored}
+            onDiscard={() => {
+              saved.clear()
+              setDraft(EMPTY_DRAFT)
+              goToStep('engagement')
+            }}
+          />
+        </div>
+      )}
 
       <Progress index={index} />
       <StepChips current={step} onJump={goToStep} />

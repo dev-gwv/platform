@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import type { Deliverable, DeliverableStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -62,6 +63,37 @@ export function DeliverableDialog({
   const [charged, setCharged] = useState(deliverable?.is_additional_charge ?? false)
   const [amount, setAmount] = useState(deliverable?.additional_charge_amount ? String(deliverable.additional_charge_amount) : '')
   const [brief, setBrief] = useState(deliverable?.description ?? '')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    `deliverable:${deliverable?.id ?? `new:${projectId}${defaultShootId ? `:${defaultShootId}` : ''}`}`,
+    { title, shootId, scope, assigneeId, due, status, link, charged, amount, brief },
+    (v) => {
+      setTitle(v.title)
+      setShootId(v.shootId)
+      setScope(v.scope)
+      setAssigneeId(v.assigneeId)
+      setDue(v.due)
+      setStatus(v.status)
+      setLink(v.link)
+      setCharged(v.charged)
+      setAmount(v.amount)
+      setBrief(v.brief)
+    },
+  )
+
+  function startFresh() {
+    draft.clear()
+    setTitle(deliverable?.title ?? '')
+    setShootId(deliverable?.shoot_id ?? defaultShootId ?? '')
+    setScope(deliverable?.visibility_scope ?? 'client')
+    setAssigneeId(deliverable?.assignee_id ?? '')
+    setDue(deliverable?.estimated_date ?? '')
+    setStatus((deliverable?.status as DeliverableStatus | undefined) ?? 'pending')
+    setLink(deliverable?.delivery_link ?? '')
+    setCharged(deliverable?.is_additional_charge ?? false)
+    setAmount(deliverable?.additional_charge_amount ? String(deliverable.additional_charge_amount) : '')
+    setBrief(deliverable?.description ?? '')
+  }
 
   const busy = add.isPending || update.isPending
   const client = scope === 'client'
@@ -81,8 +113,12 @@ export function DeliverableDialog({
       additional_charge_amount: extra ? Number(amount) || 0 : 0,
       description: brief.trim() || null,
     }
+    const saved = () => {
+      draft.clear()
+      onClose()
+    }
     if (editing) {
-      update.mutate({ deliverableId: deliverable.id, patch: body }, { onSuccess: onClose })
+      update.mutate({ deliverableId: deliverable.id, patch: body }, { onSuccess: saved })
     } else {
       add.mutate(
         {
@@ -92,7 +128,7 @@ export function DeliverableDialog({
           estimated_date: due || undefined,
           description: brief.trim() || undefined,
         },
-        { onSuccess: onClose },
+        { onSuccess: saved },
       )
     }
   }
@@ -101,6 +137,7 @@ export function DeliverableDialog({
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={editing ? 'Edit deliverable' : 'Add deliverable'} className="max-w-lg">
         <div className="flex flex-col gap-3">
+          <DraftRestoredBanner at={draft.restoredAt} onDismiss={draft.dismissRestored} onDiscard={startFresh} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dl-title">What</Label>
             <LookupSelect

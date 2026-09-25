@@ -6,6 +6,7 @@ import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -283,6 +284,13 @@ function RoleDialog({ role }: { role?: EmployeeRole }) {
     role ? stageOf(role) : 'production',
   )
   const busy = create.isPending || update.isPending
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? `job-role:${role?.id ?? 'new'}` : null, { name, code, codeTouched, stage }, (v) => {
+    setName(v.name)
+    setCode(v.code)
+    setCodeTouched(v.codeTouched)
+    setStage(v.stage)
+  })
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -291,7 +299,12 @@ function RoleDialog({ role }: { role?: EmployeeRole }) {
       role_code: (codeTouched ? code : toCode(name)).trim(),
       stage,
     }
-    const done = { onSuccess: () => setOpen(false) }
+    const done = {
+      onSuccess: () => {
+        draft.clear()
+        setOpen(false)
+      },
+    }
     if (editing) update.mutate({ id: role.id, patch: body }, done)
     else create.mutate(body, done)
   }

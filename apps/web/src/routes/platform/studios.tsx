@@ -10,6 +10,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { humanize } from '@/shared/ui/format'
@@ -337,8 +338,16 @@ function CreateStudioDialog() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [planKey, setPlanKey] = useState('')
+  const [open, setOpen] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? 'platform-studio:new' : null, { name, email, phone, planKey }, (v) => {
+    setName(v.name)
+    setEmail(v.email)
+    setPhone(v.phone)
+    setPlanKey(v.planKey)
+  })
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm">New studio</Button></DialogTrigger>
       <DialogContent
         title="Create studio"
@@ -349,7 +358,22 @@ function CreateStudioDialog() {
           <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Owner email *" />
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Owner phone (optional)" />
           <Input value={planKey} onChange={(e) => setPlanKey(e.target.value)} placeholder="Plan key (optional — grants trial)" />
-          <Button disabled={create.isPending || !name.trim() || !email.trim()} onClick={() => create.mutate({ name: name.trim(), owner_email: email.trim(), owner_phone: phone.trim() || undefined, plan_key: planKey.trim() || undefined })}>
+          <Button disabled={create.isPending || !name.trim() || !email.trim()} onClick={() =>
+              create.mutate(
+                { name: name.trim(), owner_email: email.trim(), owner_phone: phone.trim() || undefined, plan_key: planKey.trim() || undefined },
+                {
+                  onSuccess: () => {
+                    draft.clear()
+                    setName('')
+                    setEmail('')
+                    setPhone('')
+                    setPlanKey('')
+                    setOpen(false)
+                  },
+                },
+              )
+            }
+          >
             {create.isPending ? 'Creating…' : 'Create'}
           </Button>
         </div>

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSlots } from '@/features/allocation/api'
 import { crewState, rolesFilled, rolesNeeded, type CrewState } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -408,6 +409,15 @@ function ShootDialog() {
   const [mapLink, setMapLink] = useState('')
   const [requirements, setRequirements] = useState<ShootRequirementInput[]>([])
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? 'shoots-page:new' : null, { projectId, name, date, location, mapLink, requirements }, (v) => {
+    setProjectId(v.projectId)
+    setName(v.name)
+    setDate(v.date)
+    setLocation(v.location)
+    setMapLink(v.mapLink)
+    setRequirements(v.requirements)
+  })
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -424,6 +434,7 @@ function ShootDialog() {
         ...(requirements.length > 0 ? { requirements } : {}),
       }
       await create.mutateAsync(body)
+      draft.clear()
       setOpen(false)
       setName('')
       setDate('')
@@ -507,6 +518,19 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
     shoot.requirements.map((r) => ({ name: r.name, quantity: r.quantity })),
   )
   const [error, setError] = useState<string | null>(null)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `shoots-page:edit:${shoot.id}` : null,
+    { name, date, location, mapLink, status, requirements },
+    (v) => {
+      setName(v.name)
+      setDate(v.date)
+      setLocation(v.location)
+      setMapLink(v.mapLink)
+      setStatus(v.status)
+      setRequirements(v.requirements)
+    },
+  )
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -521,6 +545,7 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
         requirements: requirements.map((r) => shootRequirementInput.parse(r)),
       }
       await update.mutateAsync({ id: shoot.id, patch: body })
+      draft.clear()
       setOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the shoot.')

@@ -3,6 +3,7 @@ import { HardDrive, Loader2, Ruler, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CustodyStatus, DataRecord, ShootListItem, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
@@ -74,6 +75,26 @@ export function DataRecordDialog({
     status: record?.backup_status ?? 'pending',
   })
 
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const initial = useState(() => ({ type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup }))[0]
+  const draft = useFormDraft(
+    `data-record:${record?.id ?? `new:${slot.id}`}`,
+    { type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup },
+    restore,
+  )
+  function restore(v: typeof initial) {
+    setType(v.type)
+    setReceived(v.received)
+    setCopiedBy(v.copiedBy)
+    setCopiedByName(v.copiedByName)
+    setSize(v.size)
+    setCards(v.cards)
+    setLabel(v.label)
+    setNotes(v.notes)
+    setPrimary(v.primary)
+    setBackup(v.backup)
+  }
+
   const who = slot.user_name ?? 'this booking'
 
 
@@ -125,6 +146,7 @@ export function DataRecordDialog({
           team_member_name: slot.user_name ?? undefined,
           requirement_name: slot.service_name ?? undefined,
         })
+      draft.clear()
       onClose()
     } catch {
       // The hooks toast the server's reason.
@@ -139,6 +161,14 @@ export function DataRecordDialog({
         description={`${shoot.name} · ${slot.service_name ?? 'Crew'} · ${whenLabel(slot)}`}
       >
         <div className="flex flex-col gap-3">
+          <DraftRestoredBanner
+            at={draft.restoredAt}
+            onDismiss={draft.dismissRestored}
+            onDiscard={() => {
+              draft.clear()
+              restore(initial)
+            }}
+          />
           {/* What came in, and who handled it. */}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">

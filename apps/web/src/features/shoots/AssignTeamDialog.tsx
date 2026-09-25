@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import type { ShootListItem, SlotCostStatus, TeamMember, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { ApiError } from '@/shared/api/client'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -245,6 +246,24 @@ function AssignOne({
   const [replacing, setReplacing] = useState<{ slot: TeamSlot; name: string } | null>(null)
   const [justAssigned, setJustAssigned] = useState<string | null>(null)
   const [quickAdd, setQuickAdd] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is saved. Only
+  // a typed payout or note makes it worth keeping; a pick alone is one click.
+  const draft = useFormDraft(
+    `assign-team:${shoot.id}`,
+    { requirement, date, time, hours, memberId, costStatus, cost, costTouched, notes },
+    (v) => {
+      setRequirement(v.requirement)
+      setDate(v.date)
+      setTime(v.time)
+      setHours(v.hours)
+      setMemberId(v.memberId)
+      setCostStatus(v.costStatus)
+      setCost(v.cost)
+      setCostTouched(v.costTouched)
+      setNotes(v.notes)
+    },
+    { isBlank: (v) => !v.costTouched && !v.notes.trim() },
+  )
 
   const slotWindow = windowOf(date, time, hours)
   const current = fill.find((r) => r.name === requirement)
@@ -322,6 +341,7 @@ function AssignOne({
         cost_status: costStatus,
         ...(notes.trim() ? { cost_notes: notes.trim() } : {}),
       })
+      draft.clear()
       setJustAssigned(`${picked.name} is booked as ${requirement}.`)
       reset()
     } catch (e) {
@@ -832,6 +852,20 @@ function AssignMany({
   /** `${requirement}|${userId}` → payout typed for that person. */
   const [payouts, setPayouts] = useState<Record<string, string>>({})
   const [failed, setFailed] = useState<string[]>([])
+  // Picks and payouts for a whole crew survive a refresh or a closed tab until they are booked.
+  const draft = useFormDraft(
+    `assign-team-many:${shoot.id}`,
+    { date, time, hours, costStatus, picks, payouts },
+    (v) => {
+      setDate(v.date)
+      setTime(v.time)
+      setHours(v.hours)
+      setCostStatus(v.costStatus)
+      setPicks(v.picks)
+      setPayouts(v.payouts)
+    },
+    { isBlank: (v) => Object.values(v.picks).every((ids) => ids.length === 0) },
+  )
 
   const slotWindow = windowOf(date, time, hours)
   const pending = fill.filter((r) => r.open > 0)
@@ -891,6 +925,7 @@ function AssignMany({
       setFailed(bad)
       if (ok > 0) toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} assigned and booked.`)
       if (bad.length === 0) {
+        draft.clear()
         setPicks({})
         setPayouts({})
         onDone()

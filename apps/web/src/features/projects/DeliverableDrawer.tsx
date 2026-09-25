@@ -12,6 +12,7 @@ import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
 import { isLate, stageOf } from './deliverable-stage'
 import { DueChip, DueEditor, EditorName, EditorPicker, KindTile, MoveToMenu, NextStageButton, activityWhat } from './DeliverableCard'
@@ -186,9 +187,18 @@ function Brief({ d, canEdit }: { d: Deliverable; canEdit: boolean }) {
   const update = useUpdateDeliverable(d.project_id)
   const [text, setText] = useState(d.description ?? '')
   useEffect(() => setText(d.description ?? ''), [d.description])
+  // The brief saves on blur; a refresh before that no longer loses it.
+  const draft = useFormDraft(
+    canEdit ? `deliverable-brief:${d.id}` : null,
+    { text },
+    (v) => setText(v.text),
+    { isBlank: (v) => v.text === (d.description ?? '') },
+  )
   const save = () => {
     const next = text.trim()
-    if (next !== (d.description ?? '').trim()) update.mutate({ deliverableId: d.id, patch: { description: next || null } })
+    if (next !== (d.description ?? '').trim()) {
+      update.mutate({ deliverableId: d.id, patch: { description: next || null } }, { onSuccess: draft.clear })
+    }
   }
   return (
     <section>
@@ -399,11 +409,21 @@ function Composer({
   const voice = useSendVoiceNote(deliverableId)
   const [text, setText] = useState('')
   const [recording, setRecording] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is sent.
+  const draft = useFormDraft(`deliverable-note:${deliverableId}`, { text }, (v) => setText(v.text))
 
   const send = () => {
     const body = text.trim()
     if (!body) return
-    add.mutate({ kind: 'text', body }, { onSuccess: () => setText('') })
+    add.mutate(
+      { kind: 'text', body },
+      {
+        onSuccess: () => {
+          draft.clear()
+          setText('')
+        },
+      },
+    )
   }
 
   // Every control stays mounted and is only shown or hidden. Swapping them

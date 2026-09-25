@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useCreateQuote, useUpdateQuote } from './api'
 
 interface Line {
@@ -59,6 +60,20 @@ export function QuoteBuilder({
   const [notes, setNotes] = useState(quote?.notes ?? '')
   const [terms, setTerms] = useState(quote?.terms ?? '50% advance to confirm the date; balance before delivery.')
   const [error, setError] = useState<string | null>(null)
+  // The fields as the builder opened, for "Start fresh".
+  const [start] = useState(() => ({ title, lines, discount, intra, place, validUntil, notes, terms }))
+  const fill = (v: typeof start) => {
+    setTitle(v.title)
+    setLines(v.lines)
+    setDiscount(v.discount)
+    setIntra(v.intra)
+    setPlace(v.place)
+    setValidUntil(v.validUntil)
+    setNotes(v.notes)
+    setTerms(v.terms)
+  }
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? `quote:${quote?.id ?? `new:${lead.id}`}` : null, { title, lines, discount, intra, place, validUntil, notes, terms }, fill)
 
   const parsedLines = useMemo(
     () =>
@@ -99,7 +114,15 @@ export function QuoteBuilder({
         setError(parsed.error.issues[0]?.message ?? 'Please check the quote.')
         return
       }
-      update.mutate({ id: quote.id, patch: parsed.data }, { onSuccess: () => onClose() })
+      update.mutate(
+        { id: quote.id, patch: parsed.data },
+        {
+          onSuccess: () => {
+            draft.clear()
+            onClose()
+          },
+        },
+      )
       return
     }
     const body: CreateQuoteRequest = { lead_id: lead.id, ...shared }
@@ -108,7 +131,12 @@ export function QuoteBuilder({
       setError(parsed.error.issues[0]?.message ?? 'Please check the quote.')
       return
     }
-    create.mutate(parsed.data, { onSuccess: (q) => onClose(q.id) })
+    create.mutate(parsed.data, {
+      onSuccess: (q) => {
+        draft.clear()
+        onClose(q.id)
+      },
+    })
   }
 
   const busy = create.isPending || update.isPending
@@ -121,6 +149,14 @@ export function QuoteBuilder({
         className="max-w-2xl"
       >
         <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
+          <DraftRestoredBanner
+            at={draft.restoredAt}
+            onDismiss={draft.dismissRestored}
+            onDiscard={() => {
+              draft.clear()
+              fill(start)
+            }}
+          />
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1 sm:col-span-2">
               <Label htmlFor="q-title">Title</Label>

@@ -3,6 +3,7 @@ import { Camera, ImagePlus, Lightbulb, Loader2, Send, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Textarea } from '@/shared/ui/input'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { VoiceNoteRecorder } from '@/features/projects/VoiceNoteRecorder'
 import { VoiceNotePlayer } from '@/features/projects/VoiceNotePlayer'
 import { useSendFeatureRequest } from './api'
@@ -80,6 +81,9 @@ export function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; on
     setDone(false)
     setProblem(null)
   }, [open])
+  // What was typed survives a refresh or a closed tab until it is sent. Only
+  // the text: a voice note or a screenshot cannot be kept this way.
+  const draft = useFormDraft(open && !done ? 'suggest-feature' : null, text, setText)
   useEffect(() => () => void (voice && URL.revokeObjectURL(voice.url)), [voice])
   useEffect(() => () => void (shot && URL.revokeObjectURL(shot.url)), [shot])
 
@@ -136,6 +140,7 @@ export function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; on
       return
     }
     await send.mutateAsync({ body: text, voice: voice && { blob: voice.blob, seconds: voice.seconds }, screenshot: shot?.blob ?? null })
+    draft.clear()
     setDone(true)
   }
 

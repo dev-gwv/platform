@@ -28,6 +28,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { useBoardDeliverables, useProjects } from '@/features/projects/api'
@@ -596,6 +597,22 @@ function NewTaskDialog() {
   // Only the chosen project's own, still-open deliverables: attaching a task to
   // another project's, or to one already delivered, would be a mistake.
   const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId && d.status !== 'completed')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? 'tasks-page:new' : null,
+    { title, description, projectId, deliverableId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees },
+    (v) => {
+      setTitle(v.title)
+      setDescription(v.description)
+      setProjectId(v.projectId)
+      setDeliverableId(v.deliverableId)
+      setPriority(v.priority)
+      setCustomPriorityCode(v.customPriorityCode)
+      setDueDate(v.dueDate)
+      setVoiceNoteUrl(v.voiceNoteUrl)
+      setAssignees(v.assignees)
+    },
+  )
 
   function reset() {
     setTitle('')
@@ -626,6 +643,7 @@ function NewTaskDialog() {
       },
       {
         onSuccess: () => {
+          draft.clear()
           setOpen(false)
           reset()
         },
@@ -775,6 +793,21 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
   const [dueDate, setDueDate] = useState(task.due_date ?? '')
   const [voiceNoteUrl, setVoiceNoteUrl] = useState(task.voice_note_url ?? '')
   const [assignees, setAssignees] = useState<string[]>(task.assignee_ids)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `tasks-page:${task.id}` : null,
+    { title, description, projectId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees },
+    (v) => {
+      setTitle(v.title)
+      setDescription(v.description)
+      setProjectId(v.projectId)
+      setPriority(v.priority)
+      setCustomPriorityCode(v.customPriorityCode)
+      setDueDate(v.dueDate)
+      setVoiceNoteUrl(v.voiceNoteUrl)
+      setAssignees(v.assignees)
+    },
+  )
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -792,7 +825,12 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
           assignees,
         },
       },
-      { onSuccess: () => setOpen(false) },
+      {
+        onSuccess: () => {
+          draft.clear()
+          setOpen(false)
+        },
+      },
     )
   }
 
@@ -895,6 +933,15 @@ function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
   const [name, setName] = useState('')
   const [itemText, setItemText] = useState('')
   const [applyTo, setApplyTo] = useState<Record<string, string>>({})
+  // A checklist being written survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? `task-bundle:${editingId ?? 'new'}` : null, { name, itemText }, (v) => {
+    setName(v.name)
+    setItemText(v.itemText)
+  })
+  const saved = () => {
+    draft.clear()
+    cancelEdit()
+  }
 
   function startEdit(b: { id: string; name: string; items: { title: string }[] }) {
     setEditingId(b.id)
@@ -1004,9 +1051,9 @@ function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
               e.preventDefault()
               const payload = { name: name.trim(), items: items.map((title) => ({ title, priority: 'medium' as const })) }
               if (editingId) {
-                updateBundle.mutate({ id: editingId, input: payload }, { onSuccess: cancelEdit })
+                updateBundle.mutate({ id: editingId, input: payload }, { onSuccess: saved })
               } else {
-                createBundle.mutate(payload, { onSuccess: cancelEdit })
+                createBundle.mutate(payload, { onSuccess: saved })
               }
             }}
             className="flex flex-col gap-3 border-t border-border pt-5"

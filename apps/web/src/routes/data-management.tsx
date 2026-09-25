@@ -33,6 +33,7 @@ import { LookupSelect } from '@/features/settings/LookupSelect'
 import { useProjects } from '@/features/projects/api'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 
 const shootsList = shootListItem.array()
 
@@ -508,6 +509,12 @@ function LocationEditor({ id, onDone }: { id: string; onDone: () => void }) {
   const [capacity, setCapacity] = useState(loc?.capacity_gb != null ? String(loc.capacity_gb) : '')
   const [owner, setOwner] = useState(loc?.owner ?? '')
   const [notes, setNotes] = useState(loc?.notes ?? '')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`storage-location:${id}`, { capacity, owner, notes }, (v) => {
+    setCapacity(v.capacity)
+    setOwner(v.owner)
+    setNotes(v.notes)
+  })
 
   async function onSave(e: FormEvent) {
     e.preventDefault()
@@ -519,6 +526,7 @@ function LocationEditor({ id, onDone }: { id: string; onDone: () => void }) {
         notes: notes.trim() || null,
       },
     })
+    draft.clear()
     onDone()
   }
 
@@ -552,6 +560,13 @@ function ManageLocationsDialog() {
   const [kind, setKind] = useState<string>('drive')
   const [capacity, setCapacity] = useState('')
   const [owner, setOwner] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(open ? 'storage-location:new' : null, { name, kind, capacity, owner }, (v) => {
+    setName(v.name)
+    setKind(v.kind)
+    setCapacity(v.capacity)
+    setOwner(v.owner)
+  })
 
   async function onAdd(e: FormEvent) {
     e.preventDefault()
@@ -563,6 +578,7 @@ function ManageLocationsDialog() {
       ...(capacity.trim() ? { capacity_gb: Number(capacity) } : {}),
       ...(owner.trim() ? { owner: owner.trim() } : {}),
     })
+    draft.clear()
     setName('')
     setKind('drive')
     setCapacity('')
@@ -666,6 +682,21 @@ function AddRecordDialog({ record, trigger }: { record?: DataRecord; trigger?: R
   const [backupLocationId, setBackupLocationId] = useState(record?.backup_location_id ?? '')
   const [error, setError] = useState<string | null>(null)
   const { data: locations } = useStorageLocations()
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `data-card:${record?.id ?? 'new'}` : null,
+    { label, dataType, cards, size, projectId, shootId, primaryLocationId, backupLocationId },
+    (v) => {
+      setLabel(v.label)
+      setDataType(v.dataType)
+      setCards(v.cards)
+      setSize(v.size)
+      setProjectId(v.projectId)
+      setShootId(v.shootId)
+      setPrimaryLocationId(v.primaryLocationId)
+      setBackupLocationId(v.backupLocationId)
+    },
+  )
 
   const shoots = useQuery({
     queryKey: ['shoots', 'by-project', projectId],
@@ -694,6 +725,7 @@ function AddRecordDialog({ record, trigger }: { record?: DataRecord; trigger?: R
         const body: CreateDataRecordRequest = { ...shared, ...(dataType ? { data_type: dataType } : {}) }
         await create.mutateAsync(body)
       }
+      draft.clear()
       setOpen(false)
       if (!isEdit) {
         setLabel('')

@@ -11,6 +11,7 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Badge } from '@/shared/ui/badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import {
   useProjectTemplates,
   useSaveProjectTemplate,
@@ -37,6 +38,13 @@ function ProjectTemplatesContent() {
     shoots_json: [],
     tasks_json: [],
   })
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const templateDraft = useFormDraft(dialogOpen ? `project-template:${editingId ?? 'new'}` : null, form, setForm)
+  const applyDraft = useFormDraft(
+    applyDialogOpen && applyingTemplateId ? `project-template-apply:${applyingTemplateId}` : null,
+    applyForm,
+    setApplyForm,
+  )
 
   const { data, isLoading, isError, refetch } = useProjectTemplates()
   const saveTemplate = useSaveProjectTemplate()
@@ -81,6 +89,7 @@ function ProjectTemplatesContent() {
         // Straight into the new project: that is where its price, dates and
         // team get filled in.
         onSuccess: (r) => {
+          applyDraft.clear()
           setApplyDialogOpen(false)
           void navigate({ to: '/projects/$id', params: { id: r.project_id } })
         },
@@ -121,7 +130,12 @@ function ProjectTemplatesContent() {
     }
     saveTemplate.mutate(
       { id: editingId ?? undefined, body },
-      { onSuccess: () => setDialogOpen(false) },
+      {
+        onSuccess: () => {
+          templateDraft.clear()
+          setDialogOpen(false)
+        },
+      },
     )
   }
 
@@ -209,6 +223,16 @@ function ProjectTemplatesContent() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" title={editingId ? 'Edit Template' : 'New Template'}>
           <div className="space-y-4">
+            <DraftRestoredBanner
+              at={templateDraft.restoredAt}
+              onDismiss={templateDraft.dismissRestored}
+              onDiscard={() => {
+                templateDraft.clear()
+                const t = templates.find((x) => x.id === editingId)
+                if (t) openEdit(t)
+                else openCreate()
+              }}
+            />
             <div>
               <label className="text-sm font-medium">Template name</label>
               <Input

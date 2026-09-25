@@ -16,6 +16,7 @@ import type { ProjectStatus, UpdateProjectRequest } from '@ipc/contracts'
 import { useProject, useUpdateProject } from '@/features/projects/api'
 import { useClient, useUpdateClient } from '@/features/clients/api'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { toast } from 'sonner'
 
 const CLS_TEXTAREA =
@@ -105,6 +106,20 @@ function ProjectEdit() {
   const liveTotal = Number(form.package_cost ?? 0) + addOns
   const busy = update.isPending || updateClient.isPending
 
+  // What was typed survives a refresh or a closed tab until it is saved. It
+  // switches on once both records have filled the form, so that is the baseline.
+  const draft = useFormDraft(
+    loaded && clientLoaded ? `project-edit:${id}` : null,
+    { form, packageCostText, clientForm },
+    (v) => {
+      setForm(v.form)
+      setPackageCostText(v.packageCostText)
+      setClientForm(v.clientForm)
+    },
+    // The page already asks before leaving with unsaved edits.
+    { warnOnLeave: false },
+  )
+
   // Warn on tab close / reload with unsaved work. Declared with the other
   // hooks, above the guards — moving it below them changed the hook count
   // between the loading render and the loaded one, which React refuses.
@@ -137,6 +152,7 @@ function ProjectEdit() {
         confirmLabel: 'Discard',
       })
       if (!leave) return
+      draft.clear()
     }
     void navigate({ to: '/projects/$id', params: { id } })
   }
@@ -169,6 +185,7 @@ function ProjectEdit() {
           address: clientForm.address.trim() || null,
         })
       }
+      draft.clear()
       if (close) void navigate({ to: '/projects/$id', params: { id } })
       else toast.success('Saved')
     } catch (err) {
@@ -177,6 +194,7 @@ function ProjectEdit() {
   }
 
   function discard() {
+    draft.clear()
     const p = project
     setForm({
       name: p.name,
@@ -214,6 +232,12 @@ function ProjectEdit() {
           </Button>
         }
       />
+
+      {draft.restoredAt && (
+        <div className="mt-4">
+          <DraftRestoredBanner at={draft.restoredAt} onDismiss={draft.dismissRestored} onDiscard={discard} />
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <Card className="self-start">

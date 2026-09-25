@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import type { DirectoryMember, ProductionStage } from '@ipc/contracts'
+import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -8,6 +9,25 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { useUpdateMember, useAssignRoles, useCreateRole, useEmployeeRoles } from './api'
 import { CompensationFields, type CompensationDraft } from './CompensationFields'
 import { STAGE_LABEL, STAGE_ORDER, byStage, toRoleCode } from './role-stages'
+
+/** The pay fields as they are on record, for the form to start from. */
+function compFrom(member: DirectoryMember): CompensationDraft {
+  return {
+    payment_type: member.payment_type ?? '',
+    pay_components: member.pay_components,
+    payment_status: member.payment_status,
+    salary: member.salary != null ? String(member.salary) : '',
+    freelancer_rate: member.freelancer_rate != null ? String(member.freelancer_rate) : '',
+    has_login_access: member.login_enabled,
+    payout_type: member.payout_type ?? '',
+    commission_pct: member.commission_pct != null ? String(member.commission_pct) : '',
+    commission_basis: member.commission_basis ?? '',
+    stipend_amount: member.stipend_amount != null ? String(member.stipend_amount) : '',
+    pay_effective_from: member.pay_effective_from ?? '',
+    pay_effective_to: member.pay_effective_to ?? '',
+    compensation_notes: member.compensation_notes ?? '',
+  }
+}
 
 /**
  * Everything about a team member the create wizard could set, editable
@@ -52,26 +72,41 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
     )
   }
 
-  const [comp, setComp] = useState<CompensationDraft>({
-    payment_type: member.payment_type ?? '',
-    pay_components: member.pay_components,
-    payment_status: member.payment_status,
-    salary: member.salary != null ? String(member.salary) : '',
-    freelancer_rate: member.freelancer_rate != null ? String(member.freelancer_rate) : '',
-    has_login_access: member.login_enabled,
-    payout_type: member.payout_type ?? '',
-    commission_pct: member.commission_pct != null ? String(member.commission_pct) : '',
-    commission_basis: member.commission_basis ?? '',
-    stipend_amount: member.stipend_amount != null ? String(member.stipend_amount) : '',
-    pay_effective_from: member.pay_effective_from ?? '',
-    pay_effective_to: member.pay_effective_to ?? '',
-    compensation_notes: member.compensation_notes ?? '',
-  })
+  const [comp, setComp] = useState<CompensationDraft>(() => compFrom(member))
   function setCompField<K extends keyof CompensationDraft>(key: K, value: CompensationDraft[K]) {
     setComp((prev) => ({ ...prev, [key]: value }))
   }
 
   const [error, setError] = useState<string | null>(null)
+
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open ? `edit-member:${member.user_id}` : null,
+    { name, phone, alternatePhone, address, role, engagementType, roleIds, comp },
+    (v) => {
+      setName(v.name)
+      setPhone(v.phone)
+      setAlternatePhone(v.alternatePhone)
+      setAddress(v.address)
+      setRole(v.role)
+      setEngagementType(v.engagementType)
+      setRoleIds(v.roleIds)
+      setComp(v.comp)
+    },
+  )
+
+  // "Start fresh" goes back to what is on record for this person.
+  function discardDraft() {
+    draft.clear()
+    setName(member.name)
+    setPhone(member.phone ?? '')
+    setAlternatePhone(member.alternate_phone ?? '')
+    setAddress(member.address ?? '')
+    setRole(member.role as typeof role)
+    setEngagementType(member.engagement_type === 'freelancer' ? 'freelancer' : 'in_house')
+    setRoleIds(member.role_ids)
+    setComp(compFrom(member))
+  }
 
   function toggleRole(id: string) {
     setRoleIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]))
@@ -109,6 +144,7 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
       const nextIds = new Set(roleIds)
       const changed = currentIds.size !== nextIds.size || [...currentIds].some((id) => !nextIds.has(id))
       if (changed) await assignRoles.mutateAsync({ userId: member.user_id, roles: { role_ids: roleIds } })
+      draft.clear()
       setOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save these changes.')
@@ -128,6 +164,7 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
       </DialogTrigger>
       <DialogContent title={`Edit ${member.name}`} description="Anything set when they joined can be corrected here.">
         <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
+          <DraftRestoredBanner at={draft.restoredAt} onDismiss={draft.dismissRestored} onDiscard={discardDraft} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label>Name</Label>

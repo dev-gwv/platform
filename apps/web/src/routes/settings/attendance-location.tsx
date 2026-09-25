@@ -5,6 +5,7 @@ import { Loader2, MapPin } from 'lucide-react'
 import { companyFence, setFenceRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SettingsTabs } from '@/features/settings/SettingsTabs'
@@ -64,19 +65,44 @@ function AttendanceLocation() {
   const [cutoff, setCutoff] = useState('')
   const [locating, setLocating] = useState(false)
 
+  // The form as the server has it: what it is filled with, and what counts as
+  // unchanged. With no fence yet, the defaults above.
+  const serverFence = fence.data
+    ? {
+        lat: String(fence.data.lat),
+        lng: String(fence.data.lng),
+        radius: String(fence.data.radius_m),
+        active: fence.data.is_active,
+        // Postgres returns HH:MM:SS; <input type="time"> wants HH:MM. Null
+        // stays empty.
+        expected: fence.data.expected_checkin_time?.slice(0, 5) ?? '',
+        grace: String(fence.data.late_grace_minutes),
+        cutoff: fence.data.missed_cutoff_time?.slice(0, 5) ?? '',
+      }
+    : { lat: '', lng: '', radius: '100', active: true, expected: '', grace: '15', cutoff: '' }
+  function fill(v: typeof serverFence) {
+    setLat(v.lat)
+    setLng(v.lng)
+    setRadius(v.radius)
+    setActive(v.active)
+    setExpected(v.expected)
+    setGrace(v.grace)
+    setCutoff(v.cutoff)
+  }
+
   useEffect(() => {
-    if (fence.data) {
-      setLat(String(fence.data.lat))
-      setLng(String(fence.data.lng))
-      setRadius(String(fence.data.radius_m))
-      setActive(fence.data.is_active)
-      // Postgres returns HH:MM:SS; <input type="time"> wants HH:MM. Null
-      // stays empty.
-      setExpected(fence.data.expected_checkin_time?.slice(0, 5) ?? '')
-      setGrace(String(fence.data.late_grace_minutes))
-      setCutoff(fence.data.missed_cutoff_time?.slice(0, 5) ?? '')
-    }
+    if (fence.data) fill(serverFence)
+    // `serverFence` is derived from `fence.data`.
   }, [fence.data])
+
+  // What was typed survives a refresh or a closed tab until it is saved.
+  // Only once the saved fence has loaded, and only real changes to it.
+  const draft = useFormDraft(
+    isOwner && fence.isSuccess ? 'attendance-location' : null,
+    { lat, lng, radius, active, expected, grace, cutoff },
+    fill,
+    { isBlank: (v) => JSON.stringify(v) === JSON.stringify(serverFence) },
+  )
 
   // Not a hook — it reads the browser geolocation once, on a click. The old
   // name made the hooks lint (rightly) treat it as one.
@@ -112,15 +138,18 @@ function AttendanceLocation() {
     if (expected && cutoff && cutoff <= expected) {
       return toast.error('The missed check-in cutoff must be after the start time.')
     }
-    save.mutate({
-      lat: la,
-      lng: ln,
-      radius_m: Math.round(r),
-      is_active: active,
-      expected_checkin_time: expected || null,
-      late_grace_minutes: Math.round(g),
-      missed_cutoff_time: cutoff || null,
-    })
+    save.mutate(
+      {
+        lat: la,
+        lng: ln,
+        radius_m: Math.round(r),
+        is_active: active,
+        expected_checkin_time: expected || null,
+        late_grace_minutes: Math.round(g),
+        missed_cutoff_time: cutoff || null,
+      },
+      { onSuccess: () => draft.clear() },
+    )
   }
 
   return (
@@ -147,6 +176,14 @@ function AttendanceLocation() {
               </p>
             )}
             <form onSubmit={onSubmit} className="grid gap-4">
+              <DraftRestoredBanner
+                at={draft.restoredAt}
+                onDismiss={draft.dismissRestored}
+                onDiscard={() => {
+                  draft.clear()
+                  fill(serverFence)
+                }}
+              />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>Latitude</Label>

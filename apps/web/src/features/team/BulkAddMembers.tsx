@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Check, ClipboardPaste, Eye, EyeOff, Loader2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Select, Textarea } from '@/shared/ui/input'
@@ -57,6 +58,14 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
   const [picking, setPicking] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
+
+  // What was typed survives a refresh or a closed tab until it is saved. Only
+  // rows still to send are kept, and never their passwords (nor the paste box,
+  // which can hold them): those are typed again.
+  const typedRows = rows
+    .filter((r) => r.status !== 'added' && !isBlankRow(r))
+    .map(({ name, phone, email, role, engagement, roleKeys }) => ({ name, phone, email, role, engagement, roleKeys }))
+  const draft = useFormDraft('team-bulk-add', typedRows, (v) => setRows(v.map((r) => ({ ...newRow(), ...r }))))
 
   const pickable = useMemo(() => pickableRoles(roles ?? [], library ?? []), [roles, library])
   const roleName = useMemo(() => new Map(pickable.map((r) => [r.key, r.type_name])), [pickable])
@@ -180,6 +189,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
     }
     if (failed === 0) {
       toast.success(`${plural(added, 'person', 'people')} added to your team.`)
+      draft.clear()
       onDone()
       return
     }
@@ -203,6 +213,20 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
           Cancel
         </Button>
       </div>
+
+      {draft.restoredAt && (
+        <div className="mt-4">
+          <DraftRestoredBanner
+            at={draft.restoredAt}
+            onDismiss={draft.dismissRestored}
+            onDiscard={() => {
+              draft.clear()
+              setRows(Array.from({ length: START_ROWS }, newRow))
+              setShowErrors(false)
+            }}
+          />
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPasteOpen((v) => !v)} disabled={running}>

@@ -9,6 +9,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import { useCreateTask, useDeleteTask, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { todayISO } from '@/features/tasks/board'
@@ -86,6 +87,12 @@ function AddTaskRow({ projectId }: { projectId: string }) {
   const [title, setTitle] = useState('')
   const [who, setWho] = useState('')
   const [due, setDue] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`project-task:new:${projectId}`, { title, who, due }, (v) => {
+    setTitle(v.title)
+    setWho(v.who)
+    setDue(v.due)
+  })
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -102,6 +109,7 @@ function AddTaskRow({ projectId }: { projectId: string }) {
       },
       {
         onSuccess: () => {
+          draft.clear()
           setTitle('')
           setDue('')
         },

@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Check, Copy, FileSignature, Send, Undo2 } from 'lucide-react'
 import type { ShootListItem, TeamTermsSend, TeamTermsStatus } from '@ipc/contracts'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -53,6 +54,19 @@ export function SendTermsDialog({ shoot }: { shoot: ShootListItem }) {
   const [byEmail, setByEmail] = useState(true)
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(
+    open && !link ? `team-terms-send:${shoot.id}` : null,
+    { memberId, name, email, roleId, templateId, byEmail },
+    (v) => {
+      setMemberId(v.memberId)
+      setName(v.name)
+      setEmail(v.email)
+      setRoleId(v.roleId)
+      setTemplateId(v.templateId)
+      setByEmail(v.byEmail)
+    },
+  )
 
   const active = useMemo(
     () => (templates.data ?? []).filter((t) => t.is_active),
@@ -97,7 +111,12 @@ export function SendTermsDialog({ shoot }: { shoot: ShootListItem }) {
         role_name: role?.type_name ?? null,
         send_email: byEmail && !!email.trim(),
       },
-      { onSuccess: (r) => setLink(r.link) },
+      {
+        onSuccess: (r) => {
+          draft.clear()
+          setLink(r.link)
+        },
+      },
     )
   }
 

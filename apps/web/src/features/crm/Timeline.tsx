@@ -11,6 +11,7 @@ import { cn } from '@/shared/ui/cn'
 import { toast as notify } from 'sonner'
 import { downloadFile, ApiError } from '@/shared/api/client'
 import { useConfirm } from '@/shared/ui/confirm'
+import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import { useCrmAccess } from './access'
 import { useDeleteActivity, useLogActivity, usePlaceCall, useScheduleMeeting, useTimeline, useUpdateActivity } from './api'
@@ -129,7 +130,17 @@ export function Timeline({ lead }: { lead: CrmLead }) {
               canDelete={canDelete}
               editing={editing}
               onEdit={setEditing}
-              onSave={(id, patch) => update.mutate({ id, patch }, { onSuccess: () => setEditing(null) })}
+              onSave={(id, patch, onSaved) =>
+                update.mutate(
+                  { id, patch },
+                  {
+                    onSuccess: () => {
+                      onSaved()
+                      setEditing(null)
+                    },
+                  },
+                )
+              }
               pending={update.isPending}
               onDone={(a) => update.mutate({ id: a.id, patch: { done: !a.done_at } })}
               onDelete={async (a) => {
@@ -160,7 +171,7 @@ interface RowProps {
   canDelete: boolean
   editing: string | null
   onEdit: (id: string | null) => void
-  onSave: (id: string, patch: UpdateActivityRequest) => void
+  onSave: (id: string, patch: UpdateActivityRequest, onSaved: () => void) => void
   pending: boolean
   onDone: (a: CrmActivity) => void
   onDelete: (a: CrmActivity) => void
@@ -183,7 +194,7 @@ function TimelineRow({ item, canEdit, canDelete, editing, onEdit, onSave, pendin
   const Icon = ICON[a.type]
   const overdue = a.type === 'task' && !a.done_at && !!a.due_at && new Date(a.due_at).getTime() < Date.now()
 
-  if (editing === a.id) return <RowEditor activity={a} pending={pending} onCancel={() => onEdit(null)} onSave={(patch) => onSave(a.id, patch)} />
+  if (editing === a.id) return <RowEditor activity={a} pending={pending} onCancel={() => onEdit(null)} onSave={(patch, onSaved) => onSave(a.id, patch, onSaved)} />
 
   return (
     <li className="flex items-start gap-2 rounded-md bg-muted/30 px-2 py-1.5 text-xs">
@@ -256,7 +267,7 @@ function RowEditor({
   activity: CrmActivity
   pending: boolean
   onCancel: () => void
-  onSave: (patch: UpdateActivityRequest) => void
+  onSave: (patch: UpdateActivityRequest, onSaved: () => void) => void
 }) {
   const { data: members } = useMembers()
   const [subject, setSubject] = useState(a.subject ?? '')
@@ -264,6 +275,14 @@ function RowEditor({
   const [location, setLocation] = useState(a.location ?? '')
   const [due, setDue] = useState(a.due_at ? toLocalInput(a.due_at) : '')
   const [assignee, setAssignee] = useState(a.assigned_to ?? '')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`activity-edit:${a.id}`, { subject, body, location, due, assignee }, (v) => {
+    setSubject(v.subject)
+    setBody(v.body)
+    setLocation(v.location)
+    setDue(v.due)
+    setAssignee(v.assignee)
+  })
 
   function save() {
     const patch: UpdateActivityRequest = {
@@ -275,7 +294,7 @@ function RowEditor({
       patch.due_at = due ? new Date(due).toISOString() : null
       patch.assigned_to = assignee || null
     }
-    onSave(patch)
+    onSave(patch, draft.clear)
   }
 
   return (
@@ -339,6 +358,12 @@ function CallForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
   const [outcome, setOutcome] = useState('answered')
   const [minutes, setMinutes] = useState('5')
   const [notes, setNotes] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`lead-call:${lead.id}`, { outcome, minutes, notes }, (v) => {
+    setOutcome(v.outcome)
+    setMinutes(v.minutes)
+    setNotes(v.notes)
+  })
   return (
     <div className="mt-2 grid gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-4">
       <div className="flex flex-col gap-1">
@@ -374,7 +399,12 @@ function CallForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
                 ...(notes.trim() ? { body: notes.trim() } : {}),
                 started_at: new Date().toISOString(),
               },
-              { onSuccess: onDone },
+              {
+                onSuccess: () => {
+                  draft.clear()
+                  onDone()
+                },
+              },
             )
           }
         >
@@ -412,6 +442,12 @@ function QuickForm({ lead, type, onDone }: { lead: CrmLead; type: 'note' | 'emai
   const [direction, setDirection] = useState<'in' | 'out'>('out')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved.
+  const draft = useFormDraft(`lead-${type}:${lead.id}`, { direction, subject, body }, (v) => {
+    setDirection(v.direction)
+    setSubject(v.subject)
+    setBody(v.body)
+  })
   return (
     <div className="mt-2 grid gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-4">
       {type === 'email' && (
@@ -445,7 +481,12 @@ function QuickForm({ lead, type, onDone }: { lead: CrmLead; type: 'note' | 'emai
                 ...(body.trim() ? { body: body.trim() } : {}),
                 started_at: new Date().toISOString(),
               },
-              { onSuccess: onDone },
+              {
+                onSuccess: () => {
+                  draft.clear()
+                  onDone()
+                },
+              },
             )
           }
         >
@@ -460,6 +501,17 @@ function TaskForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
   const log = useLogActivity()
   const [subject, setSubject] = useState('')
   const [due, setDue] = useState(nowLocal(24 * 60))
+  // What was typed survives a refresh or a closed tab until it is saved. The
+  // default due time moves with the clock, so only the task text counts.
+  const draft = useFormDraft(
+    `lead-task:${lead.id}`,
+    { subject, due },
+    (v) => {
+      setSubject(v.subject)
+      setDue(v.due)
+    },
+    { isBlank: (v) => !v.subject.trim() },
+  )
   return (
     <div className="mt-2 grid gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-4">
       <div className="flex flex-col gap-1 sm:col-span-3">
@@ -474,7 +526,17 @@ function TaskForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
         <Button
           size="sm"
           disabled={log.isPending || !subject.trim() || !due}
-          onClick={() => log.mutate({ lead_id: lead.id, type: 'task', direction: 'none', subject: subject.trim(), due_at: new Date(due).toISOString() }, { onSuccess: onDone })}
+          onClick={() =>
+            log.mutate(
+              { lead_id: lead.id, type: 'task', direction: 'none', subject: subject.trim(), due_at: new Date(due).toISOString() },
+              {
+                onSuccess: () => {
+                  draft.clear()
+                  onDone()
+                },
+              },
+            )
+          }
         >
           Add task
         </Button>
@@ -489,6 +551,20 @@ function MeetingForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
   const [start, setStart] = useState(nowLocal(24 * 60))
   const [minutes, setMinutes] = useState('60')
   const [location, setLocation] = useState('')
+  // What was typed survives a refresh or a closed tab until it is saved. The
+  // default start moves with the clock, so it alone is not worth keeping.
+  const defaultSubject = `Meeting with ${lead.name ?? 'lead'}`
+  const draft = useFormDraft(
+    `lead-meeting:${lead.id}`,
+    { subject, start, minutes, location },
+    (v) => {
+      setSubject(v.subject)
+      setStart(v.start)
+      setMinutes(v.minutes)
+      setLocation(v.location)
+    },
+    { isBlank: (v) => v.subject === defaultSubject && v.minutes === '60' && !v.location.trim() },
+  )
   return (
     <div className="mt-2 grid gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-4">
       <div className="flex flex-col gap-1 sm:col-span-2">
@@ -516,7 +592,12 @@ function MeetingForm({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
             const e = new Date(s.getTime() + Math.max(5, Number(minutes) || 60) * 60_000)
             schedule.mutate(
               { lead_id: lead.id, subject: subject.trim(), starts_at: s.toISOString(), ends_at: e.toISOString(), ...(location.trim() ? { location: location.trim() } : {}), invite_lead: true },
-              { onSuccess: onDone },
+              {
+                onSuccess: () => {
+                  draft.clear()
+                  onDone()
+                },
+              },
             )
           }}
         >
