@@ -31,7 +31,8 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
-import { useBoardDeliverables, useProjects } from '@/features/projects/api'
+import { useProjects } from '@/features/projects/api'
+import { useProductionBoard } from '@/features/board/api'
 import { useDirectory } from '@/features/team/api'
 import {
   useApplyBundle,
@@ -593,10 +594,10 @@ function NewTaskDialog() {
   const [dueDate, setDueDate] = useState('')
   const [voiceNoteUrl, setVoiceNoteUrl] = useState('')
   const [assignees, setAssignees] = useState<string[]>([])
-  const { data: deliverables } = useBoardDeliverables()
+  const deliverables = useProductionBoard().data?.items
   // Only the chosen project's own, still-open deliverables: attaching a task to
   // another project's, or to one already delivered, would be a mistake.
-  const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId && d.status !== 'completed')
+  const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId && d.status !== 'completed' && d.status !== 'cancelled')
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? 'tasks-page:new' : null,

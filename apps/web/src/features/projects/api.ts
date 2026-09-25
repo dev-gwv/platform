@@ -213,30 +213,6 @@ export function useUpdateQuotation(id: string) {
   })
 }
 
-const boardDeliverable = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  status: z.string(),
-  board_status: z.string().nullable().default(null),
-  project_id: z.string().uuid().nullable(),
-  project_name: z.string().nullable(),
-  due_date: z.string().nullable().default(null),
-  shoot_name: z.string().nullable().default(null),
-  assignee_name: z.string().nullable().default(null),
-})
-export type BoardDeliverable = z.infer<typeof boardDeliverable>
-
-export function useBoardDeliverables() {
-  const { session } = useAuth()
-  const access = useAccess()
-  return useQuery({
-    queryKey: ['projects', 'board-deliverables'],
-    queryFn: () => callApi('/projects/board/deliverables', { responseSchema: boardDeliverable.array() }),
-    enabled: !!session && access.hasModule('projects'),
-    staleTime: 30_000,
-  })
-}
-
 // ── Shoot types catalog ──
 const shootTypeItem = z.object({ id: z.string().uuid(), name: z.string(), category: z.string().nullable().default(null), usage_count: z.number().int().default(0), is_archived: z.boolean().default(false) })
 

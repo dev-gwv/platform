@@ -1120,6 +1120,73 @@ if (listed) {
   const afterDrop = Number((await api(`/projects/${pid}`, { token: aToken })).json.total_cost)
   check('deliverables: a dropped extra is no longer charged', withExtra === 58000 && afterDrop === 50000, { withExtra, afterDrop })
 
+  // ── The production board: every deliverable in flight, by stage and by person
+  const nowMs = Date.now()
+  await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: edUid, start_at: new Date(nowMs - 30 * 60_000).toISOString(), end_at: new Date(nowMs + 30 * 60_000).toISOString(), service_name: 'Candid' },
+  })
+  const board = await api('/projects/board', { token: aToken })
+  const boardIds = new Set((board.json.items ?? []).map((d) => d.id))
+  const edRow = (board.json.people ?? []).find((p) => p.user_id === edUid)
+  check(
+    "board: the studio's deliverables, its stages and its people, with who is on a shoot today",
+    board.status === 200 && boardIds.has(reel.json.id) && boardIds.has(other.json.id) && !boardIds.has(extra.json.id) &&
+      (board.json.stages ?? []).some((s) => s.code === 'with_manager') && edRow?.on_shoot_today === true &&
+      board.json.counts.open >= 2 && board.json.counts.truncated === false,
+    { status: board.status, counts: board.json.counts, edRow },
+  )
+  const bBoard = await api('/projects/board', { token: newPw.json.access_token })
+  check(
+    "board: another studio sees none of this studio's work",
+    bBoard.status === 200 && !(bBoard.json.items ?? []).some((d) => boardIds.has(d.id)),
+    bBoard.status,
+  )
+  const gone = await api('/projects/board/deliverables', { token: aToken })
+  check('board: the old deliverables strip endpoint is gone', gone.status === 404 || gone.status === 400, gone.status)
+
+  const trio = await Promise.all(
+    ['Pre-wedding reel', 'Highlights', 'Photo selection'].map((title) =>
+      api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title } }).then((r) => r.json.id),
+    ),
+  )
+  const bulkAssign = await api('/projects/deliverables/bulk', { token: aToken, method: 'POST', body: { ids: trio, assignee_id: edUid } })
+  const afterBulk = (await api('/projects/board', { token: aToken })).json.items.filter((d) => trio.includes(d.id))
+  check(
+    'board: three deliverables handed to one editor at once, and giving them out starts them',
+    bulkAssign.status === 200 && bulkAssign.json.updated === 3 &&
+      afterBulk.length === 3 && afterBulk.every((d) => d.assignee_id === edUid && d.status === 'in_progress'),
+    { bulk: bulkAssign.json, afterBulk },
+  )
+  const bulkStage = await api('/projects/deliverables/bulk', {
+    token: aToken, method: 'POST', body: { ids: trio.slice(0, 2), stage: { status: 'review', custom_status_code: 'with_manager' } },
+  })
+  const bulkWrongStep = await api('/projects/deliverables/bulk', {
+    token: aToken, method: 'POST', body: { ids: trio, stage: { status: 'pending', custom_status_code: 'with_client' } },
+  })
+  const bulkDue = await api('/projects/deliverables/bulk', { token: aToken, method: 'POST', body: { ids: trio, estimated_date: '2020-01-01' } })
+  const lateNow = (await api('/projects/board', { token: aToken })).json
+  check(
+    'board: a bulk move to a stage works, a stage from the wrong step is refused, and a past due date counts as late',
+    bulkStage.status === 200 && bulkWrongStep.status === 422 && bulkDue.status === 200 &&
+      lateNow.items.filter((d) => trio.includes(d.id) && d.custom_status_code === 'with_manager').length === 2 &&
+      lateNow.counts.late >= 3 && lateNow.counts.in_review >= 2,
+    { stage: bulkStage.status, wrong: bulkWrongStep.status, due: bulkDue.status, counts: lateNow.counts },
+  )
+  const bulkEmpty = await api('/projects/deliverables/bulk', { token: aToken, method: 'POST', body: { ids: [], assignee_id: null } })
+  const bulkTwo = await api('/projects/deliverables/bulk', { token: aToken, method: 'POST', body: { ids: trio, assignee_id: null, estimated_date: null } })
+  const bulkByEditor = await api('/projects/deliverables/bulk', { token: edToken, method: 'POST', body: { ids: trio, assignee_id: null } })
+  const bulkOtherStudio = await api('/projects/deliverables/bulk', { token: newPw.json.access_token, method: 'POST', body: { ids: trio, assignee_id: null } })
+  const stillHis = (await api('/projects/board', { token: aToken })).json.items.filter((d) => trio.includes(d.id))
+  check(
+    'board: bulk refuses an empty list, two changes at once, an editor (403), and another studio changes nothing',
+    bulkEmpty.status === 422 && bulkTwo.status === 422 && bulkByEditor.status === 403 &&
+      (bulkOtherStudio.status === 403 || bulkOtherStudio.json?.updated === 0) &&
+      stillHis.every((d) => d.assignee_id === edUid),
+    { empty: bulkEmpty.status, two: bulkTwo.status, editor: bulkByEditor.status, other: bulkOtherStudio.status, otherJson: bulkOtherStudio.json },
+  )
+
   // A project template creates a real project now -- and asks for a client.
   const tpl = await api('/projects/templates', {
     token: aToken,
