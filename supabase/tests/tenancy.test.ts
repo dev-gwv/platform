@@ -4023,8 +4023,9 @@ describe('client documents (0042)', () => {
     ).rows[0]!.id
     project = (
       await db.query<{ id: string }>(
-        `insert into projects (company_id, client_id, name, package_cost)
-         values ('${company}', '${client}', 'Sharma Wedding', 150000) returning id;`,
+        // Shown to the client: a hidden project's quotation link reads as hidden (0190).
+        `insert into projects (company_id, client_id, name, package_cost, show_quotation)
+         values ('${company}', '${client}', 'Sharma Wedding', 150000, true) returning id;`,
       )
     ).rows[0]!.id
     await db.query(
