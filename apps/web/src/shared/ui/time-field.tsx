@@ -123,7 +123,12 @@ export function TimeField({
         tabIndex={-1}
         aria-hidden
         disabled={disabled}
-        className="sr-only"
+        /* hidden, not sr-only: see date-field.tsx. aria-hidden + tabIndex=-1
+         * means no screen reader or pointer reaches this; sr-only would make
+         * it `position: absolute` inside a `display: contents` wrapper, which
+         * is no containing block, so it anchors to the PAGE and grows the
+         * document by however far down the field sits. */
+        className="hidden"
         {...(value === undefined ? { defaultValue } : { value: current })}
         onChange={onChange ?? (() => undefined)}
         {...rest}

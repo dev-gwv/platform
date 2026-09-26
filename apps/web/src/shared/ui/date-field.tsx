@@ -170,7 +170,21 @@ export function DateField({
         tabIndex={-1}
         aria-hidden
         disabled={disabled}
-        className="sr-only"
+        /*
+         * hidden, not sr-only.
+         *
+         * This input is aria-hidden and tabIndex=-1: it is a value carrier and
+         * an event source, never something a screen reader or a pointer
+         * reaches. sr-only is `position: absolute`, and the wrapper above is
+         * `display: contents` -- which generates no box, so it cannot be the
+         * containing block. The input was therefore positioned against the
+         * PAGE at its static position, and on a tall scrolled screen that
+         * point sits below the fold: the document grew by however far down the
+         * field was, and the window scrolled past the h-screen shell into a
+         * band of empty background. `display: none` still submits with the
+         * form, still holds a value and still fires input events.
+         */
+        className="hidden"
         min={min}
         max={max}
         {...(value === undefined ? { defaultValue } : { value: current })}
