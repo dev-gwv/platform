@@ -33,6 +33,7 @@ export function AddTeamChooser({
           title="One person"
           description="Add a single team member, one step at a time — including their pay, if you want to set it now."
           onClick={() => onPick('single')}
+          nudge
         />
         <Choice
           icon={Users}
@@ -56,16 +57,20 @@ function Choice({
   title,
   description,
   onClick,
+  nudge,
 }: {
   icon: LucideIcon
   title: string
   description: string
   onClick: () => void
+  /** The choice to pulse when this screen is opened from setup. */
+  nudge?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-setup-nudge={nudge ? '' : undefined}
       className="group flex flex-col items-start gap-3 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/50 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">

@@ -1,36 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCorners, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, Palette, Users } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import type { TaskListItem, TaskStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
-import { Select } from '@/shared/ui/input'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { useBoard, useLaneColors, useSetBoardOrder, useSetLaneColor, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
+import { useBoard, useLaneColors, useSetBoardOrder, useSetLaneColor, useUpdateTaskStatus } from '@/features/tasks/api'
+import { todayISO } from '@/features/tasks/board'
+import { BOARD_LANES } from '@/features/tasks/delegation'
+import { TaskCard } from '@/features/tasks/TaskCard'
+import { useTaskActions, useTaskViewer } from '@/features/tasks/TaskActions'
+import { TaskDrawer } from '@/features/tasks/TaskDrawer'
 
 /**
- * The studio's tasks as a kanban: the board as it was before deliverables
- * took the front, kept so nothing a team relied on goes missing. Lanes are the
- * four task statuses; the order inside a lane is dragged by hand and shared.
+ * The studio's tasks as a kanban: To do · In progress · Review · Blocked ·
+ * Done. The order inside a lane is dragged by hand and shared. Cancelled work
+ * is off the board (the list still has it).
  */
-const LANES: { key: TaskStatus; label: string; hint: string }[] = [
-  { key: 'to_do', label: 'To do', hint: 'Not started yet' },
-  { key: 'in_progress', label: 'In progress', hint: 'Being worked on' },
-  { key: 'completed', label: 'Completed', hint: 'Done and approved' },
-  { key: 'cancelled', label: 'Cancelled', hint: 'Dropped work' },
-]
-
-const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> = {
-  urgent: 'danger',
-  high: 'warning',
-  medium: 'info',
-  low: 'neutral',
-}
+const LANES = BOARD_LANES
 
 /**
  * Lane tints. Token pairs rather than hex, so a lane stays legible in both
@@ -49,8 +40,28 @@ export type LaneColor = keyof typeof LANE_COLORS
 
 type Lanes = Record<TaskStatus, TaskListItem[]>
 
-export function TaskBoard({ project, person, q }: { project?: string | undefined; person?: string | undefined; q?: string | undefined }) {
-  const { data, isLoading, isError, refetch } = useBoard()
+export function TaskBoard({
+  project,
+  person,
+  q,
+  items,
+  filter,
+}: {
+  project?: string | undefined
+  person?: string | undefined
+  q?: string | undefined
+  /** Rows to show instead of the studio board (someone who sees only their own). */
+  items?: readonly TaskListItem[] | undefined
+  /** The page's own filters (mine, member, due date). */
+  filter?: ((t: TaskListItem) => boolean) | undefined
+}) {
+  const board = useBoard()
+  const data = items ?? board.data
+  const { isLoading, isError, refetch } = items ? { isLoading: false, isError: false, refetch: board.refetch } : board
+  const today = todayISO()
+  const { me, canManage } = useTaskViewer()
+  const actions = useTaskActions()
+  const [openId, setOpenId] = useState<string | null>(null)
   const setOrder = useSetBoardOrder()
   const updateStatus = useUpdateTaskStatus()
   const laneColors = useLaneColors()
@@ -61,12 +72,13 @@ export function TaskBoard({ project, person, q }: { project?: string | undefined
   const filtered = useMemo(() => {
     const needle = (q ?? '').trim().toLowerCase()
     return (data ?? []).filter((t) => {
+      if (filter && !filter(t)) return false
       if (project && t.project_id !== project) return false
       if (person === 'none' ? t.assignee_ids.length > 0 : person && !t.assignee_ids.includes(person)) return false
       if (needle && !`${t.title} ${t.project_name ?? ''}`.toLowerCase().includes(needle)) return false
       return true
     })
-  }, [data, project, person, q])
+  }, [data, project, person, q, filter])
 
   // Selection never points at rows the filters have hidden.
   const visibleIds = useMemo(() => new Set(filtered.map((t) => t.id)), [filtered])
@@ -118,11 +130,16 @@ export function TaskBoard({ project, person, q }: { project?: string | undefined
     // over is either a card id or a lane droppable id ("lane:<status>")
     const to = overId.startsWith('lane:') ? (overId.slice(5) as TaskStatus) : laneOf.get(overId)
     if (!to) return
+    // Only someone who manages tasks drags between lanes; the person on a
+    // task uses its buttons (Done is a review, not a drag).
+    if (!canManage) return
 
     setLanes((prev) => {
       const next: Lanes = {
         to_do: [...prev.to_do],
         in_progress: [...prev.in_progress],
+        review: [...prev.review],
+        blocked: [...prev.blocked],
         completed: [...prev.completed],
         cancelled: [...prev.cancelled],
       }
@@ -168,7 +185,7 @@ export function TaskBoard({ project, person, q }: { project?: string | undefined
         </div>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           {LANES.map((lane) => (
             <Lane
               key={lane.key}
@@ -176,20 +193,34 @@ export function TaskBoard({ project, person, q }: { project?: string | undefined
               label={lane.label}
               hint={lane.hint}
               tasks={lanes[lane.key]}
-              selected={selected}
-              onToggleSelect={toggleSelect}
               color={(laneColors.data?.[lane.key] as LaneColor | undefined) ?? 'default'}
-              onColor={(c) => setLaneColor.mutate({ lane: lane.key, color: c })}
-            />
+              onColor={canManage ? (c) => setLaneColor.mutate({ lane: lane.key, color: c }) : undefined}
+            >
+              {(t) => (
+                <SortableCard key={t.id} id={t.id} disabled={!canManage}>
+                  <TaskCard
+                    task={t}
+                    today={today}
+                    me={me}
+                    canManage={canManage}
+                    onOpen={(x) => setOpenId(x.id)}
+                    onAction={actions.run}
+                    {...(canManage ? { select: { ticked: selected.has(t.id), onToggle: () => toggleSelect(t.id) } } : {})}
+                  />
+                </SortableCard>
+              )}
+            </Lane>
           ))}
         </div>
       </DndContext>
+      {actions.dialogs}
+      {openId && <TaskDrawer taskId={openId} onClose={() => setOpenId(null)} />}
     </>
   )
 }
 
 function groupByLane(items: TaskListItem[]): Lanes {
-  const lanes: Lanes = { to_do: [], in_progress: [], completed: [], cancelled: [] }
+  const lanes: Lanes = { to_do: [], in_progress: [], review: [], blocked: [], completed: [], cancelled: [] }
   for (const t of items) lanes[t.status].push(t)
   for (const key of Object.keys(lanes) as TaskStatus[]) {
     lanes[key].sort((a, b) => a.sort_order - b.sort_order)
@@ -202,19 +233,17 @@ function Lane({
   label,
   hint,
   tasks,
-  selected,
-  onToggleSelect,
   color,
   onColor,
+  children,
 }: {
   laneKey: TaskStatus
   label: string
   hint: string
   tasks: TaskListItem[]
-  selected: ReadonlySet<string>
-  onToggleSelect: (id: string) => void
   color: LaneColor
-  onColor: (c: LaneColor) => void
+  onColor?: ((c: LaneColor) => void) | undefined
+  children: (t: TaskListItem) => ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `lane:${laneKey}` })
   const [picking, setPicking] = useState(false)
@@ -234,17 +263,17 @@ function Lane({
         </span>
         <span className="flex items-center gap-1">
           <span className="text-xs text-muted-foreground">{tasks.length}</span>
-          <button
+          {onColor && <button
             type="button"
             aria-label={`Change ${label} lane colour`}
             onClick={() => setPicking((v) => !v)}
             className="rounded p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
           >
             <Palette className="size-3.5" />
-          </button>
+          </button>}
         </span>
       </div>
-      {picking && (
+      {picking && onColor && (
         <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-card p-2">
           {(Object.keys(LANE_COLORS) as LaneColor[]).map((key) => (
             <button
@@ -267,141 +296,23 @@ function Lane({
         </div>
       )}
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        {tasks.map((t) => (
-          <TaskCard key={t.id} task={t} ticked={selected.has(t.id)} onToggle={() => onToggleSelect(t.id)} />
-        ))}
+        {tasks.map((t) => children(t))}
       </SortableContext>
     </div>
   )
 }
 
-function TaskCard({ task, ticked, onToggle }: { task: TaskListItem; ticked: boolean; onToggle: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-  })
-  const [open, setOpen] = useState(false)
-  const setStatus = useUpdateTaskStatus()
-  const updateTask = useUpdateTask()
-  const overdue = !!task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && task.status !== 'completed' && task.status !== 'cancelled'
+function SortableCard({ id, disabled, children }: { id: string; disabled: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`cursor-grab rounded-md border border-border bg-card p-3 shadow-sm ${
-        isDragging ? 'opacity-50' : ''
-      } ${ticked ? 'ring-2 ring-primary/50' : ''}`}
+      className={cn(!disabled && 'cursor-grab', isDragging && 'opacity-50')}
       {...attributes}
       {...listeners}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 items-start gap-1.5">
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={ticked}
-            aria-label={`Select ${task.title}`}
-            onClick={(e) => { e.stopPropagation(); onToggle() }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className={cn(
-              'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-              ticked ? 'border-primary bg-primary text-primary-foreground' : 'border-input hover:border-primary/50',
-            )}
-          >
-            {ticked && <Check className="size-2.5" aria-hidden />}
-          </button>
-          <p className="min-w-0 text-sm font-medium">{task.title}</p>
-        </span>
-        <StatusBadge tone={PRIORITY_TONE[task.priority]}>{task.priority}</StatusBadge>
-      </div>
-      {task.project_name && (
-        <p className="mt-1 text-xs text-muted-foreground">{task.project_name}</p>
-      )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-        {task.due_date && (
-          <span className={cn('flex items-center gap-1', overdue && 'font-medium text-destructive')}>
-            <CalendarDays className="size-3" /> {task.due_date}{overdue ? ' · overdue' : ''}
-          </span>
-        )}
-        {task.assignee_names.length > 0 && (
-          <span className="flex items-center gap-1">
-            <Users className="size-3" /> {task.assignee_names.slice(0, 2).join(', ')}
-            {task.assignee_names.length > 2 ? ` +${task.assignee_names.length - 2}` : ''}
-          </span>
-        )}
-      </div>
-
-      {/* Details in place. Opening a dialog to read one line of description
-          loses your position on a board you are triaging down. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen((v) => !v)
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        aria-expanded={open}
-        className="mt-2 flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-      >
-        <ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} aria-hidden />
-        {open ? 'Hide details' : 'Details'}
-      </button>
-
-      {open && (
-        <div
-          className="mt-2 flex flex-col gap-2 border-t border-border pt-2 text-[11px]"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {task.description ? (
-            <p className="whitespace-pre-wrap text-muted-foreground">{task.description}</p>
-          ) : (
-            <p className="text-muted-foreground">No description.</p>
-          )}
-          {task.assignee_names.length > 0 && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Assigned:</span> {task.assignee_names.join(', ')}
-            </p>
-          )}
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Status</span>
-              <Select
-                value={task.status}
-                aria-label={`Change status of ${task.title}`}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation()
-                  setStatus.mutate({ id: task.id, status: e.target.value as TaskStatus })
-                }}
-                className="h-8 text-xs"
-              >
-                {LANES.map((l) => (
-                  <option key={l.key} value={l.key}>
-                    {l.label}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Priority</span>
-              <Select
-                value={task.priority}
-                aria-label={`Change priority of ${task.title}`}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation()
-                  updateTask.mutate({ id: task.id, patch: { priority: e.target.value as TaskListItem['priority'] } })
-                }}
-                className="h-8 text-xs"
-              >
-                <option value="urgent">Urgent</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </Select>
-            </label>
-          </div>
-        </div>
-      )}
+      {children}
     </div>
   )
 }

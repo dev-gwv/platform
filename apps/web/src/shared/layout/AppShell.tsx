@@ -11,8 +11,9 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
+import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
-import { SetupReturnBar } from '@/features/onboarding/setup-flow'
+import { SetupGuideBar } from '@/features/onboarding/setup-flow'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -182,12 +183,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <CommandPalette />
 
-        <main
-          key={pathname}
-          className="page-enter min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible"
-        >
-          <SetupReturnBar />
-          {children}
+        {/* The scroller stays put and is never transformed; only the page
+            inside it animates in, keyed so each navigation replays it. */}
+        <main className="min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible">
+          <div key={pathname} className="page-enter">
+            <SetupGuideBar />
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -287,6 +289,7 @@ function Sidebar({
               icon={e.icon}
               active={e.to === active}
               collapsed={collapsed}
+              badge={e.badge}
             />
           ) : (
             <Group
@@ -368,6 +371,7 @@ function Group({
               icon={c.icon}
               active={c.to === active}
               collapsed={false}
+              badge={c.badge}
             />
           ))}
         </div>
@@ -382,19 +386,21 @@ function NavItem({
   icon: Icon,
   active,
   collapsed,
+  badge,
 }: {
   to: string
   label: string
   icon?: NavLeaf['icon']
   active: boolean
   collapsed: boolean
+  badge?: NavLeaf['badge'] | undefined
 }) {
   return (
     <Link
       to={to}
       title={collapsed ? label : undefined}
       className={cn(
-        'flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+        'relative flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
         active
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:bg-brand hover:text-brand-foreground',
@@ -403,6 +409,7 @@ function NavItem({
     >
       {Icon && <Icon className="size-4 shrink-0" />}
       {!collapsed && label}
+      {badge === 'tasks-overdue' && <TaskOverdueBadge collapsed={collapsed} />}
     </Link>
   )
 }

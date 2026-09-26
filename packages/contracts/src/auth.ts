@@ -144,6 +144,14 @@ export const sessionState = z.object({
    * switcher lists. `profile_id` is the id to hand to POST /auth/switch.
    */
   studios: z.array(studioMembership).default([]),
+  /**
+   * Whether the studio's three-step setup is over: finished, skipped, or
+   * already satisfied (a teammate, a client and a project exist). Defaults to
+   * true so an older API never walks anyone through setup by accident.
+   */
+  setup_done: z.boolean().default(true),
+  /** The first setup step still outstanding (1 team, 2 client, 3 project), or null. */
+  setup_step: z.number().int().min(1).max(3).nullable().default(null),
 })
 export type SessionState = z.infer<typeof sessionState>
 

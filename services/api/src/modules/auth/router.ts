@@ -83,6 +83,21 @@ async function signIn(c: Context<AppEnv>, uid: string, profile?: string): Promis
   return pair(c, await issueToken(env, minted.target, minted.pwv), minted.refresh)
 }
 
+/**
+ * Where the caller's studio is in its three-step setup (studio_setup_state,
+ * 0191). A failure reads as "done": the worst case is a studio not walked
+ * through setup, never an established one sent back to step 1.
+ */
+async function setupStateOf(c: Context<AppEnv>, uid: string) {
+  const row = await attempt(c, 'auth.session.setup', () =>
+    withUser(c.env, uid, async (sql) => {
+      const [r] = await sql<{ done: boolean; step: number | null }[]>`select * from studio_setup_state()`
+      return r ?? null
+    }),
+  )
+  return { setup_done: row?.done ?? true, setup_step: row?.done ? null : (row?.step ?? null) }
+}
+
 /** Every studio the caller's login can open, for the switcher. */
 async function studiosOf(sql: TransactionSql, uid: string) {
   const rows = await sql`
@@ -390,6 +405,7 @@ export const authRouter = new Hono<AppEnv>()
         plan_gate: row.plan_gate,
         plan_expiry: row.plan_expiry,
         permissions: serializeAccess(access),
+        ...(await setupStateOf(c, claims.uid)),
       }),
     )
   })
@@ -662,6 +678,7 @@ export const authRouter = new Hono<AppEnv>()
         plan_expiry: a.planExpiry,
         permissions: serializeAccess(a.access),
         studios,
+        ...(await setupStateOf(c, a.userId)),
       }),
     )
   })

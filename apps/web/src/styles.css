@@ -149,6 +149,18 @@
   border-color: var(--color-border);
 }
 
+/* The project quotation's brand stripe: the studio's own colour when it set
+   one (passed in as --quotation-brand), the app's primary otherwise. */
+.quotation-brand-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--quotation-brand, var(--color-primary));
+  opacity: 0.9;
+}
+
 /* Print: hide the app shell + anything marked no-print; show only the page. */
 @media print {
   aside,
@@ -274,6 +286,25 @@
     border-color: #d4d4d4 !important;
   }
 
+  /* The quotation on paper: a thinner, solid stripe with room under it, and
+     the wide-screen tables rather than the phone's stacked cards. */
+  .quotation-brand-stripe {
+    height: 5px;
+    opacity: 1;
+  }
+  body:has(.paper) .paper.quotation-paper {
+    padding-top: 14px !important;
+  }
+  .quotation-paper .quotation-table {
+    display: block !important;
+  }
+  .quotation-paper .quotation-cards {
+    display: none !important;
+  }
+  .quotation-paper .quotation-total {
+    color: #000 !important;
+  }
+
   @page {
     size: A4;
     margin: 14mm;
@@ -370,8 +401,9 @@ body {
   top: 0;
   z-index: 1;
   /* The body scrolls underneath, so the header needs its own opaque ground. */
+  /* Solid, not blurred: a backdrop-filter on every header cell is recomputed
+     on each frame as rows scroll under it. */
   background-color: color-mix(in oklch, var(--color-card) 92%, var(--color-foreground));
-  backdrop-filter: blur(4px);
 }
 
 /* A table's actions column, pinned to the right edge of its scroll box.
@@ -431,18 +463,19 @@ body {
   @keyframes ipc-page-enter {
     from {
       opacity: 0;
-      transform: perspective(1200px) translate3d(0, 6px, -40px);
-    }
-    to {
-      opacity: 1;
-      transform: perspective(1200px) translate3d(0, 0, 0);
+      transform: translateY(6px);
     }
   }
 
   /* The page's own content, on arrival. 6px is enough to read as "this is new"
-     without the layout appearing to slide around. */
+     without the layout appearing to slide around.
+
+     Flat and fill-backwards on purpose: a 3D transform left on the page after
+     the animation (which `both` + perspective() used to do) turns the whole
+     scrolling page into one composited layer and makes every scroll re-raster
+     it — the lag people felt. Once this ends, nothing stays transformed. */
   .page-enter {
-    animation: ipc-page-enter 220ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation: ipc-page-enter 200ms cubic-bezier(0.2, 0, 0, 1) backwards;
   }
 
   /* ── Depth ──────────────────────────────────────────────────────

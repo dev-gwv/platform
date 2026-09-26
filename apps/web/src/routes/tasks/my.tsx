@@ -17,8 +17,9 @@ import {
   STATUS_LABEL,
   todayISO,
 } from '@/features/tasks/board'
+import { assigneeStatusOptions } from '@/features/tasks/delegation'
 
-const STATUSES: TaskStatus[] = ['to_do', 'in_progress', 'completed', 'cancelled']
+const STATUSES: TaskStatus[] = ['to_do', 'in_progress', 'review', 'blocked', 'completed', 'cancelled']
 
 type SortKey = 'due_asc' | 'due_desc' | 'recent' | 'priority'
 type StatusFilter = 'all' | TaskStatus
@@ -177,8 +178,8 @@ function MyTasks() {
             className="h-8 w-36"
             aria-label={`Status for ${t.title}`}
           >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+            {assigneeStatusOptions(t.status).map((s) => (
+              <option key={s} value={s} disabled={s === 'completed' || s === 'cancelled' || s === 'blocked'}>{STATUS_LABEL[s]}</option>
             ))}
           </Select>
           <Button size="sm" variant="outline" onClick={() => openVoice(t)}>

@@ -71,8 +71,9 @@ beforeAll(async () => {
     insert into users (user_id, company_id, role, name, email) values
       ('${OWNER}', '${COMPANY}', 'super_admin', 'Owner', 'o@s.test');
     insert into clients (id, company_id, name) values ('${CLIENT}', '${COMPANY}', 'Mehta');
-    insert into projects (id, company_id, client_id, name, package_cost)
-      values ('${PROJECT}', '${COMPANY}', '${CLIENT}', 'Mehta Wedding', 100000);
+    -- Shown to the client: a hidden project's link reads as hidden (0190).
+    insert into projects (id, company_id, client_id, name, package_cost, show_quotation)
+      values ('${PROJECT}', '${COMPANY}', '${CLIENT}', 'Mehta Wedding', 100000, true);
   `)
   await db.exec(`set request.jwt.claim.sub = '${OWNER}';`)
 })

@@ -32,6 +32,11 @@ export const companyProfile = z.object({
 })
 export type CompanyProfile = z.infer<typeof companyProfile>
 
+/** Close the studio's setup walk-through: finished, or skipped. */
+export const companySetupRequest = z.object({ action: z.enum(['done', 'skip']) })
+export type CompanySetupRequest = z.infer<typeof companySetupRequest>
+export const companySetupResult = z.object({ setup_done: z.boolean() })
+
 export const updateCompanyRequest = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   legal_name: z.string().trim().max(160).optional(),

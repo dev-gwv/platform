@@ -390,6 +390,9 @@ export const projectDetail = z.object({
   // the GST quote-accept flow is the CRM-deal quote and stays separate.
   quotation_terms: z.string().nullable().default(null),
   quotation_display_prefs: z.record(z.string(), z.boolean()).default({}),
+  /** When the client last accepted a quotation link, and the name they typed. */
+  quotation_accepted_at: isoDateTime.nullable().default(null),
+  quotation_accepted_by: z.string().nullable().default(null),
   deliverables: z.array(deliverable),
   payments: z.array(
     z.object({

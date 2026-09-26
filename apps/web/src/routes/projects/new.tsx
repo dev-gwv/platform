@@ -78,7 +78,7 @@ import {
   stageOfRequirement,
 } from '@/features/projects/requirements'
 import { STAGE_TONE } from '@/features/team/role-stages'
-import { useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
+import { SetupFinished, useFromSetup } from '@/features/onboarding/setup-flow'
 import { QuantityStepper, ToneChip, TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT, toneAt } from '@/shared/ui/tone-chip'
 import {
   BUILT_IN_SETS,
@@ -413,7 +413,7 @@ function NewProject() {
           actually deciding against is the one on the quotation. */}
       {/* Edge to edge of <main>'s padding and no further, so the bar never
           pushes the page into a sideways scroll. */}
-      <div className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card/95 backdrop-blur md:-mx-4 md:-mb-4">
+      <div className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card md:-mx-4 md:-mb-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-3 md:px-4">
           <Money label="Package" value={totals.packageCost} />
           <Money label="Add-ons" value={totals.addOns} />
@@ -499,14 +499,16 @@ function CreatedDialog({
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fromSetup = useFromSetup()
-  const backToSetup = useBackToSetup()
 
   const openProject = (quotation?: boolean) =>
     void navigate({ to: quotation ? '/projects/$id/quotation' : '/projects/$id', params: { id: projectId } })
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Project created" description="What would you like to do next?">
+      <DialogContent
+        title="Project created"
+        description={fromSetup ? 'Your first project is saved.' : 'What would you like to do next?'}
+      >
         {/* A shoot that failed to save is the one thing here worth
             interrupting for — the project exists either way. */}
         {warning && (
@@ -515,7 +517,10 @@ function CreatedDialog({
           </p>
         )}
 
-        {link ? (
+        {/* The last setup step: say so, and offer the one obvious next place. */}
+        {fromSetup && !link ? (
+          <SetupFinished />
+        ) : link ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm">
               Send the client this link. It opens without an account, and the prices on it stay as
@@ -564,14 +569,6 @@ function CreatedDialog({
             <Button variant="ghost" className="w-full" onClick={() => openProject()}>
               Continue to project
             </Button>
-            {/* Opened from the setup journey: the obvious next thing is the
-                next setup step, so it is offered by name rather than left to
-                the sidebar. */}
-            {fromSetup && (
-              <Button variant="outline" className="w-full" onClick={backToSetup}>
-                Next setup step <ArrowRight />
-              </Button>
-            )}
           </div>
         )}
       </DialogContent>
@@ -640,14 +637,34 @@ function RowList({
   empty,
   addLabel,
   onAdd,
+  addVariant = 'outline',
+  addFirst = false,
   children,
 }: {
   items: unknown[]
   empty: string
   addLabel: string
   onAdd: () => void
+  addVariant?: 'outline' | 'default'
+  /** While the list is empty, lead with the button instead of the empty note. */
+  addFirst?: boolean
   children: ReactNode
 }) {
+  const button = (
+    <div>
+      <Button variant={addVariant} onClick={onAdd}>
+        <Plus /> {addLabel}
+      </Button>
+    </div>
+  )
+  if (addFirst && items.length === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border p-4">
+        {button}
+        <span className="text-sm text-muted-foreground">{empty}</span>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-3">
       {items.length === 0 ? (
@@ -657,11 +674,7 @@ function RowList({
       ) : (
         children
       )}
-      <div>
-        <Button variant="outline" onClick={onAdd}>
-          <Plus /> {addLabel}
-        </Button>
-      </div>
+      {button}
     </div>
   )
 }
@@ -1485,19 +1498,23 @@ function ShootCard({
             aria-hidden
           />
         </button>
+        {/* Always on the card, folded or open: a studio saves the day it
+            just set up as a preset, and that is usually once it is done. */}
+        <SavePresetButton
+          kind="shoot"
+          defaultName={name}
+          label="Save as preset"
+          disabled={!shoot.name.trim()}
+          disabledHint="Name the shoot first"
+          payload={{
+            requirements: shoot.requirements
+              .filter((r) => r.name.trim())
+              .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
+            internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
+          }}
+        />
         {open && (
           <>
-            <SavePresetButton
-              kind="shoot"
-              defaultName={name}
-              label="Save as preset"
-              payload={{
-                requirements: shoot.requirements
-                  .filter((r) => r.name.trim())
-                  .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
-                internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
-              }}
-            />
             <Button variant="ghost" size="icon" onClick={onRemove}>
               <Trash2 className="text-destructive" />
               <span className="sr-only">Remove {name}</span>
@@ -1770,16 +1787,21 @@ function SavePresetButton({
   defaultName,
   label,
   payload,
+  disabled,
+  disabledHint,
 }: {
   kind: ShootPresetKind
   defaultName: string
   label: string
   payload: ShootPresetPayload
+  /** Overrides the "nothing to save" rule: a shoot preset is worth saving by name alone. */
+  disabled?: boolean
+  disabledHint?: string
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(defaultName)
   const save = useSaveShootPreset()
-  const empty = payload.requirements.length === 0 && payload.internal_work.length === 0
+  const empty = disabled ?? (payload.requirements.length === 0 && payload.internal_work.length === 0)
 
   const submit = () => {
     if (!name.trim()) return
@@ -1790,13 +1812,13 @@ function SavePresetButton({
     <div className="relative">
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         onClick={() => {
           setName(defaultName)
           setOpen((v) => !v)
         }}
         disabled={empty}
-        title={empty ? 'Nothing to save yet' : label}
+        title={empty ? (disabledHint ?? 'Nothing to save yet') : label}
         aria-label={label}
       >
         <Bookmark /> <span className="hidden sm:inline">{label}</span>
@@ -2277,11 +2299,16 @@ function BillingStep({
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-medium">Advance payments</h3>
+        <h3 className="text-sm font-medium">Advance from client</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Has the client already paid something? Add it here so the balance is right from day one.
+        </p>
         <RowList
           items={draft.payments}
-          empty="Nothing received yet. Add an advance if the client has already paid."
-          addLabel="Add payment"
+          empty="Nothing received yet."
+          addLabel="Add advance payment from client"
+          addVariant="default"
+          addFirst
           onAdd={() => patch({ payments: [...draft.payments, newPayment()] })}
         >
           {draft.payments.map((p, i) => (

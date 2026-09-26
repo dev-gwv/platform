@@ -1,28 +1,27 @@
 import type { ModuleKey } from '@ipc/permissions'
 
 /**
- * The studio-setup journey shown on the dashboard until a new studio is running.
+ * The three-step setup a new studio is walked through, one step at a time:
+ * add your team, add your first client, create your first project.
  *
- * Every step is decided by real data, never by a "dismissed" flag — the card
- * reflects what the studio actually has, so it cannot congratulate someone for
- * work they have not done, and it comes back if a studio is emptied out.
+ * Each step is decided by real data. Whether setup as a whole is over is also
+ * stored on the studio (setup_done_at / setup_skipped_at, 0191), so once it is
+ * finished or skipped it never comes back, even if the studio is emptied out.
+ *
+ * Everything else a studio does (booking, data, payments, tracking) is in the
+ * menu; it is not part of setup.
  */
-export type JourneyStepKey =
-  'team' | 'client' | 'project' | 'booking' | 'data' | 'payment' | 'tracking'
+export type JourneyStepKey = 'team' | 'client' | 'project'
 
 /**
- * Counts pulled from the endpoints the dashboard already queries. `teammates`
+ * Counts from the endpoints the dashboard already queries. `teammates`
  * EXCLUDES the signed-in owner: registration creates them, so counting the
- * whole directory would tick "set up your team" off before anyone is added.
+ * whole directory would tick "add your team" off before anyone is added.
  */
 export interface StudioSignals {
   teammates: number
   clients: number
   projects: number
-  bookings: number
-  dataRecords: number
-  invoices: number
-  trackedTasks: number
 }
 
 export type JourneyStepState = 'done' | 'current' | 'upcoming'
@@ -30,26 +29,28 @@ export type JourneyStepState = 'done' | 'current' | 'upcoming'
 export interface JourneyStepDef {
   key: JourneyStepKey
   title: string
-  description: string
+  /** One line: why this step matters. */
+  why: string
   /**
-   * Where the step's button goes. `search` lets a step open a page already
-   * doing the thing it asks for — "set up your team" lands on "how do you
-   * want to add them?", not on a list of nobody with filters above it.
+   * Where the step's button goes. `search` opens the page already doing the
+   * thing — "add your team" lands on "how do you want to add them?".
    */
-  action: { label: string; to: string; search?: Record<string, string> }
+  action: { label: string; to: string; search: Record<string, string> }
   /** Step is hidden from anyone whose access does not include this module. */
   module: ModuleKey
   isDone: (s: StudioSignals) => boolean
 }
 
 export interface JourneyStep extends JourneyStepDef {
-  /** 1-based position among the steps this user can actually see. */
+  /** 1-based position. */
   step: number
   state: JourneyStepState
 }
 
 export interface Journey {
   steps: JourneyStep[]
+  /** The first step still outstanding, or null when all are done. */
+  current: JourneyStep | null
   completed: number
   total: number
   allDone: boolean
@@ -58,9 +59,8 @@ export interface Journey {
 export const JOURNEY_STEPS: JourneyStepDef[] = [
   {
     key: 'team',
-    title: 'Set up your team',
-    description:
-      'Add your photographers, editors, managers, and team members. Then prepare their access and roles.',
+    title: 'Add your team',
+    why: 'The people who shoot and edit with you.',
     action: { label: 'Add your team', to: '/employees', search: { add: 'choose', from: 'setup' } },
     module: 'team_directory',
     isDone: (s) => s.teammates > 0,
@@ -68,7 +68,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
   {
     key: 'client',
     title: 'Add your first client',
-    description: 'Create the client record before starting a booked project.',
+    why: 'The couple or family you are shooting for.',
     action: { label: 'Add a client', to: '/clients', search: { add: '1', from: 'setup' } },
     module: 'clients',
     isDone: (s) => s.clients > 0,
@@ -76,54 +76,21 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
   {
     key: 'project',
     title: 'Create your first project',
-    description: 'Add project details, shoots, deliverables, billing, and final review.',
-    action: { label: 'Create Project', to: '/projects/new', search: { from: 'setup' } },
+    why: 'The shoot, its dates and its price, all in one place.',
+    action: { label: 'Create a project', to: '/projects/new', search: { from: 'setup' } },
     module: 'projects',
     isDone: (s) => s.projects > 0,
   },
-  {
-    key: 'booking',
-    title: 'Book team for shoots',
-    description: 'Assign your team members to the right shoots.',
-    action: { label: 'Team Booking', to: '/team-allocation', search: { from: 'setup' } },
-    module: 'projects',
-    isDone: (s) => s.bookings > 0,
-  },
-  {
-    key: 'data',
-    title: 'Track data and backup',
-    description: 'Track shooter data, primary copy, and backup status shoot by shoot.',
-    action: { label: 'Data Management', to: '/data-management', search: { from: 'setup' } },
-    module: 'projects',
-    isDone: (s) => s.dataRecords > 0,
-  },
-  {
-    key: 'payment',
-    title: 'Track payments / invoices',
-    description: 'Track received payments, pending dues, invoices, and client billing.',
-    action: { label: 'Payments', to: '/billing/invoices', search: { from: 'setup' } },
-    module: 'billing',
-    isDone: (s) => s.invoices > 0,
-  },
-  {
-    key: 'tracking',
-    title: 'Track project health',
-    description:
-      'Check completion, blockers, overdue work, missing data, and recommended next action.',
-    action: { label: 'Project Tracking', to: '/projects', search: { from: 'setup' } },
-    module: 'tasks',
-    // Health is read off tasks, so the step lands once there is work to read.
-    isDone: (s) => s.trackedTasks > 0,
-  },
 ]
+
+export const SETUP_TOTAL = JOURNEY_STEPS.length
 
 /**
  * Resolve each step against the studio's real state.
  *
- * `current` is the first step still outstanding — NOT simply the one after the
- * last completed step, so a studio that added a client before a teammate still
- * gets pointed back at the teammate rather than being told to redo the client.
- * A finished step is never "upcoming", whatever order it was finished in.
+ * `current` is the first step still outstanding — NOT the one after the last
+ * finished step — so a studio that added a client before a teammate is sent
+ * back to the teammate rather than told to redo the client.
  */
 export function buildJourney(
   signals: StudioSignals,
@@ -132,16 +99,49 @@ export function buildJourney(
   const visible = JOURNEY_STEPS.filter((s) => canSee(s.module))
   const currentKey = visible.find((s) => !s.isDone(signals))?.key
 
-  const steps = visible.map((def, i) => ({
+  const steps: JourneyStep[] = visible.map((def, i) => ({
     ...def,
     step: i + 1,
-    state: (def.isDone(signals)
-      ? 'done'
-      : def.key === currentKey
-        ? 'current'
-        : 'upcoming') as JourneyStepState,
+    state: def.isDone(signals) ? 'done' : def.key === currentKey ? 'current' : 'upcoming',
   }))
 
   const completed = steps.filter((s) => s.state === 'done').length
-  return { steps, completed, total: steps.length, allDone: completed === steps.length }
+  return {
+    steps,
+    current: steps.find((s) => s.state === 'current') ?? null,
+    completed,
+    total: steps.length,
+    allDone: completed === steps.length,
+  }
+}
+
+/** The step (1-based) whose page this is, from its path. */
+export function stepForPath(pathname: string): (JourneyStepDef & { step: number }) | null {
+  const clean = pathname.replace(/\/+$/, '') || '/'
+  const i = JOURNEY_STEPS.findIndex((s) => s.action.to === clean)
+  return i < 0 ? null : { ...JOURNEY_STEPS[i]!, step: i + 1 }
+}
+
+/** The step after this one, or null after the last. */
+export function nextStep(key: JourneyStepKey): (JourneyStepDef & { step: number }) | null {
+  const i = JOURNEY_STEPS.findIndex((s) => s.key === key)
+  const next = JOURNEY_STEPS[i + 1]
+  return i < 0 || !next ? null : { ...next, step: i + 2 }
+}
+
+/** Only the people standing a studio up are walked through setup. */
+export function isSetupAudience(s: { is_owner: boolean; role: string }): boolean {
+  return s.is_owner || s.role === 'super_admin' || s.role === 'admin'
+}
+
+/**
+ * Where someone lands on sign-in: the current setup step's page while their
+ * studio is still being set up, otherwise null (the caller's default).
+ */
+export function setupLanding(
+  s: { is_owner: boolean; role: string; setup_done: boolean; setup_step: number | null } | null,
+): { to: string; search: Record<string, string> } | null {
+  if (!s || s.setup_done || !isSetupAudience(s) || s.setup_step == null) return null
+  const def = JOURNEY_STEPS[s.setup_step - 1]
+  return def ? { to: def.action.to, search: def.action.search } : null
 }

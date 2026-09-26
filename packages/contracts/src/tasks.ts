@@ -1,8 +1,39 @@
 import { z } from 'zod'
 import { uuid, isoDate } from './shared/primitives'
 
-export const taskStatus = z.enum(['to_do', 'in_progress', 'completed', 'cancelled'])
+/**
+ * review = submitted, waiting for the person who gave the task; blocked =
+ * stuck, with a reason. Both are open work.
+ */
+export const taskStatus = z.enum(['to_do', 'in_progress', 'review', 'blocked', 'completed', 'cancelled'])
 export type TaskStatus = z.infer<typeof taskStatus>
+
+/** The tags offered when adding a task. The column is free text, so older or imported tags still show. */
+export const TASK_TAGS = ['Shoot', 'Editing', 'Client', 'Office', 'General'] as const
+export const taskTag = z.string().trim().min(1).max(40)
+
+/** An http(s) link, as typed. */
+export const webLink = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine((v) => {
+    try {
+      const u = new URL(v)
+      return u.protocol === 'http:' || u.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }, 'Paste a link that starts with http:// or https://')
+
+/** The newest work submitted against a task, shown on its card. */
+export const taskLatestSubmission = z.object({
+  id: uuid,
+  link: z.string().nullable(),
+  status: z.string(),
+  submitted_at: z.string(),
+})
+export type TaskLatestSubmission = z.infer<typeof taskLatestSubmission>
 
 export const taskPriority = z.enum(['low', 'medium', 'high', 'urgent'])
 export type TaskPriority = z.infer<typeof taskPriority>
@@ -61,6 +92,13 @@ export const taskListItem = z.object({
   assignee_names: z.array(z.string()).default([]),
   assignee_ids: z.array(uuid).default([]),
   sort_order: z.number().int().default(0),
+  tag: z.string().default('General'),
+  blocked_reason: z.string().nullable().default(null),
+  created_by: uuid.nullable().default(null),
+  created_by_name: z.string().nullable().default(null),
+  latest_submission: taskLatestSubmission.nullable().default(null),
+  /** Last change; for a completed task, when it was done ("Done this week"). */
+  updated_at: z.string().nullable().default(null),
 })
 export type TaskListItem = z.infer<typeof taskListItem>
 
@@ -75,6 +113,7 @@ export const createTaskRequest = z.object({
   custom_priority_code: z.string().nullable().optional(),
   due_date: isoDate.optional(),
   voice_note_url: z.string().trim().max(500).nullable().optional(),
+  tag: taskTag.default('General'),
   assignees: z.array(uuid).default([]),
 })
 export type CreateTaskRequest = z.infer<typeof createTaskRequest>
@@ -94,9 +133,58 @@ export const updateTaskRequest = z.object({
   custom_priority_code: z.string().nullable().optional(),
   due_date: isoDate.nullable().optional(),
   voice_note_url: z.string().trim().max(500).nullable().optional(),
+  tag: taskTag.optional(),
   assignees: z.array(uuid).optional(),
 })
 export type UpdateTaskRequest = z.infer<typeof updateTaskRequest>
+
+/** The person on a task hands in their work: a link, and a note if needed. */
+export const submitTaskRequest = z.object({
+  link: webLink,
+  note: z.string().trim().max(2000).optional(),
+})
+export type SubmitTaskRequest = z.infer<typeof submitTaskRequest>
+
+/** Stuck: say why, so the person who gave it can help. */
+export const blockTaskRequest = z.object({
+  reason: z.string().trim().min(1, 'Say what is blocking this task.').max(500),
+})
+export type BlockTaskRequest = z.infer<typeof blockTaskRequest>
+
+/** Approve, or send back with what needs to change. */
+export const reviewTaskRequest = z
+  .object({
+    approve: z.boolean(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .refine((v) => v.approve || (v.note ?? '').length > 0, {
+    message: 'Say what needs to change.',
+    path: ['note'],
+  })
+export type ReviewTaskRequest = z.infer<typeof reviewTaskRequest>
+
+/** One line of a task's history: who did what, when. */
+export const taskActivityItem = z.object({
+  id: uuid,
+  user_id: uuid.nullable(),
+  user_name: z.string().nullable(),
+  action: z.string(),
+  created_at: z.string(),
+})
+export type TaskActivityItem = z.infer<typeof taskActivityItem>
+
+/** Work handed in against a task. */
+export const taskSubmissionItem = z.object({
+  id: uuid,
+  link: z.string().nullable(),
+  note: z.string().nullable(),
+  status: z.string(),
+  review_notes: z.string().nullable(),
+  submitted_by: uuid.nullable(),
+  submitted_by_name: z.string().nullable(),
+  created_at: z.string(),
+})
+export type TaskSubmissionItem = z.infer<typeof taskSubmissionItem>
 
 export const generateTasksRequest = z.object({
   project_id: uuid,

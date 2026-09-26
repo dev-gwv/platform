@@ -13,15 +13,15 @@ export const MOCK_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MOCK ===
 export const NOT_MOCKED = Symbol('not-mocked')
 
 /**
- * DEV knob for previewing the dashboard's Studio Setup Journey, which only
+ * DEV knob for previewing the dashboard's setup card, which only
  * shows while a studio is still being set up. Append `?setup=fresh` for a brand
- * new studio (0 of 7) or `?setup=partial` for one three steps in. Without it the
- * fixtures are full, so the journey is correctly hidden.
+ * new studio (0 of 3) or `?setup=partial` for one on its last step. Without it the
+ * fixtures are full, so the card is correctly hidden.
  */
 type SetupStage = 'fresh' | 'partial' | 'full'
 
 function setupStage(): SetupStage {
-  const v = new URLSearchParams(window.location.search).get('setup')
+  const v = new URLSearchParams(globalThis.location?.search ?? '').get('setup')
   return v === 'fresh' || v === 'partial' ? v : 'full'
 }
 
@@ -49,6 +49,9 @@ export const mockSession: SessionState = {
   plan_gate: 'active',
   plan_expiry: '2027-01-01T00:00:00Z',
   permissions: [],
+  // `?setup=fresh|partial` previews a studio still being set up.
+  setup_done: setupStage() === 'full',
+  setup_step: setupStage() === 'fresh' ? 1 : setupStage() === 'partial' ? 3 : null,
   // Two studios, so the switcher in the account menu shows in a preview.
   studios: [
     { profile_id: uid(1), company_id: uid(0xaa), company_name: 'Demo Studio', role: 'super_admin', is_owner: true },
@@ -143,6 +146,8 @@ const projectDetail: ProjectDetail = {
   created_at: '2026-06-01T10:00:00Z',
   quotation_terms: null,
   quotation_display_prefs: {},
+  quotation_accepted_at: null,
+  quotation_accepted_by: null,
   deliverables: [
     delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000, [], { due: 40 }),
     delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }], {
@@ -560,7 +565,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && path.startsWith('/enquiries/')) return { ok: true }
   if (method === 'POST' && /^\/enquiries\/[^/]+\/convert$/.test(path)) return { lead_id: uid(0xe9) }
   if (method === 'POST' && path === '/documents/quotations')
-    return { link: 'http://localhost:5173/quotation?token=demo-quote' }
+    return { id: uid(0x9a), link: 'http://localhost:5173/quotation?token=demo-quote' }
   if (method === 'POST' && path === '/documents/receipts')
     return { link: 'http://localhost:5173/receipt?token=demo-receipt' }
   if (method === 'GET' && path.startsWith('/public/quotation/')) return publicQuotationFx

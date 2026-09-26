@@ -26,12 +26,10 @@ import {
   Users,
   Clock,
   Settings,
-  ListOrdered,
   Lightbulb,
   ShieldCheck,
   Building2,
   Activity,
-  Package,
   DollarSign,
   FileSignature,
   Eye,
@@ -50,6 +48,8 @@ export interface NavLeaf {
   roles?: AppRole[]
   /** Cross-tenant vendor console — gated on platform_admins, NOT a module. */
   platformOnly?: boolean
+  /** A live count beside the label (the viewer's overdue tasks). */
+  badge?: 'tasks-overdue'
 }
 
 export interface NavGroup {
@@ -87,7 +87,9 @@ export const NAV: NavEntry[] = [
 
   // Employee-only personal set.
   leaf('My Work', '/my-work', ListTodo, { roles: ['employee'] }),
-  leaf('My Tasks', '/tasks/my', ListTodo, { roles: ['employee'] }),
+  // The same page as Task Management, showing only their own: where they
+  // submit work and see what was sent back.
+  leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
@@ -99,7 +101,7 @@ export const NAV: NavEntry[] = [
     children: [
       leaf('Production Board', '/production-board', KanbanSquare, { module: 'projects' }),
       leaf('Team Booking', '/team-allocation', CalendarClock, { module: 'projects' }),
-      leaf('Data Management', '/data-management', Database, { module: 'projects' }),
+      leaf('Data & Backup', '/data-management', Database, { module: 'projects' }),
     ],
   },
   {
@@ -111,13 +113,12 @@ export const NAV: NavEntry[] = [
       leaf('All Projects', '/projects', Briefcase, { module: 'projects' }),
       leaf('Create Project', '/projects/new', Plus, { module: 'projects' }),
       leaf('Project Tracking', '/project-tracking', Target, { module: 'projects' }),
-      leaf('Templates', '/settings/project-templates', Package, { module: 'projects' }),
-      leaf('Documents', '/project-documents', FileSignature, { module: 'projects' }),
-      leaf('Delivery Stages', '/projects/stages', ListOrdered, { module: 'projects' }),
+      // Templates, documents and delivery stages are set up once and then left
+      // alone, so they live under Settings rather than in the daily menu.
     ],
   },
 
-  leaf('Task Management', '/tasks', ListChecks, { module: 'tasks' }),
+  leaf('Task Management', '/tasks', ListChecks, { module: 'tasks', badge: 'tasks-overdue' }),
 
   {
     kind: 'group',

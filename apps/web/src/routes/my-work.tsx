@@ -11,9 +11,9 @@ import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { humanize } from '@/shared/ui/format'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
+import { assigneeStatusOptions } from '@/features/tasks/delegation'
 import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
@@ -21,7 +21,7 @@ import { MyDeliverables } from '@/features/projects/MyDeliverables'
 import { StartNowCard } from '@/features/projects/StartNowCard'
 import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
 import { useConfirm } from '@/shared/ui/confirm'
-import { todayISO } from '@/features/tasks/board'
+import { STATUS_LABEL, todayISO } from '@/features/tasks/board'
 
 const list = workSubmission.array()
 const shootsList = shootListItem.array()
@@ -199,7 +199,7 @@ function MyWork() {
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusBadge tone={t.status === 'completed' ? 'success' : t.status === 'in_progress' ? 'info' : 'neutral'}>
-                      {humanize(t.status)}
+                      {STATUS_LABEL[t.status]}
                     </StatusBadge>
                     {t.due_date && <StatusBadge tone={overdue ? 'danger' : t.due_date === today ? 'warning' : 'neutral'}>{overdue ? `Overdue · ${t.due_date}` : t.due_date === today ? 'Due today' : t.due_date}</StatusBadge>}
                     {submission && <StatusBadge tone={TONE[submission.status]}>{WORK_STATUS_LABEL[submission.status]}</StatusBadge>}
@@ -223,8 +223,8 @@ function MyWork() {
                     aria-label={`Status for ${t.title}`}
                     className="h-8 w-36"
                   >
-                    {(['to_do', 'in_progress', 'completed', 'cancelled'] as TaskStatus[]).map((s) => (
-                      <option key={s} value={s}>{humanize(s)}</option>
+                    {assigneeStatusOptions(t.status).map((s) => (
+                      <option key={s} value={s} disabled={s === 'completed' || s === 'cancelled' || s === 'blocked'}>{STATUS_LABEL[s]}</option>
                     ))}
                   </Select>
                   {t.voice_note_url && (

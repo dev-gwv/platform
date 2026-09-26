@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, CheckCircle2, CircleDashed, Clock, Eye, Hourglass, Search } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -90,6 +91,7 @@ function ProjectDocuments() {
   return (
     <>
       <PageHeader title="Documents" description="Terms & conditions for every project — who has agreed, and who hasn't." />
+      <SettingsTabs />
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {(['agreed', 'waiting', 'closed', 'not_sent'] as const).map((s) => {

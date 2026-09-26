@@ -17,7 +17,8 @@ interface AuthValue {
    * stored tokens are kept so a retry can succeed without a fresh sign-in.
    */
   bootError: string | null
-  refresh: () => Promise<void>
+  /** Re-read the session; resolves to it (null when signed out). */
+  refresh: () => Promise<SessionState | null>
   /** Re-run the boot after a bootError. */
   retry: () => Promise<void>
   signOut: () => Promise<void>
@@ -60,13 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (MOCK_ENABLED) {
       setSession(mockSession)
-      return
+      return mockSession
     }
     // A new tab has no access token (it is per tab); a refresh from the stored
     // token or the HttpOnly cookie mints one before anything is asked.
     if (!getToken() && !(await rotateTokens())) {
       setSession(null)
-      return
+      return null
     }
     try {
       const s = await callApi('/auth/session', { responseSchema: sessionState })
@@ -75,11 +76,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // at sign-in so a returning session (page reload, token refresh) is
       // identified too, not just a fresh login.
       setSentryUser(s)
+      return s
     } catch (e) {
       // Network/5xx should NOT log out - keep session for retry; only 401/403 mean gone.
       const status = e instanceof ApiError ? e.status : undefined
-      if (status === 401 || status === 403) setSession(null)
-      else throw e
+      if (status === 401 || status === 403) {
+        setSession(null)
+        return null
+      }
+      throw e
     }
   }, [])
 

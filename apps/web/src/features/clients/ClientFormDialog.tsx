@@ -21,12 +21,14 @@ interface Props {
   onOpenChange?: (open: boolean) => void
   /** No trigger button: the page opens it via `open`. */
   hideTrigger?: boolean
+  /** Opened from setup: the save button is the one to pulse. */
+  nudge?: boolean
   /** Called after a new client is saved (not after an edit). */
   onCreated?: (client: Client) => void
 }
 
 /** Create- or edit-client modal, depending on whether `client` is passed. */
-export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange, hideTrigger, onCreated }: Props) {
+export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange, hideTrigger, onCreated, nudge }: Props) {
   const isEdit = !!client
   const create = useCreateClient()
   const update = useUpdateClient(client?.id ?? '')
@@ -207,7 +209,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy} data-setup-nudge={nudge ? '' : undefined}>
               {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add client'}
             </Button>
           </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useNavigate } from '@tanstack/react-router'
 import { useConfirm } from '@/shared/ui/confirm'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -181,6 +182,7 @@ function ProjectTemplatesContent() {
           ) : undefined
         }
       />
+      <SettingsTabs />
 
       {/* Wraps rather than scrolls: on a phone all four stay in sight, two by two. */}
       <SectionTabs<Tab> label="Templates and presets" tabs={TABS} value={tab} onChange={setTab} className="flex-wrap" />

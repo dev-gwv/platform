@@ -1,19 +1,8 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from '@tanstack/react-router'
-import {
-  CalendarClock,
-  CheckCircle2,
-  Circle,
-  Clock,
-  Eye,
-  ListChecks,
-  Package,
-  Pencil,
-  Plus,
-  Trash2,
-} from 'lucide-react'
-import type { DirectoryMember, TaskListItem, TaskPriority, TaskStatus } from '@ipc/contracts'
-import { AuthedPage } from '@/shared/layout/AuthedPage'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, Package, Pencil, Plus, Trash2 } from 'lucide-react'
+import { TASK_TAGS, type DirectoryMember, type TaskListItem, type TaskPriority, type TaskStatus } from '@ipc/contracts'
+import { ModuleRouteGuard } from '@/shared/auth/ModuleRouteGuard'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { Button } from '@/shared/ui/button'
@@ -21,7 +10,6 @@ import { SkeletonCards, SkeletonList } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { CreatableSelect } from '@/shared/ui/creatable-select'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -29,10 +17,12 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { useProjects } from '@/features/projects/api'
 import { useProductionBoard } from '@/features/board/api'
+import { TaskBoard } from '@/features/board/TaskBoard'
 import { useDirectory } from '@/features/team/api'
 import {
   useApplyBundle,
@@ -41,9 +31,8 @@ import {
   useCreateTask,
   useDeleteBundle,
   useDeleteTask,
+  useMyTasks,
   useSetTaskStatus,
-  useSubtasks,
-  useTask,
   useTaskPriorities,
   useCreateTaskPriority,
   useTasks,
@@ -51,147 +40,192 @@ import {
   useUpdateTask,
 } from '@/features/tasks/api'
 import {
-  EMPTY_FILTERS,
   PRIORITY_LABEL,
   STATUS_LABEL,
   TASK_TABS,
   filterTasks,
-  isOverdue,
-  summarise,
   tabCounts,
   todayISO,
-  type TaskFilters,
   type TaskTab,
 } from '@/features/tasks/board'
+import {
+  DUE_FILTERS,
+  isOpen,
+  matchesDue,
+  matchesScope,
+  taskStats,
+  weekStart,
+  type DueFilter,
+} from '@/features/tasks/delegation'
+import { DueText, PriorityPill } from '@/features/tasks/TaskCard'
+import { TaskPeopleView } from '@/features/tasks/TaskPeopleView'
+import { TaskDrawer } from '@/features/tasks/TaskDrawer'
+import { useTaskActions, useTaskViewer } from '@/features/tasks/TaskActions'
 
-const PRIORITY_TONE: Record<TaskPriority, 'danger' | 'warning' | 'neutral' | 'info'> = {
-  urgent: 'danger',
-  high: 'warning',
-  medium: 'neutral',
-  low: 'info',
-}
-
-/** The studio's own label/tone when it set one, else the plain canonical badge. */
-function PriorityBadge({ task }: { task: TaskListItem }) {
-  if (task.custom_priority_code && task.custom_priority_label && task.custom_priority_tone) {
-    return <StatusBadge tone={task.custom_priority_tone}>{task.custom_priority_label}</StatusBadge>
-  }
-  return <StatusBadge tone={PRIORITY_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</StatusBadge>
-}
-
-
-const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
-
+/**
+ * Tasks: give work, see who is carrying what, and close the loop —
+ * assign → they are told → they work → they submit a link → you review → done.
+ *
+ * Someone who manages tasks sees the studio; everyone else sees their own
+ * (and may add tasks for themselves). The same page, so a link from a
+ * notification (/tasks?open=<id>) or the dashboard (?mine=1) works for all.
+ */
 export function TasksPage() {
   return (
-    <AuthedPage module="tasks">
-      <Tasks />
-    </AuthedPage>
+    <ModuleRouteGuard module="tasks" fallback={<Tasks managed={false} />}>
+      <Tasks managed />
+    </ModuleRouteGuard>
   )
 }
 
-function Tasks() {
+type TaskView = 'people' | 'list' | 'board'
+const VIEWS: ReadonlyArray<{ value: TaskView; label: string }> = [
+  { value: 'people', label: 'People' },
+  { value: 'list', label: 'List' },
+  { value: 'board', label: 'Board' },
+]
+
+function Tasks({ managed }: { managed: boolean }) {
+  // People first: who is carrying what is the question a studio owner opens
+  // this page to answer. Every choice lives in the address so it sticks.
+  const [viewParam, setView] = useUrlParam('view', 'people')
+  const view: TaskView = VIEWS.some((v) => v.value === viewParam) ? (viewParam as TaskView) : 'people'
+  const [mineParam, setMine] = useUrlParam('mine', '')
+  const [member, setMember] = useUrlParam('member', '')
+  const [dueParam, setDue] = useUrlParam('due', 'all')
+  const due: DueFilter = DUE_FILTERS.some((d) => d.value === dueParam) ? (dueParam as DueFilter) : 'all'
+  const [openId, setOpenId] = useUrlParam('open', '')
+  // A notification tapped while already on this page changes the address,
+  // not this state: follow it, so the task it names opens.
+  const { search: locSearch } = useLocation()
+  const linkedOpen = (locSearch as Record<string, unknown>).open
+  useEffect(() => {
+    if (typeof linkedOpen === 'string' && linkedOpen) setOpenId(linkedOpen)
+  }, [linkedOpen, setOpenId])
+  const [search, setSearch] = useState('')
   const [tab, setTab] = useState<TaskTab>('all')
-  const [filters, setFilters] = useState<TaskFilters>(EMPTY_FILTERS)
-  const { data, isLoading, isError, refetch } = useTasks()
+
+  const { me, canManage, canAssign } = useTaskViewer()
+  const mine = !managed || mineParam === '1'
+  const studio = useTasks()
+  const own = useMyTasks()
+  const { data, isLoading, isError, refetch } = managed ? studio : own
+  const { data: directory } = useDirectory()
+  const members = useMemo(() => (directory ?? []).filter((m: DirectoryMember) => m.status === 'active'), [directory])
+  const actions = useTaskActions()
 
   const today = todayISO()
-  const tasks = useMemo(() => data ?? [], [data])
-  const totals = useMemo(() => summarise(tasks, today), [tasks, today])
-  const counts = useMemo(() => tabCounts(tasks, today), [tasks, today])
-  const rows = useMemo(() => filterTasks(tasks, tab, filters, today), [tasks, tab, filters, today])
+  const monday = weekStart(today)
+  const needle = search.trim().toLowerCase()
+
+  // Everything the toolbar says, in one predicate the three views share.
+  const keep = useMemo(
+    () => (t: TaskListItem) =>
+      matchesScope(t, { mine, me, member: managed && !mine ? member : '' }) &&
+      matchesDue(t, due, today) &&
+      (!needle ||
+        [t.title, t.description, t.project_name, t.tag, ...t.assignee_names]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(needle))),
+    [mine, me, member, managed, due, today, needle],
+  )
+  const scoped = useMemo(() => (data ?? []).filter(keep), [data, keep])
+  const stats = useMemo(() => taskStats(scoped, today), [scoped, today])
+  // The People view is about work in hand: open tasks, and what was finished
+  // this week so a tick does not make a card vanish on the spot.
+  const peopleRows = useMemo(
+    () => scoped.filter((t) => isOpen(t) || (t.status === 'completed' && (t.updated_at ?? '').slice(0, 10) >= monday)),
+    [scoped, monday],
+  )
+  const counts = useMemo(() => tabCounts(scoped, today), [scoped, today])
+  const listRows = useMemo(() => filterTasks(scoped, tab, { search: '', priority: 'all' }, today), [scoped, tab, today])
+  const total = (data ?? []).length
 
   return (
     <>
-      <HowToUse
-        title="Track team work"
-        description="Create tasks for editing, delivery, follow-up, and operations."
-        steps={['Add the task and its details.', 'Assign it to a team member.', 'Track it to done.']}
+      <PageHeader
+        title={managed ? 'Task management' : 'My tasks'}
+        description={
+          managed
+            ? 'Give work, see who is carrying what, and review it to done.'
+            : 'Do the work, submit a link, and it goes for review.'
+        }
+        actions={
+          <>
+            {managed && <BundlesDialog />}
+            <NewTaskDialog own={!canAssign} />
+          </>
+        }
       />
 
-      <div className="mt-6">
-        <PageHeader
-          title="Task management"
-          description="All tasks across your studio — assign, track, and close out work."
-          actions={
-            <>
-              <BundlesDialog />
-              <NewTaskDialog />
-            </>
-          }
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat icon={Flame} label="High priority" value={stats.highPriority} tone="danger" />
+        <Stat icon={Clock} label="In progress" value={stats.inProgress} tone="info" />
+        <Stat icon={AlertTriangle} label="Due today" value={stats.dueToday} tone="warning" />
+        <Stat icon={CheckCircle2} label="Done this week" value={stats.doneThisWeek} tone="success" />
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <Segmented label="View" value={view} onChange={(v) => setView(v)} options={VIEWS} />
+        <Segmented
+          label="Whose tasks"
+          value={mine ? 'mine' : 'all'}
+          onChange={(v) => setMine(v === 'mine' ? '1' : '')}
+          options={[
+            { value: 'mine', label: 'My tasks' },
+            { value: 'all', label: 'All tasks', disabled: !managed },
+          ]}
         />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Tile icon={ListChecks} label="Total" value={totals.total} />
-        <Tile icon={Circle} label="To do" value={totals.toDo} tone="info" />
-        <Tile icon={Clock} label="In progress" value={totals.inProgress} tone="warning" />
-        <Tile icon={CheckCircle2} label="Completed" value={totals.completed} tone="success" />
-        <Tile icon={CalendarClock} label="Overdue" value={totals.overdue} tone="danger" />
-      </div>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <FeatureCard
-          icon={Package}
-          title="Task bundles"
-          description="Reusable checklists for the work you repeat — wedding editing, album delivery, client onboarding, shoot prep."
-          action={<BundlesDialog trigger={<Button variant="outline">Manage bundles</Button>} />}
-        />
-      </div>
-
-      <div className="mt-6">
-        <FilterTabs<TaskTab>
-          tabs={TASK_TABS.map((t) => ({ ...t, count: counts[t.value] }))}
-          value={tab}
-          onChange={setTab}
-        />
-      </div>
-
-      <div className="mt-4 grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
-        <div className="sm:col-span-2">
-          <Input
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            placeholder="Search title, description, project or assignee…"
-            aria-label="Search tasks"
-          />
-        </div>
-        <Select
-          value={filters.priority}
-          onChange={(e) =>
-            setFilters({ ...filters, priority: e.target.value as TaskFilters['priority'] })
-          }
-          aria-label="Priority"
-        >
-          <option value="all">All priorities</option>
-          {(['urgent', 'high', 'medium', 'low'] as TaskPriority[]).map((p) => (
-            <option key={p} value={p}>
-              {PRIORITY_LABEL[p]}
+        {managed && !mine && (
+          <Select value={member} onChange={(e) => setMember(e.target.value)} aria-label="Person" className="h-9 w-44">
+            <option value="">Everyone</option>
+            <option value="none">Unassigned</option>
+            {members.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <Select value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="h-9 w-40">
+          {DUE_FILTERS.map((d) => (
+            <option key={d.value} value={d.value}>
+              {d.label}
             </option>
           ))}
         </Select>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search tasks…"
+          aria-label="Search tasks"
+          className="h-9 w-full sm:w-56"
+        />
       </div>
 
       <div className="mt-4">
-        {isLoading ? (
-          <SkeletonList rows={6} columns={6} />
+        {view === 'board' ? (
+          <TaskBoard items={managed ? undefined : (data ?? [])} filter={keep} />
+        ) : isLoading ? (
+          <SkeletonList rows={6} columns={4} />
         ) : isError ? (
           <ErrorState onRetry={() => void refetch()} />
-        ) : rows.length === 0 ? (
+        ) : scoped.length === 0 ? (
           <Card>
             <CardContent className="py-4">
               <EmptyState
-                title={tasks.length === 0 ? 'No tasks yet' : 'Nothing matches these filters'}
+                title={total === 0 ? 'No tasks yet' : 'Nothing matches'}
                 description={
-                  tasks.length === 0
-                    ? 'Create your first task, or use a bundle to raise a whole checklist at once.'
-                    : 'Try another tab, or clear the search.'
+                  total === 0
+                    ? managed
+                      ? 'Give someone their first task, or raise a whole checklist from a bundle.'
+                      : 'Tasks given to you show up here. You can add your own too.'
+                    : 'Try another date, person, or search.'
                 }
                 action={
-                  tasks.length === 0 ? (
+                  total === 0 && managed ? (
                     <div className="flex flex-wrap justify-center gap-2">
-                      <NewTaskDialog />
-                      <BundlesDialog trigger={<Button variant="outline">Task bundles</Button>} />
+                      <NewTaskDialog own={!canAssign} />
                       <Button variant="outline" asChild>
                         <Link to="/projects">Projects</Link>
                       </Button>
@@ -201,83 +235,135 @@ function Tasks() {
               />
             </CardContent>
           </Card>
+        ) : view === 'people' ? (
+          <TaskPeopleView
+            rows={peopleRows}
+            today={today}
+            me={me}
+            canManage={canManage}
+            canAssign={canAssign && managed}
+            members={managed && !mine && !member ? members : []}
+            onOpen={(t) => setOpenId(t.id)}
+            onAction={actions.run}
+          />
         ) : (
-          <TaskTable rows={rows} today={today} />
+          <>
+            <FilterTabs<TaskTab> tabs={TASK_TABS.map((t) => ({ ...t, count: counts[t.value] }))} value={tab} onChange={setTab} />
+            <div className="mt-3">
+              <TaskTable rows={listRows} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
+            </div>
+          </>
         )}
       </div>
+
+      {actions.dialogs}
+      {openId && (
+        <TaskDrawer
+          taskId={openId}
+          onClose={() => setOpenId('')}
+          editSlot={
+            canManage
+              ? (t) => (
+                  <EditTaskDialog
+                    task={t}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        <Pencil /> Edit
+                      </Button>
+                    }
+                  />
+                )
+              : undefined
+          }
+        />
+      )}
     </>
   )
 }
 
-function Tile({
+function Segmented<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: T
+  onChange: (v: T) => void
+  options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>
+}) {
+  return (
+    <div role="tablist" aria-label={label} className="inline-flex gap-1 rounded-lg bg-muted p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="tab"
+          aria-selected={value === o.value}
+          disabled={o.disabled}
+          title={o.disabled ? 'Only someone who manages tasks sees everyone’s' : undefined}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+            value === o.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Stat({
   icon: Icon,
   label,
   value,
-  tone = 'neutral',
+  tone,
 }: {
-  icon: typeof ListChecks
+  icon: typeof Flame
   label: string
   value: number
-  tone?: 'success' | 'danger' | 'info' | 'warning' | 'neutral'
+  tone: 'success' | 'danger' | 'info' | 'warning'
 }) {
   const toneClass = {
     success: 'bg-success/15 text-success',
     danger: 'bg-destructive/10 text-destructive',
     info: 'bg-primary/10 text-primary',
     warning: 'bg-warning/15 text-warning',
-    neutral: 'bg-muted text-muted-foreground',
   }[tone]
-
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', toneClass)}>
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xl font-semibold tabular-nums">
-            <CountUp value={value} />
-          </p>
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
+      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', toneClass)}>
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-lg font-semibold leading-tight tabular-nums">
+          <CountUp value={value} />
+        </p>
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
+      </div>
+    </div>
   )
 }
 
-function FeatureCard({
-  icon: Icon,
-  title,
-  description,
-  action,
+const MANAGER_STATUSES: TaskStatus[] = ['to_do', 'in_progress', 'review', 'blocked', 'completed', 'cancelled']
+
+function TaskTable({
+  rows,
+  today,
+  canManage,
+  onOpen,
 }: {
-  icon: typeof Package
-  title: string
-  description: string
-  action: ReactNode
+  rows: readonly TaskListItem[]
+  today: string
+  canManage: boolean
+  onOpen: (id: string) => void
 }) {
-  return (
-    <Card>
-      <CardContent className="flex gap-3 p-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">{title}</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-          <div className="mt-3">{action}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: string }) {
   const setStatus = useSetTaskStatus()
   const deleteTask = useDeleteTask()
   const confirm = useConfirm()
   const isMobile = useIsMobile()
-  const [detailId, setDetailId] = useState<string | null>(null)
 
   async function onDelete(t: TaskListItem) {
     const yes = await confirm({
@@ -289,74 +375,69 @@ function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: stri
     if (yes) deleteTask.mutate(t.id)
   }
 
-  const StatusSelect = ({ task }: { task: TaskListItem }) => (
-    <Select
-      value={task.status}
-      onChange={(e) => setStatus.mutate({ id: task.id, status: e.target.value as TaskStatus })}
-      disabled={setStatus.isPending}
-      aria-label={`Status for ${task.title}`}
-      className="h-8 w-36"
-    >
-      {(['to_do', 'in_progress', 'completed', 'cancelled'] as TaskStatus[]).map((s) => (
-        <option key={s} value={s}>
-          {STATUS_LABEL[s]}
-        </option>
-      ))}
-    </Select>
-  )
+  const statusCell = (task: TaskListItem) =>
+    canManage ? (
+      <Select
+        value={task.status}
+        onChange={(e) => setStatus.mutate({ id: task.id, status: e.target.value as TaskStatus })}
+        disabled={setStatus.isPending}
+        aria-label={`Status for ${task.title}`}
+        className="h-8 w-36"
+      >
+        {MANAGER_STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {STATUS_LABEL[s]}
+          </option>
+        ))}
+      </Select>
+    ) : (
+      <StatusBadge>{STATUS_LABEL[task.status]}</StatusBadge>
+    )
 
   if (isMobile) {
     return (
-      <>
       <div className="flex flex-col gap-3">
         {rows.map((t) => (
           <div key={t.id} className="rounded-lg border border-border p-4">
             <div className="flex items-start justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setDetailId(t.id)}
-                className="text-left font-medium hover:text-primary hover:underline"
-              >
+              <button type="button" onClick={() => onOpen(t.id)} className="text-left font-medium hover:text-primary hover:underline">
                 {t.title}
               </button>
-              <PriorityBadge task={t} />
+              <PriorityPill task={t} />
             </div>
-            {t.project_name && (
-              <p className="mt-1 truncate text-sm text-muted-foreground">{t.project_name}</p>
-            )}
+            {t.project_name && <p className="mt-1 truncate text-sm text-muted-foreground">{t.project_name}</p>}
             <div className="mt-3 flex items-center gap-2">
-              <StatusSelect task={t} />
-              <DueBadge task={t} today={today} />
+              {statusCell(t)}
+              <DueText task={t} today={today} />
             </div>
-            <div className="mt-2 flex justify-end gap-1">
-              <EditTaskDialog
-                task={t}
-                trigger={
-                  <Button size="sm" variant="ghost">
-                    <Pencil />
-                  </Button>
-                }
-              />
-              <Button size="sm" variant="ghost" onClick={() => void onDelete(t)}>
-                <Trash2 />
-              </Button>
-            </div>
+            {canManage && (
+              <div className="mt-2 flex justify-end gap-1">
+                <EditTaskDialog
+                  task={t}
+                  trigger={
+                    <Button size="sm" variant="ghost" aria-label={`Edit ${t.title}`}>
+                      <Pencil />
+                    </Button>
+                  }
+                />
+                <Button size="sm" variant="ghost" aria-label={`Delete ${t.title}`} onClick={() => void onDelete(t)}>
+                  <Trash2 />
+                </Button>
+              </div>
+            )}
           </div>
         ))}
       </div>
-      {detailId && <TaskDetailDialog taskId={detailId} onClose={() => setDetailId(null)} />}
-      </>
     )
   }
 
   return (
-    <>
     <div className="table-wrap rounded-lg border border-border">
       <table className="table-sticky w-full text-sm">
         <thead className="bg-muted/50 text-left text-muted-foreground">
           <tr>
             <th className="min-w-64 px-4 py-2 font-medium">Task</th>
-            <th className="px-4 py-2 font-medium">Project</th>
+            <th className="px-4 py-2 font-medium">Tag</th>
             <th className="px-4 py-2 font-medium">Assigned</th>
             <th className="px-4 py-2 font-medium">Priority</th>
             <th className="px-4 py-2 font-medium">Due</th>
@@ -370,7 +451,7 @@ function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: stri
               <td className="px-4 py-2">
                 <button
                   type="button"
-                  onClick={() => setDetailId(t.id)}
+                  onClick={() => onOpen(t.id)}
                   className={cn(
                     'text-left font-medium hover:text-primary hover:underline',
                     t.status === 'completed' && 'text-muted-foreground line-through',
@@ -378,22 +459,9 @@ function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: stri
                 >
                   {t.title}
                 </button>
-                {t.description && (
-                  <p className="truncate text-xs text-muted-foreground">{t.description}</p>
-                )}
-                {t.voice_note_url && (
-                  <a
-                    href={t.voice_note_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-primary hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Voice note
-                  </a>
-                )}
+                {t.project_name && <p className="truncate text-xs text-muted-foreground">{t.project_name}</p>}
               </td>
-              <td className="px-4 py-2 text-muted-foreground">{t.project_name ?? '—'}</td>
+              <td className="px-4 py-2 text-muted-foreground">{t.tag}</td>
               <td className="px-4 py-2 text-muted-foreground">
                 {t.assignee_names.length ? (
                   <span className="flex items-center gap-2">
@@ -405,32 +473,32 @@ function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: stri
                 )}
               </td>
               <td className="px-4 py-2">
-                <PriorityBadge task={t} />
+                <PriorityPill task={t} />
               </td>
               <td className="px-4 py-2">
-                <DueBadge task={t} today={today} />
+                {t.due_date ? <DueText task={t} today={today} /> : <span className="text-xs text-muted-foreground">No date</span>}
               </td>
-              <td className="px-4 py-2">
-                <StatusSelect task={t} />
-              </td>
+              <td className="px-4 py-2">{statusCell(t)}</td>
               <td className="px-4 py-2 text-right">
                 <div className="flex justify-end gap-1">
-                  {/* The title opens this too, but a row of icons that skips
-                      "look at it" reads as if editing is the only way in. */}
-                  <Button size="sm" variant="ghost" title="View" aria-label={`View ${t.title}`} onClick={() => setDetailId(t.id)}>
+                  <Button size="sm" variant="ghost" title="Open" aria-label={`Open ${t.title}`} onClick={() => onOpen(t.id)}>
                     <Eye />
                   </Button>
-                  <EditTaskDialog
-                    task={t}
-                    trigger={
-                      <Button size="sm" variant="ghost" title="Edit">
-                        <Pencil />
+                  {canManage && (
+                    <>
+                      <EditTaskDialog
+                        task={t}
+                        trigger={
+                          <Button size="sm" variant="ghost" title="Edit" aria-label={`Edit ${t.title}`}>
+                            <Pencil />
+                          </Button>
+                        }
+                      />
+                      <Button size="sm" variant="ghost" title="Delete" aria-label={`Delete ${t.title}`} onClick={() => void onDelete(t)}>
+                        <Trash2 />
                       </Button>
-                    }
-                  />
-                  <Button size="sm" variant="ghost" title="Delete" onClick={() => void onDelete(t)}>
-                    <Trash2 />
-                  </Button>
+                    </>
+                  )}
                 </div>
               </td>
             </tr>
@@ -438,113 +506,23 @@ function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: stri
         </tbody>
       </table>
     </div>
-    {detailId && <TaskDetailDialog taskId={detailId} onClose={() => setDetailId(null)} />}
-    </>
   )
 }
 
-/**
- * Task detail dialog (Lovable parity with _app.tasks.$taskId): full header,
- * status move, voice note, and the subtask list. Subtasks are a client-side
- * slice on parent_task_id until a dedicated subtask API lands.
- */
-function TaskDetailDialog({ taskId, onClose }: { taskId: string; onClose: () => void }) {
-  const { data: task, isLoading } = useTask(taskId)
-  const subtasks = useSubtasks(taskId)
-  const setStatus = useSetTaskStatus()
-
+function TagSelect({ value, onChange }: { value: string; onChange: (tag: string) => void }) {
+  const tags: string[] = [...TASK_TAGS]
+  if (value && !tags.includes(value)) tags.push(value)
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent
-        title={task?.title ?? 'Task'}
-        description={task?.project_name ? `Project · ${task.project_name}` : 'Task details'}
-        className="max-h-[85vh] max-w-2xl overflow-y-auto"
-      >
-        {isLoading || !task ? (
-          <SkeletonList rows={4} columns={2} />
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge tone={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'info' : 'neutral'}>
-                {STATUS_LABEL[task.status]}
-              </StatusBadge>
-              <PriorityBadge task={task} />
-              <DueBadge task={task} today={todayISO()} />
-            </div>
-
-            {task.description && (
-              <p className="whitespace-pre-wrap text-sm">{task.description}</p>
-            )}
-
-            {task.assignee_names.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <AvatarGroup names={task.assignee_names} />
-                <span>{task.assignee_names.join(', ')}</span>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">Status:</span>
-              <Select
-                value={task.status}
-                onChange={(e) => setStatus.mutate({ id: task.id, status: e.target.value as TaskStatus })}
-                disabled={setStatus.isPending}
-                aria-label={`Status for ${task.title}`}
-                className="h-8 w-40"
-              >
-                {(['to_do', 'in_progress', 'completed', 'cancelled'] as TaskStatus[]).map((s) => (
-                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                ))}
-              </Select>
-              {task.voice_note_url && (
-                <a
-                  href={task.voice_note_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Voice note
-                </a>
-              )}
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <p className="mb-2 text-sm font-medium">
-                Subtasks {subtasks.length > 0 && <span className="text-muted-foreground">({subtasks.length})</span>}
-              </p>
-              {subtasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No subtasks yet. Subtask creation lands with the dedicated subtask API.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {subtasks.map((s) => (
-                    <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-sm">
-                      <span className="min-w-0 flex-1 truncate font-medium">{s.title}</span>
-                      <StatusBadge tone={s.status === 'completed' ? 'success' : 'neutral'}>
-                        {STATUS_LABEL[s.status]}
-                      </StatusBadge>
-                      <DueBadge task={s} today={todayISO()} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function DueBadge({ task, today }: { task: TaskListItem; today: string }) {
-  if (!task.due_date) return <span className="text-xs text-muted-foreground">No date</span>
-  const late = isOverdue(task, today)
-  const label = dayFormat.format(new Date(`${task.due_date}T00:00:00`))
-  return (
-    <StatusBadge tone={late ? 'danger' : task.due_date === today ? 'warning' : 'neutral'}>
-      {late ? `Overdue · ${label}` : task.due_date === today ? 'Due today' : label}
-    </StatusBadge>
+    <div className="flex flex-col gap-1.5">
+      <Label>Tag</Label>
+      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Tag">
+        {tags.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </Select>
+    </div>
   )
 }
 
@@ -574,7 +552,11 @@ function AssigneePicker({ selected, onChange }: { selected: string[]; onChange: 
   )
 }
 
-function NewTaskDialog() {
+/**
+ * A new task. Someone who manages tasks gives it to anyone, on any project;
+ * everyone else adds one for themselves (the API holds them to that too).
+ */
+function NewTaskDialog({ own = false }: { own?: boolean }) {
   const create = useCreateTask()
   const { data: projects } = useProjects()
   const { data: customPriorities } = useTaskPriorities()
@@ -594,6 +576,7 @@ function NewTaskDialog() {
   const [dueDate, setDueDate] = useState('')
   const [voiceNoteUrl, setVoiceNoteUrl] = useState('')
   const [assignees, setAssignees] = useState<string[]>([])
+  const [tag, setTag] = useState('General')
   const deliverables = useProductionBoard().data?.items
   // Only the chosen project's own, still-open deliverables: attaching a task to
   // another project's, or to one already delivered, would be a mistake.
@@ -601,7 +584,7 @@ function NewTaskDialog() {
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? 'tasks-page:new' : null,
-    { title, description, projectId, deliverableId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees },
+    { title, description, projectId, deliverableId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees, tag },
     (v) => {
       setTitle(v.title)
       setDescription(v.description)
@@ -612,6 +595,7 @@ function NewTaskDialog() {
       setDueDate(v.dueDate)
       setVoiceNoteUrl(v.voiceNoteUrl)
       setAssignees(v.assignees)
+      setTag(v.tag)
     },
   )
 
@@ -625,6 +609,7 @@ function NewTaskDialog() {
     setVoiceNoteUrl('')
     setAssignees([])
     setDeliverableId('')
+    setTag('General')
   }
 
   function onSubmit(e: FormEvent) {
@@ -632,12 +617,13 @@ function NewTaskDialog() {
     create.mutate(
       {
         title: title.trim(),
-        project_id: projectId || null,
-        deliverable_id: deliverableId || null,
+        project_id: own ? null : projectId || null,
+        deliverable_id: own ? null : deliverableId || null,
         status: 'to_do',
         priority,
-        custom_priority_code: customPriorityCode || null,
-        assignees,
+        tag,
+        ...(own ? {} : { custom_priority_code: customPriorityCode || null }),
+        assignees: own ? [] : assignees,
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
         ...(voiceNoteUrl.trim() ? { voice_note_url: voiceNoteUrl.trim() } : {}),
@@ -665,7 +651,7 @@ function NewTaskDialog() {
           <Plus /> New task
         </Button>
       </DialogTrigger>
-      <DialogContent title="New task" description="Give it a title, assign it, and track it to done.">
+      <DialogContent title="New task" description={own ? 'A task for yourself. Submit a link when it is done.' : 'Give it a title and a person. They are told straight away.'}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>
@@ -688,8 +674,9 @@ function NewTaskDialog() {
               className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
-          <AssigneePicker selected={assignees} onChange={setAssignees} />
+          {!own && <AssigneePicker selected={assignees} onChange={setAssignees} />}
           <div className="grid gap-3 sm:grid-cols-3">
+            {!own && (<>
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
               <Select
@@ -729,6 +716,8 @@ function NewTaskDialog() {
                 ))}
               </Select>
             </div>
+            </>)}
+            <TagSelect value={tag} onChange={setTag} />
             <div className="flex flex-col gap-1.5">
               <Label>Priority</Label>
               <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
@@ -753,17 +742,19 @@ function NewTaskDialog() {
               type="url"
             />
           </div>
-          {/* Always shown: hidden while the list was empty, nobody ever found
-              out labels existed. A new one is added right here. */}
-          <div className="flex flex-col gap-1.5">
-            <Label>Custom label (optional)</Label>
-            <TaskLabelPicker
-              value={customPriorityCode}
-              onChange={setCustomPriorityCode}
-              options={customPriorities ?? []}
-              noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
-            />
-          </div>
+          {/* Always shown to managers: hidden while the list was empty, nobody
+              ever found out labels existed. A new one is added right here. */}
+          {!own && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Custom label (optional)</Label>
+              <TaskLabelPicker
+                value={customPriorityCode}
+                onChange={setCustomPriorityCode}
+                options={customPriorities ?? []}
+                noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
               <Button type="button" variant="outline">
@@ -794,10 +785,11 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
   const [dueDate, setDueDate] = useState(task.due_date ?? '')
   const [voiceNoteUrl, setVoiceNoteUrl] = useState(task.voice_note_url ?? '')
   const [assignees, setAssignees] = useState<string[]>(task.assignee_ids)
+  const [tag, setTag] = useState(task.tag)
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `tasks-page:${task.id}` : null,
-    { title, description, projectId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees },
+    { title, description, projectId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees, tag },
     (v) => {
       setTitle(v.title)
       setDescription(v.description)
@@ -807,6 +799,7 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
       setDueDate(v.dueDate)
       setVoiceNoteUrl(v.voiceNoteUrl)
       setAssignees(v.assignees)
+      setTag(v.tag)
     },
   )
 
@@ -823,6 +816,7 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
           due_date: dueDate || null,
           description: description.trim() || null,
           voice_note_url: voiceNoteUrl.trim() || null,
+          tag,
           assignees,
         },
       },
@@ -868,6 +862,7 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
                 ))}
               </Select>
             </div>
+            <TagSelect value={tag} onChange={setTag} />
             <div className="flex flex-col gap-1.5">
               <Label>Priority</Label>
               <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>

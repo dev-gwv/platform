@@ -3,6 +3,7 @@ import type { TaskListItem } from '@ipc/contracts'
 import {
   EMPTY_FILTERS,
   filterTasks,
+  groupByPerson,
   isOverdue,
   summarise,
   tabCounts,
@@ -31,6 +32,12 @@ const task = (title: string, over: Partial<TaskListItem> = {}): TaskListItem => 
   assignee_names: ['Rahul'],
   assignee_ids: ['user-rahul'],
   sort_order: 0,
+  tag: 'General',
+  blocked_reason: null,
+  created_by: null,
+  created_by_name: null,
+  latest_submission: null,
+  updated_at: null,
   ...over,
 })
 
@@ -159,5 +166,52 @@ describe('todayISO', () => {
   it('pads the way a date comparison needs', () => {
     expect(todayISO(new Date(2026, 8, 1))).toBe('2026-09-01')
     expect(todayISO(new Date(2026, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+describe('groupByPerson', () => {
+  const t = (over: Partial<TaskListItem>): TaskListItem =>
+    ({
+      id: over.id ?? crypto.randomUUID(),
+      title: 'Task',
+      description: null,
+      status: 'to_do',
+      priority: 'medium',
+      custom_priority_code: null,
+      custom_priority_label: null,
+      custom_priority_tone: null,
+      custom_status_code: null,
+      custom_status_label: null,
+      due_date: null,
+      project_id: null,
+      project_name: null,
+      deliverable_id: null,
+      parent_task_id: null,
+      voice_note_url: null,
+      assignee_names: [],
+      assignee_ids: [],
+      sort_order: 0,
+      ...over,
+    }) as TaskListItem
+
+  it('puts unassigned work first, then the busiest and latest people', () => {
+    const cols = groupByPerson(
+      [
+        t({ assignee_ids: ['a'], assignee_names: ['Aman'] }),
+        t({ assignee_ids: ['n'], assignee_names: ['Nisha'], due_date: '2026-01-01' }),
+        t({ assignee_ids: ['a'], assignee_names: ['Aman'] }),
+        t({}),
+      ],
+      '2026-09-26',
+    )
+    expect(cols.map((c) => c.name)).toEqual(['Unassigned', 'Nisha', 'Aman'])
+    expect(cols[1]!.late).toBe(1)
+    expect(cols[2]!.tasks).toHaveLength(2)
+  })
+
+  it('shows a shared task under everyone on it', () => {
+    const cols = groupByPerson([t({ assignee_ids: ['a', 'n'], assignee_names: ['Aman', 'Nisha'] })], '2026-09-26')
+    expect(cols.map((c) => c.name).sort()).toEqual(['Aman', 'Nisha'])
+    expect(cols.some((c) => c.id === null)).toBe(false)
   })
 })

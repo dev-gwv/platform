@@ -20,7 +20,7 @@ import { useDeleteMember, useDirectoryPaged, useEmployeeRoles, useUpdateMember }
 import { AddMemberWizard } from '@/features/team/AddMemberWizard'
 import { AddTeamChooser, type AddMode } from '@/features/team/AddTeamChooser'
 import { BulkAddMembers } from '@/features/team/BulkAddMembers'
-import { AddMorePrompt, useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
+import { AddMorePrompt, useFromSetup } from '@/features/onboarding/setup-flow'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
@@ -67,7 +67,6 @@ function TeamPage() {
   // Set once people have just been added: the "add more?" question.
   const [justAdded, setJustAdded] = useState(false)
   const fromSetup = useFromSetup()
-  const backToSetup = useBackToSetup()
 
   const setAdding = (mode: AddMode | null) => {
     setAddingState(mode)
@@ -91,13 +90,16 @@ function TeamPage() {
       description="Want to add more people now? You can always add or edit anyone later from the team list."
       moreLabel="Add more people"
       fromSetup={fromSetup}
+      step="team"
       onMore={() => {
         setJustAdded(false)
         setAddingState('choose')
       }}
       onDone={() => {
         setJustAdded(false)
-        if (fromSetup) backToSetup()
+        // From setup the prompt navigates on to the next step itself, so
+        // only leave the add screen here -- no navigation of our own.
+        if (fromSetup) setAddingState(null)
         else setAdding(null)
       }}
     />

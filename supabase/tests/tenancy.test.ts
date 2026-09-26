@@ -402,9 +402,11 @@ describe('tasks & production board (Phase 5)', () => {
     )
 
     await asUser(db, emp)
-    await db.query(`select update_my_task_status('${taskId}', 'completed');`)
+    await db.query(`select update_my_task_status('${taskId}', 'in_progress');`)
     const t = await db.query<{ status: string }>(`select status from tasks where id = '${taskId}';`)
-    expect(t.rows[0]!.status).toBe('completed')
+    expect(t.rows[0]!.status).toBe('in_progress')
+    // Done is not the assignee's to say: it comes from review (0192).
+    await expect(db.query(`select update_my_task_status('${taskId}', 'completed');`)).rejects.toThrow(/marks it done/)
 
     // A task not assigned to the employee is rejected.
     await asUser(db, OWNER)
@@ -4023,8 +4025,9 @@ describe('client documents (0042)', () => {
     ).rows[0]!.id
     project = (
       await db.query<{ id: string }>(
-        `insert into projects (company_id, client_id, name, package_cost)
-         values ('${company}', '${client}', 'Sharma Wedding', 150000) returning id;`,
+        // Shown to the client: a hidden project's quotation link reads as hidden (0190).
+        `insert into projects (company_id, client_id, name, package_cost, show_quotation)
+         values ('${company}', '${client}', 'Sharma Wedding', 150000, true) returning id;`,
       )
     ).rows[0]!.id
     await db.query(

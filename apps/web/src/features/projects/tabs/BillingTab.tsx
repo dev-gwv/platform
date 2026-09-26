@@ -71,7 +71,7 @@ export function CollectionBar({ project, onRecord }: { project: ProjectDetail; o
         </span>
         {onRecord && (
           <Button size="sm" onClick={onRecord}>
-            <Plus /> Record payment
+            <Plus /> Add payment from client
           </Button>
         )}
       </div>
@@ -207,7 +207,7 @@ export function BillingTab({
               <p className="text-sm text-muted-foreground">No payments yet. Record the advance when it comes in.</p>
               {canEdit && (
                 <Button size="sm" onClick={() => setEditing({})}>
-                  <Plus /> Record payment
+                  <Plus /> Add payment from client
                 </Button>
               )}
             </div>
@@ -341,7 +341,7 @@ function PlanCard({
                   )}
                   {canEdit && (
                     <Button size="sm" onClick={() => onRecord(r.remaining)}>
-                      <IndianRupee /> Record payment
+                      <IndianRupee /> Add payment from client
                     </Button>
                   )}
                 </div>

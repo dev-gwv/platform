@@ -82,6 +82,28 @@ async function makeStudio(label) {
 const a = await makeStudio('A')
 const b = await makeStudio('B')
 
+// ── Studio setup (0191): a brand-new studio starts at step 1, and the owner
+//    closes it. Studio B is still empty here. (No extra sign-ins: the
+//    credential limiter is shared by the whole suite.) The employee half is in
+//    the Reports block, which already has an employee signed in. ──
+{
+  const fresh = await api('/auth/session', { token: b.token })
+  check(
+    'setup: a brand-new studio is not set up yet, at step 1',
+    fresh.status === 200 && fresh.json.setup_done === false && fresh.json.setup_step === 1,
+    fresh.json,
+  )
+  const bad = await api('/settings/company/setup', { token: b.token, method: 'PATCH', body: { action: 'later' } })
+  check('setup: an unknown action is refused (422)', bad.status === 422, { status: bad.status })
+  const done = await api('/settings/company/setup', { token: b.token, method: 'PATCH', body: { action: 'done' } })
+  const after = await api('/auth/session', { token: b.token })
+  check(
+    'setup: PATCH done -> the session shows setup_done true',
+    done.status === 200 && after.status === 200 && after.json.setup_done === true && after.json.setup_step === null,
+    { patch: done.status, session: after.json },
+  )
+}
+
 // Studio A creates a client.
 const created = await api('/clients', {
   token: a.token,
@@ -2319,8 +2341,183 @@ if (listed) {
     joinedEmp.status === 200 && emp.every((r) => r.status === 403),
     { joined: joinedEmp.status, tabs: emp.map((r) => r.status) },
   )
+  // Setup (0191): only the owner or an admin may close a studio's setup.
+  const empSetup = await api('/settings/company/setup', { token: empToken, method: 'PATCH', body: { action: 'skip' } })
+  check('setup: an employee cannot close setup (403)', empSetup.status === 403, { status: empSetup.status })
   const anonReport = await api(`/reports/sales?${range}`)
   check('reports: no token, no report (401)', anonReport.status === 401, { status: anonReport.status })
+}
+
+// ── Project quotation link (0190): carries the project's terms, display
+// options and shoot schedule, and follows the "Show to client" switch ──
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Quote Co ${rand()}`, phone: randPhone(), email: 'quote@example.com' } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Quote project ${rand()}`, client_id: client.json.id, package_cost: 150000 } })
+  const pid = project.json.id
+  const tokenOf = (url) => new URL(url, 'http://x').searchParams.get('token') ?? ''
+  const schedule = [{ title: 'Haldi', date: '2026-12-01', time: '10:30', city: 'Jaipur', services: [{ name: 'Drone', quantity: 2 }] }]
+
+  const issued = await api('/documents/quotations', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      project_id: pid,
+      terms_text: 'Clause A\nClause B',
+      display_prefs: { showTerms: true, showBillTo: false },
+      shoots_schedule: schedule,
+    },
+  })
+  const tok = tokenOf(issued.json.link ?? '')
+  const pub = await api(`/public/quotation/${tok}`)
+  check(
+    'quotation: the link carries the terms, display options and shoot schedule',
+    issued.status === 201 && /^[0-9a-f-]{36}$/.test(issued.json.id ?? '') && pub.status === 200 &&
+      pub.json.show_quotation === true && pub.json.terms_text === 'Clause A\nClause B' &&
+      pub.json.display_prefs?.showBillTo === false && pub.json.shoots_schedule?.[0]?.city === 'Jaipur' &&
+      pub.json.shoots_schedule?.[0]?.services?.[0]?.quantity === 2 && pub.json.snapshot?.total === 150000,
+    { issued: issued.json, pub: pub.json },
+  )
+  const shown = await api(`/projects/${pid}`, { token: aToken })
+  check('quotation: sending a link switches "Show to client" on', shown.json.show_quotation === true, shown.json.show_quotation)
+
+  const hide = await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: false } })
+  const hidden = await api(`/public/quotation/${tok}`)
+  const hiddenAccept = await api(`/public/quotation/${tok}/respond`, { method: 'POST', body: { accept: true, name: 'Priya Sharma' } })
+  check(
+    'quotation: switching "Show to client" off hides a link already sent, and it cannot be accepted',
+    hide.status < 300 && hidden.status === 200 && hidden.json.show_quotation === false &&
+      hidden.json.client_name === null && hidden.json.terms_text === null && hidden.json.snapshot?.total === 0 &&
+      hiddenAccept.status === 409,
+    { hide: hide.status, hidden: hidden.json, accept: hiddenAccept.status },
+  )
+
+  await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: true, quotation_terms: 'Project clause' } })
+  const accepted = await api(`/public/quotation/${tok}/respond`, { method: 'POST', body: { accept: true, name: 'Priya Sharma' } })
+  const after = await api(`/projects/${pid}`, { token: aToken })
+  check(
+    'quotation: shown again, the client can accept and the studio sees who did',
+    accepted.status === 200 && after.json.quotation_accepted_by === 'Priya Sharma' && !!after.json.quotation_accepted_at,
+    { accepted: accepted.status, after: { at: after.json.quotation_accepted_at, by: after.json.quotation_accepted_by } },
+  )
+
+  // A link sent without terms or display options shows the project's own.
+  const bare = await api('/documents/quotations', { token: aToken, method: 'POST', body: { project_id: pid } })
+  const barePub = await api(`/public/quotation/${tokenOf(bare.json.link ?? '')}`)
+  check(
+    'quotation: a link sent without terms shows the project terms',
+    bare.status === 201 && barePub.status === 200 && barePub.json.terms_text === 'Project clause',
+    { bare: bare.status, terms: barePub.json.terms_text },
+  )
+
+  // The studio's own subject and note (no mail provider here, so it says so).
+  const mailed = await api(`/documents/quotations/${issued.json.id}/send-email`, {
+    token: aToken,
+    method: 'POST',
+    body: { to_email: 'quote@example.com', subject: 'Your quotation', message: 'Hello Priya,\n<b>Please</b> have a look.' },
+  })
+  const tooLong = await api(`/documents/quotations/${issued.json.id}/send-email`, { token: aToken, method: 'POST', body: { subject: 'x'.repeat(201) } })
+  const theirs = await api(`/documents/quotations/${issued.json.id}/send-email`, { token: newPw.json.access_token, method: 'POST', body: {} })
+  check(
+    'quotation: the email takes the studio’s subject and note; another studio cannot send it',
+    mailed.status === 200 && ['provider_missing', 'sent', 'failed'].includes(mailed.json.status) && tooLong.status === 422 && theirs.status === 404,
+    { mailed: mailed.json, tooLong: tooLong.status, theirs: theirs.status },
+  )
+}
+
+// ── Task delegation (0192): assign → told → submit → review → done ──
+{
+  const email = `tasks-emp-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Task Taker', email, role: 'employee' } })
+  const joined = await api('/auth/accept-invite', {
+    method: 'POST',
+    body: { token: /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? '', password: 'Employee12345!' },
+  })
+  const tToken = joined.json.access_token
+  const tUid = (await api('/auth/session', { token: tToken })).json.user_id
+
+  const made = await api('/tasks', {
+    token: aToken,
+    method: 'POST',
+    body: { title: `Edit teaser ${rand()}`, priority: 'high', tag: 'Editing', assignees: [tUid] },
+  })
+  const told = await api(`/notifications?type=task.assigned`, { token: tToken })
+  const note = Array.isArray(told.json) ? told.json.find((n) => n.entity_id === made.json.id) : undefined
+  const ownerTold = await api(`/notifications?type=task.assigned`, { token: aToken })
+  check(
+    'tasks: assigning tells the assignee (task.assigned, opens the task), not the assigner',
+    made.status === 201 && note?.deep_link === `/tasks?open=${made.json.id}` &&
+      Array.isArray(ownerTold.json) && !ownerTold.json.some((n) => n.entity_id === made.json.id),
+    { made: made.status, told: told.json },
+  )
+
+  const cantClose = await api(`/tasks/my/${made.json.id}/status`, { token: tToken, method: 'PATCH', body: { status: 'completed' } })
+  const badLink = await api(`/tasks/${made.json.id}/submit`, { token: tToken, method: 'POST', body: { link: 'javascript:alert(1)' } })
+  const submitted = await api(`/tasks/${made.json.id}/submit`, {
+    token: tToken,
+    method: 'POST',
+    body: { link: 'https://drive.example.com/teaser-v1', note: 'First cut' },
+  })
+  const afterSubmit = await api(`/tasks/${made.json.id}`, { token: aToken })
+  const ownerSubmitted = await api(`/notifications?type=task.submitted`, { token: aToken })
+  check(
+    'tasks: the assignee cannot mark it done, but submitting a link moves it to Review and tells the owner',
+    cantClose.status === 422 && badLink.status === 422 && submitted.status === 201 &&
+      afterSubmit.json.status === 'review' && afterSubmit.json.tag === 'Editing' &&
+      afterSubmit.json.latest_submission?.link === 'https://drive.example.com/teaser-v1' &&
+      Array.isArray(ownerSubmitted.json) && ownerSubmitted.json.some((n) => n.entity_id === made.json.id),
+    { cantClose: cantClose.status, badLink: badLink.status, submitted: submitted.status, task: afterSubmit.json },
+  )
+
+  const selfReview = await api(`/tasks/${made.json.id}/review`, { token: tToken, method: 'POST', body: { approve: true } })
+  const noNote = await api(`/tasks/${made.json.id}/review`, { token: aToken, method: 'POST', body: { approve: false } })
+  const approved = await api(`/tasks/${made.json.id}/review`, { token: aToken, method: 'POST', body: { approve: true } })
+  const afterApprove = await api(`/tasks/${made.json.id}`, { token: aToken })
+  const activity = await api(`/tasks/${made.json.id}/activity`, { token: tToken })
+  check(
+    'tasks: only the person who gave it reviews; approving completes it, and the history says so',
+    selfReview.status === 403 && noNote.status === 422 && approved.status === 204 &&
+      afterApprove.json.status === 'completed' &&
+      Array.isArray(activity.json) && activity.json.some((a) => a.action === 'approved the work') &&
+      activity.json.some((a) => a.action === 'submitted work'),
+    { selfReview: selfReview.status, noNote: noNote.status, approved: approved.status, status: afterApprove.json.status, activity: activity.json },
+  )
+
+  // Sent back: in progress again, with the note.
+  const second = await api('/tasks', { token: aToken, method: 'POST', body: { title: `Album ${rand()}`, assignees: [tUid] } })
+  await api(`/tasks/${second.json.id}/submit`, { token: tToken, method: 'POST', body: { link: 'https://drive.example.com/album' } })
+  const sentBack = await api(`/tasks/${second.json.id}/review`, { token: aToken, method: 'POST', body: { approve: false, note: 'Fix page 3' } })
+  const afterBack = await api(`/tasks/${second.json.id}`, { token: tToken })
+  const blocked = await api(`/tasks/${second.json.id}/block`, { token: tToken, method: 'POST', body: { reason: 'Waiting for client photos' } })
+  const afterBlock = await api(`/tasks/${second.json.id}`, { token: tToken })
+  check(
+    'tasks: sending back returns it to In progress; the assignee can mark it Blocked with a reason',
+    sentBack.status === 204 && afterBack.json.status === 'in_progress' &&
+      blocked.status === 204 && afterBlock.json.status === 'blocked' && afterBlock.json.blocked_reason === 'Waiting for client photos',
+    { sentBack: sentBack.status, back: afterBack.json.status, blocked: blocked.status, afterBlock: afterBlock.json },
+  )
+
+  // An employee adds a task for themselves, but cannot give one to someone else.
+  const own = await api('/tasks', { token: tToken, method: 'POST', body: { title: `Clean lenses ${rand()}`, tag: 'Office' } })
+  const mine = await api('/tasks/my', { token: tToken })
+  const ownerUid = (await api('/auth/session', { token: aToken })).json.user_id
+  const delegate = await api('/tasks', { token: tToken, method: 'POST', body: { title: 'Not mine to give', assignees: [ownerUid] } })
+  const overdue = await api('/tasks/my/overdue?today=2099-01-01', { token: tToken })
+  check(
+    'tasks: an employee adds a task for themselves, may not assign others, and sees their overdue count',
+    own.status === 201 && Array.isArray(mine.json) &&
+      mine.json.some((t) => t.id === own.json.id && t.tag === 'Office' && t.assignee_ids.includes(tUid)) &&
+      delegate.status === 403 && overdue.status === 200 && typeof overdue.json.count === 'number',
+    { own: own.status, delegate: delegate.status, overdue: overdue.json },
+  )
+
+  // Studio B cannot see A's task or its history.
+  const bTask = await api(`/tasks/${made.json.id}`, { token: newPw.json.access_token })
+  const bActivity = await api(`/tasks/${made.json.id}/activity`, { token: newPw.json.access_token })
+  check(
+    "tasks: another studio cannot open A's task or read its history",
+    bTask.status === 404 && Array.isArray(bActivity.json) && bActivity.json.length === 0,
+    { task: bTask.status, activity: bActivity.json },
+  )
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

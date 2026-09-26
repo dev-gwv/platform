@@ -1061,6 +1061,7 @@ export const projectsRouter = new Hono<AppEnv>()
           select p.id, p.name, p.status, p.client_id, p.package_cost,
                  p.additional_deliverables_cost, p.total_cost, p.show_quotation, p.created_at,
                  p.quotation_terms, coalesce(p.quotation_display_prefs,'{}'::jsonb) as quotation_display_prefs,
+                 qa.accepted_at as quotation_accepted_at, qa.accepted_by_name as quotation_accepted_by,
                  cl.name as client_name, cl.phone as client_phone,
                  cl.email as client_email, cl.address as client_address,
                  coalesce((
@@ -1100,6 +1101,12 @@ export const projectsRouter = new Hono<AppEnv>()
                  ), '[]'::jsonb) as payments
           from projects p
           left join clients cl on cl.id = p.client_id
+          -- The client's latest yes on a quotation link, for the studio's banner.
+          left join lateral (
+            select q.accepted_at, q.accepted_by_name from project_quotations q
+             where q.project_id = p.id and q.accepted_at is not null
+             order by q.accepted_at desc limit 1
+          ) qa on true
           where p.id = ${id}`
         return rows[0] ?? null
       }),
