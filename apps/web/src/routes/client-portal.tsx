@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner'
 import { publicClientPortal, publicInvoice, z, type PublicClientPortal } from '@ipc/contracts'
 import { ApiError, callApi } from '@/shared/api/client'
+import { mapHref, mapSearchHref } from '@/features/shoots/map-link'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Textarea } from '@/shared/ui/input'
@@ -249,12 +250,7 @@ function ShootCard({ shoot }: { shoot: PublicClientPortal['shoots'][number] }) {
       : shoot.start_at
         ? `From ${timeFmt.format(new Date(shoot.start_at))}`
         : null
-  const mapHref =
-    shoot.map_link && /^https?:\/\//i.test(shoot.map_link)
-      ? shoot.map_link
-      : shoot.location
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shoot.location)}`
-        : null
+  const href = mapHref(shoot.map_link) ?? (shoot.location ? mapSearchHref(shoot.location) : null)
 
   return (
     <Card className={cn(past && 'opacity-80')}>
@@ -287,8 +283,8 @@ function ShootCard({ shoot }: { shoot: PublicClientPortal['shoots'][number] }) {
           {shoot.location && (
             <p className="mt-1 flex items-start gap-1.5 text-sm">
               <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              {mapHref ? (
-                <a href={mapHref} target="_blank" rel="noreferrer noopener" className="break-words underline-offset-2 hover:underline">
+              {href ? (
+                <a href={href} target="_blank" rel="noreferrer noopener" className="break-words underline-offset-2 hover:underline">
                   {shoot.location}
                 </a>
               ) : (

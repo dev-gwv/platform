@@ -14,6 +14,7 @@ import { humanize } from '@/shared/ui/format'
 import { useSlots } from '@/features/allocation/api'
 import { Button } from '@/shared/ui/button'
 import { downloadIcs } from '@/features/booking/share'
+import { mapHref } from '@/features/shoots/map-link'
 import { useMyData } from '@/features/data/api'
 import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { STAGE_LABEL, STAGE_TONE, optedOut } from '@/features/data/stage'
@@ -149,6 +150,7 @@ function Section({
         <div className="grid gap-3 md:grid-cols-2">
           {shoots.map((s) => {
             const slotsFor = mySlots.get(s.id) ?? []
+            const href = mapHref(s.map_link)
             return (
               <Card key={s.id}>
                 <CardContent className="p-4">
@@ -167,13 +169,19 @@ function Section({
                     {s.location && (
                       <span className="flex items-center gap-2">
                         <MapPin className="size-4 shrink-0" />
-                        {s.map_link ? (
-                          <a href={s.map_link} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                        {href ? (
+                          <a href={href} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                             {s.location}
                           </a>
                         ) : (
                           s.location
                         )}
+                      </span>
+                    )}
+                    {s.map_link && !href && (
+                      <span className="flex items-center gap-2">
+                        <MapPin className="size-4 shrink-0" />
+                        <span className="select-all">{s.map_link}</span>
                       </span>
                     )}
                   </div>

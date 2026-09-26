@@ -24,6 +24,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useDeleteShoot, useUpdateShoot } from '@/features/shoots/api'
+import { mapHref } from '@/features/shoots/map-link'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { RemindMe } from '@/features/reminders/RemindMe'
 
@@ -278,16 +279,26 @@ function Shoots() {
                       {s.location}
                     </span>
                   )}
-                  {s.map_link && (
-                    <a
-                      href={s.map_link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-primary hover:underline"
-                    >
-                      Map <ExternalLink className="size-3" />
-                    </a>
-                  )}
+                  {(() => {
+                    const href = mapHref(s.map_link)
+                    if (href)
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-primary hover:underline"
+                        >
+                          Map <ExternalLink className="size-3" />
+                        </a>
+                      )
+                    return s.map_link ? (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="size-3" />
+                        <span className="select-all">{s.map_link}</span>
+                      </span>
+                    ) : null
+                  })()}
                 </div>
                 {s.requirements.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -494,7 +505,7 @@ function ShootDialog() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Map link (optional)</Label>
-            <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="https://maps.google.com/…" type="url" />
+            <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="Paste the map link" />
           </div>
           <RequirementsEditor value={requirements} onChange={setRequirements} />
           {error && (
@@ -590,7 +601,7 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Map link</Label>
-              <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="https://maps.google.com/…" type="url" />
+              <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="Paste the map link" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Status</Label>

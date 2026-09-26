@@ -49,6 +49,7 @@ import { AssignmentRow } from '@/features/shoots/AssignmentRow'
 import { dataCounts, recordForSlot } from '@/features/data/stage'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
+import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
@@ -340,6 +341,7 @@ function ShootPlanner({
 
   const start = timeOf(shoot.start_at)
   const end = timeOf(shoot.end_at)
+  const href = mapHref(shoot.map_link)
   const staffed = progress.required > 0 && progress.assigned >= progress.required
 
   async function removeHolder(sl: TeamSlot) {
@@ -389,15 +391,22 @@ function ShootPlanner({
                   {shoot.location}
                 </span>
               )}
-              {shoot.map_link && (
+              {href ? (
                 <a
-                  href={shoot.map_link}
+                  href={href}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="flex items-center gap-1 text-primary hover:underline"
                 >
                   Map <ExternalLink className="size-3" />
                 </a>
+              ) : (
+                shoot.map_link && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="size-3" />
+                    <span className="select-all">{shoot.map_link}</span>
+                  </span>
+                )
               )}
               <span className="flex items-center gap-1">
                 <Users className="size-3" />
@@ -789,7 +798,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
               id="edit-map"
               value={mapLink}
               onChange={(e) => setMapLink(e.target.value)}
-              placeholder="https://maps.app.goo.gl/…"
+              placeholder="Paste the map link"
             />
           </div>
           <div className="flex justify-end gap-2">
