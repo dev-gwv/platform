@@ -1,8 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowRight,
   Camera,
   CheckSquare,
   CircleCheck,
@@ -11,14 +10,13 @@ import {
   FileText,
   IndianRupee,
   LayoutGrid,
-  Mail,
   Package,
   PauseCircle,
   Pencil,
   Phone,
   Receipt,
+  Send,
   FileCheck,
-  MapPin,
   Trash2,
   Wallet,
   X,
@@ -32,7 +30,7 @@ import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useConfirm } from '@/shared/ui/confirm'
 import { SkeletonCards } from '@/shared/ui/skeleton'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
@@ -40,11 +38,8 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
-import {
-  useDeleteProject,
-  useProject,
-  useUpdateProject,
-} from '@/features/projects/api'
+import { RowMenu } from '@/shared/ui/row-menu'
+import { useDeleteProject, useProject, useUpdateProject } from '@/features/projects/api'
 import { EntityReminders } from '@/features/reminders/EntityReminders'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
@@ -55,7 +50,7 @@ import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ReferralCard } from '@/features/projects/ReferralCard'
 import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
-import { BillingTab, CollectionBar, projectMoney } from '@/features/projects/tabs/BillingTab'
+import { BillingTab, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
 /** The tabs across a project. Each one is a view of the same project. */
@@ -94,7 +89,6 @@ const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
 
 const shootsList = shootListItem.array()
 
-
 export function ProjectDetailPage() {
   return (
     <AuthedPage module="projects">
@@ -117,6 +111,7 @@ function ProjectDetail() {
   const update = useUpdateProject(id)
   const removeProject = useDeleteProject()
   const confirm = useConfirm()
+  const [quoting, setQuoting] = useState(false)
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
   const [tab, setTabState] = useState<Tab>(() => {
     const wanted = new URLSearchParams(window.location.search).get('tab')
@@ -190,10 +185,32 @@ function ProjectDetail() {
               {humanize(data.status)}
             </StatusBadge>
             {/* For everyone on the project, not only those who can edit it. */}
-            <RemindMe entityType="project" entityId={id} name={data.name} align="start" className="-my-1" />
+            <RemindMe
+              entityType="project"
+              entityId={id}
+              name={data.name}
+              align="start"
+              className="-my-1"
+            />
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Created {prettyDate(data.created_at)}
+          {/* Who it is for and how to reach them, once -- this line replaces
+              the two cards that used to repeat it. */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {data.client_name && (
+              <Link to="/clients" className="font-medium text-foreground hover:underline">
+                {data.client_name}
+              </Link>
+            )}
+            {data.client_phone && (
+              <a
+                href={`tel:${data.client_phone}`}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
+                <Phone className="size-3.5" aria-hidden />
+                {data.client_phone}
+              </a>
+            )}
+            <span>Created {prettyDate(data.created_at)}</span>
           </p>
         </div>
 
@@ -220,35 +237,60 @@ function ProjectDetail() {
               showQuotation={data.show_quotation}
               received={received}
             />
-            <Button variant="outline" size="sm" asChild title="Open the full-page editor with live shoot planning">
-              <Link to="/projects/$id/edit" params={{ id }}>
-                <Pencil /> Full editor
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              className="text-destructive hover:bg-destructive/10"
-              disabled={removeProject.isPending}
-              onClick={() => void onDelete()}
-            >
-              <Trash2 /> Delete
-            </Button>
+            <RowMenu
+              label="More actions"
+              items={[
+                {
+                  label: 'Full editor',
+                  icon: <Pencil />,
+                  onSelect: () => void navigate({ to: '/projects/$id/edit', params: { id } }),
+                },
+                { label: 'Send quotation link', icon: <Send />, onSelect: () => setQuoting(true) },
+                {
+                  label: 'Preview & edit quotation',
+                  icon: <FileText />,
+                  onSelect: () => void navigate({ to: '/projects/$id/quotation', params: { id } }),
+                },
+                {
+                  label: 'Delete project',
+                  icon: <Trash2 />,
+                  onSelect: () => void onDelete(),
+                  disabled: removeProject.isPending,
+                },
+              ]}
+            />
+            <QuotationLinkDialog projectId={id} open={quoting} onOpenChange={setQuoting} />
           </div>
         )}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
         <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
         <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" />
         <Figure
           icon={Clock}
-          label={money.promised > 0 ? `Still to collect · ${formatINR(money.promised)} promised` : 'Still to collect'}
+          label={
+            money.promised > 0
+              ? `Still to collect · ${formatINR(money.promised)} promised`
+              : 'Still to collect'
+          }
           value={formatINR(balance)}
           tone={balance > 0 ? 'warning' : 'success'}
+          action={
+            canEdit && balance > 0 ? (
+              <button
+                type="button"
+                onClick={() => setTab('billing')}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                + Add payment
+              </button>
+            ) : undefined
+          }
         />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card p-1.5">
+      <div className="mt-4 flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5 sm:flex-wrap">
         {visibleTabs.map((t) => (
           <button
             key={t.value}
@@ -256,7 +298,7 @@ function ProjectDetail() {
             onClick={() => setTab(t.value)}
             aria-current={tab === t.value ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+              'flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
               tab === t.value
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -268,100 +310,26 @@ function ProjectDetail() {
         ))}
       </div>
 
-      {canEdit && (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Quick actions:
-          </span>
-          <QuotationLinkDialog projectId={id} />
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/projects/$id/quotation" params={{ id }}>
-              <FileText /> Preview &amp; edit quotation
-            </Link>
-          </Button>
-        </div>
-      )}
-
       {tab === 'overview' && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <DeliverablesSummary
+            deliverables={data.deliverables}
+            onOpen={() => setTab('deliverables')}
+          />
           <div className="flex flex-col gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Project &amp; client</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-                <Fact label="Project" value={data.name} />
-                <Fact label="Status" value={humanize(data.status)} />
-                <Fact label="Created" value={prettyDate(data.created_at)} />
-                <Fact label="Client" value={data.client_name ?? '—'} />
-                <Fact label="Phone" value={data.client_phone ?? '—'} />
-                <Fact label="Email" value={data.client_email ?? '—'} />
-              </CardContent>
-            </Card>
-
-            <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
-
-            <Card>
-              <CardHeader className="flex-row items-center justify-between pb-3">
-                <CardTitle>Payments</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setTab('billing')}>
-                  Open billing
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <CollectionBar project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <Card className="self-start">
-              <CardHeader className="pb-3">
-                <CardTitle>Client</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-medium">{data.client_name ?? 'No client on file'}</p>
-                {data.client_phone && (
-                  <a
-                    href={`tel:${data.client_phone}`}
-                    className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <Phone className="size-3.5" aria-hidden />
-                    {data.client_phone}
-                  </a>
-                )}
-                {data.client_email && (
-                  <a
-                    href={`mailto:${data.client_email}`}
-                    className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <Mail className="size-3.5" aria-hidden />
-                    {data.client_email}
-                  </a>
-                )}
-                {data.client_address && (
-                  <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                    {data.client_address}
-                  </p>
-                )}
-                <Link
-                  to="/clients"
-                  className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                >
-                  View client <ArrowRight className="size-3.5" aria-hidden />
-                </Link>
-              </CardContent>
-            </Card>
-
             <ClientPortalCard
               projectId={id}
               projectName={data.name}
               clientName={data.client_name}
               clientPhone={data.client_phone}
             />
-            <ReferralCard projectId={id} projectName={data.name} clientName={data.client_name} clientPhone={data.client_phone} />
-            <EntityReminders entityType="project" entityId={id} title="Reminders" />
+            <ReferralCard
+              projectId={id}
+              projectName={data.name}
+              clientName={data.client_name}
+              clientPhone={data.client_phone}
+            />
+            <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
           </div>
         </div>
       )}
@@ -371,7 +339,11 @@ function ProjectDetail() {
           projectId={id}
           projectName={data.name}
           deliverables={data.deliverables}
-          shoots={(projectShoots.data ?? []).map((s) => ({ id: s.id, name: s.name, shoot_date: s.shoot_date }))}
+          shoots={(projectShoots.data ?? []).map((s) => ({
+            id: s.id,
+            name: s.name,
+            shoot_date: s.shoot_date,
+          }))}
           canEdit={canEdit}
         />
       )}
@@ -390,12 +362,18 @@ function ProjectDetail() {
             client_phone: data.client_phone,
             client_email: data.client_email,
             total_cost: data.total_cost,
-            event_date: (projectShoots.data ?? []).map((s) => s.shoot_date).filter((d): d is string => !!d).sort()[0] ?? null,
+            event_date:
+              (projectShoots.data ?? [])
+                .map((s) => s.shoot_date)
+                .filter((d): d is string => !!d)
+                .sort()[0] ?? null,
           }}
         />
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
-      {tab === 'tasks' && <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />}
+      {tab === 'tasks' && (
+        <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
+      )}
     </>
   )
 }
@@ -406,18 +384,20 @@ function Figure({
   label,
   value,
   tone,
+  action,
 }: {
   icon: typeof Clock
   label: string
   value: string
   tone?: 'success' | 'warning' | 'info'
+  action?: ReactNode
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-3 p-4">
+      <CardContent className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
         <span
           className={cn(
-            'flex size-10 shrink-0 items-center justify-center rounded-lg',
+            'hidden size-10 shrink-0 sm:flex items-center justify-center rounded-lg',
             tone === 'success'
               ? 'bg-success/10 text-success'
               : tone === 'warning'
@@ -428,24 +408,14 @@ function Figure({
           <Icon className="size-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xl font-semibold tabular-nums">{value}</p>
-          <p className="truncate text-sm text-muted-foreground">{label}</p>
+          <p className="truncate text-base font-semibold tabular-nums sm:text-xl">{value}</p>
+          <p className="truncate text-xs text-muted-foreground sm:text-sm">{label}</p>
         </div>
+        {action && <div className="shrink-0 sm:ml-auto sm:self-end">{action}</div>}
       </CardContent>
     </Card>
   )
 }
-
-/** A label and its value, side by side, the way the reference reads them. */
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border/60 py-1.5 last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-sm font-medium">{value}</span>
-    </div>
-  )
-}
-
 
 function EditProjectDialog({
   id,
@@ -486,7 +456,11 @@ function EditProjectDialog({
       setForm(v.form)
       setPackageCostText(v.packageCostText)
     },
-    { isBlank: (v) => JSON.stringify(v) === JSON.stringify({ form: initial, packageCostText: String(packageCost) }) },
+    {
+      isBlank: (v) =>
+        JSON.stringify(v) ===
+        JSON.stringify({ form: initial, packageCostText: String(packageCost) }),
+    },
   )
 
   function reset() {
@@ -538,12 +512,18 @@ function EditProjectDialog({
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
-            <Input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input
+              value={form.name ?? ''}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Status</Label>
-              <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}>
+              <Select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
+              >
                 <option value="active">Active</option>
                 <option value="on_hold">On hold</option>
                 <option value="completed">Completed</option>
@@ -557,14 +537,18 @@ function EditProjectDialog({
                 value={packageCostText}
                 onChange={(e) => {
                   setPackageCostText(e.target.value)
-                  setForm({ ...form, package_cost: e.target.value.trim() ? Number(e.target.value) : 0 })
+                  setForm({
+                    ...form,
+                    package_cost: e.target.value.trim() ? Number(e.target.value) : 0,
+                  })
                 }}
               />
             </div>
           </div>
           {belowReceived && (
             <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-              Received {formatINR(received)} already exceeds this package. Review the Billing tab after saving.
+              Received {formatINR(received)} already exceeds this package. Review the Billing tab
+              after saving.
             </p>
           )}
           <label className="flex items-center gap-2 text-sm">
