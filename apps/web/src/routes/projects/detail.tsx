@@ -54,6 +54,7 @@ import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ReferralCard } from '@/features/projects/ReferralCard'
+import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
 import { BillingTab, CollectionBar, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
@@ -353,6 +354,12 @@ function ProjectDetail() {
               </CardContent>
             </Card>
 
+            <ClientPortalCard
+              projectId={id}
+              projectName={data.name}
+              clientName={data.client_name}
+              clientPhone={data.client_phone}
+            />
             <ReferralCard projectId={id} projectName={data.name} clientName={data.client_name} clientPhone={data.client_phone} />
             <EntityReminders entityType="project" entityId={id} title="Reminders" />
           </div>

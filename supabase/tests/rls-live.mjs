@@ -1906,5 +1906,119 @@ if (listed) {
   )
 }
 
+// ── Client portal: one private link per project, for the client ──
+{
+  const bTok = newPw.json.access_token
+  const coupleName = `Portal Couple ${rand()}`
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: coupleName, phone: randPhone() } })
+  const projectName = `Portal wedding ${rand()}`
+  const project = await api('/projects', {
+    token: aToken,
+    method: 'POST',
+    body: { name: projectName, client_id: client.json.id, package_cost: 100000, payments: [{ amount: 40000 }] },
+  })
+  const pid = project.json.id
+  const shoot = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', location: 'Jaipur' } })
+  const album = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Wedding album', visibility_scope: 'client', internal_notes: 'SECRET-NOTE', status: 'completed', delivery_link: 'https://drive.example.com/album' },
+  })
+  const cull = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Culling (team only)', visibility_scope: 'internal' } })
+  const made = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'POST', body: { show_payments: true } })
+  const token = /\/p\/([^/?#]+)$/.exec(made.json.url ?? '')?.[1] ?? ''
+  check('portal: the owner makes a link, returned once', made.status === 201 && token.length >= 60 && made.json.link?.view_count === 0, made.json)
+
+  const pub = await api(`/public/portal/${token}`)
+  const raw = JSON.stringify(pub.json)
+  const titles = (pub.json.deliverables ?? []).map((d) => d.title)
+  const albumRow = (pub.json.deliverables ?? []).find((d) => d.id === album.json.id)
+  check(
+    'portal: opens without a login, for this project and this couple',
+    pub.status === 200 && pub.json.project?.name === projectName && pub.json.project?.client_name === coupleName,
+    { status: pub.status, project: pub.json.project },
+  )
+  check(
+    'portal: client deliverables with status and link; internal work, notes and prices are not there',
+    titles.includes('Wedding album') && !titles.includes('Culling (team only)') && albumRow?.status === 'ready' &&
+      albumRow?.delivery_link === 'https://drive.example.com/album' && !raw.includes('SECRET-NOTE') && !raw.includes(cull.json.id) &&
+      !raw.includes('additional_charge') && !raw.includes('internal_notes') && !raw.includes('estimated_cost'),
+    { titles, albumRow },
+  )
+  check(
+    'portal: shoots and money (package, received, balance)',
+    (pub.json.shoots ?? []).some((s) => s.id === shoot.json.id && s.location === 'Jaipur') &&
+      pub.json.money?.total === 100000 && pub.json.money?.received === 40000 && pub.json.money?.balance === 60000,
+    { shoots: pub.json.shoots, money: pub.json.money },
+  )
+
+  // The studio sees the open; money can be hidden.
+  const status = await api(`/client-portal/projects/${pid}`, { token: aToken })
+  const hide = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'PATCH', body: { show_payments: false } })
+  const hidden = await api(`/public/portal/${token}`)
+  check(
+    'portal: the studio sees when the client opened it; hiding payments hides the money',
+    status.status === 200 && status.json.link?.view_count >= 1 && !!status.json.link?.last_viewed_at &&
+      hide.status === 200 && hidden.status === 200 && hidden.json.money === null,
+    { status: status.json, hide: hide.status, money: hidden.json.money },
+  )
+
+  // Feedback reaches the studio as a notification.
+  const fb = await api(`/public/portal/${token}/feedback`, {
+    method: 'POST',
+    body: { deliverable_id: album.json.id, kind: 'change_requested', message: 'Please brighten page 4' },
+  })
+  const fbInternal = await api(`/public/portal/${token}/feedback`, { method: 'POST', body: { deliverable_id: cull.json.id, kind: 'approved' } })
+  const notes = await api('/notifications', { token: aToken })
+  const told = JSON.stringify(notes.json).includes('asked for a change to Wedding album')
+  check(
+    'portal: a client note on a deliverable notifies the studio; an internal item takes none',
+    fb.status === 200 && fbInternal.status === 409 && told,
+    { fb: fb.status, fbInternal: fbInternal.status, told },
+  )
+
+  // Another studio can neither read, make nor stop it.
+  const bRead = await api(`/client-portal/projects/${pid}`, { token: bTok })
+  const bRevoke = await api(`/client-portal/projects/${pid}`, { token: bTok, method: 'DELETE' })
+  const bMake = await api(`/client-portal/projects/${pid}`, { token: bTok, method: 'POST', body: {} })
+  const stillOpen = await api(`/public/portal/${token}`)
+  check(
+    "portal: another studio cannot see, make or revoke this project's link",
+    bRead.status === 404 && bRevoke.status === 404 && bMake.status === 404 && stillOpen.status === 200,
+    { bRead: bRead.status, bRevoke: bRevoke.status, bMake: bMake.status, open: stillOpen.status },
+  )
+
+  // An employee without projects edit cannot make or stop one.
+  const eInv = await api('/team/invitations', {
+    token: aToken,
+    method: 'POST',
+    body: { name: 'Portal Viewer', email: `pv-${rand()}@example.com`, role: 'employee' },
+  })
+  const eRaw = /[?&]token=([^&]+)/.exec(eInv.json.invite_link ?? '')?.[1] ?? ''
+  const eJoin = await api('/auth/accept-invite', { method: 'POST', body: { token: eRaw, password: 'Viewer12345!' } })
+  const eMake = await api(`/client-portal/projects/${pid}`, { token: eJoin.json.access_token, method: 'POST', body: {} })
+  const eRevoke = await api(`/client-portal/projects/${pid}`, { token: eJoin.json.access_token, method: 'DELETE' })
+  check(
+    'portal: an employee without project edit cannot make or stop a link',
+    eJoin.status === 200 && eMake.status === 403 && eRevoke.status === 403,
+    { join: eJoin.status, make: eMake.status, revoke: eRevoke.status },
+  )
+
+  // A new link retires the old; revoking stops it; a made-up token is a miss.
+  const again = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'POST', body: {} })
+  const token2 = /\/p\/([^/?#]+)$/.exec(again.json.url ?? '')?.[1] ?? ''
+  const oldGone = await api(`/public/portal/${token}`)
+  const revoke = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'DELETE' })
+  const newGone = await api(`/public/portal/${token2}`)
+  const bogus = await api(`/public/portal/${rand()}${rand()}`)
+  const afterRevoke = await api(`/client-portal/projects/${pid}`, { token: aToken })
+  check(
+    'portal: a new link retires the old one; a revoked link and a made-up one are 404',
+    again.status === 201 && oldGone.status === 404 && revoke.status === 200 && newGone.status === 404 && bogus.status === 404 &&
+      afterRevoke.json.link === null,
+    { again: again.status, old: oldGone.status, revoke: revoke.status, gone: newGone.status, bogus: bogus.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

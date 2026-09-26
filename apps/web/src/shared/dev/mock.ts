@@ -462,6 +462,18 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path.startsWith('/public/receipt/')) return publicReceiptFx
   if (method === 'GET' && path.startsWith('/public/delivery/')) return publicDeliveryFx
   if (method === 'GET' && path.startsWith('/public/team-terms/')) return publicTeamTermsFx
+  // Client portal (0184): the studio's card and the couple's page.
+  if (method === 'GET' && /^\/client-portal\/projects\/[^/]+$/.test(path)) return clientPortalStatusFx
+  if (method === 'POST' && /^\/client-portal\/projects\/[^/]+$/.test(path))
+    return { link: { ...clientPortalStatusFx.link, view_count: 0, last_viewed_at: null }, url: '/p/demo-portal-token' }
+  if (method === 'PATCH' && /^\/client-portal\/projects\/[^/]+$/.test(path))
+    return { ...clientPortalStatusFx.link, ...(body as object) }
+  if (method === 'DELETE' && /^\/client-portal\/projects\/[^/]+$/.test(path)) return { ok: true }
+  if (method === 'GET' && /^\/public\/portal\/[^/]+\/invoices\/[^/]+$/.test(path))
+    return { invoice: invoiceDetailFx, company: { name: 'Demo Studio', logo_url: null } }
+  if (method === 'GET' && /^\/public\/portal\/[^/]+\/terms\/[^/]+$/.test(path)) return termsDocumentPayloadFx
+  if (method === 'POST' && /^\/public\/portal\/[^/]+\/feedback$/.test(path)) return { ok: true }
+  if (method === 'GET' && /^\/public\/portal\/[^/]+$/.test(path)) return publicClientPortalFx
   if (method === 'POST' && /^\/public\/team-terms\/[^/]+\/ack$/.test(path)) return { ok: true }
   if (method === 'GET' && path.startsWith('/team-terms/templates'))
     return path.includes('archived=1') ? [] : atStage(teamTermsFx, 'partial')
@@ -1968,6 +1980,128 @@ const publicDeliveryFx = {
   project_name: 'Sharma Wedding',
   client_name: 'Sharma Family',
   company_name: 'Demo Studio',
+}
+
+const clientPortalStatusFx = {
+  link: {
+    id: uid(0x7a1),
+    created_at: '2026-09-20T06:00:00Z',
+    expires_at: null,
+    show_payments: true,
+    show_team: true,
+    allow_feedback: true,
+    last_viewed_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    view_count: 4,
+  },
+  recent_feedback: [
+    {
+      id: uid(0x7b1),
+      deliverable_id: uid(0x7d1),
+      deliverable_title: 'Wedding album',
+      kind: 'change_requested',
+      message: 'Could the photos on page 4 be a little brighter?',
+      created_at: new Date(Date.now() - 5 * 3_600_000).toISOString(),
+    },
+  ],
+}
+
+const publicClientPortalFx = {
+  studio: {
+    name: 'Demo Studio',
+    logo_url: null,
+    phone: '+91 98765 43210',
+    email: 'hello@demostudio.in',
+    website: 'https://demostudio.in',
+    city: 'Jaipur',
+    brand_color: '#8a2d3b',
+    theme_preset: 'ipc_classic',
+  },
+  project: { name: 'Ananya & Rohan — Wedding', client_name: 'Ananya & Rohan', status: 'active' },
+  options: { show_payments: true, allow_feedback: true, expires_at: null },
+  shoots: [
+    {
+      id: uid(0x7c1),
+      name: 'Pre-wedding',
+      shoot_date: '2026-09-02',
+      start_at: '2026-09-02T01:30:00Z',
+      end_at: '2026-09-02T06:30:00Z',
+      location: 'Amer Fort, Jaipur',
+      map_link: null,
+      status: 'completed',
+      team: [{ first_name: 'Priya', role: 'Candid photographer' }],
+    },
+    {
+      id: uid(0x7c2),
+      name: 'Haldi & Mehendi',
+      shoot_date: '2026-11-21',
+      start_at: '2026-11-21T04:30:00Z',
+      end_at: '2026-11-21T12:30:00Z',
+      location: 'The Leela Palace, Udaipur',
+      map_link: null,
+      status: 'planned',
+      team: [
+        { first_name: 'Priya', role: 'Candid photographer' },
+        { first_name: 'Arjun', role: 'Cinematographer' },
+      ],
+    },
+    {
+      id: uid(0x7c3),
+      name: 'Wedding day',
+      shoot_date: '2026-11-22',
+      start_at: null,
+      end_at: null,
+      location: 'The Leela Palace, Udaipur',
+      map_link: null,
+      status: 'planned',
+      team: [],
+    },
+  ],
+  deliverables: [
+    {
+      id: uid(0x7d2),
+      title: 'Pre-wedding film',
+      description: 'A 3-minute film from your Amer Fort shoot.',
+      status: 'ready',
+      expected_date: '2026-09-20',
+      delivered_at: '2026-09-18T10:00:00Z',
+      delivery_link: 'https://drive.google.com/demo-film',
+      shoot_name: 'Pre-wedding',
+      feedback: { kind: 'approved', message: null, created_at: '2026-09-19T08:00:00Z' },
+    },
+    {
+      id: uid(0x7d1),
+      title: 'Wedding album',
+      description: null,
+      status: 'in_progress',
+      expected_date: '2027-01-15',
+      delivered_at: null,
+      delivery_link: null,
+      shoot_name: 'Wedding day',
+      feedback: null,
+    },
+    {
+      id: uid(0x7d3),
+      title: 'Highlight film',
+      description: null,
+      status: 'not_started',
+      expected_date: null,
+      delivered_at: null,
+      delivery_link: null,
+      shoot_name: null,
+      feedback: null,
+    },
+  ],
+  money: {
+    total: 350000,
+    received: 150000,
+    balance: 200000,
+    invoices: [
+      { id: uid(0x91), invoice_number: 'INV-0001', invoice_date: '2026-06-10', due_date: '2026-11-15', status: 'partial', total: 140400, balance_due: 40400 },
+    ],
+  },
+  terms: [
+    { id: uid(0x7e1), title: 'Wedding photography agreement', sent_at: '2026-06-01T06:00:00Z', agreed_at: '2026-06-02T09:00:00Z', agreed_by: 'Ananya' },
+  ],
 }
 
 const publicTeamTermsFx = {

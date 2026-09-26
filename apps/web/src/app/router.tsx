@@ -39,6 +39,7 @@ import { InvoicesPage } from '@/routes/billing/invoices'
 import { PaymentsPage } from '@/routes/billing/payments'
 import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
+import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
@@ -159,6 +160,10 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
+  // The client portal: one private link per project (0184).
+  publicRoute('/p/$token', ClientPortalPage),
+  publicRoute('/p/$token/invoice/$invoiceId', ClientPortalInvoicePage),
+  publicRoute('/p/$token/terms/$docId', ClientPortalTermsPage),
   // The vendor's policy pages (payment-gateway requirement).
   publicRoute('/terms-and-conditions', TermsPage),
   publicRoute('/privacy-policy', PrivacyPage),
