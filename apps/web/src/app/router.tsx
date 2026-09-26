@@ -39,6 +39,7 @@ import { InvoicesPage } from '@/routes/billing/invoices'
 import { PaymentsPage } from '@/routes/billing/payments'
 import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
+import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
@@ -67,6 +68,8 @@ import { PlatformStudiosPage } from '@/routes/platform/studios'
 import { PlatformUsagePage } from '@/routes/platform/usage'
 import { PlatformFeedbackPage } from '@/routes/platform/feedback'
 import { SystemPage } from '@/routes/settings/system'
+import { MessagingSettingsPage } from '@/routes/settings/messaging'
+import { PlatformMessagingPage } from '@/routes/platform/messaging'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
 import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
@@ -74,6 +77,8 @@ import { LookupsPage } from '@/routes/settings/lookups'
 import { ReferralsPage } from '@/routes/referrals'
 import { ProjectTemplatesPage } from '@/routes/project-templates'
 import { TeamPayoutsPage } from '@/routes/team-payouts'
+import { PayrollPage } from '@/routes/payroll'
+import { PayslipPage } from '@/routes/payslip'
 import { RemindersPage } from '@/routes/reminders'
 import { ActivityPage } from '@/routes/activity'
 import { InvoiceTemplatesPage } from '@/routes/billing/templates'
@@ -159,6 +164,10 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
+  // The client portal: one private link per project (0184).
+  publicRoute('/p/$token', ClientPortalPage),
+  publicRoute('/p/$token/invoice/$invoiceId', ClientPortalInvoicePage),
+  publicRoute('/p/$token/terms/$docId', ClientPortalTermsPage),
   // The vendor's policy pages (payment-gateway requirement).
   publicRoute('/terms-and-conditions', TermsPage),
   publicRoute('/privacy-policy', PrivacyPage),
@@ -260,11 +269,15 @@ const routeTree = rootRoute.addChildren([
   route('/referrals', ReferralsPage),
   route('/settings/project-templates', ProjectTemplatesPage),
   route('/team-payouts', TeamPayoutsPage),
+  route('/payroll', PayrollPage),
+  route('/payroll/payslip/$lineId', PayslipPage),
   route('/reminders', RemindersPage),
   route('/activity', ActivityPage),
   route('/platform/studios', PlatformStudiosPage),
   route('/platform/usage', PlatformUsagePage),
   route('/platform/feedback', PlatformFeedbackPage),
+  route('/platform/messaging', PlatformMessagingPage),
+  route('/settings/messaging', MessagingSettingsPage),
   ]),
 ])
 

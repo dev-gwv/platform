@@ -28,6 +28,11 @@ export interface Env {
   /** WhatsApp Cloud API: the sending phone number id and its access token. */
   WHATSAPP_PHONE_NUMBER_ID: string
   WHATSAPP_ACCESS_TOKEN: string
+  /**
+   * Verify token for the WhatsApp Business Account webhook handshake
+   * (GET /webhooks/whatsapp). Optional: falls back to META_VERIFY_TOKEN.
+   */
+  WHATSAPP_VERIFY_TOKEN?: string
   /** Twilio Programmable Voice for click-to-call (lib/twilio.ts). All three or none. */
   TWILIO_ACCOUNT_SID: string
   TWILIO_AUTH_TOKEN: string

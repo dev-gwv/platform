@@ -9,6 +9,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { platformMessagingRouter } from './messaging'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -238,3 +239,6 @@ export const platformRouter = new Hono<AppEnv>()
     await audit(c, { action: `platform.plan_${action}`, entityType: 'company', entityId: id, after: extended.data })
     return c.json({ ok: true })
   })
+
+  // Messaging wallets, recharge requests, prices, templates, outbox, margin.
+  .route('/messaging', platformMessagingRouter)

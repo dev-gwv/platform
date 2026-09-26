@@ -135,6 +135,25 @@ services:
           sleep 3600
         done
 
+  # The messaging worker: POST /cron/messages every five minutes sends what
+  # the messaging wallet queued (WhatsApp templates, emails) and refunds any
+  # failure. Its own ticker because an hour is too long for "your leave was
+  # approved" to reach a phone.
+  cron-messages:
+    image: curlimages/curl:8.10.1
+    restart: unless-stopped
+    depends_on:
+      - api
+    env_file: [.env]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          curl -fsS -X POST "http://api:8787/cron/messages" \
+            -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1 || true
+          sleep 300
+        done
+
   # The nightly attendance sweep: every active member with no row for today
   # gets an `absent` one. Its own ticker because it must run ONCE, after the
   # working day -- 18:30 UTC is midnight in Asia/Kolkata, which is when the

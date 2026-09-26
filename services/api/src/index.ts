@@ -37,8 +37,11 @@ import { platformRouter } from './modules/platform/router'
 import { feedbackRouter } from './modules/feedback/router'
 import { referralsRouter, publicReferralsRouter } from './modules/referrals/router'
 import { teamPayoutsRouter } from './modules/team-payouts/router'
+import { payrollRouter } from './modules/payroll/router'
 import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
+import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
+import { messagingRouter } from './modules/messaging/router'
 
 const app = new Hono<AppEnv>()
 
@@ -112,6 +115,9 @@ app.use('/auth/logout', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/auth/logout-all', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/auth/change-password', rateLimit({ windowMs: 60_000, limit: 10 }))
 app.use('/public/*', rateLimit({ windowMs: 60_000, limit: 30 }))
+// A client note on a deliverable notifies the studio: a much lower ceiling
+// than reading, per address and link (the database also caps a link a day).
+app.use('/public/portal/:token/feedback', rateLimit({ windowMs: 60_000, limit: 10 }))
 app.use('/webhooks/*', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/health', rateLimit({ windowMs: 60_000, limit: 60 }))
 // Crash reports are public by necessity; keep the abuse ceiling low and explicit.
@@ -159,8 +165,12 @@ app.route('/feedback', feedbackRouter)
 app.route('/referrals', referralsRouter)
 app.route('/public', publicReferralsRouter)
 app.route('/team-payouts', teamPayoutsRouter)
+app.route('/payroll', payrollRouter)
 app.route('/reminders', remindersRouter)
 app.route('/activity', activityRouter)
+app.route('/client-portal', clientPortalRouter)
+app.route('/public', publicClientPortalRouter)
+app.route('/messaging', messagingRouter)
 
 // Every failure leaves through here, in one JSON envelope the web client
 // can read. Hono's own handler would return the bare message instead.

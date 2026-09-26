@@ -12,6 +12,8 @@ import { log } from '../../lib/log'
 import { audit } from '../../lib/audit'
 import { fetchMetaLead, isMetaLeadgenPayload, metaLeadgenIds, verifyMetaSignature } from '../../lib/meta'
 import { verifyRazorpaySignature } from '../../lib/razorpay'
+import { whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
+import { isDevLike } from '../../lib/env'
 
 /**
  * PUBLIC webhook ingress — no auth. The source key resolves the tenant inside
@@ -128,6 +130,56 @@ export const webhooksRouter = new Hono<AppEnv>()
     if (mode !== 'subscribe' || !challenge) return c.json({ ok: true })
     if (!expected || !timingSafeEqual(token, expected)) fail(403, 'Verification token mismatch.')
     return c.text(challenge)
+  })
+
+  // WhatsApp Business Account webhook: the subscription handshake. Uses
+  // WHATSAPP_VERIFY_TOKEN, or the Meta lead-ads token when that is unset.
+  .get('/whatsapp', (c) => {
+    const mode = c.req.query('hub.mode')
+    const token = c.req.query('hub.verify_token') ?? ''
+    const challenge = c.req.query('hub.challenge')
+    const expected = c.env.WHATSAPP_VERIFY_TOKEN || c.env.META_VERIFY_TOKEN || ''
+    if (mode !== 'subscribe' || !challenge) return c.json({ ok: true })
+    if (!expected || !timingSafeEqual(token, expected)) fail(403, 'Verification token mismatch.')
+    return c.text(challenge)
+  })
+
+  // Delivery receipts for the messaging wallet's messages (sent / delivered /
+  // read / failed; a failure refunds), and STOP / START replies. Signed with
+  // the Meta app secret. A receipt can move money (a refund), so without the
+  // secret a production deployment reads nothing from this door.
+  .post('/whatsapp', async (c) => {
+    const raw = await c.req.text()
+    const signature = c.req.header('X-Hub-Signature-256') ?? ''
+    const secret = c.env.META_APP_SECRET ?? ''
+    if (secret) {
+      if (!signature || !(await verifyMetaSignature(raw, signature, secret))) fail(401, 'Invalid signature.')
+    } else if (!isDevLike(c.env)) {
+      log.warn({ requestId: c.get('requestId') }, 'whatsapp webhook received but META_APP_SECRET is unset')
+      return c.json({ ok: true, skipped: 'not_configured' })
+    }
+    let body: unknown = {}
+    try {
+      body = raw ? JSON.parse(raw) : {}
+    } catch {
+      fail(422, 'Invalid payload.')
+    }
+    const updates = whatsappStatusUpdates(body)
+    const opts = whatsappOptChanges(body)
+    const done = await attempt(c, 'webhooks.whatsapp', () =>
+      withService(c.env, async (sql) => {
+        let matched = 0
+        for (const u of updates) {
+          const [r] = await sql<{ ok: boolean }[]>`select message_status_update(${u.id}, ${u.status}, ${u.error}) as ok`
+          if (r?.ok) matched += 1
+        }
+        for (const o of opts) await sql`select message_opt_out_set(${o.from}, ${o.out})`
+        return matched
+      }),
+    )
+    // Meta retries a non-2xx for days; a database hiccup is worth a retry.
+    if (done === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    return c.json({ ok: true, statuses: updates.length, matched: done, opt_changes: opts.length })
   })
 
   // Razorpay webhook: verify HMAC over the raw body, record idempotently, and

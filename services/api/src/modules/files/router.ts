@@ -118,18 +118,34 @@ export const filesRouter = new Hono<AppEnv>()
     )
   })
 
+  // Anyone in the studio could open any file by its id. Now: the uploader and
+  // owners/admins/managers always; production work (voice notes on
+  // deliverables and tasks) for anyone in the studio; receipts and invoice
+  // attachments only for people with billing or expense access (0183).
   .get('/:id', async (c) => {
     const id = uuidParam(c)
+    const auth = c.get('auth')
     const rows = await attempt(c, 'files.get', () =>
-      withUser(
-        c.env,
-        c.get('auth').userId,
-        (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
-          select name, mime, bytes from files where id = ${id}`,
-      ),
+      withUser(c.env, auth.userId, async (sql) => {
+        const [meta] = await sql<{ created_by: string | null; is_public: boolean; kinds: string[] }[]>`
+          select created_by, is_public, kinds from file_access(${id})`
+        if (!meta) return []
+        const can =
+          meta.is_public ||
+          meta.created_by === auth.userId ||
+          auth.isOwner ||
+          ['super_admin', 'admin', 'manager'].includes(auth.role) ||
+          meta.kinds.includes('production') ||
+          (meta.kinds.includes('invoice') && (auth.access.hasModule('billing') || auth.access.hasModule('money'))) ||
+          (meta.kinds.includes('expense') &&
+            (auth.access.hasModule('company_expenses') || auth.access.hasModule('financials') || auth.access.hasModule('money')))
+        if (!can) return 'denied' as const
+        return sql<{ name: string; mime: string; bytes: Buffer }[]>`select name, mime, bytes from files where id = ${id}`
+      }),
     )
     if (!rows) fail(400, 'We could not load that file.')
-    if (!rows.length) fail(404, 'That file was not found.')
+    // Same answer as a missing file: an id is not proof that it exists.
+    if (rows === 'denied' || !rows.length) fail(404, 'That file was not found.')
     return serve(rows[0]!)
   })
 

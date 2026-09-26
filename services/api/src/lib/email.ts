@@ -254,6 +254,44 @@ export async function sendTeamTermsEmail(
   }
 }
 
+/**
+ * One message from the messaging wallet's outbox (a copy of a notification).
+ * Returns what happened rather than throwing, so the worker can refund a
+ * failure. 'provider_missing' = RESEND_API_KEY unset (dev/CI).
+ */
+export async function sendMessageEmail(
+  env: Env,
+  m: { to: string; subject: string; body: string | null; link: string | null; studio: string },
+): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }> {
+  if (!env.RESEND_API_KEY) return { status: 'provider_missing' }
+  const link = m.link ? (m.link.startsWith('http') ? m.link : `${(env.APP_URL ?? '').replace(/\/+$/, '')}${m.link}`) : null
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM,
+        to: m.to,
+        subject: m.subject,
+        html: brandedHtml({
+          title: esc(m.subject),
+          preheader: esc((m.body ?? m.subject).slice(0, 120)),
+          body: esc(m.body ?? ''),
+          cta: 'Open IPC Studios',
+          link: link ?? (env.APP_URL || 'https://ipcstudios.in'),
+          footer: `Sent for ${esc(m.studio)} by IPC Studios.`,
+        }),
+      }),
+    })
+    if (!res.ok) return { status: 'failed', error: `Email provider refused it (${res.status}).` }
+    const json = (await res.json().catch(() => ({}))) as { id?: string }
+    return { status: 'sent', ...(json.id ? { id: json.id } : {}) }
+  } catch (e) {
+    console.error('[email] message send threw', e)
+    return { status: 'failed', error: 'Email could not be sent.' }
+  }
+}
+
 const esc = (t: string) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 

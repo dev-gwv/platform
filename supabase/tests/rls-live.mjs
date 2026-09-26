@@ -1543,6 +1543,105 @@ if (listed) {
     payOwner.status === 200 && payOwner.json.upi_id === 'priya@okhdfc' && payMgr.status === 403 && paySelfOther.status === 403,
     { owner: payOwner.status, mgr: payMgr.status, other: paySelfOther.status },
   )
+  // ── Stored files: not everyone's by id any more (0183) ──
+  const upAs = async (tok, name) => {
+    const fd = new FormData()
+    fd.append('file', new Blob(['%PDF-1.4\n%%EOF\n'], { type: 'application/pdf' }), name)
+    return (await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${tok}` }, body: fd })).json()
+  }
+  const ownerFile = await upAs(aToken, 'salary-sheet.pdf')
+  const edFile = await upAs(edToken, 'my-bill.pdf')
+  const fGet = async (tok, id) => (await fetch(`${API}/files/${id}`, { headers: { Authorization: `Bearer ${tok}` } })).status
+  const fDel = async (tok, id) => (await fetch(`${API}/files/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } })).status
+  const edReadsOwners = await fGet(edToken, ownerFile.id)
+  const ownerReads = await fGet(aToken, ownerFile.id)
+  const edReadsOwn = await fGet(edToken, edFile.id)
+  const ownerReadsEds = await fGet(aToken, edFile.id)
+  const edDeletesOwners = await fDel(edToken, ownerFile.id)
+  const stillThere = await fGet(aToken, ownerFile.id)
+  check(
+    "files: a member opens their own uploads, not someone else's by id, and can't delete them; the owner opens both",
+    edReadsOwners === 404 && ownerReads === 200 && edReadsOwn === 200 && ownerReadsEds === 200 && edDeletesOwners === 404 && stillThere === 200,
+    { edReadsOwners, ownerReads, edReadsOwn, ownerReadsEds, edDeletesOwners, stillThere },
+  )
+
+
+  // ── Monthly payroll run (0185) ──
+  const prNow = new Date(Date.now() + 5.5 * 3600e3)
+  const prYear = prNow.getUTCFullYear()
+  const prMonth = prNow.getUTCMonth() + 1
+  const prSalary = await api(`/team/members/${edUid}`, { token: aToken, method: 'PATCH', body: { salary: 30000, engagement_type: 'in_house' } })
+  const prEdGen = await api('/payroll/runs/generate', { token: edToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prMgrGen = await api('/payroll/runs/generate', { token: tmToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prMonthRes = await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })
+  const prLine = (prMonthRes.json.lines ?? []).find((l) => l.user_id === edUid)
+  check(
+    'payroll: the owner works out the month (a member or a manager without salaries cannot); the member is on it at their salary',
+    prSalary.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
+      prMonthRes.status === 200 && prMonthRes.json.run?.status === 'draft' && prLine?.base_amount === 30000 &&
+      prLine.working_days > 0 && prLine.net_pay === 30000 - prLine.deduction,
+    { salary: prSalary.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
+  )
+  const prRunId = prMonthRes.json.run?.id
+  const prNoNote = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 1500, additions_note: '', other_deductions: 0 } })
+  const prEdit = await api(`/payroll/lines/${prLine?.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { additions: 1500, additions_note: 'Festival bonus', other_deductions: 500, other_deductions_note: 'Advance' },
+  })
+  const prEdEdit = await api(`/payroll/lines/${prLine?.id}`, { token: edToken, method: 'PATCH', body: { additions: 99999, additions_note: 'Mine', other_deductions: 0 } })
+  const prRegen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prAfter = ((await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })).json.lines ?? []).find((l) => l.user_id === edUid)
+  const prSlipsBefore = await api('/payroll/payslips', { token: edToken })
+  const prSlipBefore = await api(`/payroll/payslips/${prLine?.id}`, { token: edToken })
+  check(
+    'payroll: a bonus and an advance need a note and survive working the month out again; the member sees nothing before approval',
+    prNoNote.status === 422 && prEdit.status === 200 && prEdit.json.net_pay === 30000 - prLine.deduction + 1000 && prEdEdit.status === 403 &&
+      prRegen.status === 201 && prAfter?.additions === 1500 && prAfter?.additions_note === 'Festival bonus' && prAfter?.other_deductions === 500 &&
+      prSlipsBefore.status === 200 && (prSlipsBefore.json ?? []).length === 0 && prSlipBefore.status === 404,
+    { noNote: prNoNote.status, edit: prEdit.json, edEdit: prEdEdit.status, regen: prRegen.status, after: prAfter, before: prSlipsBefore.json, one: prSlipBefore.status },
+  )
+  const prEdApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: edToken, method: 'POST' })
+  const prApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
+  const prApprove2 = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
+  const prLockedGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prLockedEdit = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 0, other_deductions: 0 } })
+  check(
+    'payroll: only the owner approves; an approved month is locked',
+    prEdApprove.status === 403 && prApprove.status === 204 && prApprove2.status === 422 && prLockedGen.status === 422 && prLockedEdit.status === 422,
+    { ed: prEdApprove.status, ok: prApprove.status, again: prApprove2.status, gen: prLockedGen.status, edit: prLockedEdit.status },
+  )
+  const prSlips = await api('/payroll/payslips', { token: edToken })
+  const prSlip = await api(`/payroll/payslips/${prLine?.id}`, { token: edToken })
+  const prEdRuns = await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: edToken })
+  const prEdOthers = await api(`/payroll/payslips?user_id=${aOwnerUid}`, { token: edToken })
+  const prOtherStudio = await api(`/payroll/payslips/${prLine?.id}`, { token: newPw.json.access_token })
+  const prOtherPay = await api(`/payroll/runs/${prRunId}/pay`, { token: newPw.json.access_token, method: 'POST', body: {} })
+  check(
+    'payroll: after approval the member sees their own payslip only; nobody else and no other studio',
+    prSlips.status === 200 && (prSlips.json ?? []).length === 1 && prSlips.json[0].id === prLine?.id &&
+      prSlip.status === 200 && prSlip.json.name === 'Priya Editor' && prSlip.json.additions_note === 'Festival bonus' && !!prSlip.json.company_name &&
+      prEdRuns.status === 403 && prEdOthers.status === 403 && prOtherStudio.status === 404 && prOtherPay.status === 404,
+    { slips: prSlips.json, slip: prSlip.status, runs: prEdRuns.status, others: prEdOthers.status, otherStudio: prOtherStudio.status, otherPay: prOtherPay.status },
+  )
+  const prEdPay = await api(`/payroll/runs/${prRunId}/pay`, { token: edToken, method: 'POST', body: { line_id: prLine?.id } })
+  const prPay = await api(`/payroll/runs/${prRunId}/pay`, { token: aToken, method: 'POST', body: { line_id: prLine?.id, payment_mode: 'UPI', reference: 'UTR123' } })
+  const prPay2 = await api(`/payroll/runs/${prRunId}/pay`, { token: aToken, method: 'POST', body: { line_id: prLine?.id, payment_mode: 'UPI' } })
+  const prLedger = await api(`/team/monthly-salaries?month=${prMonth}&year=${prYear}&user_id=${edUid}`, { token: aToken })
+  const prLedgerRow = (prLedger.json.items ?? []).find((r) => r.user_id === edUid)
+  const prNotes = await api('/notifications?type=payroll.payslip', { token: edToken })
+  const prExport = await api(`/payroll/runs/${prRunId}/export`, { token: aToken })
+  const prEdExport = await api(`/payroll/runs/${prRunId}/export`, { token: edToken })
+  check(
+    'payroll: the owner marks the member paid once; the salaries ledger says paid; the member is told; the bank sheet is for the owner only',
+    prEdPay.status === 403 && prPay.status === 200 && prPay.json.paid_count === 1 && prPay2.status === 422 &&
+      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prAfter?.net_pay &&
+      (prNotes.json ?? []).some((n) => /^Payslip for .+ is ready$/.test(n.title)) &&
+      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prAfter?.net_pay) &&
+      prEdExport.status === 403,
+    { edPay: prEdPay.status, pay: prPay.json, again: prPay2.status, ledger: prLedgerRow, notes: (prNotes.json ?? []).map((n) => n.title), export: prExport.status, edExport: prEdExport.status },
+  )
   const termsEd = await api('/team-terms/templates', { token: edToken })
   const termsMgr = await api('/team-terms/templates', { token: tmToken })
   check('team terms: gated on the Team Terms module, not just on projects', termsEd.status === 403 && termsMgr.status === 200, {
@@ -1882,6 +1981,215 @@ if (listed) {
     edited.status === 200 && afterEdit.json.attachments.length === 0 && dp.json.status !== 'draft' && dp.json.amount_paid === 1000,
     { edited: edited.status, n: afterEdit.json.attachments?.length, dp: dp.json.status },
   )
+}
+
+// ── Client portal: one private link per project, for the client ──
+{
+  const bTok = newPw.json.access_token
+  const coupleName = `Portal Couple ${rand()}`
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: coupleName, phone: randPhone() } })
+  const projectName = `Portal wedding ${rand()}`
+  const project = await api('/projects', {
+    token: aToken,
+    method: 'POST',
+    body: { name: projectName, client_id: client.json.id, package_cost: 100000, payments: [{ amount: 40000 }] },
+  })
+  const pid = project.json.id
+  const shoot = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', location: 'Jaipur' } })
+  const album = await api(`/projects/${pid}/deliverables`, {
+    token: aToken,
+    method: 'POST',
+    body: { title: 'Wedding album', visibility_scope: 'client', internal_notes: 'SECRET-NOTE', status: 'completed', delivery_link: 'https://drive.example.com/album' },
+  })
+  const cull = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Culling (team only)', visibility_scope: 'internal' } })
+  const made = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'POST', body: { show_payments: true } })
+  const token = /\/p\/([^/?#]+)$/.exec(made.json.url ?? '')?.[1] ?? ''
+  check('portal: the owner makes a link, returned once', made.status === 201 && token.length >= 60 && made.json.link?.view_count === 0, made.json)
+
+  const pub = await api(`/public/portal/${token}`)
+  const raw = JSON.stringify(pub.json)
+  const titles = (pub.json.deliverables ?? []).map((d) => d.title)
+  const albumRow = (pub.json.deliverables ?? []).find((d) => d.id === album.json.id)
+  check(
+    'portal: opens without a login, for this project and this couple',
+    pub.status === 200 && pub.json.project?.name === projectName && pub.json.project?.client_name === coupleName,
+    { status: pub.status, project: pub.json.project },
+  )
+  check(
+    'portal: client deliverables with status and link; internal work, notes and prices are not there',
+    titles.includes('Wedding album') && !titles.includes('Culling (team only)') && albumRow?.status === 'ready' &&
+      albumRow?.delivery_link === 'https://drive.example.com/album' && !raw.includes('SECRET-NOTE') && !raw.includes(cull.json.id) &&
+      !raw.includes('additional_charge') && !raw.includes('internal_notes') && !raw.includes('estimated_cost'),
+    { titles, albumRow },
+  )
+  check(
+    'portal: shoots and money (package, received, balance)',
+    (pub.json.shoots ?? []).some((s) => s.id === shoot.json.id && s.location === 'Jaipur') &&
+      pub.json.money?.total === 100000 && pub.json.money?.received === 40000 && pub.json.money?.balance === 60000,
+    { shoots: pub.json.shoots, money: pub.json.money },
+  )
+
+  // The studio sees the open; money can be hidden.
+  const status = await api(`/client-portal/projects/${pid}`, { token: aToken })
+  const hide = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'PATCH', body: { show_payments: false } })
+  const hidden = await api(`/public/portal/${token}`)
+  check(
+    'portal: the studio sees when the client opened it; hiding payments hides the money',
+    status.status === 200 && status.json.link?.view_count >= 1 && !!status.json.link?.last_viewed_at &&
+      hide.status === 200 && hidden.status === 200 && hidden.json.money === null,
+    { status: status.json, hide: hide.status, money: hidden.json.money },
+  )
+
+  // Feedback reaches the studio as a notification.
+  const fb = await api(`/public/portal/${token}/feedback`, {
+    method: 'POST',
+    body: { deliverable_id: album.json.id, kind: 'change_requested', message: 'Please brighten page 4' },
+  })
+  const fbInternal = await api(`/public/portal/${token}/feedback`, { method: 'POST', body: { deliverable_id: cull.json.id, kind: 'approved' } })
+  const notes = await api('/notifications', { token: aToken })
+  const told = JSON.stringify(notes.json).includes('asked for a change to Wedding album')
+  check(
+    'portal: a client note on a deliverable notifies the studio; an internal item takes none',
+    fb.status === 200 && fbInternal.status === 409 && told,
+    { fb: fb.status, fbInternal: fbInternal.status, told },
+  )
+
+  // Another studio can neither read, make nor stop it.
+  const bRead = await api(`/client-portal/projects/${pid}`, { token: bTok })
+  const bRevoke = await api(`/client-portal/projects/${pid}`, { token: bTok, method: 'DELETE' })
+  const bMake = await api(`/client-portal/projects/${pid}`, { token: bTok, method: 'POST', body: {} })
+  const stillOpen = await api(`/public/portal/${token}`)
+  check(
+    "portal: another studio cannot see, make or revoke this project's link",
+    bRead.status === 404 && bRevoke.status === 404 && bMake.status === 404 && stillOpen.status === 200,
+    { bRead: bRead.status, bRevoke: bRevoke.status, bMake: bMake.status, open: stillOpen.status },
+  )
+
+  // An employee without projects edit cannot make or stop one.
+  const eInv = await api('/team/invitations', {
+    token: aToken,
+    method: 'POST',
+    body: { name: 'Portal Viewer', email: `pv-${rand()}@example.com`, role: 'employee' },
+  })
+  const eRaw = /[?&]token=([^&]+)/.exec(eInv.json.invite_link ?? '')?.[1] ?? ''
+  const eJoin = await api('/auth/accept-invite', { method: 'POST', body: { token: eRaw, password: 'Viewer12345!' } })
+  const eMake = await api(`/client-portal/projects/${pid}`, { token: eJoin.json.access_token, method: 'POST', body: {} })
+  const eRevoke = await api(`/client-portal/projects/${pid}`, { token: eJoin.json.access_token, method: 'DELETE' })
+  check(
+    'portal: an employee without project edit cannot make or stop a link',
+    eJoin.status === 200 && eMake.status === 403 && eRevoke.status === 403,
+    { join: eJoin.status, make: eMake.status, revoke: eRevoke.status },
+  )
+
+  // A new link retires the old; revoking stops it; a made-up token is a miss.
+  const again = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'POST', body: {} })
+  const token2 = /\/p\/([^/?#]+)$/.exec(again.json.url ?? '')?.[1] ?? ''
+  const oldGone = await api(`/public/portal/${token}`)
+  const revoke = await api(`/client-portal/projects/${pid}`, { token: aToken, method: 'DELETE' })
+  const newGone = await api(`/public/portal/${token2}`)
+  const bogus = await api(`/public/portal/${rand()}${rand()}`)
+  const afterRevoke = await api(`/client-portal/projects/${pid}`, { token: aToken })
+  check(
+    'portal: a new link retires the old one; a revoked link and a made-up one are 404',
+    again.status === 201 && oldGone.status === 404 && revoke.status === 200 && newGone.status === 404 && bogus.status === 404 &&
+      afterRevoke.json.link === null,
+    { again: again.status, old: oldGone.status, revoke: revoke.status, gone: newGone.status, bogus: bogus.status },
+  )
+}
+
+// ── Messaging wallet: balance, recharge request, settings, no-balance skip ──
+{
+  const bTok = newPw.json.access_token
+  const start = await api('/messaging', { token: aToken })
+  check(
+    'messaging: the owner sees a wallet at ₹0, prices, and every event off',
+    start.status === 200 && start.json.wallet?.balance_paise === 0 && start.json.prices?.some((p) => p.channel === 'whatsapp' && p.price_paise > 0) &&
+      start.json.settings?.length === 4 && start.json.settings.every((s) => !s.whatsapp && !s.email),
+    { status: start.status, wallet: start.json.wallet, settings: start.json.settings },
+  )
+  check(
+    'messaging: a studio sees its price, never the platform cost or markup',
+    start.status === 200 && start.json.prices.every((p) => !('meta_cost_paise' in p) && !('markup_pct' in p)),
+    start.json.prices,
+  )
+
+  const tooSmall = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 500 } })
+  const req = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 100000, note: 'UPI done' } })
+  const twice = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 50000 } })
+  const afterReq = await api('/messaging', { token: aToken })
+  check(
+    'messaging: the owner asks for a ₹1,000 recharge; it shows as pending, and a second one waits for the first',
+    tooSmall.status === 422 && req.status === 201 && twice.status === 422 &&
+      afterReq.json.requests?.some((r) => r.id === req.json.id && r.status === 'pending' && r.amount_paise === 100000),
+    { tooSmall: tooSmall.status, req: req.json, twice: twice.json, requests: afterReq.json.requests },
+  )
+
+  const selfCredit = await api('/platform/messaging/credit', {
+    token: aToken, method: 'POST', body: { company_id: '00000000-0000-4000-8000-000000000001', amount_paise: 100000, reference: 'x', request_id: req.json.id },
+  })
+  const wallets = await api('/platform/messaging/wallets', { token: aToken })
+  const afterTry = await api('/messaging/wallet', { token: aToken })
+  check(
+    'messaging: a studio owner (not a platform admin) cannot credit a wallet or read the platform wallets',
+    selfCredit.status === 403 && wallets.status === 403 && afterTry.json.balance_paise === 0,
+    { selfCredit: selfCredit.status, wallets: wallets.status, balance: afterTry.json },
+  )
+
+  const toggle = await api('/messaging/settings', {
+    token: aToken, method: 'PATCH', body: { events: [{ event: 'start_reminder', whatsapp: true, email: false }], low_balance_paise: 20000 },
+  })
+  const afterToggle = await api('/messaging', { token: aToken })
+  const theirs = await api('/messaging', { token: bTok })
+  check(
+    'messaging: switching WhatsApp on for start reminders saves, and does not touch another studio',
+    toggle.status === 200 && afterToggle.json.settings.find((s) => s.event === 'start_reminder')?.whatsapp === true &&
+      afterToggle.json.wallet.low_balance_paise === 20000 && afterToggle.json.wallet.low === true &&
+      theirs.status === 200 && theirs.json.settings.every((s) => !s.whatsapp) && !theirs.json.requests.some((r) => r.id === req.json.id),
+    { toggle: toggle.status, mine: afterToggle.json.settings, wallet: afterToggle.json.wallet, theirs: theirs.json.settings },
+  )
+
+  const test = await api('/messaging/test', { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const afterTest = await api('/messaging', { token: aToken })
+  check(
+    'messaging: with ₹0 a WhatsApp message is skipped with "Recharge to send", nothing charged',
+    test.status === 201 && test.json.status === 'skipped_no_balance' && afterTest.json.wallet.balance_paise === 0 &&
+      afterTest.json.recent.some((m) => m.id === test.json.id && m.status === 'skipped_no_balance' && m.cost_paise === 0) &&
+      afterTest.json.usage.skipped_no_balance >= 1,
+    { test: test.json, recent: afterTest.json.recent?.slice(0, 2), usage: afterTest.json.usage },
+  )
+
+  const ledger = await api('/messaging/ledger', { token: aToken })
+  const worker = await fetch(`${API}/cron/messages`, { method: 'POST', headers: { 'x-cron-secret': 'wrong' } })
+  check(
+    'messaging: the ledger is empty until money moves, and the worker needs the cron secret',
+    ledger.status === 200 && Array.isArray(ledger.json) && ledger.json.length === 0 && worker.status === 401,
+    { ledger: ledger.json, worker: worker.status },
+  )
+
+  // A team member is not the owner: the wallet is not theirs to see.
+  const mEmail = `msg-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Wallet Member', email: mEmail, role: 'employee' } })
+  const invTok = /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? ''
+  const joined = await api('/auth/accept-invite', { method: 'POST', body: { token: invTok, password: 'Member12345!' } })
+  const memberView = await api('/messaging', { token: joined.json.access_token })
+  const memberReq = await api('/messaging/recharge-requests', { token: joined.json.access_token, method: 'POST', body: { amount_paise: 50000 } })
+  check(
+    'messaging: a team member cannot see the wallet or ask for a recharge',
+    joined.status === 200 && memberView.status === 403 && memberReq.status === 403,
+    { joined: joined.status, view: memberView.status, req: memberReq.status },
+  )
+
+  const cancel = await api(`/messaging/recharge-requests/${req.json.id}/cancel`, { token: aToken, method: 'POST', body: {} })
+  const theirCancel = await api(`/messaging/recharge-requests/${req.json.id}/cancel`, { token: bTok, method: 'POST', body: {} })
+  check(
+    'messaging: the owner can take back a pending request; another studio cannot',
+    theirCancel.status === 422 && cancel.status === 204,
+    { cancel: cancel.status, theirs: theirCancel.status },
+  )
+
+  // The WhatsApp webhook handshake refuses a wrong token.
+  const hook = await fetch(`${API}/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=123`)
+  check('messaging: the WhatsApp webhook handshake refuses a wrong token', hook.status === 403, { status: hook.status })
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)
