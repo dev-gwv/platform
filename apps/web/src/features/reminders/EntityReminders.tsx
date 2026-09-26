@@ -29,16 +29,21 @@ export function EntityReminders({
   entityId,
   title,
   onNavigate,
+  hideWhenEmpty,
 }: {
   entityType: ReminderEntityType
   entityId: string
   title?: string
   /** Called when the board link is pressed (e.g. to close a dialog first). */
   onNavigate?: () => void
+  /** Show nothing while none are open -- the page has its own bell to add one. */
+  hideWhenEmpty?: boolean
 }) {
   const { data, isLoading } = useReminders({ status: 'active' })
   const rows = (data?.items ?? []).filter((r) => r.entity_type === entityType && r.entity_id === entityId)
   const [adding, setAdding] = useState(false)
+
+  if (hideWhenEmpty && rows.length === 0) return null
 
   return (
     <Card className="self-start border-dashed">
