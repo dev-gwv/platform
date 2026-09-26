@@ -37,6 +37,7 @@ import { platformRouter } from './modules/platform/router'
 import { feedbackRouter } from './modules/feedback/router'
 import { referralsRouter, publicReferralsRouter } from './modules/referrals/router'
 import { teamPayoutsRouter } from './modules/team-payouts/router'
+import { payrollRouter } from './modules/payroll/router'
 import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
@@ -163,6 +164,7 @@ app.route('/feedback', feedbackRouter)
 app.route('/referrals', referralsRouter)
 app.route('/public', publicReferralsRouter)
 app.route('/team-payouts', teamPayoutsRouter)
+app.route('/payroll', payrollRouter)
 app.route('/reminders', remindersRouter)
 app.route('/activity', activityRouter)
 app.route('/client-portal', clientPortalRouter)

@@ -35,6 +35,7 @@ import {
   FileSignature,
   Eye,
   Ellipsis,
+  HandCoins,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -158,6 +159,7 @@ export const NAV: NavEntry[] = [
       leaf('Leave & Holidays', '/leave', CalendarOff, { module: 'attendance' }),
       leaf('Roles & Access', '/settings/roles', ShieldCheck, { module: 'team_roles' }),
       leaf('Team Terms', '/settings/team-terms', FileSignature, { module: 'team_terms' }),
+      leaf('Payroll', '/payroll', HandCoins, { module: 'team_salaries' }),
       leaf('Team Payouts', '/team-payouts', DollarSign, { module: 'team_payouts' }),
       leaf('Work Preview', '/team/work-preview', Eye, { module: 'team_work_preview' }),
     ],

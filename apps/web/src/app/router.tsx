@@ -75,6 +75,8 @@ import { LookupsPage } from '@/routes/settings/lookups'
 import { ReferralsPage } from '@/routes/referrals'
 import { ProjectTemplatesPage } from '@/routes/project-templates'
 import { TeamPayoutsPage } from '@/routes/team-payouts'
+import { PayrollPage } from '@/routes/payroll'
+import { PayslipPage } from '@/routes/payslip'
 import { RemindersPage } from '@/routes/reminders'
 import { ActivityPage } from '@/routes/activity'
 import { InvoiceTemplatesPage } from '@/routes/billing/templates'
@@ -265,6 +267,8 @@ const routeTree = rootRoute.addChildren([
   route('/referrals', ReferralsPage),
   route('/settings/project-templates', ProjectTemplatesPage),
   route('/team-payouts', TeamPayoutsPage),
+  route('/payroll', PayrollPage),
+  route('/payroll/payslip/$lineId', PayslipPage),
   route('/reminders', RemindersPage),
   route('/activity', ActivityPage),
   route('/platform/studios', PlatformStudiosPage),

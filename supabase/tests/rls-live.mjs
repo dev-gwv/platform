@@ -1565,6 +1565,83 @@ if (listed) {
     { edReadsOwners, ownerReads, edReadsOwn, ownerReadsEds, edDeletesOwners, stillThere },
   )
 
+
+  // ── Monthly payroll run (0185) ──
+  const prNow = new Date(Date.now() + 5.5 * 3600e3)
+  const prYear = prNow.getUTCFullYear()
+  const prMonth = prNow.getUTCMonth() + 1
+  const prSalary = await api(`/team/members/${edUid}`, { token: aToken, method: 'PATCH', body: { salary: 30000, engagement_type: 'in_house' } })
+  const prEdGen = await api('/payroll/runs/generate', { token: edToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prMgrGen = await api('/payroll/runs/generate', { token: tmToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prMonthRes = await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })
+  const prLine = (prMonthRes.json.lines ?? []).find((l) => l.user_id === edUid)
+  check(
+    'payroll: the owner works out the month (a member or a manager without salaries cannot); the member is on it at their salary',
+    prSalary.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
+      prMonthRes.status === 200 && prMonthRes.json.run?.status === 'draft' && prLine?.base_amount === 30000 &&
+      prLine.working_days > 0 && prLine.net_pay === 30000 - prLine.deduction,
+    { salary: prSalary.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
+  )
+  const prRunId = prMonthRes.json.run?.id
+  const prNoNote = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 1500, additions_note: '', other_deductions: 0 } })
+  const prEdit = await api(`/payroll/lines/${prLine?.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { additions: 1500, additions_note: 'Festival bonus', other_deductions: 500, other_deductions_note: 'Advance' },
+  })
+  const prEdEdit = await api(`/payroll/lines/${prLine?.id}`, { token: edToken, method: 'PATCH', body: { additions: 99999, additions_note: 'Mine', other_deductions: 0 } })
+  const prRegen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prAfter = ((await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })).json.lines ?? []).find((l) => l.user_id === edUid)
+  const prSlipsBefore = await api('/payroll/payslips', { token: edToken })
+  const prSlipBefore = await api(`/payroll/payslips/${prLine?.id}`, { token: edToken })
+  check(
+    'payroll: a bonus and an advance need a note and survive working the month out again; the member sees nothing before approval',
+    prNoNote.status === 422 && prEdit.status === 200 && prEdit.json.net_pay === 30000 - prLine.deduction + 1000 && prEdEdit.status === 403 &&
+      prRegen.status === 201 && prAfter?.additions === 1500 && prAfter?.additions_note === 'Festival bonus' && prAfter?.other_deductions === 500 &&
+      prSlipsBefore.status === 200 && (prSlipsBefore.json ?? []).length === 0 && prSlipBefore.status === 404,
+    { noNote: prNoNote.status, edit: prEdit.json, edEdit: prEdEdit.status, regen: prRegen.status, after: prAfter, before: prSlipsBefore.json, one: prSlipBefore.status },
+  )
+  const prEdApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: edToken, method: 'POST' })
+  const prApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
+  const prApprove2 = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
+  const prLockedGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prLockedEdit = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 0, other_deductions: 0 } })
+  check(
+    'payroll: only the owner approves; an approved month is locked',
+    prEdApprove.status === 403 && prApprove.status === 204 && prApprove2.status === 422 && prLockedGen.status === 422 && prLockedEdit.status === 422,
+    { ed: prEdApprove.status, ok: prApprove.status, again: prApprove2.status, gen: prLockedGen.status, edit: prLockedEdit.status },
+  )
+  const prSlips = await api('/payroll/payslips', { token: edToken })
+  const prSlip = await api(`/payroll/payslips/${prLine?.id}`, { token: edToken })
+  const prEdRuns = await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: edToken })
+  const prEdOthers = await api(`/payroll/payslips?user_id=${aOwnerUid}`, { token: edToken })
+  const prOtherStudio = await api(`/payroll/payslips/${prLine?.id}`, { token: newPw.json.access_token })
+  const prOtherPay = await api(`/payroll/runs/${prRunId}/pay`, { token: newPw.json.access_token, method: 'POST', body: {} })
+  check(
+    'payroll: after approval the member sees their own payslip only; nobody else and no other studio',
+    prSlips.status === 200 && (prSlips.json ?? []).length === 1 && prSlips.json[0].id === prLine?.id &&
+      prSlip.status === 200 && prSlip.json.name === 'Priya Editor' && prSlip.json.additions_note === 'Festival bonus' && !!prSlip.json.company_name &&
+      prEdRuns.status === 403 && prEdOthers.status === 403 && prOtherStudio.status === 404 && prOtherPay.status === 404,
+    { slips: prSlips.json, slip: prSlip.status, runs: prEdRuns.status, others: prEdOthers.status, otherStudio: prOtherStudio.status, otherPay: prOtherPay.status },
+  )
+  const prEdPay = await api(`/payroll/runs/${prRunId}/pay`, { token: edToken, method: 'POST', body: { line_id: prLine?.id } })
+  const prPay = await api(`/payroll/runs/${prRunId}/pay`, { token: aToken, method: 'POST', body: { line_id: prLine?.id, payment_mode: 'UPI', reference: 'UTR123' } })
+  const prPay2 = await api(`/payroll/runs/${prRunId}/pay`, { token: aToken, method: 'POST', body: { line_id: prLine?.id, payment_mode: 'UPI' } })
+  const prLedger = await api(`/team/monthly-salaries?month=${prMonth}&year=${prYear}&user_id=${edUid}`, { token: aToken })
+  const prLedgerRow = (prLedger.json.items ?? []).find((r) => r.user_id === edUid)
+  const prNotes = await api('/notifications?type=payroll.payslip', { token: edToken })
+  const prExport = await api(`/payroll/runs/${prRunId}/export`, { token: aToken })
+  const prEdExport = await api(`/payroll/runs/${prRunId}/export`, { token: edToken })
+  check(
+    'payroll: the owner marks the member paid once; the salaries ledger says paid; the member is told; the bank sheet is for the owner only',
+    prEdPay.status === 403 && prPay.status === 200 && prPay.json.paid_count === 1 && prPay2.status === 422 &&
+      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prAfter?.net_pay &&
+      (prNotes.json ?? []).some((n) => /^Payslip for .+ is ready$/.test(n.title)) &&
+      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prAfter?.net_pay) &&
+      prEdExport.status === 403,
+    { edPay: prEdPay.status, pay: prPay.json, again: prPay2.status, ledger: prLedgerRow, notes: (prNotes.json ?? []).map((n) => n.title), export: prExport.status, edExport: prEdExport.status },
+  )
   const termsEd = await api('/team-terms/templates', { token: edToken })
   const termsMgr = await api('/team-terms/templates', { token: tmToken })
   check('team terms: gated on the Team Terms module, not just on projects', termsEd.status === 403 && termsMgr.status === 200, {

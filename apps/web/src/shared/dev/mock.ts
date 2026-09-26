@@ -208,6 +208,57 @@ const profileFx = {
 
 const themeState = { preset_key: 'ipc_classic', font_key: null as string | null, color_scheme: 'light' }
 
+/** A month's payroll, approved, one person already paid; plus shoot payouts owed. */
+const payLine = (n: number, name: string, over: Record<string, unknown> = {}) => ({
+  id: uid(0x7b00 + n),
+  user_id: uid(0xe0 + n),
+  name,
+  base_amount: 30000,
+  working_days: 25,
+  days_present: 22,
+  unpaid_leave_days: 0,
+  absent_days: 0,
+  late_marks: 0,
+  deduction: 0,
+  additions: 0,
+  additions_note: null,
+  other_deductions: 0,
+  other_deductions_note: null,
+  net_pay: 30000,
+  paid_amount: 0,
+  paid_at: null,
+  payment_mode: null,
+  payment_reference: null,
+  ...over,
+})
+const payrollMonthFx = {
+  run: {
+    id: uid(0x7a01),
+    pay_year: 2026,
+    pay_month: 9,
+    status: 'approved',
+    total_base: 70000,
+    total_deductions: 4200,
+    total_additions: 2000,
+    total_net: 67800,
+    total_paid: 18000,
+    people: 3,
+    generated_at: '2026-09-30T10:00:00Z',
+    approved_at: '2026-09-30T11:00:00Z',
+    approved_by_name: 'Demo Owner',
+    paid_at: null,
+  },
+  lines: [
+    payLine(1, 'Rahul Sharma', { days_present: 21, unpaid_leave_days: 2.5, absent_days: 1, late_marks: 2, deduction: 4200, net_pay: 25800 }),
+    payLine(2, 'Sneha Iyer', { base_amount: 22000, additions: 2000, additions_note: 'Wedding season bonus', net_pay: 24000 }),
+    payLine(3, 'Arjun Mehta', { base_amount: 18000, net_pay: 18000, other_deductions: 0, paid_amount: 18000, paid_at: '2026-09-30T12:00:00Z', payment_mode: 'UPI' }),
+  ],
+  freelancers: [
+    { user_id: uid(0xe9), name: 'Vikram (drone)', shoots: 2, owed: 16000, paid: 6000, due: 10000 },
+  ],
+  can_edit: true,
+}
+
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
   if (method === 'POST' && path === '/auth/forgot-password') return { ok: true }
@@ -440,6 +491,50 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && path.startsWith('/settings/profile/documents/')) return {}
   if (method === 'GET' && /^\/team\/members\/[^/]+\/pay-to$/.test(path))
     return { name: 'Rahul Sharma', upi_id: 'rahul@okhdfc', bank_account_name: null, bank_account_number: null, bank_ifsc: null }
+  // ── Payroll (0185) ──
+  if (method === 'GET' && path.startsWith('/payroll/runs?')) return payrollMonthFx
+  if (method === 'POST' && path === '/payroll/runs/generate') return { id: uid(0x7a01) }
+  if (method === 'PATCH' && /^\/payroll\/lines\/[^/]+$/.test(path)) {
+    const b = body as { additions?: number; other_deductions?: number }
+    return { net_pay: 25800 + (b.additions ?? 0) - (b.other_deductions ?? 0) }
+  }
+  if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/approve$/.test(path)) return {}
+  if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/pay$/.test(path))
+    return (body as { line_id?: string }).line_id ? { paid_count: 1, paid_total: 25800 } : { paid_count: 2, paid_total: 44000 }
+  if (method === 'GET' && /^\/payroll\/runs\/[^/]+\/export$/.test(path))
+    return payrollMonthFx.lines.map((l, i) => ({
+      name: l.name,
+      upi_id: i === 0 ? 'rahul@okhdfc' : null,
+      bank_account_name: i === 1 ? 'Sneha Iyer' : null,
+      bank_account_number: i === 1 ? '50100123456789' : null,
+      bank_ifsc: i === 1 ? 'HDFC0001234' : null,
+      net_pay: l.net_pay,
+    }))
+  if (method === 'GET' && path.startsWith('/payroll/payslips?'))
+    return [
+      { id: uid(0x7b01), pay_year: 2026, pay_month: 8, net_pay: 25800, paid_at: '2026-09-01T06:00:00Z', run_status: 'paid' },
+      { id: uid(0x7b02), pay_year: 2026, pay_month: 7, net_pay: 30000, paid_at: '2026-08-01T06:00:00Z', run_status: 'paid' },
+    ]
+  if (method === 'GET' && /^\/payroll\/payslips\/[^/]+$/.test(path))
+    return {
+      ...payrollMonthFx.lines[0]!,
+      id: path.split('/')[3]!,
+      pay_year: 2026,
+      pay_month: 8,
+      run_status: 'paid',
+      paid_at: '2026-09-01T06:00:00Z',
+      payment_mode: 'UPI',
+      payment_reference: 'UTR 4521 8890',
+      email: 'rahul@demostudio.in',
+      phone: '9876500001',
+      job_title: 'Candid Photographer',
+      company_name: 'Demo Studio',
+      company_legal_name: 'Demo Studio LLP',
+      company_address: '12 MG Road\nBengaluru 560001',
+      company_phone: '+91 98765 43210',
+      company_email: 'hello@demostudio.in',
+      logo_url: null,
+    }
   if (method === 'GET' && /^\/team\/members\/[^/]+\/overview$/.test(path)) {
     const id = path.split('/')[3]!
     const row = (directory as { user_id: string; name: string }[]).find((d) => d.user_id === id)

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Download, RefreshCcw } from 'lucide-react'
 import type { MonthlySalary } from '@ipc/contracts'
@@ -104,7 +105,10 @@ export function SalariesTab() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Salary management</h2>
           <p className="text-sm text-muted-foreground">
-            Generate and track monthly salaries for your team.
+            Generate and track monthly salaries for your team.{' '}
+            <Link to="/payroll" className="font-medium text-primary underline-offset-2 hover:underline">
+              Pay the month from attendance in Payroll
+            </Link>
             {list.isFetching && list.data ? ' · refreshing…' : ''}
           </p>
         </div>

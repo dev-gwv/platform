@@ -20,6 +20,7 @@ import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useDirectory, useMemberOverview, useSendReset, useUpdateMember } from '@/features/team/api'
 import { EditMemberDialog } from '@/features/team/EditMemberDialog'
 import { openIdDocument, useIdDocuments } from '@/features/profile/api'
+import { usePayrollPowers, usePayslips } from '@/features/payroll/api'
 
 /**
  * One team member, seen from every side: who they are and how complete their
@@ -98,7 +99,7 @@ function MemberPage() {
       {current === 'overview' && <OverviewTab o={o} isSelf={isSelf} onOpen={(t) => setTab(t)} />}
       {current === 'work' && o.work && <WorkTab work={o.work} memberId={o.member.user_id} />}
       {current === 'attendance' && <AttendanceTab o={o} isSelf={isSelf} />}
-      {current === 'pay' && <PayTab o={o} />}
+      {current === 'pay' && <PayTab o={o} isSelf={isSelf} />}
     </section>
   )
 }
@@ -507,7 +508,7 @@ function AttendanceTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
 }
 
 // ── Pay ──────────────────────────────────────────────────────────────────
-function PayTab({ o }: { o: MemberOverview }) {
+function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
   const m = o.member
   const salaries = o.salaries ?? []
   const payouts = o.payouts ?? []
@@ -565,6 +566,8 @@ function PayTab({ o }: { o: MemberOverview }) {
         </Card>
       )}
 
+      <Payslips userId={m.user_id} isSelf={isSelf} />
+
       {o.payouts && (
         <Card>
           <CardContent className="p-4">
@@ -589,5 +592,44 @@ function PayTab({ o }: { o: MemberOverview }) {
         </Card>
       )}
     </div>
+  )
+}
+
+/** Monthly payslips: your own once the month is approved, or anyone's for whoever runs payroll. */
+function Payslips({ userId, isSelf }: { userId: string; isSelf: boolean }) {
+  const { canView } = usePayrollPowers()
+  const q = usePayslips(userId, isSelf || canView)
+  if (!(isSelf || canView) || q.isError) return null
+  const slips = q.data ?? []
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <h2 className="font-semibold">Payslips</h2>
+        {q.isLoading ? (
+          <div className="mt-2 h-10 animate-pulse rounded-md bg-muted" aria-hidden />
+        ) : slips.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No payslips yet. They show here once a month’s pay is approved.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-border">
+            {slips.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  {MONTHS[s.pay_month - 1]} {s.pay_year}
+                </span>
+                <span className="font-medium tabular-nums">{formatINR(s.net_pay)}</span>
+                <StatusBadge tone={s.paid_at ? 'success' : s.run_status === 'draft' ? 'neutral' : 'warning'}>
+                  {s.paid_at ? 'Paid' : s.run_status === 'draft' ? 'Draft' : 'To be paid'}
+                </StatusBadge>
+                {s.run_status !== 'draft' && (
+                  <Link to="/payroll/payslip/$lineId" params={{ lineId: s.id }} className="text-sm font-medium text-primary underline-offset-2 hover:underline">
+                    View
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }
