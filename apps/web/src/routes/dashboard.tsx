@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Activity,
@@ -36,27 +36,16 @@ import { EmptyState } from '@/shared/ui/states'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
-import { useMembers, useSlots } from '@/features/allocation/api'
+import { useMembers } from '@/features/allocation/api'
 import { useInvoices } from '@/features/billing/api'
-import { useDataRecords } from '@/features/data/api'
-import { useBoard } from '@/features/tasks/api'
 import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
-import { buildJourney } from '@/features/onboarding/journey'
+import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
+import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { dashboardSections } from '@/features/onboarding/dashboard-sections'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
-
-/** Per-device: this viewer chose the whole dashboard over setup focus. */
-const FULL_VIEW_KEY = 'ipc.dashboard.full'
-function readFullView(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(FULL_VIEW_KEY) === '1'
-  } catch {
-    return false
-  }
-}
 
 export function DashboardPage() {
   return <DashboardInner />
@@ -107,9 +96,6 @@ function StudioCommandCenter() {
   const clients = useClients()
   const members = useMembers()
   const invoices = useInvoices()
-  const slots = useSlots()
-  const dataRecords = useDataRecords()
-  const board = useBoard()
 
   // The dashboard's operational half runs off the same tracking pass the
   // Project Tracking screen uses, so the two can never disagree about which
@@ -136,18 +122,17 @@ function StudioCommandCenter() {
   const outstanding = (invoices.data?.items ?? []).reduce((s, i) => s + i.balance_due, 0)
   const recent = (projects.data ?? []).slice(0, 5)
 
-  // The setup guide is for whoever is standing the studio up. An employee has
-  // no business being told to add teammates or invoice a client.
-  const isSetupAudience =
-    session?.is_owner || session?.role === 'super_admin' || session?.role === 'admin'
-  // Waiting on every query first — a half-loaded journey would show steps as
-  // outstanding and then tick them off, which reads as work being undone.
+  // The setup card is for whoever is standing the studio up, and only until
+  // setup is over (done or skipped) -- then it is gone for good.
+  const setupAudience = !!session && isSetupAudience(session) && !session.setup_done
+  // Waiting on every query first — a half-loaded card would show a step as
+  // outstanding and then jump past it, which reads as work being undone.
   //
   // A FAILED query is not pending either, and its data is undefined, so every
   // count above collapses to zero. Without this an established studio hitting
   // a 500 is told to add its first client. Counts we could not load are not
   // counts of zero.
-  const queries = [projects, clients, members, invoices, slots, dataRecords, board]
+  const queries = [projects, clients, members, invoices]
   const anyFailed = queries.some((q) => q.isError)
   const journeyReady = !queries.some((q) => q.isPending) && !anyFailed
   const journey = buildJourney(
@@ -156,43 +141,26 @@ function StudioCommandCenter() {
       teammates: (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length,
       clients: clientCount,
       projects: projects.data?.length ?? 0,
-      bookings: (slots.data ?? []).filter((s) => s.status === 'booked').length,
-      dataRecords: dataRecords.data?.length ?? 0,
-      invoices: invoices.data?.items.length ?? 0,
-      trackedTasks: board.data?.length ?? 0,
     },
     (m) => access.hasModule(m),
   )
-  const showJourney = isSetupAudience && journeyReady && !journey.allDone
+  const showJourney = setupAudience && journeyReady && !journey.allDone && !!journey.current
 
-  // While a studio is still being set up, the setup journey is the whole
-  // dashboard. Quick actions, tiles, "needs attention" and recent projects
-  // all used to sit under it, each a door out of the one thing the page was
-  // asking for — and every one of them opens onto something the journey is
-  // about to walk the owner through anyway.
-  //
-  // It is a default, not a cage: the journey is decided by real data, so a
-  // running studio that has simply never used, say, data management would
-  // otherwise be kept off its own dashboard for good. "Show the full
-  // dashboard" is remembered on this device.
-  const [fullView, setFullView] = useState(readFullView)
-  const setupFocus = showJourney && !fullView
-  // Quick actions wait for the counts too, for the reason given just below.
-  const settling = !!isSetupAudience && queries.some((q) => q.isPending)
-  const hideBody = setupFocus || settling
-  const toggleFullView = () => {
-    const next = !fullView
-    setFullView(next)
-    try {
-      globalThis.localStorage?.setItem(FULL_VIEW_KEY, next ? '1' : '0')
-    } catch {
-      // A blocked localStorage costs the preference, not the page.
-    }
-  }
+  // All three steps satisfied, however they got there: setup is done, for good.
+  const closeSetup = useCloseSetup()
+  const allDone = setupAudience && journeyReady && journey.allDone
+  const closing = useRef(false)
+  useEffect(() => {
+    if (!allDone || closing.current) return
+    closing.current = true
+    void closeSetup('done')
+  }, [allDone, closeSetup])
+
   // Until the counts are real, a setup-audience viewer is shown neither the
-  // journey nor the tiles — otherwise the zeros paint first and are then
-  // pulled out from under them when the journey arrives.
-  const countsSettled = journeyReady || !isSetupAudience
+  // card nor the body — otherwise the zeros paint first and are then pulled
+  // out from under them when the card arrives.
+  const hideBody = setupAudience && queries.some((q) => q.isPending)
+  const countsSettled = journeyReady || !setupAudience
   const sections = dashboardSections(
     {
       activeProjects,
@@ -208,9 +176,8 @@ function StudioCommandCenter() {
     <>
       <PageHeader
         title={`Welcome, ${session?.display_name ?? ''}`}
-        description={setupFocus ? "Let's get your studio ready — one step at a time." : 'Your studio at a glance.'}
+        description="Your studio at a glance."
         actions={
-          !setupFocus &&
           access.hasAction('projects', 'create') && (
             <Button asChild>
               <Link to="/projects/new">
@@ -223,16 +190,8 @@ function StudioCommandCenter() {
 
       <LowBalanceBanner />
 
-      {showJourney && (
-        <SetupJourney steps={journey.steps} completed={journey.completed} total={journey.total} />
-      )}
-
-      {showJourney && (
-        <div className="-mt-4 mb-4 flex justify-end">
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={toggleFullView}>
-            {setupFocus ? 'Show the full dashboard' : 'Focus on setup'}
-          </Button>
-        </div>
+      {showJourney && journey.current && (
+        <SetupJourney current={journey.current} completed={journey.completed} total={journey.total} />
       )}
 
       {!hideBody && (

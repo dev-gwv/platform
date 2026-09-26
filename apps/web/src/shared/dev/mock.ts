@@ -13,15 +13,15 @@ export const MOCK_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MOCK ===
 export const NOT_MOCKED = Symbol('not-mocked')
 
 /**
- * DEV knob for previewing the dashboard's Studio Setup Journey, which only
+ * DEV knob for previewing the dashboard's setup card, which only
  * shows while a studio is still being set up. Append `?setup=fresh` for a brand
- * new studio (0 of 7) or `?setup=partial` for one three steps in. Without it the
- * fixtures are full, so the journey is correctly hidden.
+ * new studio (0 of 3) or `?setup=partial` for one on its last step. Without it the
+ * fixtures are full, so the card is correctly hidden.
  */
 type SetupStage = 'fresh' | 'partial' | 'full'
 
 function setupStage(): SetupStage {
-  const v = new URLSearchParams(window.location.search).get('setup')
+  const v = new URLSearchParams(globalThis.location?.search ?? '').get('setup')
   return v === 'fresh' || v === 'partial' ? v : 'full'
 }
 
@@ -49,6 +49,9 @@ export const mockSession: SessionState = {
   plan_gate: 'active',
   plan_expiry: '2027-01-01T00:00:00Z',
   permissions: [],
+  // `?setup=fresh|partial` previews a studio still being set up.
+  setup_done: setupStage() === 'full',
+  setup_step: setupStage() === 'fresh' ? 1 : setupStage() === 'partial' ? 3 : null,
   // Two studios, so the switcher in the account menu shows in a preview.
   studios: [
     { profile_id: uid(1), company_id: uid(0xaa), company_name: 'Demo Studio', role: 'super_admin', is_owner: true },

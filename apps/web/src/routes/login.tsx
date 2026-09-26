@@ -10,6 +10,7 @@ import {
   loginRequest,
   forgotPasswordRequest,
   forgotPasswordResult,
+  type SessionState,
 } from '@ipc/contracts'
 import { callApi, ApiError } from '@/shared/api/client'
 import { fieldErrors, type FieldErrors } from '@/shared/forms/field-errors'
@@ -23,6 +24,7 @@ function rememberSession(pair: { access_token: string; refresh_token: string }) 
 }
 import { MOCK_ENABLED } from '@/shared/dev/mock'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { setupLanding } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
@@ -69,7 +71,7 @@ const FIELD_ORDER: FieldName[] = [
 ]
 
 export function LoginPage() {
-  const { refresh, session } = useAuth()
+  const { refresh } = useAuth()
   const navigate = useNavigate()
   const redirect = new URLSearchParams(window.location.search).get('redirect') ?? ''
   const [mode, setMode] = useState<Mode>('signin')
@@ -157,12 +159,18 @@ export function LoginPage() {
     }
   }
 
-  function goNext(fallback = '/dashboard') {
+  /**
+   * Where to go after signing in: an explicit ?redirect= first; else, while
+   * the studio is still being set up, its current setup step; else the
+   * dashboard.
+   */
+  function goNext(s: SessionState | null = null) {
     if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
       window.location.assign(redirect)
       return
     }
-    void navigate({ to: fallback })
+    const landing = setupLanding(s)
+    void navigate(landing ? { to: landing.to, search: landing.search as never } : { to: '/dashboard' })
   }
 
   async function onSubmit(e: FormEvent) {
@@ -190,8 +198,7 @@ export function LoginPage() {
         return
       }
       if (MOCK_ENABLED) {
-        await refresh()
-        goNext()
+        goNext(await refresh())
         return
       }
       if (isRegister) {
@@ -210,14 +217,11 @@ export function LoginPage() {
           responseSchema: authToken,
         }),
       )
-      await refresh()
       // Role/plan routing (Lovable parity): no role → /no-account,
-      // expired plan → /plan-expired, else dashboard (or ?redirect=).
-      const s = session
-      void s
-      // Session state may lag one tick; read fresh via refresh result is async,
-      // so navigate optimistically and let guards re-route if needed.
-      goNext()
+      // expired plan → /plan-expired, else the current setup step while the
+      // studio is being set up, else dashboard (or ?redirect=). The guards
+      // re-route the first two.
+      goNext(await refresh())
     } catch (err) {
       // A 403 on sign-in means the email isn't verified yet.
       if (err instanceof ApiError && err.status === 403) {
@@ -267,10 +271,9 @@ export function LoginPage() {
         await navigate({ to: '/complete-setup' })
         return
       }
-      await refresh()
       // Lovable parity: expired plan after Google sign-in lands on /plan-expired.
       // The guard also enforces this; this is the fast path before session settles.
-      goNext()
+      goNext(await refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Google sign-in failed.')
     } finally {

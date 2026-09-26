@@ -4,6 +4,8 @@ import {
   auditLogPage,
   auditLogQuery,
   companyProfile,
+  companySetupRequest,
+  companySetupResult,
   companyTheme,
   memberDocument,
   myProfile,
@@ -109,6 +111,33 @@ export const settingsRouter = new Hono<AppEnv>()
       after: parsed.data,
     })
     return c.json(companyProfile.parse(result.after))
+  })
+
+  // Close the three-step setup walk-through: 'done' when the last step is
+  // finished, 'skip' from "Skip setup". Owner or admin -- whoever is standing
+  // the studio up. mark_studio_setup (0191) checks the caller again and only
+  // ever stamps the two setup columns.
+  .patch('/company/setup', async (c) => {
+    const auth = c.get('auth')
+    if (!(auth.isOwner || auth.role === 'super_admin' || auth.role === 'admin')) {
+      fail(403, 'You do not have access to this action.')
+    }
+    const parsed = companySetupRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the details.')
+    const ok = await attempt(c, 'settings.company_setup', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [r] = await sql<{ ok: boolean }[]>`select mark_studio_setup(${parsed.data.action}) as ok`
+        return r?.ok ?? false
+      }),
+    )
+    if (ok === null) fail(400, 'We could not save your changes.')
+    if (!ok) fail(403, 'You do not have access to this action.')
+    await audit(c, {
+      action: parsed.data.action === 'done' ? 'company.setup_done' : 'company.setup_skipped',
+      entityType: 'company',
+      entityId: auth.companyId,
+    })
+    return c.json(companySetupResult.parse({ setup_done: true }))
   })
 
   // Your own profile: the shared row in users, and the private details in

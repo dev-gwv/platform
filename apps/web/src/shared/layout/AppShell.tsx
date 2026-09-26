@@ -12,7 +12,7 @@ import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { AccountMenu } from './AccountMenu'
-import { SetupReturnBar } from '@/features/onboarding/setup-flow'
+import { SetupGuideBar } from '@/features/onboarding/setup-flow'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -186,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             inside it animates in, keyed so each navigation replays it. */}
         <main className="min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible">
           <div key={pathname} className="page-enter">
-            <SetupReturnBar />
+            <SetupGuideBar />
             {children}
           </div>
         </main>

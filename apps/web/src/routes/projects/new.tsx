@@ -78,7 +78,7 @@ import {
   stageOfRequirement,
 } from '@/features/projects/requirements'
 import { STAGE_TONE } from '@/features/team/role-stages'
-import { useBackToSetup, useFromSetup } from '@/features/onboarding/setup-flow'
+import { SetupFinished, useFromSetup } from '@/features/onboarding/setup-flow'
 import { QuantityStepper, ToneChip, TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT, toneAt } from '@/shared/ui/tone-chip'
 import {
   BUILT_IN_SETS,
@@ -499,14 +499,16 @@ function CreatedDialog({
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fromSetup = useFromSetup()
-  const backToSetup = useBackToSetup()
 
   const openProject = (quotation?: boolean) =>
     void navigate({ to: quotation ? '/projects/$id/quotation' : '/projects/$id', params: { id: projectId } })
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Project created" description="What would you like to do next?">
+      <DialogContent
+        title="Project created"
+        description={fromSetup ? 'Your first project is saved.' : 'What would you like to do next?'}
+      >
         {/* A shoot that failed to save is the one thing here worth
             interrupting for — the project exists either way. */}
         {warning && (
@@ -515,7 +517,10 @@ function CreatedDialog({
           </p>
         )}
 
-        {link ? (
+        {/* The last setup step: say so, and offer the one obvious next place. */}
+        {fromSetup && !link ? (
+          <SetupFinished />
+        ) : link ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm">
               Send the client this link. It opens without an account, and the prices on it stay as
@@ -564,14 +569,6 @@ function CreatedDialog({
             <Button variant="ghost" className="w-full" onClick={() => openProject()}>
               Continue to project
             </Button>
-            {/* Opened from the setup journey: the obvious next thing is the
-                next setup step, so it is offered by name rather than left to
-                the sidebar. */}
-            {fromSetup && (
-              <Button variant="outline" className="w-full" onClick={backToSetup}>
-                Next setup step <ArrowRight />
-              </Button>
-            )}
           </div>
         )}
       </DialogContent>

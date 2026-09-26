@@ -82,6 +82,28 @@ async function makeStudio(label) {
 const a = await makeStudio('A')
 const b = await makeStudio('B')
 
+// ── Studio setup (0191): a brand-new studio starts at step 1, and the owner
+//    closes it. Studio B is still empty here. (No extra sign-ins: the
+//    credential limiter is shared by the whole suite.) The employee half is in
+//    the Reports block, which already has an employee signed in. ──
+{
+  const fresh = await api('/auth/session', { token: b.token })
+  check(
+    'setup: a brand-new studio is not set up yet, at step 1',
+    fresh.status === 200 && fresh.json.setup_done === false && fresh.json.setup_step === 1,
+    fresh.json,
+  )
+  const bad = await api('/settings/company/setup', { token: b.token, method: 'PATCH', body: { action: 'later' } })
+  check('setup: an unknown action is refused (422)', bad.status === 422, { status: bad.status })
+  const done = await api('/settings/company/setup', { token: b.token, method: 'PATCH', body: { action: 'done' } })
+  const after = await api('/auth/session', { token: b.token })
+  check(
+    'setup: PATCH done -> the session shows setup_done true',
+    done.status === 200 && after.status === 200 && after.json.setup_done === true && after.json.setup_step === null,
+    { patch: done.status, session: after.json },
+  )
+}
+
 // Studio A creates a client.
 const created = await api('/clients', {
   token: a.token,
@@ -2319,6 +2341,9 @@ if (listed) {
     joinedEmp.status === 200 && emp.every((r) => r.status === 403),
     { joined: joinedEmp.status, tabs: emp.map((r) => r.status) },
   )
+  // Setup (0191): only the owner or an admin may close a studio's setup.
+  const empSetup = await api('/settings/company/setup', { token: empToken, method: 'PATCH', body: { action: 'skip' } })
+  check('setup: an employee cannot close setup (403)', empSetup.status === 403, { status: empSetup.status })
   const anonReport = await api(`/reports/sales?${range}`)
   check('reports: no token, no report (401)', anonReport.status === 401, { status: anonReport.status })
 }

@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { completeSetupRequest, sessionState } from '@ipc/contracts'
 import { callApi, ApiError } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { setupLanding } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
@@ -25,7 +26,11 @@ export function CompleteSetupPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loading && session) void navigate({ to: '/dashboard' })
+    if (!loading && session) {
+      // A brand-new studio lands on its first setup step, not the dashboard.
+      const landing = setupLanding(session)
+      void navigate(landing ? { to: landing.to, search: landing.search as never } : { to: '/dashboard' })
+    }
   }, [loading, session, navigate])
 
   async function onSubmit(e: FormEvent) {
@@ -47,8 +52,8 @@ export function CompleteSetupPage() {
     setBusy(true)
     try {
       await callApi('/auth/complete-setup', { method: 'POST', body: parsed.data, responseSchema: sessionState })
+      // The effect above moves on once the session lands (to setup step 1).
       await refresh()
-      await navigate({ to: '/dashboard' })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'We could not set up your studio. Please try again.')
     } finally {

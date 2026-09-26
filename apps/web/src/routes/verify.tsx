@@ -13,6 +13,7 @@ function rememberSession(pair: { access_token: string; refresh_token: string }) 
   markCookieSession(!pair.refresh_token)
 }
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { setupLanding } from '@/features/onboarding/journey'
 import { Card, CardContent } from '@/shared/ui/card'
 
 /** Landing page for the email verification link (/verify?token=…). */
@@ -37,8 +38,10 @@ export function VerifyEmailPage() {
             responseSchema: authToken,
           }),
         )
-        await refresh()
-        if (active) await navigate({ to: '/dashboard' })
+        const s = await refresh()
+        // A studio still being set up lands on its current setup step.
+        const landing = setupLanding(s)
+        if (active) await navigate(landing ? { to: landing.to, search: landing.search as never } : { to: '/dashboard' })
       } catch {
         if (active) setFailed(true)
       }
