@@ -6,6 +6,9 @@ import { cn } from '@/shared/ui/cn'
 const TABS: ReadonlyArray<{ to: string; label: string; module: ModuleKey }> = [
   { to: '/settings/company', label: 'Company', module: 'settings' },
   { to: '/settings/roles', label: 'Roles & Access', module: 'team_roles' },
+  { to: '/settings/project-templates', label: 'Project Templates', module: 'projects' },
+  { to: '/project-documents', label: 'Documents', module: 'projects' },
+  { to: '/projects/stages', label: 'Delivery Stages', module: 'projects' },
   { to: '/settings/task-bundles', label: 'Task Bundles', module: 'settings' },
   { to: '/settings/team-terms', label: 'Team Terms', module: 'team_terms' },
   { to: '/settings/appearance', label: 'Theme & Branding', module: 'settings' },

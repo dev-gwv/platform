@@ -370,8 +370,9 @@ body {
   top: 0;
   z-index: 1;
   /* The body scrolls underneath, so the header needs its own opaque ground. */
+  /* Solid, not blurred: a backdrop-filter on every header cell is recomputed
+     on each frame as rows scroll under it. */
   background-color: color-mix(in oklch, var(--color-card) 92%, var(--color-foreground));
-  backdrop-filter: blur(4px);
 }
 
 /* A table's actions column, pinned to the right edge of its scroll box.
@@ -431,18 +432,19 @@ body {
   @keyframes ipc-page-enter {
     from {
       opacity: 0;
-      transform: perspective(1200px) translate3d(0, 6px, -40px);
-    }
-    to {
-      opacity: 1;
-      transform: perspective(1200px) translate3d(0, 0, 0);
+      transform: translateY(6px);
     }
   }
 
   /* The page's own content, on arrival. 6px is enough to read as "this is new"
-     without the layout appearing to slide around. */
+     without the layout appearing to slide around.
+
+     Flat and fill-backwards on purpose: a 3D transform left on the page after
+     the animation (which `both` + perspective() used to do) turns the whole
+     scrolling page into one composited layer and makes every scroll re-raster
+     it — the lag people felt. Once this ends, nothing stays transformed. */
   .page-enter {
-    animation: ipc-page-enter 220ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation: ipc-page-enter 200ms cubic-bezier(0.2, 0, 0, 1) backwards;
   }
 
   /* ── Depth ──────────────────────────────────────────────────────

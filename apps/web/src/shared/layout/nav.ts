@@ -26,12 +26,10 @@ import {
   Users,
   Clock,
   Settings,
-  ListOrdered,
   Lightbulb,
   ShieldCheck,
   Building2,
   Activity,
-  Package,
   DollarSign,
   FileSignature,
   Eye,
@@ -99,7 +97,7 @@ export const NAV: NavEntry[] = [
     children: [
       leaf('Production Board', '/production-board', KanbanSquare, { module: 'projects' }),
       leaf('Team Booking', '/team-allocation', CalendarClock, { module: 'projects' }),
-      leaf('Data Management', '/data-management', Database, { module: 'projects' }),
+      leaf('Data & Backup', '/data-management', Database, { module: 'projects' }),
     ],
   },
   {
@@ -111,9 +109,8 @@ export const NAV: NavEntry[] = [
       leaf('All Projects', '/projects', Briefcase, { module: 'projects' }),
       leaf('Create Project', '/projects/new', Plus, { module: 'projects' }),
       leaf('Project Tracking', '/project-tracking', Target, { module: 'projects' }),
-      leaf('Templates', '/settings/project-templates', Package, { module: 'projects' }),
-      leaf('Documents', '/project-documents', FileSignature, { module: 'projects' }),
-      leaf('Delivery Stages', '/projects/stages', ListOrdered, { module: 'projects' }),
+      // Templates, documents and delivery stages are set up once and then left
+      // alone, so they live under Settings rather than in the daily menu.
     ],
   },
 

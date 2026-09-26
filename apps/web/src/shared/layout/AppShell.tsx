@@ -182,12 +182,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <CommandPalette />
 
-        <main
-          key={pathname}
-          className="page-enter min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible"
-        >
-          <SetupReturnBar />
-          {children}
+        {/* The scroller stays put and is never transformed; only the page
+            inside it animates in, keyed so each navigation replays it. */}
+        <main className="min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible">
+          <div key={pathname} className="page-enter">
+            <SetupReturnBar />
+            {children}
+          </div>
         </main>
       </div>
     </div>

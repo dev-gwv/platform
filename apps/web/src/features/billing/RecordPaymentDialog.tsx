@@ -155,7 +155,7 @@ export function RecordPaymentDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={editing ? 'Change payment' : 'Record payment'} description={description_}>
+      <DialogContent title={editing ? 'Change payment' : 'Add payment from client'} description={description_}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {onProject && (
             <div role="radiogroup" aria-label="Has it come in?" className="grid grid-cols-2 gap-1 rounded-lg border border-input p-1">
@@ -272,7 +272,7 @@ export function RecordPaymentDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={busy || value <= 0}>
-              {busy ? 'Saving…' : editing ? 'Save' : received ? 'Record payment' : 'Save as promised'}
+              {busy ? 'Saving…' : editing ? 'Save' : received ? 'Save payment' : 'Save as promised'}
             </Button>
           </DialogFooter>
         </form>

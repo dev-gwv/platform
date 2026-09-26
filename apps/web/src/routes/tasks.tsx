@@ -21,7 +21,6 @@ import { SkeletonCards, SkeletonList } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { CreatableSelect } from '@/shared/ui/creatable-select'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -33,6 +32,9 @@ import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { useProjects } from '@/features/projects/api'
 import { useProductionBoard } from '@/features/board/api'
+import { TaskBoard } from '@/features/board/TaskBoard'
+import { Avatar } from '@/shared/ui/avatar'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useDirectory } from '@/features/team/api'
 import {
   useApplyBundle,
@@ -56,6 +58,7 @@ import {
   STATUS_LABEL,
   TASK_TABS,
   filterTasks,
+  groupByPerson,
   isOverdue,
   summarise,
   tabCounts,
@@ -90,7 +93,18 @@ export function TasksPage() {
   )
 }
 
+type TaskView = 'people' | 'list' | 'board'
+const VIEWS: ReadonlyArray<{ value: TaskView; label: string }> = [
+  { value: 'people', label: 'People' },
+  { value: 'list', label: 'List' },
+  { value: 'board', label: 'Board' },
+]
+
 function Tasks() {
+  // People first: who is carrying what is the question a studio owner opens
+  // this page to answer. The choice lives in the address so it sticks.
+  const [viewParam, setView] = useUrlParam('view', 'people')
+  const view: TaskView = VIEWS.some((v) => v.value === viewParam) ? (viewParam as TaskView) : 'people'
   const [tab, setTab] = useState<TaskTab>('all')
   const [filters, setFilters] = useState<TaskFilters>(EMPTY_FILTERS)
   const { data, isLoading, isError, refetch } = useTasks()
@@ -103,13 +117,7 @@ function Tasks() {
 
   return (
     <>
-      <HowToUse
-        title="Track team work"
-        description="Create tasks for editing, delivery, follow-up, and operations."
-        steps={['Add the task and its details.', 'Assign it to a team member.', 'Track it to done.']}
-      />
-
-      <div className="mt-6">
+      <div>
         <PageHeader
           title="Task management"
           description="All tasks across your studio — assign, track, and close out work."
@@ -130,16 +138,33 @@ function Tasks() {
         <Tile icon={CalendarClock} label="Overdue" value={totals.overdue} tone="danger" />
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <FeatureCard
-          icon={Package}
-          title="Task bundles"
-          description="Reusable checklists for the work you repeat — wedding editing, album delivery, client onboarding, shoot prep."
-          action={<BundlesDialog trigger={<Button variant="outline">Manage bundles</Button>} />}
-        />
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div role="tablist" aria-label="View" className="inline-flex gap-1 rounded-lg bg-muted p-1">
+          {VIEWS.map((v) => (
+            <button
+              key={v.value}
+              type="button"
+              role="tab"
+              aria-selected={view === v.value}
+              onClick={() => setView(v.value)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                view === v.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mt-6">
+      {view === 'board' ? (
+        <div className="mt-4">
+          <TaskBoard q={filters.search || undefined} />
+        </div>
+      ) : (
+      <>
+      <div className="mt-4">
         <FilterTabs<TaskTab>
           tabs={TASK_TABS.map((t) => ({ ...t, count: counts[t.value] }))}
           value={tab}
@@ -201,10 +226,65 @@ function Tasks() {
               />
             </CardContent>
           </Card>
+        ) : view === 'people' ? (
+          <TaskPeople rows={rows} today={today} />
         ) : (
           <TaskTable rows={rows} today={today} />
         )}
       </div>
+      </>
+      )}
+    </>
+  )
+}
+
+/**
+ * Everyone and what they are carrying, one column each, late work first.
+ * Tap a card to open it.
+ */
+function TaskPeople({ rows, today }: { rows: readonly TaskListItem[]; today: string }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const columns = useMemo(() => groupByPerson(rows, today), [rows, today])
+  return (
+    <>
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {columns.map((col) => (
+          <section
+            key={col.id ?? 'none'}
+            aria-label={col.name}
+            className="flex w-72 shrink-0 flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2"
+          >
+            <header className="flex items-center gap-2 px-1 py-1">
+              {col.id ? <Avatar name={col.name} size="sm" /> : <span className="size-6 rounded-full border border-dashed border-border" />}
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{col.name}</span>
+              <span className="rounded-full bg-card px-2 text-xs font-medium tabular-nums">{col.tasks.length}</span>
+              {col.late > 0 && (
+                <span className="rounded-full bg-destructive/10 px-2 text-xs font-semibold text-destructive tabular-nums">
+                  {col.late} late
+                </span>
+              )}
+            </header>
+            {col.tasks.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setOpen(t.id)}
+                className="flex flex-col gap-2 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40"
+              >
+                <span className={cn('text-sm font-medium', t.status === 'completed' && 'text-muted-foreground line-through')}>
+                  {t.title}
+                </span>
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <PriorityBadge task={t} />
+                  <DueBadge task={t} today={today} />
+                </span>
+                {t.project_name && <span className="truncate text-xs text-muted-foreground">{t.project_name}</span>}
+              </button>
+            ))}
+          </section>
+        ))}
+      </div>
+      {open && <TaskDetailDialog taskId={open} onClose={() => setOpen(null)} />}
     </>
   )
 }
@@ -245,32 +325,6 @@ function Tile({
   )
 }
 
-function FeatureCard({
-  icon: Icon,
-  title,
-  description,
-  action,
-}: {
-  icon: typeof Package
-  title: string
-  description: string
-  action: ReactNode
-}) {
-  return (
-    <Card>
-      <CardContent className="flex gap-3 p-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">{title}</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-          <div className="mt-3">{action}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
 function TaskTable({ rows, today }: { rows: readonly TaskListItem[]; today: string }) {
   const setStatus = useSetTaskStatus()

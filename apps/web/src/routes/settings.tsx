@@ -75,9 +75,12 @@ function Settings() {
 
       <Section
         title="Advanced hubs"
-        description="Task bundles, attendance geo-fence, lookups and secondary tools live on their own pages."
+        description="Project templates, documents, delivery stages, task bundles and other set-once tools live on their own pages."
       >
         <div className="grid gap-2 sm:grid-cols-2">
+          <Button variant="outline" asChild><Link to="/settings/project-templates">Project Templates</Link></Button>
+          <Button variant="outline" asChild><Link to="/project-documents">Documents</Link></Button>
+          <Button variant="outline" asChild><Link to="/projects/stages">Delivery Stages</Link></Button>
           <Button variant="outline" asChild><Link to="/settings/task-bundles">Task Bundles</Link></Button>
           <Button variant="outline" asChild><Link to="/settings/attendance-location">Attendance Location</Link></Button>
           <Button variant="outline" asChild><Link to="/settings/lookups">Lookups</Link></Button>

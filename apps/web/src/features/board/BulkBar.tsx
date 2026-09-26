@@ -31,7 +31,7 @@ export function BulkBar({
     <div
       role="region"
       aria-label="Change the selected deliverables"
-      className="sticky bottom-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card/95 p-3 shadow-lg backdrop-blur"
+      className="sticky bottom-3 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
     >
       <span className="text-sm font-semibold">
         {ids.length} selected

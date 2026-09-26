@@ -145,3 +145,40 @@ export function filterTasks(
 /** Today in the browser's timezone, as an ISO date for comparing due dates. */
 export const todayISO = (now: Date = new Date()): string =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+export interface PersonColumn {
+  /** The member's id, or null for work nobody is on yet. */
+  id: string | null
+  name: string
+  tasks: TaskListItem[]
+  late: number
+}
+
+/**
+ * The People view: one column per person with what they are carrying, busiest
+ * and latest first, and an "Unassigned" column leading when anything has no
+ * owner — that is the gap to fill. A task shared by two people shows under
+ * both, because both of them are on it.
+ */
+export function groupByPerson(tasks: readonly TaskListItem[], today: string): PersonColumn[] {
+  const byId = new Map<string, PersonColumn>()
+  const none: PersonColumn = { id: null, name: 'Unassigned', tasks: [], late: 0 }
+  for (const t of tasks) {
+    const late = isOverdue(t, today) ? 1 : 0
+    if (t.assignee_ids.length === 0) {
+      none.tasks.push(t)
+      none.late += late
+      continue
+    }
+    t.assignee_ids.forEach((id, i) => {
+      const col = byId.get(id) ?? { id, name: t.assignee_names[i] ?? 'Team member', tasks: [], late: 0 }
+      col.tasks.push(t)
+      col.late += late
+      byId.set(id, col)
+    })
+  }
+  const cols = [...byId.values()].sort(
+    (a, b) => b.late - a.late || b.tasks.length - a.tasks.length || a.name.localeCompare(b.name),
+  )
+  return none.tasks.length ? [none, ...cols] : cols
+}

@@ -112,7 +112,7 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
           <div className="flex flex-wrap gap-2">
             {data.balance_due > 0 && !cancelled && canEdit && (
               <Button size="sm" onClick={() => void asSent(() => setRecording(true))} disabled={send.isPending}>
-                <IndianRupee /> Record payment
+                <IndianRupee /> Add payment from client
               </Button>
             )}
             {editable && canEdit && (

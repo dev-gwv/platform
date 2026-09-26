@@ -425,7 +425,7 @@ function ProjectEdit() {
 
       {/* Sticky action bar: the running total next to the buttons that commit
           it, so a long edit never hides what it is about to save. */}
-      <div className="sticky bottom-0 z-10 -mx-1 mt-4 rounded-xl border border-border bg-card/95 p-4 shadow-md backdrop-blur">
+      <div className="sticky bottom-0 z-10 -mx-1 mt-4 rounded-xl border border-border bg-card p-4 shadow-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <dl className="grid grid-cols-3 gap-4 text-xs">
             <div>

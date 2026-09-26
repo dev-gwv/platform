@@ -320,7 +320,7 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
     <div
       role="region"
       aria-label="Change the selected data"
-      className="sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card/95 p-3 shadow-lg backdrop-blur"
+      className="sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
     >
       <span className="text-sm font-semibold">{rows.length} selected</span>
       <Select aria-label="What happened" value={action} onChange={(e) => setAction(e.target.value as BulkDataAction)} className="h-9 w-44">
