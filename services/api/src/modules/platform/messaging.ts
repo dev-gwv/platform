@@ -4,6 +4,9 @@ import {
   messageStatus,
   platformAdjustRequest,
   platformCreditRequest,
+  platformEmailCapRequest,
+  platformMessagingSettings,
+  platformSetMessagingSettings,
   platformOutboxMessage,
   platformOverdraftRequest,
   platformPrice,
@@ -45,6 +48,45 @@ export const platformMessagingRouter = new Hono<AppEnv>()
       webhook_signed: !!c.env.META_APP_SECRET,
     }),
   )
+
+  /** The platform's WhatsApp switch, and this month's totals across studios. */
+  .get('/settings', async (c) => {
+    const row = await attempt(c, 'platform.messaging.settings', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => (await sql`select * from platform_messaging_totals()`)[0] ?? null),
+    )
+    if (!row) fail(400, 'We could not load the messaging settings.')
+    return c.json(platformMessagingSettings.parse(row))
+  })
+
+  .put('/settings', async (c) => {
+    const parsed = platformSetMessagingSettings.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Say whether WhatsApp is on or off.')
+    const ok = await attempt(c, 'platform.messaging.settings_save', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`select platform_set_whatsapp_enabled(${parsed.data.whatsapp_enabled})`
+        return true
+      }),
+    { onCode: explain })
+    if (!ok) fail(400, 'We could not save the setting.')
+    await audit(c, { action: 'platform.messaging_whatsapp', entityType: 'messaging_platform_settings', entityId: null, after: parsed.data })
+    return c.json({ ok: true })
+  })
+
+  /** A studio's monthly email limit (10,000 by default). */
+  .post('/email-cap', async (c) => {
+    const parsed = platformEmailCapRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'The limit must be between 0 and 10,00,000 emails.')
+    const v = parsed.data
+    const ok = await attempt(c, 'platform.messaging.email_cap', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`select platform_set_email_cap(${v.company_id}, ${v.email_monthly_cap})`
+        return true
+      }),
+    { onCode: explain })
+    if (!ok) fail(400, 'We could not save the email limit.')
+    await audit(c, { action: 'platform.wallet_email_cap', entityType: 'wallet', entityId: v.company_id, after: v })
+    return c.json({ ok: true })
+  })
 
   .get('/wallets', async (c) => {
     const rows = await attempt(c, 'platform.messaging.wallets', () =>

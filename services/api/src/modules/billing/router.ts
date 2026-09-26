@@ -26,6 +26,8 @@ import {
   paymentReceipt,
   invoiceItemPreset,
   upsertInvoiceItemPresetRequest,
+  paymentReminderQuote,
+  paymentReminderResult,
   z,
 } from '@ipc/contracts'
 import type { TransactionSql } from 'postgres'
@@ -38,6 +40,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { explain } from '../messaging/router'
 
 const list = invoiceListItem.array()
 
@@ -554,6 +557,41 @@ export const billingRouter = new Hono<AppEnv>()
     if (revoke) return c.json({ ok: true })
     if (!rows.token) fail(400, 'We could not make the link.')
     return c.json({ link: `${c.env.APP_URL}/invoice?token=${rows.token}` }, 201)
+  })
+
+  /**
+   * What an emailed payment reminder would cost right now (free inside the
+   * month's allowance, else the email price from the wallet), and when the
+   * last one went to the client. Anyone who can see the invoice.
+   */
+  .get('/invoices/:id/remind', async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(c, 'billing.invoice_remind_quote', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) =>
+        (await sql`select * from client_payment_reminder_quote(${id})`)[0] ?? null),
+    { onCode: explain })
+    if (!row) fail(404, 'That invoice was not found.')
+    return c.json(paymentReminderQuote.parse(row))
+  })
+
+  /**
+   * "Send payment reminder": one email to the client now. An explicit action,
+   * so the studio's automatic-reminder switch does not apply, but the charge
+   * and the monthly email limit do. A second click inside 10 minutes returns
+   * the first reminder rather than sending another.
+   */
+  .post('/invoices/:id/remind', requireAction('billing', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(c, 'billing.invoice_remind', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) =>
+        (await sql`select * from send_client_payment_reminder(${id})`)[0] ?? null),
+    { onCode: explain })
+    if (!row) fail(400, 'We could not send the reminder.')
+    const out = paymentReminderResult.parse(row)
+    if (out.id && !out.repeated) {
+      await audit(c, { action: 'invoice.payment_reminder', entityType: 'invoice', entityId: id, after: { status: out.status, cost_paise: out.cost_paise } })
+    }
+    return c.json(out, out.status === 'queued' && !out.repeated ? 201 : 200)
   })
 
   /**

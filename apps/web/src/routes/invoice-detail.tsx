@@ -30,6 +30,7 @@ import { emptyInvoiceForm } from '@/features/billing/InvoiceForm'
 import { InvoiceEditor } from '@/features/billing/InvoiceEditor'
 import { FullScreen } from '@/features/billing/NewInvoiceDialog'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
+import { PaymentReminderCard } from '@/features/billing/PaymentReminder'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { DeleteReceivedPaymentDialog, ReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
@@ -168,6 +169,8 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
           </p>
         )}
       </div>
+
+      <PaymentReminderCard invoice={data} canSend={canEdit} />
 
       <InvoicePaper
         invoice={data}

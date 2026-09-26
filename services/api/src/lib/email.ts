@@ -91,8 +91,9 @@ interface MailCopy {
   title: string
   preheader: string
   body: string
-  cta: string
-  link: string
+  /** Without both, the email has no button (a client's payment reminder). */
+  cta?: string | undefined
+  link?: string | undefined
   footer: string
 }
 
@@ -136,7 +137,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
                 <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#4b5563;text-align:center;">
                   ${body}
                 </p>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                ${cta && link ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td align="center" style="padding:4px 0 8px;">
                       <a href="${link}"
@@ -149,7 +150,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
                 <p style="margin:20px 0 6px;font-size:12px;color:#6b7280;text-align:center;">Or paste this link into your browser:</p>
                 <p style="margin:0 0 8px;font-size:12px;text-align:center;word-break:break-all;">
                   <a href="${link}" style="color:${brand};text-decoration:none;">${link}</a>
-                </p>
+                </p>` : ''}
               </td>
             </tr>
             <!-- footer -->
@@ -261,7 +262,7 @@ export async function sendTeamTermsEmail(
  */
 export async function sendMessageEmail(
   env: Env,
-  m: { to: string; subject: string; body: string | null; link: string | null; studio: string },
+  m: { to: string; subject: string; body: string | null; link: string | null; studio: string; toClient?: boolean },
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing' }
   const link = m.link ? (m.link.startsWith('http') ? m.link : `${(env.APP_URL ?? '').replace(/\/+$/, '')}${m.link}`) : null
@@ -276,9 +277,12 @@ export async function sendMessageEmail(
         html: brandedHtml({
           title: esc(m.subject),
           preheader: esc((m.body ?? m.subject).slice(0, 120)),
-          body: esc(m.body ?? ''),
-          cta: 'Open IPC Studios',
-          link: link ?? (env.APP_URL || 'https://ipcstudios.in'),
+          body: m.toClient
+            ? `<span style="display:block;text-align:left;">${esc(m.body ?? '').replace(/\n/g, '<br>')}</span>`
+            : esc(m.body ?? '').replace(/\n/g, '<br>'),
+          // A studio's client has no IPC Studios account: no "open the app" button.
+          cta: m.toClient ? undefined : 'Open IPC Studios',
+          link: m.toClient ? undefined : (link ?? (env.APP_URL || 'https://ipcstudios.in')),
           footer: `Sent for ${esc(m.studio)} by IPC Studios.`,
         }),
       }),

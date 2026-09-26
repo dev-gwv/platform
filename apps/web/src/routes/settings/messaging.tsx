@@ -52,6 +52,7 @@ const STATUS: Record<MessageStatus, { label: string; tone: 'neutral' | 'success'
   failed: { label: 'Not sent', tone: 'danger' },
   skipped_no_balance: { label: 'Recharge to send', tone: 'warning' },
   skipped_opt_out: { label: 'Opted out', tone: 'neutral' },
+  skipped_limit: { label: 'Monthly limit reached', tone: 'warning' },
 }
 
 const REQUEST: Record<RechargeStatus, { label: string; tone: 'neutral' | 'success' | 'warning' | 'danger' }> = {
@@ -99,7 +100,14 @@ function Messaging() {
 
   return (
     <>
-      <PageHeader title="Messaging" description="WhatsApp and email to your team, paid from your messaging wallet." />
+      <PageHeader
+        title="Messaging"
+        description={
+          q.data && !q.data.whatsapp_enabled
+            ? 'Emails to your team and clients, paid from your messaging wallet.'
+            : 'WhatsApp and email to your team, paid from your messaging wallet.'
+        }
+      />
       <SettingsTabs />
       {q.isLoading ? (
         <SkeletonCards />
@@ -113,45 +121,54 @@ function Messaging() {
 }
 
 function Loaded({ data }: { data: MessagingSummary }) {
+  const wa = data.whatsapp_enabled
   const whatsappPrice = data.prices.find((p) => p.channel === 'whatsapp' && p.category === 'utility')
   const emailPrice = data.prices.find((p) => p.channel === 'email')
+  const u = data.usage
+  const notSent = u.skipped_no_balance + u.skipped_limit
   return (
     <>
       {data.wallet.low && (
         <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
           <p>
-            Your balance is low ({formatPaise(data.wallet.balance_paise)}). Recharge so WhatsApp messages keep going out.
+            Your balance is low ({formatPaise(data.wallet.balance_paise)}). Recharge so your messages keep going out.
           </p>
         </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <BalanceCard data={data} pricePaise={whatsappPrice?.price_paise ?? 0} />
+        <BalanceCard data={data} pricePaise={(wa ? whatsappPrice : emailPrice)?.price_paise ?? 0} />
         <RechargeCard data={data} />
       </div>
 
       <Section title="This month" description="Messages sent for your studio since the 1st.">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard
-            label="WhatsApp"
-            icon={MessageCircle}
-            value={`${data.usage.whatsapp_count} sent`}
-            hint={`${formatPaise(data.usage.whatsapp_paise)} used`}
-          />
+        <div className={cn('grid gap-3', wa ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+          {wa && (
+            <StatCard
+              label="WhatsApp"
+              icon={MessageCircle}
+              value={`${u.whatsapp_count} sent`}
+              hint={`${formatPaise(u.whatsapp_paise)} used`}
+            />
+          )}
           <StatCard
             label="Emails"
             icon={Mail}
-            value={`${data.usage.email_free_used + data.usage.email_charged_count} sent`}
-            hint={`${freeEmailsLeft(data.usage.email_free_used, data.usage.email_free_monthly)} of ${data.usage.email_free_monthly} free left${
-              data.usage.email_charged_count ? ` · ${formatPaise(data.usage.email_paise)} used` : ''
-            }`}
+            value={`${u.email_month_count.toLocaleString('en-IN')} sent`}
+            hint={`${freeEmailsLeft(u.email_free_used, u.email_free_monthly)} of ${u.email_free_monthly} free left${
+              u.email_charged_count ? ` · ${formatPaise(u.email_paise)} used` : ''
+            } · limit ${u.email_monthly_cap.toLocaleString('en-IN')} a month`}
           />
           <StatCard
             label="Not sent"
             icon={AlertTriangle}
-            value={data.usage.skipped_no_balance}
-            hint="Skipped because the balance was too low"
+            value={notSent}
+            hint={
+              u.skipped_limit
+                ? `${u.skipped_limit} over the monthly limit, ${u.skipped_no_balance} for low balance`
+                : 'Skipped because the balance was too low'
+            }
           />
         </div>
       </Section>
@@ -161,7 +178,9 @@ function Loaded({ data }: { data: MessagingSummary }) {
       <Section title="Prices" description="What your studio pays. Nothing else is added.">
         <Card>
           <CardContent className="divide-y divide-border p-0">
-            <PriceRow label="WhatsApp message" value={whatsappPrice ? `${formatPaise(whatsappPrice.price_paise)} each` : 'Not set yet'} />
+            {wa && (
+              <PriceRow label="WhatsApp message" value={whatsappPrice ? `${formatPaise(whatsappPrice.price_paise)} each` : 'Not set yet'} />
+            )}
             <PriceRow
               label="Email"
               value={
@@ -170,13 +189,14 @@ function Loaded({ data }: { data: MessagingSummary }) {
                   : 'Not set yet'
               }
             />
+            <PriceRow label="Emails a month" value={`Up to ${u.email_monthly_cap.toLocaleString('en-IN')}`} />
             <PriceRow label="Failed or skipped messages" value="Free. Any charge is returned." />
           </CardContent>
         </Card>
       </Section>
 
       <RecentSection recent={data.recent} />
-      <LedgerSection />
+      <LedgerSection whatsapp={wa} />
     </>
   )
 }
@@ -207,7 +227,8 @@ function BalanceCard({ data, pricePaise }: { data: MessagingSummary; pricePaise:
             <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{formatPaise(data.wallet.balance_paise)}</p>
             {pricePaise > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Enough for about {Number.isFinite(left) ? left.toLocaleString('en-IN') : 'unlimited'} WhatsApp messages
+                Enough for about {Number.isFinite(left) ? left.toLocaleString('en-IN') : 'unlimited'}{' '}
+                {data.whatsapp_enabled ? 'WhatsApp messages' : 'paid emails'}
               </p>
             )}
           </div>
@@ -230,7 +251,7 @@ function BalanceCard({ data, pricePaise }: { data: MessagingSummary; pricePaise:
             Save
           </Button>
         </form>
-        {!data.wallet.whatsapp_live && (
+        {data.whatsapp_enabled && !data.wallet.whatsapp_live && (
           <p className="text-xs text-muted-foreground">WhatsApp sending is not switched on for the platform yet. Nothing is charged until it is.</p>
         )}
       </CardContent>
@@ -331,8 +352,16 @@ function EventsSection({ data }: { data: MessagingSummary }) {
     save.mutate({ events: [row] }, { onError: () => setLocal(data.settings) })
   }
 
+  const wa = data.whatsapp_enabled
   return (
-    <Section title="What gets sent" description="A copy of these alerts goes to the person's WhatsApp or email. All are off until you switch them on.">
+    <Section
+      title="What gets sent"
+      description={
+        wa
+          ? "A copy of these alerts goes to the person's WhatsApp or email. All are off until you switch them on."
+          : 'A copy of these alerts goes to the person by email. All are off until you switch them on.'
+      }
+    >
       <Card>
         <CardContent className="divide-y divide-border p-0">
           {MESSAGING_EVENTS.map((e) => {
@@ -344,7 +373,9 @@ function EventsSection({ data }: { data: MessagingSummary }) {
                   <p className="text-sm text-muted-foreground">{e.detail}</p>
                 </div>
                 <div className="flex shrink-0 gap-6">
-                  <Switch label="WhatsApp" checked={s.whatsapp} disabled={save.isPending} onChange={(on) => flip(e.key, 'whatsapp', on)} className="w-auto" />
+                  {wa && !e.emailOnly && (
+                    <Switch label="WhatsApp" checked={s.whatsapp} disabled={save.isPending} onChange={(on) => flip(e.key, 'whatsapp', on)} className="w-auto" />
+                  )}
                   <Switch label="Email" checked={s.email} disabled={save.isPending} onChange={(on) => flip(e.key, 'email', on)} className="w-auto" />
                 </div>
               </div>
@@ -353,9 +384,11 @@ function EventsSection({ data }: { data: MessagingSummary }) {
         </CardContent>
       </Card>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate('whatsapp')}>
-          <MessageCircle aria-hidden /> Send me a test WhatsApp
-        </Button>
+        {wa && (
+          <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate('whatsapp')}>
+            <MessageCircle aria-hidden /> Send me a test WhatsApp
+          </Button>
+        )}
         <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate('email')}>
           <Mail aria-hidden /> Send me a test email
         </Button>
@@ -399,7 +432,7 @@ function RecentSection({ recent }: { recent: OutboxMessage[] }) {
   )
 }
 
-function LedgerSection() {
+function LedgerSection({ whatsapp }: { whatsapp: boolean }) {
   const [source, setSource] = useState<LedgerSource | ''>('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -430,7 +463,7 @@ function LedgerSection() {
           <Label htmlFor="ledger-source">Type</Label>
           <Select id="ledger-source" value={source} onChange={(e) => setSource(e.target.value as LedgerSource | '')} className="mt-1">
             <option value="">Everything</option>
-            {(Object.keys(SOURCE_LABEL) as LedgerSource[]).map((s) => (
+            {(Object.keys(SOURCE_LABEL) as LedgerSource[]).filter((s) => whatsapp || s !== 'whatsapp').map((s) => (
               <option key={s} value={s}>
                 {SOURCE_LABEL[s]}
               </option>

@@ -22,10 +22,12 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { StatCard } from '@/shared/ui/stat-card'
+import { Switch } from '@/shared/ui/switch'
 import {
   useAdjustWallet,
   useCreditWallet,
   usePlatformMargin,
+  usePlatformMessagingSettings,
   usePlatformMessagingStatus,
   usePlatformOutbox,
   usePlatformPrices,
@@ -34,8 +36,10 @@ import {
   usePlatformWallets,
   useRejectRecharge,
   useSaveTemplate,
+  useSetEmailCap,
   useSetOverdraft,
   useSetPrice,
+  useSetWhatsappEnabled,
 } from '@/features/messaging/api'
 
 export function PlatformMessagingPage() {
@@ -58,12 +62,15 @@ function Console() {
   const [tab, setTab] = useState<Tab>('requests')
   const pending = usePlatformRequests('pending')
   const status = usePlatformMessagingStatus()
+  const settings = usePlatformMessagingSettings()
+  const waOn = !!settings.data?.whatsapp_enabled
   const [credit, setCredit] = useState<{ wallet?: PlatformWallet; request?: PlatformRechargeRequest } | null>(null)
 
   return (
     <>
       <PageHeader title="Messaging" description="Studio wallets, recharges, prices and WhatsApp templates." />
-      {status.data && (!status.data.whatsapp_live || !status.data.webhook_signed) && (
+      <PlatformSwitches />
+      {waOn && status.data && (!status.data.whatsapp_live || !status.data.webhook_signed) && (
         <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
           {!status.data.whatsapp_live
             ? 'WhatsApp is not connected: set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN. Until then every WhatsApp message fails and is refunded.'
@@ -94,6 +101,34 @@ function Console() {
       </div>
       {credit && <CreditDialog {...credit} onClose={() => setCredit(null)} />}
     </>
+  )
+}
+
+/** WhatsApp on or off for every studio, and the platform's email count this month. */
+function PlatformSwitches() {
+  const q = usePlatformMessagingSettings()
+  const set = useSetWhatsappEnabled()
+  if (!q.data) return null
+  return (
+    <Card className="mb-4">
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-medium">Emails this month, all studios: {q.data.month_emails.toLocaleString('en-IN')}</p>
+          <p className="text-sm text-muted-foreground">
+            {q.data.whatsapp_enabled
+              ? 'WhatsApp is on: studios can switch it on and are charged per message.'
+              : 'WhatsApp is off: studios see email only, and nothing goes out on WhatsApp.'}
+          </p>
+        </div>
+        <Switch
+          label="WhatsApp"
+          checked={q.data.whatsapp_enabled}
+          disabled={set.isPending}
+          onChange={(on) => set.mutate(on)}
+          className="w-auto shrink-0"
+        />
+      </CardContent>
+    </Card>
   )
 }
 
@@ -229,6 +264,7 @@ function Wallets({ onCredit }: { onCredit: (w: PlatformWallet) => void }) {
   const [search, setSearch] = useState('')
   const [adjust, setAdjust] = useState<PlatformWallet | null>(null)
   const [overdraft, setOverdraft] = useState<PlatformWallet | null>(null)
+  const [cap, setCap] = useState<PlatformWallet | null>(null)
   const rows = useMemo(
     () => (q.data ?? []).filter((w) => w.company_name.toLowerCase().includes(search.trim().toLowerCase())),
     [q.data, search],
@@ -252,13 +288,15 @@ function Wallets({ onCredit }: { onCredit: (w: PlatformWallet) => void }) {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{w.company_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      This month: {w.month_whatsapp} WhatsApp · {w.month_emails} emails · {formatPaise(w.month_charged_paise)}
+                      This month: {w.month_whatsapp} WhatsApp · {w.month_emails.toLocaleString('en-IN')} of {w.email_monthly_cap.toLocaleString('en-IN')} emails ·{' '}
+                      {formatPaise(w.month_charged_paise)}
                       {w.overdraft_paise > 0 ? ` · overdraft ${formatPaise(w.overdraft_paise)}` : ''}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`font-semibold tabular-nums ${w.balance_paise < w.low_balance_paise ? 'text-warning' : ''}`}>{formatPaise(w.balance_paise)}</span>
                     {w.pending_requests > 0 && <StatusBadge tone="warning">Request waiting</StatusBadge>}
+                    {w.month_emails >= w.email_monthly_cap && <StatusBadge tone="danger">Email limit reached</StatusBadge>}
                     <Button size="sm" variant="outline" onClick={() => onCredit(w)}>
                       Credit
                     </Button>
@@ -267,6 +305,9 @@ function Wallets({ onCredit }: { onCredit: (w: PlatformWallet) => void }) {
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setOverdraft(w)}>
                       Overdraft
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setCap(w)}>
+                      Email limit
                     </Button>
                   </div>
                 </CardContent>
@@ -277,7 +318,39 @@ function Wallets({ onCredit }: { onCredit: (w: PlatformWallet) => void }) {
       </Loading>
       {adjust && <AdjustDialog wallet={adjust} onClose={() => setAdjust(null)} />}
       {overdraft && <OverdraftDialog wallet={overdraft} onClose={() => setOverdraft(null)} />}
+      {cap && <EmailCapDialog wallet={cap} onClose={() => setCap(null)} />}
     </>
+  )
+}
+
+function EmailCapDialog({ wallet, onClose }: { wallet: PlatformWallet; onClose: () => void }) {
+  const set = useSetEmailCap()
+  const [value, setValue] = useState(String(wallet.email_monthly_cap))
+  const n = Number(value)
+  const valid = value.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 1000000
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        title={`Email limit for ${wallet.company_name}`}
+        description={`Emails this studio may send in a month. ${wallet.month_emails.toLocaleString('en-IN')} sent so far this month.`}
+      >
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (valid) set.mutate({ company_id: wallet.company_id, email_monthly_cap: n }, { onSuccess: onClose })
+          }}
+        >
+          <div>
+            <Label htmlFor="cap-emails">Emails a month</Label>
+            <Input id="cap-emails" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} className="mt-1" />
+          </div>
+          <Button type="submit" disabled={!valid || set.isPending}>
+            Save
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -585,6 +658,7 @@ function TemplateDialog({ template, onClose }: { template: WhatsappTemplate | nu
 const MSG_FILTERS: ReadonlyArray<{ value: MessageStatus | 'all'; label: string }> = [
   { value: 'failed', label: 'Failed' },
   { value: 'skipped_no_balance', label: 'No balance' },
+  { value: 'skipped_limit', label: 'Limit reached' },
   { value: 'queued', label: 'Waiting' },
   { value: 'all', label: 'All' },
 ]

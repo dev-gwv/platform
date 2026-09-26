@@ -12,18 +12,25 @@ const paise = z.coerce.number().int()
 export const messageChannel = z.enum(['whatsapp', 'email'])
 export type MessageChannel = z.infer<typeof messageChannel>
 
-export const messagingEvent = z.enum(['start_reminder', 'leave_decided', 'payslip_ready', 'shoot_tomorrow'])
+export const messagingEvent = z.enum(['start_reminder', 'leave_decided', 'payslip_ready', 'shoot_tomorrow', 'client_payment_due'])
 export type MessagingEvent = z.infer<typeof messagingEvent>
 
-export const MESSAGING_EVENTS: ReadonlyArray<{ key: MessagingEvent; label: string; detail: string }> = [
+/** `emailOnly`: there is no WhatsApp template for it (it goes to clients). */
+export const MESSAGING_EVENTS: ReadonlyArray<{ key: MessagingEvent; label: string; detail: string; emailOnly?: boolean }> = [
   { key: 'start_reminder', label: 'Start reminders', detail: 'To the editor or team member, when work should start.' },
   { key: 'leave_decided', label: 'Leave decisions', detail: 'To the person who asked, when leave is approved or not.' },
   { key: 'payslip_ready', label: 'Payslip ready', detail: 'To the team member, when their payslip is shared.' },
   { key: 'shoot_tomorrow', label: 'Shoot tomorrow', detail: 'To the crew, the evening before a shoot.' },
+  {
+    key: 'client_payment_due',
+    label: 'Payment reminders to clients',
+    detail: 'To your client, 3 days before an invoice is due, on the day, then 3 and 10 days after, while money is due.',
+    emailOnly: true,
+  },
 ]
 
 export const messageStatus = z.enum([
-  'queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'skipped_no_balance', 'skipped_opt_out',
+  'queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'skipped_no_balance', 'skipped_opt_out', 'skipped_limit',
 ])
 export type MessageStatus = z.infer<typeof messageStatus>
 
@@ -42,6 +49,8 @@ export const walletState = z.object({
   /** Below the alert level and something is switched on that needs money. */
   low: z.boolean(),
   whatsapp_live: z.boolean(),
+  /** The platform's switch (0188). Off: WhatsApp is hidden and never sent. */
+  whatsapp_enabled: z.boolean().default(false),
 })
 export type WalletState = z.infer<typeof walletState>
 
@@ -93,6 +102,10 @@ export const messagingUsage = z.object({
   email_charged_count: z.coerce.number().int(),
   email_paise: paise,
   skipped_no_balance: z.coerce.number().int(),
+  /** Every email this month (free and paid) against the studio's cap. */
+  email_month_count: z.coerce.number().int().default(0),
+  email_monthly_cap: z.coerce.number().int().default(10000),
+  skipped_limit: z.coerce.number().int().default(0),
 })
 export type MessagingUsage = z.infer<typeof messagingUsage>
 
@@ -104,6 +117,7 @@ export const messagingSummary = z.object({
   requests: z.array(rechargeRequest),
   recent: z.array(outboxMessage),
   email_live: z.boolean(),
+  whatsapp_enabled: z.boolean().default(false),
 })
 export type MessagingSummary = z.infer<typeof messagingSummary>
 
@@ -155,6 +169,7 @@ export const platformWallet = z.object({
   month_emails: z.coerce.number().int(),
   month_charged_paise: paise,
   last_activity: isoDateTime.nullable(),
+  email_monthly_cap: z.coerce.number().int().default(10000),
 })
 export type PlatformWallet = z.infer<typeof platformWallet>
 
@@ -187,6 +202,23 @@ export const platformOverdraftRequest = z.object({
   company_id: uuid,
   overdraft_paise: z.number().int().min(0).max(100000),
 })
+
+export const platformEmailCapRequest = z.object({
+  company_id: uuid,
+  email_monthly_cap: z.number().int().min(0).max(1000000),
+})
+export type PlatformEmailCapRequest = z.infer<typeof platformEmailCapRequest>
+
+/** The platform switch and this month's totals across every studio. */
+export const platformMessagingSettings = z.object({
+  whatsapp_enabled: z.boolean(),
+  month_emails: z.coerce.number().int(),
+  month_whatsapp: z.coerce.number().int(),
+  month_skipped_limit: z.coerce.number().int(),
+})
+export type PlatformMessagingSettings = z.infer<typeof platformMessagingSettings>
+
+export const platformSetMessagingSettings = z.object({ whatsapp_enabled: z.boolean() })
 
 export const platformRejectRecharge = z.object({ note: z.string().trim().max(300).optional() })
 
@@ -274,3 +306,33 @@ export const messagesCronResult = z.object({
   sent: z.number().int(),
   failed: z.number().int(),
 })
+
+// ── payment reminders to clients (0188) ──────────────────────────
+
+/** What a reminder on this invoice would cost now, and when the last one went. */
+export const paymentReminderQuote = z.object({
+  client_email: z.string().nullable(),
+  price_paise: paise,
+  free_monthly: z.coerce.number().int(),
+  free_used: z.coerce.number().int(),
+  month_emails: z.coerce.number().int(),
+  email_monthly_cap: z.coerce.number().int(),
+  can_afford: z.boolean(),
+  /** The studio has automatic reminders switched on. */
+  auto_on: z.boolean(),
+  last_sent_at: isoDateTime.nullable(),
+  reminders_sent: z.coerce.number().int(),
+})
+export type PaymentReminderQuote = z.infer<typeof paymentReminderQuote>
+
+export const paymentReminderResult = z.object({
+  id: uuid.nullable(),
+  /** A message status, or no_email when the client has no usable address. */
+  status: z.union([messageStatus, z.literal('no_email')]),
+  error: z.string().nullable(),
+  cost_paise: paise,
+  free_allowance: z.boolean(),
+  /** A second click inside 10 minutes: this is the first reminder, not a new one. */
+  repeated: z.boolean(),
+})
+export type PaymentReminderResult = z.infer<typeof paymentReminderResult>
