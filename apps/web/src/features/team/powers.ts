@@ -42,6 +42,29 @@ export const ROLE_LABEL: Record<'admin' | 'manager' | 'employee', string> = {
   employee: 'Employee',
 }
 
+/**
+ * The same ladder in the words the add-people screens use: "What can they
+ * see?" -- a team member sees their own work, a manager runs the studio's
+ * projects, an admin sees everything but the owner's settings.
+ */
+export const CAN_SEE_LABEL: Record<'admin' | 'manager' | 'employee', string> = {
+  admin: 'Admin',
+  manager: 'Manager',
+  employee: 'Team member',
+}
+
+export const CAN_SEE_HINT: Record<'admin' | 'manager' | 'employee', string> = {
+  employee: 'Only their own shoots and tasks.',
+  manager: 'Every project and the production board.',
+  admin: 'Everything except owner-only settings and salaries.',
+}
+
+/** "Works as": on salary (in-house) or per shoot (freelancer). */
+export const WORKS_AS_LABEL: Record<'in_house' | 'freelancer', string> = {
+  in_house: 'On salary',
+  freelancer: 'Per shoot',
+}
+
 const PAY_KEYS = [
   'salary', 'freelancer_rate', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
   'pay_effective_from', 'pay_effective_to', 'compensation_notes', 'payment_type',

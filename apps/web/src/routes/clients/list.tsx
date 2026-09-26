@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { Check, Download, Eye, Search, Trash2, Users, X } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -15,6 +17,7 @@ import { cn } from '@/shared/ui/cn'
 import { useClient, useClients, useDeleteClient } from '@/features/clients/api'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
 import { AddMorePrompt, useFromSetup } from '@/features/onboarding/setup-flow'
+import { nextStep } from '@/features/onboarding/journey'
 import { ClientDetailDialog } from '@/features/clients/ClientDetailDialog'
 import type { Client } from '@ipc/contracts'
 
@@ -54,10 +57,14 @@ const added = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short',
 
 function ClientsList() {
   // Arriving from the setup journey's "add your first client": the form is
-  // already open, and saving asks whether to add another or move on.
+  // already open, and saving goes straight on to step 3 with the new client
+  // picked for the project. Elsewhere, saving asks whether to add another.
   const fromSetup = useFromSetup()
-  const [adding, setAdding] = useState(
-    () => new URLSearchParams(window.location.search).get('add') === '1',
+  const navigate = useNavigate()
+  // `?add=new` opens the form at once. The old `?add=1` still works, in both
+  // the plain and the router's JSON-encoded ("1") spellings.
+  const [adding, setAdding] = useState(() =>
+    ['new', '1', '"1"'].includes(new URLSearchParams(window.location.search).get('add') ?? ''),
   )
   const [justAdded, setJustAdded] = useState(false)
   const [search, setSearch] = useState('')
@@ -157,7 +164,15 @@ function ClientsList() {
         nudge={fromSetup}
         open={adding}
         onOpenChange={setAdding}
-        onCreated={() => setJustAdded(true)}
+        onCreated={(c) => {
+          const next = fromSetup ? nextStep('client') : null
+          if (!next) {
+            setJustAdded(true)
+            return
+          }
+          toast.success(`Client added. Step ${next.step}: create your first project.`)
+          void navigate({ to: next.action.to, search: { ...next.action.search, client: c.id } as never })
+        }}
       />
       <AddMorePrompt
         open={justAdded}
@@ -166,6 +181,7 @@ function ClientsList() {
         moreLabel="Add another client"
         fromSetup={fromSetup}
         step="client"
+        noun="client"
         onMore={() => {
           setJustAdded(false)
           setAdding(true)

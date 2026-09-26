@@ -107,7 +107,7 @@ export function QuickAddMemberDialog({
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         title="Add a team member"
-        description="Added to your team directory without a login. You can give them one later from Team."
+        description="Added to your team without a sign-in. You can give them one later from Team."
       >
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -130,8 +130,8 @@ export function QuickAddMemberDialog({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="qa-eng">Works as</Label>
               <Select id="qa-eng" value={engagement} onChange={(e) => setEngagement(e.target.value as EngagementType)}>
-                <option value="freelancer">Freelancer</option>
-                <option value="in_house">In-house</option>
+                <option value="freelancer">Per shoot</option>
+                <option value="in_house">On salary</option>
               </Select>
             </div>
             {engagement === 'freelancer' && (

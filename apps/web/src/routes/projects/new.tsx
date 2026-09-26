@@ -196,10 +196,18 @@ function NewProject() {
   // overwrite the thing we are about to offer back.
   useEffect(() => {
     const stored = loadDraft()
+    let base = EMPTY_DRAFT
     if (stored && isDirty(stored.draft)) {
-      setDraft(stored.draft)
+      base = stored.draft
       setRestored(stored.savedAt)
     }
+    // ?client=<id> -- the client just saved on the setup step before this one
+    // -- is picked for the project unless the draft already names someone.
+    const preselect = new URLSearchParams(window.location.search).get('client')
+    if (preselect && !base.client_id) {
+      base = { ...base, client_id: preselect, new_client_name: '', new_client_phone: '' }
+    }
+    if (base !== EMPTY_DRAFT) setDraft(base)
     loaded.current = true
   }, [])
 

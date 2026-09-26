@@ -6,7 +6,8 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
-import { isSetupAudience, nextStep, SETUP_TOTAL, stepForPath, type JourneyStepKey } from './journey'
+import { checkpointsFor, isSetupAudience, nextStep, SETUP_TOTAL, stepForPath, type JourneyStepKey } from './journey'
+import { SetupCheckpoints } from './SetupCheckpoints'
 
 /**
  * The setup walk-through's thread through the rest of the app.
@@ -72,7 +73,8 @@ function useNudgeOnce(active: boolean, key: string) {
 }
 
 /**
- * The slim bar across the top of a page opened from setup:
+ * The bar across the top of a page opened from setup. Two lines: the three
+ * checkpoints, then which step this page is and why it matters:
  * "Step 1 of 3 · Add your team — the people who shoot and edit with you."
  */
 export function SetupGuideBar() {
@@ -88,34 +90,37 @@ export function SetupGuideBar() {
 
   if (!show || !step) return null
   return (
-    <div className="mb-3 flex items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
-      <p className="min-w-0 flex-1">
-        <span className="font-medium text-primary">
-          Step {step.step} of {SETUP_TOTAL} · {step.title}
-        </span>
-        <span className="text-muted-foreground"> — {step.why.charAt(0).toLowerCase() + step.why.slice(1)}</span>
-      </p>
-      <button
-        type="button"
-        disabled={skipping}
-        className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        onClick={async () => {
-          setSkipping(true)
-          await closeSetup('skip')
-          setSkipping(false)
-          void navigate({ to: '/dashboard' })
-        }}
-      >
-        Skip setup
-      </button>
+    <div className="mb-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
+      <SetupCheckpoints steps={checkpointsFor(step.step)} />
+      <div className="mt-1.5 flex items-start gap-3">
+        <p className="min-w-0 flex-1">
+          <span className="font-medium text-primary">
+            Step {step.step} of {SETUP_TOTAL} · {step.title}
+          </span>
+          <span className="text-muted-foreground"> — {step.why.charAt(0).toLowerCase() + step.why.slice(1)}</span>
+        </p>
+        <button
+          type="button"
+          disabled={skipping}
+          className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          onClick={async () => {
+            setSkipping(true)
+            await closeSetup('skip')
+            setSkipping(false)
+            void navigate({ to: '/dashboard' })
+          }}
+        >
+          Skip setup
+        </button>
+      </div>
     </div>
   )
 }
 
 /**
- * "Added — add another?" after the first of something is saved.
+ * "Added. Add another, or go to step 2?" after the first of something is saved.
  *
- * From setup, the other choice is the next setup step, by number, and it goes
+ * From setup, the main choice is the next setup step, by number, and it goes
  * straight to that step's page. Otherwise it simply closes.
  */
 export function AddMorePrompt({
@@ -127,6 +132,7 @@ export function AddMorePrompt({
   onDone,
   fromSetup,
   step,
+  noun = 'person',
 }: {
   open: boolean
   title: string
@@ -137,6 +143,8 @@ export function AddMorePrompt({
   fromSetup: boolean
   /** The setup step this page is. */
   step: JourneyStepKey
+  /** What one of these is called: "Add another person". */
+  noun?: string
 }) {
   const navigate = useNavigate()
   const next = fromSetup ? nextStep(step) : null
@@ -155,7 +163,7 @@ export function AddMorePrompt({
             <>
               <h2 className="text-lg font-semibold">Added.</h2>
               <p className="text-sm text-muted-foreground">
-                Add another, or go to step {next.step} →
+                Add another {noun}, or go to step {next.step}.
               </p>
             </>
           ) : (
@@ -209,6 +217,7 @@ export function SetupFinished() {
         <CheckCircle2 className="size-6" aria-hidden />
       </span>
       <p className="text-lg font-semibold">Your studio is set up.</p>
+      <p className="text-sm text-muted-foreground">Everything you do from here is tracked for you.</p>
       <Button asChild className="w-full">
         <Link to="/dashboard">
           Go to dashboard <ArrowRight />

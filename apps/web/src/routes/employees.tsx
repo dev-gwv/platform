@@ -17,10 +17,13 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv } from '@/shared/ui/csv'
 import { Select } from '@/shared/ui/input'
 import { useDeleteMember, useDirectoryPaged, useEmployeeRoles, useUpdateMember } from '@/features/team/api'
-import { AddMemberWizard } from '@/features/team/AddMemberWizard'
+import { AddMemberForm } from '@/features/team/AddMemberForm'
 import { AddTeamChooser, type AddMode } from '@/features/team/AddTeamChooser'
 import { BulkAddMembers } from '@/features/team/BulkAddMembers'
 import { AddMorePrompt, useFromSetup } from '@/features/onboarding/setup-flow'
+import { nextStep } from '@/features/onboarding/journey'
+import { SetupWelcome } from '@/features/onboarding/SetupWelcome'
+import { useMembers } from '@/features/allocation/api'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
@@ -67,6 +70,12 @@ function TeamPage() {
   // Set once people have just been added: the "add more?" question.
   const [justAdded, setJustAdded] = useState(false)
   const fromSetup = useFromSetup()
+  const { session } = useAuth()
+  // The welcome is for a studio with nobody on its team yet (the owner is in
+  // the directory from registration, so they do not count).
+  const members = useMembers()
+  const nobodyYet =
+    members.isSuccess && (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length === 0
 
   const setAdding = (mode: AddMode | null) => {
     setAddingState(mode)
@@ -83,6 +92,13 @@ function TeamPage() {
   // Whichever way they were added, the next question is the same one: more,
   // or move on? "Move on" from setup is the next setup step, not this list.
   const onAdded = () => setJustAdded(true)
+  // A batch from setup goes straight on to step 2: the toast already said how
+  // many were added, and "add another?" after a whole table is a silly question.
+  const onBulkAdded = () => {
+    const next = fromSetup ? nextStep('team') : null
+    if (next) void navigate({ to: next.action.to, search: next.action.search as never })
+    else setJustAdded(true)
+  }
   const prompt = (
     <AddMorePrompt
       open={justAdded}
@@ -91,6 +107,7 @@ function TeamPage() {
       moreLabel="Add more people"
       fromSetup={fromSetup}
       step="team"
+      noun="person"
       onMore={() => {
         setJustAdded(false)
         setAddingState('choose')
@@ -108,12 +125,13 @@ function TeamPage() {
   if (adding) {
     return (
       <div className="pt-2">
+        {adding === 'choose' && fromSetup && nobodyYet && <SetupWelcome name={session?.display_name} />}
         {adding === 'choose' ? (
           <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} />
         ) : adding === 'bulk' ? (
-          <BulkAddMembers onDone={onAdded} onCancel={() => setAdding('choose')} />
+          <BulkAddMembers onDone={onBulkAdded} onCancel={() => setAdding('choose')} />
         ) : (
-          <AddMemberWizard onDone={onAdded} onCancel={() => setAdding('choose')} />
+          <AddMemberForm onDone={onAdded} onCancel={() => setAdding('choose')} />
         )}
         {prompt}
       </div>

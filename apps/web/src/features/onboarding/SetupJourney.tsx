@@ -3,35 +3,26 @@ import { ArrowRight } from 'lucide-react'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Button } from '@/shared/ui/button'
 import type { JourneyStep } from './journey'
+import { SetupCheckpoints } from './SetupCheckpoints'
 
 /**
- * The one setup card a new studio sees on its dashboard: how far along it is,
- * and the single step to do now. Nothing else — no list of the other steps,
- * no second button. It goes away for good once setup is done or skipped.
+ * The one card a studio still being set up sees on its dashboard: the three
+ * checkpoints, the step to do now, and one button to carry on with it.
+ * Nothing else is on the page until setup is done or skipped.
  */
-export function SetupJourney({
-  current,
-  completed,
-  total,
-}: {
-  current: JourneyStep
-  completed: number
-  total: number
-}) {
+export function SetupJourney({ steps, current }: { steps: JourneyStep[]; current: JourneyStep }) {
   return (
-    <Card className="mb-6">
-      <CardContent className="p-4 sm:p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Set up your studio · {completed} of {total} done
-        </p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="mt-2">
+      <CardContent className="p-4 sm:p-5">
+        <SetupCheckpoints steps={steps} />
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold tracking-tight">{current.title}</h2>
             <p className="text-sm text-muted-foreground">{current.why}</p>
           </div>
           <Button asChild className="shrink-0 self-start sm:self-auto">
             <Link to={current.action.to} search={current.action.search as never}>
-              {current.action.label} <ArrowRight />
+              Continue step {current.step} <ArrowRight />
             </Link>
           </Button>
         </div>
