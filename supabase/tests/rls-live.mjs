@@ -2323,5 +2323,81 @@ if (listed) {
   check('reports: no token, no report (401)', anonReport.status === 401, { status: anonReport.status })
 }
 
+// ── Project quotation link (0190): carries the project's terms, display
+// options and shoot schedule, and follows the "Show to client" switch ──
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Quote Co ${rand()}`, phone: randPhone(), email: 'quote@example.com' } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Quote project ${rand()}`, client_id: client.json.id, package_cost: 150000 } })
+  const pid = project.json.id
+  const tokenOf = (url) => new URL(url, 'http://x').searchParams.get('token') ?? ''
+  const schedule = [{ title: 'Haldi', date: '2026-12-01', time: '10:30', city: 'Jaipur', services: [{ name: 'Drone', quantity: 2 }] }]
+
+  const issued = await api('/documents/quotations', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      project_id: pid,
+      terms_text: 'Clause A\nClause B',
+      display_prefs: { showTerms: true, showBillTo: false },
+      shoots_schedule: schedule,
+    },
+  })
+  const tok = tokenOf(issued.json.link ?? '')
+  const pub = await api(`/public/quotation/${tok}`)
+  check(
+    'quotation: the link carries the terms, display options and shoot schedule',
+    issued.status === 201 && /^[0-9a-f-]{36}$/.test(issued.json.id ?? '') && pub.status === 200 &&
+      pub.json.show_quotation === true && pub.json.terms_text === 'Clause A\nClause B' &&
+      pub.json.display_prefs?.showBillTo === false && pub.json.shoots_schedule?.[0]?.city === 'Jaipur' &&
+      pub.json.shoots_schedule?.[0]?.services?.[0]?.quantity === 2 && pub.json.snapshot?.total === 150000,
+    { issued: issued.json, pub: pub.json },
+  )
+  const shown = await api(`/projects/${pid}`, { token: aToken })
+  check('quotation: sending a link switches "Show to client" on', shown.json.show_quotation === true, shown.json.show_quotation)
+
+  const hide = await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: false } })
+  const hidden = await api(`/public/quotation/${tok}`)
+  const hiddenAccept = await api(`/public/quotation/${tok}/respond`, { method: 'POST', body: { accept: true, name: 'Priya Sharma' } })
+  check(
+    'quotation: switching "Show to client" off hides a link already sent, and it cannot be accepted',
+    hide.status < 300 && hidden.status === 200 && hidden.json.show_quotation === false &&
+      hidden.json.client_name === null && hidden.json.terms_text === null && hidden.json.snapshot?.total === 0 &&
+      hiddenAccept.status === 409,
+    { hide: hide.status, hidden: hidden.json, accept: hiddenAccept.status },
+  )
+
+  await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: true, quotation_terms: 'Project clause' } })
+  const accepted = await api(`/public/quotation/${tok}/respond`, { method: 'POST', body: { accept: true, name: 'Priya Sharma' } })
+  const after = await api(`/projects/${pid}`, { token: aToken })
+  check(
+    'quotation: shown again, the client can accept and the studio sees who did',
+    accepted.status === 200 && after.json.quotation_accepted_by === 'Priya Sharma' && !!after.json.quotation_accepted_at,
+    { accepted: accepted.status, after: { at: after.json.quotation_accepted_at, by: after.json.quotation_accepted_by } },
+  )
+
+  // A link sent without terms or display options shows the project's own.
+  const bare = await api('/documents/quotations', { token: aToken, method: 'POST', body: { project_id: pid } })
+  const barePub = await api(`/public/quotation/${tokenOf(bare.json.link ?? '')}`)
+  check(
+    'quotation: a link sent without terms shows the project terms',
+    bare.status === 201 && barePub.status === 200 && barePub.json.terms_text === 'Project clause',
+    { bare: bare.status, terms: barePub.json.terms_text },
+  )
+
+  // The studio's own subject and note (no mail provider here, so it says so).
+  const mailed = await api(`/documents/quotations/${issued.json.id}/send-email`, {
+    token: aToken,
+    method: 'POST',
+    body: { to_email: 'quote@example.com', subject: 'Your quotation', message: 'Hello Priya,\n<b>Please</b> have a look.' },
+  })
+  const tooLong = await api(`/documents/quotations/${issued.json.id}/send-email`, { token: aToken, method: 'POST', body: { subject: 'x'.repeat(201) } })
+  const theirs = await api(`/documents/quotations/${issued.json.id}/send-email`, { token: newPw.json.access_token, method: 'POST', body: {} })
+  check(
+    'quotation: the email takes the studio’s subject and note; another studio cannot send it',
+    mailed.status === 200 && ['provider_missing', 'sent', 'failed'].includes(mailed.json.status) && tooLong.status === 422 && theirs.status === 404,
+    { mailed: mailed.json, tooLong: tooLong.status, theirs: theirs.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

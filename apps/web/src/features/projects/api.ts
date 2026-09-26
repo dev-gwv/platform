@@ -7,7 +7,7 @@ import {
   deliverableSet,
   deliverableType,
   myDeliverable,
-  issuedLink,
+  issuedQuotation,
   projectDetail,
   projectListItem,
   projectListPage,
@@ -15,6 +15,8 @@ import {
   type DeliverableInput,
   type DeliverableType,
   type IssueQuotationRequest,
+  sendQuotationEmailResponse,
+  type SendQuotationEmailRequest,
   type PaymentInput,
   type SaveDeliverableSetRequest,
   type SetDeliverableStageRequest,
@@ -338,12 +340,27 @@ export function useDeleteDeliverableSet() {
  * snapshots the prices, and what comes back is the link to send.
  */
 export function useIssueQuotation() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: IssueQuotationRequest) =>
       callApi('/documents/quotations', {
         method: 'POST',
         body: input,
-        responseSchema: issuedLink,
+        responseSchema: issuedQuotation,
+      }),
+    // Issuing a link also switches "Show to client" on.
+    onSuccess: (_r, input) => void qc.invalidateQueries({ queryKey: ['projects', input.project_id] }),
+  })
+}
+
+/** Email one issued quotation through the studio's mail provider. */
+export function useSendQuotationEmail() {
+  return useMutation({
+    mutationFn: ({ quotationId, ...body }: SendQuotationEmailRequest & { quotationId: string }) =>
+      callApi(`/documents/quotations/${quotationId}/send-email`, {
+        method: 'POST',
+        body,
+        responseSchema: sendQuotationEmailResponse,
       }),
   })
 }

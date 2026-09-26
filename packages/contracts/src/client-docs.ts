@@ -45,6 +45,14 @@ export type IssueQuotationRequest = z.infer<typeof issueQuotationRequest>
 export const issuedLink = z.object({ link: z.string() })
 export type IssuedLink = z.infer<typeof issuedLink>
 
+/**
+ * What issuing a quotation returns: the link, and the quotation's own id so
+ * the studio can email that exact quotation. A superset of `issuedLink`, so
+ * callers that only read the link keep working.
+ */
+export const issuedQuotation = issuedLink.extend({ id: uuid })
+export type IssuedQuotation = z.infer<typeof issuedQuotation>
+
 export const issueReceiptRequest = z.object({
   payment_id: uuid,
   // Lovable parity: configurable TTL + rotate/revoke controls.
@@ -70,8 +78,30 @@ export const sendReceiptEmailResponse = z.object({
 })
 export type SendReceiptEmailResponse = z.infer<typeof sendReceiptEmailResponse>
 
-export const sendQuotationEmailRequest = z.object({ to_email: z.string().trim().max(200).nullish() })
+export const sendQuotationEmailRequest = z.object({
+  to_email: z.string().trim().max(200).nullish(),
+  /** The studio's own subject line and note; the link is always added. */
+  subject: z.string().trim().max(200).nullish(),
+  message: z.string().trim().max(2000).nullish(),
+})
 export type SendQuotationEmailRequest = z.infer<typeof sendQuotationEmailRequest>
+
+export const sendQuotationEmailResponse = z.object({
+  status: z.enum(['sent', 'provider_missing', 'failed']),
+  error: z.string().nullable(),
+  url: z.string(),
+})
+export type SendQuotationEmailResponse = z.infer<typeof sendQuotationEmailResponse>
+
+/**
+ * "Q-1A2B3C4D": the studio's prefix and the project's id. One number per
+ * project, so a re-issued link still quotes the number the client was given.
+ * get_quotation_for_token (0190) builds the same string.
+ */
+export function quotationNumber(prefix: string | null | undefined, projectId: string): string {
+  const head = (prefix ?? '').trim().replace(/-+$/, '') || 'Q'
+  return `${head}-${projectId.slice(0, 8).toUpperCase()}`
+}
 
 /** Default quotation terms shared by admin preview, edit reset and public render. */
 export const DEFAULT_QUOTATION_TERMS: readonly string[] = [
@@ -155,6 +185,8 @@ export const publicQuotation = z.object({
    * mark which items carry an extra charge instead of a flat "Included".
    */
   deliverables: z.array(z.record(z.string(), z.unknown())).nullish(),
+  /** The studio's own colour for the stripe along the top, when it set one. */
+  brand_color: z.string().nullable().nullish(),
 })
 export type PublicQuotation = z.infer<typeof publicQuotation>
 

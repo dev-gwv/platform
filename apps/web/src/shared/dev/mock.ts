@@ -143,6 +143,8 @@ const projectDetail: ProjectDetail = {
   created_at: '2026-06-01T10:00:00Z',
   quotation_terms: null,
   quotation_display_prefs: {},
+  quotation_accepted_at: null,
+  quotation_accepted_by: null,
   deliverables: [
     delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000, [], { due: 40 }),
     delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }], {
@@ -560,7 +562,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'DELETE' && path.startsWith('/enquiries/')) return { ok: true }
   if (method === 'POST' && /^\/enquiries\/[^/]+\/convert$/.test(path)) return { lead_id: uid(0xe9) }
   if (method === 'POST' && path === '/documents/quotations')
-    return { link: 'http://localhost:5173/quotation?token=demo-quote' }
+    return { id: uid(0x9a), link: 'http://localhost:5173/quotation?token=demo-quote' }
   if (method === 'POST' && path === '/documents/receipts')
     return { link: 'http://localhost:5173/receipt?token=demo-receipt' }
   if (method === 'GET' && path.startsWith('/public/quotation/')) return publicQuotationFx

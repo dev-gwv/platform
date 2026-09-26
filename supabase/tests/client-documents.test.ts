@@ -68,8 +68,9 @@ beforeAll(async () => {
     values ('${OWNER}', '${COMPANY}', 'super_admin', 'Owner', 'owner@studio.test');
     insert into clients (id, company_id, name, email, phone, address)
     values ('${CLIENT}', '${COMPANY}', 'A Client', 'c@example.test', '8888888888', '12 Road');
-    insert into projects (id, company_id, client_id, name, package_cost)
-    values ('${PROJECT}', '${COMPANY}', '${CLIENT}', 'Wedding', 100000);
+    -- Shown to the client: a hidden project's link reads as hidden (0190).
+    insert into projects (id, company_id, client_id, name, package_cost, show_quotation)
+    values ('${PROJECT}', '${COMPANY}', '${CLIENT}', 'Wedding', 100000, true);
     insert into deliverables (company_id, project_id, list_key, title, estimated_date,
                               is_additional_charge, additional_charge_amount)
     values ('${COMPANY}', '${PROJECT}', 'primary', 'Album', '2026-10-01', false, 0),

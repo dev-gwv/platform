@@ -3,12 +3,14 @@ import {
   issueQuotationRequest,
   issueReceiptRequest,
   issuedLink,
+  issuedQuotation,
   publicDelivery,
   publicInvoice,
   publicQuotation,
   publicReceipt,
   respondToQuotationRequest,
   sendQuotationEmailRequest,
+  sendQuotationEmailResponse,
   sendReceiptEmailRequest,
   z,
 } from '@ipc/contracts'
@@ -25,6 +27,10 @@ import { sendClientDocEmail } from '../../lib/email'
 import { serve } from '../files/router'
 
 const okResponse = z.object({ ok: z.boolean() })
+
+/** The studio's own note goes into an HTML email; it must stay text. */
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 /**
  * Issuing the client-facing documents.
@@ -46,6 +52,13 @@ export const documentsRouter = new Hono<AppEnv>()
             p_project_id => ${parsed.data.project_id},
             p_notes => ${parsed.data.notes ?? null}
           )`
+        // Sending a link is showing the quotation: the public page reads the
+        // project's "Show to client" switch (0190), which new projects start
+        // with off. Only an explicit show_quotation: false leaves it alone.
+        if (rows[0] && parsed.data.show_quotation !== false) {
+          await sql`update projects set show_quotation = true
+                     where id = ${parsed.data.project_id} and not show_quotation`
+        }
         return rows[0] ?? null
       }),
     )
@@ -72,7 +85,10 @@ export const documentsRouter = new Hono<AppEnv>()
       entityId: row.quotation_id,
       after: { project_id: parsed.data.project_id },
     })
-    return c.json(issuedLink.parse({ link: `${c.env.APP_URL}/quotation?token=${row.token}` }), 201)
+    return c.json(
+      issuedQuotation.parse({ id: row.quotation_id, link: `${c.env.APP_URL}/quotation?token=${row.token}` }),
+      201,
+    )
   })
 
   // Lovable parity: revoke a quotation link (client sees invalid/expired).
@@ -118,16 +134,19 @@ export const documentsRouter = new Hono<AppEnv>()
       }),
     )
     const link = `${c.env.APP_URL}/quotation?token=${token ?? ''}`
-    const result = await sendClientDocEmail(c.env, to,
-      `Quotation${info.project_name ? ` for ${info.project_name}` : ''} — ${info.company_name ?? 'Studio'}`,
-      link, `${info.company_name ?? 'The studio'} has shared a quotation${info.project_name ? ` for ${info.project_name}` : ''}. Open the link to view and respond.`)
+    const subject = parsed.data.subject?.replace(/[<>]/g, '')
+      || `Quotation${info.project_name ? ` for ${info.project_name}` : ''} — ${info.company_name ?? 'Studio'}`
+    const intro = parsed.data.message
+      ? escapeHtml(parsed.data.message).replace(/\r?\n/g, '<br>')
+      : `${info.company_name ?? 'The studio'} has shared a quotation${info.project_name ? ` for ${info.project_name}` : ''}. Open the link to view and respond.`
+    const result = await sendClientDocEmail(c.env, to, subject, link, intro)
     try {
       await withUser(c.env, c.get('auth').userId, async (sql) => {
         await sql`insert into quotation_email_logs (company_id, quotation_id, to_email, status, error, created_by)
           values (${c.get('auth').companyId}, ${id}, ${to ?? null}, ${result.status}, ${result.error ?? null}, ${c.get('auth').userId})`
       })
     } catch { /* log table may predate migration; never fail send */ }
-    return c.json({ status: result.status, error: result.error ?? null, url: result.url })
+    return c.json(sendQuotationEmailResponse.parse({ status: result.status, error: result.error ?? null, url: result.url }))
   })
 
   .post('/receipts', requireAction('billing', 'view'), async (c) => {

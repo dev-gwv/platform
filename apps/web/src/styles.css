@@ -149,6 +149,18 @@
   border-color: var(--color-border);
 }
 
+/* The project quotation's brand stripe: the studio's own colour when it set
+   one (passed in as --quotation-brand), the app's primary otherwise. */
+.quotation-brand-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--quotation-brand, var(--color-primary));
+  opacity: 0.9;
+}
+
 /* Print: hide the app shell + anything marked no-print; show only the page. */
 @media print {
   aside,
@@ -272,6 +284,25 @@
   .paper .border-border,
   .paper .divide-border > * {
     border-color: #d4d4d4 !important;
+  }
+
+  /* The quotation on paper: a thinner, solid stripe with room under it, and
+     the wide-screen tables rather than the phone's stacked cards. */
+  .quotation-brand-stripe {
+    height: 5px;
+    opacity: 1;
+  }
+  body:has(.paper) .paper.quotation-paper {
+    padding-top: 14px !important;
+  }
+  .quotation-paper .quotation-table {
+    display: block !important;
+  }
+  .quotation-paper .quotation-cards {
+    display: none !important;
+  }
+  .quotation-paper .quotation-total {
+    color: #000 !important;
   }
 
   @page {
