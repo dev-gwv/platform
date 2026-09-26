@@ -30,15 +30,15 @@ export function AddTeamChooser({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Choice
           icon={UserPlus}
-          title="One person"
-          description="Add a single team member, one step at a time — including their pay, if you want to set it now."
+          title="Add one person"
+          description="Name, phone and a login. About a minute."
           onClick={() => onPick('single')}
           nudge
         />
         <Choice
           icon={Users}
-          title="Several people at once"
-          description="Type or paste your whole team into one table — names, phones, emails, passwords and roles — and add everyone in one go."
+          title="Bulk add team"
+          description="Paste your whole team from a sheet, or type a row per person."
           onClick={() => onPick('bulk')}
         />
       </div>

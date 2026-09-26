@@ -45,7 +45,6 @@ import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
-import { dashboardSections } from '@/features/onboarding/dashboard-sections'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
 
 export function DashboardPage() {
@@ -119,7 +118,6 @@ function StudioCommandCenter() {
 
   const activeProjects = (projects.data ?? []).filter((p) => p.status === 'active').length
   const clientCount = Array.isArray(clients.data) ? clients.data.length : 0
-  const teamCount = members.data?.length ?? 0
   const outstanding = (invoices.data?.items ?? []).reduce((s, i) => s + i.balance_due, 0)
   const recent = (projects.data ?? []).slice(0, 5)
 
@@ -157,28 +155,20 @@ function StudioCommandCenter() {
     void closeSetup('done')
   }, [allDone, closeSetup])
 
-  // Until the counts are real, a setup-audience viewer is shown neither the
-  // card nor the body — otherwise the zeros paint first and are then pulled
-  // out from under them when the card arrives.
-  const hideBody = setupAudience && queries.some((q) => q.isPending)
-  const countsSettled = journeyReady || !setupAudience
-  const sections = dashboardSections(
-    {
-      activeProjects,
-      clients: clientCount,
-      teamMembers: teamCount,
-      outstanding,
-      recentProjects: recent.length,
-    },
-    showJourney || !countsSettled,
-  )
+  // A studio still being set up sees the setup card and nothing else: no
+  // quick actions, no tiles of zeros, no empty lists sitting under a step
+  // that tells them to fill those lists. Until the counts are real, a
+  // setup-audience viewer sees neither the card nor the body -- otherwise the
+  // zeros paint first and are pulled out from under them when the card lands.
+  const settingUp = setupAudience && (queries.some((q) => q.isPending) || showJourney)
 
   return (
     <>
       <PageHeader
         title={`Welcome, ${session?.display_name ?? ''}`}
-        description="Your studio at a glance."
+        description={settingUp ? "Let's set up your studio." : 'Your studio at a glance.'}
         actions={
+          !settingUp &&
           access.hasAction('projects', 'create') && (
             <Button asChild>
               <Link to="/projects/new">
@@ -191,16 +181,13 @@ function StudioCommandCenter() {
 
       <LowBalanceBanner />
 
-      {showJourney && journey.current && (
-        <SetupJourney current={journey.current} completed={journey.completed} total={journey.total} />
-      )}
-
-      {!hideBody && (
+      {settingUp ? (
+        showJourney && journey.current && <SetupJourney steps={journey.steps} current={journey.current} />
+      ) : (
       <>
       <ProfileBanner />
       <QuickActions />
 
-      {sections.stats && (
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <Tile icon={Activity} value={activeProjects} label="Active projects" tone="primary" to="/projects" />
         <Tile icon={AlertTriangle} value={totals.attention} label="Projects needing attention" tone="danger" to="/project-tracking" search={{ tab: 'attention' }} />
@@ -211,24 +198,21 @@ function StudioCommandCenter() {
           <Tile icon={Receipt} value={formatINR(outstanding)} label="Outstanding" tone="primary" to="/billing/invoices" />
         )}
       </div>
-      )}
 
       {/* The owner gives tasks and gets them too: the next three that are theirs. */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <MyTasksCard />
       </div>
 
-      {access.hasModule('projects') && sections.stats && <NeedsAttention projects={tracked} />}
+      {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
       {session?.is_owner && <TeamProfilesCard />}
 
-      {sections.stats && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <UpcomingShoots shoots={shoots.data ?? []} />
-          <Blockers projects={tracked} />
-        </div>
-      )}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <UpcomingShoots shoots={shoots.data ?? []} />
+        <Blockers projects={tracked} />
+      </div>
 
-      {access.hasModule('projects') && sections.recentProjects && (
+      {access.hasModule('projects') && (
         <Card className="mt-6">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Recent projects</CardTitle>

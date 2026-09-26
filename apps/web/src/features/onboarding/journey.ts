@@ -69,14 +69,16 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     key: 'client',
     title: 'Add your first client',
     why: 'The couple or family you are shooting for.',
-    action: { label: 'Add a client', to: '/clients', search: { add: '1', from: 'setup' } },
+    // `add: 'new'`, not '1': the router JSON-encodes a numeric-looking value
+    // (?add=%221%22), and the clients page would never see it.
+    action: { label: 'Add a client', to: '/clients', search: { add: 'new', from: 'setup' } },
     module: 'clients',
     isDone: (s) => s.clients > 0,
   },
   {
     key: 'project',
     title: 'Create your first project',
-    why: 'The shoot, its dates and its price, all in one place.',
+    why: 'The shoots, dates and price, in one place.',
     action: { label: 'Create a project', to: '/projects/new', search: { from: 'setup' } },
     module: 'projects',
     isDone: (s) => s.projects > 0,
@@ -84,6 +86,30 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
 ]
 
 export const SETUP_TOTAL = JOURNEY_STEPS.length
+
+/** 0-based position of a step in the journey; -1 for an unknown key. */
+export const stepIndex = (key: JourneyStepKey): number => JOURNEY_STEPS.findIndex((s) => s.key === key)
+
+/** What the checkpoints row draws: number, title and one of three states. */
+export interface Checkpoint {
+  step: number
+  title: string
+  state: JourneyStepState
+}
+
+/**
+ * The three checkpoints as seen from step `current` (1-based): everything
+ * before it is done, it is current, everything after is still to come. Used
+ * where the studio's counts are not to hand (the guide bar knows only which
+ * page it is on).
+ */
+export function checkpointsFor(current: number): Checkpoint[] {
+  return JOURNEY_STEPS.map((s, i) => ({
+    step: i + 1,
+    title: s.title,
+    state: i + 1 < current ? 'done' : i + 1 === current ? 'current' : 'upcoming',
+  }))
+}
 
 /**
  * Resolve each step against the studio's real state.

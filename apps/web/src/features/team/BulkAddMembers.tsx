@@ -23,7 +23,7 @@ import {
   type PickableRole,
   type RowField,
 } from './bulk'
-import { ROLE_LABEL, useTeamPowers } from './powers'
+import { CAN_SEE_LABEL, WORKS_AS_LABEL, useTeamPowers } from './powers'
 
 const START_ROWS = 3
 /** Members sent at once. Small enough to be gentle on the API, big enough that forty people is not a long wait. */
@@ -34,17 +34,17 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /**
  * Add many people in one table.
  *
- * The single-member wizard asks six questions per person, which is right for
- * someone whose pay and access need thinking about and wrong for typing in a
- * crew of twelve. Here everyone is one row: type them, or paste them straight
- * out of the spreadsheet the studio already keeps, then send them all at once.
+ * "Add one person" is a minute per person, which is right for a two-person
+ * studio and wrong for typing in a crew of twelve. Here everyone is one row:
+ * type them, or paste them straight out of the spreadsheet the studio already
+ * keeps, then send them all at once.
  *
  * Rows are sent one by one and each reports its own result, rather than as
  * one all-or-nothing batch: a typo in row 7 should cost row 7, not the other
  * eleven. Whatever went through is locked and ticked; whatever didn't stays
  * editable with the reason beside it, and the button retries only those.
  */
-export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) => void; onCancel: () => void }) {
   const { data: roles } = useEmployeeRoles()
   const { data: library } = useRoleLibrary()
   const calls = useBulkTeamCalls()
@@ -195,9 +195,9 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
       )
     }
     if (failed === 0) {
-      toast.success(`${plural(added, 'person', 'people')} added to your team.`)
+      toast.success(`${plural(added, 'person', 'people')} added.`)
       draft.clear()
-      onDone()
+      onDone(added)
       return
     }
     toast.error(
@@ -211,7 +211,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
     <div className="mx-auto w-full max-w-7xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Add several people at once</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Bulk add team</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             One row per person. Leave email blank for anyone who won&apos;t sign in — they can still be booked on shoots.
           </p>
@@ -310,8 +310,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: () => void; onCan
               <th className="min-w-48 px-2 py-2 font-medium">Email</th>
               <th className="min-w-36 px-2 py-2 font-medium">Password</th>
               <th className="min-w-40 px-2 py-2 font-medium">Job roles</th>
-              <th className="min-w-28 px-2 py-2 font-medium">Access</th>
-              <th className="min-w-28 px-2 py-2 font-medium">Type</th>
+              <th className="min-w-32 px-2 py-2 font-medium">Can see</th>
+              <th className="min-w-28 px-2 py-2 font-medium">Works as</th>
               <th className="w-20 px-2 py-2">
                 <span className="sr-only">Row status</span>
               </th>
@@ -483,16 +483,16 @@ function Row({
             className="h-8"
             value={row.role}
             onChange={(e) => onEdit({ role: e.target.value as BulkRow['role'] })}
-            aria-label={`Row ${index + 1} access`}
+            aria-label={`Row ${index + 1} can see`}
             disabled={locked}
           >
             {(['employee', 'manager', 'admin'] as const)
-                    .filter((r) => powers.mayGrant(r) || r === row.role)
-                    .map((r) => (
-                      <option key={r} value={r} disabled={!powers.mayGrant(r)}>
-                        {ROLE_LABEL[r]}
-                      </option>
-                    ))}
+              .filter((r) => powers.mayGrant(r) || r === row.role)
+              .map((r) => (
+                <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                  {CAN_SEE_LABEL[r]}
+                </option>
+              ))}
           </Select>
         </td>
         <td className="px-2 py-1.5 align-top">
@@ -500,11 +500,11 @@ function Row({
             className="h-8"
             value={row.engagement}
             onChange={(e) => onEdit({ engagement: e.target.value as BulkRow['engagement'] })}
-            aria-label={`Row ${index + 1} type`}
+            aria-label={`Row ${index + 1} works as`}
             disabled={locked}
           >
-            <option value="in_house">In-house</option>
-            <option value="freelancer">Freelancer</option>
+            <option value="in_house">{WORKS_AS_LABEL.in_house}</option>
+            <option value="freelancer">{WORKS_AS_LABEL.freelancer}</option>
           </Select>
         </td>
         <td className="px-2 py-1.5 text-right align-top">
@@ -545,7 +545,7 @@ function Row({
 
 /**
  * The job roles for one row. Library defaults appear alongside the studio's
- * own roles and are created on send, the same single list the wizard offers.
+ * own roles and are created on send, the same single list "Add one person" offers.
  * "Use for every row" exists because a crew is usually one or two jobs
  * repeated — twelve candid photographers should be one click, not twelve.
  */

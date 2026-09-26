@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildJourney,
+  checkpointsFor,
   isSetupAudience,
   JOURNEY_STEPS,
   nextStep,
   setupLanding,
   stepForPath,
+  stepIndex,
   type StudioSignals,
 } from './journey'
 
@@ -74,6 +76,44 @@ describe('buildJourney', () => {
   })
 })
 
+describe('copy', () => {
+  it('says what each step is and why, in plain words', () => {
+    expect(JOURNEY_STEPS.map((s) => [s.title, s.why])).toEqual([
+      ['Add your team', 'The people who shoot and edit with you.'],
+      ['Add your first client', 'The couple or family you are shooting for.'],
+      ['Create your first project', 'The shoots, dates and price, in one place.'],
+    ])
+  })
+})
+
+describe('checkpoints', () => {
+  it('numbers the steps in order', () => {
+    expect(stepIndex('team')).toBe(0)
+    expect(stepIndex('client')).toBe(1)
+    expect(stepIndex('project')).toBe(2)
+  })
+
+  it('draws done / current / upcoming as seen from each step', () => {
+    const states = (n: number) => checkpointsFor(n).map((c) => c.state)
+    expect(states(1)).toEqual(['current', 'upcoming', 'upcoming'])
+    expect(states(2)).toEqual(['done', 'current', 'upcoming'])
+    expect(states(3)).toEqual(['done', 'done', 'current'])
+  })
+
+  it('carries the step number and title for the row', () => {
+    expect(checkpointsFor(2).map((c) => `${c.step} ${c.title}`)).toEqual([
+      '1 Add your team',
+      '2 Add your first client',
+      '3 Create your first project',
+    ])
+  })
+
+  it('agrees with the journey built from real counts', () => {
+    const j = buildJourney({ ...EMPTY, teammates: 1 })
+    expect(j.steps.map((s) => s.state)).toEqual(checkpointsFor(2).map((c) => c.state))
+  })
+})
+
 describe('stepForPath / nextStep', () => {
   it('finds the step a page belongs to', () => {
     expect(stepForPath('/employees')?.step).toBe(1)
@@ -95,7 +135,7 @@ describe('setupLanding', () => {
 
   it('lands a new owner on the current step page', () => {
     expect(setupLanding(owner)).toEqual({ to: '/employees', search: { add: 'choose', from: 'setup' } })
-    expect(setupLanding({ ...owner, setup_step: 2 })?.to).toBe('/clients')
+    expect(setupLanding({ ...owner, setup_step: 2 })).toEqual({ to: '/clients', search: { add: 'new', from: 'setup' } })
     expect(setupLanding({ ...owner, setup_step: 3 })?.to).toBe('/projects/new')
   })
 
