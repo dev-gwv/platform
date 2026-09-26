@@ -2,6 +2,7 @@ import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import type { AppRole } from '@ipc/permissions'
 import {
+  BarChart3,
   CalendarOff,
   LayoutDashboard,
   KanbanSquare,
@@ -81,6 +82,8 @@ const leaf = (
  */
 export const NAV: NavEntry[] = [
   leaf('Dashboard', '/dashboard', LayoutDashboard, { module: 'dashboard' }),
+  // How the studio is doing for a period: sales, money, delivery, team.
+  leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
 
   // Employee-only personal set.
   leaf('My Work', '/my-work', ListTodo, { roles: ['employee'] }),
