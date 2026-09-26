@@ -61,14 +61,18 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
     })
   }
 
-  const canSee = (['employee', 'manager', 'admin'] as const).filter((r) => powers.mayGrant(r) || r === form.role)
+  const canSee = (['employee', 'manager', 'admin'] as const).filter(
+    (r) => powers.mayGrant(r) || r === form.role,
+  )
 
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Add one person</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Name, phone and a login. About a minute.</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Name, phone and a login. About a minute.
+          </p>
         </div>
         <Button variant="ghost" onClick={onCancel} disabled={add.isPending}>
           Cancel
@@ -120,7 +124,10 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
             <Pills
               value={form.engagement_type}
               onChange={(v) => set('engagement_type', v)}
-              options={(['in_house', 'freelancer'] as const).map((v) => ({ value: v, label: WORKS_AS_LABEL[v] }))}
+              options={(['in_house', 'freelancer'] as const).map((v) => ({
+                value: v,
+                label: WORKS_AS_LABEL[v],
+              }))}
               name="Works as"
             />
           </Group>
@@ -188,7 +195,11 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
             <Pills
               value={form.role}
               onChange={(v) => set('role', v)}
-              options={canSee.map((v) => ({ value: v, label: CAN_SEE_LABEL[v], disabled: !powers.mayGrant(v) }))}
+              options={canSee.map((v) => ({
+                value: v,
+                label: CAN_SEE_LABEL[v],
+                disabled: !powers.mayGrant(v),
+              }))}
               name="What can they see"
             />
             <p className="text-xs text-muted-foreground">{CAN_SEE_HINT[form.role]}</p>
@@ -306,27 +317,50 @@ type PickableRole = {
  * has not taken yet are one list: a default is created the moment it is
  * picked, and the DEFAULT tag is the only thing that tells them apart.
  */
-function JobRolePicker({ chosen, onChange }: { chosen: string[]; onChange: (ids: string[]) => void }) {
+function JobRolePicker({
+  chosen,
+  onChange,
+}: {
+  chosen: string[]
+  onChange: (ids: string[]) => void
+}) {
   const { data: roles } = useEmployeeRoles()
   const { data: library } = useRoleLibrary()
   const create = useCreateRole()
   const [adding, setAdding] = useState(false)
+  // Folded by default: twenty role cards would push the rest of the form off
+  // the screen, and most people pick one or two.
+  const [open, setOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newStage, setNewStage] = useState<ProductionStage>('production')
   // Adding to the studio's list of job roles is the owner's; anyone else
   // picks from the roles the studio already has.
   const powers = useTeamPowers()
 
-  const toggle = (id: string) => onChange(chosen.includes(id) ? chosen.filter((r) => r !== id) : [...chosen, id])
+  const toggle = (id: string) =>
+    onChange(chosen.includes(id) ? chosen.filter((r) => r !== id) : [...chosen, id])
 
   const owned = roles ?? []
   const taken = new Set(owned.map((r) => r.role_code))
   const pickable: PickableRole[] = [
-    ...owned.map((r) => ({ key: r.id, id: r.id, type_name: r.type_name, role_code: r.role_code, stage: stageOf(r) })),
+    ...owned.map((r) => ({
+      key: r.id,
+      id: r.id,
+      type_name: r.type_name,
+      role_code: r.role_code,
+      stage: stageOf(r),
+    })),
     ...(powers.canAddJobRoles ? (library ?? []) : [])
       .filter((r) => !taken.has(r.role_code))
-      .map((r) => ({ key: r.role_code, type_name: r.type_name, role_code: r.role_code, stage: r.stage })),
+      .map((r) => ({
+        key: r.role_code,
+        type_name: r.type_name,
+        role_code: r.role_code,
+        stage: r.stage,
+      })),
   ]
+
+  const picked = pickable.filter((r) => r.id && chosen.includes(r.id))
 
   const choose = (role: PickableRole) => {
     if (role.id) {
@@ -360,14 +394,47 @@ function JobRolePicker({ chosen, onChange }: { chosen: string[]; onChange: (ids:
         <Label>
           Job role <span className="font-normal text-muted-foreground">(optional)</span>
         </Label>
-        {powers.canAddJobRoles && (
-          <Button size="sm" variant={adding ? 'outline' : 'ghost'} onClick={() => setAdding((v) => !v)}>
-            {adding ? 'Cancel' : '+ Add new role'}
+        {open ? (
+          <div className="flex items-center gap-1">
+            {powers.canAddJobRoles && (
+              <Button
+                size="sm"
+                variant={adding ? 'outline' : 'ghost'}
+                onClick={() => setAdding((v) => !v)}
+              >
+                {adding ? 'Cancel' : '+ Add new role'}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+            {picked.length ? 'Change' : 'Pick job roles'}
           </Button>
         )}
       </div>
 
-      {adding && (
+      {!open &&
+        (picked.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {picked.map((r) => (
+              <span
+                key={r.key}
+                className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+              >
+                {r.type_name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Photographer, editor… what they get booked for.
+          </p>
+        ))}
+
+      {open && adding && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/30 p-3">
           <div className="flex min-w-48 flex-1 flex-col gap-1.5">
             <Label>Role name</Label>
@@ -381,7 +448,10 @@ function JobRolePicker({ chosen, onChange }: { chosen: string[]; onChange: (ids:
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Part of the job</Label>
-            <Select value={newStage} onChange={(e) => setNewStage(e.target.value as ProductionStage)}>
+            <Select
+              value={newStage}
+              onChange={(e) => setNewStage(e.target.value as ProductionStage)}
+            >
               {STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {STAGE_LABEL[s]}
@@ -395,57 +465,69 @@ function JobRolePicker({ chosen, onChange }: { chosen: string[]; onChange: (ids:
         </div>
       )}
 
-      {STAGE_ORDER.map((stage) => {
-        const inStage = pickable.filter((r) => r.stage === stage).sort((a, b) => a.type_name.localeCompare(b.type_name))
-        if (inStage.length === 0) return null
-        const tone = STAGE_TONE[stage]
-        return (
-          <div key={stage}>
-            <p className={cn('mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider', TONE_TEXT[tone])}>
-              <span className={cn('size-2 rounded-full', TONE_DOT[tone])} aria-hidden />
-              {STAGE_LABEL[stage]}
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {inStage.map((r) => {
-                const on = !!r.id && chosen.includes(r.id)
-                return (
-                  <button
-                    key={r.key}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={on}
-                    disabled={create.isPending}
-                    onClick={() => choose(r)}
-                    className={cn(
-                      'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:opacity-60',
-                      on ? TONE_CHIP_STATIC[tone] : 'border-border hover:border-primary/40 hover:bg-accent',
-                    )}
-                  >
-                    <span
-                      aria-hidden
+      {open &&
+        STAGE_ORDER.map((stage) => {
+          const inStage = pickable
+            .filter((r) => r.stage === stage)
+            .sort((a, b) => a.type_name.localeCompare(b.type_name))
+          if (inStage.length === 0) return null
+          const tone = STAGE_TONE[stage]
+          return (
+            <div key={stage}>
+              <p
+                className={cn(
+                  'mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider',
+                  TONE_TEXT[tone],
+                )}
+              >
+                <span className={cn('size-2 rounded-full', TONE_DOT[tone])} aria-hidden />
+                {STAGE_LABEL[stage]}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {inStage.map((r) => {
+                  const on = !!r.id && chosen.includes(r.id)
+                  return (
+                    <button
+                      key={r.key}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={on}
+                      disabled={create.isPending}
+                      onClick={() => choose(r)}
                       className={cn(
-                        'flex size-4 shrink-0 items-center justify-center rounded-full border',
-                        on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                        'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:opacity-60',
+                        on
+                          ? TONE_CHIP_STATIC[tone]
+                          : 'border-border hover:border-primary/40 hover:bg-accent',
                       )}
                     >
-                      {on && <Check className="size-3" />}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{r.type_name}</span>
-                    {!r.id && (
-                      <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Default
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                          on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                        )}
+                      >
+                        {on && <Check className="size-3" />}
                       </span>
-                    )}
-                  </button>
-                )
-              })}
+                      <span className="min-w-0 flex-1 truncate">{r.type_name}</span>
+                      {!r.id && (
+                        <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Default
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
 
-      {pickable.length === 0 && (
-        <p className="text-sm text-muted-foreground">No job roles yet. Add one above, or leave it for later.</p>
+      {open && pickable.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No job roles yet. Add one above, or leave it for later.
+        </p>
       )}
     </div>
   )
