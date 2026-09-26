@@ -164,7 +164,10 @@ describe('the studio’s view', () => {
   })
 
   it('lists every version, newest first', async () => {
-    await issue('One')
+    const one_ = await issue('One')
+    // Two issues in the same millisecond tie on created_at and come back in
+    // either order; a real studio never sends twice that fast.
+    await db.exec(`update project_terms_documents set created_at = created_at - interval '1 minute' where id = '${one_.document_id}'`)
     await issue('Two')
     const rows = await q<{ revoked_at: string | null }>(`select revoked_at from list_project_terms('${PROJECT}')`)
     expect(rows).toHaveLength(2)
