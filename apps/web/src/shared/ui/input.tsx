@@ -1,12 +1,17 @@
 import type { ComponentProps } from 'react'
 import { cn } from './cn'
 import { DateField } from './date-field'
+import { TimeField } from './time-field'
 
 export function Input({ className, ...props }: ComponentProps<'input'>) {
-  // Every date box in the app opens our calendar instead of the browser's.
+  // Every date and time box in the app opens our picker instead of the browser's.
   if (props.type === 'date') {
     const { type: _type, ...rest } = props
     return <DateField className={className} {...rest} />
+  }
+  if (props.type === 'time') {
+    const { type: _type, ...rest } = props
+    return <TimeField className={className} {...rest} />
   }
   return (
     <input

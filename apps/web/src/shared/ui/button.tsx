@@ -16,6 +16,8 @@ const buttonVariants = cva(
         outline: 'border border-border bg-card hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // "You are done here, press me": the one green button on a screen.
+        success: 'bg-success text-success-foreground hover:bg-success/90',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

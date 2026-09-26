@@ -10,35 +10,40 @@ import { Select } from './select'
  * Month and year are our own dropdowns, so jumping to a birthday in 1994 or a
  * wedding next October is two taps, not forty clicks of an arrow.
  */
-export function Calendar({ className, classNames, ...props }: ComponentProps<typeof DayPicker>) {
+export function Calendar({ className, classNames, modifiers, modifiersClassNames, ...props }: ComponentProps<typeof DayPicker>) {
   return (
     <DayPicker
       showOutsideDays
       weekStartsOn={1}
       captionLayout="dropdown"
       className={cn('select-none', className)}
+      // Weekends carry a warmer ink: most shoots land on them, so the eye
+      // finds Saturday and Sunday in a column without counting across.
+      modifiers={{ weekend: { dayOfWeek: [0, 6] }, ...modifiers }}
+      modifiersClassNames={{ weekend: 'text-tone-rose', ...modifiersClassNames }}
       classNames={{
         months: 'relative flex flex-col',
         month: 'flex flex-col gap-3',
-        month_caption: 'flex h-9 items-center pr-20',
+        month_caption: 'flex h-9 items-center pr-[5.25rem]',
         caption_label: 'hidden',
         dropdowns: 'flex items-center gap-1.5',
-        nav: 'absolute right-0 top-0 z-10 flex h-9 items-center gap-1',
+        nav: 'absolute right-0 top-0 z-10 flex h-9 items-center gap-1.5',
+        // Bordered, so they read as buttons and not as stray arrows.
         button_previous:
-          'flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30',
+          'flex size-9 items-center justify-center rounded-full border border-border bg-card text-foreground hover:bg-muted disabled:opacity-30',
         button_next:
-          'flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30',
+          'flex size-9 items-center justify-center rounded-full border border-border bg-card text-foreground hover:bg-muted disabled:opacity-30',
         month_grid: 'w-full border-collapse',
         weekdays: 'flex',
-        weekday: 'flex h-8 w-9 items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
+        weekday: 'flex h-8 w-9 items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:w-10',
         week: 'mt-1 flex',
-        day: 'group size-9 p-0 text-center text-sm',
+        day: 'group size-9 p-0 text-center text-sm sm:size-10',
         day_button: cn(
-          'flex size-9 items-center justify-center rounded-full tabular-nums transition-colors',
+          'flex size-9 items-center justify-center rounded-full tabular-nums transition-colors sm:size-10',
           'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          'group-data-[selected=true]:bg-primary group-data-[selected=true]:font-semibold group-data-[selected=true]:text-primary-foreground group-data-[selected=true]:hover:bg-primary',
+          'group-data-[selected=true]:bg-primary group-data-[selected=true]:font-semibold group-data-[selected=true]:text-primary-foreground group-data-[selected=true]:shadow-md group-data-[selected=true]:hover:bg-primary',
         ),
-        today: '[&>button]:ring-1 [&>button]:ring-inset [&>button]:ring-primary/40 [&>button]:font-semibold',
+        today: '[&>button]:ring-1 [&>button]:ring-inset [&>button]:ring-primary/50 [&>button]:font-semibold',
         outside: 'text-muted-foreground/50',
         disabled: 'pointer-events-none text-muted-foreground/30 line-through',
         hidden: 'invisible',

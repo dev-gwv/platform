@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   Copy,
   FileText,
   Send,
@@ -29,11 +30,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import {
-  DUE_BASIS_OPTIONS,
-  deliverableTimings,
-  type DueBasis,
-} from '@ipc/domain'
+import { DUE_BASIS_OPTIONS } from '@ipc/domain'
 import {
   z,
   type CreateShootRequest,
@@ -98,14 +95,18 @@ import {
   clearDraft,
   deliverablesIn,
   draftTotals,
+  dueSummary,
+  firstOpenShoot,
+  nextUnfinishedShoot,
+  shootSummary,
+  stepReady,
+  STEP_DONE,
   estimatedDateFor,
   isDirty,
   internalWorkFor,
-  internalWorkSuggestions,
   loadDraft,
   matchShootTypes,
   money,
-  newAddOn,
   newClientDeliverable,
   newInternalWork,
   newPayment,
@@ -168,6 +169,28 @@ function NewProject() {
   const errors = stepErrors(draft)
   const totals = draftTotals(draft)
   const stepError = errors[step]
+  const ready = stepReady(draft, step)
+  const submittable = canSubmit(draft)
+
+  // The platform points at the next thing to press: when an edit finishes a
+  // step, Next turns green, names where it goes, and rings three times. Only
+  // an edit counts — a restored draft that is already complete, or going
+  // Back to a finished step, shows the green button without the knock.
+  const touched = useRef(false)
+  const [nudge, setNudge] = useState<{ n: number; step: WizardStep | null }>({ n: 0, step: null })
+  const seen = useRef({ step, ready })
+  useEffect(() => {
+    const before = seen.current
+    seen.current = { step, ready }
+    if (before.step !== step) {
+      // Arriving on Review with everything done is the one arrival worth a
+      // knock: the only thing left is the button.
+      setNudge((p) => (step === 'review' && ready ? { n: p.n + 1, step } : { n: p.n, step: null }))
+      return
+    }
+    if (ready && !before.ready && touched.current) setNudge((p) => ({ n: p.n + 1, step }))
+  }, [step, ready])
+  const knock = nudge.step === step
 
   // Restore before the first save runs, or the empty initial draft would
   // overwrite the thing we are about to offer back.
@@ -192,6 +215,7 @@ function NewProject() {
   }, [draft])
 
   const patch = (p: Partial<ProjectDraft>) => {
+    touched.current = true
     setDraft((d) => ({ ...d, ...p }))
     setShowErrors(false)
   }
@@ -316,57 +340,42 @@ function NewProject() {
       <Breadcrumbs items={[{ label: 'Home', to: '/dashboard' }, { label: 'Projects', to: '/projects' }, { label: 'New' }]} />
       <PageHeader
         title="Create project"
-        description="Client, shoots, deliverables and billing — one section at a time."
         actions={
-          <Button variant="outline" onClick={() => void navigate({ to: '/projects' })}>
-            <ArrowLeft /> Back to projects
-          </Button>
+          <>
+            {/* The draft is quiet: one chip that says it is safe, not a banner. */}
+            <StatusBadge tone={savedAt ? 'success' : 'neutral'}>
+              {savedAt
+                ? `Draft saved ${prettyTime(savedAt)}`
+                : restored
+                  ? `Draft restored ${prettyTime(restored)}`
+                  : 'Not saved yet'}
+            </StatusBadge>
+            {isDirty(draft) && (
+              <Button variant="ghost" size="sm" onClick={() => void onDiscard()}>
+                <RotateCcw /> Discard
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/projects' })}>
+              <ArrowLeft /> Back to projects
+            </Button>
+          </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Sparkles className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Guided setup</p>
-          <p className="text-xs text-muted-foreground">
-            {restored
-              ? `Draft restored from ${prettyTime(restored)}. It saves on this device as you type.`
-              : 'Your draft saves automatically on this device. Deliverable dates follow your shoot dates.'}
-          </p>
-        </div>
-        <StatusBadge tone={savedAt ? 'success' : 'neutral'}>
-          {savedAt ? `Draft saved ${prettyTime(savedAt)}` : 'No draft yet'}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Stepper
+          steps={WIZARD_STEPS.map((s) => ({ value: s, label: STEP_LABELS[s] }))}
+          current={step}
+          visited={visited}
+          invalid={invalid}
+          onJump={goTo}
+        />
+        <StatusBadge tone="info">
+          Step {stepIndex(step) + 1} of {WIZARD_STEPS.length}
         </StatusBadge>
-        {isDirty(draft) && (
-          <Button variant="ghost" size="sm" onClick={() => void onDiscard()}>
-            <RotateCcw /> Discard
-          </Button>
-        )}
       </div>
 
-      <Card className="mt-4">
-        <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Step-by-step setup</p>
-            <p className="text-xs text-muted-foreground">Complete one focused section at a time.</p>
-            <Stepper
-              className="mt-3"
-              steps={WIZARD_STEPS.map((s) => ({ value: s, label: STEP_LABELS[s] }))}
-              current={step}
-              visited={visited}
-              invalid={invalid}
-              onJump={goTo}
-            />
-          </div>
-          <StatusBadge tone="info">
-            Step {stepIndex(step) + 1} of {WIZARD_STEPS.length}
-          </StatusBadge>
-        </CardContent>
-      </Card>
-
-      <div ref={sectionRef} className="mt-4 scroll-mt-4">
+      <div ref={sectionRef} className="mt-3 scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
           {step === 'client' && <ClientStep draft={draft} patch={patch} />}
           {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
@@ -375,6 +384,21 @@ function NewProject() {
           )}
           {step === 'billing' && <BillingStep draft={draft} patch={patch} totals={totals} />}
           {step === 'review' && <ReviewStep draft={draft} totals={totals} errors={errors} onJump={goTo} />}
+
+          {ready && !showErrors && !error && (
+            <StepDoneBar step={step} onNext={onNext}>
+              {step === 'shoots' && (
+                <AddShootMenu
+                  variant="ghost"
+                  label="Add another"
+                  shoots={draft.shoots}
+                  onAdd={(name) =>
+                    patch({ shoots: name ? withShoots(draft.shoots, [name]) : [...draft.shoots, newShoot()] })
+                  }
+                />
+              )}
+            </StepDoneBar>
+          )}
 
           {showErrors && stepError && <p className="mt-4 text-sm text-destructive">{stepError}</p>}
           {error && (
@@ -387,8 +411,10 @@ function NewProject() {
 
       {/* The running total follows you down the flow: the number a studio is
           actually deciding against is the one on the quotation. */}
-      <div className="sticky bottom-0 z-30 -mx-4 mt-4 border-t border-border bg-card/95 backdrop-blur md:-mx-6">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 p-3 md:px-6 md:py-4">
+      {/* Edge to edge of <main>'s padding and no further, so the bar never
+          pushes the page into a sideways scroll. */}
+      <div className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card/95 backdrop-blur md:-mx-4 md:-mb-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-3 md:px-4">
           <Money label="Package" value={totals.packageCost} />
           <Money label="Add-ons" value={totals.addOns} />
           <Money label="Total" value={totals.total} strong />
@@ -407,13 +433,26 @@ function NewProject() {
             >
               <ArrowLeft /> Back
             </Button>
+            {/* `key` remounts the button on each knock so the ring replays. */}
             {step === 'review' ? (
-              <Button onClick={() => void onSubmit()} disabled={!canSubmit(draft) || busy}>
+              <Button
+                key={`create-${nudge.n}`}
+                variant={submittable ? 'success' : 'default'}
+                className={cn(submittable && knock && 'ipc-nudge')}
+                onClick={() => void onSubmit()}
+                disabled={!submittable || busy}
+              >
                 {busy ? 'Creating…' : 'Create project'}
               </Button>
             ) : (
-              <Button onClick={onNext} disabled={busy}>
-                Next <ArrowRight />
+              <Button
+                key={`next-${nudge.n}`}
+                variant={ready ? 'success' : 'default'}
+                className={cn(ready && knock && 'ipc-nudge')}
+                onClick={onNext}
+                disabled={busy}
+              >
+                {ready ? `Next: ${STEP_LABELS[nextStep(step)]}` : 'Next'} <ArrowRight />
               </Button>
             )}
           </div>
@@ -550,6 +589,49 @@ function Section({ title, hint, children }: { title: string; hint: string; child
       </CardContent>
     </Card>
   )
+}
+
+/**
+ * The green line under a finished step: what just got done and where to go
+ * next, in words, beside the button that goes there.
+ */
+function StepDoneBar({ step, onNext, children }: { step: WizardStep; onNext: () => void; children?: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="card-enter mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-success/40 bg-success/[0.06] px-4 py-2.5 text-sm"
+    >
+      <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />
+      <span className="min-w-0 flex-1">{STEP_DONE[step]}</span>
+      {children}
+      {step !== 'review' && (
+        <Button variant="link" size="sm" onClick={onNext}>
+          Go to {STEP_LABELS[nextStep(step)]} <ArrowRight />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** Close a hand-rolled menu on a press outside it, or on Escape. */
+function useDismiss(root: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  const onClose = useRef(close)
+  onClose.current = close
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) onClose.current()
+    }
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose.current()
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, root])
 }
 
 /** A repeated block of rows — shoots, deliverables, payments all share it. */
@@ -775,11 +857,15 @@ function AddShootMenu({
   shoots,
   onAdd,
   extraNames = [],
+  variant = 'default',
+  label = 'Add shoot',
 }: {
   shoots: ShootDraft[]
   onAdd: (name: string) => void
   /** This studio's own saved shoot names, merged into the common list. */
   extraNames?: readonly string[]
+  variant?: 'default' | 'ghost'
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -792,21 +878,7 @@ function AddShootMenu({
     else setQuery('')
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(root, open, () => setOpen(false))
 
   const taken = new Set(shoots.map((s) => s.name.trim().toLowerCase()))
   const matches = matchShootTypes(query, extraNames)
@@ -830,8 +902,8 @@ function AddShootMenu({
 
   return (
     <div ref={root} className="relative">
-      <Button size="sm" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
-        <Plus /> Add shoot
+      <Button size="sm" variant={variant} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
+        <Plus /> {label}
       </Button>
 
       {open && (
@@ -933,17 +1005,70 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
   const quickShoots = (shootTypes.data ?? []).filter((t) => !t.is_archived).slice(0, 8).map((t) => t.name)
   const quickList = quickShoots.length ? quickShoots : [...QUICK_SHOOTS]
   const listRef = useRef<HTMLDivElement>(null)
+  const cardAt = (i: number) => listRef.current?.children[i] ?? null
+
+  // One card open at a time; the rest fold to a line. Arriving on the step
+  // opens the first one still missing something.
+  const [openShoot, setOpenShoot] = useState<number | null>(() => firstOpenShoot(draft.shoots))
+
   // The chips sit above a list that can already be several cards long, so a
   // shoot added from up there would otherwise land off the bottom of the
-  // screen. Only a growing list scrolls — arriving on the step should not.
+  // screen. A growing list opens the FIRST of the new cards and scrolls to it:
+  // people fill top-down, so three chips tapped in a row start on the first.
   const count = useRef(draft.shoots.length)
   useEffect(() => {
-    if (draft.shoots.length > count.current) scrollIntoView(listRef.current?.lastElementChild ?? null)
+    if (draft.shoots.length > count.current) {
+      const first = count.current
+      setOpenShoot(first)
+      scrollIntoView(cardAt(first))
+    }
     count.current = draft.shoots.length
   }, [draft.shoots.length])
 
+  // The moment the open card turns green it folds and the next unfinished
+  // one opens — the platform walks them down the list. It waits while a
+  // picker or dialog is still open, or while they are typing in the card, so
+  // nothing folds out from under a half-set time or a venue being typed.
+  const shoots = useRef(draft.shoots)
+  shoots.current = draft.shoots
+  const openShootDraft = openShoot === null ? undefined : draft.shoots[openShoot]
+  const openIssues = openShootDraft ? shootIssues(openShootDraft).length : -1
+  const last = useRef({ at: openShoot, issues: openIssues })
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    const before = last.current
+    last.current = { at: openShoot, issues: openIssues }
+    if (openShoot === null || openIssues !== 0) setArmed(false)
+    else if (before.at === openShoot && before.issues > 0) setArmed(true)
+  }, [openShoot, openIssues])
+  useEffect(() => {
+    if (!armed || openShoot === null) return
+    let timer: ReturnType<typeof setTimeout>
+    const fold = () => {
+      const active = document.activeElement
+      const typing =
+        !!active && cardAt(openShoot)?.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+      if (typing || document.querySelector('[data-radix-popper-content-wrapper], [role="dialog"], [role="listbox"]')) {
+        timer = setTimeout(fold, 400)
+        return
+      }
+      setArmed(false)
+      const next = nextUnfinishedShoot(shoots.current, openShoot)
+      setOpenShoot(next)
+      if (next !== null) scrollIntoView(cardAt(next))
+    }
+    // A beat first, so the card is seen turning green before it folds.
+    timer = setTimeout(fold, 700)
+    return () => clearTimeout(timer)
+  }, [armed, openShoot])
+
   const set = (i: number, p: Partial<ShootDraft>) =>
     patch({ shoots: draft.shoots.map((s, idx) => (idx === i ? { ...s, ...p } : s)) })
+
+  const remove = (i: number) => {
+    setOpenShoot((o) => (o === null || o === i ? null : o > i ? o - 1 : o))
+    patch(removeShootAt(draft, i))
+  }
 
   const add = (names: readonly string[]) => patch({ shoots: withShoots(draft.shoots, names) })
   // An empty name is the "add new shoot type" case with nothing typed yet: a
@@ -1042,15 +1167,17 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
           </p>
         </div>
       ) : (
-        <div ref={listRef} className="flex flex-col gap-3">
+        <div ref={listRef} className="flex flex-col gap-2">
           {draft.shoots.map((s, i) => (
             <ShootCard
               key={i}
               index={i}
               shoot={s}
               draft={draft}
+              open={openShoot === i}
+              onToggle={() => setOpenShoot((o) => (o === i ? null : i))}
               onChange={(p) => set(i, p)}
-              onRemove={() => patch(removeShootAt(draft, i))}
+              onRemove={() => remove(i)}
             />
           ))}
         </div>
@@ -1268,16 +1395,25 @@ const SERVICE_LIST_ID = 'ipc-shoot-services'
  * wizard should take the booking either way. Only a missing title actually
  * stops the step.
  */
+/**
+ * One shoot day. Open, it is the form; folded, it is one line — green with a
+ * summary when the day is complete, red with what is missing when it is not.
+ * Blue is the one being edited.
+ */
 function ShootCard({
   index,
   shoot,
   draft,
+  open,
+  onToggle,
   onChange,
   onRemove,
 }: {
   index: number
   shoot: ShootDraft
   draft: ProjectDraft
+  open: boolean
+  onToggle: () => void
   onChange: (p: Partial<ShootDraft>) => void
   onRemove: () => void
 }) {
@@ -1290,172 +1426,186 @@ function ShootCard({
     () => requirementOptions(services.data ?? [], library.data ?? []),
     [services.data, library.data],
   )
+  const name = shoot.name.trim() || `Shoot ${index + 1}`
   return (
     <div
       className={cn(
-        // Red while anything is missing, green the moment it isn't: the card
-        // itself says whether this day is done, without reading the badges.
-        'card-enter rounded-lg border p-4 transition-colors duration-300',
-        ready ? 'border-success/40 bg-success/[0.04]' : 'border-destructive/25 bg-destructive/5',
+        'card-enter rounded-lg border transition-[border-color,background-color,box-shadow] duration-300',
+        open
+          ? 'border-primary/50 bg-card ring-2 ring-primary/15'
+          : ready
+            ? 'border-success/40 bg-success/[0.04] hover:border-success/60'
+            : 'border-destructive/25 bg-destructive/5 hover:border-destructive/40',
       )}
     >
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-            ready ? 'bg-success text-card' : 'bg-primary/10 text-primary',
-          )}
+      <div className="flex items-center gap-1 pr-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-4 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {ready ? <Check className="size-3.5" aria-hidden /> : index + 1}
-        </span>
-        <span className="font-medium">{shoot.name.trim() || `Shoot ${index + 1}`}</span>
-        {ready ? (
-          <StatusBadge tone="success">
-            <CheckCircle2 className="mr-1 size-3" aria-hidden />
-            Ready
-          </StatusBadge>
-        ) : (
-          issues.map((issue) => (
-            <StatusBadge key={issue} tone={issue === 'Title & date needed' ? 'danger' : 'warning'}>
-              <AlertCircle className="mr-1 size-3" aria-hidden />
-              {issue}
-            </StatusBadge>
-          ))
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          <SavePresetButton
-            kind="shoot"
-            defaultName={shoot.name.trim() || `Shoot ${index + 1}`}
-            label="Save as preset"
-            payload={{
-              requirements: shoot.requirements
-                .filter((r) => r.name.trim())
-                .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
-              internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
-            }}
-          />
-          <Button variant="ghost" size="icon" onClick={onRemove}>
-            <Trash2 className="text-destructive" />
-            <span className="sr-only">Remove shoot {index + 1}</span>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Shoot title" required>
-          <Input
-            value={shoot.name}
-            onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="Wedding day"
-            aria-invalid={!shoot.name.trim()}
-          />
-        </Field>
-        <Field label="Date" icon={CalendarDays}>
-          <Input
-            type="date"
-            value={shoot.shoot_date}
-            onChange={(e) => onChange({ shoot_date: e.target.value })}
-            aria-invalid={!shoot.shoot_date}
-          />
-        </Field>
-        <Field label="Time" icon={Clock}>
-          <Input
-            type="time"
-            value={shoot.start_time}
-            onChange={(e) => onChange({ start_time: e.target.value })}
-            aria-invalid={!shoot.start_time}
-          />
-        </Field>
-        <Field label="City / Venue" icon={MapPin}>
-          <Input
-            value={shoot.location}
-            onChange={(e) => onChange({ location: e.target.value })}
-            placeholder="e.g. Jaipur"
-          />
-        </Field>
-      </div>
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="lg:col-span-3">
-          <Field
-            label="Google Map link"
-            icon={MapPin}
-            hint="Optional. Paste a Google Maps link only — the address text belongs in City / Venue."
+          <span
+            className={cn(
+              'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+              ready ? 'bg-success text-success-foreground' : 'bg-primary/10 text-primary',
+            )}
           >
-            <Input
-              type="url"
-              inputMode="url"
-              value={shoot.map_link}
-              onChange={(e) => onChange({ map_link: e.target.value })}
-              placeholder="Paste Google Maps link"
+            {ready ? <Check className="size-3.5" aria-hidden /> : index + 1}
+          </span>
+          <span className="shrink-0 font-medium">{name}</span>
+          {ready ? (
+            open ? (
+              <StatusBadge tone="success">
+                <CheckCircle2 className="mr-1 size-3" aria-hidden />
+                Ready
+              </StatusBadge>
+            ) : (
+              <span className="min-w-0 truncate text-sm text-muted-foreground">{shootSummary(shoot)}</span>
+            )
+          ) : (
+            <span className="flex min-w-0 flex-wrap gap-1.5">
+              {issues.map((issue) => (
+                <StatusBadge key={issue} tone={issue === 'Title & date needed' ? 'danger' : 'warning'}>
+                  <AlertCircle className="mr-1 size-3" aria-hidden />
+                  {issue}
+                </StatusBadge>
+              ))}
+            </span>
+          )}
+          <ChevronDown
+            className={cn('ml-auto size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+            aria-hidden
+          />
+        </button>
+        {open && (
+          <>
+            <SavePresetButton
+              kind="shoot"
+              defaultName={name}
+              label="Save as preset"
+              payload={{
+                requirements: shoot.requirements
+                  .filter((r) => r.name.trim())
+                  .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
+                internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
+              }}
             />
-          </Field>
-        </div>
-        <Field label="Status">
-          <Select
-            value={shoot.status}
-            onChange={(e) => onChange({ status: e.target.value as ShootDraft['status'] })}
-          >
-            <option value="planned">Planned</option>
-            <option value="confirmed">Confirmed</option>
-          </Select>
-        </Field>
+            <Button variant="ghost" size="icon" onClick={onRemove}>
+              <Trash2 className="text-destructive" />
+              <span className="sr-only">Remove {name}</span>
+            </Button>
+          </>
+        )}
       </div>
 
-      {/* ── who this day needs ── */}
-      <SubCard
-        icon={Users}
-        title="Shoot requirements"
-        hint="Pick people or services and set how many of each this day needs."
-        actions={
-          <RequirementsDialog
-            shootName={shoot.name}
-            requirements={shoot.requirements}
-            onSave={(requirements) => onChange({ requirements })}
-          />
-        }
-      >
-        {shoot.requirements.length === 0 ? (
-          <Band tone="warning">No requirements yet — tap “Add requirements” to plan the team.</Band>
-        ) : (
-          // A summary, not an editor: changes happen in the dialog, so the card
-          // stays readable when a wedding day needs eight people.
-          <div className="flex flex-wrap gap-2">
-            {shoot.requirements.map((r, at) => {
-              const tone = STAGE_TONE[stageOfRequirement(r.name, options)]
-              return (
-                <span
-                  key={at}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium',
-                    TONE_CHIP_STATIC[tone],
-                  )}
-                >
-                  {r.name.trim() || 'Unnamed'}
-                  <span className="rounded-full bg-card/60 px-1.5 text-xs font-semibold tabular-nums">
-                    ×{Math.max(1, Number(r.quantity) || 1)}
-                  </span>
-                </span>
-              )
-            })}
+      {open && (
+        <div className="px-4 pb-4">
+          {/* Venue before Time: the card folds once the last required field
+              is set, so the optional one sits ahead of it. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Shoot title" required>
+              <Input
+                value={shoot.name}
+                onChange={(e) => onChange({ name: e.target.value })}
+                placeholder="Wedding day"
+                autoFocus={!shoot.name}
+                aria-invalid={!shoot.name.trim()}
+              />
+            </Field>
+            <Field label="Date" icon={CalendarDays}>
+              <Input
+                type="date"
+                value={shoot.shoot_date}
+                onChange={(e) => onChange({ shoot_date: e.target.value })}
+                aria-invalid={!shoot.shoot_date}
+              />
+            </Field>
+            <Field label="City / Venue" icon={MapPin}>
+              <Input
+                value={shoot.location}
+                onChange={(e) => onChange({ location: e.target.value })}
+                placeholder="e.g. Jaipur"
+              />
+            </Field>
+            <Field label="Time" icon={Clock}>
+              <Input
+                type="time"
+                value={shoot.start_time}
+                onChange={(e) => onChange({ start_time: e.target.value })}
+                aria-invalid={!shoot.start_time}
+              />
+            </Field>
           </div>
-        )}
-      </SubCard>
 
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="lg:col-span-3">
+              {/* Whatever the client sent — a Maps link, a short link, or the
+                  venue's name from WhatsApp. It is stored as given. */}
+              <Field label="Map link" icon={MapPin}>
+                <Input
+                  value={shoot.map_link}
+                  onChange={(e) => onChange({ map_link: e.target.value })}
+                  placeholder="Paste the map link"
+                />
+              </Field>
+            </div>
+            <Field label="Status">
+              <Select
+                value={shoot.status}
+                onChange={(e) => onChange({ status: e.target.value as ShootDraft['status'] })}
+              >
+                <option value="planned">Planned</option>
+                <option value="confirmed">Confirmed</option>
+              </Select>
+            </Field>
+          </div>
+
+          {/* ── who this day needs ── */}
+          <SubCard
+            icon={Users}
+            title="Shoot requirements"
+            hint="Pick people or services and set how many of each this day needs."
+            actions={
+              <RequirementsDialog
+                shootName={shoot.name}
+                requirements={shoot.requirements}
+                onSave={(requirements) => onChange({ requirements })}
+              />
+            }
+          >
+            {shoot.requirements.length === 0 ? (
+              <Band tone="warning">No requirements yet — tap “Add requirements” to plan the team.</Band>
+            ) : (
+              // A summary, not an editor: changes happen in the dialog, so the card
+              // stays readable when a wedding day needs eight people.
+              <div className="flex flex-wrap gap-2">
+                {shoot.requirements.map((r, at) => {
+                  const tone = STAGE_TONE[stageOfRequirement(r.name, options)]
+                  return (
+                    <span
+                      key={at}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium',
+                        TONE_CHIP_STATIC[tone],
+                      )}
+                    >
+                      {r.name.trim() || 'Unnamed'}
+                      <span className="rounded-full bg-card/60 px-1.5 text-xs font-semibold tabular-nums">
+                        ×{Math.max(1, Number(r.quantity) || 1)}
+                      </span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </SubCard>
+        </div>
+      )}
     </div>
   )
 }
 
-/**
- * The team's own list for one shoot — culling, sorting, the reel — kept off
- * the quotation because a client is not buying "data sorting", they are
- * buying the album it feeds.
- *
- * It lives on the Deliverables step, one block per shoot. It used to sit
- * inside each shoot card as well, so the wizard asked "deliverables for this
- * shoot?" on step 2 and then asked about deliverables again on step 3 — the
- * same question twice, on the step that should only be about the day itself.
- */
 /** "Created, but …" for whatever did not save after the project itself did. */
 function missedWarning(shoots: string[], work: string[]): string | null {
   const parts = [
@@ -1465,150 +1615,6 @@ function missedWarning(shoots: string[], work: string[]): string | null {
   if (parts.length === 0) return null
   const text = parts.join(' ')
   return `Created, but ${text.charAt(0).toLowerCase()}${text.slice(1)} Add them from the project.`
-}
-
-function InternalWorkBlock({
-  index,
-  shoot,
-  draft,
-  patch,
-  work,
-}: {
-  index: number
-  shoot: ShootDraft
-  draft: ProjectDraft
-  patch: Patch
-  work: { at: number; item: DeliverableDraft }[]
-}) {
-  const titles = new Set(work.map((w) => w.item.title.trim().toLowerCase()))
-  const suggestions = internalWorkSuggestions(shoot.name).filter(
-    (s) => !titles.has(s.toLowerCase()),
-  )
-  const presets = useShootPresets('internal_work')
-  const deliverableTypes = useDeliverableTypeList()
-  /** Null = closed, -1 = adding, else the index in draft.deliverables to edit. */
-  const [editing, setEditing] = useState<number | null>(null)
-
-  const addTitles = (names: string[]) =>
-    patch({
-      deliverables: [
-        ...draft.deliverables,
-        ...names
-          .filter((n) => n.trim() && !titles.has(n.trim().toLowerCase()))
-          .map((n) => newInternalWork(index, n.trim(), deliverableTypes)),
-      ],
-    })
-
-  return (
-    <SubCard
-      icon={Package}
-      title={shoot.name.trim() || `Shoot ${index + 1}`}
-      hint="What the team edits, sorts and hands off from this day."
-      actions={
-        <>
-          <PresetMenu
-            label="Apply preset"
-            variant="ghost"
-            presets={presets.data ?? []}
-            onApply={(p) => addTitles([...p.payload.internal_work])}
-          />
-          <SavePresetButton
-            kind="internal_work"
-            defaultName={shoot.name.trim() ? `${shoot.name.trim()} edit room` : 'Edit room'}
-            label="Save preset"
-            payload={{
-              requirements: [],
-              internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
-            }}
-          />
-          <Button size="sm" onClick={() => setEditing(-1)}>
-            <Plus /> Add more deliverables
-          </Button>
-        </>
-      }
-    >
-      {work.length === 0 ? (
-        <Band>No deliverables added for this shoot yet.</Band>
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {work.map(({ at, item }) => (
-            <li
-              key={at}
-              className="card-enter flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs"
-            >
-              <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-hidden />
-              <span className="font-medium">{item.title.trim() || 'Untitled'}</span>
-              {/* The date it will be saved with -- the same rule the client list uses. */}
-              {(() => {
-                const due = estimatedDateFor(draft, item)
-                return (
-                  <span className="text-muted-foreground">
-                    · {due ? `Due ${prettyDate(due)}` : 'Due date once the shoot has a date'}
-                  </span>
-                )
-              })()}
-              <span className="ml-auto flex items-center gap-0.5">
-                <Button variant="ghost" size="icon" onClick={() => setEditing(at)}>
-                  <Pencil />
-                  <span className="sr-only">Edit {item.title.trim() || 'this deliverable'}</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    patch({ deliverables: draft.deliverables.filter((_, i) => i !== at) })
-                  }
-                >
-                  <X />
-                  <span className="sr-only">Remove {item.title.trim() || 'this deliverable'}</span>
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <AddDeliverableDialog
-        open={editing !== null}
-        onOpenChange={(next) => setEditing(next ? editing : null)}
-        shootName={shoot.name}
-        // The row being edited is not a duplicate of itself.
-        existingTitles={
-          editing !== null && editing >= 0
-            ? new Set(
-                work
-                  .filter((w) => w.at !== editing)
-                  .map((w) => w.item.title.trim().toLowerCase()),
-              )
-            : titles
-        }
-        initial={editing !== null && editing >= 0 ? draft.deliverables[editing] : undefined}
-        onSubmit={(v) =>
-          patch({
-            deliverables:
-              editing !== null && editing >= 0
-                ? draft.deliverables.map((d, i) => (i === editing ? { ...d, ...v } : d))
-                : [
-                    ...draft.deliverables,
-                    { ...newInternalWork(index, v.title, deliverableTypes), ...v, shoot_index: index },
-                  ],
-          })
-        }
-      />
-
-      {suggestions.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Sparkles className="size-3.5" aria-hidden />
-            Suggested for {shoot.name.trim() || 'this shoot'}
-          </span>
-          {suggestions.map((title) => (
-            <ToneChip key={title} tone="teal" label={title} onClick={() => addTitles([title])} />
-          ))}
-        </div>
-      )}
-    </SubCard>
-  )
 }
 
 /** A titled block inside a shoot card: heading, hint, buttons, body. */
@@ -1678,22 +1684,7 @@ function PresetMenu({
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const remove = useDeleteShootPreset()
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  useDismiss(root, open, () => setOpen(false))
 
   return (
     <div ref={root} className="relative">
@@ -1823,262 +1814,274 @@ function SavePresetButton({
     </div>
   )
 }
+/** How many quick-add chips show before "+N more": two lines on a laptop. */
+const QUICK_LIMIT = 12
+
 /**
- * What the client is promised, what costs extra, and what only the team sees —
- * three lists rather than one, because those are three different conversations
- * and only the first two ever reach a quotation.
+ * What the client is promised, as one short list.
  *
- * A row's list is not a stored field: it falls out of the two switches the row
- * already carries, so turning "Charged on top" on moves an item into add-ons
- * with no second source of truth to disagree.
+ * Each line is folded to a sentence — the title, when it is due, and an
+ * Add-on tag if it is charged on top — and opens in place to edit. One is
+ * open at a time, so a wedding's six deliverables fit on a laptop screen
+ * without scrolling. Add-ons live in the same list: turning "Charged on top"
+ * on tags the line instead of moving it to another section.
+ *
+ * The team's own work (culling, sorting, reels) is not asked for here. It
+ * comes in with the shoot presets, is still created with each shoot, and is
+ * edited on the project page where the people doing it are assigned.
  */
 function DeliverablesStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
-  const sets = useDeliverableSets()
-  const saveSet = useSaveDeliverableSet()
-  const deleteSet = useDeleteDeliverableSet()
   const deliverableTypes = useDeliverableTypeList()
-  const [naming, setNaming] = useState(false)
-  const [setName, setSetName] = useState('')
+  const [openRow, setOpenRow] = useState<number | null>(null)
+  const [flash, setFlash] = useState<ReadonlySet<number>>(() => new Set())
+  const [showAll, setShowAll] = useState(false)
+  useEffect(() => {
+    if (flash.size === 0) return
+    const t = setTimeout(() => setFlash(new Set()), 1000)
+    return () => clearTimeout(t)
+  }, [flash])
 
   const quick = useMemo(() => quickDeliverables(learnedDeliverables()), [])
-  const client = deliverablesIn(draft, 'client')
-  const addOns = deliverablesIn(draft, 'add_on')
-  // Per-shoot work is listed under its shoot below; only what belongs to no
-  // shoot needs a list of its own.
-  const loose = deliverablesIn(draft, 'internal').filter(({ item }) => item.shoot_index === null)
+  const shown = showAll ? quick : quick.slice(0, QUICK_LIMIT)
+  const rows = draft.deliverables
+    .map((item, at) => ({ at, item }))
+    .filter(({ item }) => item.visibility_scope === 'client')
+  const team = draft.deliverables.length - rows.length
 
-  const add = (items: { title: string }[]) =>
-    patch({ deliverables: withDeliverables(draft.deliverables, items, deliverableTypes) })
-
-  const saveable = [...client, ...addOns].map(({ item }) => ({
-    title: item.title.trim(),
-    is_additional_charge: item.is_additional_charge,
-    additional_charge_amount: money(item.additional_charge_amount),
-    show_on_quotation: item.show_on_quotation,
-  })).filter((i) => i.title)
+  /** Chips and sets add folded lines, with a green wash on what just arrived. */
+  const add = (items: Parameters<typeof withDeliverables>[1]) => {
+    const before = draft.deliverables.length
+    const next = withDeliverables(draft.deliverables, items, deliverableTypes)
+    if (next === draft.deliverables) return
+    patch({ deliverables: next })
+    setFlash(new Set(Array.from({ length: next.length - before }, (_, k) => before + k)))
+  }
+  /** A blank line opens straight away: it needs a title before it is anything. */
+  const addBlank = () => {
+    setOpenRow(draft.deliverables.length)
+    patch({ deliverables: [...draft.deliverables, newClientDeliverable()] })
+  }
+  const remove = (i: number) => {
+    setOpenRow((o) => (o === null || o === i ? null : o > i ? o - 1 : o))
+    setFlash(new Set())
+    patch({ deliverables: draft.deliverables.filter((_, at) => at !== i) })
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── what the client is promised ── */}
-      <SubCard
-        icon={Package}
-        title="Client deliverables"
-        hint="What you promise the client. Everything here appears on the quotation."
-        actions={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => patch({ deliverables: [...draft.deliverables, newClientDeliverable()] })}
-          >
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <Sparkles className="size-3.5" aria-hidden />
+          Quick add
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <SetMenu draft={draft} onLoad={add} />
+          <Button size="sm" variant="outline" onClick={addBlank}>
             <Plus /> Add row
           </Button>
-        }
-      >
-        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Load set
-            </span>
-            {BUILT_IN_SETS.map((s) => (
-              <ToneChip
-                key={s.name}
-                tone="amber"
-                label={s.name}
-                onClick={() => add(s.titles.map((title) => ({ title })))}
-                title={s.titles.join(', ')}
-              />
-            ))}
-            {(sets.data ?? []).map((s) => (
-              <span
-                key={s.id}
-                className={cn('flex items-center rounded-full border pr-1 text-sm font-medium', TONE_CHIP_STATIC.rose)}
-              >
-                <button
-                  type="button"
-                  onClick={() => patch({ deliverables: withDeliverables(draft.deliverables, s.items, deliverableTypes) })}
-                  title={s.items.map((i) => i.title).join(', ')}
-                  className="flex items-center gap-1 rounded-full px-3 py-1 transition-colors hover:text-primary"
-                >
-                  <Plus className="size-3.5" aria-hidden />
-                  {s.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteSet.mutate(s.id)}
-                  disabled={deleteSet.isPending}
-                  className="rounded-full p-1 text-muted-foreground transition-colors hover:text-destructive"
-                >
-                  <X className="size-3.5" aria-hidden />
-                  <span className="sr-only">Delete set {s.name}</span>
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {naming ? (
-              <>
-                <Input
-                  autoFocus
-                  value={setName}
-                  onChange={(e) => setSetName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') setNaming(false)
-                    if (e.key !== 'Enter' || !setName.trim()) return
-                    saveSet.mutate(
-                      { name: setName.trim(), items: saveable },
-                      { onSuccess: () => setNaming(false) },
-                    )
-                  }}
-                  placeholder="Name this set"
-                  aria-label="Set name"
-                  className="w-56"
-                />
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    saveSet.mutate(
-                      { name: setName.trim(), items: saveable },
-                      { onSuccess: () => setNaming(false) },
-                    )
-                  }
-                  disabled={!setName.trim() || saveSet.isPending}
-                >
-                  Save
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setSetName('')
-                  setNaming(true)
-                }}
-                disabled={saveable.length === 0}
-                title={saveable.length === 0 ? 'Add a deliverable first' : undefined}
-              >
-                <Save /> Save as set
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground">
-              Sets are shared with your whole team. Delivery-time memory stays on this device.
-            </span>
-          </div>
         </div>
+      </div>
 
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="size-3.5" aria-hidden />
-            Quick add
-          </span>
-          {quick.map(({ title, learned }, i) => {
-            const already = draft.deliverables.some(
-              (d) => d.title.trim().toLowerCase() === title.toLowerCase(),
-            )
-            return (
-              <ToneChip
-                key={title}
-                // What this studio has used before stands out in one colour;
-                // the generic list cycles through the rest.
-                tone={learned ? 'rose' : toneAt(i + 1)}
-                label={title}
-                selected={already}
-                disabled={already}
-                onClick={() => add([{ title }])}
-                title={
-                  already
-                    ? `${title} is already on the list`
-                    : learned
-                      ? `${title} — you've used this before`
-                      : `Add ${title}`
-                }
-              />
-            )
-          })}
-        </div>
-
-        {client.length === 0 ? (
-          <Band>
-            No deliverables yet. Tap a Quick add chip above, or load one of your sets.
-          </Band>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {client.map(({ at, item }) => (
-              <DeliverableRow key={at} at={at} item={item} draft={draft} patch={patch} />
-            ))}
-          </div>
-        )}
-      </SubCard>
-
-      {/* ── what costs extra ── */}
-      <SubCard
-        icon={Wallet}
-        title="Additional client services"
-        hint="Add-ons billed on top of the package, listed on the quotation with their price."
-        actions={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => patch({ deliverables: [...draft.deliverables, newAddOn()] })}
+      <div className="flex flex-wrap items-center gap-2">
+        {shown.map(({ title, learned }, i) => {
+          const already = draft.deliverables.some(
+            (d) => d.title.trim().toLowerCase() === title.toLowerCase(),
+          )
+          return (
+            <ToneChip
+              key={title}
+              // What this studio has used before stands out in one colour;
+              // the generic list cycles through the rest.
+              tone={learned ? 'rose' : toneAt(i + 1)}
+              label={title}
+              selected={already}
+              disabled={already}
+              onClick={() => add([{ title }])}
+              title={
+                already
+                  ? `${title} is already on the list`
+                  : learned
+                    ? `${title} — you've used this before`
+                    : `Add ${title}`
+              }
+            />
+          )
+        })}
+        {quick.length > QUICK_LIMIT && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <Plus /> Add row
-          </Button>
-        }
-      >
-        {addOns.length === 0 ? (
-          <Band>Nothing billed separately yet. Use “Add row” to add an extra.</Band>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {addOns.map(({ at, item }) => (
-              <DeliverableRow key={at} at={at} item={item} draft={draft} patch={patch} />
-            ))}
-          </div>
+            {showAll ? 'Show less' : `+${quick.length - QUICK_LIMIT} more`}
+          </button>
         )}
-      </SubCard>
+      </div>
 
-      {/* ── what only the team sees, shoot by shoot ── */}
-      {draft.shoots.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="mt-2 flex items-center gap-2 text-sm font-semibold">
-            <Users className="size-4 text-muted-foreground" aria-hidden />
-            Team work for each shoot
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Culling, sorting, reels — what your team does off the back of each day. Never shown on the quotation.
-          </p>
+      {rows.length === 0 ? (
+        <Band>No deliverables yet. Tap a chip above, or load one of your sets.</Band>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map(({ at, item }) => (
+            <DeliverableRow
+              key={at}
+              at={at}
+              item={item}
+              draft={draft}
+              patch={patch}
+              open={openRow === at}
+              flash={flash.has(at)}
+              onToggle={() => setOpenRow((o) => (o === at ? null : at))}
+              onRemove={() => remove(at)}
+            />
+          ))}
         </div>
       )}
-      {draft.shoots.map((shoot, i) => (
-        <InternalWorkBlock
-          key={i}
-          index={i}
-          shoot={shoot}
-          draft={draft}
-          patch={patch}
-          work={internalWorkFor(draft, i)}
-        />
-      ))}
-      {loose.length > 0 && (
-        <SubCard
-          icon={Users}
-          title="Other team work"
-          hint="Internal items not tied to one shoot. Never shown on the quotation."
-          actions={null}
-        >
-          <div className="flex flex-col gap-2">
-            {loose.map(({ at, item }) => (
-              <DeliverableRow key={at} at={at} item={item} draft={draft} patch={patch} />
-            ))}
-          </div>
-        </SubCard>
+
+      {team > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Team work: {countLabel(team, 'item')} from your presets — edit them on the project page.
+        </p>
       )}
     </div>
   )
 }
 
 /**
- * One deliverable, edited in place.
+ * Packages a studio sells again and again, one tap away: the built-in
+ * wedding sets, the studio's own, and "save this list" for next time. In a
+ * menu so the step's heading carries only the quick-add chips.
+ */
+function SetMenu({
+  draft,
+  onLoad,
+}: {
+  draft: ProjectDraft
+  onLoad: (items: Parameters<typeof withDeliverables>[1]) => void
+}) {
+  const sets = useDeliverableSets()
+  const saveSet = useSaveDeliverableSet()
+  const deleteSet = useDeleteDeliverableSet()
+  const [open, setOpen] = useState(false)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const root = useRef<HTMLDivElement>(null)
+  useDismiss(root, open, () => setOpen(false))
+
+  const saveable = draft.deliverables
+    .filter((d) => d.visibility_scope === 'client' && d.title.trim())
+    .map((d) => ({
+      title: d.title.trim(),
+      is_additional_charge: d.is_additional_charge,
+      additional_charge_amount: money(d.additional_charge_amount),
+      show_on_quotation: d.show_on_quotation,
+    }))
+
+  const load = (items: Parameters<typeof withDeliverables>[1]) => {
+    onLoad(items)
+    setOpen(false)
+  }
+  const save = () => {
+    if (!name.trim()) return
+    saveSet.mutate(
+      { name: name.trim(), items: saveable },
+      {
+        onSuccess: () => {
+          setNaming(false)
+          setOpen(false)
+        },
+      },
+    )
+  }
+
+  const item = 'w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted'
+  return (
+    <div ref={root} className="relative">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          setNaming(false)
+          setOpen((v) => !v)
+        }}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <Bookmark /> Load a set <ChevronDown />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Deliverable sets"
+          className="ipc-menu absolute right-0 top-full z-40 mt-2 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-border bg-card p-1.5 shadow-lg"
+        >
+          {BUILT_IN_SETS.map((s) => (
+            <button key={s.name} type="button" role="menuitem" onClick={() => load(s.titles.map((title) => ({ title })))} className={item}>
+              {s.name}
+              <span className="block truncate text-xs text-muted-foreground">{s.titles.join(', ')}</span>
+            </button>
+          ))}
+          {(sets.data ?? []).map((s) => (
+            <div key={s.id} className="flex items-center gap-1">
+              <button type="button" role="menuitem" onClick={() => load(s.items)} className={cn(item, 'min-w-0 flex-1')}>
+                {s.name}
+                <span className="block truncate text-xs text-muted-foreground">
+                  {s.items.map((i) => i.title).join(', ')}
+                </span>
+              </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => deleteSet.mutate(s.id)}
+                disabled={deleteSet.isPending}
+              >
+                <Trash2 />
+                <span className="sr-only">Delete set {s.name}</span>
+              </Button>
+            </div>
+          ))}
+          <div className="my-1 border-t border-border" />
+          {naming ? (
+            <div className="flex items-center gap-2 p-1">
+              <Input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') save()
+                }}
+                placeholder="Name this set"
+                aria-label="Set name"
+              />
+              <Button size="sm" onClick={save} disabled={!name.trim() || saveSet.isPending}>
+                Save
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={saveable.length === 0}
+              title={saveable.length === 0 ? 'Add a deliverable first' : undefined}
+              onClick={() => {
+                setName('')
+                setNaming(true)
+              }}
+              className={cn(item, 'flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent')}
+            >
+              <Save className="size-4" aria-hidden /> Save this list as a set…
+            </button>
+          )}
+          <p className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">Sets are shared with your whole team.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One deliverable: a single line until it is opened, then edited in place.
  *
  * The lead time is remembered per title on this device as it is typed, so the
  * next project that quotes a "Photo Album" starts from the turnaround this
@@ -2089,108 +2092,147 @@ function DeliverableRow({
   item,
   draft,
   patch,
+  open,
+  flash,
+  onToggle,
+  onRemove,
 }: {
   at: number
   item: DeliverableDraft
   draft: ProjectDraft
   patch: Patch
+  open: boolean
+  flash: boolean
+  onToggle: () => void
+  onRemove: () => void
 }) {
   const set = (p: Partial<DeliverableDraft>) =>
     patch({ deliverables: draft.deliverables.map((d, i) => (i === at ? { ...d, ...p } : d)) })
   const due = estimatedDateFor(draft, item)
+  const amount = money(item.additional_charge_amount)
+  const title = item.title.trim() || 'Untitled deliverable'
 
   return (
-    <div className="card-enter rounded-lg border border-border p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Package className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">{item.title.trim() || 'Untitled deliverable'}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto"
-          onClick={() => patch({ deliverables: draft.deliverables.filter((_, i) => i !== at) })}
+    <div
+      className={cn(
+        'card-enter rounded-lg border transition-[border-color,box-shadow] duration-200',
+        open ? 'border-primary/50 bg-card ring-2 ring-primary/15' : 'border-border bg-card hover:border-primary/30',
+        flash && 'ipc-row-flash',
+      )}
+    >
+      <div className="flex items-center gap-1 pr-1.5">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Trash2 />
-          <span className="sr-only">Remove {item.title.trim() || 'this deliverable'}</span>
+          <Package className={cn('size-4 shrink-0', open ? 'text-primary' : 'text-muted-foreground')} aria-hidden />
+          <span className={cn('shrink-0 text-sm font-medium', !item.title.trim() && 'text-muted-foreground')}>
+            {title}
+          </span>
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            {dueSummary(item)}
+            {due && item.due_basis !== 'custom' ? ` · due ${prettyDate(due)}` : ''}
+          </span>
+          {item.is_additional_charge && (
+            <StatusBadge tone={amount > 0 ? 'info' : 'warning'} className="shrink-0">
+              {amount > 0 ? `Add-on ${formatINR(amount)}` : 'Add-on · amount needed'}
+            </StatusBadge>
+          )}
+          <ChevronDown
+            className={cn('ml-auto size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+            aria-hidden
+          />
+        </button>
+        <Button variant="ghost" size="icon" className="size-8" onClick={onRemove}>
+          <X />
+          <span className="sr-only">Remove {title}</span>
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Title" required>
-          <Input
-            value={item.title}
-            onChange={(e) => set({ title: e.target.value })}
-            placeholder="Wedding album"
-          />
-        </Field>
-        {/* The client's clock, which is the one the quotation prints. */}
-        <Field label="Delivery days">
-          <Input
-            inputMode="numeric"
-            value={item.due_days}
-            onChange={(e) => set({ due_days: e.target.value })}
-            onBlur={(e) => rememberDueDays(item.title, e.target.value)}
-            placeholder="45"
-          />
-        </Field>
-        <Field label="Due basis">
-          <Select
-            value={item.due_basis}
-            onChange={(e) => set({ due_basis: e.target.value as DeliverableDraft['due_basis'] })}
-          >
-            {DUE_BASIS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
+      {open && (
+        <div className="border-t border-border p-3">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]">
+            <Field label="Title" required>
+              <Input
+                value={item.title}
+                onChange={(e) => set({ title: e.target.value })}
+                placeholder="Wedding album"
+                autoFocus={!item.title}
+              />
+            </Field>
+            {/* The client's clock, which is the one the quotation prints. */}
+            <Field label="Delivery days">
+              <Input
+                inputMode="numeric"
+                value={item.due_days}
+                onChange={(e) => set({ due_days: e.target.value })}
+                onBlur={(e) => rememberDueDays(item.title, e.target.value)}
+                placeholder="45"
+              />
+            </Field>
+            <Field label="Counted from">
+              <Select
+                value={item.due_basis}
+                onChange={(e) => set({ due_basis: e.target.value as DeliverableDraft['due_basis'] })}
+              >
+                {DUE_BASIS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
 
-        {(item.due_basis === 'custom' || item.due_basis === 'custom_after') && (
-          <Field label={item.due_basis === 'custom_after' ? 'Count days from' : 'Estimated date'}>
-            <Input
-              type="date"
-              value={item.custom_date}
-              onChange={(e) => set({ custom_date: e.target.value })}
+          {(item.due_basis === 'custom' || item.due_basis === 'custom_after') && (
+            <div className="mt-3 sm:w-1/2">
+              <Field label={item.due_basis === 'custom_after' ? 'Count days from' : 'Delivery date'}>
+                <Input
+                  type="date"
+                  value={item.custom_date}
+                  onChange={(e) => set({ custom_date: e.target.value })}
+                />
+              </Field>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+            <Switch
+              className="w-auto"
+              checked={item.is_additional_charge}
+              onChange={(v) => set({ is_additional_charge: v })}
+              label="Charged on top of the package"
             />
-          </Field>
-        )}
-
-      </div>
-
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <CalendarDays className="size-3.5" />
-        {due ? (
-          <>
-            Estimated delivery <span className="font-medium text-foreground">{prettyDate(due)}</span>
-          </>
-        ) : (
-          'Estimated delivery appears once the shoot it counts from has a date.'
-        )}
-      </p>
-
-      <div className="mt-4 flex flex-wrap items-end gap-4 border-t border-border pt-4">
-        <Switch
-          className="w-auto"
-          checked={item.is_additional_charge}
-          onChange={(v) => set({ is_additional_charge: v })}
-          label="Charged on top of the package"
-        />
-        {item.is_additional_charge && (
-          <Field label="Amount (₹)" required>
-            <Input
-              inputMode="numeric"
-              value={item.additional_charge_amount}
-              onChange={(e) => set({ additional_charge_amount: e.target.value })}
-              placeholder="15000"
-              className="w-40"
-            />
-          </Field>
-        )}
-      </div>
+            {item.is_additional_charge && (
+              <Field label="Amount (₹)" required>
+                <Input
+                  inputMode="numeric"
+                  value={item.additional_charge_amount}
+                  onChange={(e) => set({ additional_charge_amount: e.target.value })}
+                  placeholder="15000"
+                  className="w-36"
+                />
+              </Field>
+            )}
+            <p className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="size-3.5" aria-hidden />
+              {due ? (
+                <>
+                  Estimated delivery <span className="font-medium text-foreground">{prettyDate(due)}</span>
+                </>
+              ) : (
+                'The date shows once the shoot it counts from has a date.'
+              )}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 function BillingStep({
   draft,
   patch,
@@ -2325,6 +2367,8 @@ function ReviewStep({
   const client = Array.isArray(clients) ? clients.find((c) => c.id === draft.client_id) : undefined
   const clientName = client?.name ?? draft.new_client_name.trim()
   const problems = WIZARD_STEPS.filter((s) => errors[s])
+  const promised = draft.deliverables.filter((d) => d.visibility_scope === 'client')
+  const team = draft.deliverables.length - promised.length
 
   return (
     <div className="flex flex-col gap-4">
@@ -2352,12 +2396,8 @@ function ReviewStep({
         />
         <ReviewTile
           label="Deliverables"
-          value={
-            draft.deliverables.length
-              ? `${countLabel(draft.deliverables.length, 'deliverable')} added`
-              : 'None added'
-          }
-          hint={summarise(draft.deliverables.map((d) => d.title.trim() || 'Untitled'))}
+          value={promised.length ? `${countLabel(promised.length, 'deliverable')} added` : 'None added'}
+          hint={summarise(promised.map((d) => d.title.trim() || 'Untitled'))}
           problem={errors.deliverables}
           onEdit={() => onJump('deliverables')}
         />
@@ -2374,6 +2414,12 @@ function ReviewStep({
           onEdit={() => onJump('billing')}
         />
       </div>
+
+      {team > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Team work: {countLabel(team, 'item')} from your presets — edit them on the project page.
+        </p>
+      )}
 
       {problems.length > 0 ? (
         <p className="text-sm font-medium text-warning">
@@ -2442,200 +2488,3 @@ function ReviewTile({
 const countLabel = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 const summarise = (names: string[]) => (names.length === 0 ? 'None' : names.join(', '))
-
-export interface AddedDeliverable {
-  title: string
-  description: string
-  due_days: string
-  due_basis: DueBasis
-  custom_date: string
-  visibility_scope: 'client' | 'internal'
-  show_on_quotation: boolean
-  start_rule: DeliverableDraft['start_rule']
-  lead_days: string
-}
-
-/**
- * Add one deliverable to a shoot.
- *
- * Two clocks, because a studio runs two. The top pair is what the client was
- * told — "thirty days after the wedding" — and it is what lands on the
- * quotation. The panel below is production's: nothing can be edited before the
- * footage arrives, so that work is timed from when its data lands. Typing a
- * title people recognise fills both, which is the point — those numbers are
- * trade knowledge, not decisions worth stopping over.
- */
-function AddDeliverableDialog({
-  open,
-  onOpenChange,
-  shootName,
-  existingTitles,
-  initial,
-  onSubmit: onSubmitValue,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  shootName: string
-  /** Titles already on this shoot, lowercased — to warn before duplicating. */
-  existingTitles: Set<string>
-  /** Given when reopening on a row: the same form, editing what is there. */
-  initial?: DeliverableDraft | undefined
-  onSubmit: (value: AddedDeliverable) => void
-}) {
-  const deliverableTypes = useDeliverableTypeList()
-  const [title, setTitle] = useState('')
-  const [dueDays, setDueDays] = useState('30')
-  const [dueBasis, setDueBasis] = useState<DueBasis>('after_wedding_day')
-  const [customDate, setCustomDate] = useState('')
-  const [description, setDescription] = useState('')
-  // Work tied to a shoot is the team's own; client promises are added under
-  // Client deliverables. The lead time follows the title, not a form field.
-  const [leadDays, setLeadDays] = useState('7')
-  const [confirmDuplicate, setConfirmDuplicate] = useState(false)
-  /** Whether the title has been typed into since the dialog opened. */
-  const [typed, setTyped] = useState(false)
-
-  // Opening resets the form: to the row being edited, or to blank. A
-  // half-typed title left over from last time is worse than retyping one.
-  useEffect(() => {
-    if (!open) return
-    setTitle(initial?.title ?? '')
-    setDueDays(initial?.due_days || '30')
-    setDueBasis(initial?.due_basis ?? 'after_wedding_day')
-    setCustomDate(initial?.custom_date ?? '')
-    setDescription(initial?.description ?? '')
-    setLeadDays(initial?.lead_days || '7')
-    setConfirmDuplicate(false)
-    setTyped(false)
-  }, [open, initial])
-
-  // Typing a name the studio or the trade knows fills in the timings behind
-  // it — the studio's own deliverable type first — but only once someone
-  // types, so reopening a row does not overwrite its numbers.
-  useEffect(() => {
-    const t = title.trim()
-    if (!typed || !t) return
-    const timing = deliverableTimings(t, deliverableTypes)
-    setDueDays(String(timing.due_days))
-    setDueBasis(timing.due_basis)
-    setLeadDays(String(timing.work_days))
-  }, [title, typed, deliverableTypes])
-
-  const trimmed = title.trim()
-  const duplicate = trimmed.length > 0 && existingTitles.has(trimmed.toLowerCase())
-  const valid = trimmed.length > 0 && (!duplicate || confirmDuplicate)
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!valid) return
-    onSubmitValue({
-      title: trimmed,
-      description: description.trim(),
-      due_days: dueDays.trim(),
-      due_basis: dueBasis,
-      custom_date: dueBasis === 'custom' || dueBasis === 'custom_after' ? customDate : '',
-      visibility_scope: 'internal',
-      show_on_quotation: false,
-      start_rule: 'this_shoot',
-      lead_days: leadDays.trim(),
-    })
-    onOpenChange(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        // Two panels of fields is taller than a laptop dialog, so it scrolls
-        // rather than pushing its own buttons off the screen.
-        className="max-h-[88vh] overflow-y-auto"
-        title={initial ? 'Edit deliverable' : 'Add deliverable'}
-        description={
-          <>
-            Linked to{' '}
-            <span className="font-medium text-foreground">{shootName.trim() || 'this shoot'}</span>.
-            Team work — not shown to the client.
-          </>
-        }
-      >
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Deliverable title *</Label>
-            <Input
-              autoFocus
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value)
-                setTyped(true)
-              }}
-              placeholder="e.g. Haldi Highlight Teaser"
-            />
-            {duplicate && (
-              <label className="flex items-center gap-2 text-xs text-warning">
-                <input
-                  type="checkbox"
-                  checked={confirmDuplicate}
-                  onChange={(e) => setConfirmDuplicate(e.target.checked)}
-                  className="size-3.5 accent-current"
-                />
-                Already on this shoot — add anyway
-              </label>
-            )}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Delivery days</Label>
-              <Input
-                inputMode="numeric"
-                value={dueDays}
-                onChange={(e) => setDueDays(e.target.value)}
-                placeholder="30"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Due basis</Label>
-              <Select value={dueBasis} onChange={(e) => setDueBasis(e.target.value as DueBasis)}>
-                {DUE_BASIS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-
-          {(dueBasis === 'custom' || dueBasis === 'custom_after') && (
-            <div className="flex flex-col gap-1.5">
-              <Label>{dueBasis === 'custom_after' ? 'Count days from' : 'Estimated date'}</Label>
-              <Input
-                type="date"
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Brief / instructions (optional)</Label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does the team need to know?"
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          <div className="mt-1 flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!valid}>
-              {initial ? 'Save changes' : 'Add deliverable'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
