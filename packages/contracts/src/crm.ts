@@ -88,6 +88,16 @@ export const crmLead = z.object({
   score: z.number().int().default(0),
   /** Free-text segment tag — "Hot Lead, Already Booked", "Referral VIP" — for quick filtering beyond the structured fields. */
   group_name: z.string().nullable().default(null),
+  /**
+   * Whether the studio is free on this lead's event_date (0193).
+   *
+   * Derived, never stored: computed from the studio's shoots and the other
+   * open leads wanting the same day. 'unknown' is a lead with no date yet —
+   * the honest answer to a question nobody has asked.
+   */
+  date_status: z.enum(['free', 'contested', 'booked', 'unknown']).default('unknown'),
+  /** Open leads wanting this date, this one included. 2 means one rival. */
+  date_wanted_by: z.number().int().default(0),
   created_at: isoDateTime,
 })
 export type CrmLead = z.infer<typeof crmLead>

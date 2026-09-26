@@ -85,11 +85,17 @@ const selectLead = (sql: TransactionSql) => sql`
          co.name as crm_company_name, l.title, l.close_date, l.currency, l.score, l.created_at,
          l.event_type, l.event_date, l.event_location, l.alternate_phone, l.city, l.group_name,
          l.quality, l.contacted_status,
-         u.name as assignee_name
+         u.name as assignee_name,
+         -- Is the studio free on this lead's date? Derived in one pass by
+         -- 0193 rather than per row, and joined here so the list and the
+         -- single-lead read can never disagree about it.
+         coalesce(av.status, 'unknown') as date_status,
+         coalesce(av.wanted_by, 0)::int as date_wanted_by
   from crm_leads l
   left join users u on u.user_id = l.assigned_to
   left join crm_pipeline_stages s on s.id = l.stage_id
-  left join crm_companies co on co.id = l.crm_company_id`
+  left join crm_companies co on co.id = l.crm_company_id
+  left join crm_date_availability() av on av.on_date = l.event_date`
 
 const dateRange = (c: { req: { query: (k: string) => string | undefined } }) => {
   const today = new Date()

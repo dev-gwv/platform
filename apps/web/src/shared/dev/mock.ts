@@ -1537,6 +1537,11 @@ const withDeal = <T extends { status: string; name: string | null }>(l: T, i: nu
   score: [72, 35, 10, 55, 20, 65][i % 6] ?? 0,
   crm_company_id: i === 1 ? COMPANY.verma : null,
   crm_company_name: i === 1 ? 'Verma Weddings' : null,
+  // Availability (0193). The server derives this from shoots and the other
+  // open leads; the mock spreads the three states across the list so the
+  // preview shows a contested date, a taken one and a free one.
+  date_status: i === 0 ? 'contested' : i === 2 ? 'booked' : 'free',
+  date_wanted_by: i === 0 ? 2 : 1,
 })
 const dealLeads = () => rawLeads.map(withDeal)
 

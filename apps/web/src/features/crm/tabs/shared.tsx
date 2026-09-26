@@ -9,6 +9,7 @@ import { EmptyState } from '@/shared/ui/states'
 import { Avatar } from '@/shared/ui/avatar'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { dueBucket, isUncontacted } from '../leads'
+import { dateVerdict, worthFlagging } from '../availability'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 export const SOURCE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -69,6 +70,19 @@ export function lastTouch(lead: CrmLead): string {
   if (days < 30) return `Spoke ${days} days ago`
   const months = Math.floor(days / 30)
   return `Spoke ${months} month${months === 1 ? '' : 's'} ago`
+}
+
+/**
+ * Free, taken, or wanted by more than one family.
+ *
+ * Ranked above the stage on a row because it decides whether the lead is worth
+ * working at all: a date the studio is already shooting cannot be sold twice,
+ * however warm the enquiry.
+ */
+export function DateBadge({ lead }: { lead: CrmLead }) {
+  const v = dateVerdict(lead)
+  if (!v.label || !worthFlagging(v)) return null
+  return <StatusBadge tone={v.tone} title={v.detail}>{v.label}</StatusBadge>
 }
 
 export function DueBadge({ lead, now }: { lead: CrmLead; now: Date }) {
@@ -177,6 +191,7 @@ export function LeadTable({
             </p>
             {l.notes && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.notes}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              <DateBadge lead={l} />
               <UncontactedBadge lead={l} />
               {l.is_hot && (
                 <StatusBadge tone="danger">
@@ -243,11 +258,14 @@ export function LeadTable({
       case 'stage':
         return (
           <td key={key} className={pad}>
-            {isUncontacted(l) ? (
-              <UncontactedBadge lead={l} />
-            ) : (
-              <StatusBadge tone={STAGE_TONE[l.status]}>{leadStageLabel(l)}</StatusBadge>
-            )}
+            <span className="flex flex-wrap items-center gap-1.5">
+              <DateBadge lead={l} />
+              {isUncontacted(l) ? (
+                <UncontactedBadge lead={l} />
+              ) : (
+                <StatusBadge tone={STAGE_TONE[l.status]}>{leadStageLabel(l)}</StatusBadge>
+              )}
+            </span>
           </td>
         )
       case 'score':

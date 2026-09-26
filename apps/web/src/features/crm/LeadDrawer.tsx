@@ -53,6 +53,7 @@ import { QuoteRow } from './tabs/QuotesTab'
 import { ScoreBadge } from './tabs/shared'
 import { LostReasonDialog } from './LostReasonDialog'
 import { Timeline } from './Timeline'
+import { dateVerdict } from './availability'
 import { LookupSelect } from '@/features/settings/LookupSelect'
 import { EVENT_TYPE_DEFAULTS } from './event-types'
 import { STAGE_LABEL, dueBucket } from './leads'
@@ -215,6 +216,30 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               </StatusBadge>
             )}
           </div>
+
+          {/*
+            * Whether the studio can take the job at all, before how to reach
+            * them. A warm lead for a day you are already shooting is not a
+            * lead, and two families on one date is a decision someone has to
+            * make rather than a fact to notice later.
+            */}
+          {lead.event_date && lead.date_status !== 'unknown' && lead.date_status !== 'free' && (
+            <div
+              className={cn(
+                'rounded-lg border p-3',
+                lead.date_status === 'contested'
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : 'border-border bg-muted/40',
+              )}
+            >
+              <p className={cn('text-sm font-semibold', lead.date_status === 'contested' && 'text-destructive')}>
+                {new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' — '}
+                {dateVerdict(lead).label}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{dateVerdict(lead).detail}</p>
+            </div>
+          )}
 
           {/*
             * Reaching the person IS the screen, so the four ways to do it sit
