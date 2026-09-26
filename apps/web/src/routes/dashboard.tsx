@@ -39,6 +39,7 @@ import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
 import { useInvoices } from '@/features/billing/api'
 import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
+import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
@@ -211,6 +212,11 @@ function StudioCommandCenter() {
         )}
       </div>
       )}
+
+      {/* The owner gives tasks and gets them too: the next three that are theirs. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <MyTasksCard />
+      </div>
 
       {access.hasModule('projects') && sections.stats && <NeedsAttention projects={tracked} />}
       {session?.is_owner && <TeamProfilesCard />}

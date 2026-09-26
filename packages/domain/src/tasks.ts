@@ -3,12 +3,14 @@
  * everything collapses to a fixed canonical enum for logic + reporting. Pure,
  * mirrored by the DB where needed.
  */
-export type CanonicalStatus = 'to_do' | 'in_progress' | 'completed' | 'cancelled'
+export type CanonicalStatus = 'to_do' | 'in_progress' | 'review' | 'blocked' | 'completed' | 'cancelled'
 export type CanonicalPriority = 'low' | 'medium' | 'high' | 'urgent'
 
 export const CANONICAL_STATUSES: readonly CanonicalStatus[] = [
   'to_do',
   'in_progress',
+  'review',
+  'blocked',
   'completed',
   'cancelled',
 ]

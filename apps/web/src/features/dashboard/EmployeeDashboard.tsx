@@ -4,7 +4,6 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { hoursLabel } from '@/features/shoots/assign'
 import { localDay } from '@/features/booking/booking-model'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { Button } from '@/shared/ui/button'
 import { useMyTasks, useBoard } from '@/features/tasks/api'
 import { useSlots } from '@/features/allocation/api'
@@ -18,6 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import { attendanceRecord } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { MyDeliveryStrip } from '@/features/projects/MyDeliveryStrip'
+import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 
 const myList = attendanceRecord.array()
 
@@ -86,7 +86,7 @@ export function EmployeeDashboard() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile icon={ClipboardList} label="My open tasks" value={String(openTasks.length)} to="/tasks/my" />
+        <Tile icon={ClipboardList} label="My open tasks" value={String(openTasks.length)} to="/tasks" />
         <Tile icon={CalendarCheck2} label="Due today" value={String(dueToday.length)} to="/tasks/my" />
         <Tile icon={CalendarDays} label="My shoots" value={String(mySlots.length)} to="/shoots/my" />
         <Tile
@@ -127,38 +127,7 @@ export function EmployeeDashboard() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>My tasks</CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/tasks/my">All my tasks</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {myTasks.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : openTasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No open tasks assigned to you.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {openTasks.slice(0, 5).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{t.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {t.project_name ?? '—'}
-                        {t.due_date ? ` · due ${t.due_date}` : ''}
-                      </p>
-                    </div>
-                    <StatusBadge tone={t.due_date && t.due_date < today ? 'danger' : 'neutral'}>
-                      {t.status.replace('_', ' ')}
-                    </StatusBadge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <MyTasksCard />
 
         <Card>
           <CardHeader className="flex-row items-center justify-between">

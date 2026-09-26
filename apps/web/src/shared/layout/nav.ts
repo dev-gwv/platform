@@ -48,6 +48,8 @@ export interface NavLeaf {
   roles?: AppRole[]
   /** Cross-tenant vendor console — gated on platform_admins, NOT a module. */
   platformOnly?: boolean
+  /** A live count beside the label (the viewer's overdue tasks). */
+  badge?: 'tasks-overdue'
 }
 
 export interface NavGroup {
@@ -85,7 +87,9 @@ export const NAV: NavEntry[] = [
 
   // Employee-only personal set.
   leaf('My Work', '/my-work', ListTodo, { roles: ['employee'] }),
-  leaf('My Tasks', '/tasks/my', ListTodo, { roles: ['employee'] }),
+  // The same page as Task Management, showing only their own: where they
+  // submit work and see what was sent back.
+  leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
@@ -114,7 +118,7 @@ export const NAV: NavEntry[] = [
     ],
   },
 
-  leaf('Task Management', '/tasks', ListChecks, { module: 'tasks' }),
+  leaf('Task Management', '/tasks', ListChecks, { module: 'tasks', badge: 'tasks-overdue' }),
 
   {
     kind: 'group',

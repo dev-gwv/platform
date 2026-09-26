@@ -21,7 +21,9 @@ export const TASK_TABS: ReadonlyArray<{ value: TaskTab; label: string }> = [
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   to_do: 'To do',
   in_progress: 'In progress',
-  completed: 'Completed',
+  review: 'Review',
+  blocked: 'Blocked',
+  completed: 'Done',
   cancelled: 'Cancelled',
 }
 

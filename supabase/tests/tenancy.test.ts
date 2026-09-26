@@ -402,9 +402,11 @@ describe('tasks & production board (Phase 5)', () => {
     )
 
     await asUser(db, emp)
-    await db.query(`select update_my_task_status('${taskId}', 'completed');`)
+    await db.query(`select update_my_task_status('${taskId}', 'in_progress');`)
     const t = await db.query<{ status: string }>(`select status from tasks where id = '${taskId}';`)
-    expect(t.rows[0]!.status).toBe('completed')
+    expect(t.rows[0]!.status).toBe('in_progress')
+    // Done is not the assignee's to say: it comes from review (0192).
+    await expect(db.query(`select update_my_task_status('${taskId}', 'completed');`)).rejects.toThrow(/marks it done/)
 
     // A task not assigned to the employee is rejected.
     await asUser(db, OWNER)

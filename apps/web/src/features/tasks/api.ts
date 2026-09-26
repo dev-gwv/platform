@@ -9,16 +9,20 @@ import {
   createTaskPriorityRequest,
   updateTaskPriorityRequest,
   createTaskRequest,
+  taskActivityItem,
   taskBundle,
   taskListItem,
+  taskSubmissionItem,
   updateTaskRequest,
   z,
+  type BlockTaskRequest,
+  type ReviewTaskRequest,
+  type SubmitTaskRequest,
   type ApplyBundleRequest,
   type CreateBundleRequest,
   type UpdateBundleRequest,
   type CreateTaskPriorityRequest,
   type UpdateTaskPriorityRequest,
-  type CreateTaskRequest,
   type SetBoardOrderRequest,
   type TaskStatus,
   type UpdateTaskRequest,
@@ -176,7 +180,7 @@ function useTaskMutation<TInput, TOutput>(
 
 export function useCreateTask() {
   return useTaskMutation(
-    (input: CreateTaskRequest) =>
+    (input: z.input<typeof createTaskRequest>) =>
       callApi('/tasks', {
         method: 'POST',
         body: createTaskRequest.parse(input),
@@ -341,5 +345,86 @@ export function useDeleteTaskPriority() {
       toast.success('Priority deleted')
       void qc.invalidateQueries({ queryKey: ['tasks', 'priorities'] })
     },
+  })
+}
+
+// ── The delegation loop (0192) ─────────────────────────────────
+
+/** What happened to a task, newest first. */
+export function useTaskActivity(id: string | null) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['tasks', 'activity', id],
+    queryFn: () => callApi(`/tasks/${id}/activity`, { responseSchema: taskActivityItem.array() }),
+    enabled: !!session && !!id,
+    staleTime: 15_000,
+  })
+}
+
+/** Work handed in against a task, newest first. */
+export function useTaskSubmissions(id: string | null) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['tasks', 'submissions', id],
+    queryFn: () => callApi(`/tasks/${id}/submissions`, { responseSchema: taskSubmissionItem.array() }),
+    enabled: !!session && !!id,
+    staleTime: 15_000,
+  })
+}
+
+export function useSubmitTask() {
+  return useTaskMutation(
+    ({ id, input }: { id: string; input: SubmitTaskRequest }) =>
+      callApi(`/tasks/${id}/submit`, { method: 'POST', body: input, responseSchema: created }),
+    'Work submitted for review',
+  )
+}
+
+export function useBlockTask() {
+  return useTaskMutation(
+    ({ id, input }: { id: string; input: BlockTaskRequest }) =>
+      callApi(`/tasks/${id}/block`, { method: 'POST', body: input, responseSchema: anySchema }),
+    'Marked as blocked',
+  )
+}
+
+export function useReviewTask() {
+  return useTaskMutation(
+    ({ id, input }: { id: string; input: ReviewTaskRequest }) =>
+      callApi(`/tasks/${id}/review`, { method: 'POST', body: input, responseSchema: anySchema }),
+    (_out) => 'Review saved',
+  )
+}
+
+/**
+ * Move a task from a card or the drawer. The person on it goes through the
+ * assignee endpoint (which refuses Done — that is a review); someone who
+ * manages tasks uses the manager one.
+ */
+export function useMoveTask() {
+  return useTaskMutation(
+    ({ id, status, manage }: { id: string; status: TaskStatus; manage: boolean }) =>
+      callApi(manage ? `/tasks/${id}/status` : `/tasks/my/${id}/status`, {
+        method: 'PATCH',
+        body: { status },
+        responseSchema: anySchema,
+      }),
+    'Task updated',
+  )
+}
+
+/**
+ * How many of my open tasks are late: the sidebar badge. Polled once a
+ * minute like the notification bell (react-query pauses it behind the tab).
+ */
+export function useMyOverdueCount(today: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['tasks', 'my', 'overdue', today],
+    queryFn: () =>
+      callApi(`/tasks/my/overdue?today=${today}`, { responseSchema: z.object({ count: z.number().int() }) }),
+    enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   })
 }
