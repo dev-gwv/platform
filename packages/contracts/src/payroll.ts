@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isoDateTime, money, uuid } from './shared/primitives'
+import { isoDate, isoDateTime, money, uuid } from './shared/primitives'
 
 /** Monthly payroll run (0185): draft -> approved (locked) -> paid. */
 export const payrollRunStatus = z.enum(['draft', 'approved', 'paid'])
@@ -30,8 +30,16 @@ export const payrollLine = z.object({
   id: uuid,
   user_id: uuid,
   name: z.string(),
+  /** The full monthly salary. */
   base_amount: money,
   working_days: z.number().int(),
+  /** The days paid for: joining (or the 1st) to leaving (or the last day), 0188. */
+  period_start: isoDate,
+  period_end: isoDate,
+  /** Working days inside that period. */
+  payable_days: z.number().int(),
+  /** base × payable days ÷ working days; the base for a full month. */
+  prorated_base: money,
   days_present: z.number().int(),
   unpaid_leave_days: z.number(),
   absent_days: z.number().int(),
@@ -100,6 +108,7 @@ export const payrollExportRow = z.object({
   bank_account_number: z.string().nullable(),
   bank_ifsc: z.string().nullable(),
   net_pay: money,
+  payable_days: z.number().int(),
 })
 export type PayrollExportRow = z.infer<typeof payrollExportRow>
 

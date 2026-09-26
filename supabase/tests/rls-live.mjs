@@ -1571,6 +1571,8 @@ if (listed) {
   const prYear = prNow.getUTCFullYear()
   const prMonth = prNow.getUTCMonth() + 1
   const prSalary = await api(`/team/members/${edUid}`, { token: aToken, method: 'PATCH', body: { salary: 30000, engagement_type: 'in_house' } })
+  // Joined long before this month (0188): paid the whole month, as before pro-rata.
+  const prJoinedEarly = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: `${prYear - 1}-01-15` } })
   const prEdGen = await api('/payroll/runs/generate', { token: edToken, method: 'POST', body: { year: prYear, month: prMonth } })
   const prMgrGen = await api('/payroll/runs/generate', { token: tmToken, method: 'POST', body: { year: prYear, month: prMonth } })
   const prGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
@@ -1578,10 +1580,11 @@ if (listed) {
   const prLine = (prMonthRes.json.lines ?? []).find((l) => l.user_id === edUid)
   check(
     'payroll: the owner works out the month (a member or a manager without salaries cannot); the member is on it at their salary',
-    prSalary.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
+    prSalary.status < 300 && prJoinedEarly.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
       prMonthRes.status === 200 && prMonthRes.json.run?.status === 'draft' && prLine?.base_amount === 30000 &&
-      prLine.working_days > 0 && prLine.net_pay === 30000 - prLine.deduction,
-    { salary: prSalary.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
+      prLine.working_days > 0 && prLine.payable_days === prLine.working_days && prLine.prorated_base === 30000 &&
+      prLine.period_start === `${prYear}-${String(prMonth).padStart(2, '0')}-01` && prLine.net_pay === 30000 - prLine.deduction,
+    { salary: prSalary.status, joined: prJoinedEarly.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
   )
   const prRunId = prMonthRes.json.run?.id
   const prNoNote = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 1500, additions_note: '', other_deductions: 0 } })
@@ -1601,6 +1604,20 @@ if (listed) {
       prRegen.status === 201 && prAfter?.additions === 1500 && prAfter?.additions_note === 'Festival bonus' && prAfter?.other_deductions === 500 &&
       prSlipsBefore.status === 200 && (prSlipsBefore.json ?? []).length === 0 && prSlipBefore.status === 404,
     { noNote: prNoNote.status, edit: prEdit.json, edEdit: prEdEdit.status, regen: prRegen.status, after: prAfter, before: prSlipsBefore.json, one: prSlipBefore.status },
+  )
+  // Pro-rata (0188): the member's joining date moves to the 12th of this month;
+  // working the month out again pays only the working days since then.
+  const prMid = `${prYear}-${String(prMonth).padStart(2, '0')}-12`
+  const prJoinedMid = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: prMid } })
+  const prProRegen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prFinal = ((await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })).json.lines ?? []).find((l) => l.user_id === edUid)
+  const prWant = prFinal && prFinal.payable_days >= prFinal.working_days ? 30000 : Math.round((30000 * (prFinal?.payable_days ?? 0)) / (prFinal?.working_days || 1) + 1e-9)
+  check(
+    'payroll: joining on the 12th pays the working days since then; the bonus and advance stay',
+    prJoinedMid.status < 300 && prProRegen.status === 201 && prFinal?.period_start === prMid && prFinal?.base_amount === 30000 &&
+      prFinal.payable_days < prAfter.payable_days && prFinal.prorated_base === prWant && prFinal.prorated_base < 30000 &&
+      prFinal.net_pay === Math.max(0, prWant - prFinal.deduction + 1500 - 500) && prFinal.additions_note === 'Festival bonus',
+    { joined: prJoinedMid.status, regen: prProRegen.status, line: prFinal, want: prWant },
   )
   const prEdApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: edToken, method: 'POST' })
   const prApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
@@ -1622,6 +1639,7 @@ if (listed) {
     'payroll: after approval the member sees their own payslip only; nobody else and no other studio',
     prSlips.status === 200 && (prSlips.json ?? []).length === 1 && prSlips.json[0].id === prLine?.id &&
       prSlip.status === 200 && prSlip.json.name === 'Priya Editor' && prSlip.json.additions_note === 'Festival bonus' && !!prSlip.json.company_name &&
+      prSlip.json.period_start === prMid && prSlip.json.payable_days === prFinal?.payable_days && prSlip.json.prorated_base === prFinal?.prorated_base &&
       prEdRuns.status === 403 && prEdOthers.status === 403 && prOtherStudio.status === 404 && prOtherPay.status === 404,
     { slips: prSlips.json, slip: prSlip.status, runs: prEdRuns.status, others: prEdOthers.status, otherStudio: prOtherStudio.status, otherPay: prOtherPay.status },
   )
@@ -1636,9 +1654,9 @@ if (listed) {
   check(
     'payroll: the owner marks the member paid once; the salaries ledger says paid; the member is told; the bank sheet is for the owner only',
     prEdPay.status === 403 && prPay.status === 200 && prPay.json.paid_count === 1 && prPay2.status === 422 &&
-      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prAfter?.net_pay &&
+      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prFinal?.net_pay &&
       (prNotes.json ?? []).some((n) => /^Payslip for .+ is ready$/.test(n.title)) &&
-      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prAfter?.net_pay) &&
+      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prFinal?.net_pay && r.payable_days === prFinal?.payable_days) &&
       prEdExport.status === 403,
     { edPay: prEdPay.status, pay: prPay.json, again: prPay2.status, ledger: prLedgerRow, notes: (prNotes.json ?? []).map((n) => n.title), export: prExport.status, edExport: prEdExport.status },
   )

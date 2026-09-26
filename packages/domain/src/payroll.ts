@@ -11,6 +11,19 @@
  *                   never more than the base
  *   net pay       = base − deduction + additions − other deductions, never below 0
  *
+ * Someone who joins or leaves part-way through the month (0188) is paid for
+ * the working days they were with the studio:
+ *
+ *   payable days   = working days of the month between joining and leaving
+ *   pro-rated base = round(base × payable days ÷ working days)
+ *                    (the full base when every working day is covered)
+ *   deduction      = as above, counting only days inside that window,
+ *                    never more than the pro-rated base
+ *   net pay        = pro-rated base − deduction + additions − other deductions
+ *
+ * A month with no working days pays by calendar days instead. Everyone else
+ * (joined before the month, not left) is paid exactly as before.
+ *
  * Lateness is shown, never deducted.
  */
 
@@ -64,14 +77,71 @@ export function unpaidLeaveDays(leave: readonly LeaveSpan[], working: readonly s
   return days
 }
 
-/** Rupees, whole: base ÷ working days × days not paid for, never above the base. */
-export function salaryDeduction(base: number, working: number, unpaidLeave: number, absent: number): number {
+/**
+ * Rupees, whole: base ÷ working days × days not paid for, never above the
+ * cap (the base, or the pro-rated base for part of a month).
+ */
+export function salaryDeduction(base: number, working: number, unpaidLeave: number, absent: number, cap = base): number {
   if (base <= 0 || working <= 0) return 0
   const days = Math.max(0, unpaidLeave) + Math.max(0, absent)
   if (days <= 0) return 0
   // A hair of epsilon so 0.5 in binary float still rounds up, like Postgres.
   const raw = Math.round((base * days) / working + 1e-9)
-  return Math.min(base, raw)
+  return Math.min(cap, raw)
+}
+
+export interface PayWindow {
+  /** First day paid for, inside the month ("YYYY-MM-DD"). */
+  start: string
+  /** Last day paid for, inside the month. */
+  end: string
+  /** Joined after the 1st. */
+  joined: boolean
+  /** Left before the last day. */
+  left: boolean
+}
+
+/**
+ * The days of the month someone was with the studio: from joining to
+ * leaving, clamped to the month. Null when they were not there at all.
+ */
+export function payWindow(year: number, month: number, joinedOn: string | null, leftOn: string | null): PayWindow | null {
+  const first = iso(year, month, 1)
+  const last = iso(year, month, daysInMonth(year, month))
+  const start = joinedOn && joinedOn > first ? joinedOn : first
+  const end = leftOn && leftOn < last ? leftOn : last
+  if (start > end) return null
+  return { start, end, joined: start > first, left: end < last }
+}
+
+/** The working days that fall inside the window. */
+export function payableDates(working: readonly string[], window: Pick<PayWindow, 'start' | 'end'>): string[] {
+  return working.filter((d) => d >= window.start && d <= window.end)
+}
+
+/** Whole days from start to end, both counted. */
+export function calendarDays(start: string, end: string): number {
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1
+}
+
+/**
+ * The salary for part of a month: base × payable days ÷ working days, to
+ * the rupee. The full base when every working day is covered. A month with
+ * no working days at all pays by calendar days (window ÷ month) instead.
+ */
+export function proratedBase(
+  base: number,
+  payable: number,
+  working: number,
+  calendar?: { windowDays: number; monthDays: number },
+): number {
+  if (base <= 0) return 0
+  if (working <= 0) {
+    if (!calendar || calendar.windowDays >= calendar.monthDays) return base
+    return Math.round((base * Math.max(0, calendar.windowDays)) / calendar.monthDays + 1e-9)
+  }
+  if (payable >= working) return base
+  return Math.round((base * Math.max(0, payable)) / working + 1e-9)
 }
 
 export interface PayLineInput {
@@ -89,6 +159,11 @@ export function netPay({ base, deduction, additions, otherDeductions }: PayLineI
 export interface PayrollLineFacts {
   base: number
   workingDays: number
+  /** Working days inside the joining–leaving window; leave out for the whole month. */
+  payableDays?: number
+  /** Only for a month with no working days: the window and the month, in calendar days. */
+  calendar?: { windowDays: number; monthDays: number }
+  /** Counted inside the window only. */
   unpaidLeaveDays: number
   absentDays: number
   additions?: number
@@ -96,12 +171,45 @@ export interface PayrollLineFacts {
 }
 
 /** One person's month, start to finish. */
-export function computePayrollLine(f: PayrollLineFacts): { deduction: number; net: number } {
-  const deduction = salaryDeduction(f.base, f.workingDays, f.unpaidLeaveDays, f.absentDays)
+export function computePayrollLine(f: PayrollLineFacts): { prorated: number; deduction: number; net: number } {
+  const prorated = proratedBase(f.base, f.payableDays ?? f.workingDays, f.workingDays, f.calendar)
+  const deduction = salaryDeduction(f.base, f.workingDays, f.unpaidLeaveDays, f.absentDays, prorated)
   return {
+    prorated,
     deduction,
-    net: netPay({ base: f.base, deduction, additions: f.additions ?? 0, otherDeductions: f.otherDeductions ?? 0 }),
+    net: netPay({ base: prorated, deduction, additions: f.additions ?? 0, otherDeductions: f.otherDeductions ?? 0 }),
   }
+}
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
+
+/** "12 Sep" from "2026-09-12". */
+export function shortDay(day: string): string {
+  const [, m, d] = day.split('-').map(Number)
+  return `${d} ${SHORT_MONTHS[(m ?? 1) - 1] ?? ''}`
+}
+
+export interface ProRataLine {
+  pay_year: number
+  pay_month: number
+  period_start: string
+  period_end: string
+  payable_days: number
+  working_days: number
+}
+
+/**
+ * The one-line reason a salary is part of a month -- "Joined 12 Sep —
+ * pro-rated 19/26 days" -- or null for a full month.
+ */
+export function proRataNote(l: ProRataLine): string | null {
+  const first = iso(l.pay_year, l.pay_month, 1)
+  const last = iso(l.pay_year, l.pay_month, daysInMonth(l.pay_year, l.pay_month))
+  const parts: string[] = []
+  if (l.period_start > first) parts.push(`Joined ${shortDay(l.period_start)}`)
+  if (l.period_end < last) parts.push(`Left ${shortDay(l.period_end)}`)
+  if (parts.length === 0) return null
+  return `${parts.join(' · ')} — pro-rated ${l.payable_days}/${l.working_days} days`
 }
 
 export interface PayrollTotals {
@@ -128,9 +236,10 @@ export interface BankRowInput {
   bank_account_number: string | null
   bank_ifsc: string | null
   net_pay: number
+  payable_days: number
 }
 
-export const PAYROLL_BANK_HEADERS = ['Name', 'Account holder', 'Account number', 'IFSC', 'UPI ID', 'Amount'] as const
+export const PAYROLL_BANK_HEADERS = ['Name', 'Account holder', 'Account number', 'IFSC', 'UPI ID', 'Amount', 'Payable days'] as const
 
 /**
  * Rows for a bank's bulk-transfer sheet: who, where, how much. A blank
@@ -144,6 +253,7 @@ export function payrollBankRows(rows: readonly BankRowInput[]): string[][] {
     r.bank_ifsc ?? '',
     r.upi_id ?? '',
     r.net_pay.toFixed(2),
+    String(r.payable_days),
   ])
 }
 

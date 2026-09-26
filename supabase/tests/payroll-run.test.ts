@@ -3,13 +3,16 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { computePayrollLine, unpaidLeaveDays, workingDates } from '../../packages/domain/src/payroll'
+import { computePayrollLine, payableDates, payWindow, unpaidLeaveDays, workingDates } from '../../packages/domain/src/payroll'
 
 /**
  * Monthly payroll run (0185): generate a month from attendance and leave,
  * type a bonus or an advance, approve (locks it), mark paid (writes the
  * salaries ledger and tells the member). A member sees only their own line,
  * and only after approval. The database's sums match packages/domain.
+ *
+ * Pro-rata (0188): someone who joins or leaves during the month is paid for
+ * the working days in between, and only those days' absences are cut.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
@@ -107,7 +110,11 @@ describe('generate', () => {
       ],
       working,
     )
-    expect(computePayrollLine({ base: 30000, workingDays: working.length, unpaidLeaveDays: unpaid, absentDays: 1 })).toEqual({ deduction: 4200, net: 25800 })
+    expect(computePayrollLine({ base: 30000, workingDays: working.length, unpaidLeaveDays: unpaid, absentDays: 1 })).toEqual({ prorated: 30000, deduction: 4200, net: 25800 })
+    // Here all month (0188): paid for every working day, exactly as before.
+    const pp = (await q<{ ps: string; pe: string; payable_days: number; prorated_base: string }>(
+      `select period_start::text as ps, period_end::text as pe, payable_days, prorated_base from payroll_lines where id = '${p.id}'`))[0]
+    expect(pp).toEqual({ ps: '2026-09-01', pe: '2026-09-30', payable_days: 25, prorated_base: '30000.00' })
 
     const n = await line(NEHA)
     expect([Number(n.base_amount), Number(n.deduction), Number(n.net_pay)]).toEqual([10000, 0, 10000])
@@ -197,5 +204,132 @@ describe('approve and pay', () => {
     const [{ id }] = (await q<{ id: string }>(`select payroll_generate('${COMPANY}', 2026, 8, '${OWNER}') as id`)) as [{ id: string }]
     expect(await fails(`select * from payroll_mark_paid('${COMPANY}', '${id}', null, '${OWNER}', 'UPI', null)`)).toMatch(/approve the month/)
     expect(await fails(`select payroll_approve('${OTHER_CO}', '${id}', '${OWNER}')`)).toMatch(/not found/)
+  })
+})
+
+describe('pro-rata: joining and leaving during the month (0188)', () => {
+  const CO3 = 'd0000000-0000-4000-8000-0000000000cc'
+  const BOSS = 'd0000000-0000-4000-8000-000000000010'
+  const RAVI = 'd0000000-0000-4000-8000-000000000011' // joined 12 Sep (profile)
+  const MEERA = 'd0000000-0000-4000-8000-000000000012' // pay ends 20 Sep, removed 25 Sep
+  const KIRAN = 'd0000000-0000-4000-8000-000000000013' // removed in August
+  const ANU = 'd0000000-0000-4000-8000-000000000014' // joins in October
+  const SAM = 'd0000000-0000-4000-8000-000000000015' // added late on 16 Sep UTC = 17 Sep India
+  const TARA = 'd0000000-0000-4000-8000-000000000016' // pay starts 29 Sep
+  const FULL = 'd0000000-0000-4000-8000-000000000017' // here all month
+  let run3 = ''
+  const l3 = async (uid: string) =>
+    (await q<Record<string, string | number | null>>(`select *, period_start::text as ps, period_end::text as pe from payroll_lines where run_id = '${run3}' and user_id = '${uid}'`))[0]
+
+  beforeAll(async () => {
+    await db.exec(`
+      insert into auth.users (id, email) values
+        ('${BOSS}', 'b@p3.test'), ('${RAVI}', 'r@p3.test'), ('${MEERA}', 'm@p3.test'), ('${KIRAN}', 'k@p3.test'),
+        ('${ANU}', 'an@p3.test'), ('${SAM}', 's@p3.test'), ('${TARA}', 't@p3.test'), ('${FULL}', 'f@p3.test');
+      insert into companies (id, name, owner_user_id) values ('${CO3}', 'Studio 3', '${BOSS}');
+      insert into users (user_id, company_id, role, name, email, created_at, salary, engagement_type, status, deleted_at, pay_effective_from, pay_effective_to) values
+        ('${BOSS}', '${CO3}', 'super_admin', 'Boss', 'b@p3.test', '2020-01-01', null, 'in_house', 'active', null, null, null),
+        ('${RAVI}', '${CO3}', 'employee', 'Ravi', 'r@p3.test', '2020-01-01', 25000, 'in_house', 'active', null, null, null),
+        ('${MEERA}', '${CO3}', 'employee', 'Meera', 'm@p3.test', '2020-01-01', 25000, 'in_house', 'inactive', '2026-09-25T10:00:00+05:30', null, '2026-09-20'),
+        ('${KIRAN}', '${CO3}', 'employee', 'Kiran', 'k@p3.test', '2020-01-01', 25000, 'in_house', 'inactive', '2026-08-20T10:00:00+05:30', null, null),
+        ('${ANU}', '${CO3}', 'employee', 'Anu', 'an@p3.test', '2020-01-01', 25000, 'in_house', 'active', null, null, null),
+        ('${SAM}', '${CO3}', 'employee', 'Sam', 's@p3.test', '2026-09-16T20:00:00Z', 25000, 'in_house', 'active', null, null, null),
+        ('${TARA}', '${CO3}', 'employee', 'Tara', 't@p3.test', '2020-01-01', 25000, 'in_house', 'active', null, '2026-09-29', null),
+        ('${FULL}', '${CO3}', 'employee', 'Full', 'f@p3.test', '2020-01-01', 25000.5, 'in_house', 'active', null, null, null);
+      insert into member_profiles (user_id, company_id, joined_on) values
+        ('${RAVI}', '${CO3}', '2026-09-12'), ('${ANU}', '${CO3}', '2026-10-03'), ('${FULL}', '${CO3}', '2019-06-01');
+      insert into attendance_policy (company_id, weekly_off) values ('${CO3}', '{0}');
+      insert into company_holidays (company_id, holiday_date, name) values ('${CO3}', '2026-09-14', 'Studio day');
+      -- Ravi: an absence before he joined (not his), one after; unpaid leave 10-12 Sep (only the 12th is his).
+      insert into attendance (company_id, user_id, a_date, status, late_minutes) values
+        ('${CO3}', '${RAVI}', '2026-09-05', 'absent', 0),
+        ('${CO3}', '${RAVI}', '2026-09-15', 'absent', 0),
+        ('${CO3}', '${MEERA}', '2026-09-22', 'absent', 0),
+        ('${CO3}', '${FULL}', '2026-09-15', 'absent', 0);
+      insert into leave_requests (company_id, user_id, kind, start_date, end_date, half_day, status) values
+        ('${CO3}', '${RAVI}', 'unpaid', '2026-09-10', '2026-09-12', false, 'approved');
+    `)
+    ;[{ id: run3 }] = (await q<{ id: string }>(`select payroll_generate('${CO3}', 2026, 9, '${BOSS}') as id`)) as [{ id: string }]
+  })
+
+  it('pays only the people who were here during the month', async () => {
+    const people = await q<{ name: string }>(`select u.name from payroll_lines l join users u using (user_id) where l.run_id = '${run3}' order by u.name`)
+    // Not Kiran (left in August), not Anu (joins in October).
+    expect(people.map((p) => p.name)).toEqual(['Full', 'Meera', 'Ravi', 'Sam', 'Tara'])
+  })
+
+  it('pays a joiner for the working days since they joined, and cuts only their own days', async () => {
+    // 25 working days (Sundays and the 14th off). Ravi: 12-30 Sep = 15 working days.
+    const r = (await l3(RAVI))!
+    expect([r.ps, r.pe, r.working_days, r.payable_days, Number(r.base_amount), Number(r.prorated_base)]).toEqual([
+      '2026-09-12', '2026-09-30', 25, 15, 25000, 15000,
+    ])
+    // Cut: the 15th absent + the 12th unpaid = 2 days × 1000.
+    expect([Number(r.unpaid_leave_days), r.absent_days, Number(r.deduction), Number(r.net_pay)]).toEqual([1, 1, 2000, 13000])
+
+    // The screen's arithmetic agrees.
+    const working = workingDates(2026, 9, [0], ['2026-09-14'])
+    const payable = payableDates(working, payWindow(2026, 9, '2026-09-12', null)!)
+    const unpaid = unpaidLeaveDays([{ start_date: '2026-09-10', end_date: '2026-09-12', half_day: false }], payable)
+    expect(computePayrollLine({ base: 25000, workingDays: working.length, payableDays: payable.length, unpaidLeaveDays: unpaid, absentDays: 1 })).toEqual({
+      prorated: 15000,
+      deduction: 2000,
+      net: 13000,
+    })
+  })
+
+  it('pays a leaver up to their last day, even once removed; an absence after leaving is not theirs', async () => {
+    // 1-20 Sep = 16 working days.
+    const m = (await l3(MEERA))!
+    expect([m.ps, m.pe, m.payable_days, Number(m.prorated_base), m.absent_days, Number(m.net_pay)]).toEqual(['2026-09-01', '2026-09-20', 16, 16000, 0, 16000])
+  })
+
+  it('falls back to the pay start date, then the day they were added (India time)', async () => {
+    const s = (await l3(SAM))!
+    // 17-30 Sep = 12 working days.
+    expect([s.ps, s.payable_days, Number(s.prorated_base)]).toEqual(['2026-09-17', 12, 12000])
+    const t = (await l3(TARA))!
+    expect([t.ps, t.payable_days, Number(t.prorated_base)]).toEqual(['2026-09-29', 2, 2000])
+  })
+
+  it('changes nothing for someone here all month (paise and all)', async () => {
+    const f = (await l3(FULL))!
+    expect([f.ps, f.pe, f.payable_days, f.working_days, Number(f.base_amount), Number(f.prorated_base), Number(f.deduction), Number(f.net_pay)]).toEqual([
+      '2026-09-01', '2026-09-30', 25, 25, 25000.5, 25000.5, 1000, 24000.5,
+    ])
+    const [run] = await q<{ total_base: string; total_net: string }>(`select total_base, total_net from payroll_runs where id = '${run3}'`)
+    // The run's salary total is what is actually earned: 25000.5 + 16000 + 15000 + 12000 + 2000.
+    expect(run).toEqual({ total_base: '70000.50', total_net: '67000.50' })
+  })
+
+  it('recounts on a new joining date and keeps the bonus; approval writes the earned salary to the ledger', async () => {
+    const r = (await l3(RAVI))!
+    await q(`select payroll_set_adjustments('${CO3}', '${r.id}', 500, 'Joining bonus', 0, null)`)
+    // Net starts from the pro-rated salary, not the full one.
+    expect(Number((await l3(RAVI))!.net_pay)).toBe(13500)
+
+    await q(`update member_profiles set joined_on = '2026-09-19' where user_id = '${RAVI}'`)
+    await q(`select payroll_generate('${CO3}', 2026, 9, '${BOSS}')`)
+    // 19-30 Sep = 10 working days; the absence and the leave are before he joined now.
+    const again = (await l3(RAVI))!
+    expect([again.ps, again.payable_days, Number(again.prorated_base), Number(again.deduction), Number(again.additions), again.additions_note, Number(again.net_pay)]).toEqual([
+      '2026-09-19', 10, 10000, 0, 500, 'Joining bonus', 10500,
+    ])
+
+    await q(`select payroll_approve('${CO3}', '${run3}', '${BOSS}')`)
+    const [ms] = await q<{ gross: string; deductions: string; net: string }>(
+      `select gross, deductions, net from monthly_salaries where user_id = '${RAVI}' and pay_year = 2026 and pay_month = 9`)
+    expect(ms).toEqual({ gross: '10500.00', deductions: '0.00', net: '10500.00' })
+    // Approved: locked, a new joining date changes nothing.
+    await q(`update member_profiles set joined_on = '2026-09-01' where user_id = '${RAVI}'`)
+    expect(await fails(`select payroll_generate('${CO3}', 2026, 9, '${BOSS}')`)).toMatch(/locked/)
+    expect(Number((await l3(RAVI))!.prorated_base)).toBe(10000)
+  })
+
+  it('pays someone removed in August for their August days only', async () => {
+    const [{ id }] = (await q<{ id: string }>(`select payroll_generate('${CO3}', 2026, 8, '${BOSS}') as id`)) as [{ id: string }]
+    const k = (await q<{ pe: string; payable_days: number }>(`select period_end::text as pe, payable_days from payroll_lines where run_id = '${id}' and user_id = '${KIRAN}'`))[0]
+    // August 2026, Sundays off: 26 working days; 1-20 Aug has 17.
+    expect(k).toEqual({ pe: '2026-08-20', payable_days: 17 })
   })
 })

@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { CheckCircle2, Download, FileText, RefreshCcw, Wallet } from 'lucide-react'
 import type { PayrollLine, PayrollRun } from '@ipc/contracts'
-import { MONTH_NAMES, monthLabel, netPay, payrollBankRows, payrollTotals, PAYROLL_BANK_HEADERS } from '@ipc/domain'
+import { MONTH_NAMES, monthLabel, netPay, payrollBankRows, payrollTotals, proRataNote, PAYROLL_BANK_HEADERS } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -169,6 +169,7 @@ function Payroll() {
             {run.status === 'draft' && (
               <p className="text-sm text-muted-foreground">
                 Pay is cut for unpaid leave and absent days: salary ÷ working days × those days. Late marks are shown but not cut.
+                Someone who joined or left during the month is paid for the working days they were here.
               </p>
             )}
 
@@ -196,61 +197,70 @@ function Payroll() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.map((l) => (
-                      <Fragment key={l.id}>
-                        <tr className="border-t border-border align-top">
-                          <td className="px-3 py-2">
-                            <p className="font-medium">{l.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {l.days_present} of {l.working_days} days in
-                              {l.unpaid_leave_days > 0 && ` · ${days(l.unpaid_leave_days)} unpaid leave`}
-                              {l.absent_days > 0 && ` · ${l.absent_days} absent`}
-                              {l.late_marks > 0 && ` · ${l.late_marks} late`}
-                            </p>
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatINR(l.base_amount)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{l.deduction > 0 ? `−${formatINR(l.deduction)}` : '—'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {l.additions > 0 ? `+${formatINR(l.additions)}` : '—'}
-                            {l.additions_note && <p className="text-xs text-muted-foreground">{l.additions_note}</p>}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {l.other_deductions > 0 ? `−${formatINR(l.other_deductions)}` : '—'}
-                            {l.other_deductions_note && <p className="text-xs text-muted-foreground">{l.other_deductions_note}</p>}
-                          </td>
-                          <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(l.net_pay)}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
-                              {canEdit && run.status === 'draft' && (
-                                <Button size="sm" variant="outline" onClick={() => setAdjusting(adjusting === l.id ? null : l.id)}>
-                                  {adjusting === l.id ? 'Close' : 'Adjust'}
-                                </Button>
+                    {lines.map((l) => {
+                      const partial = proRataNote({ ...l, pay_year: run.pay_year, pay_month: run.pay_month })
+                      return (
+                        <Fragment key={l.id}>
+                          <tr className="border-t border-border align-top">
+                            <td className="px-3 py-2">
+                              <p className="font-medium">{l.name}</p>
+                              {partial && <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{partial}</p>}
+                              <p className="text-xs text-muted-foreground">
+                                {l.days_present} of {l.payable_days} days in
+                                {l.unpaid_leave_days > 0 && ` · ${days(l.unpaid_leave_days)} unpaid leave`}
+                                {l.absent_days > 0 && ` · ${l.absent_days} absent`}
+                                {l.late_marks > 0 && ` · ${l.late_marks} late`}
+                              </p>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatINR(l.prorated_base)}
+                              {l.prorated_base !== l.base_amount && (
+                                <p className="text-xs text-muted-foreground">of {formatINR(l.base_amount)}</p>
                               )}
-                              {canEdit && run.status !== 'draft' && !l.paid_at && (
-                                <Button size="sm" onClick={() => setPaying(l)}>
-                                  Mark paid
-                                </Button>
-                              )}
-                              {run.status !== 'draft' && (
-                                <Button size="sm" variant="ghost" asChild>
-                                  <Link to="/payroll/payslip/$lineId" params={{ lineId: l.id }} aria-label={`Payslip for ${l.name}`}>
-                                    <FileText /> Payslip
-                                  </Link>
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        {adjusting === l.id && (
-                          <tr className="bg-muted/30">
-                            <td colSpan={7} className="px-3 py-3">
-                              <AdjustRow line={l} onDone={() => setAdjusting(null)} />
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.deduction > 0 ? `−${formatINR(l.deduction)}` : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {l.additions > 0 ? `+${formatINR(l.additions)}` : '—'}
+                              {l.additions_note && <p className="text-xs text-muted-foreground">{l.additions_note}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {l.other_deductions > 0 ? `−${formatINR(l.other_deductions)}` : '—'}
+                              {l.other_deductions_note && <p className="text-xs text-muted-foreground">{l.other_deductions_note}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(l.net_pay)}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
+                                {canEdit && run.status === 'draft' && (
+                                  <Button size="sm" variant="outline" onClick={() => setAdjusting(adjusting === l.id ? null : l.id)}>
+                                    {adjusting === l.id ? 'Close' : 'Adjust'}
+                                  </Button>
+                                )}
+                                {canEdit && run.status !== 'draft' && !l.paid_at && (
+                                  <Button size="sm" onClick={() => setPaying(l)}>
+                                    Mark paid
+                                  </Button>
+                                )}
+                                {run.status !== 'draft' && (
+                                  <Button size="sm" variant="ghost" asChild>
+                                    <Link to="/payroll/payslip/$lineId" params={{ lineId: l.id }} aria-label={`Payslip for ${l.name}`}>
+                                      <FileText /> Payslip
+                                    </Link>
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
-                        )}
-                      </Fragment>
-                    ))}
+                          {adjusting === l.id && (
+                            <tr className="bg-muted/30">
+                              <td colSpan={7} className="px-3 py-3">
+                                <AdjustRow line={l} onDone={() => setAdjusting(null)} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -327,7 +337,7 @@ function AdjustRow({ line, onDone }: { line: PayrollLine; onDone: () => void }) 
   const [cutNote, setCutNote] = useState(line.other_deductions_note ?? '')
   const additions = Math.max(0, Number(add) || 0)
   const other = Math.max(0, Number(cut) || 0)
-  const net = netPay({ base: line.base_amount, deduction: line.deduction, additions, otherDeductions: other })
+  const net = netPay({ base: line.prorated_base, deduction: line.deduction, additions, otherDeductions: other })
   const missingNote = (additions > 0 && !addNote.trim()) || (other > 0 && !cutNote.trim())
 
   return (

@@ -215,6 +215,10 @@ const payLine = (n: number, name: string, over: Record<string, unknown> = {}) =>
   name,
   base_amount: 30000,
   working_days: 25,
+  period_start: '2026-09-01',
+  period_end: '2026-09-30',
+  payable_days: 25,
+  prorated_base: 30000,
   days_present: 22,
   unpaid_leave_days: 0,
   absent_days: 0,
@@ -237,11 +241,11 @@ const payrollMonthFx = {
     pay_year: 2026,
     pay_month: 9,
     status: 'approved',
-    total_base: 70000,
+    total_base: 63520,
     total_deductions: 4200,
     total_additions: 2000,
-    total_net: 67800,
-    total_paid: 18000,
+    total_net: 61320,
+    total_paid: 11520,
     people: 3,
     generated_at: '2026-09-30T10:00:00Z',
     approved_at: '2026-09-30T11:00:00Z',
@@ -250,8 +254,12 @@ const payrollMonthFx = {
   },
   lines: [
     payLine(1, 'Rahul Sharma', { days_present: 21, unpaid_leave_days: 2.5, absent_days: 1, late_marks: 2, deduction: 4200, net_pay: 25800 }),
-    payLine(2, 'Sneha Iyer', { base_amount: 22000, additions: 2000, additions_note: 'Wedding season bonus', net_pay: 24000 }),
-    payLine(3, 'Arjun Mehta', { base_amount: 18000, net_pay: 18000, other_deductions: 0, paid_amount: 18000, paid_at: '2026-09-30T12:00:00Z', payment_mode: 'UPI' }),
+    payLine(2, 'Sneha Iyer', { base_amount: 22000, prorated_base: 22000, additions: 2000, additions_note: 'Wedding season bonus', net_pay: 24000 }),
+    // Joined on 12 Sep: paid for 16 of 25 working days.
+    payLine(3, 'Arjun Mehta', {
+      base_amount: 18000, period_start: '2026-09-12', payable_days: 16, prorated_base: 11520, days_present: 16, net_pay: 11520,
+      other_deductions: 0, paid_amount: 11520, paid_at: '2026-09-30T12:00:00Z', payment_mode: 'UPI',
+    }),
   ],
   freelancers: [
     { user_id: uid(0xe9), name: 'Vikram (drone)', shoots: 2, owed: 16000, paid: 6000, due: 10000 },
@@ -500,7 +508,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   }
   if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/approve$/.test(path)) return {}
   if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/pay$/.test(path))
-    return (body as { line_id?: string }).line_id ? { paid_count: 1, paid_total: 25800 } : { paid_count: 2, paid_total: 44000 }
+    return (body as { line_id?: string }).line_id ? { paid_count: 1, paid_total: 25800 } : { paid_count: 2, paid_total: 49800 }
   if (method === 'GET' && /^\/payroll\/runs\/[^/]+\/export$/.test(path))
     return payrollMonthFx.lines.map((l, i) => ({
       name: l.name,
@@ -509,6 +517,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       bank_account_number: i === 1 ? '50100123456789' : null,
       bank_ifsc: i === 1 ? 'HDFC0001234' : null,
       net_pay: l.net_pay,
+      payable_days: l.payable_days,
     }))
   if (method === 'GET' && path.startsWith('/payroll/payslips?'))
     return [
@@ -521,6 +530,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       id: path.split('/')[3]!,
       pay_year: 2026,
       pay_month: 8,
+      period_start: '2026-08-01',
+      period_end: '2026-08-31',
       run_status: 'paid',
       paid_at: '2026-09-01T06:00:00Z',
       payment_mode: 'UPI',
