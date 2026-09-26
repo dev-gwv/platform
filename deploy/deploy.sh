@@ -48,6 +48,6 @@ echo "deploy.sh: APP_VERSION=${SHA}"
 # than leaving the API running against a half-migrated database.
 docker compose -f docker-compose.yml -f docker-compose.coolify.yml \
   up -d --build --wait --remove-orphans \
-  db migrate api cron cron-attendance backup
+  db migrate api cron cron-attendance cron-messages backup
 
 docker compose -f docker-compose.yml -f docker-compose.coolify.yml ps

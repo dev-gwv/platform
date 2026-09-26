@@ -68,6 +68,8 @@ import { PlatformStudiosPage } from '@/routes/platform/studios'
 import { PlatformUsagePage } from '@/routes/platform/usage'
 import { PlatformFeedbackPage } from '@/routes/platform/feedback'
 import { SystemPage } from '@/routes/settings/system'
+import { MessagingSettingsPage } from '@/routes/settings/messaging'
+import { PlatformMessagingPage } from '@/routes/platform/messaging'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
 import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
@@ -274,6 +276,8 @@ const routeTree = rootRoute.addChildren([
   route('/platform/studios', PlatformStudiosPage),
   route('/platform/usage', PlatformUsagePage),
   route('/platform/feedback', PlatformFeedbackPage),
+  route('/platform/messaging', PlatformMessagingPage),
+  route('/settings/messaging', MessagingSettingsPage),
   ]),
 ])
 

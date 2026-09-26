@@ -37,6 +37,7 @@ import {
   Ellipsis,
   HandCoins,
   type LucideIcon,
+  MessageCircle,
 } from 'lucide-react'
 
 export interface NavLeaf {
@@ -197,6 +198,7 @@ export const NAV: NavEntry[] = [
       leaf('Studios', '/platform/studios', Building2, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
       leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
+      leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
     ],
   },
 ]

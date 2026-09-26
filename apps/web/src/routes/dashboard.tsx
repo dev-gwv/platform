@@ -42,6 +42,7 @@ import { useDataRecords } from '@/features/data/api'
 import { useBoard } from '@/features/tasks/api'
 import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
+import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
 import { buildJourney } from '@/features/onboarding/journey'
 import { dashboardSections } from '@/features/onboarding/dashboard-sections'
@@ -219,6 +220,8 @@ function StudioCommandCenter() {
           )
         }
       />
+
+      <LowBalanceBanner />
 
       {showJourney && (
         <SetupJourney steps={journey.steps} completed={journey.completed} total={journey.total} />

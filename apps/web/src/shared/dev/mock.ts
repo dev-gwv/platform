@@ -1058,6 +1058,10 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'PATCH' && path.startsWith('/platform/feedback/')) return {}
   if (method === 'GET' && path === '/platform/usage') return platformUsageFx
   if (method === 'POST' && /^\/platform\/studios\/[^/]+\/plan$/.test(path)) return { ok: true }
+  {
+    const m = messagingMock(method, path, body)
+    if (m !== NOT_MOCKED) return m
+  }
   // 204-style writes: return an empty object so the schema (z.any) passes.
   if (method === 'POST' && path === '/tasks/board/order') return {}
   if (method === 'PATCH' && path.includes('/status')) return {}
@@ -3367,4 +3371,124 @@ function memberOverviewFx(id: string, name: string) {
     payouts: [],
     can: { edit: true, see_pay: true, manage_access: true },
   }
+}
+
+// ── messaging wallet ─────────────────────────────────────────────
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+
+const walletFx = { balance_paise: 8420, low_balance_paise: 10000 }
+const messagingSettingsFx = [
+  { event: 'start_reminder', whatsapp: true, email: true },
+  { event: 'leave_decided', whatsapp: true, email: false },
+  { event: 'payslip_ready', whatsapp: false, email: true },
+  { event: 'shoot_tomorrow', whatsapp: false, email: false },
+]
+const rechargeFx: Array<Record<string, unknown>> = [
+  { id: uid(0x7a1), amount_paise: 100000, note: 'Paid by UPI', status: 'fulfilled', created_at: hoursAgo(240), decided_at: hoursAgo(230), admin_note: null },
+]
+const ledgerFx = [
+  { id: uid(0x7b1), kind: 'debit', amount_paise: 20, balance_after: 8420, source: 'whatsapp', reference: null, note: null, message_id: uid(0x7c1), created_at: hoursAgo(2) },
+  { id: uid(0x7b2), kind: 'credit', amount_paise: 20, balance_after: 8440, source: 'refund', reference: null, note: 'WhatsApp could not deliver it', message_id: uid(0x7c2), created_at: hoursAgo(5) },
+  { id: uid(0x7b3), kind: 'debit', amount_paise: 20, balance_after: 8420, source: 'whatsapp', reference: null, note: null, message_id: uid(0x7c2), created_at: hoursAgo(6) },
+  { id: uid(0x7b4), kind: 'credit', amount_paise: 100000, balance_after: 100000, source: 'recharge_manual', reference: 'UTR 4412 9087', note: 'Paid by UPI', message_id: null, created_at: hoursAgo(230) },
+]
+const recentFx = [
+  { id: uid(0x7c1), channel: 'whatsapp', to_address: '919876543210', template_key: 'start_reminder', subject: 'Demo Studio: Start Album design today', status: 'delivered', cost_paise: 20, error: null, created_at: hoursAgo(2), refunded: false },
+  { id: uid(0x7c3), channel: 'email', to_address: 'priya@demostudio.in', template_key: 'start_reminder', subject: 'Demo Studio: Start Album design today', status: 'sent', cost_paise: 0, error: null, created_at: hoursAgo(2), refunded: false },
+  { id: uid(0x7c2), channel: 'whatsapp', to_address: '919812345678', template_key: 'leave_decided', subject: 'Demo Studio: Leave approved', status: 'failed', cost_paise: 20, error: 'Number not on WhatsApp', created_at: hoursAgo(6), refunded: true },
+]
+const templatesFx = [
+  { id: uid(0x7d1), key: 'start_reminder', name: 'Work start reminder', meta_template_name: 'ipc_work_start_reminder', language: 'en', category: 'utility', body: 'Hi {{1}}, a work reminder from {{2}}: {{3}}. Details: {{4}}. Open the IPC Studios app to see your work.', variables: ['First name', 'Studio name', 'What to start', 'Project and due date'], status: 'approved', updated_at: hoursAgo(300) },
+  { id: uid(0x7d2), key: 'leave_decided', name: 'Leave decision', meta_template_name: 'ipc_leave_decision', language: 'en', category: 'utility', body: 'Hi {{1}}, {{2}} has replied to your leave request: {{3}}. Dates: {{4}}.', variables: ['First name', 'Studio name', 'Approved or not', 'Dates and note'], status: 'pending', updated_at: hoursAgo(300) },
+]
+const platformPricesFx = [
+  { id: uid(0x7e1), channel: 'whatsapp', category: 'utility', meta_cost_paise: 12, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 20 },
+  { id: uid(0x7e2), channel: 'whatsapp', category: 'marketing', meta_cost_paise: 79, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 104 },
+  { id: uid(0x7e3), channel: 'whatsapp', category: 'authentication', meta_cost_paise: 12, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 20 },
+  { id: uid(0x7e4), channel: 'email', category: 'email', meta_cost_paise: 0, markup_pct: 0, markup_fixed_paise: 20, free_monthly: 500, effective_from: hoursAgo(500), price_paise: 20 },
+]
+
+function messagingMock(method: string, path: string, body: unknown): unknown {
+  if (method === 'GET' && path === '/messaging/wallet')
+    return { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true }
+  if (method === 'GET' && path === '/messaging')
+    return {
+      wallet: { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true },
+      usage: { whatsapp_count: 412, whatsapp_paise: 8240, email_free_used: 131, email_free_monthly: 500, email_charged_count: 0, email_paise: 0, skipped_no_balance: 0 },
+      prices: [
+        { channel: 'whatsapp', category: 'authentication', price_paise: 20, free_monthly: 0 },
+        { channel: 'whatsapp', category: 'marketing', price_paise: 104, free_monthly: 0 },
+        { channel: 'whatsapp', category: 'utility', price_paise: 20, free_monthly: 0 },
+        { channel: 'email', category: 'email', price_paise: 20, free_monthly: 500 },
+      ],
+      settings: messagingSettingsFx,
+      requests: rechargeFx,
+      recent: recentFx,
+      email_live: true,
+    }
+  if (method === 'GET' && path.startsWith('/messaging/ledger')) {
+    const source = new URLSearchParams(path.split('?')[1] ?? '').get('source')
+    return source ? ledgerFx.filter((l) => l.source === source) : ledgerFx
+  }
+  if (method === 'POST' && path === '/messaging/recharge-requests') {
+    const b = (body ?? {}) as { amount_paise?: number; note?: string }
+    const id = uid(0x7a0 + rechargeFx.length + 1)
+    rechargeFx.unshift({ id, amount_paise: b.amount_paise ?? 100000, note: b.note ?? null, status: 'pending', created_at: new Date().toISOString(), decided_at: null, admin_note: null })
+    return { id }
+  }
+  {
+    const m = /^\/messaging\/recharge-requests\/([^/]+)\/cancel$/.exec(path)
+    if (m && method === 'POST') {
+      const r = rechargeFx.find((x) => x.id === m[1])
+      if (r) r.status = 'cancelled'
+      return {}
+    }
+  }
+  if (method === 'PATCH' && path === '/messaging/settings') {
+    const b = (body ?? {}) as { events?: Array<{ event: string; whatsapp: boolean; email: boolean }>; low_balance_paise?: number }
+    for (const e of b.events ?? []) {
+      const s = messagingSettingsFx.find((x) => x.event === e.event)
+      if (s) Object.assign(s, e)
+    }
+    if (b.low_balance_paise !== undefined) walletFx.low_balance_paise = b.low_balance_paise
+    return { ok: true }
+  }
+  if (method === 'POST' && path === '/messaging/test') return { id: uid(0x7c9), status: 'queued', error: null }
+
+  if (method === 'GET' && path === '/platform/messaging/status') return { whatsapp_live: true, email_live: true, webhook_signed: true }
+  if (method === 'GET' && path === '/platform/messaging/wallets')
+    return [
+      { company_id: uid(0xaa), company_name: 'Demo Studio', balance_paise: walletFx.balance_paise, low_balance_paise: walletFx.low_balance_paise, overdraft_paise: 0, pending_requests: rechargeFx.filter((r) => r.status === 'pending').length, month_whatsapp: 412, month_emails: 131, month_charged_paise: 8240, last_activity: hoursAgo(2) },
+      { company_id: uid(0xab), company_name: 'Lensworks Weddings', balance_paise: 152000, low_balance_paise: 10000, overdraft_paise: 5000, pending_requests: 0, month_whatsapp: 1210, month_emails: 640, month_charged_paise: 26200, last_activity: hoursAgo(1) },
+    ]
+  if (method === 'GET' && path.startsWith('/platform/messaging/requests')) {
+    const pendingOnly = path.includes('status=pending')
+    return rechargeFx
+      .filter((r) => !pendingOnly || r.status === 'pending')
+      .map((r) => ({ ...r, company_id: uid(0xaa), company_name: 'Demo Studio', requested_by_name: 'Demo Owner', balance_paise: walletFx.balance_paise }))
+  }
+  if (method === 'POST' && path === '/platform/messaging/credit') {
+    const b = (body ?? {}) as { amount_paise?: number; request_id?: string }
+    walletFx.balance_paise += b.amount_paise ?? 0
+    const r = rechargeFx.find((x) => x.id === b.request_id)
+    if (r) r.status = 'fulfilled'
+    return { id: uid(0x7b9) }
+  }
+  if (method === 'POST' && (path === '/platform/messaging/adjust' || path === '/platform/messaging/overdraft')) return { id: uid(0x7ba), ok: true }
+  if (method === 'POST' && /^\/platform\/messaging\/requests\/[^/]+\/reject$/.test(path)) return {}
+  if (method === 'GET' && path === '/platform/messaging/prices') return platformPricesFx
+  if (method === 'POST' && path === '/platform/messaging/prices') return { id: uid(0x7e9) }
+  if (method === 'GET' && path === '/platform/messaging/templates') return templatesFx
+  if (method === 'PUT' && path === '/platform/messaging/templates') return { id: uid(0x7d9) }
+  if (method === 'GET' && path.startsWith('/platform/messaging/outbox'))
+    return recentFx
+      .filter((m) => !path.includes('status=') || path.includes(`status=${m.status}`))
+      .map((m) => ({ ...m, company_id: uid(0xaa), company_name: 'Demo Studio', sent_at: m.created_at }))
+  if (method === 'GET' && path.startsWith('/platform/messaging/margin'))
+    return [
+      { month: '2026-09', channel: 'whatsapp', messages: 1622, charged_paise: 32440, cost_paise: 19464, margin_paise: 12976 },
+      { month: '2026-09', channel: 'email', messages: 771, charged_paise: 0, cost_paise: 0, margin_paise: 0 },
+      { month: '2026-08', channel: 'whatsapp', messages: 1380, charged_paise: 27600, cost_paise: 16560, margin_paise: 11040 },
+    ]
+  return NOT_MOCKED
 }

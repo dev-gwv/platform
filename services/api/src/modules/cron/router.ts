@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import * as Sentry from '@sentry/bun'
-import { attendanceSweepResult, cronRun, cronRunResult } from '@ipc/contracts'
+import { attendanceSweepResult, cronRun, cronRunResult, messagesCronResult } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { fail } from '../../middleware/errors'
 import { requireAuth } from '../../middleware/auth'
@@ -9,6 +9,7 @@ import { attempt } from '../../lib/attempt'
 import { timingSafeEqual } from '../../lib/crypto'
 import { log } from '../../lib/log'
 import { drainOutbox } from '../../lib/outbox'
+import { drainMessages } from '../../lib/messaging'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -178,6 +179,40 @@ export const cronRouter = new Hono<AppEnv>()
     }
     log.info({ path: c.req.path, dryRun, marked_absent: marked }, 'cron attendance ran')
     return c.json(attendanceSweepResult.parse({ ok: true, marked_absent: marked }))
+  })
+
+  /**
+   * The messaging worker: sends what enqueue_message() queued (WhatsApp
+   * templates via the Cloud API, emails via Resend) and refunds whatever
+   * fails. Every five minutes from the `cron-messages` ticker, so a start
+   * reminder or a leave decision reaches the phone soon after it is written.
+   *
+   * Without WhatsApp / Resend credentials each row fails with "… not
+   * configured" and is refunded; the run itself still succeeds. ?dry=1 only
+   * counts what is waiting.
+   */
+  .post('/messages', async (c) => {
+    const provided = c.req.header('x-cron-secret') ?? ''
+    const expected = c.env.CRON_SECRET ?? ''
+    if (!expected || !timingSafeEqual(provided, expected)) fail(401, 'Unauthorized.')
+
+    const dryRun = c.req.query('dry') === '1'
+    if (dryRun) {
+      const waiting = await attempt(c, 'cron.messages.dry', () =>
+        withService(c.env, async (sql) => (await sql<{ n: number }[]>`
+          select count(*)::int as n from message_outbox where status = 'queued'`)[0]?.n ?? 0),
+      )
+      if (waiting === null) fail(400, 'The job could not run.')
+      return c.json(messagesCronResult.parse({ ok: true, claimed: waiting, sent: 0, failed: 0 }))
+    }
+    const result = await Sentry.withMonitor(
+      'messages-cron',
+      () => attempt(c, 'cron.messages', () => drainMessages(c.env)),
+      { schedule: { type: 'interval', value: 5, unit: 'minute' }, checkinMargin: 10, maxRuntime: 10, timezone: 'Etc/UTC' },
+    )
+    if (!result) throw new Error('cron.messages failed')
+    log.info({ path: c.req.path, ...result }, 'cron messages ran')
+    return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 
   .get('/runs', requireAuth, async (c) => {

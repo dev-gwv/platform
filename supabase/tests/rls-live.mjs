@@ -2097,5 +2097,100 @@ if (listed) {
   )
 }
 
+// ── Messaging wallet: balance, recharge request, settings, no-balance skip ──
+{
+  const bTok = newPw.json.access_token
+  const start = await api('/messaging', { token: aToken })
+  check(
+    'messaging: the owner sees a wallet at ₹0, prices, and every event off',
+    start.status === 200 && start.json.wallet?.balance_paise === 0 && start.json.prices?.some((p) => p.channel === 'whatsapp' && p.price_paise > 0) &&
+      start.json.settings?.length === 4 && start.json.settings.every((s) => !s.whatsapp && !s.email),
+    { status: start.status, wallet: start.json.wallet, settings: start.json.settings },
+  )
+  check(
+    'messaging: a studio sees its price, never the platform cost or markup',
+    start.status === 200 && start.json.prices.every((p) => !('meta_cost_paise' in p) && !('markup_pct' in p)),
+    start.json.prices,
+  )
+
+  const tooSmall = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 500 } })
+  const req = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 100000, note: 'UPI done' } })
+  const twice = await api('/messaging/recharge-requests', { token: aToken, method: 'POST', body: { amount_paise: 50000 } })
+  const afterReq = await api('/messaging', { token: aToken })
+  check(
+    'messaging: the owner asks for a ₹1,000 recharge; it shows as pending, and a second one waits for the first',
+    tooSmall.status === 422 && req.status === 201 && twice.status === 422 &&
+      afterReq.json.requests?.some((r) => r.id === req.json.id && r.status === 'pending' && r.amount_paise === 100000),
+    { tooSmall: tooSmall.status, req: req.json, twice: twice.json, requests: afterReq.json.requests },
+  )
+
+  const selfCredit = await api('/platform/messaging/credit', {
+    token: aToken, method: 'POST', body: { company_id: '00000000-0000-4000-8000-000000000001', amount_paise: 100000, reference: 'x', request_id: req.json.id },
+  })
+  const wallets = await api('/platform/messaging/wallets', { token: aToken })
+  const afterTry = await api('/messaging/wallet', { token: aToken })
+  check(
+    'messaging: a studio owner (not a platform admin) cannot credit a wallet or read the platform wallets',
+    selfCredit.status === 403 && wallets.status === 403 && afterTry.json.balance_paise === 0,
+    { selfCredit: selfCredit.status, wallets: wallets.status, balance: afterTry.json },
+  )
+
+  const toggle = await api('/messaging/settings', {
+    token: aToken, method: 'PATCH', body: { events: [{ event: 'start_reminder', whatsapp: true, email: false }], low_balance_paise: 20000 },
+  })
+  const afterToggle = await api('/messaging', { token: aToken })
+  const theirs = await api('/messaging', { token: bTok })
+  check(
+    'messaging: switching WhatsApp on for start reminders saves, and does not touch another studio',
+    toggle.status === 200 && afterToggle.json.settings.find((s) => s.event === 'start_reminder')?.whatsapp === true &&
+      afterToggle.json.wallet.low_balance_paise === 20000 && afterToggle.json.wallet.low === true &&
+      theirs.status === 200 && theirs.json.settings.every((s) => !s.whatsapp) && !theirs.json.requests.some((r) => r.id === req.json.id),
+    { toggle: toggle.status, mine: afterToggle.json.settings, wallet: afterToggle.json.wallet, theirs: theirs.json.settings },
+  )
+
+  const test = await api('/messaging/test', { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const afterTest = await api('/messaging', { token: aToken })
+  check(
+    'messaging: with ₹0 a WhatsApp message is skipped with "Recharge to send", nothing charged',
+    test.status === 201 && test.json.status === 'skipped_no_balance' && afterTest.json.wallet.balance_paise === 0 &&
+      afterTest.json.recent.some((m) => m.id === test.json.id && m.status === 'skipped_no_balance' && m.cost_paise === 0) &&
+      afterTest.json.usage.skipped_no_balance >= 1,
+    { test: test.json, recent: afterTest.json.recent?.slice(0, 2), usage: afterTest.json.usage },
+  )
+
+  const ledger = await api('/messaging/ledger', { token: aToken })
+  const worker = await fetch(`${API}/cron/messages`, { method: 'POST', headers: { 'x-cron-secret': 'wrong' } })
+  check(
+    'messaging: the ledger is empty until money moves, and the worker needs the cron secret',
+    ledger.status === 200 && Array.isArray(ledger.json) && ledger.json.length === 0 && worker.status === 401,
+    { ledger: ledger.json, worker: worker.status },
+  )
+
+  // A team member is not the owner: the wallet is not theirs to see.
+  const mEmail = `msg-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Wallet Member', email: mEmail, role: 'employee' } })
+  const invTok = /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? ''
+  const joined = await api('/auth/accept-invite', { method: 'POST', body: { token: invTok, password: 'Member12345!' } })
+  const memberView = await api('/messaging', { token: joined.json.access_token })
+  const memberReq = await api('/messaging/recharge-requests', { token: joined.json.access_token, method: 'POST', body: { amount_paise: 50000 } })
+  check(
+    'messaging: a team member cannot see the wallet or ask for a recharge',
+    joined.status === 200 && memberView.status === 403 && memberReq.status === 403,
+    { joined: joined.status, view: memberView.status, req: memberReq.status },
+  )
+
+  const cancel = await api(`/messaging/recharge-requests/${req.json.id}/cancel`, { token: aToken, method: 'POST', body: {} })
+  const theirCancel = await api(`/messaging/recharge-requests/${req.json.id}/cancel`, { token: bTok, method: 'POST', body: {} })
+  check(
+    'messaging: the owner can take back a pending request; another studio cannot',
+    theirCancel.status === 422 && cancel.status === 204,
+    { cancel: cancel.status, theirs: theirCancel.status },
+  )
+
+  // The WhatsApp webhook handshake refuses a wrong token.
+  const hook = await fetch(`${API}/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=123`)
+  check('messaging: the WhatsApp webhook handshake refuses a wrong token', hook.status === 403, { status: hook.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
