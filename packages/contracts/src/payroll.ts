@@ -33,7 +33,7 @@ export const payrollLine = z.object({
   /** The full monthly salary. */
   base_amount: money,
   working_days: z.number().int(),
-  /** The days paid for: joining (or the 1st) to leaving (or the last day), 0188. */
+  /** The days paid for: joining (or the 1st) to leaving (or the last day), 0187. */
   period_start: isoDate,
   period_end: isoDate,
   /** Working days inside that period. */

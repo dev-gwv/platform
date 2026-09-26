@@ -11,7 +11,7 @@ import { computePayrollLine, payableDates, payWindow, unpaidLeaveDays, workingDa
  * salaries ledger and tells the member). A member sees only their own line,
  * and only after approval. The database's sums match packages/domain.
  *
- * Pro-rata (0188): someone who joins or leaves during the month is paid for
+ * Pro-rata (0187): someone who joins or leaves during the month is paid for
  * the working days in between, and only those days' absences are cut.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
@@ -111,7 +111,7 @@ describe('generate', () => {
       working,
     )
     expect(computePayrollLine({ base: 30000, workingDays: working.length, unpaidLeaveDays: unpaid, absentDays: 1 })).toEqual({ prorated: 30000, deduction: 4200, net: 25800 })
-    // Here all month (0188): paid for every working day, exactly as before.
+    // Here all month (0187): paid for every working day, exactly as before.
     const pp = (await q<{ ps: string; pe: string; payable_days: number; prorated_base: string }>(
       `select period_start::text as ps, period_end::text as pe, payable_days, prorated_base from payroll_lines where id = '${p.id}'`))[0]
     expect(pp).toEqual({ ps: '2026-09-01', pe: '2026-09-30', payable_days: 25, prorated_base: '30000.00' })
@@ -207,7 +207,7 @@ describe('approve and pay', () => {
   })
 })
 
-describe('pro-rata: joining and leaving during the month (0188)', () => {
+describe('pro-rata: joining and leaving during the month (0187)', () => {
   const CO3 = 'd0000000-0000-4000-8000-0000000000cc'
   const BOSS = 'd0000000-0000-4000-8000-000000000010'
   const RAVI = 'd0000000-0000-4000-8000-000000000011' // joined 12 Sep (profile)

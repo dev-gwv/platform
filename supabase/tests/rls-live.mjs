@@ -1571,7 +1571,7 @@ if (listed) {
   const prYear = prNow.getUTCFullYear()
   const prMonth = prNow.getUTCMonth() + 1
   const prSalary = await api(`/team/members/${edUid}`, { token: aToken, method: 'PATCH', body: { salary: 30000, engagement_type: 'in_house' } })
-  // Joined long before this month (0188): paid the whole month, as before pro-rata.
+  // Joined long before this month (0187): paid the whole month, as before pro-rata.
   const prJoinedEarly = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: `${prYear - 1}-01-15` } })
   const prEdGen = await api('/payroll/runs/generate', { token: edToken, method: 'POST', body: { year: prYear, month: prMonth } })
   const prMgrGen = await api('/payroll/runs/generate', { token: tmToken, method: 'POST', body: { year: prYear, month: prMonth } })
@@ -1605,7 +1605,7 @@ if (listed) {
       prSlipsBefore.status === 200 && (prSlipsBefore.json ?? []).length === 0 && prSlipBefore.status === 404,
     { noNote: prNoNote.status, edit: prEdit.json, edEdit: prEdEdit.status, regen: prRegen.status, after: prAfter, before: prSlipsBefore.json, one: prSlipBefore.status },
   )
-  // Pro-rata (0188): the member's joining date moves to the 12th of this month;
+  // Pro-rata (0187): the member's joining date moves to the 12th of this month;
   // working the month out again pays only the working days since then.
   const prMid = `${prYear}-${String(prMonth).padStart(2, '0')}-12`
   const prJoinedMid = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: prMid } })

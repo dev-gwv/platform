@@ -11,7 +11,7 @@
  *                   never more than the base
  *   net pay       = base − deduction + additions − other deductions, never below 0
  *
- * Someone who joins or leaves part-way through the month (0188) is paid for
+ * Someone who joins or leaves part-way through the month (0187) is paid for
  * the working days they were with the studio:
  *
  *   payable days   = working days of the month between joining and leaving
