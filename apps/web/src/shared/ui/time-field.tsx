@@ -105,7 +105,7 @@ export function TimeField({
     )
   const cell = (selected: boolean) =>
     cn(
-      'flex size-9 items-center justify-center rounded-full text-sm tabular-nums transition-colors',
+      'flex size-8 items-center justify-center justify-self-center rounded-full text-sm tabular-nums transition-colors',
       'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent',
       selected && 'bg-primary font-semibold text-primary-foreground hover:bg-primary',
     )
@@ -150,7 +150,15 @@ export function TimeField({
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-[19rem] max-w-[calc(100vw-1rem)] p-3">
+        <PopoverContent
+          // Never taller than the room it has, so the top row cannot slide off
+          // the screen when it opens upward; and no keyboard jumping up on a
+          // phone before anyone has asked to type.
+          className="max-h-[var(--radix-popover-content-available-height)] w-[19rem] max-w-[calc(100vw-1rem)] overflow-y-auto p-3"
+          onOpenAutoFocus={(e) => {
+            if (globalThis.matchMedia?.('(pointer: coarse)').matches) e.preventDefault()
+          }}
+        >
           <form
             className="mb-3 flex items-center gap-1.5"
             onSubmit={(e) => {
@@ -164,7 +172,6 @@ export function TimeField({
                 setTyped(e.target.value)
                 setTypedBad(false)
               }}
-              autoFocus
               placeholder="Type a time, e.g. 3:15 pm"
               aria-label="Type a time"
               aria-invalid={typedBad || undefined}

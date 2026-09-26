@@ -1464,14 +1464,21 @@ function ShootCard({
               <span className="min-w-0 truncate text-sm text-muted-foreground">{shootSummary(shoot)}</span>
             )
           ) : (
-            <span className="flex min-w-0 flex-wrap gap-1.5">
+            <>
+              {/* A phone has room for one chip, not three: say how many. */}
+              <StatusBadge tone="warning" className="shrink-0 sm:hidden">
+                <AlertCircle className="mr-1 size-3" aria-hidden />
+                {issues.length} to fill
+              </StatusBadge>
+              <span className="hidden min-w-0 flex-wrap gap-1.5 sm:flex">
               {issues.map((issue) => (
                 <StatusBadge key={issue} tone={issue === 'Title & date needed' ? 'danger' : 'warning'}>
                   <AlertCircle className="mr-1 size-3" aria-hidden />
                   {issue}
                 </StatusBadge>
               ))}
-            </span>
+              </span>
+            </>
           )}
           <ChevronDown
             className={cn('ml-auto size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
@@ -1789,9 +1796,10 @@ function SavePresetButton({
           setOpen((v) => !v)
         }}
         disabled={empty}
-        title={empty ? 'Nothing to save yet' : undefined}
+        title={empty ? 'Nothing to save yet' : label}
+        aria-label={label}
       >
-        <Bookmark /> {label}
+        <Bookmark /> <span className="hidden sm:inline">{label}</span>
       </Button>
       {open && (
         <div className="ipc-menu absolute right-0 top-full z-40 mt-2 flex w-64 items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
