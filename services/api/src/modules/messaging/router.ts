@@ -38,12 +38,19 @@ const CHARGED = ['queued', 'sending', 'sent', 'delivered', 'read']
 async function readWallet(sql: TransactionSql) {
   const [w] = await sql<{ balance_paise: number; low_balance_paise: number }[]>`
     select balance_paise, low_balance_paise from wallets where company_id = get_current_company_id()`
-  const [on] = await sql<{ any: boolean }[]>`
-    select exists (select 1 from messaging_settings
-                    where company_id = get_current_company_id() and (whatsapp or email)) as any`
+  const [on] = await sql<{ any: boolean; whatsapp_enabled: boolean }[]>`
+    select messaging_whatsapp_enabled() as whatsapp_enabled,
+           exists (select 1 from messaging_settings
+                    where company_id = get_current_company_id()
+                      and ((whatsapp and messaging_whatsapp_enabled()) or email)) as any`
   const balance = Number(w?.balance_paise ?? 0)
   const low = Number(w?.low_balance_paise ?? 10000)
-  return { balance_paise: balance, low_balance_paise: low, low: !!on?.any && balance < low }
+  return {
+    balance_paise: balance,
+    low_balance_paise: low,
+    low: !!on?.any && balance < low,
+    whatsapp_enabled: !!on?.whatsapp_enabled,
+  }
 }
 
 /**
@@ -72,15 +79,23 @@ export const messagingRouter = new Hono<AppEnv>()
             count(*) filter (where channel = 'email' and free_allowance and status = any(${CHARGED}::text[]))::int as email_free_used,
             count(*) filter (where channel = 'email' and not free_allowance and status = any(${CHARGED}::text[]))::int as email_charged_count,
             coalesce(sum(cost_paise) filter (where channel = 'email' and status = any(${CHARGED}::text[])), 0)::bigint as email_paise,
-            count(*) filter (where status = 'skipped_no_balance')::int as skipped_no_balance
+            count(*) filter (where status = 'skipped_no_balance')::int as skipped_no_balance,
+            count(*) filter (where channel = 'email' and status = any(${CHARGED}::text[]))::int as email_month_count,
+            count(*) filter (where status = 'skipped_limit')::int as skipped_limit,
+            (select coalesce(max(email_monthly_cap), 10000) from wallets where company_id = get_current_company_id())::int
+              as email_monthly_cap
           from message_outbox
           where company_id = get_current_company_id() and created_at >= messaging_month_start()`
-        const prices = await sql`select * from messaging_price_list()`
+        // While the platform has WhatsApp off, a studio sees nothing of it:
+        // no price, no toggle, no test button.
+        const wa = wallet.whatsapp_enabled
+        const allPrices = await sql<{ channel: string }[]>`select * from messaging_price_list()`
+        const prices = wa ? allPrices : allPrices.filter((p) => p.channel !== 'whatsapp')
         const saved = await sql<{ event: string; whatsapp: boolean; email: boolean }[]>`
           select event, whatsapp, email from messaging_settings where company_id = get_current_company_id()`
         const settings = MESSAGING_EVENTS.map((e) => {
           const s = saved.find((r) => r.event === e.key)
-          return { event: e.key, whatsapp: s?.whatsapp ?? false, email: s?.email ?? false }
+          return { event: e.key, whatsapp: wa && !e.emailOnly ? (s?.whatsapp ?? false) : false, email: s?.email ?? false }
         })
         const requests = await sql`
           select id, amount_paise, note, status, created_at, decided_at, admin_note
@@ -90,6 +105,7 @@ export const messagingRouter = new Hono<AppEnv>()
           select id, channel, to_address, template_key, subject, status, cost_paise, error, created_at,
                  refunded_at is not null as refunded
             from message_outbox where company_id = get_current_company_id()
+             ${wa ? sql`` : sql`and channel = 'email'`}
            order by created_at desc limit 25`
         const emailFree = (prices as unknown as Array<{ channel: string; free_monthly: number }>).find((p) => p.channel === 'email')
         return {
@@ -100,6 +116,7 @@ export const messagingRouter = new Hono<AppEnv>()
           requests,
           recent,
           email_live: !!c.env.RESEND_API_KEY,
+          whatsapp_enabled: wa,
         }
       }),
     )

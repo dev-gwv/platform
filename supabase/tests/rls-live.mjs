@@ -1571,6 +1571,8 @@ if (listed) {
   const prYear = prNow.getUTCFullYear()
   const prMonth = prNow.getUTCMonth() + 1
   const prSalary = await api(`/team/members/${edUid}`, { token: aToken, method: 'PATCH', body: { salary: 30000, engagement_type: 'in_house' } })
+  // Joined long before this month (0187): paid the whole month, as before pro-rata.
+  const prJoinedEarly = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: `${prYear - 1}-01-15` } })
   const prEdGen = await api('/payroll/runs/generate', { token: edToken, method: 'POST', body: { year: prYear, month: prMonth } })
   const prMgrGen = await api('/payroll/runs/generate', { token: tmToken, method: 'POST', body: { year: prYear, month: prMonth } })
   const prGen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
@@ -1578,10 +1580,11 @@ if (listed) {
   const prLine = (prMonthRes.json.lines ?? []).find((l) => l.user_id === edUid)
   check(
     'payroll: the owner works out the month (a member or a manager without salaries cannot); the member is on it at their salary',
-    prSalary.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
+    prSalary.status < 300 && prJoinedEarly.status < 300 && prEdGen.status === 403 && prMgrGen.status === 403 && prGen.status === 201 &&
       prMonthRes.status === 200 && prMonthRes.json.run?.status === 'draft' && prLine?.base_amount === 30000 &&
-      prLine.working_days > 0 && prLine.net_pay === 30000 - prLine.deduction,
-    { salary: prSalary.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
+      prLine.working_days > 0 && prLine.payable_days === prLine.working_days && prLine.prorated_base === 30000 &&
+      prLine.period_start === `${prYear}-${String(prMonth).padStart(2, '0')}-01` && prLine.net_pay === 30000 - prLine.deduction,
+    { salary: prSalary.status, joined: prJoinedEarly.status, ed: prEdGen.status, mgr: prMgrGen.status, gen: prGen.status, month: prMonthRes.status, line: prLine },
   )
   const prRunId = prMonthRes.json.run?.id
   const prNoNote = await api(`/payroll/lines/${prLine?.id}`, { token: aToken, method: 'PATCH', body: { additions: 1500, additions_note: '', other_deductions: 0 } })
@@ -1601,6 +1604,20 @@ if (listed) {
       prRegen.status === 201 && prAfter?.additions === 1500 && prAfter?.additions_note === 'Festival bonus' && prAfter?.other_deductions === 500 &&
       prSlipsBefore.status === 200 && (prSlipsBefore.json ?? []).length === 0 && prSlipBefore.status === 404,
     { noNote: prNoNote.status, edit: prEdit.json, edEdit: prEdEdit.status, regen: prRegen.status, after: prAfter, before: prSlipsBefore.json, one: prSlipBefore.status },
+  )
+  // Pro-rata (0187): the member's joining date moves to the 12th of this month;
+  // working the month out again pays only the working days since then.
+  const prMid = `${prYear}-${String(prMonth).padStart(2, '0')}-12`
+  const prJoinedMid = await api('/settings/profile', { token: edToken, method: 'PATCH', body: { joined_on: prMid } })
+  const prProRegen = await api('/payroll/runs/generate', { token: aToken, method: 'POST', body: { year: prYear, month: prMonth } })
+  const prFinal = ((await api(`/payroll/runs?year=${prYear}&month=${prMonth}`, { token: aToken })).json.lines ?? []).find((l) => l.user_id === edUid)
+  const prWant = prFinal && prFinal.payable_days >= prFinal.working_days ? 30000 : Math.round((30000 * (prFinal?.payable_days ?? 0)) / (prFinal?.working_days || 1) + 1e-9)
+  check(
+    'payroll: joining on the 12th pays the working days since then; the bonus and advance stay',
+    prJoinedMid.status < 300 && prProRegen.status === 201 && prFinal?.period_start === prMid && prFinal?.base_amount === 30000 &&
+      prFinal.payable_days < prAfter.payable_days && prFinal.prorated_base === prWant && prFinal.prorated_base < 30000 &&
+      prFinal.net_pay === Math.max(0, prWant - prFinal.deduction + 1500 - 500) && prFinal.additions_note === 'Festival bonus',
+    { joined: prJoinedMid.status, regen: prProRegen.status, line: prFinal, want: prWant },
   )
   const prEdApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: edToken, method: 'POST' })
   const prApprove = await api(`/payroll/runs/${prRunId}/approve`, { token: aToken, method: 'POST' })
@@ -1622,6 +1639,7 @@ if (listed) {
     'payroll: after approval the member sees their own payslip only; nobody else and no other studio',
     prSlips.status === 200 && (prSlips.json ?? []).length === 1 && prSlips.json[0].id === prLine?.id &&
       prSlip.status === 200 && prSlip.json.name === 'Priya Editor' && prSlip.json.additions_note === 'Festival bonus' && !!prSlip.json.company_name &&
+      prSlip.json.period_start === prMid && prSlip.json.payable_days === prFinal?.payable_days && prSlip.json.prorated_base === prFinal?.prorated_base &&
       prEdRuns.status === 403 && prEdOthers.status === 403 && prOtherStudio.status === 404 && prOtherPay.status === 404,
     { slips: prSlips.json, slip: prSlip.status, runs: prEdRuns.status, others: prEdOthers.status, otherStudio: prOtherStudio.status, otherPay: prOtherPay.status },
   )
@@ -1636,9 +1654,9 @@ if (listed) {
   check(
     'payroll: the owner marks the member paid once; the salaries ledger says paid; the member is told; the bank sheet is for the owner only',
     prEdPay.status === 403 && prPay.status === 200 && prPay.json.paid_count === 1 && prPay2.status === 422 &&
-      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prAfter?.net_pay &&
+      prLedgerRow?.status === 'paid' && prLedgerRow?.paid_amount === prFinal?.net_pay &&
       (prNotes.json ?? []).some((n) => /^Payslip for .+ is ready$/.test(n.title)) &&
-      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prAfter?.net_pay) &&
+      prExport.status === 200 && (prExport.json ?? []).some((r) => r.name === 'Priya Editor' && r.upi_id === 'priya@okhdfc' && r.net_pay === prFinal?.net_pay && r.payable_days === prFinal?.payable_days) &&
       prEdExport.status === 403,
     { edPay: prEdPay.status, pay: prPay.json, again: prPay2.status, ledger: prLedgerRow, notes: (prNotes.json ?? []).map((n) => n.title), export: prExport.status, edExport: prEdExport.status },
   )
@@ -2102,10 +2120,30 @@ if (listed) {
   const bTok = newPw.json.access_token
   const start = await api('/messaging', { token: aToken })
   check(
-    'messaging: the owner sees a wallet at ₹0, prices, and every event off',
-    start.status === 200 && start.json.wallet?.balance_paise === 0 && start.json.prices?.some((p) => p.channel === 'whatsapp' && p.price_paise > 0) &&
-      start.json.settings?.length === 4 && start.json.settings.every((s) => !s.whatsapp && !s.email),
-    { status: start.status, wallet: start.json.wallet, settings: start.json.settings },
+    'messaging: the owner sees a wallet at ₹0, 100 free emails a month, and every event off',
+    start.status === 200 && start.json.wallet?.balance_paise === 0 &&
+      start.json.prices?.some((p) => p.channel === 'email' && p.free_monthly === 100 && p.price_paise > 0) &&
+      start.json.usage?.email_monthly_cap === 10000 &&
+      start.json.settings?.length === 5 && start.json.settings.every((s) => !s.whatsapp && !s.email) &&
+      start.json.settings.some((s) => s.event === 'client_payment_due'),
+    { status: start.status, wallet: start.json.wallet, prices: start.json.prices, settings: start.json.settings },
+  )
+  // WhatsApp is set aside for now (0188): a studio sees nothing of it.
+  check(
+    'messaging: while the platform has WhatsApp off, settings show no WhatsApp price, toggle or message',
+    start.json.whatsapp_enabled === false && start.json.wallet?.whatsapp_enabled === false &&
+      start.json.prices.every((p) => p.channel === 'email') && start.json.recent.every((m) => m.channel === 'email'),
+    { whatsapp_enabled: start.json.whatsapp_enabled, prices: start.json.prices },
+  )
+  const platformSettings = await api('/platform/messaging/settings', { token: aToken })
+  const platformFlip = await api('/platform/messaging/settings', { token: aToken, method: 'PUT', body: { whatsapp_enabled: true } })
+  const platformCap = await api('/platform/messaging/email-cap', {
+    token: aToken, method: 'POST', body: { company_id: '00000000-0000-4000-8000-000000000001', email_monthly_cap: 5 },
+  })
+  check(
+    'messaging: a studio owner cannot read or flip the platform WhatsApp switch, or set an email limit',
+    platformSettings.status === 403 && platformFlip.status === 403 && platformCap.status === 403,
+    { read: platformSettings.status, flip: platformFlip.status, cap: platformCap.status },
   )
   check(
     'messaging: a studio sees its price, never the platform cost or markup',
@@ -2136,26 +2174,28 @@ if (listed) {
   )
 
   const toggle = await api('/messaging/settings', {
-    token: aToken, method: 'PATCH', body: { events: [{ event: 'start_reminder', whatsapp: true, email: false }], low_balance_paise: 20000 },
+    token: aToken, method: 'PATCH', body: { events: [{ event: 'start_reminder', whatsapp: true, email: true }], low_balance_paise: 20000 },
   })
   const afterToggle = await api('/messaging', { token: aToken })
   const theirs = await api('/messaging', { token: bTok })
+  const toggled = afterToggle.json.settings?.find((s) => s.event === 'start_reminder')
   check(
-    'messaging: switching WhatsApp on for start reminders saves, and does not touch another studio',
-    toggle.status === 200 && afterToggle.json.settings.find((s) => s.event === 'start_reminder')?.whatsapp === true &&
+    'messaging: switching email on for start reminders saves (WhatsApp stays off), and does not touch another studio',
+    toggle.status === 200 && toggled?.email === true && toggled?.whatsapp === false &&
       afterToggle.json.wallet.low_balance_paise === 20000 && afterToggle.json.wallet.low === true &&
       theirs.status === 200 && theirs.json.settings.every((s) => !s.whatsapp) && !theirs.json.requests.some((r) => r.id === req.json.id),
     { toggle: toggle.status, mine: afterToggle.json.settings, wallet: afterToggle.json.wallet, theirs: theirs.json.settings },
   )
 
-  const test = await api('/messaging/test', { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const waTest = await api('/messaging/test', { token: aToken, method: 'POST', body: { channel: 'whatsapp' } })
+  const test = await api('/messaging/test', { token: aToken, method: 'POST', body: { channel: 'email' } })
   const afterTest = await api('/messaging', { token: aToken })
   check(
-    'messaging: with ₹0 a WhatsApp message is skipped with "Recharge to send", nothing charged',
-    test.status === 201 && test.json.status === 'skipped_no_balance' && afterTest.json.wallet.balance_paise === 0 &&
-      afterTest.json.recent.some((m) => m.id === test.json.id && m.status === 'skipped_no_balance' && m.cost_paise === 0) &&
-      afterTest.json.usage.skipped_no_balance >= 1,
-    { test: test.json, recent: afterTest.json.recent?.slice(0, 2), usage: afterTest.json.usage },
+    'messaging: a WhatsApp test is refused while WhatsApp is off; with ₹0 an email still goes, free inside the allowance',
+    waTest.status === 422 && test.status === 201 && test.json.status === 'queued' && afterTest.json.wallet.balance_paise === 0 &&
+      afterTest.json.recent.some((m) => m.id === test.json.id && m.channel === 'email' && m.cost_paise === 0) &&
+      afterTest.json.usage.email_free_used >= 1 && afterTest.json.usage.email_month_count >= 1,
+    { wa: waTest.json, test: test.json, recent: afterTest.json.recent?.slice(0, 2), usage: afterTest.json.usage },
   )
 
   const ledger = await api('/messaging/ledger', { token: aToken })
@@ -2177,6 +2217,45 @@ if (listed) {
     'messaging: a team member cannot see the wallet or ask for a recharge',
     joined.status === 200 && memberView.status === 403 && memberReq.status === 403,
     { joined: joined.status, view: memberView.status, req: memberReq.status },
+  )
+
+  // Payment reminder to a client, by hand from the invoice (0188).
+  const payClient = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Reminder Client', email: `client-${rand()}@example.com` } })
+  const noMailClient = await api('/clients', { token: aToken, method: 'POST', body: { name: 'No Mail Client' } })
+  const invBody = (clientId) => ({
+    client_id: clientId,
+    place_of_supply: '27',
+    intra_state: true,
+    invoice_date: new Date().toISOString().slice(0, 10),
+    due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+    discount: 0,
+    discount_type: 'flat',
+    status: 'sent',
+    lines: [{ description: 'Wedding album', quantity: 1, rate: 12500, gst_rate: 0 }],
+  })
+  const payInv = await api('/billing/invoices', { token: aToken, method: 'POST', body: invBody(payClient.json.id) })
+  const noMailInv = await api('/billing/invoices', { token: aToken, method: 'POST', body: invBody(noMailClient.json.id) })
+  const quote = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: aToken })
+  const remind = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: aToken, method: 'POST', body: {} })
+  const again = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: aToken, method: 'POST', body: {} })
+  const quoteAfter = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: aToken })
+  check(
+    'reminder: the owner sees it is free, sends a payment reminder, and a double click sends once',
+    payInv.status === 201 && quote.status === 200 && quote.json.free_monthly === 100 && quote.json.last_sent_at === null &&
+      remind.status === 201 && remind.json.status === 'queued' && remind.json.cost_paise === 0 && remind.json.free_allowance === true &&
+      again.status === 200 && again.json.repeated === true && again.json.id === remind.json.id &&
+      quoteAfter.json.last_sent_at !== null && quoteAfter.json.reminders_sent === 1,
+    { inv: payInv.status, quote: quote.json, remind: remind.json, again: again.json, after: quoteAfter.json },
+  )
+  const memberRemind = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: joined.json.access_token, method: 'POST', body: {} })
+  const otherRemind = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: bTok, method: 'POST', body: {} })
+  const otherQuote = await api(`/billing/invoices/${payInv.json.id}/remind`, { token: bTok })
+  const noMail = await api(`/billing/invoices/${noMailInv.json.id}/remind`, { token: aToken, method: 'POST', body: {} })
+  check(
+    'reminder: an employee without billing edit gets 403, another studio 404, and a client with no email is said plainly',
+    memberRemind.status === 403 && otherRemind.status === 404 && otherQuote.status === 404 &&
+      noMail.status === 200 && noMail.json.status === 'no_email',
+    { member: memberRemind.status, other: otherRemind.status, otherQuote: otherQuote.status, noMail: noMail.json },
   )
 
   const cancel = await api(`/messaging/recharge-requests/${req.json.id}/cancel`, { token: aToken, method: 'POST', body: {} })

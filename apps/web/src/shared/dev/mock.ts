@@ -215,6 +215,10 @@ const payLine = (n: number, name: string, over: Record<string, unknown> = {}) =>
   name,
   base_amount: 30000,
   working_days: 25,
+  period_start: '2026-09-01',
+  period_end: '2026-09-30',
+  payable_days: 25,
+  prorated_base: 30000,
   days_present: 22,
   unpaid_leave_days: 0,
   absent_days: 0,
@@ -237,11 +241,11 @@ const payrollMonthFx = {
     pay_year: 2026,
     pay_month: 9,
     status: 'approved',
-    total_base: 70000,
+    total_base: 63520,
     total_deductions: 4200,
     total_additions: 2000,
-    total_net: 67800,
-    total_paid: 18000,
+    total_net: 61320,
+    total_paid: 11520,
     people: 3,
     generated_at: '2026-09-30T10:00:00Z',
     approved_at: '2026-09-30T11:00:00Z',
@@ -250,8 +254,12 @@ const payrollMonthFx = {
   },
   lines: [
     payLine(1, 'Rahul Sharma', { days_present: 21, unpaid_leave_days: 2.5, absent_days: 1, late_marks: 2, deduction: 4200, net_pay: 25800 }),
-    payLine(2, 'Sneha Iyer', { base_amount: 22000, additions: 2000, additions_note: 'Wedding season bonus', net_pay: 24000 }),
-    payLine(3, 'Arjun Mehta', { base_amount: 18000, net_pay: 18000, other_deductions: 0, paid_amount: 18000, paid_at: '2026-09-30T12:00:00Z', payment_mode: 'UPI' }),
+    payLine(2, 'Sneha Iyer', { base_amount: 22000, prorated_base: 22000, additions: 2000, additions_note: 'Wedding season bonus', net_pay: 24000 }),
+    // Joined on 12 Sep: paid for 16 of 25 working days.
+    payLine(3, 'Arjun Mehta', {
+      base_amount: 18000, period_start: '2026-09-12', payable_days: 16, prorated_base: 11520, days_present: 16, net_pay: 11520,
+      other_deductions: 0, paid_amount: 11520, paid_at: '2026-09-30T12:00:00Z', payment_mode: 'UPI',
+    }),
   ],
   freelancers: [
     { user_id: uid(0xe9), name: 'Vikram (drone)', shoots: 2, owed: 16000, paid: 6000, due: 10000 },
@@ -500,7 +508,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   }
   if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/approve$/.test(path)) return {}
   if (method === 'POST' && /^\/payroll\/runs\/[^/]+\/pay$/.test(path))
-    return (body as { line_id?: string }).line_id ? { paid_count: 1, paid_total: 25800 } : { paid_count: 2, paid_total: 44000 }
+    return (body as { line_id?: string }).line_id ? { paid_count: 1, paid_total: 25800 } : { paid_count: 2, paid_total: 49800 }
   if (method === 'GET' && /^\/payroll\/runs\/[^/]+\/export$/.test(path))
     return payrollMonthFx.lines.map((l, i) => ({
       name: l.name,
@@ -509,6 +517,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       bank_account_number: i === 1 ? '50100123456789' : null,
       bank_ifsc: i === 1 ? 'HDFC0001234' : null,
       net_pay: l.net_pay,
+      payable_days: l.payable_days,
     }))
   if (method === 'GET' && path.startsWith('/payroll/payslips?'))
     return [
@@ -521,6 +530,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       id: path.split('/')[3]!,
       pay_year: 2026,
       pay_month: 8,
+      period_start: '2026-08-01',
+      period_end: '2026-08-31',
       run_status: 'paid',
       paid_at: '2026-09-01T06:00:00Z',
       payment_mode: 'UPI',
@@ -803,6 +814,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && /^\/work\/submissions\/[^/]+\/review$/.test(path)) return {}
   if (method === 'GET' && path === '/billing/states') return states
   if (method === 'GET' && path === '/billing/invoices') return atStage(invoices2, 'full')
+  if (method === 'GET' && /^\/billing\/invoices\/[^/]+\/remind$/.test(path)) return reminderQuoteFx
+  if (method === 'POST' && /^\/billing\/invoices\/[^/]+\/remind$/.test(path)) {
+    reminderQuoteFx.free_used += 1
+    reminderQuoteFx.month_emails += 1
+    reminderQuoteFx.reminders_sent += 1
+    reminderQuoteFx.last_sent_at = new Date().toISOString()
+    return { id: uid(0x7cf), status: 'queued', error: null, cost_paise: 0, free_allowance: true, repeated: false }
+  }
   if (method === 'GET' && path.startsWith('/billing/invoices/')) return invoiceDetailFx
   if (method === 'POST' && path === '/billing/invoices')
     return { id: uid(0x9a), invoice_number: 'INV-0004' }
@@ -3382,7 +3401,22 @@ const messagingSettingsFx = [
   { event: 'leave_decided', whatsapp: true, email: false },
   { event: 'payslip_ready', whatsapp: false, email: true },
   { event: 'shoot_tomorrow', whatsapp: false, email: false },
+  { event: 'client_payment_due', whatsapp: false, email: true },
 ]
+/** The platform switch (0188): WhatsApp is set aside for now. */
+const messagingPlatformFx = { whatsapp_enabled: false }
+const reminderQuoteFx = {
+  client_email: 'rahul.mehta@example.com',
+  price_paise: 20,
+  free_monthly: 100,
+  free_used: 31,
+  month_emails: 31,
+  email_monthly_cap: 10000,
+  can_afford: true,
+  auto_on: true,
+  last_sent_at: null as string | null,
+  reminders_sent: 0,
+}
 const rechargeFx: Array<Record<string, unknown>> = [
   { id: uid(0x7a1), amount_paise: 100000, note: 'Paid by UPI', status: 'fulfilled', created_at: hoursAgo(240), decided_at: hoursAgo(230), admin_note: null },
 ]
@@ -3405,26 +3439,37 @@ const platformPricesFx = [
   { id: uid(0x7e1), channel: 'whatsapp', category: 'utility', meta_cost_paise: 12, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 20 },
   { id: uid(0x7e2), channel: 'whatsapp', category: 'marketing', meta_cost_paise: 79, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 104 },
   { id: uid(0x7e3), channel: 'whatsapp', category: 'authentication', meta_cost_paise: 12, markup_pct: 25, markup_fixed_paise: 5, free_monthly: 0, effective_from: hoursAgo(500), price_paise: 20 },
+  { id: uid(0x7e5), channel: 'email', category: 'email', meta_cost_paise: 0, markup_pct: 0, markup_fixed_paise: 20, free_monthly: 100, effective_from: hoursAgo(20), price_paise: 20 },
   { id: uid(0x7e4), channel: 'email', category: 'email', meta_cost_paise: 0, markup_pct: 0, markup_fixed_paise: 20, free_monthly: 500, effective_from: hoursAgo(500), price_paise: 20 },
 ]
 
 function messagingMock(method: string, path: string, body: unknown): unknown {
+  const wa = messagingPlatformFx.whatsapp_enabled
   if (method === 'GET' && path === '/messaging/wallet')
-    return { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true }
+    return { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true, whatsapp_enabled: wa }
   if (method === 'GET' && path === '/messaging')
     return {
-      wallet: { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true },
-      usage: { whatsapp_count: 412, whatsapp_paise: 8240, email_free_used: 131, email_free_monthly: 500, email_charged_count: 0, email_paise: 0, skipped_no_balance: 0 },
+      wallet: { ...walletFx, low: walletFx.balance_paise < walletFx.low_balance_paise, whatsapp_live: true, whatsapp_enabled: wa },
+      usage: {
+        whatsapp_count: wa ? 412 : 0, whatsapp_paise: wa ? 8240 : 0, email_free_used: 100, email_free_monthly: 100,
+        email_charged_count: 31, email_paise: 620, skipped_no_balance: 0,
+        email_month_count: 131, email_monthly_cap: 10000, skipped_limit: 0,
+      },
       prices: [
-        { channel: 'whatsapp', category: 'authentication', price_paise: 20, free_monthly: 0 },
-        { channel: 'whatsapp', category: 'marketing', price_paise: 104, free_monthly: 0 },
-        { channel: 'whatsapp', category: 'utility', price_paise: 20, free_monthly: 0 },
-        { channel: 'email', category: 'email', price_paise: 20, free_monthly: 500 },
+        ...(wa
+          ? [
+              { channel: 'whatsapp', category: 'authentication', price_paise: 20, free_monthly: 0 },
+              { channel: 'whatsapp', category: 'marketing', price_paise: 104, free_monthly: 0 },
+              { channel: 'whatsapp', category: 'utility', price_paise: 20, free_monthly: 0 },
+            ]
+          : []),
+        { channel: 'email', category: 'email', price_paise: 20, free_monthly: 100 },
       ],
-      settings: messagingSettingsFx,
+      settings: messagingSettingsFx.map((x) => ({ ...x, whatsapp: wa && x.event !== 'client_payment_due' ? x.whatsapp : false })),
       requests: rechargeFx,
-      recent: recentFx,
+      recent: wa ? recentFx : recentFx.filter((m) => m.channel === 'email'),
       email_live: true,
+      whatsapp_enabled: wa,
     }
   if (method === 'GET' && path.startsWith('/messaging/ledger')) {
     const source = new URLSearchParams(path.split('?')[1] ?? '').get('source')
@@ -3456,10 +3501,17 @@ function messagingMock(method: string, path: string, body: unknown): unknown {
   if (method === 'POST' && path === '/messaging/test') return { id: uid(0x7c9), status: 'queued', error: null }
 
   if (method === 'GET' && path === '/platform/messaging/status') return { whatsapp_live: true, email_live: true, webhook_signed: true }
+  if (method === 'GET' && path === '/platform/messaging/settings')
+    return { whatsapp_enabled: wa, month_emails: 771, month_whatsapp: wa ? 1622 : 0, month_skipped_limit: 0 }
+  if (method === 'PUT' && path === '/platform/messaging/settings') {
+    messagingPlatformFx.whatsapp_enabled = !!(body as { whatsapp_enabled?: boolean } | null)?.whatsapp_enabled
+    return { ok: true }
+  }
+  if (method === 'POST' && path === '/platform/messaging/email-cap') return { ok: true }
   if (method === 'GET' && path === '/platform/messaging/wallets')
     return [
-      { company_id: uid(0xaa), company_name: 'Demo Studio', balance_paise: walletFx.balance_paise, low_balance_paise: walletFx.low_balance_paise, overdraft_paise: 0, pending_requests: rechargeFx.filter((r) => r.status === 'pending').length, month_whatsapp: 412, month_emails: 131, month_charged_paise: 8240, last_activity: hoursAgo(2) },
-      { company_id: uid(0xab), company_name: 'Lensworks Weddings', balance_paise: 152000, low_balance_paise: 10000, overdraft_paise: 5000, pending_requests: 0, month_whatsapp: 1210, month_emails: 640, month_charged_paise: 26200, last_activity: hoursAgo(1) },
+      { company_id: uid(0xaa), company_name: 'Demo Studio', balance_paise: walletFx.balance_paise, low_balance_paise: walletFx.low_balance_paise, overdraft_paise: 0, pending_requests: rechargeFx.filter((r) => r.status === 'pending').length, month_whatsapp: 412, month_emails: 131, month_charged_paise: 8240, last_activity: hoursAgo(2), email_monthly_cap: 10000 },
+      { company_id: uid(0xab), company_name: 'Lensworks Weddings', balance_paise: 152000, low_balance_paise: 10000, overdraft_paise: 5000, pending_requests: 0, month_whatsapp: 1210, month_emails: 640, month_charged_paise: 26200, last_activity: hoursAgo(1), email_monthly_cap: 10000 },
     ]
   if (method === 'GET' && path.startsWith('/platform/messaging/requests')) {
     const pendingOnly = path.includes('status=pending')

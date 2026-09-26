@@ -50,6 +50,7 @@ export async function deliver(env: Env, row: ClaimedRow): Promise<Outcome> {
       body: row.body,
       link: row.link,
       studio: row.studio_name,
+      toClient: row.template_key === 'client_payment_due',
     })
     if (r.status === 'provider_missing') return { ok: false, error: 'Email not configured' }
     if (r.status === 'failed') return { ok: false, error: r.error ?? 'Email could not be sent.' }

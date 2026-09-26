@@ -10,6 +10,11 @@ import { beforeAll, describe, expect, it } from 'vitest'
  * send is refunded exactly once; emails are free up to the monthly allowance;
  * a studio reads only its own wallet and cannot credit itself.
  *
+ * 0188: WhatsApp sits behind a platform switch (off by default: nothing is
+ * written or charged), 100 free emails a month, and a monthly email cap that
+ * records skipped_limit instead of sending. The WhatsApp tests switch it on
+ * first; the last block switches it off again.
+ *
  * Runs statements as `authenticated` with the production default privileges
  * (see work-submission-rls.test.ts for why both matter), and as the
  * superuser for the service-side calls the API makes with withService.
@@ -87,6 +92,24 @@ beforeAll(async () => {
     insert into platform_admins (user_id) values ('${ADMIN}');
     update whatsapp_templates set status = 'approved';
   `)
+})
+
+describe('defaults (0188)', () => {
+  it('WhatsApp starts switched off for the platform, and emails are 100 free a month', async () => {
+    expect((await one<{ on: boolean }>(`select messaging_whatsapp_enabled() as on`)).on).toBe(false)
+    expect((await one<{ f: number }>(`select (messaging_price_now('email', 'email')).free_monthly as f`)).f).toBe(100)
+    // The old 500 stays in the history.
+    expect(await q(`select 1 from messaging_prices where channel = 'email' and free_monthly = 500`)).toHaveLength(1)
+    const [p] = await asUser<{ free_monthly: number }>(OWNER, `select free_monthly from messaging_price_list() where channel = 'email'`)
+    expect(p!.free_monthly).toBe(100)
+  })
+
+  it('only a platform admin can switch WhatsApp on', async () => {
+    expect(await fails(() => asUser(OWNER, `select platform_set_whatsapp_enabled(true)`))).toMatch(/not allowed/)
+    expect(await fails(() => asUser(OWNER, `update messaging_platform_settings set whatsapp_enabled = true`))).toMatch(/permission denied/)
+    await asUser(ADMIN, `select platform_set_whatsapp_enabled(true)`)
+    expect((await one<{ on: boolean }>(`select messaging_whatsapp_enabled() as on`)).on).toBe(true)
+  })
 })
 
 describe('settings', () => {
@@ -329,5 +352,73 @@ describe('who can see and touch what', () => {
   it('a test message to the owner with an empty wallet is skipped for balance', async () => {
     const [r] = await asUser<{ status: string }>(OWNER_B, `select * from send_test_message('whatsapp')`)
     expect(r!.status).toBe('skipped_no_balance')
+  })
+})
+
+describe('monthly email cap (0188)', () => {
+  it('past the cap an email is skipped_limit, not charged, and the owner hears once', async () => {
+    await asUser(OWNER, `select set_messaging_setting('start_reminder', false, true)`)
+    const sent = await one<{ n: number }>(`select messaging_month_emails('${STUDIO}') as n`)
+    expect(await fails(() => asUser(OWNER, `select platform_set_email_cap('${STUDIO}', 1)`))).toMatch(/not allowed/)
+    await asUser(ADMIN, `select platform_set_email_cap('${STUDIO}', ${sent.n + 1})`)
+    await q(`select credit_wallet('${STUDIO}', 1000, 'adjustment', null, 'cap test')`)
+    const before = await balance()
+    const send = async () => {
+      seq += 1
+      await q(`select create_notification('${STUDIO}', '${EDITOR}', 'deliverable_start', 'Start Teaser', 'Wedding', 'cap:${seq}', 'deliverable', null)`)
+      return one<{ status: string; cost_paise: string; error: string | null }>(`
+        select o.status, o.cost_paise::text, o.error from message_outbox o
+          join notifications n on o.dedupe_key = 'n:' || n.id where n.dedupe_key = 'cap:${seq}' and o.channel = 'email'`)
+    }
+    const a = await send()
+    const b = await send()
+    const c = await send()
+    expect(a.status).toBe('queued')
+    expect([b.status, c.status]).toEqual(['skipped_limit', 'skipped_limit'])
+    expect(b.error).toBe('Monthly email limit reached.')
+    expect(Number(b.cost_paise)).toBe(0)
+    // a was charged (the allowance is used up); b and c were not.
+    expect(await balance()).toBe(before - Number(a.cost_paise))
+    expect(await q(`select 1 from notifications where recipient_uid = '${OWNER}' and type = 'wallet.email_limit'`)).toHaveLength(1)
+    const [w] = await asUser<{ month_emails: number; email_monthly_cap: number }>(ADMIN,
+      `select month_emails, email_monthly_cap from platform_messaging_wallets() where company_id = '${STUDIO}'`)
+    expect(w!.month_emails).toBe(sent.n + 1)
+    expect(w!.email_monthly_cap).toBe(sent.n + 1)
+    const [t] = await asUser<{ month_emails: number; month_skipped_limit: number }>(ADMIN, `select * from platform_messaging_totals()`)
+    expect(t!.month_emails).toBeGreaterThanOrEqual(sent.n + 1)
+    expect(t!.month_skipped_limit).toBe(2)
+    expect(await fails(() => asUser(OWNER, `select * from platform_messaging_totals()`))).toMatch(/not allowed/)
+    await asUser(ADMIN, `select platform_set_email_cap('${STUDIO}', 10000)`)
+  })
+})
+
+describe('WhatsApp switched off (0188)', () => {
+  it('writes nothing and charges nothing', async () => {
+    await asUser(ADMIN, `select platform_set_whatsapp_enabled(false)`)
+    await asUser(OWNER, `select set_messaging_setting('start_reminder', true, false)`)
+    const rows = Number((await one<{ n: string }>(`select count(*)::text as n from message_outbox`)).n)
+    const ledger = Number((await one<{ n: string }>(`select count(*)::text as n from wallet_ledger`)).n)
+    const before = await balance()
+    const direct = await one<{ id: string | null }>(`
+      select enqueue_message('${STUDIO}', 'whatsapp', '9123456789', 'start_reminder', '[]', 'task', null, 'wa-off-1') as id`)
+    expect(direct.id).toBeNull()
+    seq += 1
+    await q(`select create_notification('${STUDIO}', '${EDITOR}', 'task_start', 'x', 'y', 'task_start:waoff', 'task', null)`)
+    expect(Number((await one<{ n: string }>(`select count(*)::text as n from message_outbox`)).n)).toBe(rows)
+    expect(Number((await one<{ n: string }>(`select count(*)::text as n from wallet_ledger`)).n)).toBe(ledger)
+    expect(await balance()).toBe(before)
+    expect(await fails(() => asUser(OWNER, `select * from send_test_message('whatsapp')`))).toMatch(/not available yet/)
+  })
+
+  it('a settings save while it is off keeps the stored WhatsApp choice, and payment reminders are email only', async () => {
+    const before = await one<{ whatsapp: boolean }>(`select whatsapp from messaging_settings where company_id = '${STUDIO}' and event = 'start_reminder'`)
+    await asUser(OWNER, `select set_messaging_setting('start_reminder', false, true)`)
+    const after = await one<{ whatsapp: boolean; email: boolean }>(`select whatsapp, email from messaging_settings where company_id = '${STUDIO}' and event = 'start_reminder'`)
+    expect(after).toEqual({ whatsapp: before.whatsapp, email: true })
+    await asUser(ADMIN, `select platform_set_whatsapp_enabled(true)`)
+    await asUser(OWNER, `select set_messaging_setting('client_payment_due', true, true)`)
+    expect(await one(`select whatsapp, email from messaging_settings where company_id = '${STUDIO}' and event = 'client_payment_due'`))
+      .toEqual({ whatsapp: false, email: true })
+    await asUser(ADMIN, `select platform_set_whatsapp_enabled(false)`)
   })
 })

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { amountInWords, monthLabel } from '@ipc/domain'
+import { amountInWords, monthLabel, proRataNote, shortDay } from '@ipc/domain'
 import type { Payslip } from '@ipc/contracts'
 import { formatINR } from '@/shared/ui/format'
 
@@ -12,8 +12,17 @@ import { formatINR } from '@/shared/ui/format'
 export function PayslipPaper({ slip }: { slip: Payslip }) {
   const month = monthLabel(slip.pay_year, slip.pay_month)
   const contact = [slip.company_phone, slip.company_email].filter(Boolean).join('  ·  ')
+  // Joined or left during the month: paid for the working days in between.
+  const partial = proRataNote(slip)
+  const period = `${shortDay(slip.period_start)} – ${shortDay(slip.period_end)} ${slip.pay_year}`
   const earnings: [string, number, string | null][] = [
-    ['Monthly salary', slip.base_amount, null],
+    partial
+      ? [
+          `Salary for ${slip.payable_days} of ${slip.working_days} working days`,
+          slip.prorated_base,
+          `Monthly salary ${formatINR(slip.base_amount)} × ${slip.payable_days} ÷ ${slip.working_days}`,
+        ]
+      : ['Monthly salary', slip.base_amount, null],
     ...(slip.additions > 0 ? [['Additions', slip.additions, slip.additions_note] as [string, number, string | null]] : []),
   ]
   const deductions: [string, number, string | null][] = [
@@ -22,7 +31,7 @@ export function PayslipPaper({ slip }: { slip: Payslip }) {
       : []),
     ...(slip.other_deductions > 0 ? [['Other deductions', slip.other_deductions, slip.other_deductions_note] as [string, number, string | null]] : []),
   ]
-  const gross = slip.base_amount + slip.additions
+  const gross = slip.prorated_base + slip.additions
   const totalDeductions = slip.deduction + slip.other_deductions
   const paid = !!slip.paid_at
 
@@ -51,11 +60,14 @@ export function PayslipPaper({ slip }: { slip: Payslip }) {
       <section className="px-5 pt-6 sm:px-8">
         <h1 className="text-2xl font-bold uppercase tracking-tight">Payslip</h1>
         <p className="mt-1 text-xs text-slate-500">Salary for {month}.</p>
+        {partial && <p className="mt-1 text-xs font-medium text-slate-700">{partial}</p>}
         <dl className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
           <Meta label="Name" value={slip.name} />
           {slip.job_title && <Meta label="Role" value={slip.job_title} />}
           <Meta label="Month" value={month} />
+          <Meta label="Period" value={period} />
           <Meta label="Working days" value={String(slip.working_days)} />
+          {partial && <Meta label="Days paid for" value={String(slip.payable_days)} />}
           <Meta label="Days present" value={String(slip.days_present)} />
           {slip.unpaid_leave_days > 0 && <Meta label="Unpaid leave" value={fmtDays(slip.unpaid_leave_days)} />}
           {slip.absent_days > 0 && <Meta label="Absent" value={String(slip.absent_days)} />}

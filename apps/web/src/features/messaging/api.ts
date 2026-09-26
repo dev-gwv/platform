@@ -4,6 +4,7 @@ import {
   ledgerEntry,
   marginRow,
   messagingSummary,
+  platformMessagingSettings,
   platformOutboxMessage,
   platformPrice,
   platformRechargeRequest,
@@ -18,6 +19,7 @@ import {
   type MessageStatus,
   type PlatformAdjustRequest,
   type PlatformCreditRequest,
+  type PlatformEmailCapRequest,
   type PlatformSetPrice,
   type RechargeStatus,
   type SaveWhatsappTemplate,
@@ -101,7 +103,8 @@ export function useSendTest() {
       callApi('/messaging/test', { method: 'POST', body: { channel }, responseSchema: testMessageResult }),
     onSuccess: (r) => {
       if (r.status === 'queued') toast.success('Test message queued. It goes out within a few minutes.')
-      else if (r.status === 'skipped_no_balance') toast.error('Not sent: recharge to send WhatsApp messages.')
+      else if (r.status === 'skipped_no_balance') toast.error('Not sent: recharge your messaging wallet to send.')
+      else if (r.status === 'skipped_limit') toast.error('Not sent: your monthly email limit is reached.')
       else toast.error(r.error ?? 'The test message could not be sent.')
       void qc.invalidateQueries({ queryKey: ['messaging'] })
     },
@@ -122,6 +125,8 @@ function usePlatformQuery<T extends z.ZodTypeAny>(key: string[], path: string, s
 
 export const usePlatformMessagingStatus = () =>
   usePlatformQuery(['status'], '/platform/messaging/status', z.object({ whatsapp_live: z.boolean(), email_live: z.boolean(), webhook_signed: z.boolean() }))
+export const usePlatformMessagingSettings = () =>
+  usePlatformQuery(['settings'], '/platform/messaging/settings', platformMessagingSettings)
 export const usePlatformWallets = () => usePlatformQuery(['wallets'], '/platform/messaging/wallets', platformWallet.array())
 export const usePlatformRequests = (status: RechargeStatus | null) =>
   usePlatformQuery(['requests', status ?? 'all'], `/platform/messaging/requests${status ? `?status=${status}` : ''}`, platformRechargeRequest.array())
@@ -174,4 +179,15 @@ export const useSaveTemplate = () =>
   usePlatformMutation(
     (body: SaveWhatsappTemplate) => callApi('/platform/messaging/templates', { method: 'PUT', body, responseSchema: idOnly }),
     'Template saved',
+  )
+export const useSetWhatsappEnabled = () =>
+  usePlatformMutation(
+    (whatsapp_enabled: boolean) =>
+      callApi('/platform/messaging/settings', { method: 'PUT', body: { whatsapp_enabled }, responseSchema: none }),
+    'Saved. Studios see the change on their next visit.',
+  )
+export const useSetEmailCap = () =>
+  usePlatformMutation(
+    (body: PlatformEmailCapRequest) => callApi('/platform/messaging/email-cap', { method: 'POST', body, responseSchema: none }),
+    'Email limit saved',
   )

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   canAfford,
   emailChargePaise,
+  emailQuote,
   fillTemplate,
+  paymentReminderStage,
   formatPaise,
   freeEmailsLeft,
   messageMarginPaise,
@@ -88,5 +90,36 @@ describe('templates', () => {
   it('sends exactly as many params as the body uses, none blank, no newlines', () => {
     expect(templateParams('Hi {{1}} {{2}}', ['Priya', 'Line\nbreak', 'extra'])).toEqual(['Priya', 'Line break'])
     expect(templateParams('Hi {{1}} {{2}}', ['Priya'])).toEqual(['Priya', '-'])
+  })
+})
+
+describe('emailQuote', () => {
+  const base = { monthEmails: 0, cap: 10000, freeUsed: 0, freeMonthly: 100, pricePaise: 20, canAfford: false }
+  it('is free inside the 100 a month, and says how many are left', () => {
+    expect(emailQuote(base)).toEqual({ kind: 'free', freeLeft: 100 })
+    expect(emailQuote({ ...base, freeUsed: 99, monthEmails: 99 })).toEqual({ kind: 'free', freeLeft: 1 })
+  })
+  it('costs the price after the allowance, or waits for a recharge', () => {
+    expect(emailQuote({ ...base, freeUsed: 100, monthEmails: 100, canAfford: true })).toEqual({ kind: 'paid', cost: 20 })
+    expect(emailQuote({ ...base, freeUsed: 100, monthEmails: 100 })).toEqual({ kind: 'no_balance', cost: 20 })
+  })
+  it('stops at the monthly cap before anything else', () => {
+    expect(emailQuote({ ...base, monthEmails: 10000, canAfford: true })).toEqual({ kind: 'limit' })
+    expect(emailQuote({ ...base, monthEmails: 5, cap: 5 })).toEqual({ kind: 'limit' })
+  })
+})
+
+describe('paymentReminderStage', () => {
+  it('fires 3 days before, on the day, and 3 and 10 days after', () => {
+    expect(paymentReminderStage('2026-10-10', '2026-10-07')).toBe('before_3')
+    expect(paymentReminderStage('2026-10-10', '2026-10-10')).toBe('due')
+    expect(paymentReminderStage('2026-10-10', '2026-10-13')).toBe('after_3')
+    expect(paymentReminderStage('2026-10-10', '2026-10-20')).toBe('after_10')
+  })
+  it('is quiet on every other day, across a month end too', () => {
+    for (const d of ['2026-10-06', '2026-10-08', '2026-10-09', '2026-10-11', '2026-10-14', '2026-10-21']) {
+      expect(paymentReminderStage('2026-10-10', d)).toBeNull()
+    }
+    expect(paymentReminderStage('2026-10-29', '2026-11-01')).toBe('after_3')
   })
 })

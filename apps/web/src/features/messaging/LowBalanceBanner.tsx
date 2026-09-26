@@ -19,7 +19,7 @@ export function LowBalanceBanner() {
       <CardContent className="flex flex-wrap items-center gap-3 p-4">
         <Wallet className="size-6 shrink-0 text-warning" aria-hidden />
         <div className="min-w-[12rem] flex-1">
-          <p className="text-sm font-semibold">{empty ? 'WhatsApp messages have stopped' : 'Messaging balance is low'}</p>
+          <p className="text-sm font-semibold">{empty ? 'Paid messages have stopped' : 'Messaging balance is low'}</p>
           <p className="text-xs text-muted-foreground">
             Balance {formatPaise(data.balance_paise)}. {empty ? 'Recharge to send again.' : 'Recharge so messages keep going out.'}
           </p>

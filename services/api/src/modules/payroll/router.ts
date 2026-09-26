@@ -66,7 +66,9 @@ function explain(code: string, err: unknown): undefined {
 }
 
 const LINE_COLUMNS = (sql: TransactionSql) => sql`
-  l.id, l.user_id, coalesce(u.name, 'Team member') as name, l.base_amount, l.working_days, l.days_present,
+  l.id, l.user_id, coalesce(u.name, 'Team member') as name, l.base_amount, l.working_days,
+  to_char(l.period_start, 'YYYY-MM-DD') as period_start, to_char(l.period_end, 'YYYY-MM-DD') as period_end,
+  l.payable_days, l.prorated_base, l.days_present,
   l.unpaid_leave_days::float8 as unpaid_leave_days, l.absent_days, l.late_marks, l.deduction,
   l.additions, l.additions_note, l.other_deductions, l.other_deductions_note, l.net_pay,
   l.paid_amount, l.paid_at, l.payment_mode, l.payment_reference`
@@ -250,7 +252,8 @@ export const payrollRouter = new Hono<AppEnv>()
     const rows = await attempt(c, 'payroll.export', () =>
       withService(c.env, (sql) => sql`
         select coalesce(u.name, 'Team member') as name, mp.upi_id, mp.bank_account_name,
-               nullif(btrim(mp.bank_account_number), '') as bank_account_number, mp.bank_ifsc, l.net_pay
+               nullif(btrim(mp.bank_account_number), '') as bank_account_number, mp.bank_ifsc, l.net_pay,
+               l.payable_days
           from payroll_lines l
           join users u on u.user_id = l.user_id
           left join member_profiles mp on mp.user_id = l.user_id

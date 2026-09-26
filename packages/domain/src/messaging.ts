@@ -50,6 +50,53 @@ export function freeEmailsLeft(usedThisMonth: number, freeMonthly: number): numb
   return Math.max(0, freeMonthly - usedThisMonth)
 }
 
+/** Emails a studio may send in a calendar month unless the platform changes it. */
+export const DEFAULT_EMAIL_MONTHLY_CAP = 10000
+
+/**
+ * What one more email would do right now: go free inside the monthly
+ * allowance, cost `pricePaise` from the wallet, wait for a recharge, or be
+ * stopped by the studio's monthly cap. Same order as enqueue_message()
+ * (0188): the cap first, then the allowance, then the balance.
+ */
+export type EmailQuote =
+  | { kind: 'limit' }
+  | { kind: 'free'; freeLeft: number }
+  | { kind: 'paid'; cost: number }
+  | { kind: 'no_balance'; cost: number }
+
+export function emailQuote(q: {
+  monthEmails: number
+  cap: number
+  freeUsed: number
+  freeMonthly: number
+  pricePaise: number
+  canAfford: boolean
+}): EmailQuote {
+  if (q.monthEmails >= q.cap) return { kind: 'limit' }
+  const c = emailChargePaise(q.freeUsed, q.freeMonthly, q.pricePaise)
+  if (c.free) return { kind: 'free', freeLeft: freeEmailsLeft(q.freeUsed, q.freeMonthly) }
+  if (c.cost === 0) return { kind: 'paid', cost: 0 }
+  return q.canAfford ? { kind: 'paid', cost: c.cost } : { kind: 'no_balance', cost: c.cost }
+}
+
+export type PaymentReminderStage = 'before_3' | 'due' | 'after_3' | 'after_10'
+
+/**
+ * Which automatic payment reminder goes to the client today: 3 days before
+ * the due date, on it, and 3 and 10 days after. Null on every other day.
+ * Dates are 'YYYY-MM-DD' (India). Mirrors client_payment_due_stage() in SQL.
+ */
+export function paymentReminderStage(dueDate: string, today: string): PaymentReminderStage | null {
+  const day = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10))) / 86_400_000
+  const diff = day(today) - day(dueDate)
+  if (diff === -3) return 'before_3'
+  if (diff === 0) return 'due'
+  if (diff === 3) return 'after_3'
+  if (diff === 10) return 'after_10'
+  return null
+}
+
 /**
  * Whether the wallet can pay `cost`. A wallet never goes below minus the
  * overdraft (0 by default, so never below zero).
