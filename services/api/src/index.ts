@@ -42,6 +42,7 @@ import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
 import { messagingRouter } from './modules/messaging/router'
+import { reportsRouter } from './modules/reports/router'
 
 const app = new Hono<AppEnv>()
 
@@ -171,6 +172,7 @@ app.route('/activity', activityRouter)
 app.route('/client-portal', clientPortalRouter)
 app.route('/public', publicClientPortalRouter)
 app.route('/messaging', messagingRouter)
+app.route('/reports', reportsRouter)
 
 // Every failure leaves through here, in one JSON envelope the web client
 // can read. Hono's own handler would return the bare message instead.

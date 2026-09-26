@@ -39,6 +39,7 @@ export type ModuleKey =
   | 'employee_credentials'
   | 'referrals'
   | 'team_payouts'
+  | 'reports'
 
 export type ModuleAction = 'view' | 'create' | 'edit' | 'delete'
 
@@ -160,6 +161,17 @@ export const MODULES: Readonly<Record<ModuleKey, ModuleDef>> = {
     label: 'CRM',
     path: '/follow-ups',
     routePatterns: ['/follow-ups', '/reminders', '/crm'],
+    sensitive: false,
+    defaultVisibility: allow(true, true, false),
+  },
+  // How the studio is doing for a period: sales, money, delivery, team. Read
+  // only. The Money tab also needs a money module (financials or money),
+  // checked by the API, so a manager sees Sales, Delivery and Team only.
+  reports: {
+    key: 'reports',
+    label: 'Reports',
+    path: '/reports',
+    routePatterns: ['/reports'],
     sensitive: false,
     defaultVisibility: allow(true, true, false),
   },

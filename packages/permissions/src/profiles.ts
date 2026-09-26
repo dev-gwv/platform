@@ -41,13 +41,16 @@ const BASE_MANAGER: ReadonlyArray<ModuleKey> = [
   'lead_sources',
 ]
 
+/** Screens that only show things: View, never create / edit / delete. */
+const READ_ONLY: ReadonlyArray<ModuleKey> = ['reports']
+
 export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
   project_manager: {
     key: 'project_manager',
     label: 'Project Manager',
     description: 'Projects, team, clients, CRM. No money, no settings.',
     accessLevel: 'manager',
-    permissions: withWrites(BASE_MANAGER),
+    permissions: [...withWrites(BASE_MANAGER), ...READ_ONLY],
   },
   finance_manager: {
     key: 'finance_manager',
@@ -58,6 +61,7 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     permissions: [
       ...BASE_EMPLOYEE,
       ...withWrites(['clients', 'money', 'billing', 'financials', 'company_expenses', 'team_salaries', 'team_payouts']),
+      ...READ_ONLY,
     ],
   },
   crm_executive: {
@@ -75,6 +79,7 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     permissions: [
       ...BASE_EMPLOYEE,
       ...withWrites(['team', 'team_directory', 'team_work_preview', 'team_terms', 'team_roles', 'attendance']),
+      ...READ_ONLY,
     ],
   },
   photographer: {
@@ -89,7 +94,7 @@ export const SYSTEM_PROFILES: Readonly<Record<string, SystemProfile>> = {
     label: 'Custom Admin',
     description: 'Start from base manager, then customise with overrides.',
     accessLevel: 'custom',
-    permissions: withWrites(BASE_MANAGER),
+    permissions: [...withWrites(BASE_MANAGER), ...READ_ONLY],
   },
 }
 

@@ -78,6 +78,7 @@ import { ReferralsPage } from '@/routes/referrals'
 import { ProjectTemplatesPage } from '@/routes/project-templates'
 import { TeamPayoutsPage } from '@/routes/team-payouts'
 import { PayrollPage } from '@/routes/payroll'
+import { ReportsPage } from '@/routes/reports'
 import { PayslipPage } from '@/routes/payslip'
 import { RemindersPage } from '@/routes/reminders'
 import { ActivityPage } from '@/routes/activity'
@@ -190,6 +191,7 @@ const routeTree = rootRoute.addChildren([
   authedLayout.addChildren([
   route('/', DashboardPage),
   route('/dashboard', DashboardPage),
+  route('/reports', ReportsPage),
 
   route('/projects', ProjectsListPage),
   route('/projects/new', NewProjectPage),

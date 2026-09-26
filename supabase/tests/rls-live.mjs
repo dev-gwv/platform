@@ -2271,5 +2271,39 @@ if (listed) {
   check('messaging: the WhatsApp webhook handshake refuses a wrong token', hook.status === 403, { status: hook.status })
 }
 
+// ── Reports (0189): the owner reads all four tabs; an employee none ──
+{
+  const range = 'from=2026-04-01&to=2027-03-31'
+  const tabs = ['sales', 'money', 'delivery', 'team']
+  const owner = await Promise.all(tabs.map((t) => api(`/reports/${t}?${range}`, { token: aToken })))
+  check(
+    'reports: the owner opens Sales, Money, Delivery and Team (200)',
+    owner.every((r) => r.status === 200) &&
+      typeof owner[0].json.enquiries === 'number' && typeof owner[1].json.billed === 'number' &&
+      typeof owner[2].json.delivered === 'number' && Array.isArray(owner[3].json.members),
+    owner.map((r) => r.status),
+  )
+  const bad = await api('/reports/sales?from=2026-06-30&to=2026-06-01', { token: aToken })
+  const none = await api('/reports/sales', { token: aToken })
+  check('reports: a backwards or missing period is refused (422)', bad.status === 422 && none.status === 422, { bad: bad.status, none: none.status })
+
+  // A plain employee has no Reports module, no money module, no Team Directory.
+  const empEmail = `reports-emp-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Report Employee', email: empEmail, role: 'employee' } })
+  const joinedEmp = await api('/auth/accept-invite', {
+    method: 'POST',
+    body: { token: /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? '', password: 'Employee12345!' },
+  })
+  const empToken = joinedEmp.json.access_token
+  const emp = await Promise.all(tabs.map((t) => api(`/reports/${t}?${range}`, { token: empToken })))
+  check(
+    'reports: an employee without access gets 403 on every tab',
+    joinedEmp.status === 200 && emp.every((r) => r.status === 403),
+    { joined: joinedEmp.status, tabs: emp.map((r) => r.status) },
+  )
+  const anonReport = await api(`/reports/sales?${range}`)
+  check('reports: no token, no report (401)', anonReport.status === 401, { status: anonReport.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
