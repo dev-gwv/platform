@@ -284,10 +284,11 @@ describe('pro-rata: joining and leaving during the month (0188)', () => {
     expect([m.ps, m.pe, m.payable_days, Number(m.prorated_base), m.absent_days, Number(m.net_pay)]).toEqual(['2026-09-01', '2026-09-20', 16, 16000, 0, 16000])
   })
 
-  it('falls back to the pay start date, then the day they were added (India time)', async () => {
+  it('uses the owner’s pay start date; with no date at all, a full month (never the day they were added)', async () => {
+    // Sam was added to the app on 17 Sep with no join date: the studio's own
+    // staff onboarded mid-month are not docked for the days before signing up.
     const s = (await l3(SAM))!
-    // 17-30 Sep = 12 working days.
-    expect([s.ps, s.payable_days, Number(s.prorated_base)]).toEqual(['2026-09-17', 12, 12000])
+    expect([s.ps, s.payable_days, Number(s.prorated_base)]).toEqual(['2026-09-01', 25, 25000])
     const t = (await l3(TARA))!
     expect([t.ps, t.payable_days, Number(t.prorated_base)]).toEqual(['2026-09-29', 2, 2000])
   })
@@ -298,8 +299,8 @@ describe('pro-rata: joining and leaving during the month (0188)', () => {
       '2026-09-01', '2026-09-30', 25, 25, 25000.5, 25000.5, 1000, 24000.5,
     ])
     const [run] = await q<{ total_base: string; total_net: string }>(`select total_base, total_net from payroll_runs where id = '${run3}'`)
-    // The run's salary total is what is actually earned: 25000.5 + 16000 + 15000 + 12000 + 2000.
-    expect(run).toEqual({ total_base: '70000.50', total_net: '67000.50' })
+    // The run's salary total is what is actually earned: 25000.5 + 16000 + 15000 + 25000 (Sam: no date, full month) + 2000.
+    expect(run).toEqual({ total_base: '83000.50', total_net: '80000.50' })
   })
 
   it('recounts on a new joining date and keeps the bonus; approval writes the earned salary to the ledger', async () => {

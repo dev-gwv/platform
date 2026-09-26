@@ -4,8 +4,11 @@
 -- they were with the studio:
 --
 --   window         = the days of the month between joining and leaving
---                    joined = member_profiles.joined_on, else users.pay_effective_from,
---                             else the day they were added (users.created_at, India time)
+--                    joined = users.pay_effective_from (the owner's pay start date),
+--                             else member_profiles.joined_on (the member's own date);
+--                             with neither, a full month -- never the day they were
+--                             added to the app, which would underpay everyone a
+--                             studio onboards mid-month
 --                    left   = the earlier of users.pay_effective_to and the day
 --                             they were removed (users.deleted_at, India time)
 --   payable days   = working days of the month inside the window
@@ -70,7 +73,7 @@ set search_path = public
 as $$
   select x.j, x.lft, greatest(p_first, coalesce(x.j, p_first)), least(p_last, coalesce(x.lft, p_last))
     from (
-      select coalesce(mp.joined_on, u.pay_effective_from, (u.created_at at time zone 'Asia/Kolkata')::date) as j,
+      select coalesce(u.pay_effective_from, mp.joined_on) as j,
              -- least() skips a null: whichever of the two dates is known.
              least(u.pay_effective_to, (u.deleted_at at time zone 'Asia/Kolkata')::date) as lft
         from users u
