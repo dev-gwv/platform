@@ -7,6 +7,7 @@ import {
   type StudioDeliverableType,
 } from '@ipc/domain'
 import type { CreateProjectRequest, CreateShootRequest, DeliverableInput } from '@ipc/contracts'
+import { niceTime } from '@/shared/ui/time-format'
 
 /**
  * Create Project, as data.
@@ -500,6 +501,103 @@ export function shootIssues(shoot: ShootDraft): string[] {
   if (!shoot.start_time) issues.push('Time needed')
   if (shoot.requirements.filter((r) => r.name.trim()).length === 0) issues.push('No requirements')
   return issues
+}
+
+/** The first shoot still missing something — the one to open for the user. */
+export function firstOpenShoot(shoots: readonly ShootDraft[]): number | null {
+  const at = shoots.findIndex((s) => shootIssues(s).length > 0)
+  return at === -1 ? null : at
+}
+
+/**
+ * The next unfinished shoot after `after`, wrapping round to the top — where
+ * to take someone the moment the card they were filling turns green. Null
+ * when every shoot is done.
+ */
+export function nextUnfinishedShoot(shoots: readonly ShootDraft[], after: number): number | null {
+  for (let step = 1; step <= shoots.length; step++) {
+    const at = (after + step) % shoots.length
+    if (at !== after && shootIssues(shoots[at]!).length > 0) return at
+  }
+  return null
+}
+
+/** Heads on the day: "2 candid, 1 drone" is three people. */
+export const peopleCount = (reqs: readonly ShootRequirementDraft[]): number =>
+  reqs.filter((r) => r.name.trim()).reduce((n, r) => n + Math.max(1, Number(r.quantity) || 1), 0)
+
+/** "Fri 11 Sept" — short enough for a one-line summary. */
+function shortDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return iso
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (Number.isNaN(d.getTime())) return iso
+  return `${d.toLocaleDateString('en-IN', { weekday: 'short' })} ${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
+}
+
+/**
+ * A folded shoot card in one line: "Fri 11 Sept · 3:12 PM · Jaipur · 4 people".
+ * Whatever is not filled in yet is simply left out.
+ */
+export function shootSummary(shoot: ShootDraft): string {
+  const people = peopleCount(shoot.requirements)
+  return [
+    shoot.shoot_date ? shortDate(shoot.shoot_date) : '',
+    niceTime(shoot.start_time),
+    shoot.location.trim(),
+    people ? `${people} ${people === 1 ? 'person' : 'people'}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+const BASIS_PHRASE: Record<Exclude<DueBasis, 'custom' | 'custom_after'>, string> = {
+  after_wedding_day: 'after Wedding Day',
+  after_last_shoot: 'after the last shoot',
+  after_project_created: 'after project start',
+}
+
+/** A folded deliverable's promise in words: "7 days after Wedding Day". */
+export function dueSummary(d: DeliverableDraft): string {
+  const days = Number(d.due_days)
+  const hasDays = d.due_days.trim() !== '' && Number.isFinite(days)
+  if (d.due_basis === 'custom') return d.custom_date ? `On ${shortDate(d.custom_date)}` : 'Pick a delivery date'
+  if (!hasDays) return 'No delivery time yet'
+  const count = `${days} ${days === 1 ? 'day' : 'days'}`
+  if (d.due_basis === 'custom_after') return d.custom_date ? `${count} after ${shortDate(d.custom_date)}` : `${count} after a date`
+  return `${count} ${BASIS_PHRASE[d.due_basis]}`
+}
+
+/**
+ * Whether a step is finished — not just allowed to be left (that is
+ * stepErrors), but done enough that the platform should point at Next.
+ */
+export function stepReady(draft: ProjectDraft, step: WizardStep): boolean {
+  const errors = stepErrors(draft)
+  switch (step) {
+    case 'client':
+      return !errors.client
+    case 'shoots':
+      return draft.shoots.length > 0 && draft.shoots.every((s) => shootIssues(s).length === 0)
+    case 'deliverables':
+      return (
+        !errors.deliverables &&
+        draft.deliverables.some((d) => d.visibility_scope === 'client' && d.title.trim() !== '')
+      )
+    case 'billing':
+      return !errors.billing && money(draft.package_cost) > 0
+    case 'review':
+      return canSubmit(draft)
+  }
+}
+
+/** What the green bar under a finished step says. */
+export const STEP_DONE: Record<WizardStep, string> = {
+  client: 'Project and client are set. Next: the shoot days.',
+  shoots: 'All shoots look good. Add another, or go to Deliverables.',
+  deliverables: 'Deliverables are set. Next: the package price.',
+  billing: 'Billing is set. Check everything on the Review step.',
+  review: 'Everything is ready. Press Create project.',
 }
 
 /**

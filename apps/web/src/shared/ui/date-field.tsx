@@ -52,6 +52,40 @@ export function niceDate(iso: string): string {
   return `${part({ weekday: 'short' })}, ${d.getDate()} ${part({ month: 'short' })} ${d.getFullYear()}`
 }
 
+export interface QuickDate {
+  label: string
+  iso: string
+  /** False when the date falls outside the field's min/max: shown greyed, not hidden. */
+  ok: boolean
+}
+
+/**
+ * The dates people reach for without looking at a grid: today, tomorrow, and
+ * the coming Saturday and Sunday — most shoots land on a weekend. The
+ * weekend days are the ones strictly after tomorrow, so on a Friday the
+ * chips read Today · Tomorrow · Sun 5 Oct, never "Tomorrow" and "Sat" twice.
+ */
+export function quickDates(now: Date, min?: Date, max?: Date): QuickDate[] {
+  const day = (offset: number) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
+    return d
+  }
+  const short = (d: Date) =>
+    `${d.toLocaleDateString('en-IN', { weekday: 'short' })} ${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
+  const within = (d: Date) => (!min || toIso(d) >= toIso(min)) && (!max || toIso(d) <= toIso(max))
+  const out: QuickDate[] = [
+    { label: 'Today', iso: toIso(day(0)), ok: within(day(0)) },
+    { label: 'Tomorrow', iso: toIso(day(1)), ok: within(day(1)) },
+  ]
+  for (const dow of [6, 0]) {
+    let offset = 2
+    while (day(offset).getDay() !== dow) offset++
+    const d = day(offset)
+    out.push({ label: short(d), iso: toIso(d), ok: within(d) })
+  }
+  return out.sort((a, b) => a.iso.localeCompare(b.iso))
+}
+
 export function DateField({
   className,
   value,
@@ -124,7 +158,7 @@ export function DateField({
   }
 
   const disabledDays = [...(minD ? [{ before: minD }] : []), ...(maxD ? [{ after: maxD }] : [])]
-  const todayOk = (!minD || toIso(now) >= toIso(minD)) && (!maxD || toIso(now) <= toIso(maxD))
+  const quick = quickDates(now, minD, maxD)
 
   return (
     // `contents`: the wrapper takes no box, so a caller's grid or width
@@ -198,6 +232,22 @@ export function DateField({
               </button>
             )}
           </form>
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {quick.map((q) => (
+              <button
+                key={q.label}
+                type="button"
+                onClick={() => commit(q.iso)}
+                disabled={!q.ok}
+                className={cn(
+                  'h-8 rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40',
+                  q.iso === current ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-primary/10 hover:text-primary',
+                )}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
           <Calendar
             mode="single"
             selected={selected}
@@ -208,7 +258,7 @@ export function DateField({
             endMonth={maxD ?? new Date(now.getFullYear() + 10, 11)}
             autoFocus
           />
-          <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+          <div className="mt-2 flex items-center border-t border-border pt-2">
             <button
               type="button"
               onClick={() => commit('')}
@@ -216,14 +266,6 @@ export function DateField({
               className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
             >
               <X className="size-3.5" aria-hidden /> Clear
-            </button>
-            <button
-              type="button"
-              onClick={() => commit(toIso(now))}
-              disabled={!todayOk}
-              className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/15 disabled:opacity-40"
-            >
-              Today
             </button>
           </div>
         </PopoverContent>

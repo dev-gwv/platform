@@ -7,6 +7,7 @@ import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { hoursLabel } from '@/features/shoots/assign'
+import { mapHref } from '@/features/shoots/map-link'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
 
 const FILL_TONE: Record<Fill, { card: string; pill: string }> = {
@@ -49,6 +50,7 @@ export function ShootCard({
   const time = shoot.start_at
     ? new Date(shoot.start_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
     : null
+  const href = mapHref(shoot.map_link)
 
   return (
     <article
@@ -87,13 +89,19 @@ export function ShootCard({
             {shoot.location && (
               <span className="inline-flex items-center gap-1">
                 <MapPin className="size-3.5" aria-hidden />
-                {shoot.map_link ? (
-                  <a href={shoot.map_link} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">
+                {href ? (
+                  <a href={href} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">
                     {shoot.location}
                   </a>
                 ) : (
                   shoot.location
                 )}
+              </span>
+            )}
+            {shoot.map_link && !href && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3.5" aria-hidden />
+                <span className="select-all">{shoot.map_link}</span>
               </span>
             )}
             {st.needed > 0 && (

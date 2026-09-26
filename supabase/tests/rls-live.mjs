@@ -1266,6 +1266,24 @@ if (listed) {
     del.status === 204 && afterDel?.status === 'released' && !!afterDel?.released_at && afterDel?.shoot_id === null,
     afterDel,
   )
+  // A map link is whatever was pasted -- a venue name shared from WhatsApp
+  // as often as a real link. It used to have to be a URL, and the 422 made
+  // the project wizard drop the shoot.
+  const pastedLink = 'Taj Palace, Jaipur (shared from WhatsApp)'
+  const mehendi = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Mehendi', map_link: pastedLink } })
+  const mehendiRow = ((await api(`/shoots?project_id=${pid}`, { token: aToken })).json ?? []).find((x) => x.id === mehendi.json?.id)
+  check('shoots: a map link that is not a URL is stored as typed', mehendi.status === 201 && mehendiRow?.map_link === pastedLink, {
+    status: mehendi.status,
+    row: mehendiRow,
+  })
+  const blankLink = await api(`/shoots/${mehendi.json.id}`, { token: aToken, method: 'PATCH', body: { map_link: '   ' } })
+  const blankRow = ((await api(`/shoots?project_id=${pid}`, { token: aToken })).json ?? []).find((x) => x.id === mehendi.json?.id)
+  const mehendiGone = await api(`/shoots/${mehendi.json.id}`, { token: aToken, method: 'DELETE' })
+  check('shoots: a blank map link clears it', blankLink.status === 204 && blankRow?.map_link === null && mehendiGone.status === 204, {
+    patch: blankLink.status,
+    row: blankRow,
+    del: mehendiGone.status,
+  })
 
   // ── Data v2 (0173): the board, crew handover, bulk, locations ──
   const pastDay = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10)

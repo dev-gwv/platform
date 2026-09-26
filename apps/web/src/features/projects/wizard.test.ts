@@ -22,6 +22,13 @@ import {
   newShoot,
   removeShootAt,
   shootIssues,
+  shootSummary,
+  stepReady,
+  dueSummary,
+  firstOpenShoot,
+  nextUnfinishedShoot,
+  peopleCount,
+  STEP_DONE,
   learnedDeliverables,
   quickDeliverables,
   rememberDeliverables,
@@ -286,6 +293,13 @@ describe('toProjectRequest', () => {
         requirements: [{ name: 'Photographer', quantity: 2 }],
       },
     ])
+  })
+
+  it('sends whatever map link the client gave, even when it is not a URL', () => {
+    const d = named({
+      shoots: [{ ...newShoot(), name: 'Mehendi', map_link: '  Taj Palace, Jaipur (shared from WhatsApp) ' }],
+    })
+    expect(toShootRequests(d, 'p')[0]?.map_link).toBe('Taj Palace, Jaipur (shared from WhatsApp)')
   })
 })
 
@@ -644,5 +658,79 @@ describe('learned deliverables', () => {
     const row = quickDeliverables(learnedDeliverables())
     expect(row.slice(0, 3).every((r) => r.learned)).toBe(true)
     expect(row.filter((r) => r.title.toLowerCase() === 'highlight film')).toHaveLength(1)
+  })
+})
+
+describe('guided flow', () => {
+  const ready = (over: Partial<ShootDraft> = {}): ShootDraft => ({
+    ...newShoot(),
+    name: 'Wedding Day',
+    shoot_date: '2026-09-11',
+    start_time: '15:12',
+    location: 'Jaipur',
+    requirements: [
+      { name: 'Candid Photographer', quantity: '2' },
+      { name: 'Drone', quantity: '1' },
+      { name: '', quantity: '4' },
+    ],
+    ...over,
+  })
+
+  it('calls a step ready only when it is actually done', () => {
+    expect(stepReady(EMPTY_DRAFT, 'client')).toBe(false)
+    expect(stepReady(named(), 'client')).toBe(true)
+
+    expect(stepReady(named(), 'shoots')).toBe(false)
+    expect(stepReady(named({ shoots: [ready(), { ...newShoot(), name: 'Haldi' }] }), 'shoots')).toBe(false)
+    expect(stepReady(named({ shoots: [ready(), ready({ name: 'Haldi' })] }), 'shoots')).toBe(true)
+
+    const film = { ...newClientDeliverable('Wedding Film'), due_days: '60' }
+    const team = { ...newDeliverable(), title: 'Culling', visibility_scope: 'internal' as const }
+    expect(stepReady(named({ deliverables: [team] }), 'deliverables')).toBe(false)
+    expect(stepReady(named({ deliverables: [film] }), 'deliverables')).toBe(true)
+    const addOnNoAmount = { ...film, is_additional_charge: true, additional_charge_amount: '' }
+    expect(stepReady(named({ deliverables: [addOnNoAmount] }), 'deliverables')).toBe(false)
+
+    expect(stepReady(named({ package_cost: '' }), 'billing')).toBe(false)
+    expect(stepReady(named({ package_cost: '0' }), 'billing')).toBe(false)
+    expect(stepReady(named({ package_cost: '150000' }), 'billing')).toBe(true)
+
+    expect(stepReady(named(), 'review')).toBe(canSubmit(named()))
+    expect(stepReady(EMPTY_DRAFT, 'review')).toBe(false)
+    expect(Object.keys(STEP_DONE)).toHaveLength(5)
+  })
+
+  it('opens the first unfinished shoot and moves on to the next one', () => {
+    const shoots = [ready(), { ...newShoot(), name: 'Haldi' }, ready({ name: 'Reception' }), { ...newShoot(), name: 'Mehendi' }]
+    expect(firstOpenShoot(shoots)).toBe(1)
+    expect(firstOpenShoot([ready()])).toBeNull()
+    expect(nextUnfinishedShoot(shoots, 1)).toBe(3)
+    // Past the end, it wraps round to the top.
+    expect(nextUnfinishedShoot(shoots, 3)).toBe(1)
+    expect(nextUnfinishedShoot([ready(), ready()], 0)).toBeNull()
+    // The card just finished is never offered back.
+    expect(nextUnfinishedShoot([{ ...newShoot(), name: 'Haldi' }], 0)).toBeNull()
+  })
+
+  it('folds a shoot into one readable line', () => {
+    expect(peopleCount(ready().requirements)).toBe(3)
+    expect(shootSummary(ready())).toMatch(/^Fri 11 Sept? · 3:12 PM · Jaipur · 3 people$/)
+    // Postgres hands times back with seconds; the summary does not care.
+    expect(shootSummary(ready({ start_time: '09:00:00', location: '' }))).toMatch(/^Fri 11 Sept? · 9:00 AM · 3 people$/)
+    expect(shootSummary(ready({ requirements: [{ name: 'Drone', quantity: '1' }] }))).toMatch(/1 person$/)
+    expect(shootSummary(newShoot())).toBe('')
+  })
+
+  it('says when a deliverable is due in plain words', () => {
+    const base = newDeliverable()
+    expect(dueSummary({ ...base, due_days: '7', due_basis: 'after_wedding_day' })).toBe('7 days after Wedding Day')
+    expect(dueSummary({ ...base, due_days: '1', due_basis: 'after_last_shoot' })).toBe('1 day after the last shoot')
+    expect(dueSummary({ ...base, due_days: '30', due_basis: 'after_project_created' })).toBe('30 days after project start')
+    expect(dueSummary({ ...base, due_days: '', due_basis: 'after_wedding_day' })).toBe('No delivery time yet')
+    expect(dueSummary({ ...base, due_basis: 'custom', custom_date: '2026-09-18' })).toMatch(/^On Fri 18 Sept?$/)
+    expect(dueSummary({ ...base, due_basis: 'custom', custom_date: '' })).toBe('Pick a delivery date')
+    expect(dueSummary({ ...base, due_days: '10', due_basis: 'custom_after', custom_date: '2026-09-18' })).toMatch(
+      /^10 days after Fri 18 Sept?$/,
+    )
   })
 })

@@ -62,15 +62,18 @@ export const updateServiceRequest = createServiceRequest
 export type UpdateServiceRequest = z.infer<typeof updateServiceRequest>
 
 /**
- * A map link is a link. Storing an address here instead would put the driver's
- * pin and the printed address in the same field, and lose one of them.
+ * Whatever the client sent, trimmed. It used to have to be a URL, and studios
+ * paste short links, plus codes and "Taj Palace, Jaipur (shared from
+ * WhatsApp)" -- the 422 that answered those made the Create Project wizard
+ * drop the shoot without a word. The web shows the value as a link only when
+ * it starts with http(s); anything else is shown as text to copy.
  *
- * An empty string clears it: forms submit "" for "no link", and rejecting
- * that with a 422 would make the field impossible to clear.
+ * An empty or blank string clears it: forms submit "" for "no link", and
+ * rejecting that with a 422 would make the field impossible to clear.
  */
 const mapLink = z.preprocess(
-  (v) => (v === '' ? null : v),
-  z.string().trim().url().max(500).nullish(),
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+  z.string().trim().max(500).nullish(),
 )
 
 export const createShootRequest = z.object({

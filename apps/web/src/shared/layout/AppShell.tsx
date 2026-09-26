@@ -92,6 +92,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     globalThis.localStorage?.setItem(COLLAPSE_KEY, collapsed ? '1' : '0')
   }, [collapsed])
 
+  // Focus mode: creating a project gets the whole width, so the menu narrows
+  // to its icons for that page on its own. The stored preference is left
+  // alone and comes back on the next page; the toggle still works, for this
+  // visit only.
+  const focus = pathname.startsWith('/projects/new')
+  const [peek, setPeek] = useState(false)
+  useEffect(() => setPeek(false), [pathname])
+  const railCollapsed = focus ? !peek : collapsed
+
   const toggleGroup = useCallback(
     (label: string) => setManualGroup({ path: pathname, label: openGroup === label ? null : label }),
     [pathname, openGroup],
@@ -101,8 +110,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-background print:block print:h-auto print:overflow-visible">
       <Sidebar
         entries={entries}
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
+        collapsed={railCollapsed}
+        onToggleCollapse={() => (focus ? setPeek((p) => !p) : setCollapsed((c) => !c))}
         openGroup={openGroup}
         onToggleGroup={toggleGroup}
         className="hidden md:flex"
