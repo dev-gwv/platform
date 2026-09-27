@@ -13,6 +13,7 @@ import * as Sentry from '@sentry/react'
 import { ThemeProvider } from '@/shared/theme/ThemeProvider'
 import { ConfirmProvider } from '@/shared/ui/confirm'
 import { router } from '@/app/router'
+import { registerPwa } from '@/shared/pwa/install'
 
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
@@ -42,6 +43,9 @@ const sentryOn = MOCK_ENABLED ? false : initSentry(router)
 // crash would be filed twice, once as a Sentry issue and once as a log line.
 // The mock preview has no backend to receive reports either way.
 if (!MOCK_ENABLED && !sentryOn) installClientErrorReporting()
+
+// Home-screen install (no caching; see public/sw.js).
+if (!MOCK_ENABLED) registerPwa()
 
 const el = document.getElementById('root')
 if (!el) throw new Error('#root not found')
