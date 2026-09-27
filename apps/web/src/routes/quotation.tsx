@@ -3,7 +3,7 @@ import { publicQuotation, z, buildMailtoUrl, buildWhatsAppUrl, type PublicQuotat
 import { CheckCircle2, Printer, Mail, MessageCircle, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -199,7 +199,7 @@ export function QuotationPage() {
 
   return (
     <div className="relative overflow-hidden">
-      <CameraBackdrop />
+      <PageBackdrop />
       <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 p-4">
         {loadError ? (
           <Card>

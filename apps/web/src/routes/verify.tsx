@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { Camera, Loader2, XCircle } from 'lucide-react'
 import { authToken } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { setTokens } from '@/shared/auth/token'
 import { markCookieSession } from '@/shared/api/client'
 
@@ -52,8 +52,8 @@ export function VerifyEmailPage() {
   }, [navigate, refresh])
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/40 p-4">
-      <CameraBackdrop />
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4">
+      <PageBackdrop />
 
       <div className="relative w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">

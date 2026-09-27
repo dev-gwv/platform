@@ -28,8 +28,7 @@ import { setupLanding } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
-import { TiltCard } from '@/shared/ui/tilt-card'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 
 type Mode = 'signin' | 'register' | 'forgot'
 const ok = z.object({ ok: z.boolean() })
@@ -322,17 +321,31 @@ export function LoginPage() {
   }, [googleReady, googleClientId])
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/40 p-4">
-      <CameraBackdrop />
+    <div className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+      <PageBackdrop />
 
-      <TiltCard className="relative w-full max-w-md" max={3} sheen={false}>
-        <h1 className="mb-6 text-center text-xl font-bold tracking-tight">
+      {/*
+        * Still, not tilting.
+        *
+        * The card used to follow the pointer by three degrees. On the one
+        * screen whose job is to look dependable to someone deciding whether
+        * to trust this with their client list, furniture that moves when you
+        * approach it reads as a demo rather than as a product.
+        */}
+      <div className="relative w-full max-w-[26rem]">
+        <h1 className="mb-7 text-center text-2xl font-bold tracking-tight">
+          {/*
+            * The raw brand amber (#f2a618) on a near-white ground fails
+            * contrast as body text. At this size and weight it clears the
+            * large-text threshold, which is why the wordmark may carry it and
+            * the links below may not.
+            */}
           <span className="text-brand">IPC</span> Studios
         </h1>
 
         {resetSentTo ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-4 p-4 text-center">
+          <Card className="rounded-xl shadow-sm">
+            <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
               <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <MailCheck className="size-6" />
               </span>
@@ -356,8 +369,8 @@ export function LoginPage() {
             </CardContent>
           </Card>
         ) : pendingEmail ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-4 p-4 text-center">
+          <Card className="rounded-xl shadow-sm">
+            <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
               <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <MailCheck className="size-6" />
               </span>
@@ -395,10 +408,10 @@ export function LoginPage() {
           </Card>
         ) : (
           <>
-            <Card>
-              <CardContent className="p-4 sm:p-8">
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold tracking-tight">
+            <Card className="rounded-xl shadow-sm">
+              <CardContent className="p-6 sm:p-8">
+                <div className="mb-7">
+                  <h2 className="text-xl font-semibold tracking-tight">
                     {isForgot
                       ? 'Forgot password'
                       : isRegister
@@ -599,7 +612,7 @@ export function LoginPage() {
               </CardContent>
             </Card>
 
-            <p className="mt-4 text-center text-sm text-muted-foreground">
+            <p className="mt-5 text-center text-sm text-muted-foreground">
               {isForgot ? (
                 <button
                   type="button"
@@ -625,10 +638,10 @@ export function LoginPage() {
                 </>
               )}
             </p>
-            <LegalLinks className="mt-4" />
+            <LegalLinks className="mt-6" />
           </>
         )}
-      </TiltCard>
+      </div>
     </div>
   )
 }

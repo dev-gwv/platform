@@ -7,7 +7,7 @@ import { publicReferralCampaign, z, buildWhatsAppUrl, type PublicReferralCampaig
 const created = z.object({ id: z.string().uuid() })
 const duplicateResponse = z.object({ duplicate: z.boolean(), message: z.string().nullish() })
 import { callApi, ApiError } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
@@ -114,7 +114,7 @@ export function ReferPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
-      <CameraBackdrop />
+      <PageBackdrop />
       <Card className="relative z-10 w-full max-w-lg">
         <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">

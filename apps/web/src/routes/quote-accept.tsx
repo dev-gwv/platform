@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { CheckCircle2, FileText, XCircle } from 'lucide-react'
 import { okResponse, publicQuote, type PublicQuote } from '@ipc/contracts'
 import { callApi, ApiError } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -67,7 +67,7 @@ export function QuoteAcceptPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
-      <CameraBackdrop />
+      <PageBackdrop />
       <Card className="relative z-10 w-full max-w-2xl">
         <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">

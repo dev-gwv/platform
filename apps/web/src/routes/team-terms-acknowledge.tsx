@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { z, publicTeamTerms, type PublicTeamTerms } from '@ipc/contracts'
 import { CalendarDays, CheckCircle2, Printer, ShieldCheck } from 'lucide-react'
 import { callApi, ApiError } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -74,7 +74,7 @@ export function TeamTermsAcknowledgePage() {
 
   return (
     <div className="relative overflow-hidden">
-      <CameraBackdrop />
+      <PageBackdrop />
       <div className="paper relative mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-4 p-4">
         <div className="flex items-center gap-2">
           {terms?.logo_url ? (

@@ -3,7 +3,7 @@ import { UserX } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 
 /**
  * Lovable parity (/no-account): a signed-in identity with role === 'none' —
@@ -20,8 +20,8 @@ export function NoAccountPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/40 p-4">
-      <CameraBackdrop />
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4">
+      <PageBackdrop />
       <div className="relative w-full max-w-sm">
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-4 text-center">

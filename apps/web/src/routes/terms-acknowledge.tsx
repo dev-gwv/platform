@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { z } from '@ipc/contracts'
 import { CheckCircle2, Printer } from 'lucide-react'
 import { callApi, ApiError } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -93,7 +93,7 @@ export function TermsAcknowledgePage() {
 
   return (
     <div className="relative overflow-hidden">
-      <CameraBackdrop />
+      <PageBackdrop />
       <div className="paper relative mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-4">
       {doc && <TermsDocumentLetterhead doc={doc} trailing={done ? <StatusBadge tone="success">Agreed</StatusBadge> : null} />}
 

@@ -4,7 +4,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { humanize } from '@/shared/ui/format'
 
 /**
@@ -24,8 +24,8 @@ export function PlanExpiredPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/40 p-4">
-      <CameraBackdrop />
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4">
+      <PageBackdrop />
       <div className="relative w-full max-w-sm">
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-4 text-center">

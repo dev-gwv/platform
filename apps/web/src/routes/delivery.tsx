@@ -3,7 +3,7 @@ import { publicDelivery, buildMailtoUrl, buildWhatsAppUrl, type PublicDelivery }
 import { ExternalLink, PackageCheck, MessageCircle, Mail, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { callApi } from '@/shared/api/client'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
@@ -63,7 +63,7 @@ export function DeliveryPage() {
 
   return (
     <div className="relative overflow-hidden">
-      <CameraBackdrop />
+      <PageBackdrop />
       <div className="paper relative mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-4">
         <div className="flex items-center gap-2">
           {delivery?.logo_url ? (

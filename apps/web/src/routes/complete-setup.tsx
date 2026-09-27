@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { TiltCard } from '@/shared/ui/tilt-card'
-import { CameraBackdrop } from '@/shared/brand/CameraBackdrop'
+import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 
 /**
  * The second half of Google sign-in for a first-time identity: Google already
@@ -65,7 +65,7 @@ export function CompleteSetupPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
-      <CameraBackdrop />
+      <PageBackdrop />
       <TiltCard className="relative z-10 w-full max-w-md">
         <Card>
           <CardContent className="flex flex-col gap-4 p-4">
