@@ -1,11 +1,10 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Flame, Lock } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DndContext,
   PointerSensor,
   closestCenter,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -26,6 +25,7 @@ import { Button } from '@/shared/ui/button'
 import { LostReasonDialog } from '../LostReasonDialog'
 import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted, type DueBucket } from '../leads'
 import { BoardColumn, DueBadge, LeadCard, LeadTable, stageTone } from './shared'
+import { DealCard } from '../DealCard'
 
 /** Everything owed today or already late — the list to clear before going home. */
 export function TodayTab({ leads, now, onOpen }: { leads: readonly CrmLead[]; now: Date; onOpen: (id: string) => void }) {
@@ -214,6 +214,9 @@ export function FollowUpBoardTab({
  * and required fields, and asks for a reason before a deal is lost.
  */
 export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOpen: (id: string) => void }) {
+  // One clock for the board, so a card cannot read "due today" while the one
+  // beside it reads "overdue" because they asked at different moments.
+  const now = useMemo(() => new Date(), [leads])
   const pipelines = usePipelines()
   const move = useMoveStage()
   const access = useAccess()
@@ -324,7 +327,14 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
             return (
               <DroppableStage key={s.id} stage={s} count={inStage.length} value={value} full={full}>
                 {inStage.map((l) => (
-                  <DraggableLeadCard key={l.id} lead={l} onOpen={onOpen} draggable={canEdit && !move.isPending} />
+                  <DealCard
+                    key={l.id}
+                    lead={l}
+                    now={now}
+                    onOpen={onOpen}
+                    draggable={canEdit && !move.isPending}
+                    stageProbability={s.probability_default}
+                  />
                 ))}
               </DroppableStage>
             )
@@ -391,32 +401,3 @@ function DroppableStage({
   )
 }
 
-function DraggableLeadCard({ lead, onOpen, draggable }: { lead: CrmLead; onOpen: (id: string) => void; draggable: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id, disabled: !draggable })
-  const style: CSSProperties | undefined = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.6 : 1 }
-    : undefined
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={`rounded-lg border border-border bg-card p-3 text-left hover:bg-accent ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
-    >
-      <button type="button" onClick={() => onOpen(lead.id)} className="w-full text-left">
-        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-          {lead.is_hot && <Flame className="size-3 shrink-0 text-destructive" />}
-          {lead.title ?? lead.name ?? 'Unnamed deal'}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {lead.title ? (lead.name ?? lead.phone ?? '—') : (lead.phone ?? '—')}
-        </p>
-        <p className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="truncate">{lead.assignee_name ?? 'Unassigned'}</span>
-          {lead.deal_value !== null && <span className="shrink-0 tabular-nums">{formatINR(lead.deal_value)}</span>}
-        </p>
-      </button>
-    </div>
-  )
-}
