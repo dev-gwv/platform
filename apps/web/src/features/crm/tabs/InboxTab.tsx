@@ -24,6 +24,7 @@ export function InboxTab({
   onOpen,
   showArchived,
   onShowArchived,
+  chrome = true,
 }: {
   leads: readonly CrmLead[]
   now: Date
@@ -33,6 +34,8 @@ export function InboxTab({
   onOpen: (id: string) => void
   showArchived: boolean
   onShowArchived: (on: boolean) => void
+  /** False on the leads page, which shows its own view picker and search. */
+  chrome?: boolean
 }) {
   const { data: views } = useSavedViews()
   const saveView = useSaveView()
@@ -129,6 +132,19 @@ export function InboxTab({
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+        * The page owns the controls now.
+        *
+        * This block held a how-to banner, a saved-views select, search, a
+        * column picker, an archived toggle, seven quick-filter chips and
+        * three more selects -- above the first lead, every time. The leads
+        * page shows one view name, one search box and one Filter button
+        * instead, and passes the rows down. Kept behind a flag rather than
+        * deleted because the same component still backs the setup screens,
+        * where the full set is what you went there for.
+        */}
+      {chrome && (
+        <>
       {!dismissed && (
         <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] p-4 text-sm">
           <p className="flex-1 text-muted-foreground">
@@ -405,6 +421,9 @@ export function InboxTab({
           <option value="cold">Cold</option>
         </Select>
       </div>
+
+        </>
+      )}
 
       {selected.size > 0 && (
         <div className="no-print flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2" role="toolbar" aria-label="Bulk actions">

@@ -23,5 +23,13 @@ export default defineConfig({
   test: {
     hookTimeout: 120_000,
     testTimeout: 60_000,
+    /*
+     * Vitest's default exclude covers node_modules and dist, not a reference
+     * checkout dropped in the working tree. Git ignores those and eslint has
+     * its own list, so without this a folder read for design reference is
+     * collected as thousands of test files belonging to someone else's
+     * project -- every one of them failing, and burying our own result.
+     */
+    exclude: ['**/node_modules/**', '**/dist/**', 'twenty-orbitcrew-main/**'],
   },
 })

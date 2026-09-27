@@ -19,7 +19,8 @@ import { toast } from 'sonner'
 import type { CrmLead, CrmQuote, LeadQuality } from '@ipc/contracts'
 import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent } from '@/shared/ui/dialog'
+import { Dialog } from '@/shared/ui/dialog'
+import { SheetContent } from '@/shared/ui/sheet'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
@@ -175,12 +176,19 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
+      {/*
+        * A panel beside the list, not a modal over it.
+        *
+        * The dialog covered the middle of the screen, so working four leads
+        * meant opening and closing four times and losing your place in the
+        * list each time. A sheet keeps the queue visible behind it -- the next
+        * lead is a click away rather than a close-and-find.
+        */}
+      <SheetContent
         title={lead.name ?? 'Unnamed lead'}
         description={`${lead.source}${lead.source_label ? ` via ${lead.source_label}` : ''} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
-        className="max-w-xl"
       >
-        <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={lead.is_hot ? 'danger' : 'neutral'}>{lead.is_hot ? 'Hot lead' : 'Normal'}</StatusBadge>
             <ScoreBadge score={lead.score} hotScore={settings?.hot_score ?? 60} />
@@ -635,7 +643,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </div>
           )}
         </div>
-      </DialogContent>
+      </SheetContent>
     </Dialog>
   )
 }

@@ -52,3 +52,6 @@ docs-reverse-engineered/
 blueprint/
 .tmp-check/
 parity-gaps.json
+
+# Reference only — Twenty CRM checkout, read for design reference, never built or shipped.
+twenty-orbitcrew-main/
