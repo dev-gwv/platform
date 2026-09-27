@@ -15,8 +15,20 @@ import { Input, Label } from '@/shared/ui/input'
  * The link is the product here, not an email: a studio sends it on WhatsApp as
  * often as by mail, so the dialog's job is to hand it over cleanly.
  */
-export function QuotationLinkDialog({ projectId }: { projectId: string }) {
-  const [open, setOpen] = useState(false)
+export function QuotationLinkDialog({
+  projectId,
+  open: openProp,
+  onOpenChange,
+}: {
+  projectId: string
+  /** Opened from elsewhere (a menu) instead of its own button. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
+  const [openSelf, setOpenSelf] = useState(false)
+  const controlled = openProp !== undefined
+  const open = controlled ? openProp : openSelf
+  const setOpen = (o: boolean) => (controlled ? onOpenChange?.(o) : setOpenSelf(o))
   const [notes, setNotes] = useState('')
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -45,11 +57,13 @@ export function QuotationLinkDialog({ projectId }: { projectId: string }) {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <FileText /> Quotation
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <FileText /> Quotation
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent
         title="Send a quotation"
         description="The client sees the deliverables marked for the quotation, and the totals as they stand now."

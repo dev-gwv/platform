@@ -71,7 +71,8 @@ export function ClientPortalCard({
   const revoke = useRevokeClientPortalLink(projectId)
   const confirm = useConfirm()
   const [fresh, setFresh] = useState<{ id: string; url: string } | null>(null)
-  const [showPayments, setShowPayments] = useState(true)
+  // Payments show by default; the switch appears once the link exists.
+  const showPayments = true
 
   const link = data?.link ?? null
   const url = link ? (fresh?.id === link.id ? fresh.url : recall(link.id)) : null
@@ -121,7 +122,7 @@ export function ClientPortalCard({
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Globe className="size-4 text-primary" aria-hidden /> Client portal
+            <Globe className="size-4 text-primary" aria-hidden /> Share with client
           </p>
           {link && <StatusBadge tone="success">Live</StatusBadge>}
         </div>
@@ -134,17 +135,9 @@ export function ClientPortalCard({
               One private link for {clientName ?? 'your client'}: shoots, deliverables, payments and terms. No login needed.
             </p>
             {canEdit ? (
-              <>
-                <Switch
-                  checked={showPayments}
-                  onChange={setShowPayments}
-                  label="Show payments"
-                  description="Package, received, balance and invoices."
-                />
-                <Button size="sm" disabled={create.isPending} onClick={() => void makeLink(false)}>
-                  <Globe /> {create.isPending ? 'Making link…' : 'Make client link'}
-                </Button>
-              </>
+              <Button size="sm" disabled={create.isPending} onClick={() => void makeLink(false)}>
+                <Globe /> {create.isPending ? 'Making link…' : 'Make client link'}
+              </Button>
             ) : (
               <p className="text-xs text-muted-foreground">No link has been shared yet.</p>
             )}

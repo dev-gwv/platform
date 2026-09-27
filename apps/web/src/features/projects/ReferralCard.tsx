@@ -34,19 +34,9 @@ export function ReferralCard({
   const live = (data?.campaigns ?? []).filter((c) => c.status === 'active')
   const campaign = live.find((c) => c.project_id === projectId) ?? live[0]
 
-  if (!campaign) {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-3 p-4 text-sm">
-          <Gift className="size-5 shrink-0 text-tone-rose" aria-hidden />
-          <span className="flex-1 text-muted-foreground">Offer clients a reward for sending friends your way.</span>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/referrals">Set up</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
+  // No live offer: nothing to ask for here. Setting one up lives on the
+  // Referrals page, not on every project.
+  if (!campaign) return null
 
   const reward =
     campaign.reward_title ??
