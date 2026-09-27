@@ -11,7 +11,6 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
-  Phone,
   Repeat,
   Square,
 } from 'lucide-react'
@@ -19,6 +18,7 @@ import { toast } from 'sonner'
 import type { CrmLead, CrmQuote, LeadQuality } from '@ipc/contracts'
 import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
+import { CallButton } from '@/features/crm-calls/CallButton'
 import { Dialog } from '@/shared/ui/dialog'
 import { SheetContent } from '@/shared/ui/sheet'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -271,17 +271,8 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             * which.
             */}
           <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-2 border-b border-border bg-card px-1 pb-3">
-            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
-              {lead.phone ? (
-                <a href={`tel:${lead.phone}`}>
-                  <Phone /> Call
-                </a>
-              ) : (
-                <span>
-                  <Phone /> Call
-                </span>
-              )}
-            </Button>
+            {/* Dials, then asks how it went (0201). */}
+            <CallButton lead={lead} />
             <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
               {lead.phone ? (
                 <a href={waLink(lead.phone)} target="_blank" rel="noreferrer">

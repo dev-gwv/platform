@@ -42,6 +42,7 @@ import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
 import { enquiryFormsRouter, publicEnquiryFormsRouter } from './modules/enquiry-forms/router'
+import { crmCallsRouter } from './modules/crm-calls/router'
 import { publicOnboardingRouter } from './modules/onboarding/router'
 import { messagingRouter } from './modules/messaging/router'
 import { reportsRouter } from './modules/reports/router'
@@ -147,6 +148,7 @@ app.route('/work', workRouter)
 app.route('/work/reminder-settings', workReminderSettingsRouter)
 app.route('/billing', billingRouter)
 app.route('/financials', financialsRouter)
+app.route('/crm', crmCallsRouter)
 app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)
 app.route('/meta', metaRouter)

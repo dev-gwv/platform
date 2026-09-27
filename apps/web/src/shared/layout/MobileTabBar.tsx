@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { Camera, Home, Inbox, Menu } from 'lucide-react'
+import { Camera, Home, Inbox, Menu, PhoneCall } from 'lucide-react'
 import { useAccess } from '../auth/useAccess'
 import { cn } from '../ui/cn'
 
@@ -12,6 +12,7 @@ export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
   const access = useAccess()
   const tabs = [
     { to: '/dashboard', label: 'Home', icon: Home, show: true },
+    { to: '/follow-ups/queue', label: 'Calls', icon: PhoneCall, show: access.hasModule('crm') },
     { to: '/follow-ups', label: 'Leads', icon: Inbox, show: access.hasModule('crm') },
     { to: '/shoots', label: 'Shoots', icon: Camera, show: access.hasModule('projects') },
   ].filter((t) => t.show)
@@ -22,7 +23,7 @@ export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
       className="flex shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden print:hidden"
     >
       {tabs.map(({ to, label, icon: Icon }) => {
-        const on = pathname === to || pathname.startsWith(`${to}/`)
+        const on = pathname === to || (to !== '/follow-ups' && pathname.startsWith(`${to}/`))
         return (
           <Link key={to} to={to} className={cn(item, on ? 'text-primary' : 'text-muted-foreground')} aria-current={on ? 'page' : undefined}>
             <Icon className="size-5" aria-hidden />

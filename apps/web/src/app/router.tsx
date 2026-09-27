@@ -49,6 +49,7 @@ import { FinancialsPage } from '@/routes/financials'
 import { FollowUpsPage } from '@/routes/follow-ups'
 import { CrmSetupPage } from '@/routes/follow-ups/setup'
 import { CrmReportsPage } from '@/routes/follow-ups/reports'
+import { CallQueuePage } from '@/routes/follow-ups/queue'
 import { AttendancePage } from '@/routes/attendance'
 import { NotificationsPage } from '@/routes/notifications'
 import { EmployeesPage } from '@/routes/employees'
@@ -248,6 +249,7 @@ const routeTree = rootRoute.addChildren([
   route('/follow-ups', FollowUpsPage),
   // Everything a studio sets once and never opens again.
   route('/follow-ups/setup', CrmSetupPage),
+  route('/follow-ups/queue', CallQueuePage),
   // The funnel, the team and the forecast. Built long ago and unreachable
   // until now -- no route pointed at them while the API kept computing them.
   route('/follow-ups/reports', CrmReportsPage),

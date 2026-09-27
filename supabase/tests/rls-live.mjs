@@ -2645,5 +2645,27 @@ if (listed) {
   )
 }
 
+// ── 0201: call outcomes and the call queue ─────────────────────
+{
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const made = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: 'Queue Test', phone: `9${String(Date.now()).slice(-9)}`, assigned_to: me } })
+  const id = made.json.id ?? made.json.lead?.id
+  const q1 = await api('/crm/queue', { token: aToken })
+  const row = q1.json.items?.find?.((r) => r.id === id)
+  check('calls: a new lead nobody has rung is in my queue, with a reason', q1.status === 200 && row?.reason === 'New enquiry, not called yet', { status: q1.status, row, made: made.status })
+
+  for (const outcome of ['no_answer', 'busy', 'switched_off']) {
+    await api('/crm/activities', { token: aToken, method: 'POST', body: { lead_id: id, type: 'call', direction: 'out', outcome } })
+  }
+  const leads = await api('/crm/leads?include_archived=true', { token: aToken })
+  const list = Array.isArray(leads.json) ? leads.json : leads.json?.items ?? []
+  const after = list.find((l) => l.id === id)
+  check('calls: three misses in a row make the lead unreachable', after?.contacted_status === 'unreachable', { contacted: after?.contacted_status })
+
+  const everyone = await api('/crm/queue?scope=all', { token: aToken })
+  const bad = await api('/crm/queue?scope=nobody', { token: aToken })
+  check('calls: owners can see everyone\'s queue; a bad scope is refused', everyone.status === 200 && everyone.json.scope === 'all' && bad.status === 422, { all: everyone.json.scope, bad: bad.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
