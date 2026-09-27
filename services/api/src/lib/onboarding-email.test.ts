@@ -20,7 +20,7 @@ describe('welcome email', () => {
   it('shows the call button only when a booking link is set', async () => {
     const without = await welcomeMail(env, { companyId: COMPANY, name: null })
     expect(without.html).not.toContain('Book an onboarding call')
-    expect(without.html).toContain('Just reply to this email')
+    expect(without.html).toContain('Suggest a feature')
     const withCall = await welcomeMail({ ...env, ONBOARDING_CALL_URL: 'https://cal.test/me' }, { companyId: COMPANY, name: null })
     expect(withCall.html).toContain('Book an onboarding call')
     expect(withCall.html).toContain('https://cal.test/me')

@@ -93,8 +93,8 @@ function stepCard(env: Env, n: SetupStep, done: boolean): string {
   <tr><td style="padding:14px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${done ? 'opacity:0.6;' : ''}">
       <tr>
-        <td width="200" valign="top" style="padding-right:18px;">
-          <img src="${img}" width="200" alt="" style="display:block;width:200px;max-width:100%;height:auto;border-radius:10px;border:0;" />
+        <td width="170" valign="top" style="padding-right:16px;">
+          <img src="${img}" width="170" alt="" style="display:block;width:170px;max-width:100%;height:auto;border-radius:10px;border:0;" />
         </td>
         <td valign="middle">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${GOLD};text-transform:uppercase;">Step ${n}</p>
@@ -117,7 +117,7 @@ function layout(
     : ''
   const help = call
     ? `<p style="margin:0 0 16px;font-size:14px;color:${MUTED};">We will set it up with you on a short call.</p>${button('Book a call', call, false)}`
-    : `<p style="margin:0;font-size:14px;color:${MUTED};">Just reply to this email. A real person reads it.</p>`
+    : `<p style="margin:0;font-size:14px;color:${MUTED};">Press “Suggest a feature” at the top of the app. A real person reads every one.</p>`
   return `<!doctype html>
 <html lang="en">
   <head>
