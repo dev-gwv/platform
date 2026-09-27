@@ -186,7 +186,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
         */}
       <SheetContent
         title={lead.name ?? 'Unnamed lead'}
-        description={`${lead.source} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
+        description={`${lead.source}${lead.source_label ? ` via ${lead.source_label}` : ''} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
       >
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6">
           <div className="flex flex-wrap items-center gap-2">
