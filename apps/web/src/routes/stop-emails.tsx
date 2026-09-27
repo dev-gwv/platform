@@ -5,24 +5,27 @@ import { callApi } from '@/shared/api/client'
 import { Card, CardContent } from '@/shared/ui/card'
 
 /**
- * "Stop these emails" from the onboarding emails' footer
- * (/stop-emails?c=<studio>&t=<signature>). One press already happened in the
+ * "Stop these emails" from an email's footer: the onboarding emails
+ * (/stop-emails?c=<studio>&t=<signature>) or the morning email
+ * (/stop-emails?m=<person>&t=<signature>). One press already happened in the
  * inbox, so this page just does it and says so.
  */
 export function StopEmailsPage() {
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working')
+  const morning = new URLSearchParams(window.location.search).has('m')
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     const c = q.get('c')
+    const m = q.get('m')
     const t = q.get('t')
-    if (!c || !t) {
+    if ((!c && !m) || !t) {
       setState('failed')
       return
     }
-    callApi('/public/onboarding-emails/stop', {
+    callApi(m ? '/public/morning-email/stop' : '/public/onboarding-emails/stop', {
       method: 'POST',
-      body: { c, t },
+      body: m ? { u: m, t } : { c, t },
       responseSchema: z.object({ ok: z.boolean() }),
     })
       .then(() => setState('done'))
@@ -37,10 +40,18 @@ export function StopEmailsPage() {
           {state === 'done' && <CheckCircle2 className="size-8 text-success" aria-hidden />}
           {state === 'failed' && <XCircle className="size-8 text-destructive" aria-hidden />}
           <p className="font-semibold">
-            {state === 'working' ? 'One moment…' : state === 'done' ? 'Done. No more setup emails.' : 'This link did not work.'}
+            {state === 'working'
+              ? 'One moment…'
+              : state === 'done'
+                ? morning
+                  ? 'Done. No more morning emails.'
+                  : 'Done. No more setup emails.'
+                : 'This link did not work.'}
           </p>
           {state === 'done' && (
-            <p className="text-sm text-muted-foreground">Your studio and everything in it are untouched.</p>
+            <p className="text-sm text-muted-foreground">
+              {morning ? 'You can turn it back on from your profile.' : 'Your studio and everything in it are untouched.'}
+            </p>
           )}
         </CardContent>
       </Card>

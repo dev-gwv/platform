@@ -31,6 +31,7 @@ import {
 } from '@/features/profile/api'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { MorningEmailCard } from '@/features/settings/MorningEmailCard'
 
 export function MyProfilePage() {
   return (
@@ -254,6 +255,7 @@ function MyProfileForm() {
       </Section>
 
       <IdProofSection needed={missing.has('id_document')} />
+      <MorningEmailCard />
 
       <div className="sticky bottom-3 flex justify-end">
         <Button onClick={submit} disabled={save.isPending} className="shadow-lg">

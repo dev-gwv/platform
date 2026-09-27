@@ -13,6 +13,7 @@ import {
   updateMyProfileRequest,
   updateThemeRequest,
   integrationStatusList,
+  z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -22,7 +23,7 @@ import { razorpayConfigured } from '../../lib/env'
 import { whatsappConfigured } from '../../lib/whatsapp'
 import { twilioConfigured } from '../../lib/twilio'
 import { fail } from '../../middleware/errors'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { uuidParam } from '../../lib/params'
@@ -179,6 +180,30 @@ export const settingsRouter = new Hono<AppEnv>()
     // Which fields changed, never the values: bank and PAN stay out of the log.
     await audit(c, { action: 'profile.update', entityType: 'user', entityId: auth.userId, after: { fields: Object.keys(parsed.data) } })
     return c.json(myProfile.parse(row))
+  })
+
+  // Your morning email (0198): owners and admins get one at 8 am. Anyone can
+  // switch their own off or back on; it is a preference, not a permission.
+  .get('/morning-email', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'settings.morning_email', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ off: boolean; role: string }[]>`
+        select morning_email_off as off, role from users
+         where user_id = ${auth.userId} and company_id = ${auth.companyId}`),
+    )
+    if (!rows?.[0]) fail(404, 'We could not load this setting.')
+    return c.json({ on: !rows[0].off, applies: ['super_admin', 'admin'].includes(rows[0].role) })
+  })
+
+  .put('/morning-email', async (c) => {
+    const parsed = z.object({ on: z.boolean() }).safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please say on or off.')
+    const auth = c.get('auth')
+    const ok = await attempt(c, 'settings.morning_email_set', () =>
+      withService(c.env, (sql) => sql`select morning_email_set(${auth.userId}, ${!parsed.data.on})`),
+    )
+    if (!ok) fail(400, 'We could not save this.')
+    return c.json({ on: parsed.data.on })
   })
 
   // Your ID proof: private to you and the studio owner (member_documents RLS).

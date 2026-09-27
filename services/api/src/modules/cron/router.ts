@@ -11,6 +11,7 @@ import { log } from '../../lib/log'
 import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
+import { runMorningEmails } from '../../lib/morning-email'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -85,6 +86,9 @@ export const cronRouter = new Hono<AppEnv>()
         // and 10 days after), where the studio has switched it on.
         const clientPayments = await sql<{ summary: unknown }[]>`
           select run_client_payment_due_cron(p_dry_run => ${dryRun}) as summary`
+        // Owners and admins hear about each overdue invoice once, from 10 am.
+        const invoicesOverdue = await sql<{ summary: unknown }[]>`
+          select run_invoice_overdue_cron(p_dry_run => ${dryRun}) as summary`
         // Anyone with gaps in their profile hears what is missing, every day.
         const profileReminders = await sql<{ summary: unknown }[]>`
           select run_profile_reminder_cron(p_dry_run => ${dryRun}) as summary`
@@ -100,6 +104,8 @@ export const cronRouter = new Hono<AppEnv>()
         // second batch outside the dry run and double-report the first.
         // New studio owners hear about the next setup step on day 1, 3 and 7.
         const onboarding = await runOnboardingNudges(c.env, dryRun)
+        // Owners and admins get the day in one email, from 8 am.
+        const morning = await runMorningEmails(c.env, dryRun)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
@@ -113,6 +119,8 @@ export const cronRouter = new Hono<AppEnv>()
           client_payment_reminders: clientPayments[0]?.summary ?? {},
           profile_reminders: profileReminders[0]?.summary ?? {},
           onboarding_emails: onboarding,
+          invoice_overdue: invoicesOverdue[0]?.summary ?? {},
+          morning_emails: morning,
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
