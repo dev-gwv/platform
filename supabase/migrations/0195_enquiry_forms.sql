@@ -32,7 +32,10 @@ create table if not exists enquiry_forms (
   code            text not null unique check (code ~ '^[a-hj-km-np-z2-9]{7}$'),
   source_id       uuid not null unique references crm_webhook_sources (id) on delete cascade,
   -- The vendor's page. Null means it is off; a new link replaces the old one.
-  view_token_hash text unique check (view_token_hash is null or view_token_hash ~ '^[0-9a-f]{64}$'),
+  -- Kept as is, not hashed like the client portal's: the studio copies it
+  -- again whenever it re-sends the link, and anyone who can read this row
+  -- can already see every lead it shows.
+  view_token      text unique check (view_token is null or view_token ~ '^[A-Za-z0-9_-]{20,100}$'),
   show_phone      boolean not null default false,
   scans           int not null default 0,
   page_views      int not null default 0,
@@ -131,8 +134,8 @@ create trigger enquiry_forms_sync_source
   before update on enquiry_forms
   for each row execute function enquiry_forms_sync_source();
 
-/** Turn the vendor's page on with a new link (a sha256 hex), or off with null. */
-create or replace function enquiry_form_set_page(p_id uuid, p_token_hash text)
+/** Turn the vendor's page on with a new link, or off with null. */
+create or replace function enquiry_form_set_page(p_id uuid, p_token text)
 returns boolean
 language plpgsql
 security definer
@@ -144,7 +147,7 @@ begin
   if v_company is null or not is_current_user_active() then
     raise exception 'not allowed' using errcode = '42501';
   end if;
-  update enquiry_forms set view_token_hash = p_token_hash
+  update enquiry_forms set view_token = p_token
    where id = p_id and company_id = v_company;
   return found;
 end;
@@ -260,6 +263,7 @@ as $$
     when 'lost' then 'Not booked'
     when 'contacted' then 'In talks'
     when 'qualified' then 'In talks'
+    when 'proposal_sent' then 'In talks'
     else 'New'
   end
 $$;
@@ -295,7 +299,7 @@ declare
   v_out  jsonb;
 begin
   select f.* into v_form from enquiry_forms f
-   where f.view_token_hash = encode(sha256(convert_to(coalesce(p_raw, ''), 'UTF8')), 'hex')
+   where f.view_token = p_raw and p_raw is not null
      and f.archived_at is null;
   if not found then return null; end if;
 

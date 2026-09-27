@@ -41,6 +41,8 @@ export const crmLead = z.object({
   status: leadStatus,
   assigned_to: uuid.nullable(),
   assignee_name: z.string().nullable(),
+  /** The lead source it arrived through, e.g. the vendor whose QR was scanned. */
+  source_label: z.string().nullable().default(null),
   notes: z.string().nullable(),
   /** The next promised contact. Null means nobody has agreed to call back. */
   follow_up_at: isoDateTime.nullable(),
@@ -273,8 +275,20 @@ export type CreateDistributionRequest = z.infer<typeof createDistributionRequest
 export const leadSourceKind = z.enum(['webform', 'meta'])
 export type LeadSourceKind = z.infer<typeof leadSourceKind>
 
-/** Lovable parity: elementor / landing / generic webhook / other source types. */
-export const webhookSourceType = z.enum(['website_form', 'google_form', 'elementor', 'landing_page', 'webhook', 'other'])
+/**
+ * Lovable parity: elementor / landing / generic webhook / other source types.
+ * 'enquiry_form' is the source behind a vendor's QR (0195), made by the
+ * Enquiry forms page, never picked by hand.
+ */
+export const webhookSourceType = z.enum([
+  'website_form',
+  'google_form',
+  'elementor',
+  'landing_page',
+  'webhook',
+  'other',
+  'enquiry_form',
+])
 export type WebhookSourceType = z.infer<typeof webhookSourceType>
 
 export const leadSourceRow = z.object({

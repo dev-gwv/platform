@@ -23,6 +23,7 @@ import {
   Inbox,
   Bell,
   Megaphone,
+  QrCode,
   Users,
   Clock,
   Settings,
@@ -150,6 +151,8 @@ export const NAV: NavEntry[] = [
       // points here.
       leaf('Leads', '/follow-ups', Inbox, { module: 'crm' }),
       leaf('Clients', '/clients', Contact, { module: 'clients' }),
+      // A QR per vendor; its leads are credited to them (0195).
+      leaf('Enquiry forms', '/enquiry-forms', QrCode, { module: 'crm' }),
       leaf('Lead Sources', '/lead-sources', Megaphone, { module: 'lead_sources' }),
     ],
   },

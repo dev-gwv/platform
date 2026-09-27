@@ -1,7 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { createHash } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -143,14 +142,13 @@ describe('the public form', () => {
 
 describe("the vendor's page", () => {
   const raw = 'vendor-page-token-for-riya'
-  const hash = createHash('sha256').update(raw).digest('hex')
 
   it('is off until the studio makes a link', async () => {
     expect((await q<{ p: unknown }>(`select enquiry_form_page($1) as p`, [raw]))[0]!.p).toBeNull()
   })
 
   it('lists the leads with the phone masked and plain statuses', async () => {
-    await asUser(OWNER, () => q(`select enquiry_form_set_page($1, $2)`, [form.id, hash]))
+    await asUser(OWNER, () => q(`select enquiry_form_set_page($1, $2)`, [form.id, raw]))
     const [{ p }] = (await q<{ p: Record<string, unknown> }>(`select enquiry_form_page($1) as p`, [raw])) as [
       { p: Record<string, unknown> },
     ]

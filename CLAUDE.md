@@ -79,6 +79,7 @@ Keep this short and current. Delete a line when it lands.
 | --- | --- | --- |
 | CRM / Leads / availability | Claude (Opus, terminal) | 0193 taken. Date availability shipped; date holds, push alerts and open-tracking are planned next. |
 | Tasks, Quotations, onboarding, payroll | Claude (client's session) | 0190–0192, 0194 (onboarding emails) |
+| Enquiry forms (vendor QR codes) | Claude (client's session) | 0195. New `enquiry_forms` table and pages; touches CRM only in `selectLead` (`source_label`) and the LeadDrawer subtitle. |
 | Handed to CRM session | — | From the old-app comparison: leads going cold need daily re-checks (not contacted 2 h, stuck in stage 5 d, proposal silent 3 d, unassigned 1 h; 0105 checks them only on create/move). Each studio connecting its own Facebook page (today one platform token, `lib/meta.ts`). |
 
 If you are about to work in an area listed above that is not yours, pull

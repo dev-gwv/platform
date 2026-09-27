@@ -86,6 +86,8 @@ const selectLead = (sql: TransactionSql) => sql`
          l.event_type, l.event_date, l.event_location, l.alternate_phone, l.city, l.group_name,
          l.quality, l.contacted_status,
          u.name as assignee_name,
+         -- Which lead source (a vendor's QR, say) brought this lead in.
+         (select ws.label from crm_webhook_sources ws where ws.source_key = l.source_key) as source_label,
          -- Is the studio free on this lead's date? Derived in one pass by
          -- 0193 rather than per row, and joined here so the list and the
          -- single-lead read can never disagree about it.

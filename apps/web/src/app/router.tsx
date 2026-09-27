@@ -64,6 +64,8 @@ import { QuotationPage } from '@/routes/quotation'
 import { ReceiptPage } from '@/routes/receipt'
 import { DeliveryPage } from '@/routes/delivery'
 import { ReferPage } from '@/routes/refer'
+import { EnquirePage, EnquiryViewPage } from '@/routes/enquire'
+import { EnquiryFormDetailPage, EnquiryFormsPage } from '@/routes/enquiry-forms'
 import { ProjectDocumentsPage } from '@/routes/project-documents'
 import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
 import { PlatformStudiosPage } from '@/routes/platform/studios'
@@ -168,6 +170,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/invoice', PublicInvoicePage),
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
+  publicRoute('/enquire/$code', EnquirePage),
+  publicRoute('/enquiry-view/$token', EnquiryViewPage),
   // The client portal: one private link per project (0184).
   publicRoute('/p/$token', ClientPortalPage),
   publicRoute('/p/$token/invoice/$invoiceId', ClientPortalInvoicePage),
@@ -231,6 +235,8 @@ const routeTree = rootRoute.addChildren([
   // Everything a studio sets once and never opens again.
   route('/follow-ups/setup', CrmSetupPage),
   route('/lead-sources', LeadSourcesPage),
+  route('/enquiry-forms', EnquiryFormsPage),
+  route('/enquiry-forms/$id', EnquiryFormDetailPage),
   // The permissions matrix has declared /facebook as this module's path since
   // Phase 2; keep it working rather than breaking anyone's bookmark.
   route('/facebook', LeadSourcesPage),

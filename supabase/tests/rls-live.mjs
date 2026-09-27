@@ -2551,5 +2551,62 @@ if (listed) {
   )
 }
 
+// ── Enquiry forms (0195): a QR per vendor, leads credited to it ──
+{
+  const made = await api('/enquiry-forms', { token: aToken, method: 'POST', body: { name: 'Riya Boutique', kind: 'Boutique', phone: '9876500000' } })
+  check('enquiry forms: a studio makes one, with a short code and a public link', made.status === 201 && /^[a-z2-9]{7}$/.test(made.json.code) && made.json.form_url.endsWith(`/enquire/${made.json.code}`), { status: made.status, body: made.json })
+  const f = made.json
+
+  const open = await api(`/public/enquiry/${f.code}`)
+  check('enquiry forms: the public form names the studio and the vendor', open.status === 200 && open.json.form_name === 'Riya Boutique' && open.json.is_open === true, open.json)
+
+  const phone = `9${String(Date.now()).slice(-9)}`
+  const sent = await api(`/public/enquiry/${f.code}`, { method: 'POST', body: { name: 'Neha Sharma', phone, event_type: 'Wedding', event_date: '2027-02-14', city: 'Jaipur' } })
+  const again = await api(`/public/enquiry/${f.code}`, { method: 'POST', body: { name: 'Neha S', phone } })
+  const bot = await api(`/public/enquiry/${f.code}`, { method: 'POST', body: { name: 'Bot', phone: '9000000009', website: 'http://spam' } })
+  const leads = await api(`/enquiry-forms/${f.id}/leads`, { token: aToken })
+  check(
+    'enquiry forms: a submission is one lead credited to the QR; a repeat number and a bot add nothing',
+    sent.status === 200 && again.status === 200 && bot.status === 200 && leads.status === 200 && leads.json.length === 1 && leads.json[0].event_type === 'Wedding',
+    { sent: sent.status, leads: leads.json },
+  )
+  const allLeads = await api('/crm/leads?source=enquiry', { token: aToken })
+  const leadRow = (Array.isArray(allLeads.json) ? allLeads.json : allLeads.json?.items ?? []).find((l) => l.id === leads.json[0]?.id)
+  check('enquiry forms: the lead says which QR it came from', allLeads.status === 200 && leadRow?.source === 'enquiry' && leadRow?.source_label === 'Riya Boutique', { status: allLeads.status, lead: leadRow })
+
+  const listed = await api('/enquiry-forms', { token: aToken })
+  const row = listed.json.find?.((x) => x.id === f.id)
+  check('enquiry forms: the list counts the scan and the enquiry', row?.scans === 1 && row?.enquiries === 1 && row?.page_url === null, row)
+
+  const on = await api(`/enquiry-forms/${f.id}/page`, { token: aToken, method: 'POST', body: { on: true } })
+  const token = on.json.page_url?.split('/enquiry-view/')[1]
+  const view = await api(`/public/enquiry-view/${token}`)
+  check(
+    "enquiry forms: the vendor's page lists the lead with the phone masked",
+    on.status === 200 && view.status === 200 && view.json.enquiries === 1 && view.json.leads[0].phone === `${phone.slice(0, 2)}xxxxx${phone.slice(-3)}` && view.json.leads[0].status === 'New',
+    { on: on.status, view: view.json },
+  )
+  await api(`/enquiry-forms/${f.id}`, { token: aToken, method: 'PATCH', body: { show_phone: true } })
+  const full = await api(`/public/enquiry-view/${token}`)
+  check("enquiry forms: 'show full numbers' shows them", full.json.leads?.[0]?.phone === phone, full.json.leads?.[0])
+
+  // B's first session died with its password reset above; this is the live one.
+  const bLive = reset.json.access_token
+  const other = await api(`/enquiry-forms/${f.id}`, { token: bLive })
+  const otherEdit = await api(`/enquiry-forms/${f.id}/page`, { token: bLive, method: 'POST', body: { on: false } })
+  check('enquiry forms: another studio cannot see or change it', other.status === 404 && otherEdit.status === 404, { get: other.status, edit: otherEdit.status })
+
+  await api(`/enquiry-forms/${f.id}/page`, { token: aToken, method: 'POST', body: { on: false } })
+  const stopped = await api(`/public/enquiry-view/${token}`)
+  await api(`/enquiry-forms/${f.id}`, { token: aToken, method: 'PATCH', body: { is_active: false } })
+  const closed = await api(`/public/enquiry/${f.code}`, { method: 'POST', body: { name: 'Late', phone: '9000000008' } })
+  const closedView = await api(`/public/enquiry/${f.code}`)
+  check(
+    'enquiry forms: a stopped page and a switched-off form refuse',
+    stopped.status === 404 && closed.status === 404 && closedView.json.is_open === false,
+    { stopped: stopped.status, closed: closed.status, view: closedView.json },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

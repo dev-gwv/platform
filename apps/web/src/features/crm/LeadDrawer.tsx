@@ -177,7 +177,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title={lead.name ?? 'Unnamed lead'}
-        description={`${lead.source} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
+        description={`${lead.source}${lead.source_label ? ` via ${lead.source_label}` : ''} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
         className="max-w-xl"
       >
         <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
