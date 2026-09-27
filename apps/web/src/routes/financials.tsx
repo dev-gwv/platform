@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowDownRight, ArrowUpRight, Download, FileSpreadsheet, Info, Users, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Download, FileSpreadsheet, Info, Wallet } from 'lucide-react'
 import type { PnlBasis, PnlLines, ProfitAndLoss } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -15,6 +15,7 @@ import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useGstSummary, useProfitAndLoss } from '@/features/financials/api'
 import { OverheadsCard } from '@/features/financials/Overheads'
+import { NeedsAttention } from '@/features/financials/NeedsAttention'
 import { PERIOD_LABEL, periodFor, rangeLabel, type PeriodKey } from '@/features/financials/period'
 
 export function FinancialsPage() {
@@ -168,6 +169,7 @@ function ProfitAndLossPage() {
         </div>
       ) : (
         <div className={cn('mt-4 flex flex-col gap-4 transition-opacity', q.isFetching && 'opacity-70')}>
+          <NeedsAttention data={data} />
           <Headline lines={data.lines} label={period.label} />
           <div className="grid gap-4 lg:grid-cols-3">
             <Statement lines={data.lines} className="lg:col-span-2" />
@@ -307,9 +309,8 @@ function Rail({ data }: { data: ProfitAndLoss }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-1 p-3">
-        <p className="px-2 pt-1 text-sm font-semibold">Still to settle</p>
+        <p className="px-2 pt-1 text-sm font-semibold">Still to come in</p>
         {item(<Wallet className="size-4 text-tone-amber" aria-hidden />, 'Still to collect', r.still_to_collect, 'Project value not yet received', '/projects')}
-        {item(<Users className="size-4 text-tone-violet" aria-hidden />, 'Owed to the team', r.owed_to_team, 'Crew booked, not yet paid', '/team-payouts')}
       </CardContent>
     </Card>
   )
@@ -403,7 +404,7 @@ function Projects({ data }: { data: ProfitAndLoss }) {
     </button>
   )
   return (
-    <Card>
+    <Card id="pnl-projects" className="scroll-mt-4">
       <CardContent className="p-4">
         <p className="text-sm font-semibold">By project</p>
         {rows.length === 0 ? (
