@@ -53,6 +53,7 @@ import { QuoteBuilder } from './QuoteBuilder'
 import { QuoteRow } from './tabs/QuotesTab'
 import { ScoreBadge } from './tabs/shared'
 import { LostReasonDialog } from './LostReasonDialog'
+import { ArchiveDialog } from './ArchiveDialog'
 import { Timeline } from './Timeline'
 import { dateVerdict } from './availability'
 import { LookupSelect } from '@/features/settings/LookupSelect'
@@ -120,6 +121,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   const { data: contacts } = useContacts()
   const { data: settings } = useCrmSettings()
   const [losingTo, setLosingTo] = useState<string | null>(null)
+  const [askArchive, setAskArchive] = useState(false)
   const pipeline = (pipelines ?? []).find((p) => p.id === lead.pipeline_id) ?? (pipelines ?? []).find((p) => p.is_default)
   const stages = pipeline ? sortStages(pipeline.stages) : []
 
@@ -193,7 +195,15 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={lead.is_hot ? 'danger' : 'neutral'}>{lead.is_hot ? 'Hot lead' : 'Normal'}</StatusBadge>
             <ScoreBadge score={lead.score} hotScore={settings?.hot_score ?? 60} />
-            {lead.is_archived && <StatusBadge tone="neutral">Archived</StatusBadge>}
+            {lead.is_archived && (
+              <StatusBadge tone="neutral">
+                {/* A lead found in the archive months later used to say only
+                    that it had been archived. Now it says why, and by whom. */}
+                Archived
+                {lead.archive_reason ? ` · ${lead.archive_reason}` : ''}
+                {lead.archived_by_name ? ` · ${lead.archived_by_name}` : ''}
+              </StatusBadge>
+            )}
             {bucket === 'overdue' && <StatusBadge tone="danger">Follow-up overdue</StatusBadge>}
             {bucket === 'today' && <StatusBadge tone="warning">Due today</StatusBadge>}
             {lead.last_contacted_at === null && <StatusBadge tone="warning">Never contacted</StatusBadge>}
@@ -631,9 +641,25 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               move.mutate({ leadId: lead.id, stage_id: losingTo, ...d }, { onSuccess: () => setLosingTo(null) })
             }}
           />
+          <ArchiveDialog
+            open={askArchive}
+            pending={update.isPending}
+            onCancel={() => setAskArchive(false)}
+            onConfirm={(reason) => {
+              patch(reason === null ? { is_archived: true } : { is_archived: true, archive_reason: reason })
+              setAskArchive(false)
+            }}
+          />
           {canEdit && (
             <div className="flex justify-end border-t border-border pt-3">
-              <Button size="sm" variant="ghost" disabled={update.isPending} onClick={() => patch({ is_archived: !lead.is_archived })}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={update.isPending}
+                onClick={() =>
+                  lead.is_archived ? patch({ is_archived: false }) : setAskArchive(true)
+                }
+              >
                 {lead.is_archived ? (
                   <>
                     <ArchiveRestore /> Restore to inbox

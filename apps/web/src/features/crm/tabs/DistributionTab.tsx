@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowRightLeft, Trash2, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -10,14 +10,110 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMembers } from '@/features/allocation/api'
+import { isOpen } from '../leads'
 import {
   useAddToRota,
+  useBulkPatch,
+  useLeads,
   useCrmSettings,
   useDistribution,
   useRemoveFromRota,
   useUpdateCrmSettings,
   useUpdateDistribution,
 } from '../api'
+
+/**
+ * Hand one person's whole desk to someone else.
+ *
+ * The bulk toolbar can only reassign what is selected on screen, so moving a
+ * leaving rep's four hundred open leads meant selecting them in batches. This
+ * is the question actually being asked when someone leaves or goes on leave.
+ *
+ * It moves OPEN leads only. A converted or lost lead belongs to the history of
+ * who worked it, and rewriting that would quietly change every past report.
+ */
+function HandOverCard() {
+  const access = useAccess()
+  const canEdit = access.hasAction('crm', 'edit')
+  const members = useMembers()
+  const { data: leads } = useLeads(false)
+  const bulk = useBulkPatch()
+  const confirm = useConfirm()
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  const open = (leads ?? []).filter(isOpen)
+  const moving = from ? open.filter((l) => (from === 'none' ? l.assigned_to === null : l.assigned_to === from)) : []
+  const fromName =
+    from === 'none' ? 'nobody' : (members.data ?? []).find((m) => m.user_id === from)?.name ?? 'them'
+  const toName = (members.data ?? []).find((m) => m.user_id === to)?.name ?? ''
+
+  async function go() {
+    if (!from || !to || moving.length === 0) return
+    const ok = await confirm({
+      title: `Move ${moving.length} open ${moving.length === 1 ? 'lead' : 'leads'} to ${toName}?`,
+      description: `Currently with ${fromName}. Closed and lost leads stay where they are, so past reports do not change.`,
+      confirmLabel: 'Move them',
+    })
+    if (!ok) return
+    // crm_bulk_patch takes 200 ids at a time, so a full desk goes in batches.
+    for (let i = 0; i < moving.length; i += 200) {
+      bulk.mutate({ ids: moving.slice(i, i + 200).map((l) => l.id), patch: { assigned_to: to } })
+    }
+    setFrom('')
+    setTo('')
+  }
+
+  if (!canEdit) return null
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div>
+          <p className="flex items-center gap-2 font-medium">
+            <ArrowRightLeft className="size-4 text-muted-foreground" /> Hand a desk over
+          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            For somebody leaving or going on leave. Open leads move; closed and lost ones stay.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex min-w-44 flex-col gap-1">
+            <Label htmlFor="handover-from">From</Label>
+            <Select id="handover-from" value={from} onChange={(e) => setFrom(e.target.value)}>
+              <option value="">Pick a person…</option>
+              <option value="none">— Unassigned —</option>
+              {(members.data ?? []).map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex min-w-44 flex-col gap-1">
+            <Label htmlFor="handover-to">To</Label>
+            <Select id="handover-to" value={to} onChange={(e) => setTo(e.target.value)}>
+              <option value="">Pick a person…</option>
+              {(members.data ?? [])
+                .filter((m) => m.user_id !== from)
+                .map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          <Button disabled={!from || !to || moving.length === 0 || bulk.isPending} onClick={() => void go()}>
+            Move {moving.length > 0 ? moving.length : ''}
+          </Button>
+        </div>
+        {from && moving.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nothing open is with {fromName}.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 /** Who new leads get handed to, and what each is carrying. */
 export function DistributionTab() {
@@ -50,6 +146,7 @@ export function DistributionTab() {
   }
 
   return (
+    <div className="flex flex-col gap-4">
     <Card>
       <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Lead distribution</h3>
@@ -154,5 +251,7 @@ export function DistributionTab() {
         )}
       </CardContent>
     </Card>
+    <HandOverCard />
+    </div>
   )
 }

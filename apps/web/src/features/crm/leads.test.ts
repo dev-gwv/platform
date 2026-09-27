@@ -59,6 +59,8 @@ const lead = (name: string, over: Partial<CrmLead> = {}): CrmLead => ({
   date_status: 'unknown',
   date_wanted_by: 0,
   tags: [],
+  archive_reason: null,
+  archived_by_name: null,
   created_at: '2026-08-20T10:00:00Z',
   ...over,
 })

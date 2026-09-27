@@ -128,6 +128,13 @@ export interface LeadQuery {
    * forty back (0197).
    */
   tag: string | 'all'
+  /**
+   * When the lead arrived. The server has taken date_created / date_from /
+   * date_to since 0013 and no UI ever offered any of them, so "the leads that
+   * came in this month" was a question the CRM could answer and could not be
+   * asked.
+   */
+  created: 'all' | 'today' | 'last7' | 'this_month'
 }
 
 export const EMPTY_QUERY: LeadQuery = {
@@ -137,6 +144,7 @@ export const EMPTY_QUERY: LeadQuery = {
   assignee: 'all',
   quality: 'all',
   tag: 'all',
+  created: 'all',
 }
 
 function matchesSearch(l: CrmLead, search: string): boolean {
@@ -152,6 +160,33 @@ function matchesSearch(l: CrmLead, search: string): boolean {
  * reaching for "Hot" and "Overdue" together is asking for — the leads that are
  * hot AND late, not a longer list than either.
  */
+/** The period labels, so the filter and the chip that describes it agree. */
+export const CREATED_RANGES: ReadonlyArray<{ value: LeadQuery['created']; label: string }> = [
+  { value: 'all', label: 'Any time' },
+  { value: 'today', label: 'Arrived today' },
+  { value: 'last7', label: 'Last 7 days' },
+  { value: 'this_month', label: 'This month' },
+]
+
+function arrivedWithin(l: CrmLead, range: LeadQuery['created'], now: Date): boolean {
+  if (range === 'all') return true
+  const at = new Date(l.created_at)
+  if (Number.isNaN(at.getTime())) return false
+  if (range === 'today') {
+    const start = new Date(now)
+    start.setHours(0, 0, 0, 0)
+    return at >= start
+  }
+  if (range === 'last7') {
+    const start = new Date(now)
+    start.setDate(start.getDate() - 6)
+    start.setHours(0, 0, 0, 0)
+    return at >= start
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  return at >= start
+}
+
 export function applyQuery(
   leads: readonly CrmLead[],
   query: LeadQuery,
@@ -162,6 +197,7 @@ export function applyQuery(
     .filter((l) => (query.status === 'all' ? true : l.status === query.status))
     .filter((l) => (query.quality === 'all' ? true : l.quality === query.quality))
     .filter((l) => (query.tag === 'all' ? true : l.tags.some((t) => t.id === query.tag)))
+    .filter((l) => arrivedWithin(l, query.created, now))
     .filter((l) =>
       query.assignee === 'all'
         ? true

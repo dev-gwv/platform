@@ -92,8 +92,9 @@ const selectLead = (sql: TransactionSql) => sql`
          l.sla_due_at, l.pipeline_id, l.stage_id, s.name as stage_name, l.contact_id, l.crm_company_id,
          co.name as crm_company_name, l.title, l.close_date, l.currency, l.score, l.created_at,
          l.event_type, l.event_date, l.event_location, l.alternate_phone, l.city, l.group_name,
-         l.quality, l.contacted_status,
+         l.quality, l.contacted_status, l.archive_reason,
          u.name as assignee_name,
+         arch.name as archived_by_name,
          -- Which lead source (a vendor's QR, say) brought this lead in.
          (select ws.label from crm_webhook_sources ws where ws.source_key = l.source_key) as source_label,
          -- Is the studio free on this lead's date? Derived in one pass by
@@ -112,6 +113,7 @@ const selectLead = (sql: TransactionSql) => sql`
          ), '[]'::jsonb) as tags
   from crm_leads l
   left join users u on u.user_id = l.assigned_to
+  left join users arch on arch.user_id = l.archived_by
   left join crm_pipeline_stages s on s.id = l.stage_id
   left join crm_companies co on co.id = l.crm_company_id
   left join crm_date_availability() av on av.on_date = l.event_date`

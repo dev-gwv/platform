@@ -151,6 +151,9 @@ export const crmLead = z.object({
    * read it moves over; nothing writes it any more.
    */
   tags: z.array(leadTag).default([]),
+  /** Why it was archived, and by whom (0200). Null on a live lead. */
+  archive_reason: z.string().nullable().default(null),
+  archived_by_name: z.string().nullable().default(null),
   created_at: isoDateTime,
 })
 export type CrmLead = z.infer<typeof crmLead>
@@ -200,6 +203,8 @@ const lostNeedsReason = (v: { status?: string | undefined; lost_reason?: string 
 
 export const updateLeadRequest = z
   .object({
+    /** Why it is being archived (0200). Cleared by the database on restore. */
+    archive_reason: z.string().trim().min(2).max(300).nullable().optional(),
     name: z.string().trim().max(160).nullable().optional(),
     phone: z.string().trim().max(30).nullable().optional(),
     email: z.string().trim().max(200).nullable().optional(),
@@ -424,6 +429,8 @@ export const bulkLeadPatch = z.object({
       note: z.string().trim().max(2000).optional(),
       follow_up_at: isoDateTime.nullable().optional(),
       is_archived: z.boolean().optional(),
+      /** Recorded when is_archived becomes true; cleared on restore (0200). */
+      archive_reason: z.string().trim().min(2).max(300).nullable().optional(),
       deal_value: z.number().min(0).max(1_00_00_000).nullable().optional(),
       probability: z.number().int().min(0).max(100).nullable().optional(),
       close_date: isoDate.nullable().optional(),

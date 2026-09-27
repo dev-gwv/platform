@@ -12,8 +12,18 @@ import { useBulkPatch, useCrmPrefs, useCrmSettings, useDeleteView, useEnrollWork
   useTags,
 } from '../api'
 import { LostReasonDialog } from '../LostReasonDialog'
-import { EMPTY_QUERY, QUICK_FILTERS, STAGES, applyQuery, type LeadQuery, type QuickFilter } from '../leads'
+import {
+  CREATED_RANGES,
+  EMPTY_QUERY,
+  QUICK_FILTERS,
+  STAGES,
+  STAGE_LABEL,
+  applyQuery,
+  type LeadQuery,
+  type QuickFilter,
+} from '../leads'
 import { isSaveable, takeLocalViews, toLeadQuery, toSavedQuery } from '../views'
+import { ArchiveDialog } from '../ArchiveDialog'
 import { DEFAULT_INBOX_COLUMNS, INBOX_COLUMNS, LeadTable, exportLeadsCsv } from './shared'
 
 const SCOPE_LABEL: Record<SavedViewVisibility, string> = { private: 'Only me', team: 'My team', everyone: 'Everyone' }
@@ -55,6 +65,7 @@ export function InboxTab({
   const bulk = useBulkPatch()
   const workflows = useWorkflows()
   const tags = useTags()
+  const [askArchive, setAskArchive] = useState(false)
   const tagLeads = useTagLeads()
   const enroll = useEnrollWorkflow()
   const settings = useCrmSettings()
@@ -132,8 +143,50 @@ export function InboxTab({
   const runBulk = (patch: Parameters<typeof bulk.mutate>[0]['patch']) =>
     bulk.mutate({ ids: [...selected], patch }, { onSuccess: () => setSelected(new Set()) })
 
-  const filtered =
-    query.filters.length > 0 || query.search || query.status !== 'all' || query.assignee !== 'all'
+  // Every filter, not four of them. A Clear button that fails to appear because
+  // the only thing filtering is `quality` is how a studio ends up staring at a
+  // short list with no idea why.
+  const activeFilters = useMemo(() => {
+    const out: Array<{ key: string; label: string; clear: () => void }> = []
+    if (query.search)
+      out.push({ key: 'search', label: `“${query.search}”`, clear: () => onQuery({ ...query, search: '' }) })
+    for (const f of query.filters) {
+      const label = QUICK_FILTERS.find((x) => x.value === f)?.label ?? f
+      out.push({ key: `f:${f}`, label, clear: () => onQuery({ ...query, filters: query.filters.filter((x) => x !== f) }) })
+    }
+    if (query.status !== 'all')
+      out.push({
+        key: 'status',
+        label: STAGE_LABEL[query.status] ?? query.status,
+        clear: () => onQuery({ ...query, status: 'all' }),
+      })
+    if (query.assignee !== 'all')
+      out.push({
+        key: 'assignee',
+        label:
+          query.assignee === 'none'
+            ? 'Unassigned'
+            : ((members ?? []).find((m) => m.user_id === query.assignee)?.name ?? 'One owner'),
+        clear: () => onQuery({ ...query, assignee: 'all' }),
+      })
+    if (query.quality !== 'all')
+      out.push({ key: 'quality', label: `${query.quality} leads`, clear: () => onQuery({ ...query, quality: 'all' }) })
+    if (query.tag !== 'all')
+      out.push({
+        key: 'tag',
+        label: (tags.data ?? []).find((t) => t.id === query.tag)?.name ?? 'One tag',
+        clear: () => onQuery({ ...query, tag: 'all' }),
+      })
+    if (query.created !== 'all')
+      out.push({
+        key: 'created',
+        label: CREATED_RANGES.find((r) => r.value === query.created)?.label ?? query.created,
+        clear: () => onQuery({ ...query, created: 'all' }),
+      })
+    return out
+  }, [query, onQuery, members, tags.data])
+
+  const filtered = activeFilters.length > 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -425,6 +478,17 @@ export function InboxTab({
           <option value="warm">Warm</option>
           <option value="cold">Cold</option>
         </Select>
+        <Select
+          value={query.created}
+          onChange={(e) => onQuery({ ...query, created: e.target.value as LeadQuery['created'] })}
+          aria-label="When the lead arrived"
+        >
+          {CREATED_RANGES.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
         {/* The filter group_name never had. */}
         {(tags.data ?? []).length > 0 && (
           <Select
@@ -447,6 +511,47 @@ export function InboxTab({
 
         </>
       )}
+
+      {/*
+        * What is currently narrowing this list, whether or not the panel that
+        * set it is open. The filter controls collapse behind one button now, so
+        * without this a studio can be looking at eleven leads out of four
+        * hundred with nothing on screen saying why.
+        */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Showing only:</span>
+          {activeFilters.map((f) => (
+            <span
+              key={f.key}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs"
+            >
+              {f.label}
+              <button
+                type="button"
+                onClick={f.clear}
+                className="-mr-0.5 rounded-full px-0.5 leading-none text-muted-foreground hover:text-foreground"
+              >
+                ×<span className="sr-only">Remove this filter</span>
+              </button>
+            </span>
+          ))}
+          <Button variant="ghost" size="sm" onClick={() => onQuery(EMPTY_QUERY)}>
+            Clear all
+          </Button>
+        </div>
+      )}
+
+      <ArchiveDialog
+        open={askArchive}
+        count={selected.size}
+        pending={bulk.isPending}
+        onCancel={() => setAskArchive(false)}
+        onConfirm={(reason) => {
+          runBulk(reason === null ? { is_archived: true } : { is_archived: true, archive_reason: reason })
+          setAskArchive(false)
+        }}
+      />
 
       {selected.size > 0 && (
         <div className="no-print flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2" role="toolbar" aria-label="Bulk actions">
@@ -563,7 +668,12 @@ export function InboxTab({
                 ))}
             </Select>
           )}
-          <Button size="sm" variant="outline" disabled={bulk.isPending} onClick={() => runBulk({ is_archived: !showArchived })}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={bulk.isPending}
+            onClick={() => (showArchived ? runBulk({ is_archived: false }) : setAskArchive(true))}
+          >
             {showArchived ? 'Restore' : 'Archive'}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
