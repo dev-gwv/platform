@@ -97,7 +97,14 @@ export function SetupGuideBar() {
           <span className="font-medium text-primary">
             Step {step.step} of {SETUP_TOTAL} · {step.title}
           </span>
-          <span className="text-muted-foreground"> — {step.why.charAt(0).toLowerCase() + step.why.slice(1)}</span>
+          <span className="text-muted-foreground"> — {step.why.charAt(0).toLowerCase() + step.why.slice(1)}</span>{' '}
+          <Link
+            to="/help/setup"
+            hash={step.key}
+            className="whitespace-nowrap text-xs font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Watch how (under a minute)
+          </Link>
         </p>
         <button
           type="button"

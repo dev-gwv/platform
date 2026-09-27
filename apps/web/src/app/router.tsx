@@ -12,6 +12,7 @@ import { LoginPage } from '@/routes/login'
 import { MyProfilePage } from '@/routes/my-profile'
 import { LeavePage } from '@/routes/leave'
 import { ContactPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
+import { HelpSetupPage } from '@/routes/help-setup'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
@@ -39,6 +40,7 @@ import { InvoicesPage } from '@/routes/billing/invoices'
 import { PaymentsPage } from '@/routes/billing/payments'
 import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
+import { StopEmailsPage } from '@/routes/stop-emails'
 import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
@@ -154,6 +156,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/login', LoginPage),
   publicRoute('/complete-setup', CompleteSetupPage),
   publicRoute('/verify', VerifyEmailPage),
+  publicRoute('/stop-emails', StopEmailsPage),
   publicRoute('/reset-password', ResetPasswordPage),
   publicRoute('/accept-invite', AcceptInvitePage),
   publicRoute('/no-account', NoAccountPage),
@@ -174,6 +177,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/privacy-policy', PrivacyPage),
   publicRoute('/refund-policy', RefundPage),
   publicRoute('/contact-us', ContactPage),
+  // Setup tutorials; the setup emails link here, often opened signed out.
+  publicRoute('/help/setup', HelpSetupPage),
 
   renewalLayout.addChildren([
     createRoute({
