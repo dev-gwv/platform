@@ -108,7 +108,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background print:block print:h-auto print:overflow-visible">
+    // `relative` on the shell and on <main>: every absolutely placed element
+    // (an sr-only label inside a button, say) needs a positioned ancestor
+    // inside the app, or it is placed against the page itself. Placed there,
+    // a label far down a long list made the whole page taller than the
+    // h-screen shell, and scrolling showed a band of empty background.
+    <div className="relative flex h-screen overflow-hidden bg-background print:static print:block print:h-auto print:overflow-visible">
       <Sidebar
         entries={entries}
         collapsed={railCollapsed}
@@ -185,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* The scroller stays put and is never transformed; only the page
             inside it animates in, keyed so each navigation replays it. */}
-        <main className="min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:overflow-visible">
+        <main className="relative min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:static print:overflow-visible">
           <div key={pathname} className="page-enter">
             <SetupGuideBar />
             {children}
