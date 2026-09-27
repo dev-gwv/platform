@@ -10,6 +10,7 @@ import { navDestinations } from './nav'
 import { useClients } from '@/features/clients/api'
 import { useProjects } from '@/features/projects/api'
 import { useDirectory } from '@/features/team/api'
+import { useLeadSearch } from '@/features/crm/api'
 
 interface Command {
   id: string
@@ -17,6 +18,8 @@ interface Command {
   hint?: string
   to: string
   params?: Record<string, string>
+  /** For a record that opens through a query string rather than a path. */
+  search?: Record<string, string>
   group: string
   icon?: LucideIcon
 }
@@ -76,7 +79,7 @@ export function CommandPalette() {
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">
-            Jump to a page, client, project or team member.
+            Jump to a page, lead, client, project or team member.
           </DialogPrimitive.Description>
           {open && <PaletteBody onClose={() => setOpen(false)} />}
         </DialogPrimitive.Content>
@@ -97,6 +100,22 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const clients = useClients()
   const projects = useProjects()
   const team = useDirectory()
+
+  /*
+   * Leads are the one record type not loaded whole.
+   *
+   * The others fetch every row and rank in the browser, which is fine for a few
+   * hundred clients. A studio's lead book is the list that grows without limit,
+   * and filtering a truncated copy of it is exactly the bug this search was
+   * built to stop -- so this asks the server, with a pause so a typed name is
+   * one request rather than one per letter.
+   */
+  const [typed, setTyped] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setTyped(query), 200)
+    return () => clearTimeout(t)
+  }, [query])
+  const leads = useLeadSearch(access.hasModule('crm') ? typed : '')
 
   const commands = useMemo<Command[]>(() => {
     const pages: Command[] = navDestinations(
@@ -136,11 +155,25 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       group: 'Team',
     }))
 
-    return [...pages, ...clientCmds, ...projectCmds, ...teamCmds]
-  }, [clients.data, projects.data, team.data, session, access])
+    const leadCmds: Command[] = (leads.data ?? []).map((l) => ({
+      id: `lead:${l.id}`,
+      label: l.name ?? 'Unnamed lead',
+      // The phone is what people search a lead by, so it has to be part of
+      // what the ranking sees, not just decoration.
+      ...(l.phone ? { hint: l.phone } : {}),
+      to: '/follow-ups',
+      search: { lead: l.id },
+      group: 'Leads',
+    }))
+
+    return [...pages, ...clientCmds, ...projectCmds, ...teamCmds, ...leadCmds]
+  }, [clients.data, projects.data, team.data, leads.data, session, access])
 
   const results = useMemo(() => {
-    const ranked = rankBy(query, commands, (c) => c.label, 12)
+    // The hint counts: a studio searching a lead types the phone number far
+    // more often than the spelling of the name, and the same is true of a
+    // project's client or a member's email.
+    const ranked = rankBy(query, commands, (c) => (c.hint ? `${c.label} ${c.hint}` : c.label), 12)
     // Keep each group contiguous. Ranking alone interleaves them, and the
     // header logic below would then print one group's heading more than once.
     const order: string[] = []
@@ -161,7 +194,13 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function run(cmd: Command | undefined) {
     if (!cmd) return
     onClose()
-    void navigate(cmd.params ? { to: cmd.to, params: cmd.params } : ({ to: cmd.to } as never))
+    void navigate(
+      cmd.params
+        ? { to: cmd.to, params: cmd.params }
+        : cmd.search
+          ? ({ to: cmd.to, search: cmd.search } as never)
+          : ({ to: cmd.to } as never),
+    )
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -188,7 +227,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Search pages, clients, projects, people…"
+          placeholder="Search leads, clients, projects, pages…"
           aria-label="Search"
           aria-controls="command-results"
           className="w-full bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground"
