@@ -23,6 +23,14 @@ const LABELS: Record<Field, string> = { name: 'Name', phone: 'Phone', email: 'Em
  * what the server dedupes on. Everything else can be filled in from the drawer
  * once there is time.
  */
+/*
+ * There is no "Group / segment" box here any more.
+ *
+ * It wrote crm_leads.group_name, which 0197 replaced with tags -- and since the
+ * drawer no longer shows that column, anything typed here would have been saved
+ * where nobody could see it or filter by it. Tags are set from the drawer the
+ * moment this dialog hands over to it.
+ */
 export function AddLeadDialog({
   onAdded,
   open: openProp,
@@ -68,7 +76,6 @@ export function AddLeadDialog({
    */
   const [assignedTo, setAssignedTo] = useState('')
   const [followUpAt, setFollowUpAt] = useState('')
-  const [groupName, setGroupName] = useState('')
   const [stageId, setStageId] = useState('')
   /**
    * Hot / warm / cold. createLeadRequest, the leads filter and the update
@@ -81,7 +88,7 @@ export function AddLeadDialog({
   // A lead half-typed during a call survives a refresh or a closed tab.
   const draft = useFormDraft(
     open ? 'lead:new' : null,
-    { name, phone, email, source, notes, value, closeDate, eventType, eventDate, eventLocation, alternatePhone, city, assignedTo, followUpAt, groupName, stageId, quality },
+    { name, phone, email, source, notes, value, closeDate, eventType, eventDate, eventLocation, alternatePhone, city, assignedTo, followUpAt, stageId, quality },
     (v) => {
       setName(v.name)
       setPhone(v.phone)
@@ -97,7 +104,6 @@ export function AddLeadDialog({
       setCity(v.city)
       setAssignedTo(v.assignedTo)
       setFollowUpAt(v.followUpAt)
-      setGroupName(v.groupName)
       setStageId(v.stageId)
       setQuality(v.quality)
     },
@@ -118,7 +124,6 @@ export function AddLeadDialog({
     setCity('')
     setAssignedTo('')
     setFollowUpAt('')
-    setGroupName('')
     setStageId('')
     setQuality('')
     setErrors({})
@@ -143,7 +148,6 @@ export function AddLeadDialog({
       ...(assignedTo ? { assigned_to: assignedTo } : {}),
       ...(quality ? { quality } : {}),
       ...(followUpAt ? { follow_up_at: new Date(followUpAt).toISOString() } : {}),
-      ...(groupName.trim() ? { group_name: groupName.trim() } : {}),
       ...(stageId ? { stage_id: stageId } : {}),
     }
     const found = fieldErrors<Field>(createLeadRequest, body, { labels: LABELS })
@@ -341,14 +345,6 @@ export function AddLeadDialog({
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Group / segment</Label>
-                <Input
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  placeholder="Wedding 2027, Corporate…"
-                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Quality</Label>

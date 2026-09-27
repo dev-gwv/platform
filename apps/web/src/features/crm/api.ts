@@ -98,6 +98,10 @@ import {
   type UpdateScoringRuleRequest,
   type UpdateStageRequest,
   type UpdateWorkflowRequest,
+  crmTag,
+  type CreateTagRequest,
+  type UpdateTagRequest,
+  type TagLeadsRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -421,6 +425,45 @@ export function useUpdateCrmSettings() {
     (input: UpdateCrmSettingsRequest) =>
       callApi('/crm/settings', { method: 'PATCH', body: input, responseSchema: crmSettings }),
     'CRM settings saved',
+  )
+}
+
+// ── tags ──────────────────────────────────────────────────────
+export function useTags() {
+  return useCrmQuery(['tags'], () => callApi('/crm/tags', { responseSchema: crmTag.array() }), 60_000)
+}
+
+export function useCreateTag() {
+  return useCrmMutation(
+    (input: CreateTagRequest) => callApi('/crm/tags', { method: 'POST', body: input, responseSchema: crmTag }),
+    (t) => `Tag "${t.name}" ready`,
+  )
+}
+
+export function useUpdateTag() {
+  return useCrmMutation(
+    ({ id, patch }: { id: string; patch: UpdateTagRequest }) =>
+      callApi(`/crm/tags/${id}`, { method: 'PATCH', body: patch, responseSchema: noContent }),
+    'Tag saved',
+  )
+}
+
+export function useDeleteTag() {
+  return useCrmMutation((id: string) => callApi(`/crm/tags/${id}`, { method: 'DELETE', responseSchema: noContent }), 'Tag deleted')
+}
+
+/** The drawer sends the whole set it wants, so add and remove are one call. */
+export function useSetLeadTags() {
+  return useCrmMutation(({ id, tag_ids }: { id: string; tag_ids: string[] }) =>
+    callApi(`/crm/leads/${id}/tags`, { method: 'PUT', body: { tag_ids }, responseSchema: noContent }),
+  )
+}
+
+export function useTagLeads() {
+  return useCrmMutation(
+    (input: TagLeadsRequest) =>
+      callApi('/crm/leads/tags', { method: 'POST', body: input, responseSchema: z.object({ changed: z.number() }) }),
+    (r) => `${r.changed} ${r.changed === 1 ? 'lead' : 'leads'} updated`,
   )
 }
 

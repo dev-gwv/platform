@@ -32,6 +32,50 @@ export type LeadQuality = z.infer<typeof leadQuality>
 export const contactedStatus = z.enum(['uncontacted', 'contacted', 'unreachable'])
 export type ContactedStatus = z.infer<typeof contactedStatus>
 
+/** The six theme hues. StatusBadge is a locked primitive, so a tag borrows a
+ *  tone rather than carrying a hex code of its own. */
+export const tagColor = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal'])
+export type TagColor = z.infer<typeof tagColor>
+
+export const crmTag = z.object({
+  id: uuid,
+  name: z.string(),
+  color: tagColor,
+  is_active: z.boolean(),
+  /** How many leads carry it — the picker sorts by this, so the tags a studio
+   *  actually uses rise to the top instead of the ones added first. */
+  lead_count: z.number().int().default(0),
+})
+export type CrmTag = z.infer<typeof crmTag>
+
+/** As it appears on a lead: enough to draw the chip, nothing more. */
+export const leadTag = crmTag.pick({ id: true, name: true, color: true })
+export type LeadTag = z.infer<typeof leadTag>
+
+export const createTagRequest = z.object({
+  name: z.string().trim().min(1).max(40),
+  color: tagColor.default('blue'),
+})
+export type CreateTagRequest = z.infer<typeof createTagRequest>
+
+export const updateTagRequest = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+  color: tagColor.optional(),
+  is_active: z.boolean().optional(),
+})
+export type UpdateTagRequest = z.infer<typeof updateTagRequest>
+
+export const setLeadTagsRequest = z.object({ tag_ids: z.array(uuid).max(50) })
+export type SetLeadTagsRequest = z.infer<typeof setLeadTagsRequest>
+
+export const tagLeadsRequest = z.object({
+  ids: z.array(uuid).min(1).max(2000),
+  tag_id: uuid,
+  /** false detaches. One route, because the bulk bar offers both. */
+  attach: z.boolean().default(true),
+})
+export type TagLeadsRequest = z.infer<typeof tagLeadsRequest>
+
 export const crmLead = z.object({
   id: uuid,
   name: z.string().nullable(),
@@ -100,6 +144,13 @@ export const crmLead = z.object({
   date_status: z.enum(['free', 'contested', 'booked', 'unknown']).default('unknown'),
   /** Open leads wanting this date, this one included. 2 means one rival. */
   date_wanted_by: z.number().int().default(0),
+  /**
+   * Tags, replacing the single free-text `group_name` (0197).
+   *
+   * group_name is still returned above for one release while everything that
+   * read it moves over; nothing writes it any more.
+   */
+  tags: z.array(leadTag).default([]),
   created_at: isoDateTime,
 })
 export type CrmLead = z.infer<typeof crmLead>
@@ -123,6 +174,8 @@ export const leadsQuery = z.object({
   quality: leadQuality.optional(),
   contacted: contactedStatus.optional(),
   group: z.string().trim().max(120).optional(),
+  /** Leads carrying this tag. Replaces `group` as the way to ask. */
+  tag_id: uuid.optional(),
   budget_min: z.coerce.number().min(0).optional(),
   budget_max: z.coerce.number().min(0).optional(),
   city: z.string().trim().max(120).optional(),
@@ -1498,7 +1551,7 @@ export const updateIntegrationRequest = z.object({
 export type UpdateIntegrationRequest = z.infer<typeof updateIntegrationRequest>
 
 // ── per-person preferences ────────────────────────────────────
-export const inboxColumn = z.enum(['lead', 'stage', 'score', 'source', 'owner', 'value', 'close', 'company', 'follow_up', 'created'])
+export const inboxColumn = z.enum(['lead', 'stage', 'score', 'source', 'owner', 'value', 'close', 'company', 'follow_up', 'created', 'tags'])
 export type InboxColumn = z.infer<typeof inboxColumn>
 
 export const crmUserPrefs = z.object({

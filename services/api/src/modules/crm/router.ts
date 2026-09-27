@@ -92,7 +92,16 @@ const selectLead = (sql: TransactionSql) => sql`
          -- 0193 rather than per row, and joined here so the list and the
          -- single-lead read can never disagree about it.
          coalesce(av.status, 'unknown') as date_status,
-         coalesce(av.wanted_by, 0)::int as date_wanted_by
+         coalesce(av.wanted_by, 0)::int as date_wanted_by,
+         -- Tags as one aggregate rather than a join, so a lead with four tags
+         -- stays one row and the list does not quietly multiply (0197).
+         coalesce((
+           select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
+                            order by lower(t.name))
+             from crm_lead_tags lt
+             join crm_tags t on t.id = lt.tag_id
+            where lt.lead_id = l.id
+         ), '[]'::jsonb) as tags
   from crm_leads l
   left join users u on u.user_id = l.assigned_to
   left join crm_pipeline_stages s on s.id = l.stage_id
@@ -136,6 +145,7 @@ export const crmRouter = new Hono<AppEnv>()
       quality: c.req.query('quality'),
       contacted: c.req.query('contacted'),
       group: c.req.query('group'),
+      tag_id: c.req.query('tag_id'),
       budget_min: c.req.query('budget_min'),
       budget_max: c.req.query('budget_max'),
       city: c.req.query('city'),
@@ -171,6 +181,7 @@ export const crmRouter = new Hono<AppEnv>()
             and ${v.quality ? sql`l.quality = ${v.quality}` : sql`true`}
             and ${v.contacted ? sql`l.contacted_status = ${v.contacted}` : sql`true`}
             and ${groupNeedle ? sql`l.group_name ilike ${groupNeedle}` : sql`true`}
+            and ${v.tag_id ? sql`exists (select 1 from crm_lead_tags lt where lt.lead_id = l.id and lt.tag_id = ${v.tag_id})` : sql`true`}
             and ${v.budget_min !== undefined ? sql`coalesce(l.deal_value, 0) >= ${v.budget_min}` : sql`true`}
             and ${v.budget_max !== undefined ? sql`coalesce(l.deal_value, 0) <= ${v.budget_max}` : sql`true`}
             and ${cityNeedle ? sql`l.city ilike ${cityNeedle}` : sql`true`}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Archive, ArrowDown, ArrowUp, Columns3, Gauge, KanbanSquare, Megaphone, Plug, Plus, RefreshCw, RotateCcw, Timer, Trash2, XCircle } from 'lucide-react'
-import type { ConditionOp, CrmLead, PipelineStage, StageKind, StageRequiredField } from '@ipc/contracts'
+import { Archive, ArrowDown, ArrowUp, Columns3, Gauge, KanbanSquare, Megaphone, Plug, Plus, RefreshCw, RotateCcw, Timer, Trash2, XCircle, Tag as TagIcon} from 'lucide-react'
+import type { ConditionOp, CrmLead, PipelineStage, StageKind, StageRequiredField, TagColor,} from '@ipc/contracts'
 import { CONDITION_FIELDS, OP_LABEL, REQUIRED_FIELD_LABEL, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -38,8 +38,12 @@ import {
   useUpdatePipeline,
   useUpdateScoringRule,
   useUpdateStage,
+  useDeleteTag,
+  useTags,
+  useUpdateTag,
 } from '../api'
 import { DEFAULT_INBOX_COLUMNS } from './shared'
+import { TagChip } from '../TagChip'
 
 const REQUIRED_OPTIONS: StageRequiredField[] = ['deal_value', 'close_date', 'email', 'name', 'assigned_to', 'title', 'lost_reason']
 const STAGE_KINDS: Array<{ key: StageKind; label: string; hint: string }> = [
@@ -70,6 +74,7 @@ export function CrmSettingsTab({ leads, archived }: { leads: readonly CrmLead[];
     <div className="grid gap-4 md:grid-cols-2">
       <PipelinesCard />
       <LostReasonsCard />
+      <TagsCard />
       <IntegrationsCard />
       <ScoringCard />
       <SlaCard />
@@ -417,6 +422,100 @@ function StageEditor({
 }
 
 /** The picklist offered whenever a deal is marked lost. */
+/**
+ * The studio's tag list.
+ *
+ * Tags are created from the drawer, where you are looking at the lead that
+ * needs one; this is where they get renamed, recoloured, retired or removed.
+ * Retiring takes a tag out of the pickers and leaves it on the leads that
+ * already carry it -- deleting takes it off those leads too, which is why the
+ * two are different buttons and only one of them needs the delete permission.
+ */
+function TagsCard() {
+  const access = useAccess()
+  const canEdit = access.hasAction('crm', 'edit')
+  const canDelete = access.hasAction('crm', 'delete')
+  const { data, isLoading } = useTags()
+  const update = useUpdateTag()
+  const remove = useDeleteTag()
+  const confirm = useConfirm()
+
+  async function onRemove(id: string, name: string, count: number) {
+    const ok = await confirm({
+      title: `Delete the tag “${name}”?`,
+      description:
+        count > 0
+          ? `It comes off ${count} ${count === 1 ? 'lead' : 'leads'}. To keep it on them but stop offering it, use "retire" instead.`
+          : 'Nothing carries it, so nothing else changes.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (ok) remove.mutate(id)
+  }
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardContent className="flex flex-col gap-3 p-4">
+        <p className="flex items-center gap-2 font-medium">
+          <TagIcon className="size-4 text-muted-foreground" /> Tags
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Labels you invent — “Referral”, “Destination”, “Budget 2L+”. Add them from a lead; manage the list here.
+        </p>
+        {isLoading ? (
+          <Skeleton className="h-20" />
+        ) : (data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No tags yet. Open any lead and use <span className="font-medium">Add a tag</span>.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {(data ?? []).map((t) => (
+              <li key={t.id} className={`flex flex-wrap items-center gap-2 py-2 ${t.is_active ? '' : 'opacity-60'}`}>
+                <TagChip tag={t} />
+                <Input
+                  defaultValue={t.name}
+                  disabled={!canEdit}
+                  aria-label={`Rename ${t.name}`}
+                  className="h-8 w-40"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v && v !== t.name) update.mutate({ id: t.id, patch: { name: v } })
+                  }}
+                />
+                <Select
+                  value={t.color}
+                  disabled={!canEdit}
+                  aria-label={`Colour for ${t.name}`}
+                  className="h-8 w-28"
+                  onChange={(e) => update.mutate({ id: t.id, patch: { color: e.target.value as TagColor } })}
+                >
+                  {(['blue', 'green', 'violet', 'amber', 'rose', 'teal'] as const).map((hue) => (
+                    <option key={hue} value={hue}>
+                      {hue}
+                    </option>
+                  ))}
+                </Select>
+                <StatusBadge>{t.lead_count} leads</StatusBadge>
+                {canEdit && (
+                  <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: t.id, patch: { is_active: !t.is_active } })}>
+                    {t.is_active ? 'Retire' : 'Bring back'}
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button size="sm" variant="ghost" onClick={() => void onRemove(t.id, t.name, t.lead_count)} aria-label={`Delete ${t.name}`}>
+                    <Trash2 />
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function LostReasonsCard() {
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')

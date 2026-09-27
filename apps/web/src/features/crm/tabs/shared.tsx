@@ -10,6 +10,7 @@ import { Avatar } from '@/shared/ui/avatar'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { dueBucket, isUncontacted } from '../leads'
 import { dateVerdict, worthFlagging } from '../availability'
+import { TagChips } from '../TagChip'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 export const SOURCE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -125,6 +126,7 @@ export const INBOX_COLUMNS: ReadonlyArray<{ key: InboxColumn; label: string }> =
   { key: 'company', label: 'Company' },
   { key: 'follow_up', label: 'Follow-up' },
   { key: 'created', label: 'Created' },
+  { key: 'tags', label: 'Tags' },
 ]
 
 /*
@@ -262,6 +264,12 @@ export function LeadTable({
                 this is half of "where are we", and it was on the record all
                 along without ever reaching the screen. */}
             <span className="mt-0.5 block text-xs text-muted-foreground/70">{lastTouch(l)}</span>
+          </td>
+        )
+      case 'tags':
+        return (
+          <td key={key} className={pad}>
+            <TagChips tags={l.tags} />
           </td>
         )
       case 'stage':

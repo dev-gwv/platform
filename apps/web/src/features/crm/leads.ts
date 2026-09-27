@@ -120,6 +120,14 @@ export interface LeadQuery {
    * even though every lead carries a three-state quality.
    */
   quality: LeadQuality | 'all'
+  /**
+   * One tag, by id, or 'all'.
+   *
+   * Replaces the free-text `group_name`, which had a server filter nobody sent
+   * and no UI at all — so a studio could label forty leads and never get those
+   * forty back (0197).
+   */
+  tag: string | 'all'
 }
 
 export const EMPTY_QUERY: LeadQuery = {
@@ -128,6 +136,7 @@ export const EMPTY_QUERY: LeadQuery = {
   status: 'all',
   assignee: 'all',
   quality: 'all',
+  tag: 'all',
 }
 
 function matchesSearch(l: CrmLead, search: string): boolean {
@@ -152,6 +161,7 @@ export function applyQuery(
     .filter((l) => query.filters.every((f) => PREDICATES[f]!(l, now)))
     .filter((l) => (query.status === 'all' ? true : l.status === query.status))
     .filter((l) => (query.quality === 'all' ? true : l.quality === query.quality))
+    .filter((l) => (query.tag === 'all' ? true : l.tags.some((t) => t.id === query.tag)))
     .filter((l) =>
       query.assignee === 'all'
         ? true

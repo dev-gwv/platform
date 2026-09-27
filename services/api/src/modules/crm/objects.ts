@@ -11,7 +11,11 @@ import {
   crmContact,
   crmForecast,
   crmStatsQuery,
+  crmTag,
+  createTagRequest,
   lostReason,
+  setLeadTagsRequest,
+  tagLeadsRequest,
   moveStageRequest,
   moveStageResponse,
   pipeline,
@@ -21,6 +25,7 @@ import {
   updateLostReasonRequest,
   updatePipelineRequest,
   updateStageRequest,
+  updateTagRequest,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
@@ -359,6 +364,113 @@ export const crmObjectsRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That reason was not found.')
     await audit(c, { action: 'lost_reason.delete', entityType: 'crm_lost_reason', entityId: id })
     return c.body(null, 204)
+  })
+
+  // ── Tags ────────────────────────────────────────────────────
+  // One shared list per studio, replacing the single free-text group_name box
+  // whose filter was never wired up (0197).
+  .get('/tags', async (c) => {
+    const rows = await attempt(c, 'crm.tags', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select t.id, t.name, t.color, t.is_active,
+               (select count(*) from crm_lead_tags lt where lt.tag_id = t.id)::int as lead_count
+          from crm_tags t
+         order by t.is_active desc, lower(t.name)`),
+    )
+    if (!rows) fail(400, 'We could not load the tags.')
+    return c.json(crmTag.array().parse(rows))
+  })
+
+  .post('/tags', edit, async (c) => {
+    const parsed = createTagRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'A tag needs a name of 1 to 40 characters.')
+    const { name, color } = parsed.data
+    const row = await attempt(c, 'crm.tag_create', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        // Typing a tag that already exists means "use that one", not "fail".
+        // Anything else and the picker would refuse a name the studio can see.
+        const [existing] = await sql<{ id: string }[]>`
+          select id from crm_tags where lower(trim(name)) = lower(trim(${name}))`
+        if (existing) {
+          const [back] = await sql`
+            update crm_tags set is_active = true where id = ${existing.id}
+            returning id, name, color, is_active,
+                      (select count(*) from crm_lead_tags lt where lt.tag_id = crm_tags.id)::int as lead_count`
+          return back ?? null
+        }
+        const [r] = await sql`
+          insert into crm_tags (company_id, name, color)
+          values (get_current_company_id(), ${name}, ${color})
+          returning id, name, color, is_active, 0 as lead_count`
+        return r ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not add that tag.')
+    const created = crmTag.parse(row)
+    await audit(c, { action: 'crm.tag_create', entityType: 'crm_tag', entityId: created.id, after: parsed.data })
+    return c.json(created, 201)
+  })
+
+  .patch('/tags/:id', edit, async (c) => {
+    const parsed = updateTagRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Invalid update.')
+    if (Object.keys(parsed.data).length === 0) return c.body(null, 204)
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'crm.tag_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update crm_tags set ${sql(parsed.data)} where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not update that tag. A tag by that name may already exist.')
+    if (!rows.length) fail(404, 'That tag was not found.')
+    await audit(c, { action: 'crm.tag_update', entityType: 'crm_tag', entityId: id, after: parsed.data })
+    return c.body(null, 204)
+  })
+
+  // Deleting takes the tag off every lead that carried it, which is why the
+  // picker offers "retire" first and this asks for the delete permission.
+  .delete('/tags/:id', remove, async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'crm.tag_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        delete from crm_tags where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not delete that tag.')
+    if (!rows.length) fail(404, 'That tag was not found.')
+    await audit(c, { action: 'crm.tag_delete', entityType: 'crm_tag', entityId: id })
+    return c.body(null, 204)
+  })
+
+  // The drawer sends the set it wants, not a diff, so adding one tag and
+  // removing another are the same request.
+  .put('/leads/:id/tags', edit, async (c) => {
+    const parsed = setLeadTagsRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Send up to 50 tag ids.')
+    const id = uuidParam(c)
+    const ok = await attempt(c, 'crm.lead_tags_set', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`select crm_set_lead_tags(${id}, ${parsed.data.tag_ids}::uuid[])`
+        return true
+      }),
+    )
+    if (!ok) fail(400, 'We could not save those tags.')
+    await audit(c, { action: 'crm.lead_tags_set', entityType: 'crm_lead', entityId: id, after: parsed.data })
+    return c.body(null, 204)
+  })
+
+  // Bulk, from the selection toolbar.
+  .post('/leads/tags', edit, async (c) => {
+    const parsed = tagLeadsRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick a tag and at least one lead.')
+    const { ids, tag_id, attach } = parsed.data
+    const row = await attempt(c, 'crm.leads_tag', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [r] = await sql<{ n: number }[]>`select crm_tag_leads(${ids}::uuid[], ${tag_id}, ${attach}) as n`
+        return r ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not tag those leads.')
+    await audit(c, { action: 'crm.leads_tag', entityType: 'crm_tag', entityId: tag_id, after: { count: ids.length, attach } })
+    return c.json({ changed: row.n })
   })
 
   // ── Contacts ────────────────────────────────────────────────

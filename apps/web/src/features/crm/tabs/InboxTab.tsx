@@ -7,7 +7,10 @@ import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useMembers } from '@/features/allocation/api'
-import { useBulkPatch, useCrmPrefs, useCrmSettings, useDeleteView, useEnrollWorkflow, useSaveView, useSavedViews, useUpdateCrmPrefs, useUpdateView, useWorkflows } from '../api'
+import { useBulkPatch, useCrmPrefs, useCrmSettings, useDeleteView, useEnrollWorkflow, useSaveView, useSavedViews, useUpdateCrmPrefs, useUpdateView, useWorkflows,
+  useTagLeads,
+  useTags,
+} from '../api'
 import { LostReasonDialog } from '../LostReasonDialog'
 import { EMPTY_QUERY, QUICK_FILTERS, STAGES, applyQuery, type LeadQuery, type QuickFilter } from '../leads'
 import { isSaveable, takeLocalViews, toLeadQuery, toSavedQuery } from '../views'
@@ -51,6 +54,8 @@ export function InboxTab({
   const [losing, setLosing] = useState(false)
   const bulk = useBulkPatch()
   const workflows = useWorkflows()
+  const tags = useTags()
+  const tagLeads = useTagLeads()
   const enroll = useEnrollWorkflow()
   const settings = useCrmSettings()
   const { session } = useAuth()
@@ -420,6 +425,24 @@ export function InboxTab({
           <option value="warm">Warm</option>
           <option value="cold">Cold</option>
         </Select>
+        {/* The filter group_name never had. */}
+        {(tags.data ?? []).length > 0 && (
+          <Select
+            value={query.tag}
+            onChange={(e) => onQuery({ ...query, tag: e.target.value })}
+            aria-label="Tag"
+          >
+            <option value="all">Any tag</option>
+            {(tags.data ?? [])
+              .filter((t) => t.is_active || t.id === query.tag)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.lead_count > 0 ? ` (${t.lead_count})` : ''}
+                </option>
+              ))}
+          </Select>
+        )}
       </div>
 
         </>
@@ -504,6 +527,40 @@ export function InboxTab({
                   {w.name}
                 </option>
               ))}
+            </Select>
+          )}
+          {/* Both directions in one control: the studio that can label forty
+              leads at once is the studio that mislabels forty at once. */}
+          {(tags.data ?? []).filter((t) => t.is_active).length > 0 && (
+            <Select
+              value=""
+              aria-label="Tag the selected leads"
+              className="w-44"
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) return
+                const attach = !v.startsWith('-')
+                tagLeads.mutate(
+                  { ids: [...selected], tag_id: attach ? v : v.slice(1), attach },
+                  { onSuccess: () => setSelected(new Set()) },
+                )
+              }}
+            >
+              <option value="">Tag…</option>
+              {(tags.data ?? [])
+                .filter((t) => t.is_active)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    Add {t.name}
+                  </option>
+                ))}
+              {(tags.data ?? [])
+                .filter((t) => t.is_active)
+                .map((t) => (
+                  <option key={`off-${t.id}`} value={`-${t.id}`}>
+                    Remove {t.name}
+                  </option>
+                ))}
             </Select>
           )}
           <Button size="sm" variant="outline" disabled={bulk.isPending} onClick={() => runBulk({ is_archived: !showArchived })}>
