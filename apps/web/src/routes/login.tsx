@@ -73,7 +73,12 @@ export function LoginPage() {
   const { refresh } = useAuth()
   const navigate = useNavigate()
   const redirect = new URLSearchParams(window.location.search).get('redirect') ?? ''
-  const [mode, setMode] = useState<Mode>('signin')
+  // `?mode=register|forgot` opens straight into that form (old /register and
+  // /forgot-password links land here).
+  const [mode, setMode] = useState<Mode>(() => {
+    const m = new URLSearchParams(window.location.search).get('mode')
+    return m === 'register' || m === 'forgot' ? m : 'signin'
+  })
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

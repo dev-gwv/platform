@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import {
   createRootRoute,
   createRoute,
@@ -6,6 +6,7 @@ import {
   Outlet,
   Link,
   Navigate,
+  useNavigate,
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
@@ -65,6 +66,7 @@ import { QuotationPage } from '@/routes/quotation'
 import { ReceiptPage } from '@/routes/receipt'
 import { DeliveryPage } from '@/routes/delivery'
 import { ReferPage } from '@/routes/refer'
+import { LEGACY_AUTHED_PATHS, LEGACY_PUBLIC_PATHS, legacyTarget } from './legacy-links'
 import { EnquirePage, EnquiryViewPage } from '@/routes/enquire'
 import { EnquiryFormDetailPage, EnquiryFormsPage } from '@/routes/enquiry-forms'
 import { ProjectDocumentsPage } from '@/routes/project-documents'
@@ -147,6 +149,16 @@ const renewalLayout = createRoute({
   component: RenewalShell,
 })
 
+/** An old-app address: go to the page that does its job now, query string and all. */
+function LegacyRedirect() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const to = legacyTarget(window.location.pathname, window.location.search) ?? '/'
+    void navigate({ href: to, replace: true })
+  }, [navigate])
+  return null
+}
+
 /** Public: no session, no shell. */
 const publicRoute = (path: string, component: () => ReactNode): AnyRoute =>
   createRoute({ getParentRoute: () => rootRoute, path, component })
@@ -157,6 +169,7 @@ const route = (path: string, component: () => ReactNode): AnyRoute =>
 
 const routeTree = rootRoute.addChildren([
   publicRoute('/login', LoginPage),
+  ...LEGACY_PUBLIC_PATHS.map((p) => publicRoute(p, LegacyRedirect)),
   publicRoute('/complete-setup', CompleteSetupPage),
   publicRoute('/verify', VerifyEmailPage),
   publicRoute('/stop-emails', StopEmailsPage),
@@ -278,6 +291,8 @@ const routeTree = rootRoute.addChildren([
   route('/settings/lookups', LookupsPage),
   route('/settings/advanced', AdvancedSettingsPage),
   route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),
+  // Old-app addresses with no page of their own now (see ./legacy-links).
+  ...LEGACY_AUTHED_PATHS.map((p) => route(p, LegacyRedirect)),
   route('/settings/invoicing', InvoiceTemplatesPage),
   route('/settings/appearance', AppearancePage),
   route('/settings/system', SystemPage),

@@ -58,8 +58,8 @@ const firstName = (name: string | null | undefined) => (name ?? '').trim().split
 
 const base = (env: Env) => (env.APP_URL || 'https://ipcstudios.in').replace(/\/+$/, '')
 
-/** A signed "stop these emails" link, good for this studio only. */
-export async function stopToken(env: Env, companyId: string): Promise<string> {
+/** A short HMAC of `message`, for links that must not be forgeable. */
+export async function signFor(env: Env, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(env.JWT_SECRET),
@@ -67,8 +67,13 @@ export async function stopToken(env: Env, companyId: string): Promise<string> {
     false,
     ['sign'],
   )
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`onboarding-stop:${companyId}`))
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
   return toHex(sig).slice(0, 40)
+}
+
+/** A signed "stop these emails" link, good for this studio only. */
+export function stopToken(env: Env, companyId: string): Promise<string> {
+  return signFor(env, `onboarding-stop:${companyId}`)
 }
 
 export async function stopTokenValid(env: Env, companyId: string, token: string): Promise<boolean> {

@@ -2608,5 +2608,42 @@ if (listed) {
   )
 }
 
+// ── 0198: overdue alerts and the morning email ───────────────────
+{
+  const dry = await fetch(`${API}/cron/reminders?dry=1`, {
+    method: 'POST',
+    headers: { 'x-cron-secret': process.env.CRON_SECRET ?? 'ci-cron' },
+  })
+  const j = await dry.json().catch(() => ({}))
+  check(
+    'cron: the dry run reports overdue invoices and morning emails',
+    dry.status === 200 && typeof j.invoice_overdue?.due === 'number' && typeof j.morning_emails?.due === 'number' && j.morning_emails?.sent === 0,
+    { status: dry.status, overdue: j.invoice_overdue, morning: j.morning_emails },
+  )
+
+  const setting = await api('/settings/morning-email', { token: aToken })
+  const off = await api('/settings/morning-email', { token: aToken, method: 'PUT', body: { on: false } })
+  const after = await api('/settings/morning-email', { token: aToken })
+  await api('/settings/morning-email', { token: aToken, method: 'PUT', body: { on: true } })
+  check(
+    'morning email: an owner sees the switch and can turn it off and on',
+    setting.status === 200 && setting.json.on === true && setting.json.applies === true && off.status === 200 && after.json.on === false,
+    { setting: setting.json, after: after.json },
+  )
+
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const { createHmac } = await import('node:crypto')
+  const sign = (id) => createHmac('sha256', process.env.JWT_SECRET ?? 'ci-test-secret').update(`morning-stop:${id}`).digest('hex').slice(0, 40)
+  const forged = await api('/public/morning-email/stop', { method: 'POST', body: { u: me, t: 'f'.repeat(40) } })
+  const wrongUser = await api('/public/morning-email/stop', { method: 'POST', body: { u: '00000000-0000-4000-8000-000000000001', t: sign(me) } })
+  const stopped = await api('/public/morning-email/stop', { method: 'POST', body: { u: me, t: sign(me) } })
+  const nowOff = await api('/settings/morning-email', { token: aToken })
+  check(
+    'morning email: the stop link works only with its own signature',
+    forged.status === 400 && wrongUser.status === 400 && stopped.status === 200 && nowOff.json.on === false,
+    { forged: forged.status, wrongUser: wrongUser.status, stopped: stopped.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
