@@ -30,6 +30,6 @@ export default defineConfig({
      * collected as thousands of test files belonging to someone else's
      * project -- every one of them failing, and burying our own result.
      */
-    exclude: ['**/node_modules/**', '**/dist/**', 'twenty-orbitcrew-main/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'twenty-orbitcrew-main/**', 'ipc-control-center-main/**'],
   },
 })

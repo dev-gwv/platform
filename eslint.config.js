@@ -18,6 +18,7 @@ export default tseslint.config(
       // ignores them; eslint keeps its own list, so a clone that drops one of
       // these in reports thousands of errors from code we do not own.
       'twenty-orbitcrew-main/**',
+      'ipc-control-center-main/**',
     ],
   },
   js.configs.recommended,
