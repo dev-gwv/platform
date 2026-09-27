@@ -2520,5 +2520,36 @@ if (listed) {
   )
 }
 
+// ── Onboarding emails (0194) ─────────────────────────────────────────────
+{
+  const { createHmac } = await import('node:crypto')
+  const dry = await fetch(`${API}/cron/reminders?dry=1`, {
+    method: 'POST',
+    headers: { 'x-cron-secret': process.env.CRON_SECRET ?? 'ci-cron' },
+  })
+  const dryJson = await dry.json().catch(() => ({}))
+  check(
+    'onboarding emails: the hourly cron reports how many nudges are due',
+    dry.status === 200 && typeof dryJson.onboarding_emails?.due === 'number' && dryJson.onboarding_emails?.sent === 0,
+    { status: dry.status, onboarding: dryJson.onboarding_emails },
+  )
+
+  // Studio A's own link; stopping its setup emails touches nothing else.
+  const companyId = (await api('/auth/session', { token: aToken })).json.company_id
+  const sign = (id) =>
+    createHmac('sha256', process.env.JWT_SECRET ?? 'ci-test-secret').update(`onboarding-stop:${id}`).digest('hex').slice(0, 40)
+  const forged = await api('/public/onboarding-emails/stop', { method: 'POST', body: { c: companyId, t: 'f'.repeat(40) } })
+  const other = await api('/public/onboarding-emails/stop', {
+    method: 'POST',
+    body: { c: '00000000-0000-4000-8000-000000000001', t: sign(companyId) },
+  })
+  const stopped = await api('/public/onboarding-emails/stop', { method: 'POST', body: { c: companyId, t: sign(companyId) } })
+  check(
+    'onboarding emails: the stop link works only with its own signature, for its own studio',
+    forged.status === 400 && other.status === 400 && stopped.status === 200 && stopped.json.ok === true,
+    { forged: forged.status, other: other.status, stopped: stopped.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -41,6 +41,7 @@ import { payrollRouter } from './modules/payroll/router'
 import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
+import { publicOnboardingRouter } from './modules/onboarding/router'
 import { messagingRouter } from './modules/messaging/router'
 import { reportsRouter } from './modules/reports/router'
 
@@ -171,6 +172,7 @@ app.route('/reminders', remindersRouter)
 app.route('/activity', activityRouter)
 app.route('/client-portal', clientPortalRouter)
 app.route('/public', publicClientPortalRouter)
+app.route('/public', publicOnboardingRouter)
 app.route('/messaging', messagingRouter)
 app.route('/reports', reportsRouter)
 

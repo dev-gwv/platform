@@ -39,6 +39,7 @@ import { InvoicesPage } from '@/routes/billing/invoices'
 import { PaymentsPage } from '@/routes/billing/payments'
 import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
+import { StopEmailsPage } from '@/routes/stop-emails'
 import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
@@ -154,6 +155,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/login', LoginPage),
   publicRoute('/complete-setup', CompleteSetupPage),
   publicRoute('/verify', VerifyEmailPage),
+  publicRoute('/stop-emails', StopEmailsPage),
   publicRoute('/reset-password', ResetPasswordPage),
   publicRoute('/accept-invite', AcceptInvitePage),
   publicRoute('/no-account', NoAccountPage),

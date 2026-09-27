@@ -34,6 +34,7 @@ import { issueToken, hashPassword, verifyPassword, verifyToken, TTL_SECONDS } fr
 import { clearRefreshCookie, cookieMode, readRefreshCookie, setRefreshCookie } from '../../lib/session-cookie'
 import { originAllowed } from '../../lib/allowed-origins'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../../lib/email'
+import { sendWelcomeFor } from '../../lib/onboarding'
 
 /**
  * A throwaway hash to verify against when no account matches, so a miss costs
@@ -211,6 +212,10 @@ export const authRouter = new Hono<AppEnv>()
       }),
     )
     if (!uid) fail(400, 'This verification link is invalid or has expired.')
+
+    // The studio owner's welcome email goes out in the background; signing in
+    // never waits on it.
+    void sendWelcomeFor(c.env, uid)
 
     // Verified → sign them straight in.
     return c.json(await signIn(c, uid))

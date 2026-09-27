@@ -10,6 +10,7 @@ import { timingSafeEqual } from '../../lib/crypto'
 import { log } from '../../lib/log'
 import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
+import { runOnboardingNudges } from '../../lib/onboarding'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -97,6 +98,8 @@ export const cronRouter = new Hono<AppEnv>()
         // The quote sweep runs inside run_crm_followup_cron now, so its count
         // comes out of that summary. Calling it again here would expire a
         // second batch outside the dry run and double-report the first.
+        // New studio owners hear about the next setup step on day 1, 3 and 7.
+        const onboarding = await runOnboardingNudges(c.env, dryRun)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
@@ -109,6 +112,7 @@ export const cronRouter = new Hono<AppEnv>()
           start_reminders: startReminders[0]?.summary ?? {},
           client_payment_reminders: clientPayments[0]?.summary ?? {},
           profile_reminders: profileReminders[0]?.summary ?? {},
+          onboarding_emails: onboarding,
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
