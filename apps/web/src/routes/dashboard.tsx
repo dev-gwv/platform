@@ -5,21 +5,14 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarDays,
-  CircleAlert,
-  Database,
-  Eye,
-  Lightbulb,
   Plus,
   Receipt,
-  Target,
-  Users,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { projectTrackingRow, shootListItem, type ShootListItem } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { cn } from '@/shared/ui/cn'
 import {
-  BAND_LABEL,
   BAND_TONE,
   NEXT_ACTION_LABEL,
   summary,
@@ -29,11 +22,9 @@ import {
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { PageHeader } from '@/shared/layout/page-header'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
-import { EmptyState } from '@/shared/ui/states'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { formatINR } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
@@ -42,7 +33,6 @@ import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
-import { TeamProfilesCard } from '@/features/profile/TeamProfilesCard'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
@@ -52,13 +42,6 @@ export function DashboardPage() {
 }
 
 const EMPLOYEE_ROLES = new Set(['employee'])
-
-const STATUS_TONE = {
-  active: 'info',
-  completed: 'success',
-  cancelled: 'danger',
-  on_hold: 'warning',
-} as const
 
 /**
  * Lovable parity: employees get their own day view (my tasks/shoots/
@@ -119,7 +102,6 @@ function StudioCommandCenter() {
   const activeProjects = (projects.data ?? []).filter((p) => p.status === 'active').length
   const clientCount = Array.isArray(clients.data) ? clients.data.length : 0
   const outstanding = (invoices.data?.items ?? []).reduce((s, i) => s + i.balance_due, 0)
-  const recent = (projects.data ?? []).slice(0, 5)
 
   // The setup card is for whoever is standing the studio up, and only until
   // setup is over (done or skipped) -- then it is gone for good.
@@ -186,120 +168,37 @@ function StudioCommandCenter() {
       ) : (
       <>
       <ProfileBanner />
-      <QuickActions />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      {/* Three numbers, the way a project page opens: what is running, what
+          needs a hand, what is still to come in. Everything else is one
+          click away in the menu. */}
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
         <Tile icon={Activity} value={activeProjects} label="Active projects" tone="primary" to="/projects" />
-        <Tile icon={AlertTriangle} value={totals.attention} label="Projects needing attention" tone="danger" to="/project-tracking" search={{ tab: 'attention' }} />
-        <Tile icon={CircleAlert} value={totals.overdue} label="Projects with late work" tone="warning" to="/project-tracking" search={{ tab: 'overdue' }} />
-        <Tile icon={Database} value={totals.data_missing} label="Projects with data not safe" tone="warning" to="/data-management" />
-        <Tile icon={Eye} value={totals.pending_review} label="Projects with work to review" tone="success" to="/project-tracking" search={{ tab: 'pending_review' }} />
+        <Tile
+          icon={AlertTriangle}
+          value={totals.attention}
+          label="Need attention"
+          tone={totals.attention > 0 ? 'danger' : 'success'}
+          to="/project-tracking"
+          search={{ tab: 'attention' }}
+        />
         {access.hasModule('billing') && (
-          <Tile icon={Receipt} value={formatINR(outstanding)} label="Outstanding" tone="primary" to="/billing/invoices" />
+          <Tile icon={Receipt} value={formatINR(outstanding)} label="To collect" tone="warning" to="/billing/invoices" />
         )}
       </div>
 
-      {/* The owner gives tasks and gets them too: the next three that are theirs. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <MyTasksCard />
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
+        {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
+        <div className="flex flex-col gap-4">
+          {access.hasModule('projects') && <UpcomingShoots shoots={shoots.data ?? []} />}
+          <MyTasksCard hideWhenEmpty />
+        </div>
       </div>
-
-      {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
-      {session?.is_owner && <TeamProfilesCard />}
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <UpcomingShoots shoots={shoots.data ?? []} />
-        <Blockers projects={tracked} />
-      </div>
-
-      {access.hasModule('projects') && (
-        <Card className="mt-6">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Recent projects</CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/projects">
-                View all <ArrowRight />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {recent.length === 0 ? (
-              <EmptyState
-                title="No projects yet"
-                description="Create your first project to start tracking shoots, tasks and payments."
-                action={
-                  access.hasAction('projects', 'create') && (
-                    <Button asChild>
-                      <Link to="/projects/new">
-                        <Plus /> New project
-                      </Link>
-                    </Button>
-                  )
-                }
-              />
-            ) : (
-              <ul className="divide-y divide-border">
-                {recent.map((p) => (
-                  <li key={p.id}>
-                    <Link
-                      to="/projects/$id"
-                      params={{ id: p.id }}
-                      className="flex items-center justify-between py-2.5 hover:opacity-80"
-                    >
-                      <div>
-                        <p className="font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{p.client_name ?? '—'}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">{formatINR(p.total_cost)}</span>
-                        <StatusBadge tone={STATUS_TONE[p.status]}>{humanize(p.status)}</StatusBadge>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
       </>
       )}
     </>
   )
 }
-/**
- * The four places a studio starts its day. Links, not a menu: one press from
- * the dashboard to the thing they came to do.
- */
-function QuickActions() {
-  const access = useAccess()
-  const actions = [
-    { to: '/projects/new', label: 'Create project', icon: Plus, module: 'projects' as const },
-    { to: '/team-allocation', label: 'Team booking', icon: Users, module: 'projects' as const },
-    { to: '/data-management', label: 'Data management', icon: Database, module: 'projects' as const },
-    { to: '/project-tracking', label: 'Project tracking', icon: Target, module: 'projects' as const },
-  ].filter((a) => access.hasModule(a.module))
-
-  if (actions.length === 0) return null
-
-  return (
-    <Card className="mt-6">
-      <CardContent className="p-4">
-        <p className="mb-3 text-sm font-medium">Quick actions</p>
-        <div className="flex flex-wrap gap-2">
-          {actions.map((a) => (
-            <Button key={a.to} variant="outline" size="sm" asChild>
-              <Link to={a.to}>
-                <a.icon /> {a.label}
-              </Link>
-            </Button>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 /** One counter, with its icon tile. Clickable when there is somewhere to go. */
 function Tile({
   icon: Icon,
@@ -320,10 +219,10 @@ function Tile({
   search?: Record<string, string>
 }) {
   const body = (
-    <CardContent className="flex items-start gap-3 p-4">
+    <CardContent className="flex items-center gap-3 p-3 sm:p-4">
       <span
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-lg',
+          'hidden size-10 shrink-0 items-center justify-center rounded-lg sm:flex',
           tone === 'danger'
             ? 'bg-destructive/10 text-destructive'
             : tone === 'warning'
@@ -336,8 +235,8 @@ function Tile({
         <Icon className="size-5" aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-xl font-semibold tabular-nums leading-tight">{value}</p>
-        <p className="truncate text-sm text-muted-foreground">{label}</p>
+        <p className="truncate text-base font-semibold tabular-nums leading-tight sm:text-xl">{value}</p>
+        <p className="truncate text-xs text-muted-foreground sm:text-sm">{label}</p>
         {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>}
       </div>
     </CardContent>
@@ -367,54 +266,45 @@ function NeedsAttention({ projects }: { projects: readonly TrackedProject[] }) {
     .slice(0, 3)
 
   return (
-    <Card className="mt-4">
-      <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
-        <div>
-          <CardTitle>Needs attention</CardTitle>
-          <CardDescription>Highest-priority projects right now</CardDescription>
-        </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/project-tracking">Open project tracking</Link>
-        </Button>
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+        <CardTitle>Needs attention</CardTitle>
+        {worst.length > 0 && (
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/project-tracking">
+              See all <ArrowRight />
+            </Link>
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {worst.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">
-            Nothing is behind. Every project has its next step covered.
-          </p>
+          <p className="py-1 text-sm text-muted-foreground">All clear. Every project has its next step covered.</p>
         ) : (
+          // One line per project: its name, the one thing wrong, and the way in.
           <ul className="divide-y divide-border">
             {worst.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{p.name}</p>
-                    <StatusBadge tone={BAND_TONE[p.health.band]}>
-                      {BAND_LABEL[p.health.band]}
-                    </StatusBadge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{p.client_name ?? '—'}</p>
-                  {/* One symptom, not a list: the recommendation below says
-                      what to do about it, and two lines of grievance push the
-                      action off the card. */}
-                  {worstFlag(p) && (
-                    <span className="mt-1.5 inline-block rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 text-xs text-warning">
-                      {worstFlag(p)}
+              <li key={p.id}>
+                <Link
+                  to="/projects/$id"
+                  params={{ id: p.id }}
+                  className="flex items-center gap-3 py-2.5 hover:text-primary"
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'size-2 shrink-0 rounded-full',
+                      BAND_TONE[p.health.band] === 'danger' ? 'bg-destructive' : 'bg-warning',
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{p.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {worstFlag(p) ?? NEXT_ACTION_LABEL[p.health.next_action]}
                     </span>
-                  )}
-                  <p className="mt-1.5 flex items-center gap-1.5 text-sm">
-                    <Lightbulb className="size-3.5 shrink-0 text-primary" aria-hidden />
-                    <span className="font-medium text-primary">Recommended:</span>
-                    <span className="text-muted-foreground">
-                      {NEXT_ACTION_LABEL[p.health.next_action]}
-                    </span>
-                  </p>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/projects/$id" params={{ id: p.id }}>
-                    Open project <ArrowRight />
-                  </Link>
-                </Button>
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
               </li>
             ))}
           </ul>
@@ -432,91 +322,34 @@ function UpcomingShoots({ shoots }: { shoots: readonly ShootListItem[] }) {
     .filter((s) => s.shoot_date && s.shoot_date >= today && s.shoot_date <= horizon)
     .filter((s) => s.status !== 'cancelled')
     .sort((a, b) => (a.shoot_date ?? '').localeCompare(b.shoot_date ?? ''))
-    .slice(0, 5)
+    .slice(0, 3)
+
+  // Nothing this week: no card saying so.
+  if (soon.length === 0) return null
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
-        <div>
-          <CardTitle>Upcoming shoots</CardTitle>
-          <CardDescription>Next 7 days</CardDescription>
-        </div>
+      <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+        <CardTitle>Coming up</CardTitle>
         <Button asChild variant="ghost" size="sm">
-          <Link to="/team-allocation">Team booking</Link>
+          <Link to="/team-allocation">
+            See all <ArrowRight />
+          </Link>
         </Button>
       </CardHeader>
       <CardContent>
-        {soon.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing booked in the next week.</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {soon.map((s) => (
-              <li key={s.id} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <CalendarDays className="size-4" aria-hidden />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{s.name}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {s.project_name ?? '—'}
-                    {s.location ? ` · ${s.location}` : ''}
-                  </p>
-                  {s.shoot_date && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{prettyDay(s.shoot_date)}</p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-/**
- * Where work is stuck: cards not backed up, and submissions waiting on a
- * review. Both are things that stall a delivery while looking like progress.
- */
-function Blockers({ projects }: { projects: readonly TrackedProject[] }) {
-  const stuck = projects
-    .filter((p) => p.data_records_unverified > 0 || p.pending_reviews > 0)
-    .sort((a, b) => b.data_records_unverified + b.pending_reviews - (a.data_records_unverified + a.pending_reviews))
-    .slice(0, 5)
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
-        <div>
-          <CardTitle>Data &amp; delivery blockers</CardTitle>
-          <CardDescription>Where work is stuck</CardDescription>
-        </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/data-management">Data management</Link>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {stuck.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No blockers right now.</p>
-        ) : (
-          <ul className="flex flex-col gap-2.5">
-            {stuck.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate text-sm font-medium">{p.name}</span>
-                <span className="flex shrink-0 items-center gap-2 text-xs">
-                  {p.data_records_unverified > 0 && (
-                    <StatusBadge tone="warning">
-                      {p.data_records_unverified} unverified
-                    </StatusBadge>
-                  )}
-                  {p.pending_reviews > 0 && (
-                    <StatusBadge tone="info">{p.pending_reviews} to review</StatusBadge>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="divide-y divide-border">
+          {soon.map((s) => (
+            <li key={s.id} className="flex items-center gap-3 py-2.5">
+              <CalendarDays className="size-4 shrink-0 text-primary" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{s.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{s.project_name ?? '—'}</span>
+              </span>
+              {s.shoot_date && <span className="shrink-0 text-xs text-muted-foreground">{prettyDay(s.shoot_date)}</span>}
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   )

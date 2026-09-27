@@ -12,10 +12,13 @@ import { DueText } from './TaskCard'
  * The three things on my plate soonest, on every dashboard (the owner has
  * tasks too). Late ones in red. A tap opens the task.
  */
-export function MyTasksCard({ className }: { className?: string }) {
+export function MyTasksCard({ className, hideWhenEmpty }: { className?: string; hideWhenEmpty?: boolean }) {
   const { data, isLoading } = useMyTasks()
   const today = todayISO()
   const next = soonestOpen(data ?? [], today, 3)
+  // The studio dashboard keeps only what needs a hand today: no card for an
+  // empty list.
+  if (hideWhenEmpty && (isLoading || next.length === 0)) return null
 
   return (
     <Card className={className}>
