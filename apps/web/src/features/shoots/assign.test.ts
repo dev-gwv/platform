@@ -5,8 +5,10 @@ import {
   clashFor,
   defaultWindowFields,
   overlaps,
+  pickedIds,
   requirementFill,
   roleMatches,
+  seatsLeft,
   shootProgress,
   suggestedPayout,
   windowOf,
@@ -156,5 +158,20 @@ describe('roleMatches / suggestedPayout / defaultWindowFields', () => {
     expect(
       defaultWindowFields({ shoot_date: '2026-10-01', start_at: s.toISOString(), end_at: e.toISOString() }),
     ).toEqual({ date: '2026-10-01', time: '16:00', hours: 6.5 })
+  })
+})
+
+describe('seatsLeft / pickedIds', () => {
+  const fill = [
+    { name: 'Candid', required: 2, assigned: 1, open: 1 },
+    { name: 'Drone', required: 1, assigned: 0, open: 1 },
+  ]
+  it('takes the picks off the open seats and never goes below zero', () => {
+    const left = seatsLeft(fill, { Candid: [{ id: 'a', payout: '' }, { id: 'b', payout: '' }] })
+    expect(left.get('Candid')).toBe(0)
+    expect(left.get('Drone')).toBe(1)
+  })
+  it('knows everyone picked, across roles', () => {
+    expect([...pickedIds({ Candid: [{ id: 'a', payout: '' }], Drone: [{ id: 'b', payout: '5000' }] })]).toEqual(['a', 'b'])
   })
 })

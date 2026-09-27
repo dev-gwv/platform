@@ -1,70 +1,48 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  MapPin,
-  Plus,
-  Search,
-  UserPlus,
-  Users,
-  X,
-} from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Check, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ShootListItem, SlotCostStatus, TeamMember, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
-import { ApiError } from '@/shared/api/client'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
+import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { Avatar } from '@/shared/ui/avatar'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
-import {
-  useBookSlot,
-  useBookSlots,
-  useMembers,
-  useReleaseSlot,
-  useSlots,
-  useUpdateSlot,
-} from '@/features/allocation/api'
+import { useBookSlots, useMembers, useReleaseSlot, useSetSlotCost, useSlots, useUpdateSlot } from '@/features/allocation/api'
 import {
   candidatesFor,
   defaultWindowFields,
-  fieldsOfSlot,
   hoursLabel,
   isLive,
-  payBasisLabel,
+  pickedIds,
   requirementFill,
+  seatsLeft,
   shootProgress,
   suggestedPayout,
   windowOf,
   type Candidate,
   type RequirementFill,
+  type SeatPick,
 } from './assign'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
 
 /**
- * "Assign team" for one shoot day -- the old platform's allocation desk.
+ * "Assign team" for one shoot: the roles it needs, who is in each, and an
+ * empty seat you tap to choose someone.
  *
- * The first version here was a bare Who / From / To / Cost form per role: no
- * idea who was free, who suited the role, how full the day already was, or
- * what the person is normally paid, and one person at a time only. This puts
- * the whole day in front of the planner:
+ * It used to be two tabs ("One by one" and "Many at once") with about fifteen
+ * controls before the first booking: a requirement dropdown, date, start,
+ * hours, payout status, amount and notes every time. Almost always the time is
+ * the shoot's and the payout is the freelancer's saved rate, so those are now
+ * defaults, and picking for one role or five is the same motion: tap the seat,
+ * tap a name, then "Book".
  *
- *  - how far the day is staffed, and which requirements still have seats;
- *  - who holds each seat, with Change and Remove;
- *  - a picker that sorts people who fit the role first, and says why anyone
- *    who cannot take it cannot (booked elsewhere at that time, or already on
- *    this role) instead of silently hiding them;
- *  - payout status, amount (pre-filled from a freelancer's saved rate) and an
- *    internal note, set with the booking rather than in a second trip;
- *  - "Many at once": pick people for every open requirement in one screen and
- *    book them together.
+ * The rules underneath are unchanged (see ./assign): only people free at that
+ * time are offered, role fits first; a person cannot hold two roles at once;
+ * a freelancer's saved rate fills the payout.
  */
 export function AssignTeamDialog({
   shoot,
@@ -77,114 +55,604 @@ export function AssignTeamDialog({
 }) {
   const members = useMembers()
   const slots = useSlots()
-  const all = slots.data ?? []
-  const onShoot = useMemo(() => all.filter((s) => s.shoot_id === shoot.id && isLive(s)), [all, shoot.id])
-  const fill = useMemo(() => requirementFill(shoot, onShoot), [shoot, onShoot])
-  const progress = shootProgress(fill)
-  const [tab, setTab] = useState<'one' | 'many'>('one')
-
   const loading = members.isLoading || slots.isLoading
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="max-w-3xl"
-        title="Assign team to shoot"
-        description="Assigned people are booked in Team Booking straight away. Anyone already out at that time is blocked."
-      >
-        <div>
-          <DaySummary shoot={shoot} progress={progress} />
-
-          {shoot.requirements.length === 0 ? (
-            <p className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-              Add at least one requirement to this shoot (for example Candid Photographer or Drone Operator)
-              before assigning a team.
-            </p>
-          ) : loading ? (
-            <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Loading the team…
-            </div>
-          ) : (
-            <Tabs value={tab} onValueChange={(v) => setTab(v as 'one' | 'many')} className="mt-3">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="one">
-                  <UserPlus className="mr-1.5 size-4" /> One by one
-                </TabsTrigger>
-                <TabsTrigger value="many">
-                  <Users className="mr-1.5 size-4" /> Many at once (bulk)
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="one" className="mt-3">
-                <AssignOne
-                  shoot={shoot}
-                  fill={fill}
-                  members={members.data ?? []}
-                  slots={all}
-                  onShoot={onShoot}
-                  initialRequirement={initialRequirement}
-                  onClose={onClose}
-                />
-              </TabsContent>
-              <TabsContent value="many" className="mt-3">
-                <AssignMany
-                  shoot={shoot}
-                  fill={fill}
-                  members={members.data ?? []}
-                  slots={all}
-                  onDone={() => setTab('one')}
-                />
-              </TabsContent>
-            </Tabs>
-          )}
-        </div>
+      <DialogContent className="max-w-2xl" title="Assign team" description={shootLine(shoot)}>
+        {shoot.requirements.length === 0 ? (
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+            Add the roles this shoot needs first (for example Candid Photographer), then assign people to them.
+          </p>
+        ) : loading ? (
+          <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading the team…
+          </div>
+        ) : (
+          <AssignBoard
+            shoot={shoot}
+            members={members.data ?? []}
+            slots={slots.data ?? []}
+            initialRequirement={initialRequirement}
+            onClose={onClose}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
-function DaySummary({ shoot, progress }: { shoot: ShootListItem; progress: ReturnType<typeof shootProgress> }) {
-  const bar = progress.pct === 100 ? 'bg-success' : progress.pct > 0 ? 'bg-warning' : 'bg-destructive'
+function shootLine(shoot: ShootListItem): string {
+  const parts = [shoot.name]
+  if (shoot.shoot_date) {
+    parts.push(new Date(`${shoot.shoot_date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }))
+  }
+  if (shoot.location) parts.push(shoot.location)
+  return parts.join(' · ')
+}
+
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+
+/** Why a pick did not go in, in a few words. */
+function failureText(error: string | null): string {
+  return error === 'double_booked' ? 'Already booked at this time' : 'Could not be booked'
+}
+
+function AssignBoard({
+  shoot,
+  members,
+  slots,
+  initialRequirement,
+  onClose,
+}: {
+  shoot: ShootListItem
+  members: TeamMember[]
+  slots: TeamSlot[]
+  initialRequirement?: string | undefined
+  onClose: () => void
+}) {
+  const { session } = useAuth()
+  const bookMany = useBookSlots()
+  const update = useUpdateSlot()
+  const release = useReleaseSlot()
+  const confirm = useConfirm()
+
+  const onShoot = useMemo(() => slots.filter((s) => s.shoot_id === shoot.id && isLive(s)), [slots, shoot.id])
+  const fill = useMemo(() => requirementFill(shoot, onShoot), [shoot, onShoot])
+  const progress = shootProgress(fill)
+
+  const start = defaultWindowFields(shoot)
+  const [date, setDate] = useState(start.date)
+  const [time, setTime] = useState(start.time)
+  const [hours, setHours] = useState(start.hours)
+  const [showTime, setShowTime] = useState(false)
+  /** requirement → people picked for it, not booked yet. */
+  const [picks, setPicks] = useState<Record<string, SeatPick[]>>({})
+  /** `${requirement}|${userId}` → why that pick did not go in. */
+  const [failed, setFailed] = useState<Record<string, string>>({})
+  /** The role whose picker is open, and the booking being swapped when it is a "Change person". */
+  const [picker, setPicker] = useState<{ role: string; replacing?: TeamSlot } | null>(() => {
+    const r = fill.find((f) => f.name === initialRequirement && f.open > 0) ?? null
+    return r ? { role: r.name } : null
+  })
+  const [editing, setEditing] = useState<TeamSlot | null>(null)
+  const [quickAdd, setQuickAdd] = useState<string | null>(null)
+
+  // A half-picked crew survives a refresh or a closed tab until it is booked.
+  const draft = useFormDraft(
+    `assign-team:${shoot.id}`,
+    { date, time, hours, picks },
+    (v) => {
+      setDate(v.date)
+      setTime(v.time)
+      setHours(v.hours)
+      setPicks(v.picks ?? {})
+    },
+    { isBlank: (v) => Object.values(v.picks ?? {}).every((p) => p.length === 0) },
+  )
+
+  const slotWindow = windowOf(date, time, hours)
+  const left = seatsLeft(fill, picks)
+  const taken = pickedIds(picks)
+  const byId = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members])
+  const total = taken.size
+
+  // Roles still needing people first, then the full ones -- the to-do on top.
+  const ordered = [...fill].sort((a, b) => Number(a.open === 0) - Number(b.open === 0))
+
+  function pick(role: string, member: TeamMember) {
+    const rate = suggestedPayout(member)
+    const next = { ...picks, [role]: [...(picks[role] ?? []), { id: member.user_id, payout: rate != null ? String(rate) : '' }] }
+    setPicks(next)
+    // Close the list once the role has all the people it needs.
+    if ((seatsLeft(fill, next).get(role) ?? 0) === 0) setPicker(null)
+  }
+
+  function unpick(role: string, id: string) {
+    setPicks((p) => ({ ...p, [role]: (p[role] ?? []).filter((x) => x.id !== id) }))
+    setFailed((f) => {
+      const { [`${role}|${id}`]: _gone, ...rest } = f
+      return rest
+    })
+  }
+
+  function setPayout(role: string, id: string, payout: string) {
+    setPicks((p) => ({ ...p, [role]: (p[role] ?? []).map((x) => (x.id === id ? { ...x, payout } : x)) }))
+  }
+
+  async function replace(slot: TeamSlot, member: TeamMember) {
+    try {
+      await update.mutateAsync({ id: slot.id, patch: { user_id: member.user_id } })
+      toast.success(`${member.name} is now on ${slot.service_name ?? 'this role'}.`)
+      setPicker(null)
+    } catch (e) {
+      toast.error(e instanceof Error && /409|already/i.test(e.message) ? 'They are already booked at this time.' : 'We could not change this.')
+    }
+  }
+
+  async function remove(slot: TeamSlot) {
+    const yes = await confirm({
+      title: `Remove ${slot.user_name ?? 'this person'}?`,
+      description: 'Their seat opens again.',
+      destructive: true,
+      confirmLabel: 'Remove',
+    })
+    if (yes) release.mutate(slot.id, { onSuccess: () => toast.success(`${slot.user_name ?? 'They'} removed.`) })
+  }
+
+  async function book() {
+    if (!slotWindow || total === 0) return
+    const rows = Object.entries(picks).flatMap(([role, ps]) => ps.map((p) => ({ role, ...p })))
+    const items = rows.map((r) => {
+      const amount = r.payout.trim() === '' ? undefined : Number(r.payout)
+      return {
+        user_id: r.id,
+        shoot_id: shoot.id,
+        service_name: r.role,
+        start_at: slotWindow.start,
+        end_at: slotWindow.end,
+        ...(amount !== undefined && Number.isFinite(amount) && amount >= 0 ? { estimated_cost: amount } : {}),
+        cost_status: 'tentative' as const,
+      }
+    })
+    try {
+      const { results } = await bookMany.mutateAsync(items)
+      const ok = results.filter((r) => r.id).length
+      const nextPicks: Record<string, SeatPick[]> = {}
+      const nextFailed: Record<string, string> = {}
+      for (const r of results) {
+        if (r.id) continue
+        const row = rows[r.index]!
+        nextPicks[row.role] = [...(nextPicks[row.role] ?? []), { id: row.id, payout: row.payout }]
+        nextFailed[`${row.role}|${row.id}`] = failureText(r.error)
+      }
+      setPicks(nextPicks)
+      setFailed(nextFailed)
+      if (ok > 0) toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} booked.`)
+      if (Object.keys(nextFailed).length === 0) draft.clear()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'We could not book the team.')
+    }
+  }
+
   return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{shoot.name}</p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-            {shoot.shoot_date && <span>{shoot.shoot_date}</span>}
-            {shoot.start_at && (
-              <span className="inline-flex items-center gap-1">
-                <Clock className="size-3" />
-                {new Date(shoot.start_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            {shoot.location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="size-3" />
-                {shoot.location}
-              </span>
-            )}
-          </p>
-        </div>
-        {progress.required > 0 && (
-          <div className="shrink-0 text-right">
-            <p className="text-sm font-semibold tabular-nums">
-              {progress.assigned}/{progress.required} assigned
-            </p>
-            <p className="text-[11px] text-muted-foreground">{progress.pct}% allocated</p>
+    <div className="flex flex-col gap-3">
+      <Progress assigned={progress.assigned} required={progress.required} />
+
+      {showTime && (
+        <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_4.5rem] gap-2 rounded-lg border border-border bg-muted/30 p-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="assign-date" className="text-xs">
+              Date
+            </Label>
+            <Input id="assign-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="assign-time" className="text-xs">
+              Start
+            </Label>
+            <Input id="assign-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="assign-hours" className="text-xs">
+              Hours
+            </Label>
+            <Input
+              id="assign-hours"
+              type="number"
+              min={0.5}
+              step={0.5}
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+      )}
+
+      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        {ordered.map((r) => (
+          <RoleRow
+            key={r.name}
+            role={r}
+            booked={onShoot.filter((s) => (s.service_name ?? '').toLowerCase() === r.name.toLowerCase())}
+            picked={picks[r.name] ?? []}
+            left={left.get(r.name) ?? 0}
+            failed={failed}
+            byId={byId}
+            open={picker?.role === r.name}
+            onOpen={() => setPicker(picker?.role === r.name && !picker.replacing ? null : { role: r.name })}
+            onUnpick={(id) => unpick(r.name, id)}
+            onPayout={(id, v) => setPayout(r.name, id, v)}
+            onChange={(slot) => setPicker({ role: r.name, replacing: slot })}
+            onEditPayout={setEditing}
+            onRemove={(slot) => void remove(slot)}
+            picker={
+              picker?.role === r.name && (
+                <PersonPicker
+                  candidates={candidatesFor({
+                    members,
+                    requirement: r.name,
+                    window: picker.replacing
+                      ? { start: picker.replacing.start_at, end: picker.replacing.end_at }
+                      : slotWindow,
+                    shootId: shoot.id,
+                    slots,
+                    ignoreSlotId: picker.replacing?.id,
+                  })}
+                  // Everyone picked goes at the same hours, so they are not offered twice.
+                  hidden={picker.replacing ? new Set() : taken}
+                  title={picker.replacing ? `Who takes ${picker.replacing.user_name ?? 'this'} seat?` : null}
+                  busy={update.isPending}
+                  onPick={(m) => (picker.replacing ? void replace(picker.replacing, m) : pick(r.name, m))}
+                  onNew={session?.is_owner ? () => setQuickAdd(r.name) : undefined}
+                  onCancel={() => setPicker(null)}
+                />
+              )
+            }
+          />
+        ))}
+      </ul>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-3 text-sm">
+          <Button variant="outline" onClick={onClose}>
+            Done
+          </Button>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => {
+              if (showTime) {
+                setDate(start.date)
+                setTime(start.time)
+                setHours(start.hours)
+              }
+              setShowTime((v) => !v)
+            }}
+          >
+            {showTime
+              ? 'Use the shoot’s time'
+              : slotWindow
+                ? `${timeOf(slotWindow.start)} – ${timeOf(slotWindow.end)} · Different time?`
+                : 'Set the time'}
+          </button>
+        </div>
+        <Button disabled={!slotWindow || total === 0 || bookMany.isPending} onClick={() => void book()}>
+          {bookMany.isPending ? <Loader2 className="animate-spin" /> : <Check />}
+          {total === 0 ? 'Book' : `Book ${total} ${total === 1 ? 'person' : 'people'}`}
+        </Button>
+      </div>
+
+      {editing && <EditPayoutDialog slot={editing} onClose={() => setEditing(null)} />}
+      {quickAdd && (
+        <QuickAddMemberDialog
+          requirement={quickAdd}
+          onClose={() => setQuickAdd(null)}
+          onCreated={(id) => {
+            const role = quickAdd
+            setQuickAdd(null)
+            const m = byId.get(id)
+            if (m && (left.get(role) ?? 0) > 0) pick(role, m)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function Progress({ assigned, required }: { assigned: number; required: number }) {
+  if (required === 0) return null
+  const pct = Math.round((assigned / required) * 100)
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Team assigned"
+      >
+        <div
+          className={cn('h-full rounded-full transition-[width] duration-500', pct === 100 ? 'bg-success' : 'bg-warning')}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="shrink-0 text-sm font-medium tabular-nums">
+        {assigned} of {required} filled
+      </p>
+    </div>
+  )
+}
+
+function RoleRow({
+  role,
+  booked,
+  picked,
+  left,
+  failed,
+  byId,
+  open,
+  onOpen,
+  onUnpick,
+  onPayout,
+  onChange,
+  onEditPayout,
+  onRemove,
+  picker,
+}: {
+  role: RequirementFill
+  booked: TeamSlot[]
+  picked: SeatPick[]
+  left: number
+  failed: Record<string, string>
+  byId: Map<string, TeamMember>
+  open: boolean
+  onOpen: () => void
+  onUnpick: (id: string) => void
+  onPayout: (id: string, v: string) => void
+  onChange: (slot: TeamSlot) => void
+  onEditPayout: (slot: TeamSlot) => void
+  onRemove: (slot: TeamSlot) => void
+  picker: ReactNode
+}) {
+  const full = role.open === 0
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  return (
+    <li className="p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate font-medium">{role.name}</p>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1 text-xs tabular-nums',
+            full ? 'text-success' : 'text-muted-foreground',
+          )}
+        >
+          {full && <Check className="size-3.5" aria-hidden />}
+          {Math.min(role.assigned, role.required)} of {role.required}
+        </span>
+      </div>
+
+      {(booked.length > 0 || picked.length > 0) && (
+        <ul className="mt-2 flex flex-col gap-1.5">
+          {booked.map((s) => {
+            const payout = s.final_cost ?? s.estimated_cost
+            const menu = menuFor === s.id
+            return (
+              <li key={s.id} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <Avatar name={s.user_name ?? '?'} size="sm" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {s.user_name ?? 'Someone'}
+                    <span className="text-muted-foreground"> · {payout != null ? formatINR(payout) : 'no payout yet'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Options for ${s.user_name ?? 'this person'}`}
+                    aria-expanded={menu}
+                    onClick={() => setMenuFor(menu ? null : s.id)}
+                    className={cn('rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground', menu && 'bg-muted text-foreground')}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </div>
+                {/* Inline, not a floating menu: a popover portalled out of the
+                    dialog cannot be clicked while the dialog is open. */}
+                {menu && (
+                  <div className="ml-9 flex flex-wrap gap-1">
+                    {(
+                      [
+                        ['Change person', UserRound, () => onChange(s)],
+                        ['Edit payout', Pencil, () => onEditPayout(s)],
+                        ['Remove', Trash2, () => onRemove(s)],
+                      ] as const
+                    ).map(([label, Icon, run]) => (
+                      <Button
+                        key={label}
+                        size="sm"
+                        variant="outline"
+                        className={cn('h-7 px-2.5 text-xs', label === 'Remove' && 'text-destructive')}
+                        onClick={() => {
+                          setMenuFor(null)
+                          run()
+                        }}
+                      >
+                        <Icon className="size-3.5" /> {label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+          {picked.map((p) => {
+            const m = byId.get(p.id)
+            const why = failed[`${role.name}|${p.id}`]
+            return (
+              <li key={p.id} className="flex flex-col gap-0.5">
+                <div
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-sm',
+                    why ? 'border-destructive/50 bg-destructive/5' : 'border-primary/50 bg-primary/5',
+                  )}
+                >
+                  <Avatar name={m?.name ?? '?'} size="sm" />
+                  <span className="min-w-0 flex-1 truncate">{m?.name ?? 'Someone'}</span>
+                  <span className="text-xs text-muted-foreground">₹</span>
+                  <input
+                    aria-label={`Payout for ${m?.name ?? 'this person'}`}
+                    inputMode="decimal"
+                    placeholder="Payout"
+                    value={p.payout}
+                    onChange={(e) => onPayout(p.id, e.target.value.replace(/[^\d.]/g, ''))}
+                    className="h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-xs tabular-nums"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Take ${m?.name ?? 'them'} off`}
+                    onClick={() => onUnpick(p.id)}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                {why && <p className="pl-2 text-xs text-destructive">{why}. Take them off or pick someone else.</p>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {left > 0 && !open && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-primary hover:border-primary hover:bg-primary/5"
+        >
+          <Plus className="size-4" /> {left === 1 ? 'Choose person' : `Choose ${left} people`}
+        </button>
+      )}
+      {open && picker}
+    </li>
+  )
+}
+
+/** Who can take this seat: free people, role fits first; the busy ones in one line. */
+function PersonPicker({
+  candidates,
+  hidden,
+  title,
+  busy,
+  onPick,
+  onNew,
+  onCancel,
+}: {
+  candidates: Candidate[]
+  hidden: Set<string>
+  title: string | null
+  busy: boolean
+  onPick: (m: TeamMember) => void
+  onNew: (() => void) | undefined
+  onCancel: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [showBusy, setShowBusy] = useState(false)
+  const query = q.trim().toLowerCase()
+  const matches = (c: Candidate) =>
+    !query ||
+    c.member.name.toLowerCase().includes(query) ||
+    c.member.role_names.some((r) => r.toLowerCase().includes(query)) ||
+    (c.member.phone ?? '').includes(query)
+  const free = candidates.filter((c) => c.availability.state === 'free' && !hidden.has(c.member.user_id) && matches(c))
+  const unavailable = candidates.filter((c) => c.availability.state !== 'free' && matches(c))
+
+
+  return (
+    <div className="mt-2 rounded-lg border border-border bg-card">
+      {title && <p className="px-3 pt-2 text-xs font-medium text-muted-foreground">{title}</p>}
+      <div className="flex items-center gap-2 border-b border-border p-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search name or role"
+            className="h-8 pl-8"
+            aria-label="Search people"
+          />
+        </div>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Close
+        </Button>
+      </div>
+
+      {free.length === 0 ? (
+        <p className="px-3 py-3 text-sm text-muted-foreground">
+          {query ? 'Nobody free by that name.' : 'Nobody is free at this time.'}
+        </p>
+      ) : (
+        <ul className="max-h-60 overflow-y-auto p-1" role="listbox" aria-label="Free people">
+          {free.map((c) => (
+            <li key={c.member.user_id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                disabled={busy}
+                onClick={() => onPick(c.member)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+              >
+                <Avatar name={c.member.name} size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{c.member.name}</span>
+                  {c.member.role_names.length > 0 && (
+                    <span className="block truncate text-xs text-muted-foreground">{c.member.role_names.join(', ')}</span>
+                  )}
+                </span>
+                {c.match && (
+                  <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">Fits</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-1.5">
+        {unavailable.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowBusy((v) => !v)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {unavailable.length} busy at this time {showBusy ? '▴' : '▾'}
+          </button>
+        ) : (
+          <span />
+        )}
+        {onNew && (
+          <button type="button" onClick={onNew} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            <Plus className="size-3" /> New team member
+          </button>
         )}
       </div>
-      {progress.required > 0 && (
-        <div
-          className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-valuenow={progress.pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Team allocated"
-        >
-          <div className={cn('h-full rounded-full transition-[width] duration-500', bar)} style={{ width: `${progress.pct}%` }} />
-        </div>
+      {showBusy && unavailable.length > 0 && (
+        <ul className="max-h-40 overflow-y-auto border-t border-border px-1 pb-1 pt-1">
+          {unavailable.map((c) => (
+            <li key={c.member.user_id} className="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
+              <Avatar name={c.member.name} size="sm" />
+              <span className="min-w-0 flex-1 truncate">{c.member.name}</span>
+              <span className="shrink-0 text-xs">
+                {c.availability.state === 'on_role'
+                  ? 'Already on this role'
+                  : c.availability.state === 'busy'
+                    ? `Booked ${hoursLabel(c.availability.slot)}`
+                    : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
@@ -196,419 +664,63 @@ const COST_STATUS: { value: SlotCostStatus; label: string }[] = [
   { value: 'not_decided', label: 'Not decided' },
 ]
 
-/** A 409 from the overlap guard, said the way the planner thinks about it. */
-function bookingError(e: unknown): string {
-  if (e instanceof ApiError && e.status === 409) return 'This person is already booked for another assignment at this time.'
-  return e instanceof Error ? e.message : 'We could not book this.'
-}
+/** The payout for one booking: amount, whether it is agreed, a note. Team members never see it. */
+function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => void }) {
+  const setCost = useSetSlotCost()
+  const [amount, setAmount] = useState(() => {
+    const v = slot.final_cost ?? slot.estimated_cost
+    return v != null ? String(v) : ''
+  })
+  const [status, setStatus] = useState<SlotCostStatus>(slot.cost_status)
+  const [note, setNote] = useState(slot.cost_notes ?? '')
 
-// ── One by one ──────────────────────────────────────────────────
-
-function AssignOne({
-  shoot,
-  fill,
-  members,
-  slots,
-  onShoot,
-  initialRequirement,
-  onClose,
-}: {
-  shoot: ShootListItem
-  fill: RequirementFill[]
-  members: TeamMember[]
-  slots: TeamSlot[]
-  onShoot: TeamSlot[]
-  initialRequirement?: string | undefined
-  onClose: () => void
-}) {
-  const { session } = useAuth()
-  const book = useBookSlot()
-  const update = useUpdateSlot()
-  const release = useReleaseSlot()
-  const confirm = useConfirm()
-
-  const pending = fill.filter((r) => r.open > 0)
-  const full = fill.filter((r) => r.open === 0)
-  const start = defaultWindowFields(shoot)
-
-  const [requirement, setRequirement] = useState(
-    () => fill.find((r) => r.name === initialRequirement)?.name ?? pending[0]?.name ?? fill[0]?.name ?? '',
-  )
-  const [date, setDate] = useState(start.date)
-  const [time, setTime] = useState(start.time)
-  const [hours, setHours] = useState(start.hours)
-  const [memberId, setMemberId] = useState('')
-  const [costStatus, setCostStatus] = useState<SlotCostStatus>('tentative')
-  const [cost, setCost] = useState('')
-  const [costTouched, setCostTouched] = useState(false)
-  const [notes, setNotes] = useState('')
-  const [search, setSearch] = useState('')
-  const [replacing, setReplacing] = useState<{ slot: TeamSlot; name: string } | null>(null)
-  const [justAssigned, setJustAssigned] = useState<string | null>(null)
-  const [quickAdd, setQuickAdd] = useState(false)
-  // What was typed survives a refresh or a closed tab until it is saved. Only
-  // a typed payout or note makes it worth keeping; a pick alone is one click.
-  const draft = useFormDraft(
-    `assign-team:${shoot.id}`,
-    { requirement, date, time, hours, memberId, costStatus, cost, costTouched, notes },
-    (v) => {
-      setRequirement(v.requirement)
-      setDate(v.date)
-      setTime(v.time)
-      setHours(v.hours)
-      setMemberId(v.memberId)
-      setCostStatus(v.costStatus)
-      setCost(v.cost)
-      setCostTouched(v.costTouched)
-      setNotes(v.notes)
-    },
-    { isBlank: (v) => !v.costTouched && !v.notes.trim() },
-  )
-
-  const slotWindow = windowOf(date, time, hours)
-  const current = fill.find((r) => r.name === requirement)
-  const openSeats = current?.open ?? 0
-
-  const candidates = useMemo(
-    () =>
-      candidatesFor({
-        members,
-        requirement,
-        window: slotWindow,
-        shootId: shoot.id,
-        slots,
-        ignoreSlotId: replacing?.slot.id,
-      }),
-    [members, requirement, slotWindow?.start, slotWindow?.end, shoot.id, slots, replacing?.slot.id],
-  )
-  const picked = members.find((m) => m.user_id === memberId) ?? null
-  const pickedCandidate = candidates.find((c) => c.member.user_id === memberId)
-
-  // A pick that stops being possible (the time changed under it) is dropped
-  // rather than left selected and refused on submit.
-  useEffect(() => {
-    if (pickedCandidate && pickedCandidate.availability.state !== 'free') setMemberId('')
-  }, [pickedCandidate])
-
-  // A freelancer's saved rate fills the payout, until the planner types one.
-  useEffect(() => {
-    if (!picked || costTouched) return
-    const rate = suggestedPayout(picked)
-    setCost(rate != null ? String(rate) : '')
-  }, [picked, costTouched])
-
-  // A requirement that fills up hands over to the next one that has seats.
-  useEffect(() => {
-    if (replacing) return
-    if (current && current.open === 0 && pending.length > 0) setRequirement(pending[0]!.name)
-  }, [current, pending, replacing])
-
-  const onRole = onShoot.filter((s) => (s.service_name ?? '').toLowerCase() === requirement.toLowerCase())
-  const elsewhere = onShoot.filter((s) => (s.service_name ?? '').toLowerCase() !== requirement.toLowerCase())
-
-  const q = search.trim().toLowerCase()
-  const shown = candidates.filter(
-    (c) =>
-      !q ||
-      c.member.name.toLowerCase().includes(q) ||
-      c.member.role_names.some((r) => r.toLowerCase().includes(q)) ||
-      (c.member.phone ?? '').includes(q),
-  )
-
-  function reset() {
-    setMemberId('')
-    setCost('')
-    setCostTouched(false)
-    setNotes('')
-    setCostStatus('tentative')
-  }
-
-  async function onAssign() {
-    if (!picked || !slotWindow || !requirement) return
-    const amount = cost.trim() === '' ? undefined : Number(cost)
-    if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+  function save() {
+    const n = amount.trim() === '' ? null : Number(amount)
+    if (n != null && (!Number.isFinite(n) || n < 0)) {
       toast.error('Payout must be a positive number.')
       return
     }
-    try {
-      await book.mutateAsync({
-        user_id: picked.user_id,
-        shoot_id: shoot.id,
-        service_name: requirement,
-        start_at: slotWindow.start,
-        end_at: slotWindow.end,
-        ...(amount !== undefined && costStatus !== 'not_decided' ? { estimated_cost: amount } : {}),
-        cost_status: costStatus,
-        ...(notes.trim() ? { cost_notes: notes.trim() } : {}),
-      })
-      draft.clear()
-      setJustAssigned(`${picked.name} is booked as ${requirement}.`)
-      reset()
-    } catch (e) {
-      toast.error(bookingError(e))
-    }
-  }
-
-  async function onReplace() {
-    if (!replacing || !picked) return
-    try {
-      await update.mutateAsync({ id: replacing.slot.id, patch: { user_id: picked.user_id } })
-      setJustAssigned(`${picked.name} replaces ${replacing.name} as ${replacing.slot.service_name ?? requirement}.`)
-      setReplacing(null)
-      reset()
-    } catch (e) {
-      toast.error(bookingError(e))
-    }
-  }
-
-  function startReplace(slot: TeamSlot) {
-    const f = fieldsOfSlot(slot)
-    setReplacing({ slot, name: slot.user_name ?? 'this person' })
-    if (slot.service_name) setRequirement(slot.service_name)
-    setDate(f.date)
-    setTime(f.time)
-    setHours(f.hours)
-    setMemberId('')
-    setJustAssigned(null)
-  }
-
-  async function onRemove(slot: TeamSlot) {
-    const yes = await confirm({
-      title: `Remove ${slot.user_name ?? 'this person'} from ${shoot.name}?`,
-      description: 'Their seat opens again. The booking stays in the history.',
-      destructive: true,
-      confirmLabel: 'Remove',
-    })
-    if (!yes) return
-    release.mutate(slot.id, { onSuccess: () => toast.success(`${slot.user_name ?? 'Member'} removed.`) })
+    setCost.mutate(
+      {
+        id: slot.id,
+        patch: {
+          estimated_cost: status === 'not_decided' ? null : n,
+          ...(status === 'final' ? { final_cost: n } : {}),
+          cost_status: status,
+          cost_notes: note.trim() || null,
+        },
+      },
+      { onSuccess: onClose },
+    )
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Which requirements still need people -- the planner's to-do list. */}
-      <section className="rounded-lg border border-border p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pending requirements</p>
-          <p className="text-[11px] text-muted-foreground">
-            {pending.length === 0
-              ? 'All requirements filled'
-              : `${pending.length} requirement${pending.length === 1 ? '' : 's'} need people`}
-          </p>
-        </div>
-        {pending.length === 0 ? (
-          <p className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 p-2 text-xs text-success">
-            <CheckCircle2 className="size-4" /> Every requirement on this day is fully staffed.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {pending.map((r) => {
-              const active = r.name === requirement
-              return (
-                <button
-                  key={r.name}
-                  type="button"
-                  onClick={() => {
-                    setRequirement(r.name)
-                    setReplacing(null)
-                  }}
-                  aria-pressed={active}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                    active
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-tone-amber/40 bg-tone-amber-soft text-tone-amber hover:border-tone-amber',
-                  )}
-                >
-                  <AlertCircle className="size-3" aria-hidden />
-                  {r.name}
-                  <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', active ? 'bg-card/25' : 'bg-card/70')}>
-                    {r.open} left
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-        {full.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {full.map((r) => (
-              <button
-                key={r.name}
-                type="button"
-                onClick={() => setRequirement(r.name)}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  r.name === requirement
-                    ? 'border-success bg-success text-card'
-                    : 'border-success/40 bg-success/10 text-success',
-                )}
-              >
-                <CheckCircle2 className="size-3" aria-hidden /> {r.name} · {r.assigned}/{r.required}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Who already holds this requirement's seats. */}
-      <section>
-        <p className="text-xs font-semibold">
-          On “{requirement}” <span className="font-normal text-muted-foreground">({onRole.length}/{current?.required ?? 0})</span>
-        </p>
-        {onRole.length === 0 ? (
-          <p className="mt-1 rounded-md border border-dashed border-border bg-muted/20 p-2 text-[11px] text-muted-foreground">
-            Nobody on this requirement yet.
-          </p>
-        ) : (
-          <ul className="mt-1 flex flex-col gap-1">
-            {onRole.map((s) => (
-              <BookedRow key={s.id} slot={s} onChange={() => startReplace(s)} onRemove={() => void onRemove(s)} busy={release.isPending} />
-            ))}
-          </ul>
-        )}
-        {elsewhere.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
-              Everyone else on this shoot ({elsewhere.length})
-            </summary>
-            <ul className="mt-1 flex flex-col gap-1">
-              {elsewhere.map((s) => (
-                <BookedRow
-                  key={s.id}
-                  slot={s}
-                  showRole
-                  onChange={() => startReplace(s)}
-                  onRemove={() => void onRemove(s)}
-                  busy={release.isPending}
-                />
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
-
-      {replacing && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
-          <div>
-            <p className="font-semibold text-primary">Replacing {replacing.name}</p>
-            <p className="text-[11px] text-muted-foreground">
-              Pick who takes their place below. The role, hours and payout stay as they are.
-            </p>
-          </div>
-          <Button size="sm" variant="ghost" onClick={() => setReplacing(null)}>
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      {/* The booking itself. */}
-      <section className="rounded-lg border border-border p-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {replacing ? 'Replacement' : 'Add team member'}
-        </p>
-
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <Label htmlFor="assign-req" className="text-xs">
-              Requirement
-            </Label>
-            <Select
-              id="assign-req"
-              value={requirement}
-              disabled={!!replacing}
-              onChange={(e) => setRequirement(e.target.value)}
-            >
-              {fill.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {r.name} — {r.open > 0 ? `${r.open} slot${r.open === 1 ? '' : 's'} left` : 'full'}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="grid min-w-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.5rem] gap-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-date" className="text-xs">
-                Date
-              </Label>
-              <Input id="assign-date" type="date" value={date} disabled={!!replacing} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-time" className="text-xs">
-                Start
-              </Label>
-              <Input id="assign-time" type="time" value={time} disabled={!!replacing} onChange={(e) => setTime(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-hours" className="text-xs">
-                Hours
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        className="max-w-sm"
+        title={`Payout · ${slot.user_name ?? 'this booking'}`}
+        description="Only you see this. Team members never do."
+      >
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="pay-amount" className="text-xs">
+                Amount (₹)
               </Label>
               <Input
-                id="assign-hours"
-                type="number"
-                min={0.5}
-                step={0.5}
-                value={hours}
-                disabled={!!replacing}
-                onChange={(e) => setHours(Number(e.target.value) || 0)}
+                id="pay-amount"
+                inputMode="decimal"
+                value={amount}
+                disabled={status === 'not_decided'}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                autoFocus
               />
             </div>
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="assign-search" className="text-xs">
-              Team member
-            </Label>
-            {session?.is_owner && (
-              <button
-                type="button"
-                onClick={() => setQuickAdd(true)}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              >
-                <Plus className="size-3" /> Add team member
-              </button>
-            )}
-          </div>
-          <div className="relative mt-1.5">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="assign-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, role or phone"
-              className="pl-8"
-            />
-          </div>
-          <MemberPicker
-            candidates={shown}
-            selected={memberId}
-            onSelect={(id) => {
-              setMemberId(id)
-              setJustAssigned(null)
-            }}
-            requirement={requirement}
-            hasWindow={!!slotWindow}
-          />
-          {picked && (
-            <p className="mt-1 text-[11px] text-success">
-              {payBasisLabel(picked) ?? 'No pay basis saved for this person — add the payout below.'}
-              {suggestedPayout(picked) != null && !costTouched ? ' — pre-filled below' : ''}
-            </p>
-          )}
-        </div>
-
-        {!replacing && (
-          <div className="mt-3 grid gap-3 rounded-md border border-border bg-muted/30 p-2.5 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-cost-status" className="text-xs">
-                Payout status
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="pay-status" className="text-xs">
+                Status
               </Label>
-              <Select
-                id="assign-cost-status"
-                value={costStatus}
-                onChange={(e) => setCostStatus(e.target.value as SlotCostStatus)}
-              >
+              <Select id="pay-status" value={status} onChange={(e) => setStatus(e.target.value as SlotCostStatus)}>
                 {COST_STATUS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -616,521 +728,23 @@ function AssignOne({
                 ))}
               </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-cost" className="text-xs">
-                Estimated payout (₹)
-              </Label>
-              <Input
-                id="assign-cost"
-                inputMode="decimal"
-                placeholder="e.g. 12000"
-                value={cost}
-                disabled={costStatus === 'not_decided'}
-                onChange={(e) => {
-                  setCostTouched(true)
-                  setCost(e.target.value.replace(/[^\d.]/g, ''))
-                }}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="assign-notes" className="text-xs">
-                Notes (internal)
-              </Label>
-              <Input id="assign-notes" placeholder="Optional" value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </div>
-            <p className="text-[11px] text-muted-foreground sm:col-span-3">
-              This is the project’s direct cost for this booking. Team members never see it.
-            </p>
           </div>
-        )}
-
-        {justAssigned && (
-          <p className="mt-3 flex items-center gap-2 rounded-md border border-success/40 bg-success/10 p-2 text-xs text-success">
-            <CheckCircle2 className="size-4 shrink-0" /> {justAssigned}
-          </p>
-        )}
-      </section>
-
-      <DialogFooter className="sm:justify-between">
-        <Button variant="outline" onClick={onClose}>
-          Done
-        </Button>
-        {replacing ? (
-          <Button disabled={!picked || update.isPending} onClick={() => void onReplace()}>
-            {update.isPending ? <Loader2 className="animate-spin" /> : <UserPlus />} Replace team member
-          </Button>
-        ) : (
-          <Button
-            disabled={!picked || !slotWindow || openSeats <= 0 || book.isPending}
-            onClick={() => void onAssign()}
-            title={openSeats <= 0 ? 'This requirement is fully staffed' : undefined}
-          >
-            {book.isPending ? <Loader2 className="animate-spin" /> : <UserPlus />} Assign &amp; book slot
-          </Button>
-        )}
-      </DialogFooter>
-
-      {quickAdd && (
-        <QuickAddMemberDialog
-          requirement={requirement}
-          onClose={() => setQuickAdd(false)}
-          onCreated={(id) => {
-            setQuickAdd(false)
-            setMemberId(id)
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-function BookedRow({
-  slot,
-  showRole,
-  onChange,
-  onRemove,
-  busy,
-}: {
-  slot: TeamSlot
-  showRole?: boolean
-  onChange: () => void
-  onRemove: () => void
-  busy: boolean
-}) {
-  const payout = slot.final_cost ?? slot.estimated_cost
-  return (
-    <li className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 text-sm">
-      <Avatar name={slot.user_name ?? '?'} size="sm" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{slot.user_name ?? 'Unknown'}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {showRole && slot.service_name ? `${slot.service_name} · ` : ''}
-          {hoursLabel(slot)} ·{' '}
-          {payout != null ? `${formatINR(payout)} · ${slot.cost_status.replace('_', ' ')}` : 'Payout not added'}
-        </p>
-      </div>
-      <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onChange} disabled={busy}>
-        Change
-      </Button>
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive" onClick={onRemove} disabled={busy}>
-        <X className="size-3.5" /> Remove
-      </Button>
-    </li>
-  )
-}
-
-/** Why someone cannot take this seat, in a few words. */
-function unavailableReason(c: Candidate): string | null {
-  if (c.availability.state === 'on_role') return 'Already on this role'
-  if (c.availability.state === 'busy') {
-    const s = c.availability.slot
-    return `Booked ${hoursLabel(s)}${s.service_name ? ` · ${s.service_name}` : ''}`
-  }
-  return null
-}
-
-function MemberPicker({
-  candidates,
-  selected,
-  onSelect,
-  requirement,
-  hasWindow,
-}: {
-  candidates: Candidate[]
-  selected: string
-  onSelect: (id: string) => void
-  requirement: string
-  hasWindow: boolean
-}) {
-  const free = candidates.filter((c) => c.availability.state === 'free')
-  const blocked = candidates.filter((c) => c.availability.state !== 'free')
-  const [showBlocked, setShowBlocked] = useState(false)
-
-  if (!hasWindow) {
-    return <p className="mt-2 text-[11px] text-muted-foreground">Set the date, start time and hours to see who is free.</p>
-  }
-
-  return (
-    <div className="mt-2 rounded-md border border-border">
-      {free.length === 0 ? (
-        <p className="p-3 text-xs text-muted-foreground">
-          Nobody is free for this time. Change the hours, or add a new team member.
-        </p>
-      ) : (
-        <ul role="listbox" aria-label={`People for ${requirement}`} className="max-h-60 overflow-y-auto p-1">
-          {free.map((c) => (
-            <li key={c.member.user_id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected === c.member.user_id}
-                onClick={() => onSelect(c.member.user_id)}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-                  selected === c.member.user_id ? 'bg-primary/10 ring-1 ring-primary' : 'hover:bg-muted',
-                )}
-              >
-                <Avatar name={c.member.name} size="sm" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{c.member.name}</span>
-                  {c.member.role_names.length > 0 && (
-                    <span className="block truncate text-[11px] text-muted-foreground">{c.member.role_names.join(', ')}</span>
-                  )}
-                </span>
-                {c.member.engagement_type === 'freelancer' && (
-                  <span className="rounded-full border border-tone-violet/30 bg-tone-violet-soft px-1.5 text-[10px] font-medium text-tone-violet">
-                    Freelancer
-                  </span>
-                )}
-                {c.match && (
-                  <span className="rounded-full border border-success/40 bg-success/10 px-1.5 text-[10px] font-medium text-success">
-                    Role match
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {blocked.length > 0 && (
-        <div className="border-t border-border">
-          <button
-            type="button"
-            onClick={() => setShowBlocked((v) => !v)}
-            className="w-full px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground"
-          >
-            {showBlocked ? 'Hide' : 'Show'} {blocked.length} not available at this time
-          </button>
-          {showBlocked && (
-            <ul className="max-h-40 overflow-y-auto px-1 pb-1">
-              {blocked.map((c) => (
-                <li key={c.member.user_id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm opacity-70">
-                  <Avatar name={c.member.name} size="sm" />
-                  <span className="min-w-0 flex-1 truncate">{c.member.name}</span>
-                  <span className="text-[11px] text-destructive">{unavailableReason(c)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="pay-note" className="text-xs">
+              Note
+            </Label>
+            <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={setCost.isPending} onClick={save}>
+              {setCost.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
         </div>
-      )}
-    </div>
-  )
-}
-
-// ── Many at once ────────────────────────────────────────────────
-
-/**
- * Staff the whole day in one go: every requirement that still has seats, each
- * with the people free at that time (role matches first), tick who goes where
- * and book them together. One person can only be ticked once -- a person
- * cannot be two roles at the same hour.
- */
-function AssignMany({
-  shoot,
-  fill,
-  members,
-  slots,
-  onDone,
-}: {
-  shoot: ShootListItem
-  fill: RequirementFill[]
-  members: TeamMember[]
-  slots: TeamSlot[]
-  onDone: () => void
-}) {
-  const bookMany = useBookSlots()
-  const start = defaultWindowFields(shoot)
-  const [date, setDate] = useState(start.date)
-  const [time, setTime] = useState(start.time)
-  const [hours, setHours] = useState(start.hours)
-  const [costStatus, setCostStatus] = useState<SlotCostStatus>('tentative')
-  const [search, setSearch] = useState('')
-  const [matchesOnly, setMatchesOnly] = useState(false)
-  /** requirement → picked user ids, in pick order. */
-  const [picks, setPicks] = useState<Record<string, string[]>>({})
-  /** `${requirement}|${userId}` → payout typed for that person. */
-  const [payouts, setPayouts] = useState<Record<string, string>>({})
-  const [failed, setFailed] = useState<string[]>([])
-  // Picks and payouts for a whole crew survive a refresh or a closed tab until they are booked.
-  const draft = useFormDraft(
-    `assign-team-many:${shoot.id}`,
-    { date, time, hours, costStatus, picks, payouts },
-    (v) => {
-      setDate(v.date)
-      setTime(v.time)
-      setHours(v.hours)
-      setCostStatus(v.costStatus)
-      setPicks(v.picks)
-      setPayouts(v.payouts)
-    },
-    { isBlank: (v) => Object.values(v.picks).every((ids) => ids.length === 0) },
-  )
-
-  const slotWindow = windowOf(date, time, hours)
-  const pending = fill.filter((r) => r.open > 0)
-  const pickedAnywhere = new Map<string, string>()
-  for (const [req, ids] of Object.entries(picks)) for (const id of ids) pickedAnywhere.set(id, req)
-  const total = Object.values(picks).reduce((n, ids) => n + ids.length, 0)
-  const byId = new Map(members.map((m) => [m.user_id, m]))
-  const q = search.trim().toLowerCase()
-
-  function toggle(req: string, member: TeamMember, open: number) {
-    setFailed([])
-    setPicks((prev) => {
-      const cur = prev[req] ?? []
-      if (cur.includes(member.user_id)) return { ...prev, [req]: cur.filter((x) => x !== member.user_id) }
-      if (cur.length >= open) {
-        toast.error(`${req} only has ${open} seat${open === 1 ? '' : 's'} left.`)
-        return prev
-      }
-      return { ...prev, [req]: [...cur, member.user_id] }
-    })
-    const k = `${req}|${member.user_id}`
-    setPayouts((prev) => {
-      if (k in prev) return prev
-      const rate = suggestedPayout(member)
-      return { ...prev, [k]: rate != null ? String(rate) : '' }
-    })
-  }
-
-  async function submit() {
-    if (!slotWindow || total === 0) return
-    const rows = Object.entries(picks).flatMap(([req, ids]) => ids.map((id) => ({ req, id })))
-    const items = rows.map(({ req, id }) => {
-      const raw = payouts[`${req}|${id}`]?.trim() ?? ''
-      const amount = raw === '' ? undefined : Number(raw)
-      return {
-        user_id: id,
-        shoot_id: shoot.id,
-        service_name: req,
-        start_at: slotWindow.start,
-        end_at: slotWindow.end,
-        ...(amount !== undefined && Number.isFinite(amount) && amount >= 0 && costStatus !== 'not_decided'
-          ? { estimated_cost: amount }
-          : {}),
-        cost_status: costStatus,
-      }
-    })
-    try {
-      const { results } = await bookMany.mutateAsync(items)
-      const ok = results.filter((r) => r.id).length
-      const bad = results
-        .filter((r) => !r.id)
-        .map((r) => {
-          const row = rows[r.index]!
-          const who = byId.get(row.id)?.name ?? 'Someone'
-          return r.error === 'double_booked' ? `${who} (${row.req}) is already booked at this time` : `${who} (${row.req}) could not be booked`
-        })
-      setFailed(bad)
-      if (ok > 0) toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} assigned and booked.`)
-      if (bad.length === 0) {
-        draft.clear()
-        setPicks({})
-        setPayouts({})
-        onDone()
-      } else {
-        // Keep only what did not go in, so a retry sends just those.
-        const keep = new Set(results.filter((r) => !r.id).map((r) => r.index))
-        const next: Record<string, string[]> = {}
-        rows.forEach((row, i) => {
-          if (keep.has(i)) next[row.req] = [...(next[row.req] ?? []), row.id]
-        })
-        setPicks(next)
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'We could not book the team.')
-    }
-  }
-
-  if (pending.length === 0) {
-    return (
-      <p className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 p-3 text-sm text-success">
-        <CheckCircle2 className="size-4" /> Every requirement on this day is fully staffed. Use “One by one” to change
-        anyone.
-      </p>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_5rem_1fr]">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bulk-date" className="text-xs">
-            Date
-          </Label>
-          <Input id="bulk-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bulk-time" className="text-xs">
-            Start
-          </Label>
-          <Input id="bulk-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bulk-hours" className="text-xs">
-            Hours
-          </Label>
-          <Input
-            id="bulk-hours"
-            type="number"
-            min={0.5}
-            step={0.5}
-            value={hours}
-            onChange={(e) => setHours(Number(e.target.value) || 0)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bulk-cost-status" className="text-xs">
-            Payout status
-          </Label>
-          <Select id="bulk-cost-status" value={costStatus} onChange={(e) => setCostStatus(e.target.value as SlotCostStatus)}>
-            {COST_STATUS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <p className="text-[11px] text-muted-foreground sm:col-span-4">
-          Everyone ticked below is booked for these hours. Payouts are pre-filled from each freelancer’s saved rate.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search people"
-            className="pl-8"
-            aria-label="Search people"
-          />
-        </div>
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input type="checkbox" checked={matchesOnly} onChange={(e) => setMatchesOnly(e.target.checked)} />
-          Only people whose role fits
-        </label>
-      </div>
-
-      {!slotWindow ? (
-        <p className="text-sm text-muted-foreground">Set the date, start time and hours to see who is free.</p>
-      ) : (
-        pending.map((r) => {
-          const chosen = picks[r.name] ?? []
-          const cands = candidatesFor({ members, requirement: r.name, window: slotWindow, shootId: shoot.id, slots })
-          const free = cands.filter(
-            (c) =>
-              c.availability.state === 'free' &&
-              (!matchesOnly || c.match) &&
-              (!q || c.member.name.toLowerCase().includes(q) || c.member.role_names.some((x) => x.toLowerCase().includes(q))),
-          )
-          const blocked = cands.length - cands.filter((c) => c.availability.state === 'free').length
-          return (
-            <section key={r.name} className="rounded-lg border border-border">
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
-                <p className="text-sm font-semibold">
-                  {r.name}{' '}
-                  <span className="font-normal text-muted-foreground">
-                    · {chosen.length}/{r.open} picked
-                  </span>
-                </p>
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    chosen.length >= r.open ? 'bg-success/15 text-success' : 'bg-tone-amber-soft text-tone-amber',
-                  )}
-                >
-                  {r.open - chosen.length > 0 ? `${r.open - chosen.length} seat${r.open - chosen.length === 1 ? '' : 's'} left` : 'All seats picked'}
-                </span>
-              </header>
-              {free.length === 0 ? (
-                <p className="p-3 text-xs text-muted-foreground">Nobody free fits this filter.</p>
-              ) : (
-                <ul className="max-h-56 overflow-y-auto p-1">
-                  {free.map((c) => {
-                    const id = c.member.user_id
-                    const on = chosen.includes(id)
-                    const other = pickedAnywhere.get(id)
-                    const lockedElsewhere = !!other && other !== r.name
-                    const k = `${r.name}|${id}`
-                    return (
-                      <li
-                        key={id}
-                        className={cn(
-                          'flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                          on ? 'bg-primary/10' : 'hover:bg-muted',
-                          lockedElsewhere && 'opacity-50',
-                        )}
-                      >
-                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            disabled={lockedElsewhere}
-                            onChange={() => toggle(r.name, c.member, r.open)}
-                            aria-label={`${c.member.name} as ${r.name}`}
-                          />
-                          <Avatar name={c.member.name} size="sm" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">{c.member.name}</span>
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {lockedElsewhere ? `Picked for ${other}` : c.member.role_names.join(', ') || '—'}
-                            </span>
-                          </span>
-                          {c.match && (
-                            <span className="rounded-full border border-success/40 bg-success/10 px-1.5 text-[10px] font-medium text-success">
-                              Role match
-                            </span>
-                          )}
-                        </label>
-                        {on && (
-                          <Input
-                            aria-label={`Payout for ${c.member.name}`}
-                            inputMode="decimal"
-                            placeholder="Payout ₹"
-                            className="h-7 w-28 text-xs"
-                            value={payouts[k] ?? ''}
-                            disabled={costStatus === 'not_decided'}
-                            onChange={(e) => setPayouts((p) => ({ ...p, [k]: e.target.value.replace(/[^\d.]/g, '') }))}
-                          />
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-              {blocked > 0 && (
-                <p className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-                  {blocked} {blocked === 1 ? 'person is' : 'people are'} booked elsewhere at this time or already on this role.
-                </p>
-              )}
-            </section>
-          )
-        })
-      )}
-
-      {failed.length > 0 && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs">
-          <p className="font-medium text-destructive">Not booked — still ticked, change the hours or pick someone else:</p>
-          <ul className="mt-1 list-disc pl-4">
-            {failed.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <DialogFooter className="sm:justify-between">
-        <p className="mr-auto self-center text-xs text-muted-foreground">
-          {total === 0 ? 'Tick people to assign them' : `${total} ${total === 1 ? 'person' : 'people'} selected`}
-        </p>
-        <Button disabled={!slotWindow || total === 0 || bookMany.isPending} onClick={() => void submit()}>
-          {bookMany.isPending ? <Loader2 className="animate-spin" /> : <Users />} Assign {total > 0 ? total : ''}{' '}
-          {total === 1 ? 'person' : 'people'}
-        </Button>
-      </DialogFooter>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
