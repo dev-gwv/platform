@@ -219,3 +219,25 @@ export function hoursLabel(slot: Pick<TeamSlot, 'start_at' | 'end_at'>, timeZone
     new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', ...(timeZone ? { timeZone } : {}) })
   return `${t(slot.start_at)}–${t(slot.end_at)}`
 }
+
+/** Someone picked for a seat but not booked yet, with the payout typed for them. */
+export interface SeatPick {
+  id: string
+  payout: string
+}
+
+/**
+ * Seats still free on each requirement once the people already picked are
+ * counted: what "+ Choose person" may still offer. Never below zero.
+ */
+export function seatsLeft(fill: readonly RequirementFill[], picks: Readonly<Record<string, readonly SeatPick[]>>): Map<string, number> {
+  return new Map(fill.map((r) => [r.name, Math.max(0, r.open - (picks[r.name]?.length ?? 0))]))
+}
+
+/**
+ * Who is already picked anywhere on this screen. Everyone picked is booked
+ * for the same hours, so one person cannot be picked for two roles.
+ */
+export function pickedIds(picks: Readonly<Record<string, readonly SeatPick[]>>): Set<string> {
+  return new Set(Object.values(picks).flatMap((ps) => ps.map((p) => p.id)))
+}
