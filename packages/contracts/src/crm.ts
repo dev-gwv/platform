@@ -532,6 +532,22 @@ export const csvImportRow = z.object({
   email: z.string().nullable(),
   source: leadSource,
   notes: z.string().nullable(),
+  /**
+   * The seven the importer used to drop.
+   *
+   * These come back from the preview already parsed -- an ISO date, a number,
+   * a quality the schema accepts -- so what the preview shows is exactly what
+   * commit writes, and the UI echoes the row back rather than re-deriving it.
+   */
+  city: z.string().nullable().default(null),
+  event_type: z.string().nullable().default(null),
+  event_date: isoDate.nullable().default(null),
+  event_location: z.string().nullable().default(null),
+  deal_value: z.number().nullable().default(null),
+  alternate_phone: z.string().nullable().default(null),
+  quality: leadQuality.nullable().default(null),
+  /** Cells that were present and could not be read, e.g. "next Tuesday". */
+  warnings: z.array(z.string()).default([]),
   valid: z.boolean(),
   error: z.string().nullable(),
   phone_norm: z.string().nullable(),

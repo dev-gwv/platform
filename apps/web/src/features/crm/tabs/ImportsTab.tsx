@@ -4,12 +4,21 @@ import type { CsvImportPreviewResponse } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
+import { Select } from '@/shared/ui/input'
+import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useImportCommit, useImportPreview } from '../api'
 import { WorkflowsSection } from './WorkflowsSection'
 import { CadencesSection } from './CadencesSection'
 
-const SAMPLE = 'name,phone,email,notes\nPriya Sharma,9876543210,priya@example.in,Wedding in December\n'
+// Shows the columns that are read, including the ones the importer used to
+// drop -- a sample that only demonstrates five teaches a studio to send five.
+const SAMPLE = [
+  'name,phone,email,event type,event date,venue,city,deal value,quality,notes',
+  'Priya Sharma,9876543210,priya@example.in,Wedding,12/03/2027,Taj Lands End,Mumbai,"1,50,000",hot,Wants candid + album',
+  'Rohan Mehta,9812345678,,Pre-wedding,05 Apr 2027,Lodhi Garden,Delhi,75000,warm,Asked about drone',
+  '',
+].join('\n')
 
 /**
  * CSV import, then cadences and automations — the ways leads get into and
@@ -33,9 +42,21 @@ export function ImportsTab() {
   )
 }
 
+/** A shoot date, the way the rest of the CRM prints one. */
+const importDateFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+const showDate = (iso: string) => importDateFormat.format(new Date(`${iso}T00:00:00`))
+
 function CsvImport() {
   const [csv, setCsv] = useState('')
-  const [skipDuplicates, setSkipDuplicates] = useState(true)
+  /**
+   * What to do about a number already in the CRM.
+   *
+   * crm_import_leads has taken skip / update / create since 0107 and this screen
+   * only ever sent 'skip', so a studio re-importing a corrected spreadsheet had
+   * no way to apply the corrections.
+   */
+  const [mode, setMode] = useState<'skip' | 'update' | 'create'>('skip')
+  const skipDuplicates = mode === 'skip'
   const [preview, setPreview] = useState<CsvImportPreviewResponse | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const previewIt = useImportPreview()
@@ -54,11 +75,27 @@ function CsvImport() {
 
   function doCommit() {
     if (!preview) return
+    // Every field the preview showed. This used to send five and drop the rest,
+    // so the shoot dates and budgets a studio had in its file were listed in the
+    // preview's column line and then thrown away on commit.
     const rows = preview.rows
       .filter((r) => r.valid && !!r.phone)
-      .map((r) => ({ name: r.name, phone: r.phone!, email: r.email, source: r.source, notes: r.notes }))
+      .map((r) => ({
+        name: r.name,
+        phone: r.phone!,
+        email: r.email,
+        source: r.source,
+        notes: r.notes,
+        city: r.city,
+        event_type: r.event_type,
+        event_date: r.event_date,
+        event_location: r.event_location,
+        deal_value: r.deal_value,
+        alternate_phone: r.alternate_phone,
+        quality: r.quality,
+      }))
     commit.mutate(
-      { mode: "skip", rows, skip_duplicates: skipDuplicates },
+      { mode, rows, skip_duplicates: skipDuplicates },
       {
         onSuccess: () => {
           setPreview(null)
@@ -76,7 +113,10 @@ function CsvImport() {
         <div>
           <p className="font-medium">Import leads from a spreadsheet</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Export a CSV with a header row. Columns are matched by name — phone, name, email, notes, source — and only the phone is required.
+            Export a CSV with a header row. Only the phone is required. Columns are matched by name, and most
+            spellings work: <span className="text-foreground">phone, name, email, notes, source, city, event type,
+            event date, venue, deal value, alternate phone, quality</span>. Dates are read day-first (12/03/2027 is
+            12 March) and ₹1,50,000 is understood.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -106,8 +146,17 @@ function CsvImport() {
           {preview && (
             <>
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />
-                Skip numbers already in the CRM
+                <span className="text-muted-foreground">A number we already have:</span>
+                <Select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as typeof mode)}
+                  aria-label="What to do about a number already in the CRM"
+                  className="w-auto"
+                >
+                  <option value="skip">Leave that lead alone</option>
+                  <option value="update">Fill in what is missing on it</option>
+                  <option value="create">Add a second lead anyway</option>
+                </Select>
               </label>
               <Button variant="outline" onClick={doCommit} disabled={importable === 0 || commit.isPending}>
                 <Upload /> {commit.isPending ? 'Importing…' : `Import ${importable}`}
@@ -133,6 +182,8 @@ function CsvImport() {
                     <th className="px-2 py-1.5 font-medium">Name</th>
                     <th className="px-2 py-1.5 font-medium">Phone</th>
                     <th className="px-2 py-1.5 font-medium">Email</th>
+                    <th className="px-2 py-1.5 font-medium">Event</th>
+                    <th className="px-2 py-1.5 font-medium">Value</th>
                     <th className="px-2 py-1.5 font-medium">Result</th>
                   </tr>
                 </thead>
@@ -143,6 +194,12 @@ function CsvImport() {
                       <td className="px-2 py-1.5">{p.name ?? '—'}</td>
                       <td className="px-2 py-1.5">{p.phone ?? '—'}</td>
                       <td className="px-2 py-1.5">{p.email ?? '—'}</td>
+                      {/* Shown because they are now saved. A studio should be
+                          able to see the date it is about to commit. */}
+                      <td className="px-2 py-1.5">
+                        {[p.event_type, p.event_date ? showDate(p.event_date) : null].filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="px-2 py-1.5 tabular-nums">{p.deal_value === null ? '—' : formatINR(p.deal_value)}</td>
                       <td className="px-2 py-1.5">
                         {!p.valid ? (
                           <span className="text-destructive">{p.error}</span>
@@ -150,6 +207,9 @@ function CsvImport() {
                           <span className="text-warning">{p.error ?? 'Already in the CRM'}{skipDuplicates ? ' · skipped' : ' · will duplicate'}</span>
                         ) : (
                           <span className="text-success">Will import</span>
+                        )}
+                        {p.warnings.length > 0 && (
+                          <span className="block text-warning">{p.warnings.join(' · ')}</span>
                         )}
                       </td>
                     </tr>

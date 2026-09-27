@@ -57,7 +57,15 @@ import {
   fbTestImportRequest,
   type CsvImportRow,
 } from '@ipc/contracts'
-import { leadsFromCsv, parseCsv, renderTemplate, crmTemplateVars } from '@ipc/domain'
+import {
+  leadsFromCsv,
+  parseCsv,
+  parseImportDate,
+  parseImportMoney,
+  parseImportQuality,
+  renderTemplate,
+  crmTemplateVars,
+} from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction, requireModule } from '../../middleware/permissions'
@@ -449,6 +457,18 @@ export const crmRouter = new Hono<AppEnv>()
       const source = r.source && ['facebook', 'webform', 'referral', 'manual', 'enquiry'].includes(r.source.toLowerCase())
         ? (r.source.toLowerCase() as CsvImportRow['source'])
         : 'manual'
+
+      // A cell that is present and unreadable is a warning, not an error: the
+      // lead is still worth importing, and silently binning the shoot date is
+      // what this whole change exists to stop.
+      const warnings: string[] = []
+      const eventDate = parseImportDate(r.event_date)
+      if (r.event_date && !eventDate) warnings.push(`Could not read the date "${r.event_date}"`)
+      const dealValue = parseImportMoney(r.deal_value)
+      if (r.deal_value && dealValue === null) warnings.push(`Could not read the value "${r.deal_value}"`)
+      const quality = parseImportQuality(r.quality)
+      if (r.quality && !quality) warnings.push(`Not a quality we know: "${r.quality}"`)
+
       return {
         row: r.row,
         name: r.name,
@@ -456,6 +476,14 @@ export const crmRouter = new Hono<AppEnv>()
         email: r.email,
         source,
         notes: r.notes,
+        city: r.city,
+        event_type: r.event_type,
+        event_date: eventDate,
+        event_location: r.event_location,
+        deal_value: dealValue,
+        alternate_phone: r.alternate_phone,
+        quality,
+        warnings,
         valid: !error,
         error: error ?? (inFile ? 'Repeated in this file' : null),
         phone_norm: norm,

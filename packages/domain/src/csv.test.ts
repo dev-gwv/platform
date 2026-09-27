@@ -45,9 +45,24 @@ describe('leadsFromCsv', () => {
   it('uses the header when there is one and points errors at the file line', () => {
     const { columns, records } = leadsFromCsv(parseCsv('Phone,Name\n9876543210,Aanya\n,Nobody\n'))
     expect(columns).toEqual(['Phone', 'Name'])
+    // The extra columns a lead record now carries are absent from this file, so
+    // every one of them must come back null rather than undefined -- the commit
+    // contract distinguishes the two.
+    const absent = {
+      email: null,
+      notes: null,
+      source: null,
+      city: null,
+      event_type: null,
+      event_date: null,
+      event_location: null,
+      deal_value: null,
+      alternate_phone: null,
+      quality: null,
+    }
     expect(records).toEqual([
-      { row: 2, name: 'Aanya', phone: '9876543210', email: null, notes: null, source: null },
-      { row: 3, name: 'Nobody', phone: null, email: null, notes: null, source: null },
+      { row: 2, name: 'Aanya', phone: '9876543210', ...absent },
+      { row: 3, name: 'Nobody', phone: null, ...absent },
     ])
   })
 
