@@ -8,8 +8,16 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMembers } from '@/features/allocation/api'
-import { useAddToRota, useDistribution, useRemoveFromRota, useUpdateDistribution } from '../api'
+import {
+  useAddToRota,
+  useCrmSettings,
+  useDistribution,
+  useRemoveFromRota,
+  useUpdateCrmSettings,
+  useUpdateDistribution,
+} from '../api'
 
 /** Who new leads get handed to, and what each is carrying. */
 export function DistributionTab() {
@@ -20,9 +28,14 @@ export function DistributionTab() {
   const remove = useRemoveFromRota()
   const confirm = useConfirm()
   const access = useAccess()
+  const { session } = useAuth()
+  const isOwner = !!session?.is_owner
   const canEdit = access.hasAction('crm', 'edit')
   const canDelete = access.hasAction('crm', 'delete')
   const [pick, setPick] = useState('')
+  const settings = useCrmSettings()
+  const saveSettings = useUpdateCrmSettings()
+  const strategy = settings.data?.assign_strategy ?? 'least_loaded'
 
   if (isLoading) return <SkeletonCards count={4} />
   if (isError) return <ErrorState error={error} onRetry={() => void refetch()} />
@@ -41,8 +54,30 @@ export function DistributionTab() {
       <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Lead distribution</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          New unassigned leads go to the active member with fewest open leads. Priority breaks ties (0 = first).
+          {strategy === 'round_robin'
+            ? 'New unassigned leads go round the active members in turn. Priority sets who starts (0 = first).'
+            : 'New unassigned leads go to the active member with fewest open leads. Priority breaks ties (0 = first).'}
         </p>
+
+        {/* Until now this was a sentence and not a setting: the rota row had a
+            strategy column nothing read, so the choice was made in a comment.
+            The picker below is the whole studio's rule, which is what it always
+            was -- a per-person strategy is not a thing that can mean anything. */}
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="flex min-w-56 flex-col gap-1">
+            <Label htmlFor="assign-strategy">How to share them out</Label>
+            <Select
+              id="assign-strategy"
+              value={strategy}
+              disabled={!isOwner || saveSettings.isPending}
+              onChange={(e) => saveSettings.mutate({ assign_strategy: e.target.value as typeof strategy })}
+            >
+              <option value="least_loaded">Whoever is carrying least</option>
+              <option value="round_robin">Take turns</option>
+            </Select>
+          </div>
+          {!isOwner && <p className="pb-2 text-xs text-muted-foreground">Only the studio owner can change this.</p>}
+        </div>
 
         {canEdit && (
           <div className="mt-4 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/20 p-3">
@@ -57,7 +92,7 @@ export function DistributionTab() {
                 ))}
               </Select>
             </div>
-            <Button disabled={!pick || add.isPending} onClick={() => add.mutate({ user_id: pick, priority: 0, source_filter: [], strategy: "round_robin" }, { onSuccess: () => setPick('') })}>
+            <Button disabled={!pick || add.isPending} onClick={() => add.mutate({ user_id: pick, priority: 0, source_filter: [] }, { onSuccess: () => setPick('') })}>
               <UserPlus /> Add
             </Button>
           </div>
@@ -97,6 +132,9 @@ export function DistributionTab() {
                 </div>
                 <StatusBadge tone={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'Active' : 'Paused'}</StatusBadge>
                 <StatusBadge>{r.lead_count} open</StatusBadge>
+                {strategy === 'round_robin' && r.assigned_count > 0 && (
+                  <StatusBadge tone="neutral">{r.assigned_count} given</StatusBadge>
+                )}
                 {canEdit && (
                   <>
                     <Button size="sm" variant="ghost" onClick={() => patch.mutate({ id: r.id, patch: { is_active: !r.is_active } })}>

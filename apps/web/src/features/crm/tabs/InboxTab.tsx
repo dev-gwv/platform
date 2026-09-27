@@ -512,9 +512,16 @@ export function InboxTab({
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
             Clear
           </Button>
-          <Button size="sm" variant="outline" onClick={() => exportLeadsCsv(rows.filter((r) => selected.has(r.id)))}>
-            <Download /> CSV
-          </Button>
+          {/* Downloading the client book is not the same act as reading a page
+              of it, and the permission registry has always said so: crm_export
+              is sensitive and off for every staff role by default. Nothing read
+              it until now, so any employee who could open this screen could
+              take the lot. */}
+          {access.hasModule('crm_export') && (
+            <Button size="sm" variant="outline" onClick={() => exportLeadsCsv(rows.filter((r) => selected.has(r.id)))}>
+              <Download /> CSV
+            </Button>
+          )}
         </div>
       )}
 

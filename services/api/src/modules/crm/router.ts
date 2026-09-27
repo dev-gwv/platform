@@ -99,6 +99,9 @@ const selectLead = (sql: TransactionSql) => sql`
   left join crm_companies co on co.id = l.crm_company_id
   left join crm_date_availability() av on av.on_date = l.event_date`
 
+/** What /crm/settings reads back, shared by the GET and the PATCH. */
+type CrmSettingsRow = { sla_hours: number; hot_score: number; assign_strategy: 'least_loaded' | 'round_robin' }
+
 const dateRange = (c: { req: { query: (k: string) => string | undefined } }) => {
   const today = new Date()
   const from = new Date(today)
@@ -1095,21 +1098,27 @@ export const crmRouter = new Hono<AppEnv>()
   // ── Settings ────────────────────────────────────────────────
   .get('/settings', async (c) => {
     const rows = await attempt(c, 'crm.settings', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql<{ sla_hours: number; hot_score: number }[]>`
+      withUser(c.env, c.get('auth').userId, (sql) => sql<CrmSettingsRow[]>`
         select crm_sla_hours() as sla_hours,
-               coalesce((select s.hot_score from crm_settings s where s.company_id = get_current_company_id()), 60) as hot_score`),
+               coalesce((select s.hot_score from crm_settings s where s.company_id = get_current_company_id()), 60) as hot_score,
+               coalesce((select s.assign_strategy from crm_settings s where s.company_id = get_current_company_id()), 'least_loaded') as assign_strategy`),
     )
     if (!rows) fail(400, 'We could not load CRM settings.')
-    return c.json(crmSettings.parse(rows[0] ?? { sla_hours: 24, hot_score: 60 }))
+    return c.json(crmSettings.parse(rows[0] ?? { sla_hours: 24, hot_score: 60, assign_strategy: 'least_loaded' }))
   })
 
   .patch('/settings', edit, async (c) => {
     const parsed = updateCrmSettingsRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'The SLA must be between 1 and 720 hours, the hot score between 1 and 1000.')
-    if (parsed.data.sla_hours === undefined && parsed.data.hot_score === undefined) return c.body(null, 204)
+    if (
+      parsed.data.sla_hours === undefined &&
+      parsed.data.hot_score === undefined &&
+      parsed.data.assign_strategy === undefined
+    )
+      return c.body(null, 204)
     const auth = c.get('auth')
     if (!auth.isOwner) fail(403, 'Only the studio owner can change CRM settings.')
-    const { sla_hours: sla, hot_score: hot } = parsed.data
+    const { sla_hours: sla, hot_score: hot, assign_strategy: strategy } = parsed.data
     // crm_set_sla_hours() also moves sla_due_at on every lead still waiting,
     // so a tighter target shows up on the board the same minute.
     const row = await attempt(c, 'crm.settings_update', () =>
@@ -1120,7 +1129,12 @@ export const crmRouter = new Hono<AppEnv>()
             insert into crm_settings (company_id, hot_score) values (get_current_company_id(), ${hot})
             on conflict (company_id) do update set hot_score = excluded.hot_score`
         }
-        const rows = await sql<{ sla_hours: number; hot_score: number }[]>`
+        if (strategy !== undefined) {
+          await sql`
+            insert into crm_settings (company_id, assign_strategy) values (get_current_company_id(), ${strategy})
+            on conflict (company_id) do update set assign_strategy = excluded.assign_strategy`
+        }
+        const rows = await sql<CrmSettingsRow[]>`
           select crm_sla_hours() as sla_hours,
                  coalesce((select s.hot_score from crm_settings s where s.company_id = get_current_company_id()), 60) as hot_score`
         return rows[0] ?? null
@@ -1157,7 +1171,7 @@ export const crmRouter = new Hono<AppEnv>()
   .post('/distribution', edit, async (c) => {
     const parsed = createDistributionRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Pick a team member.')
-    const { user_id, priority, name, source_filter, strategy } = parsed.data
+    const { user_id, priority, name, source_filter, strategy = 'least_loaded' } = parsed.data
     const row = await attempt(
       c,
       'crm.distribution_add',

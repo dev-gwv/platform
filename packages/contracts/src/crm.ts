@@ -264,7 +264,14 @@ export const createDistributionRequest = z.object({
   priority: z.number().int().min(0).max(100).default(0),
   name: z.string().trim().min(2).max(80).optional(),
   source_filter: z.array(z.string().trim().max(40)).max(20).default([]),
-  strategy: distributionStrategy.default('round_robin'),
+  /**
+   * Kept for the rows that already carry one; no longer sent when adding.
+   *
+   * How leads are shared out is a decision about the whole desk, so it lives on
+   * crm_settings.assign_strategy (0196). A strategy per rota member could never
+   * mean anything, and for years nothing read this column at all.
+   */
+  strategy: distributionStrategy.optional(),
 })
 export type CreateDistributionRequest = z.infer<typeof createDistributionRequest>
 
@@ -924,11 +931,23 @@ export const updateSavedViewRequest = z
 export type UpdateSavedViewRequest = z.infer<typeof updateSavedViewRequest>
 
 // ── settings ──────────────────────────────────────────────────
+/**
+ * How the rota shares out a lead nobody was assigned.
+ *
+ * 'least_loaded' gives it to whoever holds the fewest OPEN leads -- finished
+ * and archived work does not count against anyone (0196). 'round_robin' simply
+ * takes turns, which studios prefer when leads are similar and fairness between
+ * staff matters more than balancing workload.
+ */
+export const assignStrategy = z.enum(['least_loaded', 'round_robin'])
+export type AssignStrategy = z.infer<typeof assignStrategy>
+
 export const crmSettings = z.object({
   /** Hours a new lead may wait before first contact and still count as on time. */
   sla_hours: z.number().int().min(1).max(720),
   /** A lead scoring at or above this is shown as hot. */
   hot_score: z.number().int().min(1).max(1000).default(60),
+  assign_strategy: assignStrategy.default('least_loaded'),
 })
 export type CrmSettings = z.infer<typeof crmSettings>
 

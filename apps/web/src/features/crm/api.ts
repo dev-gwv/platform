@@ -108,13 +108,13 @@ const rulesList = distributionRule.array()
 const noContent = z.any()
 
 /** Every CRM read hangs off ['crm', …] so one invalidation refreshes the page. */
-function useCrmQuery<T>(key: readonly unknown[], fn: () => Promise<T>, staleTime = 15_000) {
+function useCrmQuery<T>(key: readonly unknown[], fn: () => Promise<T>, staleTime = 15_000, enabled = true) {
   const { session } = useAuth()
   const access = useAccess()
   return useQuery({
     queryKey: ['crm', ...key],
     queryFn: fn,
-    enabled: !!session && access.hasModule('crm'),
+    enabled: enabled && !!session && access.hasModule('crm'),
     staleTime,
   })
 }
@@ -122,6 +122,35 @@ function useCrmQuery<T>(key: readonly unknown[], fn: () => Promise<T>, staleTime
 export function useLeads(includeArchived = false) {
   return useCrmQuery(['leads', includeArchived ? 'all' : 'active'], () =>
     callApi(`/crm/leads${includeArchived ? '?include_archived=1' : ''}`, { responseSchema: leadsList }),
+  )
+}
+
+/** Below this, a search matches so much of the desk that the list is no help. */
+export const SEARCH_MIN = 2
+
+/**
+ * Search every lead the studio has, not the page's copy of the newest 2,000.
+ *
+ * `GET /crm/leads` has taken a `q` since 0013 and the inbox never sent it: the
+ * search box filtered the rows already in the browser. A studio past 2,000
+ * leads could type a client's exact phone number and be shown nothing, with no
+ * indication the list it searched had been cut off — the failure looked
+ * identical to "this person is not in the CRM".
+ *
+ * Archived leads are included on purpose. Searching by name or number is how
+ * you find out what happened to someone, and "we archived them in March" is an
+ * answer; silence is not.
+ */
+export function useLeadSearch(term: string) {
+  const needle = term.trim()
+  return useCrmQuery(
+    ['lead-search', needle.toLowerCase()],
+    () =>
+      callApi(`/crm/leads?include_archived=1&limit=200&q=${encodeURIComponent(needle)}`, {
+        responseSchema: leadsList,
+      }),
+    30_000,
+    needle.length >= SEARCH_MIN,
   )
 }
 

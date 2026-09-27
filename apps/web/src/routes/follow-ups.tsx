@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { useLeads, useSavedViews } from '@/features/crm/api'
+import { SEARCH_MIN, useLeadSearch, useLeads, useSavedViews } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawer } from '@/features/crm/LeadDrawer'
 import { GettingStarted } from '@/features/crm/GettingStarted'
@@ -107,7 +107,19 @@ function Crm() {
     return inView(source, current.key, now)
   }, [current, allOpen, allLeads, showArchived, saved, now])
 
-  const rows = useMemo(() => {
+  // A quarter of a second of quiet before we ask the server, so typing a phone
+  // number is one request and not eleven.
+  const [debounced, setDebounced] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), 250)
+    return () => clearTimeout(t)
+  }, [text])
+
+  const searching = debounced.trim().length >= SEARCH_MIN
+  const found = useLeadSearch(debounced)
+
+  /** The same match the server makes, for the rows already in hand. */
+  const clientMatch = useMemo(() => {
     const needle = text.trim().toLowerCase()
     if (!needle) return inViewRows
     return inViewRows.filter((l) =>
@@ -117,9 +129,15 @@ function Crm() {
     )
   }, [inViewRows, text])
 
+  // While the request is in flight the local matches stand in, so the list
+  // never blinks empty between keystrokes. Once it lands, the server's answer
+  // wins -- it is the one that has seen every lead.
+  const rows = searching && found.data ? found.data : clientMatch
+
   const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
-  const selected = [...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null
-  const isEmptyStudio = !active.isLoading && allOpen.length === 0
+  const selected =
+    [...(found.data ?? []), ...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null
+  const isEmptyStudio = !active.isLoading && allOpen.length === 0 && !searching
 
   return (
     <>
@@ -161,6 +179,20 @@ function Crm() {
           <SlidersHorizontal /> Filter
         </Button>
       </div>
+
+      {/* Search deliberately ignores the chosen view and the archive, because
+          "where did that person go" is the question being asked. Saying so
+          matters: the result set is not the list the picker describes. */}
+      {searching && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          {found.isPending
+            ? 'Searching every lead…'
+            : `${rows.length === 200 ? 'First 200' : rows.length} of all your leads, archived included, matching “${debounced.trim()}”`}{' '}
+          <button type="button" className="underline hover:no-underline" onClick={() => setText('')}>
+            Back to {label}
+          </button>
+        </p>
+      )}
 
       <div className="mt-4">
         {active.isLoading ? (

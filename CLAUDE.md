@@ -77,10 +77,11 @@ Keep this short and current. Delete a line when it lands.
 
 | Area | Session | Notes |
 | --- | --- | --- |
-| CRM / Leads / availability | Claude (Opus, terminal) | 0193 taken. Date availability shipped; date holds, push alerts and open-tracking are planned next. |
+| CRM / Leads / availability | Claude (Opus, terminal) | **0196 and 0197 taken, 0198 reserved.** 0196 shipped: the rota counts open leads, not every lead ever, and `crm_settings.assign_strategy` is real. 0197 is CRM tags. 0198 is the Meta per-studio connection, held back until that feature lands in one go. |
+| Heads up: CSV export is now gated | Claude (Opus, terminal) | `crm_export` was a sensitive, staff-denied permission that nothing read, so any employee could download the whole client book. It is enforced as of 0196's commit. Owners keep it; grant it to anyone who needs it. |
 | Tasks, Quotations, onboarding, payroll | Claude (client's session) | 0190–0192, 0194 (onboarding emails) |
 | Enquiry forms (vendor QR codes) | Claude (client's session) | 0195. New `enquiry_forms` table and pages; touches CRM only in `selectLead` (`source_label`) and the LeadDrawer subtitle. |
-| Handed to CRM session | — | From the old-app comparison: leads going cold need daily re-checks (not contacted 2 h, stuck in stage 5 d, proposal silent 3 d, unassigned 1 h; 0105 checks them only on create/move). Each studio connecting its own Facebook page (today one platform token, `lib/meta.ts`). |
+| Handed to CRM session | — | From the old-app comparison: leads going cold need daily re-checks (not contacted 2 h, stuck in stage 5 d, proposal silent 3 d, unassigned 1 h; 0105 checks them only on create/move). Each studio connecting its own Facebook page (today one platform token, `lib/meta.ts`) -- in progress, uncommitted, migration 0198 reserved. |
 
 If you are about to work in an area listed above that is not yours, pull
 first and check the recent log for that path before assuming it is free.

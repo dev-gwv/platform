@@ -10,6 +10,7 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { Select } from '@/shared/ui/input'
 import { useCrmStats, useForecast } from '../api'
 import { STAGES } from '../leads'
+import { useAccess } from '@/shared/auth/useAccess'
 import { exportLeadsCsv } from './shared'
 
 /** The channels a lead can arrive through — the same list the CRM filters on. */
@@ -27,6 +28,7 @@ const SOURCES = [
 ] as const
 
 export function ReportsTab({ leads, range: pageRange }: { leads: readonly CrmLead[]; range: CrmStatsQuery }) {
+  const access = useAccess()
   /*
    * The dates come from the page; "which source" and "whose" stay here.
    * They narrow this report only -- the other two sections beneath it have no
@@ -133,9 +135,12 @@ export function ReportsTab({ leads, range: pageRange }: { leads: readonly CrmLea
               <CardContent className="p-4">
                 <p className="font-medium">Export</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">A CSV of every lead in the inbox, for sheets.</p>
-                <Button className="mt-3" variant="outline" size="sm" onClick={() => exportLeadsCsv(leads)}>
-                  <Download /> Download CSV ({leads.length})
-                </Button>
+{/* Same control as the inbox: crm_export, not crm. */}
+                {access.hasModule('crm_export') && (
+                  <Button className="mt-3" variant="outline" size="sm" onClick={() => exportLeadsCsv(leads)}>
+                    <Download /> Download CSV ({leads.length})
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
