@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <!-- Step 3 · Create your first project: the shoot dates, and the album they become. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF7E8"/>
+      <stop offset="1" stop-color="#FDEBC8"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F9C26B"/>
+      <stop offset="1" stop-color="#F29A6B"/>
+    </linearGradient>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3B3A8F"/>
+      <stop offset="1" stop-color="#8E4B8A"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" fill="url(#bg)"/>
+  <circle cx="300" cy="215" r="170" fill="#FBDDA0" opacity="0.55"/>
+  <g fill="#F5B942">
+    <path d="M556 210 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4z"/>
+    <path d="M40 60 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3z"/>
+    <path d="M320 40 l2.5 6 l6 2.5 l-6 2.5 l-2.5 6 l-2.5 -6 l-6 -2.5 l6 -2.5z"/>
+  </g>
+
+  <!-- calendar -->
+  <g transform="translate(56 70) rotate(-4)">
+    <rect x="6" y="10" width="236" height="250" rx="20" fill="#2B2A6B" opacity="0.14"/>
+    <rect width="236" height="250" rx="20" fill="#FFFFFF"/>
+    <path d="M0 20 Q0 0 20 0 H216 Q236 0 236 20 V56 H0Z" fill="#2B2A6B"/>
+    <rect x="46" y="-10" width="10" height="26" rx="5" fill="#F5B942"/>
+    <rect x="180" y="-10" width="10" height="26" rx="5" fill="#F5B942"/>
+    <rect x="70" y="22" width="96" height="12" rx="6" fill="#F5B942"/>
+    <g fill="#EFEDF8">
+      <rect x="18" y="72" width="26" height="26" rx="7"/><rect x="48" y="72" width="26" height="26" rx="7"/><rect x="78" y="72" width="26" height="26" rx="7"/><rect x="108" y="72" width="26" height="26" rx="7"/><rect x="138" y="72" width="26" height="26" rx="7"/><rect x="168" y="72" width="26" height="26" rx="7"/><rect x="198" y="72" width="26" height="26" rx="7"/>
+      <rect x="18" y="104" width="26" height="26" rx="7"/><rect x="48" y="104" width="26" height="26" rx="7"/><rect x="78" y="104" width="26" height="26" rx="7"/><rect x="138" y="104" width="26" height="26" rx="7"/><rect x="168" y="104" width="26" height="26" rx="7"/><rect x="198" y="104" width="26" height="26" rx="7"/>
+      <rect x="18" y="136" width="26" height="26" rx="7"/><rect x="48" y="136" width="26" height="26" rx="7"/><rect x="78" y="136" width="26" height="26" rx="7"/><rect x="108" y="136" width="26" height="26" rx="7"/><rect x="138" y="136" width="26" height="26" rx="7"/><rect x="198" y="136" width="26" height="26" rx="7"/>
+      <rect x="18" y="168" width="26" height="26" rx="7"/><rect x="48" y="168" width="26" height="26" rx="7"/><rect x="78" y="168" width="26" height="26" rx="7"/><rect x="108" y="168" width="26" height="26" rx="7"/><rect x="138" y="168" width="26" height="26" rx="7"/><rect x="168" y="168" width="26" height="26" rx="7"/><rect x="198" y="168" width="26" height="26" rx="7"/>
+      <rect x="18" y="200" width="26" height="26" rx="7"/><rect x="48" y="200" width="26" height="26" rx="7"/><rect x="78" y="200" width="26" height="26" rx="7"/>
+    </g>
+    <!-- haldi day -->
+    <rect x="108" y="104" width="26" height="26" rx="7" fill="#F5B942"/>
+    <circle cx="121" cy="117" r="5" fill="#FFF3D6"/>
+    <!-- wedding day -->
+    <rect x="168" y="136" width="26" height="26" rx="7" fill="#C8243B"/>
+    <path d="M181 155 c-4 -5 -11 -3 -9 3 l9 7 l9 -7 c2 -6 -5 -8 -9 -3z" fill="#FFFFFF" transform="translate(0 -7)"/>
+    <circle cx="181" cy="149" r="19" fill="none" stroke="#F5B942" stroke-width="3" stroke-dasharray="4 4"/>
+  </g>
+
+  <!-- camera -->
+  <g transform="translate(262 62) rotate(-8)">
+    <rect x="4" y="8" width="96" height="62" rx="14" fill="#2B2A6B" opacity="0.16"/>
+    <rect x="18" y="-10" width="28" height="16" rx="5" fill="#26264F"/>
+    <rect width="96" height="62" rx="14" fill="#26264F"/>
+    <rect y="22" width="96" height="10" fill="#3B3A8F"/>
+    <circle cx="50" cy="32" r="22" fill="#3B3A8F"/>
+    <circle cx="50" cy="32" r="14" fill="#1A1A3A"/>
+    <circle cx="45" cy="27" r="4.5" fill="#8C8BC7"/>
+    <rect x="76" y="8" width="12" height="7" rx="2" fill="#F5B942"/>
+  </g>
+
+  <!-- album, open -->
+  <g transform="translate(300 150)">
+    <path d="M6 18 H254 V212 H6Z" fill="#2B2A6B" opacity="0.14"/>
+    <path d="M0 8 Q64 -6 128 10 V208 Q64 192 0 206Z" fill="#8E2446"/>
+    <path d="M128 10 Q192 -6 256 8 V206 Q192 192 128 208Z" fill="#8E2446"/>
+    <path d="M8 14 Q66 2 126 16 V200 Q66 186 8 198Z" fill="#FFFDF7"/>
+    <path d="M130 16 Q190 2 248 14 V198 Q190 186 130 200Z" fill="#FFFDF7"/>
+    <line x1="128" y1="14" x2="128" y2="204" stroke="#E6D9BE" stroke-width="2"/>
+    <!-- left page photo: sunset over hills -->
+    <g transform="translate(22 30)">
+      <rect width="92" height="116" rx="6" fill="url(#sky)"/>
+      <circle cx="58" cy="52" r="14" fill="#FFF3D6"/>
+      <path d="M0 84 Q24 62 46 80 Q68 60 92 78 V116 H0Z" fill="#E0661B"/>
+      <path d="M0 96 Q30 84 58 98 Q76 90 92 96 V116 H0Z" fill="#8E2446"/>
+    </g>
+    <rect x="30" y="158" width="76" height="8" rx="4" fill="#E6D9BE"/>
+    <!-- right page photo: couple under the mandap at dusk -->
+    <g transform="translate(142 30)">
+      <rect width="92" height="116" rx="6" fill="url(#dusk)"/>
+      <g fill="#F5B942"><circle cx="14" cy="16" r="2"/><circle cx="30" cy="10" r="1.6"/><circle cx="74" cy="14" r="2"/><circle cx="84" cy="30" r="1.4"/></g>
+      <path d="M14 116 V46 Q46 24 78 46 V116" fill="none" stroke="#F5B942" stroke-width="4"/>
+      <path d="M14 46 Q46 60 78 46" fill="none" stroke="#F29A1F" stroke-width="3" stroke-dasharray="1 5" stroke-linecap="round"/>
+      <circle cx="38" cy="72" r="9" fill="#1A1A3A"/>
+      <path d="M26 116 Q26 84 38 84 Q50 84 50 116Z" fill="#1A1A3A"/>
+      <circle cx="56" cy="74" r="8.5" fill="#1A1A3A"/>
+      <path d="M44 116 Q46 86 56 86 Q68 86 70 116Z" fill="#C8243B"/>
+    </g>
+    <rect x="150" y="158" width="76" height="8" rx="4" fill="#E6D9BE"/>
+  </g>
+
+  <!-- venue pin -->
+  <g transform="translate(250 300)">
+    <ellipse cx="0" cy="28" rx="14" ry="4" fill="#2B2A6B" opacity="0.15"/>
+    <path d="M0 26 C-18 6 -20 -4 -20 -10 A20 20 0 0 1 20 -10 C20 -4 18 6 0 26Z" fill="#E0661B"/>
+    <circle cx="0" cy="-10" r="7" fill="#FFF3D6"/>
+  </g>
+</svg>

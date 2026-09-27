@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <!-- Step 2 · Add your first client: the couple's card, and a phone. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF7E8"/>
+      <stop offset="1" stop-color="#FDEBC8"/>
+    </linearGradient>
+    <clipPath id="portrait"><circle cx="0" cy="0" r="74"/></clipPath>
+  </defs>
+  <rect width="600" height="400" fill="url(#bg)"/>
+  <circle cx="300" cy="210" r="170" fill="#FBDDA0" opacity="0.55"/>
+
+  <!-- rangoli corners -->
+  <g opacity="0.35" fill="none" stroke="#E0661B" stroke-width="2">
+    <circle cx="40" cy="360" r="26"/><circle cx="40" cy="360" r="14"/>
+    <circle cx="560" cy="44" r="26"/><circle cx="560" cy="44" r="14"/>
+  </g>
+  <g fill="#F5B942">
+    <path d="M70 90 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4z"/>
+    <path d="M540 300 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3z"/>
+    <path d="M500 96 l2.5 6 l6 2.5 l-6 2.5 l-2.5 6 l-2.5 -6 l-6 -2.5 l6 -2.5z"/>
+  </g>
+
+  <!-- the client card -->
+  <g transform="translate(96 58)">
+    <rect x="6" y="10" width="268" height="290" rx="22" fill="#2B2A6B" opacity="0.14"/>
+    <rect width="268" height="290" rx="22" fill="#FFFFFF"/>
+    <path d="M0 22 Q0 0 22 0 H246 Q268 0 268 22 V64 H0Z" fill="#F5B942"/>
+    <g fill="#FFF3D6" opacity="0.8">
+      <circle cx="30" cy="30" r="4"/><circle cx="48" cy="30" r="4"/><circle cx="66" cy="30" r="4"/>
+    </g>
+
+    <!-- couple portrait -->
+    <g transform="translate(134 118)">
+      <circle r="80" fill="#FFFFFF"/>
+      <circle r="76" fill="#F6D9A8"/>
+      <g clip-path="url(#portrait)">
+        <rect x="-80" y="-80" width="160" height="160" fill="#FCE6C0"/>
+        <!-- groom -->
+        <g transform="translate(30 20)">
+          <path d="M-36 80 V20 Q-36 -2 -10 -6 H10 Q36 -2 36 20 V80Z" fill="#FFF3D6"/>
+          <path d="M-10 -6 L0 16 L10 -6Z" fill="#B97E4B"/>
+          <path d="M-36 80 V20 Q-36 -2 -10 -6 L-4 -6 L-10 80Z" fill="#F1DDB0"/>
+          <rect x="-7" y="-18" width="14" height="14" rx="3" fill="#B97E4B"/>
+          <circle cx="0" cy="-36" r="21" fill="#C98A55"/>
+          <path d="M-24 -40 Q-26 -70 0 -70 Q26 -70 24 -40 Q20 -54 0 -56 Q-20 -54 -24 -40Z" fill="#E0661B"/>
+          <path d="M-22 -48 Q0 -62 22 -48" fill="none" stroke="#F5B942" stroke-width="4"/>
+          <path d="M16 -64 q10 -10 6 -22 q-8 8 -10 20z" fill="#F5B942"/>
+          <circle cx="-7" cy="-36" r="2.3" fill="#1F1712"/><circle cx="7" cy="-36" r="2.3" fill="#1F1712"/>
+          <path d="M-8 -26 Q0 -21 8 -26" fill="none" stroke="#1F1712" stroke-width="2.6" stroke-linecap="round"/>
+          <path d="M-18 6 Q0 26 18 6" fill="none" stroke="#C8243B" stroke-width="4"/>
+        </g>
+        <!-- bride -->
+        <g transform="translate(-30 26)">
+          <path d="M-38 80 V18 Q-38 -4 -10 -8 H10 Q38 -4 38 18 V80Z" fill="#C8243B"/>
+          <path d="M-10 -8 L0 12 L10 -8Z" fill="#D8975F"/>
+          <path d="M-38 80 V18 Q-38 -4 -10 -8 L-4 30 L-20 80Z" fill="#A91D34"/>
+          <rect x="-7" y="-20" width="14" height="14" rx="3" fill="#D8975F"/>
+          <path d="M-28 -34 Q-32 -70 0 -70 Q32 -70 28 -34 L30 10 L-30 10Z" fill="#C8243B"/>
+          <circle cx="0" cy="-38" r="20" fill="#E0A370"/>
+          <path d="M-20 -40 Q-20 -60 0 -60 Q20 -60 20 -40 Q14 -52 0 -52 Q-14 -52 -20 -40Z" fill="#2A1B14"/>
+          <line x1="0" y1="-60" x2="0" y2="-50" stroke="#F5B942" stroke-width="2"/>
+          <circle cx="0" cy="-48" r="3" fill="#F5B942"/>
+          <circle cx="0" cy="-42" r="1.8" fill="#C8243B"/>
+          <circle cx="-7" cy="-36" r="2.2" fill="#2A1B14"/><circle cx="7" cy="-36" r="2.2" fill="#2A1B14"/>
+          <path d="M-6 -27 Q0 -22 6 -27" fill="none" stroke="#A91D34" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="-20" cy="-32" r="3" fill="#F5B942"/><circle cx="20" cy="-32" r="3" fill="#F5B942"/>
+          <path d="M-14 -4 Q0 14 14 -4" fill="none" stroke="#F5B942" stroke-width="3"/>
+          <g fill="#F5B942" opacity="0.8"><circle cx="-24" cy="30" r="2"/><circle cx="-12" cy="44" r="2"/><circle cx="20" cy="36" r="2"/><circle cx="8" cy="56" r="2"/></g>
+        </g>
+      </g>
+      <circle r="76" fill="none" stroke="#F5B942" stroke-width="4"/>
+    </g>
+
+    <!-- name and details, as bars -->
+    <rect x="64" y="212" width="140" height="14" rx="7" fill="#2B2A6B"/>
+    <g transform="translate(64 240)">
+      <rect width="18" height="18" rx="5" fill="#FDE3B0"/>
+      <path d="M5 5 q0 8 8 8 l1.5 -2.5 l-3 -1.5 l-1 1 q-2.5 -1 -3.5 -3.5 l1 -1 l-1.5 -3z" fill="#E09A2C"/>
+      <rect x="26" y="4" width="112" height="10" rx="5" fill="#C9C8E6"/>
+    </g>
+    <g transform="translate(64 264)">
+      <rect width="18" height="18" rx="5" fill="#FDE3B0"/>
+      <path d="M9 3 a4.5 4.5 0 0 1 4.5 4.5 c0 3.5 -4.5 8 -4.5 8 s-4.5 -4.5 -4.5 -8 a4.5 4.5 0 0 1 4.5 -4.5z" fill="#E09A2C"/>
+      <rect x="26" y="4" width="80" height="10" rx="5" fill="#C9C8E6"/>
+    </g>
+    <path d="M226 256 c-6 -8 -18 -4 -14 6 l14 12 l14 -12 c4 -10 -8 -14 -14 -6z" fill="#E5484D"/>
+  </g>
+
+  <!-- the phone -->
+  <g transform="translate(396 92) rotate(6)">
+    <rect x="6" y="10" width="124" height="236" rx="22" fill="#2B2A6B" opacity="0.16"/>
+    <rect width="124" height="236" rx="22" fill="#2B2A6B"/>
+    <rect x="8" y="16" width="108" height="204" rx="14" fill="#3B3A8F"/>
+    <rect x="46" y="6" width="32" height="5" rx="2.5" fill="#1A1A3A"/>
+    <circle cx="62" cy="76" r="30" fill="#F5B942"/>
+    <path d="M42 96 Q62 70 82 96" fill="#E09A2C"/>
+    <circle cx="62" cy="66" r="11" fill="#FFF3D6"/>
+    <rect x="30" y="120" width="64" height="9" rx="4.5" fill="#FFFFFF" opacity="0.85"/>
+    <rect x="40" y="136" width="44" height="7" rx="3.5" fill="#8C8BC7"/>
+    <circle cx="62" cy="186" r="18" fill="#2FA36B"/>
+    <path d="M54 180 q0 13 13 13 l2.5 -4 l-5 -2.5 l-1.6 1.6 q-4 -1.6 -5.6 -5.6 l1.6 -1.6 l-2.5 -5z" fill="#FFFFFF"/>
+  </g>
+  <!-- ringing -->
+  <g fill="none" stroke="#E09A2C" stroke-width="4" stroke-linecap="round">
+    <path d="M540 150 q14 14 0 28"/>
+    <path d="M552 138 q26 26 0 52" opacity="0.6"/>
+  </g>
+</svg>
