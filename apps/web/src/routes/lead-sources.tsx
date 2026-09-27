@@ -74,6 +74,14 @@ function useSources() {
 
 function LeadSources() {
   const { data, isLoading, isError, refetch } = useSources()
+  /*
+   * The Meta setup checklist is eleven rows of things to paste into another
+   * company's console. It used to render on arrival, for ever -- including for
+   * a studio that finished the setup months ago and now opens this page to
+   * check whether leads are arriving.
+   */
+  const [showMeta, setShowMeta] = useState(false)
+  const hasSources = (data?.length ?? 0) > 0
 
   return (
     <>
@@ -83,6 +91,7 @@ function LeadSources() {
         actions={<NewSourceDialog />}
       />
 
+      {!hasSources && (
       <HowToUse
         title="Connect a source once, then forget it"
         description="Each source has its own URL. Point a web form or a Meta lead-ads webhook at it and the leads arrive assigned, deduped, and ready to follow up."
@@ -92,10 +101,16 @@ function LeadSources() {
           'Watch the lead count climb here.',
         ]}
       />
+      )}
 
       <div className="mt-6">
         <MetaConnectionCard />
-        <MetaSetupChecklist />
+        <div className="mt-3">
+          <Button variant="outline" size="sm" onClick={() => setShowMeta((v) => !v)} aria-expanded={showMeta}>
+            {showMeta ? 'Hide Meta setup steps' : 'Set up Meta'}
+          </Button>
+        </div>
+        {showMeta && <MetaSetupChecklist />}
       </div>
 
       <div className="mt-6">

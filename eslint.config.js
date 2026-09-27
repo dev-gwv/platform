@@ -14,6 +14,10 @@ export default tseslint.config(
       'extracted/**',
       'blueprint/**',
       'docs-reverse-engineered/**',
+      // Reference checkouts read for design, never built or shipped. Git
+      // ignores them; eslint keeps its own list, so a clone that drops one of
+      // these in reports thousands of errors from code we do not own.
+      'twenty-orbitcrew-main/**',
     ],
   },
   js.configs.recommended,

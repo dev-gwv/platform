@@ -1,51 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { Settings2 } from 'lucide-react'
-import type { CrmStatsQuery } from '@ipc/contracts'
+import { Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
-import { MetricCard } from '@/shared/ui/metric-card'
-import { SectionTabs } from '@/shared/layout/section-tabs'
 import { ErrorState } from '@/shared/ui/states'
-import { useLeads } from '@/features/crm/api'
+import { useLeads, useSavedViews } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawer } from '@/features/crm/LeadDrawer'
 import { GettingStarted } from '@/features/crm/GettingStarted'
-import { ALL_GROUPS, CrmFilterBar, inGroup } from '@/features/crm/FilterBar'
-import { daysBack } from '@/features/crm/tabs/DateRange'
-import { EMPTY_QUERY, countsFor, summarise, type LeadQuery } from '@/features/crm/leads'
+import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
+import { inView, openingView, viewName } from '@/features/crm/builtin-views'
+import { toLeadQuery } from '@/features/crm/views'
+import { EMPTY_QUERY, applyQuery, countsFor, isOpen, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
-import { FollowUpBoardTab, PipelineTab, TodayTab } from '@/features/crm/tabs/BoardTabs'
-import { ReportsTab } from '@/features/crm/tabs/ReportsTab'
-import { TeamTab } from '@/features/crm/tabs/TeamTab'
-import { ForecastTab } from '@/features/crm/tabs/ForecastTab'
+import { PipelineTab } from '@/features/crm/tabs/BoardTabs'
 
 /**
- * Four tabs, from fourteen.
+ * One list, and nothing above it but a header and a line of controls.
  *
- * The other ten were not features anyone lost -- they were the same leads
- * sliced ten ways, plus five things a studio configures once. Today and All
- * leads are where the work happens; Pipeline is the stage board; Reports is
- * the three number screens (reports, forecast, per-person) stacked, because
- * nobody opens one without wanting the others.
+ * This page used to open with a tab bar, two full-width filter bars, a
+ * five-item checklist and four counter cards -- eight blocks before the first
+ * lead, on the screen a studio opens every morning to find out who to ring.
  *
- * Gone from here, not from the app: Distribution, Templates, Imports,
- * Duplicates and CRM Settings live on /follow-ups/setup. Activities is the
- * lead's own Timeline and the studio-wide /activity page. Quotes are on the
- * lead, where the quote belongs, and in Billing.
+ * Every one of those counters was really the size of a list, so the number
+ * moved into the name of the view you would click to see it, and the view
+ * picker replaced the tabs. What is left is: who you owe a call, in order.
+ *
+ * Nothing was removed from the product. The stage board is a view; the
+ * configuration screens are on /follow-ups/setup; the numbers are in the
+ * picker; everything else is a keystroke away on the command palette.
  */
-const TABS = [
-  { key: 'today', label: 'Today' },
-  { key: 'inbox', label: 'All leads' },
-  { key: 'pipeline', label: 'Pipeline' },
-  { key: 'reports', label: 'Reports' },
-] as const
-
-type TabKey = (typeof TABS)[number]['key']
-const isTab = (v: unknown): v is TabKey => TABS.some((t) => t.key === v)
-
 export function FollowUpsPage() {
   return (
     <AuthedPage module="crm">
@@ -54,58 +41,85 @@ export function FollowUpsPage() {
   )
 }
 
-/** The tab lives in the URL (?tab=), so a reload and a shared link both land on it. */
-function useTab(): [TabKey, (t: TabKey) => void] {
-  const { search } = useLocation()
-  const navigate = useNavigate()
-  const current = (search as { tab?: unknown }).tab
-  const tab: TabKey = isTab(current) ? current : 'today'
-  const setTab = (t: TabKey) =>
-    void navigate({ to: '/follow-ups', search: (t === 'today' ? {} : { tab: t }) as never, replace: true })
-  return [tab, setTab]
-}
-
 function Crm() {
-  const [tab, setTab] = useTab()
   const { search } = useLocation()
   const navigate = useNavigate()
+  const [view, setView] = useState<ViewChoice | null>(null)
   const [query, setQuery] = useState<LeadQuery>(EMPTY_QUERY)
-  // One group and one date range, read by every tab. Reports, Forecast and Per
-  // person each owned a date picker before, so setting one left the other two
-  // on their defaults and three sections on one screen disagreed.
-  const [group, setGroup] = useState<string>(ALL_GROUPS)
-  const [range, setRange] = useState<CrmStatsQuery>(() => daysBack(29))
+  const [text, setText] = useState('')
   const [openLead, setOpenLead] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
+  /*
+   * Every filter this page ever had is still here -- status, owner, quality,
+   * group, the seven chips, saved-view management, columns, density, archived,
+   * CSV. It is off until asked for, which is the whole point: the filters were
+   * two full-width bars above the list a studio reads every morning.
+   */
+  const [showFilters, setShowFilters] = useState(false)
 
-  // A ?lead= link (from a reminder, a converted enquiry, elsewhere) opens
-  // straight to that deal -- even an archived one -- then clears itself so
-  // closing the drawer and reloading doesn't reopen it.
+  // A ?lead= link (a reminder, a converted enquiry, an alert) opens straight
+  // to that lead -- even an archived one -- then clears itself so closing the
+  // panel and reloading does not reopen it.
   const linkedLeadId = (search as { lead?: unknown }).lead
   const hasLeadLink = typeof linkedLeadId === 'string' && linkedLeadId.length > 0
   useEffect(() => {
     if (!hasLeadLink) return
     setOpenLead(linkedLeadId as string)
-    void navigate({ to: '/follow-ups', search: (tab === 'today' ? {} : { tab }) as never, replace: true })
-  }, [hasLeadLink]) // tab/navigate/linkedLeadId intentionally excluded: this fires once, off the initial URL
+    void navigate({ to: '/follow-ups', search: {} as never, replace: true })
+  }, [hasLeadLink]) // fires once, off the initial URL
 
   const active = useLeads(false)
-  // The archived rows cost a second request, so they are only fetched when
-  // someone asks to see them or a direct link needs to find one.
   const everything = useLeads(showArchived || hasLeadLink)
+  const { data: savedViews } = useSavedViews()
   const allOpen = useMemo(() => active.data ?? [], [active.data])
   const allLeads = useMemo(() => everything.data ?? [], [everything.data])
-  const leads = useMemo(() => inGroup(allOpen, group), [allOpen, group])
 
-  // One clock for the whole page, so a lead cannot be "due today" in the strip
-  // and "overdue" in the table because two components asked at different times.
+  // One clock for the page, so a lead cannot be "due today" in the picker and
+  // "overdue" in the list because two components asked at different moments.
   const now = useMemo(() => new Date(), [active.data])
-  const totals = useMemo(() => summarise(leads, now), [leads, now])
-  const chipCounts = useMemo(() => countsFor(leads, now), [leads, now])
 
-  const inboxLeads = inGroup(showArchived ? allLeads : allOpen, group)
+  // Which view to land on is a question about the data, so it can only be
+  // answered once the data is here -- and only once, or every refetch would
+  // drag someone back to Today while they were reading something else.
+  const landing = openingView(allOpen, now)
+  useEffect(() => {
+    if (view === null && !active.isLoading) setView({ kind: 'builtin', key: landing })
+  }, [view, active.isLoading, landing])
+
+  const current: ViewChoice = view ?? { kind: 'builtin', key: 'today' }
+  const saved = savedViews ?? []
+
+  const label =
+    current.kind === 'pipeline'
+      ? 'Pipeline'
+      : current.kind === 'saved'
+        ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
+        : viewName(current.key)
+
+  /** The rows this view is, before the search box narrows them further. */
+  const inViewRows = useMemo(() => {
+    const source = showArchived ? allLeads : allOpen
+    if (current.kind === 'pipeline') return source.filter(isOpen)
+    if (current.kind === 'saved') {
+      const v = saved.find((x) => x.id === current.id)
+      return v ? applyQuery(source, toLeadQuery(v.query), now) : source.filter(isOpen)
+    }
+    return inView(source, current.key, now)
+  }, [current, allOpen, allLeads, showArchived, saved, now])
+
+  const rows = useMemo(() => {
+    const needle = text.trim().toLowerCase()
+    if (!needle) return inViewRows
+    return inViewRows.filter((l) =>
+      [l.name, l.phone, l.email, l.notes, l.assignee_name]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(needle)),
+    )
+  }, [inViewRows, text])
+
+  const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
   const selected = [...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null
+  const isEmptyStudio = !active.isLoading && allOpen.length === 0
 
   return (
     <>
@@ -119,53 +133,50 @@ function Crm() {
                 <Settings2 /> Setup
               </Link>
             </Button>
-            <AddLeadDialog open={addOpen} onOpenChange={setAddOpen} onAdded={(id) => setOpenLead(id)} />
+            <AddLeadDialog onAdded={(id) => setOpenLead(id)} />
           </div>
         }
       />
 
-      {/* Under the title, reading as part of it rather than as a control
-          competing with the list below. */}
-      <SectionTabs
-        className="no-print mt-2"
-        variant="underline"
-        label="Leads"
-        tabs={TABS.map((t) => ({ value: t.key, label: t.label }))}
-        value={tab}
-        onChange={setTab}
-      />
-
-      <div className="mt-4 flex flex-col gap-4">
-        <CrmFilterBar leads={allOpen} group={group} onGroup={setGroup} range={range} onRange={setRange} />
-        <GettingStarted leads={allOpen} />
+      {/* One line: which leads, and a way to find one. Everything that used to
+          sit here is either in the picker or behind Setup. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-border pb-3">
+        <ViewPicker leads={allOpen} now={now} value={current} onChange={setView} saved={saved} label={label} />
+        <span className="relative ml-auto w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Search leads…"
+            aria-label="Search leads"
+            className="pl-8"
+          />
+        </span>
+        <Button
+          variant={showFilters ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowFilters((v) => !v)}
+          aria-expanded={showFilters}
+        >
+          <SlidersHorizontal /> Filter
+        </Button>
       </div>
 
-      <div id="crm-tabpanel" role="tabpanel" aria-labelledby={`crm-tab-${tab}`} className="mt-4">
+      <div className="mt-4">
         {active.isLoading ? (
-          <SkeletonList rows={5} columns={5} />
+          <SkeletonList rows={5} columns={4} />
         ) : active.isError ? (
           <ErrorState error={active.error} onRetry={() => void active.refetch()} />
-        ) : tab === 'today' ? (
-          <div className="flex flex-col gap-6">
-            {/*
-              * The six figures live here, not above every tab.
-              *
-              * They describe today's work -- late, due, never called -- so on
-              * the pipeline board or a report they were a row of numbers about
-              * a different question, with a Show summary toggle hiding six more.
-              */}
-            <TodayCounts totals={totals} />
-            <TodayTab leads={leads} now={now} onOpen={setOpenLead} />
-            <div>
-              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">What is coming</h2>
-              {/* Overdue and Today are the table above; repeating them as
-                  columns put every late lead on the screen twice. */}
-              <FollowUpBoardTab leads={leads} now={now} onOpen={setOpenLead} omit={['overdue', 'today']} />
-            </div>
-          </div>
-        ) : tab === 'inbox' ? (
+        ) : isEmptyStudio ? (
+          /* The checklist a studio needs once, on the only screen where it is
+             the most useful thing present: an empty one. */
+          <GettingStarted leads={allOpen} />
+        ) : current.kind === 'pipeline' ? (
+          <PipelineTab leads={rows} onOpen={setOpenLead} />
+        ) : (
           <InboxTab
-            leads={inboxLeads}
+            chrome={showFilters}
+            leads={rows}
             now={now}
             query={query}
             onQuery={setQuery}
@@ -174,61 +185,10 @@ function Crm() {
             showArchived={showArchived}
             onShowArchived={setShowArchived}
           />
-        ) : tab === 'pipeline' ? (
-          <PipelineTab leads={leads} onOpen={setOpenLead} />
-        ) : (
-          <div className="flex flex-col gap-8">
-            <ReportsTab leads={leads} range={range} />
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Forecast</h2>
-              <ForecastTab range={range} />
-            </section>
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Per person</h2>
-              <TeamTab range={range} />
-            </section>
-          </div>
         )}
       </div>
 
       {selected && <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />}
     </>
-  )
-}
-
-/** Late, due, never called -- the figures that decide what happens next. */
-function TodayCounts({ totals }: { totals: ReturnType<typeof summarise> }) {
-  const pct = (n: number) => (totals.total === 0 ? '' : `${Math.round((n / totals.total) * 100)}% of open leads`)
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard
-        label="Overdue"
-        value={totals.overdue}
-        tone={totals.overdue > 0 ? 'danger' : 'muted'}
-        hint={totals.overdue > 0 ? 'Promised earlier and missed' : 'Nothing is late'}
-        help="Open leads whose promised call-back date has already passed."
-      />
-      <MetricCard
-        label="Due today"
-        value={totals.today}
-        tone="accent"
-        hint={totals.today > 0 ? 'Before the day ends' : 'Nothing owed today'}
-        help="Open leads you promised to contact today."
-      />
-      <MetricCard
-        label="Never contacted"
-        value={totals.uncontacted}
-        tone={totals.uncontacted > 0 ? 'warning' : 'muted'}
-        hint={pct(totals.uncontacted)}
-        help="Leads still marked new that nobody has rung, messaged or emailed."
-      />
-      <MetricCard
-        label="Won this month"
-        value={totals.wonThisMonth}
-        tone="success"
-        hint={`${totals.total} open · ${totals.hot} hot`}
-        help="Leads converted to a client or project since the 1st."
-      />
-    </div>
   )
 }

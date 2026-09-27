@@ -189,6 +189,9 @@ function ClientsList() {
         onDone={() => setJustAdded(false)}
       />
 
+      {/* Only when there are none. A studio with two hundred clients does not
+          need telling what a client is, every time it opens the list. */}
+      {total === 0 && (
       <HowToUse
         className="mt-4"
         title="Clients"
@@ -199,6 +202,7 @@ function ClientsList() {
           'Create their wedding or event project from there.',
         ]}
       />
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-2 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="relative lg:col-span-2">

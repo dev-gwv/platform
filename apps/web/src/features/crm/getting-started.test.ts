@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmLead } from '@ipc/contracts'
 import { allDone, remaining, startSteps } from './getting-started'
-import { ALL_GROUPS, NO_GROUP, groupsOf, inGroup } from './FilterBar'
+import { ALL_GROUPS, NO_GROUP, groupsOf, inGroup } from './groups'
 
 const lead = (over: Partial<CrmLead> = {}): CrmLead =>
   ({

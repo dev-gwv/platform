@@ -127,7 +127,16 @@ export const INBOX_COLUMNS: ReadonlyArray<{ key: InboxColumn; label: string }> =
   { key: 'created', label: 'Created' },
 ]
 
-export const DEFAULT_INBOX_COLUMNS: readonly InboxColumn[] = ['lead', 'stage', 'score', 'source', 'owner', 'value', 'follow_up']
+/*
+ * Four columns, from seven.
+ *
+ * Score, source and value were on every row by default and decide nothing: a
+ * studio scanning its morning wants the name, what is owed, whose it is and
+ * when. The other three are one tick away in Columns for anyone who reads this
+ * as a table, and the lead row itself already carries the date state and the
+ * last contact underneath the name.
+ */
+export const DEFAULT_INBOX_COLUMNS: readonly InboxColumn[] = ['lead', 'stage', 'owner', 'follow_up']
 
 export function LeadTable({
   leads,
