@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -16,7 +16,7 @@ import { inView, openingView, viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery } from '@/features/crm/views'
 import { EMPTY_QUERY, applyQuery, countsFor, isOpen, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
-import { PipelineTab } from '@/features/crm/tabs/BoardTabs'
+import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 
 /**
  * One list, and nothing above it but a header and a line of controls.
@@ -92,7 +92,9 @@ function Crm() {
   const label =
     current.kind === 'pipeline'
       ? 'Pipeline'
-      : current.kind === 'saved'
+      : current.kind === 'board'
+        ? 'Follow-up board'
+        : current.kind === 'saved'
         ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
         : viewName(current.key)
 
@@ -100,6 +102,8 @@ function Crm() {
   const inViewRows = useMemo(() => {
     const source = showArchived ? allLeads : allOpen
     if (current.kind === 'pipeline') return source.filter(isOpen)
+    // The board buckets by due date itself, so it wants every open lead.
+    if (current.kind === 'board') return source.filter(isOpen)
     if (current.kind === 'saved') {
       const v = saved.find((x) => x.id === current.id)
       return v ? applyQuery(source, toLeadQuery(v.query), now) : source.filter(isOpen)
@@ -146,6 +150,11 @@ function Crm() {
         description="Everyone who got in touch, and who you owe a call."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/follow-ups/reports">
+                <BarChart3 /> Reports
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link to="/follow-ups/setup">
                 <Settings2 /> Setup
@@ -205,6 +214,10 @@ function Crm() {
           <GettingStarted leads={allOpen} />
         ) : current.kind === 'pipeline' ? (
           <PipelineTab leads={rows} onOpen={setOpenLead} />
+        ) : current.kind === 'board' ? (
+          /* Built with the rest of the CRM and never mounted: no route, no
+             import, nothing that could open it. */
+          <FollowUpBoardTab leads={rows} now={now} onOpen={setOpenLead} />
         ) : (
           <InboxTab
             chrome={showFilters}
