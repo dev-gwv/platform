@@ -308,10 +308,19 @@ export function LoginPage() {
         auto_select: false,
       })
       googleDivRef.current.innerHTML = ''
+      /*
+       * Google draws this button itself and takes a width in pixels, so it
+       * cannot stretch on its own. Hard-coded at 320 it was 12px wider than
+       * the card's inner width once the sm:p-8 padding applied, and Google
+       * clamps anything outside 200-400 — so the number has to be measured,
+       * not guessed.
+       */
+      const room = googleDivRef.current.clientWidth
+      const width = Math.round(Math.min(400, Math.max(200, room || 300)))
       g.accounts.id.renderButton(googleDivRef.current, {
         theme: 'outline',
         size: 'large',
-        width: 320,
+        width,
         text: 'continue_with',
         shape: 'rectangular',
       } as unknown as Record<string, unknown>)
@@ -332,7 +341,7 @@ export function LoginPage() {
         * to trust this with their client list, furniture that moves when you
         * approach it reads as a demo rather than as a product.
         */}
-      <div className="relative w-full max-w-[26rem]">
+      <div className="relative w-full max-w-[27rem]">
         <h1 className="mb-7 text-center text-2xl font-bold tracking-tight">
           {/*
             * The raw brand amber (#f2a618) on a near-white ground fails
@@ -409,16 +418,16 @@ export function LoginPage() {
         ) : (
           <>
             <Card className="rounded-xl shadow-sm">
-              <CardContent className="p-6 sm:p-8">
+              <CardContent className="auth-scale p-6 sm:p-8">
                 <div className="mb-7">
-                  <h2 className="text-xl font-semibold tracking-tight">
+                  <h2 className="text-2xl font-semibold tracking-tight">
                     {isForgot
                       ? 'Forgot password'
                       : isRegister
                         ? 'Create your account'
                         : 'Welcome back'}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1.5 text-sm text-muted-foreground">
                     {isForgot
                       ? "Enter your email and we'll send a reset link"
                       : isRegister
@@ -585,7 +594,7 @@ export function LoginPage() {
                     </p>
                   )}
 
-                  <Button type="submit" disabled={busy} className="mt-1 w-full">
+                  <Button type="submit" disabled={busy} className="mt-1 w-full text-base font-semibold">
                     {busy
                       ? 'Please wait…'
                       : isForgot
@@ -597,7 +606,7 @@ export function LoginPage() {
 
                   {!isForgot && !isRegister && googleClientId && (
                     <>
-                      <div className="my-4 flex items-center gap-3">
+                      <div className="my-5 flex items-center gap-3">
                         <div className="h-px flex-1 bg-border" />
                         <span className="text-xs text-muted-foreground">or</span>
                         <div className="h-px flex-1 bg-border" />

@@ -449,6 +449,37 @@ body {
   }
 }
 
+/* ── Sign-in scale ─────────────────────────────────────────────
+   The app runs at a 14px root with h-9 controls because its screens are
+   dense tables a studio reads all day. Sign-in is the opposite job: two
+   fields, once a day, often one-handed on a phone at a venue. It gets its
+   own scale here rather than dragging every form in the product up with it.
+
+   16px on the control is not a taste decision. Below 16 CSS pixels iOS
+   zooms the page on focus and then leaves it zoomed, which is why so many
+   mobile logins jump when you tap the email box. */
+.auth-scale input:not([type='checkbox']):not([type='radio']),
+.auth-scale button[type='submit'] {
+  height: 44px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.auth-scale input:not([type='checkbox']):not([type='radio']) {
+  padding-inline: 14px;
+}
+
+/* The label sits closer to 13px than the app's 12.25, and further from its
+   control: a field reads as one object when the gap inside it is smaller
+   than the gap to the next one. */
+.auth-scale label {
+  font-size: 13px;
+}
+
+.auth-scale form {
+  gap: 1.35rem;
+}
+
 /* ── Motion ────────────────────────────────────────────────────
    Every animation here is opt-in per surface and short enough to read as
    feedback rather than choreography. Nothing loops (the Next-button nudge
