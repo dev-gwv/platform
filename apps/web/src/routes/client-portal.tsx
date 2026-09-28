@@ -36,6 +36,7 @@ import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { termsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { DELIVERABLE_STATUS_LABEL, openedAgo } from '@/features/client-portal/format'
+import { DeliverableTile } from '@/shared/ui/icon-tile'
 
 /**
  * PUBLIC page -- no login, no app shell. The one link a studio sends its
@@ -353,9 +354,12 @@ function DeliverableCard({
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="break-words font-semibold">{item.title}</p>
-            {item.shoot_name && <p className="text-xs text-muted-foreground">From {item.shoot_name}</p>}
+          <div className="flex min-w-0 items-start gap-3">
+            <DeliverableTile title={item.title} />
+            <div className="min-w-0">
+              <p className="break-words font-semibold">{item.title}</p>
+              {item.shoot_name && <p className="text-xs text-muted-foreground">From {item.shoot_name}</p>}
+            </div>
           </div>
           <StatusBadge tone={STATUS_TONE[item.status]} className="shrink-0 gap-1">
             <Icon className="size-3" aria-hidden />

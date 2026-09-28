@@ -6,9 +6,11 @@ import {
   defaultWindowFields,
   overlaps,
   pickedIds,
+  progressWithPicks,
   requirementFill,
   roleMatches,
   seatsLeft,
+  withPicks,
   shootProgress,
   suggestedPayout,
   windowOf,
@@ -173,5 +175,22 @@ describe('seatsLeft / pickedIds', () => {
   })
   it('knows everyone picked, across roles', () => {
     expect([...pickedIds({ Candid: [{ id: 'a', payout: '' }], Drone: [{ id: 'b', payout: '5000' }] })]).toEqual(['a', 'b'])
+  })
+})
+
+describe('withPicks / progressWithPicks', () => {
+  const fill = [
+    { name: 'Album Designer', required: 2, assigned: 0, open: 2 },
+    { name: 'Candid', required: 2, assigned: 1, open: 1 },
+  ]
+  it('counts a pick the moment it is made, before Book', () => {
+    const counts = withPicks(fill, { 'Album Designer': [{ id: 'a', payout: '' }] })
+    expect(counts[0]).toMatchObject({ booked: 0, picked: 1, filled: 1 })
+    expect(counts[1]).toMatchObject({ booked: 1, picked: 0, filled: 1 })
+    expect(progressWithPicks(counts)).toEqual({ required: 4, booked: 1, picked: 1, filled: 2 })
+  })
+  it('never counts past what a role needs', () => {
+    const counts = withPicks(fill, { Candid: [{ id: 'a', payout: '' }, { id: 'b', payout: '' }] })
+    expect(counts[1]).toMatchObject({ booked: 1, picked: 1, filled: 2 })
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Camera, FolderOpen, Plus } from 'lucide-react'
+import { FolderOpen, Plus } from 'lucide-react'
 import type { Deliverable } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -9,6 +9,7 @@ import { DeliverableCard } from '@/features/projects/DeliverableCard'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { DeliveryPipeline, type PipelineFilter } from '@/features/projects/DeliveryPipeline'
 import { STAGE_LABEL, groupByShoot, isLate, stageOf, type ShootRef } from '@/features/projects/deliverable-stage'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 /**
  * One tap adds the usual thing to an empty group. Anything else goes through
@@ -114,9 +115,13 @@ export function DeliverablesTab({
           <section key={g.shoot?.id ?? 'project'} className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 px-1">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <span className={g.shoot ? 'flex size-6 items-center justify-center rounded-md bg-tone-violet-soft text-tone-violet' : 'flex size-6 items-center justify-center rounded-md bg-tone-blue-soft text-tone-blue'}>
-                  {g.shoot ? <Camera className="size-3.5" aria-hidden /> : <FolderOpen className="size-3.5" aria-hidden />}
-                </span>
+                {g.shoot ? (
+                  <EventTile name={g.shoot.name} size="sm" />
+                ) : (
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-tone-blue-soft text-tone-blue">
+                    <FolderOpen className="size-3.5" aria-hidden />
+                  </span>
+                )}
                 {g.shoot ? g.shoot.name : 'Whole project'}
                 {g.shoot?.shoot_date && <span className="text-xs font-normal text-muted-foreground">{dateFmt(g.shoot.shoot_date)}</span>}
                 {g.items.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{g.items.length}</span>}

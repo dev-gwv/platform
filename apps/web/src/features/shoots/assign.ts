@@ -241,3 +241,33 @@ export function seatsLeft(fill: readonly RequirementFill[], picks: Readonly<Reco
 export function pickedIds(picks: Readonly<Record<string, readonly SeatPick[]>>): Set<string> {
   return new Set(Object.values(picks).flatMap((ps) => ps.map((p) => p.id)))
 }
+
+export interface RoleCount {
+  name: string
+  required: number
+  booked: number
+  picked: number
+  /** Booked plus picked, never past what the role needs. */
+  filled: number
+}
+
+/**
+ * What each role shows while choosing: people picked on this screen count
+ * the moment they are picked, not only once "Book" is pressed -- a counter
+ * that stays at 0 after a pick reads as "that didn't work".
+ */
+export function withPicks(fill: readonly RequirementFill[], picks: Readonly<Record<string, readonly SeatPick[]>>): RoleCount[] {
+  return fill.map((r) => {
+    const booked = Math.min(r.assigned, r.required)
+    const picked = Math.min(picks[r.name]?.length ?? 0, r.required - booked)
+    return { name: r.name, required: r.required, booked, picked, filled: booked + picked }
+  })
+}
+
+/** The whole shoot: seats needed, booked and picked-but-not-yet-booked. */
+export function progressWithPicks(counts: readonly RoleCount[]) {
+  const required = counts.reduce((n, r) => n + r.required, 0)
+  const booked = counts.reduce((n, r) => n + r.booked, 0)
+  const picked = counts.reduce((n, r) => n + r.picked, 0)
+  return { required, booked, picked, filled: booked + picked }
+}

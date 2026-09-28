@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  CalendarDays,
   Plus,
   Receipt,
 } from 'lucide-react'
@@ -36,6 +35,7 @@ import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 export function DashboardPage() {
   return <DashboardInner />
@@ -341,7 +341,7 @@ function UpcomingShoots({ shoots }: { shoots: readonly ShootListItem[] }) {
         <ul className="divide-y divide-border">
           {soon.map((s) => (
             <li key={s.id} className="flex items-center gap-3 py-2.5">
-              <CalendarDays className="size-4 shrink-0 text-primary" aria-hidden />
+              <EventTile name={s.name} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{s.name}</span>
                 <span className="block truncate text-xs text-muted-foreground">{s.project_name ?? '—'}</span>

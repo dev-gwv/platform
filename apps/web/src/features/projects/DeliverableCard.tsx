@@ -1,21 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   ArrowRight,
-  BookOpen,
   CalendarDays,
   Check,
-  Clapperboard,
   ExternalLink,
-  Film,
-  HardDrive,
   Hourglass,
-  Image as ImageIcon,
   MessageSquare,
   Mic,
-  Package,
   Pencil,
   PanelRightOpen,
-  Printer,
   RotateCcw,
   Trash2,
   UserPlus,
@@ -38,17 +31,10 @@ import { STAGE_LABEL, dueLabel, isLate, previousStage, relativeDue, stageOf } fr
 import { TONE_CLASSES, actionLabel, allPoints, movedLabel, nextPoint, wantsLinkAt } from './stages'
 import { useDeliverableStages } from './stages-api'
 import { deliverableKind, type DeliverableKind } from './deliverable-kind'
+import { DELIVERABLE_ICON } from '@/shared/ui/icon-tile'
 import { STAGE_STYLE, StageStepper } from './StageStepper'
 
-export const KIND_ICON: Record<DeliverableKind, LucideIcon> = {
-  album: BookOpen,
-  reel: Clapperboard,
-  film: Film,
-  photos: ImageIcon,
-  print: Printer,
-  data: HardDrive,
-  other: Package,
-}
+export const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
 
 /** The item's picture: its kind, in its stage's colour; a check once delivered. */
 export function KindTile({ title, status, size = 'md' }: { title: string; status: string; size?: 'md' | 'lg' }) {

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
-  Camera,
   Clock,
   Database,
   ExternalLink,
@@ -53,6 +52,7 @@ import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
+import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
 
 /**
  * The shoots a wedding studio books over and over. Used as one-click chips so
@@ -203,6 +203,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
                   create.mutate({ name, shoot_date: todayISO() })
                 }}
               >
+                <EventIcon name={name} />
                 {pending === name ? 'Adding…' : name}
               </Button>
             ))}
@@ -360,7 +361,7 @@ function ShootPlanner({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold">
-              <Camera className="size-4 text-muted-foreground" />
+              <EventTile name={shoot.name} size="sm" />
               {shoot.name}
               <StatusBadge tone={TONE[shoot.status]}>{humanize(shoot.status)}</StatusBadge>
               {/* Beside the name rather than among the edit buttons: crew who
@@ -520,6 +521,7 @@ function ShootPlanner({
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2">
+                    <RoleTile name={r.name} size="sm" />
                     <span className="text-sm font-semibold">{r.name}</span>
                     <span
                       className={cn(

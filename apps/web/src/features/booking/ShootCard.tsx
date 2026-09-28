@@ -9,6 +9,7 @@ import { cn } from '@/shared/ui/cn'
 import { hoursLabel } from '@/features/shoots/assign'
 import { mapHref } from '@/features/shoots/map-link'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 const FILL_TONE: Record<Fill, { card: string; pill: string }> = {
   full: { card: 'border-tone-green/30 bg-tone-green-soft/50', pill: 'bg-tone-green-soft text-tone-green' },
@@ -69,7 +70,8 @@ export function ShootCard({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold leading-tight">
+          <h3 className="flex items-center gap-2 text-base font-semibold leading-tight">
+            <EventTile name={shoot.name} size="sm" />
             <Link to="/shoots/$shootId" params={{ shootId: shoot.id }} className="hover:text-primary hover:underline">
               {shoot.name}
             </Link>

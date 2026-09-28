@@ -20,7 +20,8 @@ import {
   pickedIds,
   requirementFill,
   seatsLeft,
-  shootProgress,
+  progressWithPicks,
+  withPicks,
   suggestedPayout,
   windowOf,
   type Candidate,
@@ -28,6 +29,7 @@ import {
   type SeatPick,
 } from './assign'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
+import { RoleTile } from '@/shared/ui/icon-tile'
 
 /**
  * "Assign team" for one shoot: the roles it needs, who is in each, and an
@@ -119,7 +121,6 @@ function AssignBoard({
 
   const onShoot = useMemo(() => slots.filter((s) => s.shoot_id === shoot.id && isLive(s)), [slots, shoot.id])
   const fill = useMemo(() => requirementFill(shoot, onShoot), [shoot, onShoot])
-  const progress = shootProgress(fill)
 
   const start = defaultWindowFields(shoot)
   const [date, setDate] = useState(start.date)
@@ -237,7 +238,7 @@ function AssignBoard({
 
   return (
     <div className="flex flex-col gap-3">
-      <Progress assigned={progress.assigned} required={progress.required} />
+      <Progress {...progressWithPicks(withPicks(fill, picks))} />
 
       {showTime && (
         <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_4.5rem] gap-2 rounded-lg border border-border bg-muted/30 p-3">
@@ -360,26 +361,37 @@ function AssignBoard({
   )
 }
 
-function Progress({ assigned, required }: { assigned: number; required: number }) {
+/**
+ * Booked seats in green and people picked (not booked yet) in the primary
+ * colour, so the bar moves the moment someone is picked.
+ */
+function Progress({ required, booked, picked, filled }: { required: number; booked: number; picked: number; filled: number }) {
   if (required === 0) return null
-  const pct = Math.round((assigned / required) * 100)
+  const pct = (n: number) => `${Math.round((n / required) * 100)}%`
   return (
     <div className="flex items-center gap-3">
       <div
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+        className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted"
         role="progressbar"
-        aria-valuenow={pct}
+        aria-valuenow={Math.round((filled / required) * 100)}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label="Team assigned"
       >
-        <div
-          className={cn('h-full rounded-full transition-[width] duration-500', pct === 100 ? 'bg-success' : 'bg-warning')}
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full bg-success transition-[width] duration-500" style={{ width: pct(booked) }} />
+        <div className="h-full bg-primary transition-[width] duration-500" style={{ width: pct(picked) }} />
       </div>
       <p className="shrink-0 text-sm font-medium tabular-nums">
-        {assigned} of {required} filled
+        {picked > 0 ? (
+          <>
+            <span className="text-primary">{filled} of {required} chosen</span>
+            <span className="font-normal text-muted-foreground"> · press Book</span>
+          </>
+        ) : (
+          <span className={filled === required ? 'text-success' : undefined}>
+            {filled} of {required} filled
+          </span>
+        )}
       </p>
     </div>
   )
@@ -417,19 +429,25 @@ function RoleRow({
   picker: ReactNode
 }) {
   const full = role.open === 0
+  const counted = Math.min(role.required, Math.min(role.assigned, role.required) + picked.length)
+  const pending = !full && picked.length > 0
   const [menuFor, setMenuFor] = useState<string | null>(null)
   return (
     <li className="p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate font-medium">{role.name}</p>
+        <p className="flex min-w-0 items-center gap-2 font-medium">
+          <RoleTile name={role.name} size="sm" />
+          <span className="truncate">{role.name}</span>
+        </p>
         <span
           className={cn(
-            'inline-flex shrink-0 items-center gap-1 text-xs tabular-nums',
-            full ? 'text-success' : 'text-muted-foreground',
+            'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
+            full ? 'bg-success/10 text-success' : pending ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
           )}
+          title={pending ? 'Picked, not booked yet: press Book' : undefined}
         >
           {full && <Check className="size-3.5" aria-hidden />}
-          {Math.min(role.assigned, role.required)} of {role.required}
+          {counted} of {role.required}
         </span>
       </div>
 
@@ -498,20 +516,28 @@ function RoleRow({
                 >
                   <Avatar name={m?.name ?? '?'} size="sm" />
                   <span className="min-w-0 flex-1 truncate">{m?.name ?? 'Someone'}</span>
-                  <span className="text-xs text-muted-foreground">₹</span>
-                  <input
-                    aria-label={`Payout for ${m?.name ?? 'this person'}`}
-                    inputMode="decimal"
-                    placeholder="Payout"
-                    value={p.payout}
-                    onChange={(e) => onPayout(p.id, e.target.value.replace(/[^\d.]/g, ''))}
-                    className="h-7 w-20 rounded border border-input bg-background px-1.5 text-right text-xs tabular-nums"
-                  />
+                  {/* An empty payout asks to be filled (amber); a filled one reads settled (green). */}
+                  <label
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-md border px-2 text-sm shadow-sm transition-colors focus-within:ring-2 focus-within:ring-ring',
+                      p.payout ? 'border-success/50 bg-success/10' : 'border-warning/60 bg-warning/10',
+                    )}
+                  >
+                    <span className={cn('font-medium', p.payout ? 'text-success' : 'text-warning')}>₹</span>
+                    <input
+                      aria-label={`Payout for ${m?.name ?? 'this person'}`}
+                      inputMode="decimal"
+                      placeholder="Add payout"
+                      value={p.payout}
+                      onChange={(e) => onPayout(p.id, e.target.value.replace(/[^\d.]/g, ''))}
+                      className="w-20 bg-transparent text-right text-sm font-medium tabular-nums outline-none placeholder:font-normal placeholder:text-foreground/60"
+                    />
+                  </label>
                   <button
                     type="button"
                     aria-label={`Take ${m?.name ?? 'them'} off`}
                     onClick={() => onUnpick(p.id)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded-md border border-border bg-card p-1.5 text-muted-foreground shadow-sm hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
                   >
                     <X className="size-3.5" />
                   </button>
