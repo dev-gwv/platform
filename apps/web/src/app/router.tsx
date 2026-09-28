@@ -51,7 +51,7 @@ import { CrmSetupPage } from '@/routes/follow-ups/setup'
 import { CrmReportsPage } from '@/routes/follow-ups/reports'
 import { CallQueuePage } from '@/routes/follow-ups/queue'
 import { SendNowPage } from '@/routes/follow-ups/send'
-import { AttendancePage } from '@/routes/attendance'
+import { AttendancePage, MyAttendancePage } from '@/routes/attendance'
 import { NotificationsPage } from '@/routes/notifications'
 import { EmployeesPage } from '@/routes/employees'
 import { EmployeeDetailPage } from '@/routes/employees/$id'
@@ -265,7 +265,7 @@ const routeTree = rootRoute.addChildren([
   route('/employees', EmployeesPage),
   route('/employees/$id', EmployeeDetailPage),
   route('/attendance', AttendancePage),
-  route('/attendance/my', () => <AttendancePage initialTab="mine" />),
+  route('/attendance/my', MyAttendancePage),
   route('/attendance/$uid', AttendanceUidPage),
   route('/billing', BillingPage),
   route('/billing/invoices', InvoicesPage),

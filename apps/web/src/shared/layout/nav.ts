@@ -4,6 +4,7 @@ import type { AppRole } from '@ipc/permissions'
 import {
   BarChart3,
   CalendarOff,
+  MapPin,
   LayoutDashboard,
   KanbanSquare,
   CalendarClock,
@@ -92,6 +93,7 @@ export const NAV: NavEntry[] = [
   // submit work and see what was sent back.
   leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
+  leaf('Attendance', '/attendance/my', MapPin, { roles: ['employee'] }),
   leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
   {

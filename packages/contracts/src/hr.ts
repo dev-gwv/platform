@@ -11,13 +11,99 @@ export const attendanceRecord = z.object({
   status: attendanceStatus,
   /** Minutes past the studio's expected start. 0 unless the status is 'late'. */
   late_minutes: z.number().int().default(0),
+  /** Where they were marked (0206), and how far from its centre. */
+  place_name: z.string().nullable().default(null),
+  check_in_distance_m: z.number().int().nullable().default(null),
+  /** 'auto_login' when the app marked it on open. */
+  source: z.string().nullable().default(null),
+  /** Nobody checked out: the nightly sweep closed the day. */
+  closed_by_system: z.boolean().default(false),
 })
 export type AttendanceRecord = z.infer<typeof attendanceRecord>
 
 export const checkInRequest = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+  /** The app marked this on open, not a tap. */
+  auto: z.boolean().optional(),
 })
+
+export const checkOutRequest = z.object({
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+})
+
+/** POST /hr/check-in's refusal body, and the rule the member is under. */
+export const attendanceMode = z.enum(['required', 'anywhere', 'off'])
+export type AttendanceMode = z.infer<typeof attendanceMode>
+
+/** GET /hr/attendance/me: today's row and the rule that decides it (0206). */
+export const myAttendanceToday = z.object({
+  today: attendanceRecord.nullable(),
+  mode: attendanceMode,
+  /** The one place they must be at, when their rule names one. Null: any studio place. */
+  place_name: z.string().nullable(),
+  /** 'person' | 'position' | 'studio' | 'freelancer'. */
+  rule_from: z.string(),
+  /** The studio has at least one active place: without one there is no fence. */
+  fenced: z.boolean(),
+  day_off: z.string().nullable(),
+  on_leave: z.boolean(),
+})
+export type MyAttendanceToday = z.infer<typeof myAttendanceToday>
+
+// ── places and rules (0206) ─────────────────────────────────────
+export const attendancePlace = z.object({
+  id: uuid,
+  name: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  radius_m: z.number().int(),
+  is_active: z.boolean(),
+  /** The studio's own spot: edited on the location card, not here. */
+  is_primary: z.boolean(),
+})
+export type AttendancePlace = z.infer<typeof attendancePlace>
+
+export const attendancePlaceInput = z.object({
+  name: z.string().trim().min(1).max(80),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  radius_m: z.number().int().min(20).max(5000),
+  is_active: z.boolean().default(true),
+})
+export type AttendancePlaceInput = z.infer<typeof attendancePlaceInput>
+
+export const attendanceRule = z.object({
+  id: uuid,
+  scope: z.enum(['role', 'user']),
+  role_id: uuid.nullable(),
+  user_id: uuid.nullable(),
+  /** The position's or the person's name, for the list. */
+  label: z.string(),
+  mode: attendanceMode,
+  place_id: uuid.nullable(),
+  radius_m: z.number().int().nullable(),
+  expected_checkin_time: z.string().nullable(),
+  late_grace_minutes: z.number().int().nullable(),
+})
+export type AttendanceRule = z.infer<typeof attendanceRule>
+
+export const attendanceRuleInput = z
+  .object({
+    scope: z.enum(['role', 'user']),
+    role_id: uuid.nullable().optional(),
+    user_id: uuid.nullable().optional(),
+    mode: attendanceMode,
+    place_id: uuid.nullable().optional(),
+    radius_m: z.number().int().min(20).max(5000).nullable().optional(),
+    expected_checkin_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable().optional(),
+    late_grace_minutes: z.number().int().min(0).max(240).nullable().optional(),
+  })
+  .refine((v) => (v.scope === 'role' ? !!v.role_id && !v.user_id : !!v.user_id && !v.role_id), {
+    message: 'A rule is for one position or one person.',
+  })
+export type AttendanceRuleInput = z.infer<typeof attendanceRuleInput>
 export type CheckInRequest = z.infer<typeof checkInRequest>
 
 export const companyFence = z.object({
@@ -94,6 +180,11 @@ export const attendanceDayRow = z.object({
   on_leave: z.boolean().default(false),
   /** A holiday's name or 'Weekly off': nobody was expected in. */
   day_off: z.string().nullable().default(null),
+  /** Where they were marked (0206), how far from it, and whether the app did it. */
+  place_name: z.string().nullable().default(null),
+  check_in_distance_m: z.number().int().nullable().default(null),
+  source: z.string().nullable().default(null),
+  closed_by_system: z.boolean().default(false),
 })
 export type AttendanceDayRow = z.infer<typeof attendanceDayRow>
 

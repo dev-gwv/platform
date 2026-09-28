@@ -1,8 +1,14 @@
 import { Hono } from 'hono'
 import {
   attendanceDayRow,
+  attendancePlace,
+  attendancePlaceInput,
   attendanceRecord,
+  attendanceRule,
+  attendanceRuleInput,
   checkInRequest,
+  checkOutRequest,
+  myAttendanceToday,
   companyFence,
   setAttendanceRequest,
   setFenceRequest,
@@ -251,15 +257,172 @@ export const hrRouter = new Hono<AppEnv>()
         c.env,
         auth.userId,
         (sql) => sql`
-          select id, a_date, check_in_at, check_out_at, status, late_minutes
-          from attendance where user_id = ${auth.userId}
-            and ${month ? sql`extract(month from a_date)::int = ${month}` : sql`true`}
-            and ${year ? sql`extract(year from a_date)::int = ${year}` : sql`true`}
-          order by a_date desc limit 120`,
+          select a.id, a.a_date, a.check_in_at, a.check_out_at, a.status, a.late_minutes,
+                 p.name as place_name, a.check_in_distance_m, a.source, a.closed_by_system
+          from attendance a left join attendance_places p on p.id = a.check_in_place_id
+          where a.user_id = ${auth.userId}
+            and ${month ? sql`extract(month from a.a_date)::int = ${month}` : sql`true`}
+            and ${year ? sql`extract(year from a.a_date)::int = ${year}` : sql`true`}
+          order by a.a_date desc limit 120`,
       ),
     )
     if (!rows) fail(400, 'We could not load attendance.')
     return c.json(list.parse(rows))
+  })
+
+  // Today, and the rule that decides it (0206): what the app needs to mark
+  // someone by itself, and to say why it has not.
+  .get('/attendance/me', async (c) => {
+    const auth = c.get('auth')
+    const out = await attempt(c, 'hr.attendance_me', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [rule] = await sql<{ mode: 'required' | 'anywhere' | 'off'; place_name: string | null; rule_from: string; tz: string }[]>`
+          select mode, place_name, rule_from, tz from attendance_rule_for(${auth.userId})`
+        const tz = rule?.tz ?? 'Asia/Kolkata'
+        const [today] = await sql`
+          select a.id, a.a_date, a.check_in_at, a.check_out_at, a.status, a.late_minutes,
+                 p.name as place_name, a.check_in_distance_m, a.source, a.closed_by_system
+            from attendance a left join attendance_places p on p.id = a.check_in_place_id
+           where a.user_id = ${auth.userId} and a.a_date = (now() at time zone ${tz})::date`
+        const [ctx] = await sql<{ fenced: boolean; day_off: string | null; on_leave: boolean }[]>`
+          select exists (select 1 from attendance_places where company_id = get_current_company_id() and is_active) as fenced,
+                 day_off(get_current_company_id(), (now() at time zone ${tz})::date) as day_off,
+                 on_leave(${auth.userId}, (now() at time zone ${tz})::date) as on_leave`
+        return { rule, today: today ?? null, ctx }
+      }),
+    )
+    if (!out?.rule || !out.ctx) fail(400, 'We could not load your attendance.')
+    return c.json(
+      myAttendanceToday.parse({
+        today: out.today,
+        mode: out.rule.mode,
+        place_name: out.rule.place_name,
+        rule_from: out.rule.rule_from,
+        fenced: out.ctx.fenced,
+        day_off: out.ctx.day_off,
+        on_leave: out.ctx.on_leave,
+      }),
+    )
+  })
+
+  // ── Places and rules (0206). Owner-only writes, enforced by RLS. ─────
+  .get('/places', async (c) => {
+    const rows = await attempt(c, 'hr.places', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, name, lat, lng, radius_m, is_active, is_primary
+          from attendance_places order by is_primary desc, name`),
+    )
+    if (!rows) fail(400, 'We could not load places.')
+    return c.json(attendancePlace.array().parse(rows))
+  })
+
+  .post('/places', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change places.')
+    const parsed = attendancePlaceInput.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please give the place a name, a pin and a radius between 20 m and 5 km.')
+    const v = parsed.data
+    const rows = await attempt(c, 'hr.place_add', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        insert into attendance_places (company_id, name, lat, lng, radius_m, is_active)
+        values (get_current_company_id(), ${v.name}, ${v.lat}, ${v.lng}, ${v.radius_m}, ${v.is_active})
+        returning id, name, lat, lng, radius_m, is_active, is_primary`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not add that place.')
+    await audit(c, { action: 'attendance.place_add', entityType: 'attendance_place', entityId: rows[0].id as string, after: v })
+    return c.json(attendancePlace.parse(rows[0]), 201)
+  })
+
+  .patch('/places/:id', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change places.')
+    const id = uuidParam(c)
+    const parsed = attendancePlaceInput.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please give the place a name, a pin and a radius between 20 m and 5 km.')
+    const v = parsed.data
+    const rows = await attempt(c, 'hr.place_edit', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        update attendance_places
+           set name = ${v.name}, lat = ${v.lat}, lng = ${v.lng}, radius_m = ${v.radius_m},
+               is_active = ${v.is_active}, updated_at = now()
+         where id = ${id}
+        returning id, name, lat, lng, radius_m, is_active, is_primary`),
+    )
+    if (!rows) fail(400, 'We could not save that place.')
+    if (!rows[0]) fail(404, 'That place was not found, or it is the studio itself (change it on the location card).')
+    await audit(c, { action: 'attendance.place_edit', entityType: 'attendance_place', entityId: id, after: v })
+    return c.json(attendancePlace.parse(rows[0]))
+  })
+
+  .delete('/places/:id', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change places.')
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'hr.place_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from attendance_places where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not remove that place.')
+    if (!rows[0]) fail(404, 'That place was not found, or it is the studio itself.')
+    await audit(c, { action: 'attendance.place_delete', entityType: 'attendance_place', entityId: id })
+    return c.body(null, 204)
+  })
+
+  .get('/rules', async (c) => {
+    const rows = await attempt(c, 'hr.rules', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select r.id, r.scope, r.role_id, r.user_id,
+               coalesce(er.type_name, u.name, 'Unknown') as label,
+               r.mode, r.place_id, r.radius_m,
+               to_char(r.expected_checkin_time, 'HH24:MI') as expected_checkin_time, r.late_grace_minutes
+          from attendance_rules r
+          left join employee_roles er on er.id = r.role_id
+          left join users u on u.user_id = r.user_id
+         order by r.scope, label`),
+    )
+    if (!rows) fail(400, 'We could not load the attendance rules.')
+    return c.json(attendanceRule.array().parse(rows))
+  })
+
+  // One rule per position or person: saving again replaces it.
+  .put('/rules', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change attendance rules.')
+    const parsed = attendanceRuleInput.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the rule.')
+    const v = parsed.data
+    const id = await attempt(c, 'hr.rule_set', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        await sql`
+          delete from attendance_rules
+           where ${v.scope === 'role' ? sql`scope = 'role' and role_id = ${v.role_id!}` : sql`scope = 'user' and user_id = ${v.user_id!}`}`
+        const [r] = await sql<{ id: string }[]>`
+          insert into attendance_rules (company_id, scope, role_id, user_id, mode, place_id, radius_m,
+                                        expected_checkin_time, late_grace_minutes)
+          select get_current_company_id(), ${v.scope}, ${v.role_id ?? null}, ${v.user_id ?? null}, ${v.mode},
+                 ${v.place_id ?? null}, ${v.radius_m ?? null}, ${v.expected_checkin_time ?? null}::time,
+                 ${v.late_grace_minutes ?? null}
+           -- Only this studio's own positions, people and places.
+           where (${v.role_id ?? null}::uuid is null
+                  or exists (select 1 from employee_roles where id = ${v.role_id ?? null} and company_id = get_current_company_id()))
+             and (${v.user_id ?? null}::uuid is null
+                  or exists (select 1 from users where user_id = ${v.user_id ?? null} and company_id = get_current_company_id()))
+             and (${v.place_id ?? null}::uuid is null
+                  or exists (select 1 from attendance_places where id = ${v.place_id ?? null}))
+          returning id`
+        return r?.id ?? null
+      }),
+    )
+    if (!id) fail(422, 'That position, person or place is not part of this studio.')
+    await audit(c, { action: 'attendance.rule_set', entityType: 'attendance_rule', entityId: id, after: v })
+    return c.json({ id })
+  })
+
+  .delete('/rules/:id', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change attendance rules.')
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'hr.rule_delete', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from attendance_rules where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not remove that rule.')
+    if (!rows[0]) fail(404, 'That rule was not found.')
+    await audit(c, { action: 'attendance.rule_delete', entityType: 'attendance_rule', entityId: id })
+    return c.body(null, 204)
   })
 
   // One member's history for the /attendance/$uid stub. Self, owner, admin or
@@ -324,6 +487,8 @@ export const hrRouter = new Hono<AppEnv>()
                  coalesce(a.status, 'absent') as status,
                  a.check_in_at, a.check_out_at, a.corrected_by, a.correction_note,
                  coalesce(a.late_minutes, 0) as late_minutes,
+                 (select p.name from attendance_places p where p.id = a.check_in_place_id) as place_name,
+                 a.check_in_distance_m, a.source, coalesce(a.closed_by_system, false) as closed_by_system,
                  on_leave(u.user_id, coalesce(${date}::date, (now() at time zone 'Asia/Kolkata')::date)) as on_leave,
                  day_off(u.company_id, coalesce(${date}::date, (now() at time zone 'Asia/Kolkata')::date)) as day_off
           from users u
@@ -407,12 +572,14 @@ export const hrRouter = new Hono<AppEnv>()
   })
 
   .post('/check-out', async (c) => {
+    const where = checkOutRequest.safeParse(await c.req.json().catch(() => ({})))
+    const at = where.success ? where.data : {}
     const id = await attempt(
       c,
       'hr.check_out',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          const rows = await sql<{ id: string }[]>`select check_out() as id`
+          const rows = await sql<{ id: string }[]>`select check_out(${at.lat ?? null}, ${at.lng ?? null}) as id`
           return rows[0]?.id ?? null
         }),
       { onCode: (code, err) => (code === 'P0001' && rpcReason(err).includes('no_open_check_in') ? 'no_open' : undefined) },
@@ -466,12 +633,21 @@ export const hrRouter = new Hono<AppEnv>()
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
           const rows = await sql<{ id: string }[]>`
-            select check_in(p_lat => ${parsed.data.lat}, p_lng => ${parsed.data.lng}) as id`
+            select check_in(p_lat => ${parsed.data.lat}, p_lng => ${parsed.data.lng}, p_auto => ${parsed.data.auto ?? false}) as id`
           return rows[0]?.id ?? null
         }),
-      { onCode: (code, err) => (code === 'P0001' && rpcReason(err).includes('outside_fence') ? 'outside' : undefined) },
+      {
+        onCode: (code, err) => {
+          if (code !== 'P0001') return undefined
+          const why = rpcReason(err)
+          if (why.includes('outside_fence')) return { outside: why.replace(/^.*outside_fence:\s*/, '').trim() }
+          if (why.includes('not_tracked')) return 'not_tracked' as const
+          return undefined
+        },
+      },
     )
-    if (id === 'outside') fail(422, 'You are too far from the studio to check in.')
+    if (id === 'not_tracked') fail(422, 'Attendance is not tracked for you.')
+    if (id && typeof id === 'object') fail(422, `You're ${id.outside}. You'll be marked once you're inside.`)
     if (!id) fail(400, 'We could not record your check-in.')
     await audit(c, { action: 'attendance.check_in', entityType: 'attendance', entityId: id })
     return c.json(idOnly.parse({ id }), 201)

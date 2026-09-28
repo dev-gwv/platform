@@ -193,6 +193,8 @@ export const cronRouter = new Hono<AppEnv>()
              )`
           return rows[0]?.n ?? 0
         }
+        // Shifts nobody closed first (0206), then the days nobody came.
+        await sql`select auto_checkout_sweep()`
         const rows = await sql<{ n: number }[]>`select mark_absent_backstop() as n`
         return rows[0]?.n ?? 0
       }),
