@@ -11,13 +11,14 @@ import { useLeads } from '@/features/crm/api'
 import { DistributionTab } from '@/features/crm/tabs/DistributionTab'
 import { TemplatesTab } from '@/features/crm/tabs/TemplatesTab'
 import { ImportsTab } from '@/features/crm/tabs/ImportsTab'
+import { SequencesSection } from '@/features/crm-sequences/SequencesSection'
 import { DuplicatesTab } from '@/features/crm/tabs/DuplicatesTab'
 import { CrmSettingsTab } from '@/features/crm/tabs/SettingsTab'
 
 /**
  * Everything a studio sets once.
  *
- * These five sat as tabs beside the day's work, which is how the CRM came to
+ * These sat as tabs beside the day's work, which is how the CRM came to
  * have fourteen of them. Distribution rules, message templates, a CSV import,
  * a duplicate merge and the pipeline editor are all things someone configures
  * on a Tuesday afternoon and then never opens again -- so they are one click
@@ -25,8 +26,9 @@ import { CrmSettingsTab } from '@/features/crm/tabs/SettingsTab'
  */
 const SECTIONS = [
   { key: 'distribution', label: 'Who gets new leads', hint: 'The rota that assigns an arriving lead' },
+  { key: 'sequences', label: 'Follow-up sequences', hint: 'WhatsApp and email follow-ups, written once' },
   { key: 'templates', label: 'Message templates', hint: 'What you send on WhatsApp and email' },
-  { key: 'imports', label: 'Imports & automations', hint: 'Bring in a CSV; run a sequence' },
+  { key: 'imports', label: 'Imports & automations', hint: 'Bring in a CSV; automations' },
   { key: 'duplicates', label: 'Duplicates', hint: 'The same person, twice' },
   { key: 'pipeline', label: 'Stages & scoring', hint: 'Your pipeline, lost reasons, scoring, SLA' },
 ] as const
@@ -105,6 +107,8 @@ function CrmSetup() {
       <div id="crm-setup-panel" role="tabpanel" aria-labelledby={`crm-setup-${section}`} className="mt-4">
         {section === 'distribution' ? (
           <DistributionTab />
+        ) : section === 'sequences' ? (
+          <SequencesSection />
         ) : section === 'templates' ? (
           <TemplatesTab />
         ) : section === 'imports' ? (

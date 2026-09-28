@@ -13,6 +13,7 @@ import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { CallButton } from '@/features/crm-calls/CallButton'
 import { useCallQueue } from '@/features/crm-calls/api'
+import { useSendNow } from '@/features/crm-sequences/api'
 
 export function CallQueuePage() {
   return (
@@ -43,6 +44,7 @@ function CallQueue() {
   const [scope, setScope] = useState<CallQueueScope>('mine')
   const q = useCallQueue(scope)
   const items = q.data?.items ?? []
+  const toSend = useSendNow().data?.items.length ?? 0
 
   return (
     <>
@@ -68,6 +70,16 @@ function CallQueue() {
           )
         }
       />
+      {toSend > 0 && (
+        <Link
+          to="/follow-ups/send"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-200"
+        >
+          <MessageCircle className="size-4" />
+          {toSend} message{toSend === 1 ? '' : 's'} ready to send
+          <span className="ml-auto">Open →</span>
+        </Link>
+      )}
       {q.isPending ? (
         <SkeletonList rows={6} />
       ) : q.isError ? (

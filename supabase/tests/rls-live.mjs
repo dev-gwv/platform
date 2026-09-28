@@ -2667,5 +2667,60 @@ if (listed) {
   check('calls: owners can see everyone\'s queue; a bad scope is refused', everyone.status === 200 && everyone.json.scope === 'all' && bad.status === 422, { all: everyone.json.scope, bad: bad.status })
 }
 
+// ── 0202: sequences, Send now, feature switches, branding ────────
+{
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const starters = await api('/crm/sequences/starters', { token: aToken, method: 'POST' })
+  const again = await api('/crm/sequences/starters', { token: aToken, method: 'POST' })
+  const list = await api('/crm/sequences', { token: aToken })
+  const names = (list.json ?? []).map?.((x) => x.name) ?? []
+  check(
+    'sequences: the ready-made ones are added once',
+    starters.json.added === 3 && again.json.added === 0 && ['New enquiry', 'Quotation sent', 'After the shoot'].every((n) => names.includes(n)),
+    { first: starters.json, again: again.json, names },
+  )
+
+  const noSubject = await api('/crm/sequences', { token: aToken, method: 'POST', body: { name: 'Bad one', steps: [{ day_offset: 0, channel: 'email', body: 'Hi' }] } })
+  check('sequences: an email step without a subject is refused', noSubject.status === 422, { status: noSubject.status })
+
+  const made = await api('/crm/sequences', {
+    token: aToken,
+    method: 'POST',
+    body: { name: `Live ${rand()}`, auto_start: true, source_filter: 'referral', steps: [{ day_offset: 0, channel: 'whatsapp', body: 'Hi {{first_name}}' }] },
+  })
+  const lead = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: 'Seq Person', phone: `9${String(Date.now()).slice(-9)}`, source: 'referral', assigned_to: me } })
+  const leadId = lead.json.id ?? lead.json.lead?.id
+  const on = await api(`/crm/leads/${leadId}/sequence`, { token: aToken })
+  check(
+    'sequences: a new lead from the right source starts the automatic one',
+    made.status === 201 && on.status === 200 && on.json.current?.cadence_id === made.json.id && on.json.current?.next_channel === 'whatsapp',
+    { made: made.status, current: on.json.current },
+  )
+
+  await api('/crm/activities', { token: aToken, method: 'POST', body: { lead_id: leadId, type: 'whatsapp', direction: 'in', body: 'Yes please' } })
+  const replied = await api(`/crm/leads/${leadId}/sequence`, { token: aToken })
+  check('sequences: a reply stops it', replied.json.current?.stopped_reason === 'replied', replied.json.current)
+
+  const sends = await api('/crm/sequences/sends', { token: aToken })
+  const bLive = reset.json.access_token
+  const bSends = await api('/crm/sequences/sends', { token: bLive })
+  const bLead = await api(`/crm/leads/${leadId}/sequence`, { token: bLive })
+  check(
+    'sequences: Send now loads, and another studio sees none of it',
+    sends.status === 200 && Array.isArray(sends.json.items) && bSends.status === 200 && !bSends.json.items.some((x) => x.lead_id === leadId) && bLead.json.current === null,
+    { mine: sends.status, theirs: bSends.json.items?.length, bLead: bLead.json.current },
+  )
+
+  const features = await api('/features', { token: aToken })
+  const locked = await api('/features/branding', { token: aToken, method: 'PUT', body: { from_name: 'Asha Studio' } })
+  const studio = (await api('/auth/session', { token: aToken })).json.company_id
+  const selfGrant = await api(`/platform/studios/${studio}/features`, { token: aToken, method: 'PUT', body: { key: 'white_label', enabled: true } })
+  check(
+    'features: a studio reads its switches but cannot turn one on, and branding stays locked without it',
+    features.status === 200 && Array.isArray(features.json.keys) && locked.status === 403 && selfGrant.status === 403,
+    { features: features.json, locked: locked.status, selfGrant: selfGrant.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

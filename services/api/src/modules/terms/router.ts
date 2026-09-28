@@ -10,6 +10,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail } from '../../lib/email'
+import { currentStudioBrand } from '../../lib/studio-brand'
 
 const issueTermsRequest = z.object({
   project_id: z.string().uuid().nullable().default(null),
@@ -195,6 +196,7 @@ async function emailTerms(
     words.message
       ? escapeHtml(words.message).replace(/\n/g, '<br>')
       : `${info?.company_name ?? 'The studio'} has shared the terms${info?.project_name ? ` for ${info.project_name}` : ''}. Please open the link, read them, and tap "I agree".`,
+    await currentStudioBrand(c),
   )
   try {
     await withUser(c.env, c.get('auth').userId, async (sql) => {

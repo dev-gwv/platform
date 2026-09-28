@@ -14,6 +14,7 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { humanize } from '@/shared/ui/format'
+import { StudioFeatures } from '@/features/platform/StudioFeatures'
 import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio } from '@/features/platform/api'
 
 const GATE_TONE: Record<PlanGate, 'success' | 'info' | 'warning' | 'danger'> = {
@@ -407,6 +408,7 @@ function StudioDetailsDialog({ studio, onClose, onExpire }: { studio: PlatformSt
           <div><dt className="text-muted-foreground">Users</dt><dd>{studio.user_count}</dd></div>
           <div><dt className="text-muted-foreground">Projects</dt><dd>{studio.project_count}</dd></div>
         </dl>
+        <StudioFeatures studioId={studio.id} />
         <div className="mt-4 flex flex-col gap-2">
           <AssignPlanForm studio={studio} />
           <Button size="sm" variant="ghost" className="text-destructive" onClick={onExpire}>Expire plan</Button>

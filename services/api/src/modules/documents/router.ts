@@ -24,6 +24,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail } from '../../lib/email'
+import { currentStudioBrand } from '../../lib/studio-brand'
 import { serve } from '../files/router'
 
 const okResponse = z.object({ ok: z.boolean() })
@@ -139,7 +140,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const intro = parsed.data.message
       ? escapeHtml(parsed.data.message).replace(/\r?\n/g, '<br>')
       : `${info.company_name ?? 'The studio'} has shared a quotation${info.project_name ? ` for ${info.project_name}` : ''}. Open the link to view and respond.`
-    const result = await sendClientDocEmail(c.env, to, subject, link, intro)
+    const result = await sendClientDocEmail(c.env, to, subject, link, intro, await currentStudioBrand(c))
     try {
       await withUser(c.env, c.get('auth').userId, async (sql) => {
         await sql`insert into quotation_email_logs (company_id, quotation_id, to_email, status, error, created_by)
@@ -225,8 +226,9 @@ export const documentsRouter = new Hono<AppEnv>()
     const failedTo: { email: string; error: string }[] = []
     let lastStatus: 'sent' | 'provider_missing' | 'failed' = 'sent'
     let lastError: string | null = null
+    const brand = await currentStudioBrand(c)
     for (const to of toList) {
-      const result = await sendClientDocEmail(c.env, to, subject, link, bodyText)
+      const result = await sendClientDocEmail(c.env, to, subject, link, bodyText, brand)
       try {
         await withUser(c.env, c.get('auth').userId, async (sql) => {
           await sql`insert into receipt_email_logs (company_id, payment_id, to_email, status, error, created_by)

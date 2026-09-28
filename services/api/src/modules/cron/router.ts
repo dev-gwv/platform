@@ -12,6 +12,7 @@ import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
 import { runMorningEmails } from '../../lib/morning-email'
+import { runSequenceSends } from '../../lib/sequence-sender'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -134,8 +135,14 @@ export const cronRouter = new Hono<AppEnv>()
       if (!dryRun) throw new Error('cron.reminders failed')
       fail(400, 'The job could not run.')
     }
-    log.info({ path: c.req.path, dryRun, ...result }, 'cron reminders ran')
-    return c.json(cronRunResult.parse({ ok: true, ...result }))
+    // After the sweep has committed, so a sequence email written this tick
+    // goes this tick. Each send commits on its own (never twice).
+    const sequenceSends = await runSequenceSends(c.env, dryRun).catch((err: unknown) => {
+      log.error({ err: String(err) }, 'sequence sends failed')
+      return { claimed: 0, sent: 0, failed: 0 }
+    })
+    log.info({ path: c.req.path, dryRun, ...result, sequenceSends }, 'cron reminders ran')
+    return c.json(cronRunResult.parse({ ok: true, ...result, sequence_sends: sequenceSends }))
   })
 
   /**
