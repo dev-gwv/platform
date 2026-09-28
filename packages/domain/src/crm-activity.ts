@@ -14,11 +14,19 @@ export const ACTIVITY_LABEL: Record<ActivityType, string> = {
   sms: 'SMS',
 }
 
-export const CALL_OUTCOMES: ReadonlyArray<{ key: string; label: string }> = [
+/**
+ * How a call went. The first four are the everyday ones (one tap each after a
+ * call); 0201 decides what each does to the lead: an answer or a call-back
+ * request resets the misses, three misses in a row or a wrong number marks
+ * the lead unreachable.
+ */
+export const CALL_OUTCOMES: ReadonlyArray<{ key: string; label: string; missed?: boolean }> = [
   { key: 'answered', label: 'Answered' },
-  { key: 'no_answer', label: 'No answer' },
-  { key: 'busy', label: 'Busy' },
-  { key: 'voicemail', label: 'Voicemail' },
+  { key: 'no_answer', label: 'No answer', missed: true },
+  { key: 'busy', label: 'Busy', missed: true },
+  { key: 'callback', label: 'Call back later' },
+  { key: 'switched_off', label: 'Switched off', missed: true },
+  { key: 'voicemail', label: 'Voicemail', missed: true },
   { key: 'wrong_number', label: 'Wrong number' },
 ]
 

@@ -33,6 +33,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 
 import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
+import { EmailBrandingCard } from '@/features/branding/EmailBrandingCard'
 
 export function SettingsPage() {
   return (
@@ -72,6 +73,7 @@ function Settings() {
       </div>
 
       <BrandIdentityCard readOnly={!isOwner} />
+      <EmailBrandingCard readOnly={!isOwner && session?.role !== 'admin'} />
 
       <Section
         title="Advanced hubs"

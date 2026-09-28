@@ -95,12 +95,43 @@ interface MailCopy {
   cta?: string | undefined
   link?: string | undefined
   footer: string
+  /** Mail a studio sends to its own client wears the studio's name. */
+  brand?: StudioBrand | undefined
+}
+
+/**
+ * Who a studio's email is from. Every studio's mail to its clients leads with
+ * the studio; with white_label (0202) nothing in it says IPC Studios at all,
+ * and the studio chooses the sender name, reply-to and footer.
+ */
+export interface StudioBrand {
+  name: string
+  logoUrl: string | null
+  replyTo: string | null
+  fromName: string | null
+  footerLine: string | null
+  whiteLabel: boolean
+}
+
+/** "Asha Studio via IPC Studios <noreply@…>", or with white label "Asha Studio <noreply@…>". */
+export function studioFrom(envFrom: string, brand: StudioBrand): string {
+  const address = /<([^>]+)>/.exec(envFrom)?.[1] ?? envFrom.trim()
+  const clean = (t: string) => t.replace(/["<>\r\n\\]/g, '').trim().slice(0, 60)
+  const name = brand.whiteLabel ? clean(brand.fromName || brand.name) : `${clean(brand.name)} via IPC Studios`
+  return `"${name}" <${address}>`
+}
+
+/** The footer line under a studio's email. */
+export function studioFooter(brand: StudioBrand): string {
+  if (brand.whiteLabel) return brand.footerLine ? esc(brand.footerLine) : esc(brand.name)
+  return `Sent for ${esc(brand.name)} by IPC Studios.`
 }
 
 /** Branded, email-client-safe HTML (table layout + inline styles). */
-function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): string {
-  const brand = '#1b2a4a' // navy (badge + button)
+function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailCopy): string {
+  const navy = '#1b2a4a' // navy (badge + button)
   const accent = '#f2a618' // gold (wordmark "IPC")
+  const studio = brand
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -122,12 +153,12 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
             <!-- header -->
             <tr>
               <td align="center" style="padding:32px 32px 8px;">
-                <table role="presentation" cellpadding="0" cellspacing="0">
+                ${studio ? studioHeader(studio) : `<table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td style="width:44px;height:44px;background:${brand};border-radius:12px;text-align:center;vertical-align:middle;font-size:22px;line-height:44px;">📷</td>
+                    <td style="width:44px;height:44px;background:${navy};border-radius:12px;text-align:center;vertical-align:middle;font-size:22px;line-height:44px;">📷</td>
                   </tr>
                 </table>
-                <div style="margin-top:12px;font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#111827;"><span style="color:${accent};">IPC</span> Studios</div>
+                <div style="margin-top:12px;font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#111827;"><span style="color:${accent};">IPC</span> Studios</div>`}
               </td>
             </tr>
             <!-- body -->
@@ -141,7 +172,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
                   <tr>
                     <td align="center" style="padding:4px 0 8px;">
                       <a href="${link}"
-                         style="display:inline-block;background:${brand};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:10px;">
+                         style="display:inline-block;background:${navy};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:10px;">
                         ${cta}
                       </a>
                     </td>
@@ -149,7 +180,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
                 </table>
                 <p style="margin:20px 0 6px;font-size:12px;color:#6b7280;text-align:center;">Or paste this link into your browser:</p>
                 <p style="margin:0 0 8px;font-size:12px;text-align:center;word-break:break-all;">
-                  <a href="${link}" style="color:${brand};text-decoration:none;">${link}</a>
+                  <a href="${link}" style="color:${navy};text-decoration:none;">${link}</a>
                 </p>` : ''}
               </td>
             </tr>
@@ -162,7 +193,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer }: MailCopy): s
               </td>
             </tr>
           </table>
-          <div style="margin-top:16px;font-size:11px;color:#9ca3af;">© IPC Studios</div>
+          ${studio?.whiteLabel ? '' : '<div style="margin-top:16px;font-size:11px;color:#9ca3af;">© IPC Studios</div>'}
         </td>
       </tr>
     </table>
@@ -181,6 +212,7 @@ export async function sendClientDocEmail(
   subject: string,
   link: string,
   intro: string,
+  brand?: StudioBrand | null,
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error?: string; url: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing', url: link }
   if (!to) return { status: 'failed', error: 'Client email not found for this project.', url: link }
@@ -192,10 +224,19 @@ export async function sendClientDocEmail(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: env.EMAIL_FROM,
+        from: brand ? studioFrom(env.EMAIL_FROM, brand) : env.EMAIL_FROM,
         to,
         subject,
-        html: brandedHtml({ title: subject, preheader: intro, body: intro, cta: 'Open document', link, footer: 'If you were not expecting this, you can ignore this email.' }),
+        ...(brand?.replyTo ? { reply_to: brand.replyTo } : {}),
+        html: brandedHtml({
+          title: subject,
+          preheader: intro,
+          body: intro,
+          cta: 'Open document',
+          link,
+          footer: brand ? studioFooter(brand) : 'If you were not expecting this, you can ignore this email.',
+          brand: brand ?? undefined,
+        }),
       }),
     })
     if (!res.ok) return { status: 'failed', error: 'Email failed to send.', url: link }
@@ -205,6 +246,47 @@ export async function sendClientDocEmail(
     return { status: 'failed', error: 'Email failed to send.', url: link }
   }
 }
+
+/**
+ * A message a studio's sequence writes to its lead (0202): plain words, the
+ * studio's name on it, replies going to the studio. Never throws.
+ */
+export async function sendStudioEmail(
+  env: Env,
+  m: { to: string; subject: string; text: string; brand: StudioBrand },
+): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }> {
+  if (!env.RESEND_API_KEY) return { status: 'provider_missing' }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: studioFrom(env.EMAIL_FROM, m.brand),
+        to: m.to,
+        subject: m.subject,
+        ...(m.brand.replyTo ? { reply_to: m.brand.replyTo } : {}),
+        text: m.text,
+        html: brandedHtml({
+          title: esc(m.subject),
+          preheader: esc(m.text.slice(0, 120)),
+          body: `<span style="display:block;text-align:left;">${linkify(esc(m.text)).replace(/\n/g, '<br>')}</span>`,
+          footer: studioFooter(m.brand),
+          brand: m.brand,
+        }),
+      }),
+    })
+    if (!res.ok) return { status: 'failed', error: `Email provider refused it (${res.status}).` }
+    const json = (await res.json().catch(() => ({}))) as { id?: string }
+    return { status: 'sent', ...(json.id ? { id: json.id } : {}) }
+  } catch (e) {
+    console.error('[email] studio send threw', e)
+    return { status: 'failed', error: 'Email could not be sent.' }
+  }
+}
+
+/** Make the links in already-escaped text clickable. */
+const linkify = (escaped: string) =>
+  escaped.replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" style="color:#1b2a4a;">${u}</a>`)
 
 /**
  * Terms sent to someone the studio has booked.
@@ -294,6 +376,14 @@ export async function sendMessageEmail(
     console.error('[email] message send threw', e)
     return { status: 'failed', error: 'Email could not be sent.' }
   }
+}
+
+/** The studio's logo when it has a web address for one, else its name. */
+function studioHeader(b: StudioBrand): string {
+  const logo = b.logoUrl && /^https:\/\//.test(b.logoUrl) ? b.logoUrl : null
+  return logo
+    ? `<img src="${esc(logo)}" alt="${esc(b.name)}" style="max-height:56px;max-width:200px;border:0;display:block;margin:0 auto;" />`
+    : `<div style="font-size:20px;font-weight:600;letter-spacing:-0.01em;color:#111827;">${esc(b.name)}</div>`
 }
 
 const esc = (t: string) =>

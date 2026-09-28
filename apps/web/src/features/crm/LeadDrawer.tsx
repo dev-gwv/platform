@@ -11,14 +11,14 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
-  Phone,
-  Repeat,
   Square,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CrmLead, CrmQuote, LeadQuality } from '@ipc/contracts'
 import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
+import { CallButton } from '@/features/crm-calls/CallButton'
+import { LeadSequencePanel } from '@/features/crm-sequences/LeadSequencePanel'
 import { Dialog } from '@/shared/ui/dialog'
 import { SheetContent } from '@/shared/ui/sheet'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -30,21 +30,17 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
 import { useClients } from '@/features/clients/api'
 import {
-  useCadences,
   useConvertLead,
   useContacts,
   useCrmCompanies,
   useCrmSettings,
   useEnrollWorkflow,
   useExitEnrollment,
-  useLeadCadence,
   useLeadEnrollments,
   useMoveStage,
   usePipelines,
   useQuotes,
   useSendTemplate,
-  useStartCadence,
-  useStopCadence,
   useTemplates,
   useUpdateLead,
   useWorkflows,
@@ -271,17 +267,8 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             * which.
             */}
           <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-2 border-b border-border bg-card px-1 pb-3">
-            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
-              {lead.phone ? (
-                <a href={`tel:${lead.phone}`}>
-                  <Phone /> Call
-                </a>
-              ) : (
-                <span>
-                  <Phone /> Call
-                </span>
-              )}
-            </Button>
+            {/* Dials, then asks how it went (0201). */}
+            <CallButton lead={lead} />
             <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
               {lead.phone ? (
                 <a href={waLink(lead.phone)} target="_blank" rel="noreferrer">
@@ -481,7 +468,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               )}
             </div>
 
-            {canEdit && <CadencePanel lead={lead} />}
+            {canEdit && <LeadSequencePanel lead={lead} />}
             {canEdit && <WorkflowPanel lead={lead} />}
 
             <div className="flex flex-col gap-1.5">
@@ -710,63 +697,6 @@ function QuotesPanel({ lead, canEdit }: { lead: CrmLead; canEdit: boolean }) {
       )}
       {building && <QuoteBuilder lead={lead} open onClose={() => setBuilding(false)} />}
       {editing && <QuoteBuilder lead={lead} quote={editing} open onClose={() => setEditing(null)} />}
-    </div>
-  )
-}
-
-/** The follow-up sequence this lead is on, or the one to put it on. */
-function CadencePanel({ lead }: { lead: CrmLead }) {
-  const { data: current } = useLeadCadence(lead.id)
-  const { data: cadences } = useCadences()
-  const start = useStartCadence()
-  const stop = useStopCadence()
-  const [pick, setPick] = useState('')
-  const options = (cadences ?? []).filter((c) => c.is_active && c.steps.length > 0)
-  const closed = lead.status === 'converted' || lead.status === 'lost'
-  const running = current && !current.completed_at && !current.stopped_at
-
-  if (options.length === 0 && !current) return null
-
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        <Repeat className="size-3.5" /> Cadence
-      </p>
-      {running ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">{current.cadence_name}</span>
-          <StatusBadge tone="info">
-            step {current.step_no} of {current.total_steps}
-          </StatusBadge>
-          {current.next_at && <span className="text-muted-foreground">next {when.format(new Date(current.next_at))}</span>}
-          <Button size="sm" variant="ghost" className="ml-auto" disabled={stop.isPending} onClick={() => stop.mutate(lead.id)}>
-            <Square /> Stop
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {current && (
-            <span className="text-xs text-muted-foreground">
-              {current.cadence_name} {current.completed_at ? 'completed' : 'stopped'}.
-            </span>
-          )}
-          {!closed && options.length > 0 && (
-            <>
-              <Select value={pick} onChange={(e) => setPick(e.target.value)} className="w-56" aria-label="Cadence">
-                <option value="">Put on a cadence…</option>
-                {options.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} · {c.steps.length} step{c.steps.length === 1 ? '' : 's'}
-                  </option>
-                ))}
-              </Select>
-              <Button size="sm" disabled={!pick || start.isPending} onClick={() => start.mutate({ leadId: lead.id, cadence_id: pick }, { onSuccess: () => setPick('') })}>
-                Start
-              </Button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 }

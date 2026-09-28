@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
+import { BackButton } from './BackButton'
+import { RefreshButton } from './RefreshButton'
+import { MobileTabBar } from './MobileTabBar'
 import { Menu, Moon, Sun, ChevronDown, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useAccess } from '../auth/useAccess'
@@ -145,6 +148,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="md:hidden">
             <Brand />
           </span>
+          {/* Back and Refresh on every page: a way out of any screen without
+              the browser's buttons, and fresh numbers without a reload. */}
+          <div className="flex items-center">
+            <BackButton />
+            <RefreshButton />
+          </div>
 
           <div className="ml-auto flex items-center gap-2">
             <QuickLinks className="hidden lg:flex" />
@@ -196,6 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {children}
           </div>
         </main>
+        <MobileTabBar onMenu={() => setMobileOpen(true)} />
       </div>
     </div>
   )

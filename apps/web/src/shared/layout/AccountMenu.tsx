@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Building2, Check, ChevronDown, Loader2, LogOut, Palette, UserRound, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Download, Loader2, LogOut, Palette, UserRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { companyProfile, type StudioMembership } from '@ipc/contracts'
 import { callApi } from '../api/client'
@@ -10,6 +10,7 @@ import { useAccess } from '../auth/useAccess'
 import { Avatar } from '../ui/avatar'
 import { cn } from '../ui/cn'
 import { humanize } from '../ui/format'
+import { useInstall } from '../pwa/install'
 
 /**
  * Who you are signed in as, and the two or three things you do about it.
@@ -27,6 +28,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   const access = useAccess()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  const install = useInstall()
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
 
@@ -107,6 +109,24 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
             <div className="border-t border-border p-1.5">
               <Item to="/settings/company" icon={Building2} label="Company Profile" />
               <Item to="/settings/appearance" icon={Palette} label="Appearance" />
+            </div>
+          )}
+
+          {install.kind && (
+            <div className="border-t border-border p-1.5">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false)
+                  if (install.kind === 'prompt') void install.install()
+                  else toast.info('On iPhone: tap Share, then “Add to Home Screen”.', { duration: 6000 })
+                }}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+              >
+                <Download className="size-4 shrink-0" aria-hidden />
+                Install app on this device
+              </button>
             </div>
           )}
 

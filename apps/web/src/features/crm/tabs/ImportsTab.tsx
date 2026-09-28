@@ -9,7 +9,6 @@ import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useImportCommit, useImportPreview } from '../api'
 import { WorkflowsSection } from './WorkflowsSection'
-import { CadencesSection } from './CadencesSection'
 
 // Shows the columns that are read, including the ones the importer used to
 // drop -- a sample that only demonstrates five teaches a studio to send five.
@@ -21,8 +20,8 @@ const SAMPLE = [
 ].join('\n')
 
 /**
- * CSV import, then cadences and automations — the ways leads get into and
- * through the pipeline without anyone typing them.
+ * CSV import, then automations — the ways leads get into and through the
+ * pipeline without anyone typing them. Sequences have their own section.
  */
 export function ImportsTab() {
   const access = useAccess()
@@ -36,7 +35,6 @@ export function ImportsTab() {
           <CardContent className="p-4 text-sm text-muted-foreground">Importing needs the ability to create leads.</CardContent>
         </Card>
       )}
-      <CadencesSection />
       <WorkflowsSection />
     </div>
   )

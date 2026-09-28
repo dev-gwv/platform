@@ -42,6 +42,9 @@ import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
 import { enquiryFormsRouter, publicEnquiryFormsRouter } from './modules/enquiry-forms/router'
+import { crmCallsRouter } from './modules/crm-calls/router'
+import { crmSequencesRouter } from './modules/crm-sequences/router'
+import { featuresRouter, platformFeaturesRouter } from './modules/features/router'
 import { publicOnboardingRouter } from './modules/onboarding/router'
 import { messagingRouter } from './modules/messaging/router'
 import { reportsRouter } from './modules/reports/router'
@@ -147,6 +150,8 @@ app.route('/work', workRouter)
 app.route('/work/reminder-settings', workReminderSettingsRouter)
 app.route('/billing', billingRouter)
 app.route('/financials', financialsRouter)
+app.route('/crm', crmCallsRouter)
+app.route('/crm', crmSequencesRouter)
 app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)
 app.route('/meta', metaRouter)
@@ -167,6 +172,8 @@ app.route('/public', publicDocumentsRouter)
 app.route('/public', publicFilesRouter)
 app.route('/settings', settingsRouter)
 app.route('/platform', platformRouter)
+app.route('/platform', platformFeaturesRouter)
+app.route('/features', featuresRouter)
 app.route('/feedback', feedbackRouter)
 app.route('/referrals', referralsRouter)
 app.route('/public', publicReferralsRouter)

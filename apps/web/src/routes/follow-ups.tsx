@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -150,6 +150,11 @@ function Crm() {
         description="Everyone who got in touch, and who you owe a call."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to="/follow-ups/queue">
+                <PhoneCall /> Today's calls
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link to="/follow-ups/reports">
                 <BarChart3 /> Reports
