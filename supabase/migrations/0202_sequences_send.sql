@@ -251,7 +251,7 @@ begin
     update crm_leads set follow_up_at = v_next where id = p_lead;
   end if;
   insert into crm_lead_events (company_id, lead_id, from_status, to_status, actor_id, note)
-  values (v_company, p_lead, null, null, p_actor, coalesce(p_why, 'sequence started') || ': ' || v_name);
+  values (v_company, p_lead, null, null, p_actor, coalesce(p_why, 'cadence started') || ': ' || v_name);
   return v_next;
 end;
 $$;
@@ -276,7 +276,7 @@ begin
   if not exists (select 1 from crm_leads where id = p_lead and company_id = v_company) then
     raise exception 'unknown lead' using errcode = '42501';
   end if;
-  return crm_sequence_begin(p_lead, p_cadence, auth.uid(), 'sequence started');
+  return crm_sequence_begin(p_lead, p_cadence, auth.uid(), 'cadence started');
 end;
 $$;
 revoke all on function start_lead_cadence(uuid, uuid) from public, anon;
@@ -302,7 +302,7 @@ begin
   returning (select name from crm_cadences where id = lc.cadence_id) into v_name;
   if not found then return false; end if;
   insert into crm_lead_events (company_id, lead_id, from_status, to_status, actor_id, note)
-  values (v_company, p_lead, null, null, auth.uid(), 'sequence stopped: ' || coalesce(v_name, ''));
+  values (v_company, p_lead, null, null, auth.uid(), 'cadence stopped: ' || coalesce(v_name, ''));
   return true;
 end;
 $$;
@@ -374,7 +374,7 @@ begin
       returning c.name into v_stopped;
       if v_stopped is not null then
         insert into crm_lead_events (company_id, lead_id, from_status, to_status, actor_id, note)
-        values (new.company_id, new.lead_id, null, null, null, 'replied via ' || new.type || ' · sequence stopped: ' || v_stopped);
+        values (new.company_id, new.lead_id, null, null, null, 'replied via ' || new.type || ' · cadence stopped: ' || v_stopped);
       end if;
       update crm_workflow_enrollments e
          set status = 'exited', exit_reason = 'replied', next_at = null
@@ -429,7 +429,7 @@ begin
   end if;
 
   if v_cadence is not null then
-    perform crm_sequence_begin(new.id, v_cadence, null, 'sequence started by itself');
+    perform crm_sequence_begin(new.id, v_cadence, null, 'cadence started by itself');
   end if;
   return null;
 end;
