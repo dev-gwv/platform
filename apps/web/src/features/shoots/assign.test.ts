@@ -34,6 +34,9 @@ const member = (id: string, name: string, over: Partial<TeamMember> = {}): TeamM
 
 let n = 0
 const slot = (over: Partial<TeamSlot>): TeamSlot => ({
+  response: 'confirmed',
+  decline_reason: null,
+  arrived_at: null,
   released_at: null,
   shoot_name: null,
   shoot_date: null,

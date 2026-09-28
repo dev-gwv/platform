@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { ResponseChip } from '@/features/allocation/SlotAnswer'
 import { AlertTriangle, CheckCircle2, Clock, MapPin, UserPlus, Users } from 'lucide-react'
 import type { ShootListItem, TeamSlot } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
@@ -47,6 +48,11 @@ export function ShootCard({
 }) {
   const { cards, extra } = roleCards(shoot, slots)
   const st = staffing(shoot, slots)
+  // The crew's answers (0207), for a shoot still to come.
+  const live = new Date(shoot.shoot_date ?? '9999-12-31') >= new Date(new Date().toDateString())
+  const booked = slots.filter((s) => s.shoot_id === shoot.id && s.status === 'booked')
+  const unanswered = live ? booked.filter((s) => s.response === 'pending').length : 0
+  const declined = live ? booked.filter((s) => s.response === 'declined').length : 0
   const d = shoot.shoot_date ? dateParts(shoot.shoot_date) : null
   const time = shoot.start_at
     ? new Date(shoot.start_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
@@ -111,6 +117,8 @@ export function ShootCard({
                 <Users className="size-3.5" aria-hidden /> {st.filled}/{st.needed} assigned
               </span>
             )}
+            {unanswered > 0 && <span className="font-medium text-warning">{unanswered} not confirmed</span>}
+            {declined > 0 && <span className="font-medium text-destructive">{declined} can't make it</span>}
           </p>
         </div>
         <StaffingBadge state={st.state} filled={st.filled} needed={st.needed} />
@@ -243,6 +251,7 @@ export function BookedPerson({ slot, canPlan, menu, showRole = false }: { slot: 
           )}
         </p>
       </div>
+      <ResponseChip slot={slot} />
       {menu.length > 0 && <RowMenu label={`More for ${slot.user_name ?? 'this booking'}`} items={menu} />}
     </li>
   )

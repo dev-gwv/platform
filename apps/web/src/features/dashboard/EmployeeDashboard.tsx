@@ -20,6 +20,7 @@ import { MyDeliveryStrip } from '@/features/projects/MyDeliveryStrip'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { TodayAttendanceCard } from '@/features/attendance/TodayAttendanceCard'
+import { SlotAnswer } from '@/features/allocation/SlotAnswer'
 
 const myList = attendanceRecord.array()
 
@@ -148,7 +149,7 @@ export function EmployeeDashboard() {
             ) : (
               <ul className="flex flex-col gap-2">
                 {mySlots.map((s) => (
-                  <li key={s.id} className="flex items-start gap-2 text-sm">
+                  <li key={s.id} className="flex flex-wrap items-start gap-2 text-sm">
                     <EventTile name={s.shoot_name ?? s.service_name} size="sm" />
                     <span className="min-w-0">
                       <span className="font-medium">{s.shoot_name ?? s.service_name ?? 'Booked'}</span>
@@ -157,6 +158,9 @@ export function EmployeeDashboard() {
                         {s.service_name && s.shoot_name ? ` · ${s.service_name}` : ''}
                         {s.location ? ` · ${s.location}` : ''}
                       </span>
+                    </span>
+                    <span className="ml-auto shrink-0">
+                      <SlotAnswer slot={s} />
                     </span>
                   </li>
                 ))}

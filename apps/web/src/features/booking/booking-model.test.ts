@@ -11,6 +11,9 @@ const SANA = '00000000-0000-4000-8000-000000000003'
 
 let n = 0
 const slot = (over: Partial<TeamSlot>): TeamSlot => ({
+  response: 'confirmed',
+  decline_reason: null,
+  arrived_at: null,
   id: `00000000-0000-4000-9000-${String(++n).padStart(12, '0')}`,
   user_id: PRIYA,
   user_name: 'Priya Nair',

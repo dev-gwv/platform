@@ -33,8 +33,27 @@ export const teamSlot = z.object({
   project_id: uuid.nullable().default(null),
   project_name: z.string().nullable().default(null),
   client_name: z.string().nullable().default(null),
+  /** The person's answer (0207): pending until they confirm or decline. */
+  response: z.enum(['pending', 'confirmed', 'declined']).default('confirmed'),
+  decline_reason: z.string().nullable().default(null),
+  arrived_at: isoDateTime.nullable().default(null),
 })
 export type TeamSlot = z.infer<typeof teamSlot>
+
+/** POST /allocation/:id/respond: the person booked answers. */
+export const respondSlotRequest = z
+  .object({
+    response: z.enum(['confirmed', 'declined']),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .refine((v) => v.response === 'confirmed' || (v.reason ?? '').length >= 3, { message: "Say why you can't make it." })
+export type RespondSlotRequest = z.infer<typeof respondSlotRequest>
+
+/** POST /allocation/:id/arrived: "I've reached", with where, if the phone says. */
+export const arrivedRequest = z.object({
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+})
 
 /**
  * Bookings in a window. `from`/`to` are dates (inclusive) matched against the
