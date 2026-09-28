@@ -29,6 +29,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 type Mode = 'signin' | 'register' | 'forgot'
 const ok = z.object({ ok: z.boolean() })
@@ -354,7 +355,7 @@ export function LoginPage() {
             * large-text threshold, which is why the wordmark may carry it and
             * the links below may not.
             */}
-          <span className="text-brand">IPC</span> Studios
+          <Wordmark />
         </h1>
 
         {resetSentTo ? (

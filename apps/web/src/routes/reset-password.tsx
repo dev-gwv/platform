@@ -16,6 +16,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 /**
  * Landing page for the reset link (/reset-password?token=…). A successful reset
@@ -69,7 +70,7 @@ export function ResetPasswordPage() {
             <Camera className="size-6" />
           </span>
           <h1 className="text-xl font-semibold tracking-tight">
-            <span className="text-brand">IPC</span> Studios
+            <Wordmark />
           </h1>
         </div>
         <Card>

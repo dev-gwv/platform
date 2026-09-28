@@ -74,7 +74,7 @@ function Whatsapp() {
       ) : !s.ready ? (
         <Card>
           <CardContent className="p-4 text-sm text-muted-foreground">
-            WhatsApp connections are not switched on for this server yet. Please ask IPC Studios support.
+            WhatsApp connections are not switched on for this server yet. Please ask Studio AutoPilot support.
           </CardContent>
         </Card>
       ) : canManage ? (

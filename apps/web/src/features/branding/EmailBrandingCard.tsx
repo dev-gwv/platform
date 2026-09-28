@@ -26,7 +26,7 @@ export function EmailBrandingCard({ readOnly }: { readOnly: boolean }) {
   }, [b])
 
   if (!b) return null
-  const shownFrom = b.enabled ? fromName.trim() || b.studio_name : `${b.studio_name} via IPC Studios`
+  const shownFrom = b.enabled ? fromName.trim() || b.studio_name : `${b.studio_name} via Studio AutoPilot`
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -44,7 +44,7 @@ export function EmailBrandingCard({ readOnly }: { readOnly: boolean }) {
         {!b.enabled ? (
           <p className="mt-3 flex items-center gap-2 rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
             <Lock className="size-4 shrink-0" />
-            Your own sender name, reply-to and footer, with no IPC Studios on anything, comes with the higher plan.
+            Your own sender name, reply-to and footer, with no Studio AutoPilot on anything, comes with the higher plan.
           </p>
         ) : (
           <form onSubmit={onSubmit} className="mt-4 grid gap-3 sm:grid-cols-3">

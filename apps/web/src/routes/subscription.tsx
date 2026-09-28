@@ -76,7 +76,7 @@ function Subscription() {
           razorpayOrderId: order.razorpay_order_id,
           amountRupees: order.amount,
           currency: order.currency,
-          studioName: 'IPC Studios',
+          studioName: 'Studio AutoPilot',
           description: `${p.name} plan`,
           prefill: { name: session?.display_name ?? '', email: session?.email ?? '' },
         })
@@ -132,37 +132,52 @@ function Subscription() {
         description="Manage your studio's plan."
         actions={
           session && (
-            <StatusBadge tone={gateTone[session.plan_gate]}>{humanize(session.plan_gate)}</StatusBadge>
+            <StatusBadge tone={gateTone[session.plan_gate]}>
+              {status.data ? PLAN_SOURCE_LABEL[status.data.plan_source] : humanize(session.plan_gate)}
+            </StatusBadge>
           )
         }
       />
       <SettingsTabs />
-      {status.data && (
-        <Card className="mb-4">
-          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-1 p-4 text-sm">
-            <span><span className="text-muted-foreground">Current: </span><strong>{status.data.plan_name ?? status.data.plan_key ?? '—'}</strong></span>
-            {!status.data.can_purchase && <StatusBadge tone="success">Current plan</StatusBadge>}
-            {/* "Active" reads the same on a free trial and on two years
-                paid up. Which one it is decides what to say on a renewal
-                call, so it belongs beside the plan name. */}
-            <span>
-              <span className="text-muted-foreground">Source: </span>
-              <strong>{PLAN_SOURCE_LABEL[status.data.plan_source]}</strong>
-            </span>
-            {status.data.latest_order_status && (
-              <span><span className="text-muted-foreground">Latest payment: </span>{humanize(status.data.latest_order_status)}</span>
-            )}
-            {status.data.webhook_configured === false && session?.is_owner && (
-              <span className="text-xs text-muted-foreground">Automatic renewal receipts are off (provider webhook not configured) — renewals still activate on checkout.</span>
-            )}
+      {/* One line only when a payment is in flight; the card below says the rest. */}
+      {status.data?.latest_order_status && status.data.latest_order_status !== 'paid' && (
+        <p className="mb-2 text-sm text-muted-foreground">Latest payment: {humanize(status.data.latest_order_status)}</p>
+      )}
+      {/* When it ends, in one line anyone can read: the 30-day trial (0210)
+          or the paid plan, with the days left in big type. */}
+      {status.data?.access_until && (
+        <Card
+          className={`mb-4 border-l-4 ${
+            (status.data.days_left ?? 0) < 0
+              ? 'border-l-destructive'
+              : (status.data.days_left ?? 0) <= 7
+                ? 'border-l-tone-amber'
+                : 'border-l-tone-green'
+          }`}
+        >
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {status.data.plan_source === 'trial' ? 'Your free trial' : 'Your plan'}
+              </p>
+              <p className="text-2xl font-bold tabular-nums">
+                {(status.data.days_left ?? 0) < 0
+                  ? 'Ended'
+                  : `${status.data.days_left} day${status.data.days_left === 1 ? '' : 's'} left`}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {(status.data.days_left ?? 0) < 0 ? 'Ended on ' : 'Ends on '}
+              <strong className="text-foreground">
+                {new Date(status.data.access_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </strong>
+              .{' '}
+              {status.data.plan_source === 'trial'
+                ? 'Pick a plan below to keep everything running after that.'
+                : 'Paying again extends from that date, so nothing is lost by renewing early.'}
+            </p>
           </CardContent>
         </Card>
-      )}
-      {session?.plan_expiry && (
-        <p className="mb-4 text-sm text-muted-foreground">
-          Current plan runs until {new Date(session.plan_expiry).toLocaleDateString('en-IN')}. Paying
-          again extends from that date, so nothing is lost by renewing early.
-        </p>
       )}
       {outcome && (
         <p role="status" className={`mb-4 rounded-md px-3 py-2 text-sm ${outcomeClass[outcome.tone]}`}>

@@ -18,7 +18,7 @@ export function SetupWelcome({ name }: { name: string | null | undefined }) {
     <Card className="mx-auto mb-4 w-full max-w-2xl border-primary/25 bg-primary/5">
       <CardContent className="p-4 sm:p-5">
         <h1 className="text-lg font-semibold tracking-tight">
-          Welcome to IPC Studios{first ? `, ${first}` : ''}.
+          Welcome to Studio AutoPilot{first ? `, ${first}` : ''}.
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Three quick steps and your studio runs on autopilot.

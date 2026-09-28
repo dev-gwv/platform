@@ -107,7 +107,7 @@ export function MetaConnectionCard() {
         {!ready && (
           <p className="mt-3 flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-            <span>Facebook connections are not set up on this server yet. Ask IPC Studios to finish the setup.</span>
+            <span>Facebook connections are not set up on this server yet. Ask Studio AutoPilot to finish the setup.</span>
           </p>
         )}
         {status.data?.last_error && (

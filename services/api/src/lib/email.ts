@@ -31,10 +31,10 @@ export function sendVerificationEmail(env: Env, to: string, link: string): Promi
   return send(
     env,
     to,
-    'Verify your IPC Studios email',
+    'Verify your Studio AutoPilot email',
     brandedHtml({
       title: 'Verify your email',
-      preheader: 'Confirm your email to activate your IPC Studios workspace.',
+      preheader: 'Confirm your email to activate your Studio AutoPilot workspace.',
       body: 'Welcome! Confirm your email address to activate your studio workspace.',
       cta: 'Verify email',
       link,
@@ -47,10 +47,10 @@ export function sendPasswordResetEmail(env: Env, to: string, link: string): Prom
   return send(
     env,
     to,
-    'Reset your IPC Studios password',
+    'Reset your Studio AutoPilot password',
     brandedHtml({
       title: 'Reset your password',
-      preheader: 'Choose a new password for your IPC Studios account.',
+      preheader: 'Choose a new password for your Studio AutoPilot account.',
       body: 'We received a request to reset your password. Choose a new one to get back in.',
       cta: 'Reset password',
       link,
@@ -74,10 +74,10 @@ export function sendInvitationEmail(
   return send(
     env,
     to,
-    `${companyName} invited you to IPC Studios`,
+    `${companyName} invited you to Studio AutoPilot`,
     brandedHtml({
       title: `Join ${companyName}`,
-      preheader: `${companyName} added you to their studio on IPC Studios.`,
+      preheader: `${companyName} added you to their studio on Studio AutoPilot.`,
       body: `${companyName} has added you to their team. Set a password to open your dashboard and see the work assigned to you.`,
       cta: 'Accept invitation',
       link,
@@ -101,7 +101,7 @@ interface MailCopy {
 
 /**
  * Who a studio's email is from. Every studio's mail to its clients leads with
- * the studio; with white_label (0202) nothing in it says IPC Studios at all,
+ * the studio; with white_label (0202) nothing in it says Studio AutoPilot at all,
  * and the studio chooses the sender name, reply-to and footer.
  */
 export interface StudioBrand {
@@ -113,24 +113,24 @@ export interface StudioBrand {
   whiteLabel: boolean
 }
 
-/** "Asha Studio via IPC Studios <noreply@…>", or with white label "Asha Studio <noreply@…>". */
+/** "Asha Studio via Studio AutoPilot <noreply@…>", or with white label "Asha Studio <noreply@…>". */
 export function studioFrom(envFrom: string, brand: StudioBrand): string {
   const address = /<([^>]+)>/.exec(envFrom)?.[1] ?? envFrom.trim()
   const clean = (t: string) => t.replace(/["<>\r\n\\]/g, '').trim().slice(0, 60)
-  const name = brand.whiteLabel ? clean(brand.fromName || brand.name) : `${clean(brand.name)} via IPC Studios`
+  const name = brand.whiteLabel ? clean(brand.fromName || brand.name) : `${clean(brand.name)} via Studio AutoPilot`
   return `"${name}" <${address}>`
 }
 
 /** The footer line under a studio's email. */
 export function studioFooter(brand: StudioBrand): string {
   if (brand.whiteLabel) return brand.footerLine ? esc(brand.footerLine) : esc(brand.name)
-  return `Sent for ${esc(brand.name)} by IPC Studios.`
+  return `Sent for ${esc(brand.name)} by Studio AutoPilot.`
 }
 
 /** Branded, email-client-safe HTML (table layout + inline styles). */
 function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailCopy): string {
   const navy = '#1b2a4a' // navy (badge + button)
-  const accent = '#f2a618' // gold (wordmark "IPC")
+  const accent = '#f2a618' // gold (wordmark "AutoPilot")
   const studio = brand
   return `<!doctype html>
 <html lang="en">
@@ -158,7 +158,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailC
                     <td style="width:44px;height:44px;background:${navy};border-radius:12px;text-align:center;vertical-align:middle;font-size:22px;line-height:44px;">📷</td>
                   </tr>
                 </table>
-                <div style="margin-top:12px;font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#111827;"><span style="color:${accent};">IPC</span> Studios</div>`}
+                <div style="margin-top:12px;font-size:18px;font-weight:800;letter-spacing:-0.02em;"><span style="color:#1b2a4a;">Studio</span><span style="color:${accent};">AutoPilot</span></div>`}
               </td>
             </tr>
             <!-- body -->
@@ -193,7 +193,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailC
               </td>
             </tr>
           </table>
-          ${studio?.whiteLabel ? '' : '<div style="margin-top:16px;font-size:11px;color:#9ca3af;">© IPC Studios</div>'}
+          ${studio?.whiteLabel ? '' : '<div style="margin-top:16px;font-size:11px;color:#9ca3af;">© Studio AutoPilot</div>'}
         </td>
       </tr>
     </table>
@@ -362,10 +362,10 @@ export async function sendMessageEmail(
           body: m.toClient
             ? `<span style="display:block;text-align:left;">${esc(m.body ?? '').replace(/\n/g, '<br>')}</span>`
             : esc(m.body ?? '').replace(/\n/g, '<br>'),
-          // A studio's client has no IPC Studios account: no "open the app" button.
-          cta: m.toClient ? undefined : 'Open IPC Studios',
+          // A studio's client has no Studio AutoPilot account: no "open the app" button.
+          cta: m.toClient ? undefined : 'Open Studio AutoPilot',
           link: m.toClient ? undefined : (link ?? (env.APP_URL || 'https://ipcstudios.in')),
-          footer: `Sent for ${esc(m.studio)} by IPC Studios.`,
+          footer: `Sent for ${esc(m.studio)} by Studio AutoPilot.`,
         }),
       }),
     })

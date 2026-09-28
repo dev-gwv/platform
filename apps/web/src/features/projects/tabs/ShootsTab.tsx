@@ -9,7 +9,6 @@ import {
   MapPin,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   UserPlus,
   Users,
@@ -168,12 +167,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
       {canEdit && (
-        <section aria-labelledby="add-functions" className="rounded-xl border border-border bg-card p-4">
-          <h2 id="add-functions" className="flex items-center gap-2 text-base font-bold tracking-tight">
-            <Sparkles className="size-4 text-primary" /> Add your functions
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Tap a function to add it. You can change the date and venue after.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <section aria-label="Add a function" className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-wrap gap-2">
             {chips.map((name) => (
               <Button
                 key={name}
@@ -250,7 +245,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       ) : !data || data.length === 0 ? (
         <EmptyState
           title="No functions added yet"
-          description="Start with the buttons above. Haldi, Mehendi, Wedding, Reception — one card each."
+          description="Tap a function above to add it."
         />
       ) : (
         <div className="flex flex-col gap-3">

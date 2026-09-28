@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, CalendarClock, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -19,6 +19,9 @@ import { EMPTY_QUERY, applyQuery, countsFor, isOpen, type LeadQuery } from '@/fe
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
+import { CsvImport } from '@/features/crm/tabs/ImportsTab'
+import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
+import { useAccess } from '@/shared/auth/useAccess'
 import { NO_FACETS, applyFacets, type LeadFacets } from '@/features/crm/board-filters'
 
 const FACETS_KEY = 'crm:facets'
@@ -86,7 +89,7 @@ function Crm() {
    * or as the stage board. Separate from WHICH leads, so "Hot leads, on the
    * board" is now a thing that can be asked for.
    */
-  const [mode, setMode] = useState<'list' | 'board' | 'pipeline'>('list')
+  const [mode, setMode] = useState<'list' | 'board' | 'pipeline'>('pipeline')
 
   // A ?lead= link (a reminder, a converted enquiry, an alert) opens straight
   // to that lead -- even an archived one -- then clears itself so closing the
@@ -200,6 +203,7 @@ function Crm() {
                 <Settings2 /> Setup
               </Link>
             </Button>
+            <ImportLeadsButton />
             <AddLeadDialog onAdded={(id) => setOpenLead(id)} />
           </div>
         }
@@ -252,6 +256,30 @@ function Crm() {
         </div>
       )}
 
+      {/* The Filter button used to open a second toolbar -- a banner, saved
+          views, columns, seven chips, another search box and four more
+          selects -- above leads that were already filtered by the row
+          above. The owner found it tiring; this is all it holds now. */}
+      {showFilters && (
+        <div className="mt-2 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Show archived leads
+          </label>
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => {
+              setFacets(NO_FACETS)
+              setShowArchived(false)
+              setText('')
+            }}
+          >
+            Clear all filters
+          </button>
+        </div>
+      )}
+
       {/* Search deliberately ignores the chosen view and the archive, because
           "where did that person go" is the question being asked. Saying so
           matters: the result set is not the list the picker describes. */}
@@ -281,7 +309,7 @@ function Crm() {
           <FollowUpBoardTab leads={rows} now={now} onOpen={setOpenLead} />
         ) : (
           <InboxTab
-            chrome={showFilters}
+            chrome={false}
             leads={rows}
             now={now}
             query={query}
@@ -296,5 +324,26 @@ function Crm() {
 
       {selected && <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />}
     </>
+  )
+}
+
+/**
+ * Import a spreadsheet of leads from the Leads page itself. It lived only
+ * on Setup, where nobody looked for it; the owner could not find it at all.
+ */
+function ImportLeadsButton() {
+  const canCreate = useAccess().hasAction('crm', 'create')
+  if (!canCreate) return null
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <FileUp /> Import leads
+        </Button>
+      </DialogTrigger>
+      <DialogContent title="Import leads" description="Upload a CSV from Excel or Google Sheets. You see every row before anything is saved." className="sm:max-w-3xl">
+        <CsvImport />
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -164,29 +164,35 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             * The Control Center's drawer opens this way and the owner liked
             * it best for a reason -- the phone is what gets used.
             */}
-          <div className="flex flex-col gap-0.5">
-            {lead.phone ? (
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard.writeText(lead.phone!)
-                  setCopied(true)
-                  toast.success('Number copied')
-                }}
-                className="group inline-flex w-fit items-center gap-2 text-2xl font-semibold tracking-wide tabular-nums"
-                title="Copy number"
-              >
-                {lead.phone}
-                {copied ? (
-                  <Check className="size-4 text-tone-green" />
-                ) : (
-                  <Copy className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                )}
-              </button>
-            ) : (
-              <span className="text-sm text-muted-foreground">No phone number</span>
-            )}
-            {lead.email && <span className="text-xs text-muted-foreground">{lead.email}</span>}
+          <div className="flex flex-col gap-1 pr-8 pt-1">
+            {/* The panel's title is for screen readers only, so the name has
+                to be drawn here -- without it the drawer opened on a bare
+                phone number. */}
+            <h2 className="text-xl font-semibold leading-tight tracking-tight">{lead.name ?? 'Unnamed lead'}</h2>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
+              {lead.phone ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(lead.phone!)
+                    setCopied(true)
+                    toast.success('Number copied')
+                  }}
+                  className="group inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground hover:text-primary"
+                  title="Copy number"
+                >
+                  {lead.phone}
+                  {copied ? (
+                    <Check className="size-3.5 text-tone-green" />
+                  ) : (
+                    <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                  )}
+                </button>
+              ) : (
+                <span>No phone number</span>
+              )}
+              {lead.email && <span className="truncate">{lead.email}</span>}
+            </div>
           </div>
 
           {/* The four ways to reach them, and a note, always in the same place. */}

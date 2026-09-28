@@ -27,8 +27,20 @@ const GATE_TONE: Record<PlanGate, 'success' | 'info' | 'warning' | 'danger'> = {
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtIso = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : '')
-const daysLeftOf = (s: PlatformStudio) =>
-  s.days_remaining ?? (s.plan_expiry ? Math.max(0, Math.ceil((new Date(s.plan_expiry).getTime() - Date.now()) / 86_400_000)) : null)
+/** When the studio's access ends: paid plan, else trial, else grace (0210). */
+const endsOf = (s: PlatformStudio) => s.access_until ?? s.plan_expiry
+const daysLeftOf = (s: PlatformStudio) => {
+  const end = endsOf(s)
+  return end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)) : (s.days_remaining ?? null)
+}
+/** A studio on open access that ends within two months is on the 30-day trial. */
+const gateLabel = (s: PlatformStudio) =>
+  s.plan_gate === 'grandfathered' && (daysLeftOf(s) ?? 999) <= 60 ? 'Free trial' : humanize(s.plan_gate)
+const ago = (iso: string | null | undefined) => {
+  if (!iso) return 'Never'
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : `${d} days ago`
+}
 
 function csvEscape(v: unknown): string {
   if (v == null) return ''
@@ -47,7 +59,7 @@ function downloadStudiosCsv(rows: PlatformStudio[]) {
   const lines = [header.join(',')]
   for (const s of rows) {
     lines.push(
-      [s.name, s.owner_name ?? '', s.owner_email ?? '', s.owner_phone ?? '', fmtIso(s.created_at), s.plan_gate, fmtIso(s.plan_expiry), daysLeftOf(s) ?? '', s.plan_key ?? '', s.user_count, s.project_count]
+      [s.name, s.owner_name ?? '', s.owner_email ?? '', s.owner_phone ?? '', fmtIso(s.created_at), s.plan_gate, fmtIso(endsOf(s)), daysLeftOf(s) ?? '', s.plan_key ?? '', s.user_count, s.project_count]
         .map(csvEscape)
         .join(','),
     )
@@ -262,7 +274,8 @@ function Studios() {
               <th className="px-4 py-2 font-medium">Days left</th>
               <th className="px-4 py-2 text-right font-medium"><Users className="inline h-4 w-4" aria-label="Users" /></th>
               <th className="px-4 py-2 text-right font-medium"><FolderKanban className="inline h-4 w-4" aria-label="Projects" /></th>
-              <th className="px-4 py-2 font-medium">Expiry</th>
+              <th className="px-4 py-2 font-medium">Ends on</th>
+              <th className="px-4 py-2 font-medium">Last active</th>
               <th className="px-4 py-2 font-medium">Joined</th>
               <th className="px-4 py-2 text-right font-medium">Actions</th>
             </tr>
@@ -273,11 +286,12 @@ function Studios() {
                 <td className="px-4 py-2 font-medium"><Building2 className="mr-1.5 inline h-4 w-4 text-muted-foreground" />{s.name}</td>
                 <td className="px-4 py-2 text-muted-foreground">{s.owner_name ?? s.owner_email ?? '—'}</td>
                 <td className="px-4 py-2 text-muted-foreground">{s.owner_phone ?? '—'}</td>
-                <td className="px-4 py-2"><StatusBadge tone={GATE_TONE[s.plan_gate]}>{humanize(s.plan_gate)}</StatusBadge>{s.plan_key && <span className="ml-1 text-xs text-muted-foreground">{s.plan_key}</span>}</td>
+                <td className="px-4 py-2"><StatusBadge tone={GATE_TONE[s.plan_gate]}>{gateLabel(s)}</StatusBadge>{s.plan_key && <span className="ml-1 text-xs text-muted-foreground">{s.plan_key}</span>}</td>
                 <td className="px-4 py-2 text-muted-foreground">{daysLeftOf(s) ?? '—'}</td>
                 <td className="px-4 py-2 text-right">{s.user_count}</td>
                 <td className="px-4 py-2 text-right">{s.project_count}</td>
-                <td className="px-4 py-2 text-muted-foreground">{fmtDate(s.plan_expiry)}</td>
+                <td className="px-4 py-2 text-muted-foreground">{fmtDate(endsOf(s))}</td>
+                <td className="px-4 py-2 text-muted-foreground">{ago(s.last_seen)}</td>
                 <td className="px-4 py-2 text-muted-foreground">{fmtDate(s.created_at)}</td>
                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-1.5">

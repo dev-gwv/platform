@@ -16,6 +16,8 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
+import { TrialChip } from '@/features/billing/TrialChip'
+import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar } from '@/features/onboarding/setup-flow'
@@ -58,10 +60,7 @@ function groupHolding(entries: NavEntry[], pathname: string): string | null {
 
 function Brand({ compact }: { compact?: boolean }) {
   return (
-    <span className="whitespace-nowrap text-base font-bold tracking-tight">
-      <span className="text-brand">IPC</span>
-      {!compact && ' Studios'}
-    </span>
+    <Wordmark compact={!!compact} className="text-lg" />
   )
 }
 
@@ -182,6 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </kbd>
             </button>
 
+            <TrialChip />
             <SuggestFeatureButton />
 
             <div className="flex items-center gap-1">
