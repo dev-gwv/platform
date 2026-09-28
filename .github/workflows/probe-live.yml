@@ -10,16 +10,9 @@ jobs:
       - name: Probe
         run: |
           set +e
-          t() { echo "== $*"; curl -sS -m 60 -o /tmp/b -w "HTTP %{http_code} in %{time_total}s\n" "$@"; head -c 300 /tmp/b; echo; }
-          getent hosts ipcstudios.duckdns.org; t -I http://ipcstudios.duckdns.org/health
-          t https://studioautopilot.in/login
-          JS=$(grep -oE '/assets/index-[^"]+\.js' /tmp/b | head -1)
-          [ -z "$JS" ] && JS=$(curl -sS -m 30 https://studioautopilot.in/ | grep -oE '/assets/[^"]+\.js' | head -1)
-          echo "bundle: $JS"
-          API=$(curl -sS -m 60 "https://studioautopilot.in$JS" | grep -oE 'https://api[a-z0-9.-]*' | sort -u | head -3)
-          echo "api urls in bundle: $API"
-          for a in https://ipcstudios.duckdns.org $API; do
-            t "$a/health"
-            t -X POST "$a/auth/login" -H 'Content-Type: application/json' -H 'Origin: https://studioautopilot.in' -d '{"email":"probe-nobody@example.com","password":"wrong-password-123"}'
-            t "$a/auth/session"
-          done
+          A=https://ipcstudios.duckdns.org
+          echo "== DNS"; getent ahosts ipcstudios.duckdns.org; dig +short ipcstudios.duckdns.org @1.1.1.1; dig +short ipcstudios.duckdns.org @8.8.8.8
+          echo "== preflight"; curl -sS -m 30 -D - -o /dev/null -X OPTIONS "$A/auth/login" -H 'Origin: https://studioautopilot.in' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type'
+          echo "== post"; curl -sS -m 30 -D - -o /dev/null -X POST "$A/auth/login" -H 'Origin: https://studioautopilot.in' -H 'Content-Type: application/json' -d '{"email":"probe-nobody@example.com","password":"wrong-password-123"}'
+          echo "== TLS"; echo | openssl s_client -connect ipcstudios.duckdns.org:443 -servername ipcstudios.duckdns.org 2>/dev/null | openssl x509 -noout -dates -issuer -subject
+          echo "== timing x5"; for i in 1 2 3 4 5; do curl -sS -m 30 -o /dev/null -w "%{http_code} connect=%{time_connect} tls=%{time_appconnect} total=%{time_total}\n" "$A/health"; done
