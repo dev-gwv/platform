@@ -112,7 +112,7 @@ export const MODULES: Readonly<Record<ModuleKey, ModuleDef>> = {
     key: 'team_directory',
     label: 'Team Directory',
     path: '/employees',
-    routePatterns: ['/employees'],
+    routePatterns: ['/employees', '/team/performance'],
     sensitive: false,
     defaultVisibility: allow(true, true, false),
   },

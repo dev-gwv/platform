@@ -19,6 +19,7 @@ import { useMyData } from '@/features/data/api'
 import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { STAGE_LABEL, STAGE_TONE, optedOut } from '@/features/data/stage'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { SlotAnswer } from '@/features/allocation/SlotAnswer'
 
 /** A booking whose shoot is over, owes data, and has not been handed over. */
 const owesData = (sl: TeamSlot, rec: DataRecord | undefined, now: string) =>
@@ -80,7 +81,7 @@ function MyShoots() {
       <HowToUse
         title="Your bookings"
         description="Each card is a shoot you hold a slot on. The times are your slot, not the whole day."
-        steps={['Check the date and venue.', 'Note your call time.', 'Ask your manager if something looks off.']}
+        steps={['Confirm each booking, or say why you can’t make it.', 'On the day, tap I’ve reached.', 'Hand over your cards after the shoot.']}
       />
 
       {owed > 0 && (
@@ -198,6 +199,7 @@ function Section({
                           </span>
                           <span className="text-muted-foreground">{sl.service_name ?? 'Crew'}</span>
                           <StatusBadge tone={sl.status === 'booked' ? 'success' : 'neutral'}>{humanize(sl.status)}</StatusBadge>
+                          <SlotAnswer slot={sl} />
                           {sl.status === 'booked' && sl.end_at >= data.now && (
                             <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => downloadIcs(sl)}>
                               <CalendarPlus /> Add to calendar

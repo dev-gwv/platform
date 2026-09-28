@@ -6,6 +6,9 @@ import { dataCounts, defaultDataType, defaultLabel, deriveStage, recordForSlot, 
 const SHOOT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
 const slot = (over: Partial<TeamSlot> = {}): TeamSlot => ({
+  response: 'confirmed',
+  decline_reason: null,
+  arrived_at: null,
   released_at: null,
   shoot_name: null,
   shoot_date: null,

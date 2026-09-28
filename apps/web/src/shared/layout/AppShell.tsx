@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { AutoAttendance } from '@/features/attendance/auto'
 import { Link, useLocation } from '@tanstack/react-router'
 import { BackButton } from './BackButton'
 import { RefreshButton } from './RefreshButton'
@@ -117,6 +118,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     // a label far down a long list made the whole page taller than the
     // h-screen shell, and scrolling showed a band of empty background.
     <div className="relative flex h-screen overflow-hidden bg-background print:static print:block print:h-auto print:overflow-visible">
+      {/* Marks attendance by itself on open, inside the person's radius (0206). */}
+      <AutoAttendance />
       <Sidebar
         entries={entries}
         collapsed={railCollapsed}

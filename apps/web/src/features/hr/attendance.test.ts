@@ -26,6 +26,10 @@ const row = (name: string, over: Partial<AttendanceDayRow> = {}): AttendanceDayR
   correction_note: null,
   on_leave: false,
   day_off: null,
+  place_name: null,
+  check_in_distance_m: null,
+  source: null,
+  closed_by_system: false,
   ...over,
 })
 

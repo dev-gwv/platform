@@ -19,6 +19,9 @@ import { callApi } from '@/shared/api/client'
 import { MyDeliveryStrip } from '@/features/projects/MyDeliveryStrip'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { TodayAttendanceCard } from '@/features/attendance/TodayAttendanceCard'
+import { SlotAnswer } from '@/features/allocation/SlotAnswer'
+import { MyMonthCard } from '@/features/performance/MyMonthCard'
 
 const myList = attendanceRecord.array()
 
@@ -94,9 +97,12 @@ export function EmployeeDashboard() {
           icon={CheckCircle2}
           label="Attendance"
           value={isCheckedIn ? 'Checked in' : (todayAttendance ? String(todayAttendance.status ?? 'Marked') : 'Not in')}
-          to="/attendance"
+          to="/attendance/my"
         />
       </div>
+
+      <TodayAttendanceCard />
+      <MyMonthCard />
 
       <ProfileBanner />
 
@@ -145,7 +151,7 @@ export function EmployeeDashboard() {
             ) : (
               <ul className="flex flex-col gap-2">
                 {mySlots.map((s) => (
-                  <li key={s.id} className="flex items-start gap-2 text-sm">
+                  <li key={s.id} className="flex flex-wrap items-start gap-2 text-sm">
                     <EventTile name={s.shoot_name ?? s.service_name} size="sm" />
                     <span className="min-w-0">
                       <span className="font-medium">{s.shoot_name ?? s.service_name ?? 'Booked'}</span>
@@ -155,6 +161,9 @@ export function EmployeeDashboard() {
                         {s.location ? ` · ${s.location}` : ''}
                       </span>
                     </span>
+                    <span className="ml-auto shrink-0">
+                      <SlotAnswer slot={s} />
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -162,31 +171,6 @@ export function EmployeeDashboard() {
             {todaySlots.length > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">{todaySlots.length} today.</p>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>My attendance</CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/attendance">Open</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Status</p>
-                <p className="font-medium">{isCheckedIn ? 'Checked in' : 'Not checked in'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Today</p>
-                <p className="font-medium">{todayAttendance ? String(todayAttendance.status ?? 'Marked') : '—'}</p>
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Welcome{session?.display_name ? `, ${session.display_name}` : ''} — check in from the
-              Attendance page when you reach the studio.
-            </p>
           </CardContent>
         </Card>
 
@@ -220,7 +204,7 @@ export function EmployeeDashboard() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild><Link to="/tasks/my">My tasks</Link></Button>
             <Button variant="outline" size="sm" asChild><Link to="/shoots/my">My shoots</Link></Button>
-            <Button variant="outline" size="sm" asChild><Link to="/attendance">Attendance</Link></Button>
+            <Button variant="outline" size="sm" asChild><Link to="/attendance/my">Attendance</Link></Button>
             <Button variant="outline" size="sm" asChild><Link to="/my-work">My work</Link></Button>
             <Button variant="outline" size="sm" asChild><Link to="/reminders">Reminders</Link></Button>
           </div>

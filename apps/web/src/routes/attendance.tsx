@@ -29,6 +29,7 @@ import {
 import { withinFence } from '@ipc/domain'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { TodayAttendanceCard } from '@/features/attendance/TodayAttendanceCard'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SectionTabs } from '@/shared/layout/section-tabs'
@@ -598,7 +599,7 @@ const HISTORY_MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-function MyAttendance() {
+export function MyAttendance() {
   const { session } = useAuth()
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -928,5 +929,22 @@ function CorrectDialog({ row, date }: { row: AttendanceDayRow; date: string }) {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * /attendance/my: everyone's own record. The roster needs the attendance
+ * module; your own day does not -- employees could never open this page, so
+ * the dashboard's Attendance tile led to "Not available" (0206).
+ */
+export function MyAttendancePage() {
+  return (
+    <AuthedPage module="dashboard">
+      <PageHeader title="My attendance" description="You're marked when you open the app inside your radius." />
+      <div className="flex flex-col gap-4">
+        <TodayAttendanceCard />
+        <MyAttendance />
+      </div>
+    </AuthedPage>
   )
 }

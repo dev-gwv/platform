@@ -117,7 +117,8 @@ describe('the evening before', () => {
     expect(again[0]!.s.notifications_created).toBe(0)
     const priya = await notes(PRIYA, 'shoot_tomorrow')
     expect(priya).toHaveLength(1)
-    expect(priya[0]!.title).toBe('Tomorrow: Haldi')
+    // 0207: a booking nobody has confirmed asks for it the evening before.
+    expect(priya[0]!.title).toBe('Tomorrow: Haldi · please confirm')
     expect(await notes(AMAN, 'shoot_tomorrow')).toHaveLength(1)
   })
 

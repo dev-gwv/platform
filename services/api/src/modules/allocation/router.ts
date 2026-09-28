@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { TransactionSql } from 'postgres'
 import type { BookSlotRequest } from '@ipc/contracts'
-import { bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
+import { arrivedRequest, respondSlotRequest, bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -41,8 +41,69 @@ async function bookOne(sql: TransactionSql, d: BookSlotRequest): Promise<string 
   return id
 }
 
+const reason = (err: unknown): string => String((err as { message?: string })?.message ?? '')
+
 export const allocationRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+
+  // The person booked answers (0207). Theirs alone: the function checks it.
+  .post('/:id/respond', async (c) => {
+    const id = uuidParam(c)
+    const parsed = respondSlotRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check your answer.')
+    const ok = await attempt(
+      c,
+      'allocation.respond',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          await sql`select respond_to_slot(${id}, ${parsed.data.response}, ${parsed.data.reason ?? null})`
+          return true as const
+        }),
+      {
+        onCode: (code, err) => {
+          if (code === 'P0002') return 'missing' as const
+          if (code === 'P0001' && reason(err).includes('not_booked')) return 'released' as const
+          if (code === 'P0001' && reason(err).includes('past')) return 'past' as const
+          return undefined
+        },
+      },
+    )
+    if (ok === 'missing') fail(404, 'That booking is not yours, or it no longer exists.')
+    if (ok === 'released') fail(409, 'This booking was released or cancelled.')
+    if (ok === 'past') fail(409, 'This shoot is over.')
+    if (!ok) fail(400, 'We could not save your answer.')
+    await audit(c, { action: `slot.${parsed.data.response}`, entityType: 'team_slot', entityId: id, after: parsed.data })
+    return c.body(null, 204)
+  })
+
+  // "I've reached", on the day.
+  .post('/:id/arrived', async (c) => {
+    const id = uuidParam(c)
+    const parsed = arrivedRequest.safeParse(await c.req.json().catch(() => ({})))
+    const at = parsed.success ? parsed.data : {}
+    const out = await attempt(
+      c,
+      'allocation.arrived',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const [r] = await sql<{ t: string }[]>`select mark_arrived(${id}, ${at.lat ?? null}, ${at.lng ?? null}) as t`
+          return r?.t ?? null
+        }),
+      {
+        onCode: (code, err) => {
+          if (code === 'P0002') return 'missing' as const
+          if (code === 'P0001' && reason(err).includes('not_now')) return 'not_now' as const
+          if (code === 'P0001' && reason(err).includes('not_booked')) return 'released' as const
+          return undefined
+        },
+      },
+    )
+    if (out === 'missing') fail(404, 'That booking is not yours, or it no longer exists.')
+    if (out === 'not_now') fail(409, 'You can mark this from three hours before the shoot until it ends.')
+    if (out === 'released') fail(409, 'This booking was released or cancelled.')
+    if (!out) fail(400, 'We could not save that.')
+    return c.json({ arrived_at: out })
+  })
 
   /**
    * Bookings, with what each is for. `from`/`to` (dates, inclusive) and
@@ -72,6 +133,7 @@ export const allocationRouter = new Hono<AppEnv>()
                  ${canPlan ? sql`s.cost_notes` : sql`null::text`} as cost_notes,
                  coalesce(s.data_required, false) as data_required,
                  s.data_not_required_reason, s.released_at, u.name as user_name,
+                 s.response, s.decline_reason, s.arrived_at,
                  sh.name as shoot_name, sh.shoot_date, sh.status as shoot_status,
                  sh.location, sh.map_link,
                  p.id as project_id, p.name as project_name, cl.name as client_name

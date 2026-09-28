@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { Switch } from '@/shared/ui/switch'
 import { HowToUse } from '@/shared/ui/how-to-use'
+import { PlacesAndRules } from '@/features/attendance/PlacesAndRules'
 
 export function AttendanceLocationPage() {
   return (
@@ -278,6 +279,7 @@ function AttendanceLocation() {
           </CardContent>
         </Card>
       )}
+      <PlacesAndRules canEdit={isOwner} />
     </>
   )
 }
