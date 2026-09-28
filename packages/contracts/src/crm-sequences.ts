@@ -18,6 +18,11 @@ export const sequenceStepInput = z
     subject: text(150).nullish(),
     body: text(4000).nullish(),
     note: text(300).nullish(),
+    /** An approved WhatsApp template, so the step can go out by itself (0203). */
+    wa_template_name: text(512).nullish(),
+    wa_template_lang: text(20).nullish(),
+    /** Which of our words fill the template's {{1}}, {{2}}...: ["first_name", "event_type"]. */
+    wa_params: z.array(z.string().max(40)).max(10).nullish(),
   })
   .superRefine((s, ctx) => {
     if (s.channel !== 'reminder' && !s.body) ctx.addIssue({ code: 'custom', path: ['body'], message: 'Write the message for this step.' })
@@ -52,6 +57,9 @@ export const sequenceStep = z.object({
   body: z.string().nullable(),
   note: z.string().nullable(),
   template_name: z.string().nullable(),
+  wa_template_name: z.string().nullable(),
+  wa_template_lang: z.string().nullable(),
+  wa_params: z.array(z.string()).nullable(),
 })
 export type SequenceStep = z.infer<typeof sequenceStep>
 
@@ -89,6 +97,8 @@ export const sequenceSend = z.object({
   subject: z.string().nullable(),
   text: z.string(),
   status: sequenceSendStatus,
+  /** WhatsApp's receipt for a message the API sent: delivered, read, failed. */
+  delivery: z.string().nullable(),
   error: z.string().nullable(),
   due_at: isoDateTime,
   sent_at: isoDateTime.nullable(),

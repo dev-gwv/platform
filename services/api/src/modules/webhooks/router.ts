@@ -13,6 +13,8 @@ import { audit } from '../../lib/audit'
 import { fetchMetaLead, isMetaLeadgenPayload, metaLeadgenIds, verifyMetaSignature } from '../../lib/meta'
 import { verifyRazorpaySignature } from '../../lib/razorpay'
 import { whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
+import { routeStudioWhatsapp } from '../../lib/studio-whatsapp-inbound'
+import { open } from '../../lib/secret-box'
 import { isDevLike } from '../../lib/env'
 
 /**
@@ -177,9 +179,56 @@ export const webhooksRouter = new Hono<AppEnv>()
         return matched
       }),
     )
+    // Studios that connected their number through our app (Embedded Signup)
+    // post here too: their clients' replies and their receipts (0203).
+    const studios = done === null ? null : await attempt(c, 'webhooks.whatsapp_studios', () => routeStudioWhatsapp(c.env, body))
     // Meta retries a non-2xx for days; a database hiccup is worth a retry.
     if (done === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
-    return c.json({ ok: true, statuses: updates.length, matched: done, opt_changes: opts.length })
+    if (studios === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    return c.json({ ok: true, statuses: updates.length, matched: done, opt_changes: opts.length, studios })
+  })
+
+  // A studio whose number lives on its own Meta app points that app here
+  // (0203). The address carries the studio's unguessable key; the handshake
+  // checks its verify token; posts are checked against its app secret when it
+  // gave us one, and only ever write about its own number.
+  .get('/whatsapp/studio/:key', async (c) => {
+    const mode = c.req.query('hub.mode')
+    const token = c.req.query('hub.verify_token') ?? ''
+    const challenge = c.req.query('hub.challenge')
+    if (mode !== 'subscribe' || !challenge) return c.json({ ok: true })
+    const rows = await attempt(c, 'webhooks.whatsapp_studio_verify', () =>
+      withService(c.env, (sql) => sql<{ verify_token: string }[]>`
+        select verify_token from company_whatsapp where webhook_key = ${c.req.param('key')}`),
+    )
+    const expected = rows?.[0]?.verify_token ?? ''
+    if (!expected || !timingSafeEqual(token, expected)) fail(403, 'Verification token mismatch.')
+    return c.text(challenge)
+  })
+
+  .post('/whatsapp/studio/:key', async (c) => {
+    const raw = await c.req.text()
+    const rows = await attempt(c, 'webhooks.whatsapp_studio_read', () =>
+      withService(c.env, (sql) => sql<{ phone_number_id: string; app_secret_enc: string | null }[]>`
+        select phone_number_id, app_secret_enc from company_whatsapp where webhook_key = ${c.req.param('key')}`),
+    )
+    if (rows === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    const w = rows[0]
+    if (!w) fail(404, 'Unknown address.')
+    if (w.app_secret_enc) {
+      const secret = await open(c.env, w.app_secret_enc).catch(() => '')
+      const signature = c.req.header('X-Hub-Signature-256') ?? ''
+      if (!secret || !signature || !(await verifyMetaSignature(raw, signature, secret))) fail(401, 'Invalid signature.')
+    }
+    let body: unknown = {}
+    try {
+      body = raw ? JSON.parse(raw) : {}
+    } catch {
+      fail(422, 'Invalid payload.')
+    }
+    const r = await attempt(c, 'webhooks.whatsapp_studio', () => routeStudioWhatsapp(c.env, body, w.phone_number_id))
+    if (r === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    return c.json({ ok: true, ...r })
   })
 
   // Razorpay webhook: verify HMAC over the raw body, record idempotently, and

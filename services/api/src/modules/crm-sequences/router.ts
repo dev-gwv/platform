@@ -37,6 +37,7 @@ interface SendRow {
   subject: string | null
   body: string
   status: SequenceSend['status']
+  delivery: string | null
   error: string | null
   due_at: string
   sent_at: string | null
@@ -62,6 +63,7 @@ async function filled(sql: TransactionSql, rows: SendRow[]): Promise<SequenceSen
       subject: r.subject ? fillSequenceText(r.subject, lead, studio) : null,
       text: fillSequenceText(r.body, lead, studio),
       status: r.status,
+      delivery: r.delivery,
       error: r.error,
       due_at: r.due_at,
       sent_at: r.sent_at,
@@ -71,16 +73,21 @@ async function filled(sql: TransactionSql, rows: SendRow[]): Promise<SequenceSen
 
 const sendColumns = (sql: TransactionSql) => sql`
   s.id, s.lead_id, l.name as lead_name, l.phone, l.email, l.city, l.event_type, l.event_date::text as event_date,
-  c.name as sequence_name, s.step_no, s.channel, s.subject, s.body, s.status, s.error, s.due_at, s.sent_at`
+  c.name as sequence_name, s.step_no, s.channel, s.subject, s.body, s.status, s.delivery, s.error, s.due_at, s.sent_at`
 
 async function writeSteps(sql: TransactionSql, id: string, steps: ReturnType<typeof sequenceInput.parse>['steps']) {
   await sql`delete from crm_cadence_steps where cadence_id = ${id}`
   for (const [i, s] of steps.entries()) {
+    // Only a WhatsApp step carries a template.
+    const wa = s.channel === 'whatsapp' && !!s.wa_template_name
     await sql`
-      insert into crm_cadence_steps (cadence_id, company_id, step_no, day_offset, channel, send_hour, subject, body, note)
+      insert into crm_cadence_steps (cadence_id, company_id, step_no, day_offset, channel, send_hour, subject, body, note,
+                                     wa_template_name, wa_template_lang, wa_params)
       values (${id}, get_current_company_id(), ${i + 1}, ${s.day_offset}, ${s.channel}, ${s.send_hour},
               ${s.channel === 'email' ? (s.subject ?? null) : null}, ${s.channel === 'reminder' ? null : (s.body ?? null)},
-              ${s.note ?? null})`
+              ${s.note ?? null},
+              ${wa ? s.wa_template_name! : null}, ${wa ? (s.wa_template_lang ?? 'en') : null},
+              ${wa ? sql.json(s.wa_params ?? []) : null})`
   }
   // Leads already past the new last step have nothing left to do.
   await sql`
@@ -101,7 +108,8 @@ export const crmSequencesRouter = new Hono<AppEnv>()
                coalesce((
                  select jsonb_agg(jsonb_build_object(
                    'step_no', s.step_no, 'day_offset', s.day_offset, 'channel', s.channel, 'send_hour', s.send_hour,
-                   'subject', s.subject, 'body', s.body, 'note', s.note, 'template_name', t.name) order by s.step_no)
+                   'subject', s.subject, 'body', s.body, 'note', s.note, 'template_name', t.name,
+                   'wa_template_name', s.wa_template_name, 'wa_template_lang', s.wa_template_lang, 'wa_params', s.wa_params) order by s.step_no)
                    from crm_cadence_steps s left join crm_templates t on t.id = s.template_id
                   where s.cadence_id = ca.id), '[]'::jsonb) as steps,
                (select count(*) from crm_lead_cadences lc

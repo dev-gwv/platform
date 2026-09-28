@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Sequence, SequenceChannel, SequenceInput } from '@ipc/contracts'
+import type { Sequence, SequenceChannel, SequenceInput, StudioWhatsappTemplate } from '@ipc/contracts'
 import { SEQUENCE_VARS, fillSequenceText } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -9,6 +9,7 @@ import { cn } from '@/shared/ui/cn'
 import { usePipelines } from '@/features/crm/api'
 import { useSaveSequence } from './api'
 import { CHANNEL } from './SequencesSection'
+import { useWhatsapp, useWhatsappTemplates } from '@/features/studio-whatsapp/api'
 
 interface StepDraft {
   key: number
@@ -18,6 +19,9 @@ interface StepDraft {
   subject: string
   body: string
   note: string
+  /** "name|language" of an approved WhatsApp template, or '' to send by a tap. */
+  template: string
+  params: string[]
 }
 
 const SOURCES: { value: string; label: string }[] = [
@@ -46,6 +50,8 @@ const blank = (day: number, channel: SequenceChannel = 'whatsapp'): StepDraft =>
   subject: '',
   body: '',
   note: '',
+  template: '',
+  params: [],
 })
 
 /**
@@ -54,6 +60,11 @@ const blank = (day: number, channel: SequenceChannel = 'whatsapp'): StepDraft =>
  */
 export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | null; onClose: () => void }) {
   const save = useSaveSequence()
+  // With the studio's own number connected, a WhatsApp step can name an
+  // approved template and go out by itself (0203).
+  const wa = useWhatsapp()
+  const connected = !!wa.data?.connection
+  const templates = (useWhatsappTemplates(connected).data?.items ?? []).filter((t) => t.status === 'APPROVED')
   const pipelines = usePipelines()
   const [name, setName] = useState(sequence?.name ?? '')
   const [starts, setStarts] = useState<'hand' | 'new' | 'stage'>(
@@ -72,6 +83,8 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
           subject: s.subject ?? '',
           body: s.body ?? '',
           note: s.note ?? '',
+          template: s.wa_template_name ? `${s.wa_template_name}|${s.wa_template_lang ?? 'en'}` : '',
+          params: s.wa_params ?? [],
         }))
       : [blank(0), blank(2, 'reminder')],
   )
@@ -107,6 +120,9 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
         subject: s.channel === 'email' ? s.subject.trim() || null : null,
         body: s.channel === 'reminder' ? null : s.body.trim() || null,
         note: s.channel === 'reminder' ? s.note.trim() || null : null,
+        ...(s.channel === 'whatsapp' && s.template
+          ? { wa_template_name: s.template.split('|')[0]!, wa_template_lang: s.template.split('|')[1] ?? 'en', wa_params: s.params }
+          : { wa_template_name: null, wa_template_lang: null, wa_params: null }),
       })),
     }
     const missing = input.steps.findIndex((s) => (s.channel !== 'reminder' && !s.body) || (s.channel === 'email' && !s.subject))
@@ -167,6 +183,7 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
                 step={s}
                 onChange={(p) => update(s.key, p)}
                 onRemove={steps.length > 1 ? () => setSteps((all) => all.filter((x) => x.key !== s.key)) : undefined}
+                templates={connected ? templates : null}
               />
             ))}
           </ol>
@@ -203,11 +220,13 @@ function StepCard({
   step,
   onChange,
   onRemove,
+  templates,
 }: {
   index: number
   step: StepDraft
   onChange: (p: Partial<StepDraft>) => void
   onRemove: (() => void) | undefined
+  templates: StudioWhatsappTemplate[] | null
 }) {
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const isMessage = step.channel !== 'reminder'
@@ -302,6 +321,7 @@ function StepCard({
               </button>
             ))}
           </div>
+          {step.channel === 'whatsapp' && templates && <TemplatePick step={step} templates={templates} onChange={onChange} index={index} />}
           {step.body.trim() && (
             <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Riya would get: </span>
@@ -319,5 +339,70 @@ function StepCard({
         />
       )}
     </li>
+  )
+}
+
+/** The usual order of a photography template's blanks: Hi {{1}}, {{2}} here, about your {{3}} on {{4}}. */
+const GUESS = ['first_name', 'studio', 'event_type', 'event_date', 'city']
+
+/**
+ * Which approved template sends this step by itself, and what fills its
+ * {{1}}, {{2}}. Without one, the step still goes by itself while the client's
+ * 24 hours are open, and waits in Send now otherwise.
+ */
+function TemplatePick({
+  step,
+  templates,
+  onChange,
+  index,
+}: {
+  step: StepDraft
+  templates: StudioWhatsappTemplate[]
+  onChange: (p: Partial<StepDraft>) => void
+  index: number
+}) {
+  const chosen = templates.find((t) => `${t.name}|${t.language}` === step.template)
+  return (
+    <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-xs">
+      <Label htmlFor={`tpl-${index}`} className="text-xs">
+        Send by itself with an approved template
+      </Label>
+      <Select
+        id={`tpl-${index}`}
+        aria-label={`Step ${index + 1} template`}
+        value={step.template}
+        onChange={(e) => {
+          const t = templates.find((x) => `${x.name}|${x.language}` === e.target.value)
+          onChange({ template: e.target.value, params: Array.from({ length: t?.param_count ?? 0 }, (_, i) => step.params[i] ?? GUESS[i] ?? 'first_name') })
+        }}
+        className="mt-1 h-8"
+      >
+        <option value="">No template: send by a tap (or by itself if they wrote in the last 24 hours)</option>
+        {templates.map((t) => (
+          <option key={`${t.name}|${t.language}`} value={`${t.name}|${t.language}`}>
+            {t.name} ({t.language})
+          </option>
+        ))}
+      </Select>
+      {chosen?.body && <p className="mt-1.5 whitespace-pre-wrap text-muted-foreground">{chosen.body}</p>}
+      {chosen &&
+        step.params.map((p, i) => (
+          <div key={i} className="mt-1.5 flex items-center gap-2">
+            <span className="w-10 shrink-0 font-mono">{`{{${i + 1}}}`}</span>
+            <Select
+              aria-label={`Step ${index + 1} template value ${i + 1}`}
+              value={p}
+              onChange={(e) => onChange({ params: step.params.map((x, j) => (j === i ? e.target.value : x)) })}
+              className="h-8"
+            >
+              {SEQUENCE_VARS.map((v) => (
+                <option key={v.key} value={v.key}>
+                  {v.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ))}
+    </div>
   )
 }
