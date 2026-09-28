@@ -227,6 +227,32 @@ $$;
 revoke all on function crm_whatsapp_receipt(text, text, text) from public, anon, authenticated;
 grant execute on function crm_whatsapp_receipt(text, text, text) to service_role;
 
+-- A reply (a message or a call in) also drops what the lead's sequences
+-- still had waiting to send -- "still deciding?" after they wrote back reads
+-- as not listening. 0202 only dropped it for a sequence still running; a
+-- finished one could leave its last message sitting in Send now.
+create or replace function crm_activities_drop_waiting_on_reply()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.lead_id is null or new.direction <> 'in' or new.type not in ('whatsapp', 'email', 'sms', 'call') then
+    return null;
+  end if;
+  update crm_sequence_sends s
+     set status = 'skipped', error = 'They replied'
+    from crm_cadences c
+   where s.lead_id = new.lead_id and c.id = s.cadence_id and c.stop_on_reply
+     and s.status in ('manual', 'queued');
+  return null;
+end;
+$$;
+drop trigger if exists crm_activities_zz_drop_waiting on crm_activities;
+create trigger crm_activities_zz_drop_waiting after insert on crm_activities
+  for each row execute function crm_activities_drop_waiting_on_reply();
+
 -- ── The hourly sweep ─────────────────────────────────────────
 -- 0202's body. A WhatsApp step is queued for the API when the studio's
 -- number is connected and WhatsApp allows it (a template, or the client's

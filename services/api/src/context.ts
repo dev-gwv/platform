@@ -35,6 +35,11 @@ export interface Env {
    * (GET /webhooks/whatsapp). Optional: falls back to META_VERIFY_TOKEN.
    */
   WHATSAPP_VERIFY_TOKEN?: string
+  /** Encrypts each studio's WhatsApp access token at rest (lib/secret-box.ts). Required in production. */
+  WHATSAPP_TOKEN_KEY?: string
+  /** Meta app id + Embedded Signup configuration id: "Connect with Facebook" for a studio's number. Optional. */
+  META_APP_ID?: string
+  WHATSAPP_CONFIG_ID?: string
   /** Twilio Programmable Voice for click-to-call (lib/twilio.ts). All three or none. */
   TWILIO_ACCOUNT_SID: string
   TWILIO_AUTH_TOKEN: string

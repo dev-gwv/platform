@@ -126,6 +126,11 @@ describe('sending by itself', () => {
       { step_no: 1, status: 'queued', wa_template_name: 'enquiry_hello', wa_params: ['first_name'] },
       { step_no: 2, status: 'manual', wa_template_name: null, wa_params: null },
     ])
+
+    // The sequence has finished, but a reply still drops what was waiting.
+    await inbound('919876500002', 'Thanks, we booked', 'wamid.5')
+    const after = await q<{ status: string; error: string | null }>(`select status, error from crm_sequence_sends where lead_id = '${id}' and step_no = 2`)
+    expect(after).toEqual([{ status: 'skipped', error: 'They replied' }])
   })
 })
 

@@ -2722,5 +2722,26 @@ if (listed) {
   )
 }
 
+// ── 0203: the studio's own WhatsApp number ───────────────────────
+{
+  const status = await api('/whatsapp', { token: aToken })
+  check(
+    'whatsapp: the status reads, with no connection and no token in it',
+    status.status === 200 && typeof status.json.entitled === 'boolean' && status.json.connection === null && !JSON.stringify(status.json).includes('access_token'),
+    status.json,
+  )
+  const locked = await api('/whatsapp/connect', {
+    token: aToken,
+    method: 'POST',
+    body: { phone_number_id: '1098765432', waba_id: '2233445566', access_token: 'EAAG-not-a-real-token-0000000000' },
+  })
+  check('whatsapp: connecting needs the higher plan', locked.status === 403, { status: locked.status })
+  const templates = await api('/whatsapp/templates', { token: aToken })
+  check('whatsapp: templates list is empty before connecting', templates.status === 200 && Array.isArray(templates.json.items) && templates.json.items.length === 0, templates.json)
+  const unknown = await fetch(`${API}/webhooks/whatsapp/studio/not-a-real-key-${rand()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+  const handshake = await fetch(`${API}/webhooks/whatsapp/studio/not-a-real-key?hub.mode=subscribe&hub.verify_token=x&hub.challenge=y`)
+  check('whatsapp: an unknown studio address is refused', unknown.status === 404 && handshake.status === 403, { post: unknown.status, get: handshake.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

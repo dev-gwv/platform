@@ -17,6 +17,7 @@ const TABS: ReadonlyArray<{ to: string; label: string; module: ModuleKey }> = [
   { to: '/settings/attendance-location', label: 'Attendance Location', module: 'settings' },
   { to: '/settings/subscription', label: 'Subscription', module: 'settings_subscription' },
   { to: '/settings/messaging', label: 'Messaging', module: 'settings' },
+  { to: '/settings/whatsapp', label: 'WhatsApp', module: 'settings' },
   { to: '/settings/system', label: 'System', module: 'settings' },
   { to: '/settings/advanced', label: 'Advanced', module: 'settings' },
 ]

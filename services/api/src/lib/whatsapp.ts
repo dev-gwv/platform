@@ -10,7 +10,9 @@ import type { Env } from '../context'
  * template messages (the messaging wallet's utility templates, which may be
  * sent at any time).
  */
-const GRAPH = 'https://graph.facebook.com/v21.0'
+// WHATSAPP_GRAPH_URL points the API at a stand-in Graph server in local
+// end-to-end runs; production never sets it.
+export const GRAPH = (typeof process !== 'undefined' && process.env?.WHATSAPP_GRAPH_URL) || 'https://graph.facebook.com/v21.0'
 
 export const whatsappConfigured = (env: Pick<Env, 'WHATSAPP_PHONE_NUMBER_ID' | 'WHATSAPP_ACCESS_TOKEN'>): boolean =>
   !!env.WHATSAPP_PHONE_NUMBER_ID && !!env.WHATSAPP_ACCESS_TOKEN
@@ -104,7 +106,20 @@ interface WebhookBody {
           status?: string
           errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
         }>
-        messages?: Array<{ from?: string; type?: string; text?: { body?: string }; button?: { text?: string } }>
+        metadata?: { phone_number_id?: string }
+        contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>
+        messages?: Array<{
+          id?: string
+          from?: string
+          timestamp?: string
+          type?: string
+          text?: { body?: string }
+          button?: { text?: string }
+          interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } }
+          image?: { caption?: string }
+          video?: { caption?: string }
+          document?: { caption?: string; filename?: string }
+        }>
       }
     }>
   }>
@@ -148,6 +163,64 @@ export function whatsappOptChanges(body: unknown): Array<{ from: string; out: bo
         if (!m.from) continue
         if (text === 'STOP' || text === 'UNSUBSCRIBE') out.push({ from: m.from, out: true })
         else if (text === 'START') out.push({ from: m.from, out: false })
+      }
+    }
+  }
+  return out
+}
+
+export interface WhatsAppInbound {
+  phoneNumberId: string
+  from: string
+  name: string | null
+  text: string
+  id: string | null
+  at: string | null
+}
+
+const KIND_WORDS: Record<string, string> = {
+  image: '[Photo]',
+  video: '[Video]',
+  audio: '[Voice note]',
+  document: '[Document]',
+  sticker: '[Sticker]',
+  location: '[Location]',
+  contacts: '[Contact card]',
+}
+
+/**
+ * Messages people sent to a WhatsApp number, with the number that received
+ * them (metadata.phone_number_id) so each can be routed to its studio. A
+ * photo or voice note comes through as words saying what it was.
+ */
+export function whatsappInboundMessages(body: unknown): WhatsAppInbound[] {
+  const b = body as WebhookBody | null
+  if (!b || b.object !== 'whatsapp_business_account') return []
+  const out: WhatsAppInbound[] = []
+  for (const entry of b.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const v = change.value
+      const phoneNumberId = v?.metadata?.phone_number_id
+      if (!phoneNumberId) continue
+      for (const m of v?.messages ?? []) {
+        if (!m.from) continue
+        const text =
+          m.text?.body ??
+          m.button?.text ??
+          m.interactive?.button_reply?.title ??
+          m.interactive?.list_reply?.title ??
+          [KIND_WORDS[m.type ?? ''], m.image?.caption ?? m.video?.caption ?? m.document?.caption ?? m.document?.filename]
+            .filter(Boolean)
+            .join(' ')
+        const name = v?.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? v?.contacts?.[0]?.profile?.name ?? null
+        out.push({
+          phoneNumberId,
+          from: m.from,
+          name,
+          text: text || '[Message]',
+          id: m.id ?? null,
+          at: m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : null,
+        })
       }
     }
   }

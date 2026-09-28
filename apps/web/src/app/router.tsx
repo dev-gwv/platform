@@ -78,6 +78,7 @@ import { PlatformUsagePage } from '@/routes/platform/usage'
 import { PlatformFeedbackPage } from '@/routes/platform/feedback'
 import { SystemPage } from '@/routes/settings/system'
 import { MessagingSettingsPage } from '@/routes/settings/messaging'
+import { WhatsappSettingsPage } from '@/routes/settings/whatsapp'
 import { PlatformMessagingPage } from '@/routes/platform/messaging'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
@@ -314,6 +315,7 @@ const routeTree = rootRoute.addChildren([
   route('/platform/feedback', PlatformFeedbackPage),
   route('/platform/messaging', PlatformMessagingPage),
   route('/settings/messaging', MessagingSettingsPage),
+  route('/settings/whatsapp', WhatsappSettingsPage),
   ]),
 ])
 

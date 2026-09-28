@@ -104,7 +104,7 @@ export function LeadSequencePanel({ lead }: { lead: { id: string; status: string
                   </Link>
                 ) : (
                   <span className={cn('shrink-0', m.status === 'sent' ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')} title={m.error ?? undefined}>
-                    {STATUS[m.status]}
+                    {m.status === 'sent' && m.delivery === 'read' ? 'Read' : m.status === 'sent' && m.delivery === 'delivered' ? 'Delivered' : STATUS[m.status]}
                     {m.sent_at && ` ${when.format(new Date(m.sent_at))}`}
                   </span>
                 )}
