@@ -199,6 +199,10 @@ export const NAV: NavEntry[] = [
     ],
   },
 
+  // The studio's own plan: what it is on, when it ends, and the plans to
+  // move to. Its own line so an owner never has to hunt for it (the owner
+  // asked for "their own billing section").
+  leaf('Subscription', '/settings/subscription', CreditCard, { module: 'settings_subscription' }),
   leaf('Settings', '/settings/company', Settings, { module: 'settings' }),
 
   {

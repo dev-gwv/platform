@@ -8,8 +8,8 @@
  * filled in, so nothing untrue is ever printed.
  */
 export const LEGAL = {
-  appName: 'IPC Studios',
-  productName: 'IPC Studios studio management software',
+  appName: 'Studio AutoPilot',
+  productName: 'Studio AutoPilot studio management software',
   operatorName: 'IPC Studios',
   supportEmail: 'support@ipcstudios.in',
   /** Registered or business address, one line per entry. */

@@ -44,7 +44,7 @@ export function buildIcs(ev: IcsEvent): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//IPC Studios//CRM//EN',
+    'PRODID:-//Studio AutoPilot//CRM//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:REQUEST',
     'BEGIN:VEVENT',

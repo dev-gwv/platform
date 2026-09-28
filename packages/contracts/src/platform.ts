@@ -24,6 +24,8 @@ export const platformStudio = z.object({
   days_remaining: z.coerce.number().int().nullish(),
   active_today: z.coerce.number().int().nullish(),
   last_seen: isoDateTime.nullable().nullish(),
+  /** When this studio's access ends: the paid plan, else the trial, else grace (0210). */
+  access_until: isoDateTime.nullable().nullish(),
 })
 export type PlatformStudio = z.infer<typeof platformStudio>
 

@@ -22,7 +22,6 @@ import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-
 import { IconTile } from '@/shared/ui/icon-tile'
 import { waLink } from '@ipc/domain'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
-import { HowToUse } from '@/shared/ui/how-to-use'
 
 type Payment = ProjectDetail['payments'][number]
 type BillingInvoice = NonNullable<ProjectBilling['invoices']>[number]
@@ -254,12 +253,6 @@ export function BillingTab({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <HowToUse
-        id="project-billing"
-        title="Money for this project"
-        description="What the client has paid, what is still to come, and every invoice and payment in one list."
-        steps={['Record each payment as it comes in', 'Create an invoice when you need one', 'Remind on WhatsApp if it is late']}
-      />
       <MoneyStory project={project} onRecord={canEdit ? () => setEditing({}) : undefined} />
 
       <NeedsALook project={project} checks={checks} canEdit={canEdit} onRecord={(invoiceId, amount) => setEditing({ invoiceId, amount })} />

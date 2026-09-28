@@ -5,7 +5,7 @@ import { useSetStudioFeature, useStudioFeatures } from '@/features/crm-sequences
 const FEATURES: { key: EntitlementKey; label: string; description: string }[] = [
   { key: 'sequences_auto', label: 'Automatic follow-ups', description: 'Sequence emails send by themselves' },
   { key: 'whatsapp_api', label: 'Own WhatsApp number', description: 'Connect their WhatsApp Business number' },
-  { key: 'white_label', label: 'White label', description: 'No IPC Studios on anything a client sees' },
+  { key: 'white_label', label: 'White label', description: 'No Studio AutoPilot on anything a client sees' },
 ]
 
 /** The higher-tier switches for one studio (0202). */

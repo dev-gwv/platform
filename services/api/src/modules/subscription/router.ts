@@ -77,6 +77,7 @@ export const subscriptionRouter = new Hono<AppEnv>()
           select c.plan as plan_key,
                  p.name as plan_name,
                  c.plan_expiry::text as plan_expiry,
+                 company_access_until(c.plan_expiry, c.grandfathered_until, c.grace_until)::text as access_until,
                  case
                    when coalesce(c.plan_expiry,         'epoch'::timestamptz) > now() then 'active'
                    when coalesce(c.grandfathered_until, 'epoch'::timestamptz) > now() then 'grandfathered'
@@ -113,13 +114,21 @@ export const subscriptionRouter = new Hono<AppEnv>()
     const gate = (comp['plan_gate'] as string ?? 'expired') as 'active' | 'grandfathered' | 'grace' | 'expired'
     const orders = row.orders as Record<string, unknown>[]
     const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
+    const accessUntil = str(comp['access_until'])
+    const daysLeft = accessUntil ? Math.ceil((new Date(accessUntil).getTime() - Date.now()) / 86_400_000) : null
+    // 0210: open access that ends within a couple of months is the 30-day
+    // trial; the long grants a platform admin gives by hand stay
+    // "grandfathered".
+    const source = planSource(gate, orders)
     return c.json(subscriptionStatus.parse({
       plan_key: str(comp['plan_key']),
       plan_name: str(comp['plan_name']),
       plan_gate: gate,
       plan_expiry: str(comp['plan_expiry']),
+      access_until: accessUntil,
+      days_left: daysLeft,
       can_purchase: gate !== 'active',
-      plan_source: planSource(gate, orders),
+      plan_source: source === 'grandfathered' && daysLeft !== null && daysLeft <= 60 ? 'trial' : source,
       latest_order_id: (orders[0]?.['id'] as string | undefined) ?? null,
       latest_order_status: (orders[0]?.['status'] as string | undefined) ?? null,
       webhook_configured: Boolean(c.env.RAZORPAY_WEBHOOK_SECRET),

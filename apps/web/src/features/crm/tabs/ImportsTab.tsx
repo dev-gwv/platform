@@ -44,7 +44,7 @@ export function ImportsTab() {
 const importDateFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 const showDate = (iso: string) => importDateFormat.format(new Date(`${iso}T00:00:00`))
 
-function CsvImport() {
+export function CsvImport() {
   const [csv, setCsv] = useState('')
   /**
    * What to do about a number already in the CRM.

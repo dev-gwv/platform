@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/shared/ui/cn'
 import { LEGAL, LEGAL_LINKS } from './legal'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 /**
  * The shell every policy page shares: the brand, a way back to sign in, the
@@ -22,7 +23,7 @@ export function LegalPage({ title, intro, children }: { title: string; intro?: s
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/login" className="text-lg font-semibold tracking-tight">
-            <span className="text-brand">IPC</span> Studios
+            <Wordmark />
           </Link>
           <Link to="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> Back to sign in

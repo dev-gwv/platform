@@ -27,6 +27,10 @@ export const subscriptionStatus = z.object({
   plan_name: z.string().nullable(),
   plan_gate: z.enum(['active', 'grandfathered', 'grace', 'expired']),
   plan_expiry: z.string().nullable(),
+  /** When access ends, whichever gate holds it open -- a trial's last day included (0210). */
+  access_until: z.string().nullable().nullish(),
+  /** Whole days until access_until; negative once it has passed. */
+  days_left: z.number().int().nullable().nullish(),
   can_purchase: z.boolean().default(true),
   /**
    * Where the plan on the account came from: a paid order, a trial nobody

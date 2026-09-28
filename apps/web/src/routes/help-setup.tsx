@@ -3,6 +3,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 import { JOURNEY_STEPS } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 /**
  * /help/setup — one short screen recording per setup step.
@@ -40,7 +41,7 @@ export function HelpSetupPage() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/dashboard" className="text-lg font-semibold tracking-tight">
-            <span className="text-brand">IPC</span> Studios
+            <Wordmark />
           </Link>
           <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
             Open the app

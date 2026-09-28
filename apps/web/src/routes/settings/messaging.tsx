@@ -277,7 +277,7 @@ function RechargeCard({ data }: { data: MessagingSummary }) {
       <CardContent className="flex flex-col gap-4 p-4">
         <div>
           <p className="font-medium">Add money</p>
-          <p className="text-sm text-muted-foreground">Pay the IPC Studios team, then send a request. We add it to your wallet once the payment is confirmed.</p>
+          <p className="text-sm text-muted-foreground">Pay the Studio AutoPilot team, then send a request. We add it to your wallet once the payment is confirmed.</p>
         </div>
         {pending ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">

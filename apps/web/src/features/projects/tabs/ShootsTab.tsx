@@ -9,7 +9,6 @@ import {
   MapPin,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   UserPlus,
   Users,
@@ -53,7 +52,6 @@ import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { shootNextStep } from '@/features/shoots/next-step'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 
@@ -154,12 +152,6 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   return (
     <div className="mt-4 flex flex-col gap-3">
       {canEdit && <ProjectDataStrip projectId={projectId} />}
-      <HowToUse
-        id="project-shoots"
-        title="Plan the shoot days"
-        description="Every function of this wedding is one shoot: Haldi, Mehendi, Wedding, Reception. Add each one, set its date and venue, then assign your team."
-        steps={['Add your functions below', 'Set the date, time and venue on each card', 'Tap Assign team and pick who is coming']}
-      />
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         {canEdit && (data?.length ?? 0) > 1 && (
           <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
@@ -175,12 +167,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
       {canEdit && (
-        <section aria-labelledby="add-functions" className="rounded-xl border border-border bg-card p-4">
-          <h2 id="add-functions" className="flex items-center gap-2 text-base font-bold tracking-tight">
-            <Sparkles className="size-4 text-primary" /> Add your functions
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Tap a function to add it. You can change the date and venue after.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <section aria-label="Add a function" className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-wrap gap-2">
             {chips.map((name) => (
               <Button
                 key={name}
@@ -257,7 +245,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       ) : !data || data.length === 0 ? (
         <EmptyState
           title="No functions added yet"
-          description="Start with the buttons above. Haldi, Mehendi, Wedding, Reception — one card each."
+          description="Tap a function above to add it."
         />
       ) : (
         <div className="flex flex-col gap-3">

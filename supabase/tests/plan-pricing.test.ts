@@ -87,7 +87,8 @@ describe('plan pricing', () => {
   it('carries the old app’s prices', async () => {
     expect(Number((await plan('ipc_monthly'))!['price'])).toBe(1999)
     expect(Number((await plan('ipc_yearly'))!['price'])).toBe(18000)
-    expect(Number((await plan('ipc_2year'))!['price'])).toBe(30000)
+    // 0210: the owner set the 2-year plan at Rs 33,000 + GST.
+    expect(Number((await plan('ipc_2year'))!['price'])).toBe(33000)
   })
 
   it('states a saving that matches the arithmetic', async () => {
@@ -98,8 +99,8 @@ describe('plan pricing', () => {
     const twoYear = await plan('ipc_2year')
     expect(monthly * 12 - Number(yearly!['price'])).toBe(5988)
     expect(String(yearly!['savings_label'])).toContain('5,988')
-    expect(monthly * 24 - Number(twoYear!['price'])).toBe(17976)
-    expect(String(twoYear!['savings_label'])).toContain('17,976')
+    expect(monthly * 24 - Number(twoYear!['price'])).toBe(14976)
+    expect(String(twoYear!['savings_label'])).toContain('14,976')
   })
 
   it('quotes a per-month figure that matches the price and the term', async () => {

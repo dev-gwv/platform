@@ -15,6 +15,7 @@ function rememberSession(pair: { access_token: string; refresh_token: string }) 
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { setupLanding } from '@/features/onboarding/journey'
 import { Card, CardContent } from '@/shared/ui/card'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 /** Landing page for the email verification link (/verify?token=…). */
 export function VerifyEmailPage() {
@@ -61,7 +62,7 @@ export function VerifyEmailPage() {
             <Camera className="size-6" />
           </span>
           <h1 className="text-xl font-semibold tracking-tight">
-            <span className="text-brand">IPC</span> Studios
+            <Wordmark />
           </h1>
         </div>
         <Card>

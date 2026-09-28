@@ -19,6 +19,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { humanize } from '@/shared/ui/format'
 import { Skeleton } from '@/shared/ui/skeleton'
+import { Wordmark } from '@/shared/ui/wordmark'
 
 /**
  * Landing page for an invitation link (/accept-invite?token=…).
@@ -104,7 +105,7 @@ export function AcceptInvitePage() {
             <Camera className="size-6" />
           </span>
           <h1 className="text-xl font-semibold tracking-tight">
-            <span className="text-brand">IPC</span> Studios
+            <Wordmark />
           </h1>
         </div>
 
