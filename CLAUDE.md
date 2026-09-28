@@ -71,6 +71,16 @@ The suite is the gate. If a dependency was added by the other session,
 `bun install` first — a missing package looks like a type error in files you
 never touched.
 
+## UI rules the owner asked for
+
+These come from the owner reviewing the live app. Apply them to anything you touch.
+
+- **Every control looks like a control.** Anything that can be clicked or typed into has a visible border or fill -- never white on near-white. An empty box that needs filling gets a colour nudge (amber), and turns calm (green) once filled. (The Assign team payout box was invisible; that is the bug this rule exists for.)
+- **Counters move the moment the user acts.** A pick, a tick or a choice shows in the count and the progress bar straight away, with "pending" told apart from "saved" (e.g. "1 of 6 chosen · press Book").
+- **Use the icon family.** `shared/ui/icon-tile.tsx` + `shared/kinds.ts`: `EventTile` for shoots/events (haldi = sun, wedding = heart…), `RoleTile` for crew roles, `DeliverableTile` / `KindTile` for deliverables, `IconTile` for anything else (money rows). The owner likes these; the CRM deal cards could use `EventTile` for `event_type` too.
+- **Say what the numbers mean.** A sentence beats three bare figures; when two numbers disagree (an unpaid invoice beside a received payment), say why and offer the one-tap fix.
+- At most 3-4 things under a heading; plain English; no jargon.
+
 ## Who is working on what
 
 Keep this short and current. Delete a line when it lands.

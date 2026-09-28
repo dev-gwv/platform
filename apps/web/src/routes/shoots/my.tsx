@@ -18,6 +18,7 @@ import { mapHref } from '@/features/shoots/map-link'
 import { useMyData } from '@/features/data/api'
 import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { STAGE_LABEL, STAGE_TONE, optedOut } from '@/features/data/stage'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 /** A booking whose shoot is over, owes data, and has not been handed over. */
 const owesData = (sl: TeamSlot, rec: DataRecord | undefined, now: string) =>
@@ -155,9 +156,12 @@ function Section({
               <Card key={s.id}>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{s.name}</p>
-                      <p className="truncate text-sm text-muted-foreground">{s.project_name ?? 'No project'}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <EventTile name={s.name} />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{s.name}</p>
+                        <p className="truncate text-sm text-muted-foreground">{s.project_name ?? 'No project'}</p>
+                      </div>
                     </div>
                     <StatusBadge tone={TONE[s.status]}>{humanize(s.status)}</StatusBadge>
                   </div>

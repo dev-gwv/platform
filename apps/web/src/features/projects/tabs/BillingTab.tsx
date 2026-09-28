@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, Link2, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
 import type { ProjectBilling, ProjectDetail } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -17,10 +17,14 @@ import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/Record
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
 import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
-import { dueText, shortDate } from '@/features/billing/status'
+import { dueText, isOverdue, shortDate } from '@/features/billing/status'
+import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-money'
+import { IconTile } from '@/shared/ui/icon-tile'
+import { waLink } from '@ipc/domain'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
 
 type Payment = ProjectDetail['payments'][number]
+type BillingInvoice = NonNullable<ProjectBilling['invoices']>[number]
 
 /**
  * The project's money in the three numbers an owner asks about: what the
@@ -39,53 +43,176 @@ export function projectMoney(p: Pick<ProjectDetail, 'total_cost' | 'payments' | 
 
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
-/** "₹1,50,000 of ₹2,27,000 collected" with a bar -- used on Overview and Billing. */
-export function CollectionBar({ project, onRecord }: { project: ProjectDetail; onRecord?: (() => void) | undefined }) {
+/** First name for a friendly line: "Rahul" from "Rahul Sharma". */
+const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] || 'The client'
+
+/**
+ * The money in one sentence and one bar: paid (green), promised (amber),
+ * still to collect (grey). The page header already carries the three
+ * numbers; this says what they mean.
+ */
+function MoneyStory({
+  project,
+  onRecord,
+}: {
+  project: ProjectDetail
+  onRecord?: (() => void) | undefined
+}) {
   const m = projectMoney(project)
+  const who = firstName(project.client_name)
+  const pct = (n: number) => `${m.total > 0 ? Math.min(100, (n / m.total) * 100) : 0}%`
+  const remind =
+    m.due > 0 && project.client_phone
+      ? waLink(
+          project.client_phone,
+          `Hi ${who}, a gentle reminder that ${formatINR(m.due)} is still due for ${project.name}. Thank you!`,
+        )
+      : null
   return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <p className="text-sm">
-          <span className="text-lg font-semibold tabular-nums">{formatINR(m.received)}</span>
-          <span className="text-muted-foreground"> of {formatINR(m.total)} collected</span>
-        </p>
-        <p className={cn('text-sm font-medium tabular-nums', m.due > 0 ? 'text-warning' : 'text-tone-green')}>
-          {m.due > 0 ? `${formatINR(m.due)} still to collect` : 'Fully paid'}
-        </p>
-      </div>
-      <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
-        role="progressbar"
-        aria-valuenow={m.pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label="Collected"
-      >
-        <div className="h-full rounded-full bg-tone-green transition-[width]" style={{ width: `${m.pct}%` }} />
-      </div>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>
-          Package {formatINR(project.package_cost)}
-          {project.additional_deliverables_cost > 0 ? ` + extras ${formatINR(project.additional_deliverables_cost)}` : ''}
-          {m.promised > 0 ? ` · ${formatINR(m.promised)} promised, not yet received` : ''}
-        </span>
-        {onRecord && (
-          <Button size="sm" onClick={onRecord}>
-            <Plus /> Add payment from client
-          </Button>
-        )}
-      </div>
-    </div>
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="min-w-0 text-base leading-relaxed">
+            {m.total <= 0 ? (
+              <>No price set for this project yet.</>
+            ) : m.due <= 0 ? (
+              <>
+                <span className="font-semibold">{who}</span> has paid in full:{' '}
+                <span className="font-semibold text-tone-green">{formatINR(m.received)}</span>. Nothing left to collect.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">{who}</span> has paid{' '}
+                <span className="font-semibold text-tone-green">{formatINR(m.received)}</span> of{' '}
+                <span className="font-semibold">{formatINR(m.total)}</span>.{' '}
+                <span className="font-semibold text-tone-amber">{formatINR(m.due)}</span> left to collect.
+              </>
+            )}
+          </p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {remind && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={remind} target="_blank" rel="noreferrer">
+                  <MessageCircle /> Remind on WhatsApp
+                </a>
+              </Button>
+            )}
+            {onRecord && (
+              <Button size="sm" onClick={onRecord}>
+                <Plus /> Record payment
+              </Button>
+            )}
+          </div>
+        </div>
+        <div
+          className="flex h-3 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuenow={m.pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Collected"
+        >
+          <div className="h-full bg-tone-green transition-[width] duration-500" style={{ width: pct(m.received) }} />
+          <div
+            className="h-full bg-tone-amber/60 transition-[width] duration-500"
+            style={{ width: pct(Math.min(m.promised, m.due)), backgroundImage: 'repeating-linear-gradient(45deg, transparent 0 4px, rgb(255 255 255 / 0.35) 4px 8px)' }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <Legend className="bg-tone-green" label={`Paid ${formatINR(m.received)}`} />
+          {m.promised > 0 && <Legend className="bg-tone-amber/60" label={`Promised ${formatINR(m.promised)}`} />}
+          {m.due > 0 && <Legend className="bg-muted-foreground/30" label={`To collect ${formatINR(m.due)}`} />}
+          <span>
+            Package {formatINR(project.package_cost)}
+            {project.additional_deliverables_cost > 0 ? ` + extras ${formatINR(project.additional_deliverables_cost)}` : ''}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function Legend({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn('size-2.5 rounded-full', className)} aria-hidden />
+      {label}
+    </span>
   )
 }
 
 /**
- * Billing: collect the money, then see what the project made.
- *
- * Payments first, because that is what is done here most -- record one, mark
- * a promised one as received, send the receipt. Profit is one small card for
- * those who may see it. The monthly allocation report, with its methods and
- * pickers, lives on the Profit page where it belongs.
+ * The one or two things on this project's money that need a look, each with
+ * its fix -- instead of numbers that silently disagree.
+ */
+function NeedsALook({
+  project,
+  checks,
+  canEdit,
+  onRecord,
+}: {
+  project: ProjectDetail
+  checks: MoneyCheck[]
+  canEdit: boolean
+  onRecord: (invoiceId: string, amount: number) => void
+}) {
+  const attach = useUpdatePayment(project.id)
+  if (checks.length === 0) return null
+  return (
+    <Card className="border-tone-amber/40 bg-tone-amber-soft/40">
+      <CardContent className="flex flex-col gap-2 p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <AlertTriangle className="size-4 text-tone-amber" aria-hidden /> Needs a look
+        </p>
+        <ul className="flex flex-col gap-2">
+          {checks.slice(0, 2).map((c) => (
+            <li key={c.kind} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+              <span className="min-w-0 flex-1">
+                {c.kind === 'unlinked' ? (
+                  <>
+                    {formatINR(c.amount)} received isn’t attached to <b>{c.invoiceNumber}</b>, so that invoice still shows it as unpaid.
+                  </>
+                ) : c.kind === 'over_invoiced' ? (
+                  <>
+                    Invoices add up to <b>{formatINR(c.invoiced)}</b>, which is {formatINR(c.invoiced - c.agreed)} more than the project’s{' '}
+                    {formatINR(c.agreed)}.
+                  </>
+                ) : (
+                  <>
+                    <b>{c.invoiceNumber}</b> is {c.late}, with {formatINR(c.balance)} unpaid.
+                  </>
+                )}
+              </span>
+              {c.kind === 'unlinked' && canEdit ? (
+                <Button
+                  size="sm"
+                  disabled={attach.isPending}
+                  onClick={() => attach.mutate({ paymentId: c.paymentId, patch: { invoice_id: c.invoiceId } })}
+                >
+                  <Link2 /> Attach it
+                </Button>
+              ) : c.kind === 'overdue' && canEdit ? (
+                <Button size="sm" onClick={() => onRecord(c.invoiceId, c.balance)}>
+                  <IndianRupee /> Record payment
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/billing/invoices/$id" params={{ id: c.invoiceId }}>
+                    Open {c.invoiceNumber}
+                  </Link>
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Billing: what the money says, what needs a look, and every invoice and
+ * payment on one line each, newest first.
  */
 export function BillingTab({
   project,
@@ -103,10 +230,10 @@ export function BillingTab({
   const [invoicing, setInvoicing] = useState<Partial<InvoiceFormValues> | null>(null)
   const billing = useProjectBilling(project.id)
   const m = projectMoney(project)
-  const payments = [...project.payments].sort((a, b) => b.paid_on.localeCompare(a.paid_on))
   const invoices = billing.data?.invoices ?? null
   const live = (invoices ?? []).filter((i) => i.status !== 'cancelled' && i.status !== 'draft')
   const openInvoices: OpenInvoice[] = live.filter((i) => i.balance_due > 0)
+  const checks = canBill && invoices ? projectMoneyChecks(project.total_cost, invoices, project.payments) : []
 
   /** A new invoice for this project, with one line when it is for a part of the plan. */
   const invoiceFor = (line?: { description: string; amount: number }) =>
@@ -118,19 +245,17 @@ export function BillingTab({
       ...(line ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] } : {}),
     })
 
+  // Invoices and payments on one timeline, newest first.
+  const rows: Array<{ kind: 'invoice'; at: string; inv: BillingInvoice } | { kind: 'payment'; at: string; p: Payment }> = [
+    ...(canBill ? (invoices ?? []).map((inv) => ({ kind: 'invoice' as const, at: inv.invoice_date, inv })) : []),
+    ...project.payments.map((p) => ({ kind: 'payment' as const, at: p.paid_on, p })),
+  ].sort((a, b) => b.at.localeCompare(a.at))
+
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <Card>
-        <CardContent className="p-4">
-          <CollectionBar project={project} onRecord={canEdit ? () => setEditing({}) : undefined} />
-          {canBill && live.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Invoiced {formatINR(live.reduce((n, i) => n + i.total, 0))} in {live.length} invoice{live.length === 1 ? '' : 's'}
-              {openInvoices.length > 0 ? ` · ${formatINR(openInvoices.reduce((n, i) => n + i.balance_due, 0))} unpaid on them` : ' · all paid'}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <MoneyStory project={project} onRecord={canEdit ? () => setEditing({}) : undefined} />
+
+      <NeedsALook project={project} checks={checks} canEdit={canEdit} onRecord={(invoiceId, amount) => setEditing({ invoiceId, amount })} />
 
       <PlanCard
         project={project}
@@ -144,93 +269,57 @@ export function BillingTab({
         onOpenTerms={onOpenTab ? () => onOpenTab('terms') : undefined}
       />
 
-      {canBill && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <FileText className="size-4 text-tone-blue" aria-hidden /> Invoices
-                <span className="text-xs font-normal text-muted-foreground">{invoices?.length ?? 0}</span>
-              </p>
-              {canInvoice && (
-                <Button size="sm" variant="outline" onClick={() => invoiceFor()}>
-                  <Plus /> Create invoice
-                </Button>
-              )}
-            </div>
-            {!invoices || invoices.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                No invoices for this project yet.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {invoices.map((inv) => {
-                  const due = dueText(inv)
-                  return (
-                    <li key={inv.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
-                      <Link to="/billing/invoices/$id" params={{ id: inv.id }} className="min-w-[7rem] font-semibold text-primary hover:underline">
-                        {inv.invoice_number}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">
-                        {shortDate(inv.invoice_date)}
-                        {due ? ` · ${due}` : ''}
-                      </span>
-                      <span className="ml-auto text-sm tabular-nums">
-                        {formatINR(inv.total)}
-                        {inv.balance_due > 0 && inv.status !== 'cancelled' && (
-                          <span className="text-xs text-muted-foreground"> · {formatINR(inv.balance_due)} due</span>
-                        )}
-                      </span>
-                      <InvoiceBadge invoice={inv} />
-                      {canEdit && inv.balance_due > 0 && inv.status !== 'cancelled' && inv.status !== 'draft' && (
-                        <Button size="sm" variant="ghost" onClick={() => setEditing({ invoiceId: inv.id, amount: inv.balance_due })}>
-                          <IndianRupee /> Record
-                        </Button>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardContent className="p-4">
-          <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            <IndianRupee className="size-4 text-tone-green" aria-hidden /> Payments
-            <span className="text-xs font-normal text-muted-foreground">{payments.length}</span>
-          </p>
-          {payments.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-6 text-center">
-              <p className="text-sm text-muted-foreground">No payments yet. Record the advance when it comes in.</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Money in and out</p>
+            {canBill && canInvoice && (
+              <Button size="sm" variant="outline" onClick={() => invoiceFor()}>
+                <Plus /> Create invoice
+              </Button>
+            )}
+          </div>
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-6 text-center">
+              <IconTile icon={IndianRupee} tone="green" size="lg" />
+              <p className="text-sm text-muted-foreground">Nothing yet. Record the advance when it comes in.</p>
               {canEdit && (
                 <Button size="sm" onClick={() => setEditing({})}>
-                  <Plus /> Add payment from client
+                  <Plus /> Record payment
                 </Button>
               )}
             </div>
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {payments.map((p) => (
-                <PaymentItem
-                  key={p.id}
-                  p={p}
-                  paid={m.isPaid(p)}
-                  project={project}
-                  canEdit={canEdit}
-                  canBill={canBill}
-                  onEdit={() => setEditing({ payment: p })}
-                />
-              ))}
+            <ul className="flex flex-col gap-2">
+              {rows.map((r) =>
+                r.kind === 'invoice' ? (
+                  <InvoiceItem
+                    key={`i-${r.inv.id}`}
+                    inv={r.inv}
+                    canEdit={canEdit}
+                    onRecord={() => setEditing({ invoiceId: r.inv.id, amount: r.inv.balance_due })}
+                  />
+                ) : (
+                  <PaymentItem
+                    key={`p-${r.p.id}`}
+                    p={r.p}
+                    paid={m.isPaid(r.p)}
+                    project={project}
+                    canEdit={canEdit}
+                    canBill={canBill}
+                    onEdit={() => setEditing({ payment: r.p })}
+                  />
+                ),
+              )}
             </ul>
           )}
         </CardContent>
       </Card>
 
-      <ProfitCard project={project} />
-      <QuotationCard project={project} canEdit={canEdit} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <ProfitCard project={project} />
+        <QuotationCard project={project} canEdit={canEdit} />
+      </div>
 
       {editing && (
         <RecordPaymentDialog
@@ -242,6 +331,47 @@ export function BillingTab({
       )}
       {invoicing && <NewInvoiceDialog initial={invoicing} openAfter={false} onClose={() => setInvoicing(null)} />}
     </div>
+  )
+}
+
+/** One invoice on the timeline: blue when out, red when late, green once paid. */
+function InvoiceItem({
+  inv,
+  canEdit,
+  onRecord,
+}: {
+  inv: BillingInvoice
+  canEdit: boolean
+  onRecord: () => void
+}) {
+  const due = dueText(inv)
+  const late = isOverdue(inv)
+  const paid = inv.balance_due <= 0 && inv.status !== 'draft' && inv.status !== 'cancelled'
+  const open = inv.balance_due > 0 && inv.status !== 'cancelled' && inv.status !== 'draft'
+  return (
+    <li className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5', late ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card')}>
+      <IconTile icon={late ? AlertTriangle : FileText} tone={paid ? 'green' : late ? 'rose' : 'blue'} />
+      <div className="min-w-[10rem] flex-1">
+        <p className="text-sm">
+          <span className="text-muted-foreground">Invoice </span>
+          <Link to="/billing/invoices/$id" params={{ id: inv.id }} className="font-semibold text-primary hover:underline">
+            {inv.invoice_number}
+          </Link>
+          <span className="font-semibold tabular-nums"> · {formatINR(inv.total)}</span>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {shortDate(inv.invoice_date)}
+          {due ? ` · ${due}` : ''}
+          {open && inv.balance_due < inv.total ? ` · ${formatINR(inv.balance_due)} still due` : ''}
+        </p>
+      </div>
+      <InvoiceBadge invoice={inv} />
+      {canEdit && open && (
+        <Button size="sm" variant="outline" onClick={onRecord}>
+          <IndianRupee /> Record
+        </Button>
+      )}
+    </li>
   )
 }
 
@@ -273,23 +403,19 @@ function PlanCard({
 }) {
   if (loading) return null
   if (!plan) {
+    // No plan is not a problem to fill a card with: one quiet line.
     return (
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 p-4">
-          <CalendarClock className="size-4 text-muted-foreground" aria-hidden />
-          <div className="min-w-[12rem] flex-1">
-            <p className="text-sm font-semibold">Payment plan</p>
-            <p className="text-xs text-muted-foreground">
-              No plan agreed yet. Add the instalments (like 30% advance) in the terms, and each one shows here with what has come in.
-            </p>
-          </div>
+      <p className="flex items-start gap-2 px-1 text-sm text-muted-foreground">
+        <CalendarClock className="mt-0.5 size-4 shrink-0 text-tone-violet" aria-hidden />
+        <span>
+          No payment plan yet (like 30% advance, the rest before delivery).{' '}
           {onOpenTerms && (
-            <Button size="sm" variant="outline" onClick={onOpenTerms}>
-              Open Terms
-            </Button>
+            <button type="button" onClick={onOpenTerms} className="font-medium text-primary hover:underline">
+              Add it in Terms
+            </button>
           )}
-        </CardContent>
-      </Card>
+        </span>
+      </p>
     )
   }
   const m = projectMoney(project)
@@ -397,14 +523,13 @@ function PaymentItem({
   const details = [day(p.paid_on), p.mode?.toUpperCase(), p.reference, p.description, p.is_gst ? `GST ${p.gst_number ?? ''}`.trim() : null].filter(Boolean)
 
   return (
-    <li className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2', paid ? 'border-border bg-card' : 'border-tone-amber/40 bg-tone-amber-soft/30')}>
-      {paid ? (
-        <CheckCircle2 className="size-5 shrink-0 text-tone-green" aria-hidden />
-      ) : (
-        <Hourglass className="size-5 shrink-0 text-tone-amber" aria-hidden />
-      )}
+    <li className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5', paid ? 'border-border bg-card' : 'border-tone-amber/40 bg-tone-amber-soft/30')}>
+      <IconTile icon={paid ? IndianRupee : Hourglass} tone={paid ? 'green' : 'amber'} />
       <div className="min-w-[10rem] flex-1">
-        <p className="text-sm font-semibold tabular-nums">{formatINR(p.amount)}</p>
+        <p className="text-sm">
+          <span className="text-muted-foreground">{paid ? 'Payment received ' : 'Payment promised '}</span>
+          <span className="font-semibold tabular-nums">{formatINR(p.amount)}</span>
+        </p>
         <p className="text-xs text-muted-foreground">
           {details.join(' · ')}
           {p.invoice_id && p.invoice_number && (
@@ -477,9 +602,9 @@ function ProfitCard({ project }: { project: ProjectDetail }) {
     <Card>
       <CardContent className="p-4">
         <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <TrendingUp className="size-4 text-tone-violet" aria-hidden /> What this project makes
+          <IconTile icon={TrendingUp} tone="violet" size="sm" /> What this project makes
         </p>
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
           <Fig label="Project value" value={formatINR(f.income)} />
           <Fig label="Crew cost" value={`− ${formatINR(f.team)}`} />
           <Fig label="Expenses" value={`− ${formatINR(f.expenses)}`} />
@@ -512,8 +637,8 @@ function QuotationCard({ project, canEdit }: { project: ProjectDetail; canEdit: 
   return (
     <Card>
       <CardContent className="flex flex-wrap items-center gap-3 p-4">
-        <FileText className="size-4 text-muted-foreground" aria-hidden />
-        <div className="min-w-[12rem] flex-1">
+        <IconTile icon={FileText} tone="blue" size="sm" />
+        <div className="min-w-[10rem] flex-1">
           <p className="text-sm font-semibold">Quotation</p>
           <p className="text-xs text-muted-foreground">
             {project.show_quotation ? 'The client can open it from their link.' : 'Hidden — the client sees a “not available” note.'}

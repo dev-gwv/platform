@@ -40,6 +40,7 @@ import {
   type TrackingSort,
   type TrackingTab,
 } from '@/features/projects/tracking'
+import { DeliverableTile, EventTile } from '@/shared/ui/icon-tile'
 
 const list = projectTrackingRow.array()
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
@@ -339,7 +340,7 @@ function Breakdown({ project: p }: { project: TrackedProject }) {
         ) : (
           <ul className="space-y-1 text-sm">
             {late.map((d) => (
-              <Item key={d.id} title={d.title} who={d.assignee_name} extra={`${d.stage} · due ${day(d.estimated_date)} · ${d.days_late}d late`} bad />
+              <Item key={d.id} deliverable title={d.title} who={d.assignee_name} extra={`${d.stage} · due ${day(d.estimated_date)} · ${d.days_late}d late`} bad />
             ))}
             {data.tasks.map((t) => (
               <Item key={t.id} title={t.title} who={t.assignee_names.join(', ') || null} extra={`Task · due ${day(t.due_date)} · ${t.days_late}d late`} bad />
@@ -353,7 +354,7 @@ function Breakdown({ project: p }: { project: TrackedProject }) {
         ) : (
           <ul className="space-y-1 text-sm">
             {open.slice(0, 8).map((d) => (
-              <Item key={d.id} title={d.title} who={d.assignee_name} extra={`${d.stage}${d.estimated_date ? ` · due ${day(d.estimated_date)}` : ''}`} />
+              <Item key={d.id} deliverable title={d.title} who={d.assignee_name} extra={`${d.stage}${d.estimated_date ? ` · due ${day(d.estimated_date)}` : ''}`} />
             ))}
             {open.length > 8 && <li className="text-xs text-muted-foreground">+{open.length - 8} more</li>}
           </ul>
@@ -379,6 +380,7 @@ function Breakdown({ project: p }: { project: TrackedProject }) {
               const short = s.needed > s.booked && (!s.shoot_date || s.shoot_date >= todayIST())
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-2">
+                  <EventTile name={s.name} size="sm" />
                   <span className="font-medium">{s.name}</span>
                   <span className="text-xs text-muted-foreground">{day(s.shoot_date)}</span>
                   <span className={cn('text-xs', short ? 'text-tone-amber' : 'text-muted-foreground')}>
@@ -425,9 +427,10 @@ function Block({ title, className, children }: { title: string; className?: stri
 
 const Nothing = ({ children }: { children: React.ReactNode }) => <p className="text-sm text-muted-foreground">{children}</p>
 
-function Item({ title, who, extra, bad }: { title: string; who: string | null; extra: string; bad?: boolean }) {
+function Item({ title, who, extra, bad, deliverable }: { title: string; who: string | null; extra: string; bad?: boolean; deliverable?: boolean }) {
   return (
-    <li className="flex flex-wrap items-baseline gap-x-2">
+    <li className="flex flex-wrap items-center gap-x-2">
+      {deliverable && <DeliverableTile title={title} size="sm" />}
       <span className="font-medium">{title}</span>
       <span className="text-xs text-muted-foreground">{who ?? 'Unassigned'}</span>
       <span className={cn('text-xs', bad ? 'text-destructive' : 'text-muted-foreground')}>{extra}</span>

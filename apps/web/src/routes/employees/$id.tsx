@@ -21,6 +21,7 @@ import { useDirectory, useMemberOverview, useSendReset, useUpdateMember } from '
 import { EditMemberDialog } from '@/features/team/EditMemberDialog'
 import { openIdDocument, useIdDocuments } from '@/features/profile/api'
 import { usePayrollPowers, usePayslips } from '@/features/payroll/api'
+import { DeliverableTile } from '@/shared/ui/icon-tile'
 
 /**
  * One team member, seen from every side: who they are and how complete their
@@ -378,6 +379,7 @@ function WorkTab({ work, memberId }: { work: NonNullable<MemberOverview['work']>
             <ul className="mt-2 divide-y divide-border">
               {work.deliverables.map((d) => (
                 <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                  <DeliverableTile title={d.title} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="font-medium">{d.title}</span>
                     {d.project_name && (

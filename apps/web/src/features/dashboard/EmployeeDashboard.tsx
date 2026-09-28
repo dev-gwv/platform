@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { CalendarCheck2, CalendarDays, CheckCircle2, ClipboardList, MapPin } from 'lucide-react'
+import { CalendarCheck2, CalendarDays, CheckCircle2, ClipboardList } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { hoursLabel } from '@/features/shoots/assign'
 import { localDay } from '@/features/booking/booking-model'
@@ -18,6 +18,7 @@ import { attendanceRecord } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { MyDeliveryStrip } from '@/features/projects/MyDeliveryStrip'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 const myList = attendanceRecord.array()
 
@@ -145,7 +146,7 @@ export function EmployeeDashboard() {
               <ul className="flex flex-col gap-2">
                 {mySlots.map((s) => (
                   <li key={s.id} className="flex items-start gap-2 text-sm">
-                    <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <EventTile name={s.shoot_name ?? s.service_name} size="sm" />
                     <span className="min-w-0">
                       <span className="font-medium">{s.shoot_name ?? s.service_name ?? 'Booked'}</span>
                       <span className="block truncate text-xs text-muted-foreground">

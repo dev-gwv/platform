@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarDays, Camera, MapPin } from 'lucide-react'
+import { ArrowLeft, CalendarDays, MapPin } from 'lucide-react'
 import { shootListItem } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -13,6 +13,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
 import { useSlots } from '@/features/allocation/api'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 const list = shootListItem.array()
 
@@ -82,7 +83,7 @@ function ShootDetail() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-xl font-semibold">
-                <Camera className="size-5 text-muted-foreground" /> {shoot.name}
+                <EventTile name={shoot.name} /> {shoot.name}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {shoot.project_name ?? 'No project'}

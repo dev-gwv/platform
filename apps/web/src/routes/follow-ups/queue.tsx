@@ -14,6 +14,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { CallButton } from '@/features/crm-calls/CallButton'
 import { useCallQueue } from '@/features/crm-calls/api'
 import { useSendNow } from '@/features/crm-sequences/api'
+import { EventTile } from '@/shared/ui/icon-tile'
 
 export function CallQueuePage() {
   return (
@@ -115,6 +116,7 @@ function Row({ lead }: { lead: CallQueueItem }) {
   const what = [lead.event_type, lead.event_date ? fmtDate(lead.event_date) : null, lead.city].filter(Boolean).join(' · ')
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
+      <EventTile name={lead.event_type} className="hidden sm:flex" />
       <div className="min-w-0 flex-1">
         <Link to="/follow-ups" search={{ lead: lead.id } as never} className="block truncate font-medium hover:underline">
           {lead.name || lead.phone || 'No name'}
