@@ -27,6 +27,13 @@ export interface MorningFacts {
   tasks: number
   overdueCount: number
   overdueAmount: number
+  /** Leads going cold (0205): never called, quotation quiet 3+ days, same stage 5+ days. */
+  coldUncalled?: number
+  coldOldestDays?: number
+  coldQuietQuotes?: number
+  coldStuck?: number
+  /** What each caller did yesterday. */
+  yesterday?: { name: string | null; calls: number; answered: number; quotes: number; booked: number }[]
 }
 
 const esc = (t: string) =>
@@ -111,6 +118,33 @@ export async function morningMail(env: Env, f: MorningFacts): Promise<Onboarding
     )
   }
 
+  const cold = [
+    (f.coldUncalled ?? 0) > 0
+      ? `${plural(f.coldUncalled!, 'lead', 'leads')} nobody has called yet${(f.coldOldestDays ?? 0) > 1 ? ` (the oldest ${f.coldOldestDays} days ago)` : ''}`
+      : null,
+    (f.coldQuietQuotes ?? 0) > 0 ? `${plural(f.coldQuietQuotes!, 'quotation', 'quotations')} quiet for 3 days or more` : null,
+    (f.coldStuck ?? 0) > 0 ? `${plural(f.coldStuck!, 'lead', 'leads')} stuck in the same stage for 5 days or more` : null,
+  ].filter(Boolean) as string[]
+  if (cold.length > 0) {
+    summary.push(`${(f.coldUncalled ?? 0) + (f.coldQuietQuotes ?? 0) + (f.coldStuck ?? 0)} going cold`)
+    blocks.push(block('Leads going cold', cold.map(line).join(''), { label: "Open Today's calls", href: `${app}/follow-ups/queue` }))
+  }
+  if (f.yesterday && f.yesterday.length > 0) {
+    blocks.push(
+      block(
+        'Yesterday',
+        f.yesterday
+          .map((y) =>
+            line(
+              `<strong>${esc(firstName(y.name))}</strong> · ${plural(y.calls, 'call', 'calls')} (${y.answered} answered)` +
+                `${y.quotes > 0 ? ` · ${plural(y.quotes, 'quotation', 'quotations')}` : ''}${y.booked > 0 ? ` · <strong>${y.booked} booked</strong>` : ''}`,
+            ),
+          )
+          .join(''),
+      ),
+    )
+  }
+
   const dayLabel = new Date(`${f.day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
   const stop = `${app}/stop-emails?m=${f.userId}&t=${await morningStopToken(env, f.userId)}`
   const html = `<!doctype html>
@@ -169,6 +203,11 @@ export async function runMorningEmails(env: Env, dryRun: boolean): Promise<Morni
         tasks: number
         overdue_count: number
         overdue_amount: string | number
+        cold_uncalled: number
+        cold_oldest_days: number
+        cold_quiet_quotes: number
+        cold_stuck: number
+        yesterday: NonNullable<MorningFacts['yesterday']>
       }[]
     >`select * from morning_email_due()`,
   )
@@ -191,6 +230,11 @@ export async function runMorningEmails(env: Env, dryRun: boolean): Promise<Morni
         tasks: d.tasks,
         overdueCount: d.overdue_count,
         overdueAmount: Number(d.overdue_amount),
+        coldUncalled: d.cold_uncalled,
+        coldOldestDays: d.cold_oldest_days,
+        coldQuietQuotes: d.cold_quiet_quotes,
+        coldStuck: d.cold_stuck,
+        yesterday: d.yesterday,
       })
       if (await sendOnboardingMail(env, d.email, mail)) sent += 1
     } catch (e) {

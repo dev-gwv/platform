@@ -37,6 +37,16 @@ describe('morning email', () => {
     expect(m.html).toContain('1 task is due or late')
   })
 
+  it('says which leads are going cold and what each caller did yesterday', async () => {
+    const m = await morningMail(env, facts({ coldUncalled: 2, coldOldestDays: 4, coldQuietQuotes: 1, coldStuck: 0, yesterday: [{ name: 'Ravi Kumar', calls: 5, answered: 2, quotes: 1, booked: 1 }] }))
+    expect(m.subject).toBe('Today: 3 going cold')
+    expect(m.html).toContain('2 leads nobody has called yet (the oldest 4 days ago)')
+    expect(m.html).toContain('1 quotation quiet for 3 days or more')
+    expect(m.html).not.toContain('stuck in the same stage')
+    expect(m.html).toContain('https://app.test/follow-ups/queue')
+    expect(m.html).toContain('<strong>Ravi</strong> · 5 calls (2 answered) · 1 quotation · <strong>1 booked</strong>')
+  })
+
   it('carries a stop link that only works for this person', async () => {
     const m = await morningMail(env, facts({ tasks: 2 }))
     const t = await morningStopToken(env, USER)
