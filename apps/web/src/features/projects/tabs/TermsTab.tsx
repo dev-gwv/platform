@@ -22,7 +22,6 @@ import { TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { ShareTermsPanel } from '@/features/terms/ShareTermsPanel'
 import { useCompanyProfile } from '@/features/settings/api'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
-import { HowToUse } from '@/shared/ui/how-to-use'
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -115,12 +114,6 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
     }
     return (
       <div className="mt-4 flex flex-col gap-4">
-        <HowToUse
-          id="project-terms"
-          title="Get the client to agree"
-          description="Write what you will deliver and how they will pay, send them one link, and see here the moment they tap I agree."
-          steps={['Write the terms and the payment plan', 'Send the link on WhatsApp or email', 'See here when they agree']}
-        />
         <TermsComposer
           key={composing ? `v-${current?.id}` : 'first'}
           project={project}

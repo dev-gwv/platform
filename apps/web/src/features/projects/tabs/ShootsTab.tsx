@@ -53,7 +53,6 @@ import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { shootNextStep } from '@/features/shoots/next-step'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 
@@ -154,12 +153,6 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   return (
     <div className="mt-4 flex flex-col gap-3">
       {canEdit && <ProjectDataStrip projectId={projectId} />}
-      <HowToUse
-        id="project-shoots"
-        title="Plan the shoot days"
-        description="Every function of this wedding is one shoot: Haldi, Mehendi, Wedding, Reception. Add each one, set its date and venue, then assign your team."
-        steps={['Add your functions below', 'Set the date, time and venue on each card', 'Tap Assign team and pick who is coming']}
-      />
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         {canEdit && (data?.length ?? 0) > 1 && (
           <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>

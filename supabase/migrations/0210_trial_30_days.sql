@@ -1,0 +1,2 @@
+-- 0210: a 30-day free trial for every studio, and the 2-year plan at Rs 33,000 + GST.
+-- Claimed ahead of the body; see CLAUDE.md.
