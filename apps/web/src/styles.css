@@ -382,6 +382,23 @@ body {
   background: transparent;
 }
 
+/* ── Micro labels ──────────────────────────────────────────────
+   The old app's `.uppercase-label`: a 9px, widely-tracked, uppercase caption
+   used for table headers, column names and the tiny line above a card's title.
+   At that size the tracking is not decoration — set solid, uppercase text this
+   small closes up and stops being readable.
+
+   Ours takes its colour from --muted-foreground rather than the reference's
+   hard-coded #888, so it follows dark mode and a studio's own theme. */
+.micro-label {
+  font-size: 0.65rem;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
 /* ── Tables ────────────────────────────────────────────────────
    A long directory or billing table loses its headings the moment you
    scroll, and then every column is a guess. `position: sticky` on the header

@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { CalendarClock, Check, ChevronDown, KanbanSquare } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import type { CrmLead, SavedView } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { BUILTIN_VIEWS, viewCounts, type BuiltinViewKey } from './builtin-views'
 
-/** Either a built-in list, the stage board, or one of this person's saved views. */
+/**
+ * Which leads, not how they are drawn.
+ *
+ * This used to carry 'pipeline' and 'board' too, so picking the stage board
+ * also threw away whatever view you were in -- you could not look at Hot leads
+ * on a board. Drawing mode is now its own control beside this one, the way the
+ * reference app has always had it.
+ */
 export type ViewChoice =
   | { kind: 'builtin'; key: BuiltinViewKey }
-  | { kind: 'pipeline' }
-  | { kind: 'board' }
   | { kind: 'saved'; id: string }
 
 export const sameView = (a: ViewChoice, b: ViewChoice): boolean =>
@@ -107,40 +112,6 @@ export function ViewPicker({
                 </li>
               )
             })}
-
-            <li>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => pick({ kind: 'board' })}
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left hover:bg-accent"
-              >
-                <Check className={cn('size-3.5 shrink-0', value.kind === 'board' ? 'opacity-100' : 'opacity-0')} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">Follow-up board</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    Overdue, today, this week, later
-                  </span>
-                </span>
-                <CalendarClock className="size-3.5 text-muted-foreground" aria-hidden />
-              </button>
-            </li>
-
-            <li>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => pick({ kind: 'pipeline' })}
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left hover:bg-accent"
-              >
-                <Check className={cn('size-3.5 shrink-0', value.kind === 'pipeline' ? 'opacity-100' : 'opacity-0')} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">Pipeline</span>
-                  <span className="block truncate text-xs text-muted-foreground">The stage board</span>
-                </span>
-                <KanbanSquare className="size-3.5 text-muted-foreground" aria-hidden />
-              </button>
-            </li>
 
             {saved.length > 0 && (
               <>

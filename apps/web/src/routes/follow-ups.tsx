@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, CalendarClock, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { Segmented } from '@/shared/ui/segmented'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { SEARCH_MIN, useLeadSearch, useLeads, useSavedViews } from '@/features/crm/api'
@@ -57,6 +58,13 @@ function Crm() {
    */
   const [showFilters, setShowFilters] = useState(false)
 
+  /**
+   * How the chosen leads are drawn: as a list, bucketed by when they are due,
+   * or as the stage board. Separate from WHICH leads, so "Hot leads, on the
+   * board" is now a thing that can be asked for.
+   */
+  const [mode, setMode] = useState<'list' | 'board' | 'pipeline'>('list')
+
   // A ?lead= link (a reminder, a converted enquiry, an alert) opens straight
   // to that lead -- even an archived one -- then clears itself so closing the
   // panel and reloading does not reopen it.
@@ -90,26 +98,29 @@ function Crm() {
   const saved = savedViews ?? []
 
   const label =
-    current.kind === 'pipeline'
-      ? 'Pipeline'
-      : current.kind === 'board'
-        ? 'Follow-up board'
-        : current.kind === 'saved'
-        ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
-        : viewName(current.key)
+    current.kind === 'saved'
+      ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
+      : viewName(current.key)
 
   /** The rows this view is, before the search box narrows them further. */
   const inViewRows = useMemo(() => {
     const source = showArchived ? allLeads : allOpen
-    if (current.kind === 'pipeline') return source.filter(isOpen)
-    // The board buckets by due date itself, so it wants every open lead.
-    if (current.kind === 'board') return source.filter(isOpen)
+    // The board and the stage board both want open leads only -- a won deal has
+    // no next call and no stage to sit in.
+    if (mode !== 'list') {
+      const open = source.filter(isOpen)
+      if (current.kind === 'saved') {
+        const v = saved.find((x) => x.id === current.id)
+        return v ? applyQuery(open, toLeadQuery(v.query), now) : open
+      }
+      return inView(open, current.key, now)
+    }
     if (current.kind === 'saved') {
       const v = saved.find((x) => x.id === current.id)
       return v ? applyQuery(source, toLeadQuery(v.query), now) : source.filter(isOpen)
     }
     return inView(source, current.key, now)
-  }, [current, allOpen, allLeads, showArchived, saved, now])
+  }, [current, mode, allOpen, allLeads, showArchived, saved, now])
 
   // A quarter of a second of quiet before we ask the server, so typing a phone
   // number is one request and not eleven.
@@ -170,9 +181,25 @@ function Crm() {
         }
       />
 
-      {/* One line: which leads, and a way to find one. Everything that used to
-          sit here is either in the picker or behind Setup. */}
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-border pb-3">
+      {/*
+        * One toolbar, in the order the questions get asked: how do I want to
+        * see them, which ones, find one, narrow it.
+        *
+        * Sticky, because on a board that scrolls sideways and a list four
+        * hundred rows long, the controls scrolling away means scrolling back up
+        * to change anything.
+        */}
+      <div className="sticky top-0 z-20 -mx-1 mt-2 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1">
+        <Segmented
+          label="How to show these leads"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'list', label: 'List', icon: List },
+            { value: 'board', label: 'Board', icon: CalendarClock },
+            { value: 'pipeline', label: 'Pipeline', icon: KanbanSquare },
+          ]}
+        />
         <ViewPicker leads={allOpen} now={now} value={current} onChange={setView} saved={saved} label={label} />
         <span className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -187,6 +214,7 @@ function Crm() {
         <Button
           variant={showFilters ? 'default' : 'outline'}
           size="sm"
+          shape="square"
           onClick={() => setShowFilters((v) => !v)}
           aria-expanded={showFilters}
         >
@@ -217,11 +245,9 @@ function Crm() {
           /* The checklist a studio needs once, on the only screen where it is
              the most useful thing present: an empty one. */
           <GettingStarted leads={allOpen} />
-        ) : current.kind === 'pipeline' ? (
+        ) : mode === 'pipeline' ? (
           <PipelineTab leads={rows} onOpen={setOpenLead} />
-        ) : current.kind === 'board' ? (
-          /* Built with the rest of the CRM and never mounted: no route, no
-             import, nothing that could open it. */
+        ) : mode === 'board' ? (
           <FollowUpBoardTab leads={rows} now={now} onOpen={setOpenLead} />
         ) : (
           <InboxTab

@@ -7,7 +7,7 @@ const buttonVariants = cva(
   // Pill-shaped: buttons are the most-clicked thing in the product, and the
   // full radius is what makes a row of them read as a set of choices rather
   // than a toolbar.
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-[color,background-color,border-color,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-[color,background-color,border-color,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -26,8 +26,21 @@ const buttonVariants = cva(
         lg: 'h-10 px-6',
         icon: 'size-9',
       },
+      /*
+       * Pill everywhere, except in a dense toolbar.
+       *
+       * A row of pills reads as a set of choices, which is right on a form or a
+       * page header. Packed eight-across above a kanban board it reads as
+       * bubbles, and the eye cannot find the edges. The reference app squares
+       * every toolbar control off for exactly that reason, so `square` is the
+       * opt-in for those strips and nothing else changes.
+       */
+      shape: {
+        pill: 'rounded-full',
+        square: 'rounded-md',
+      },
     },
-    defaultVariants: { variant: 'default', size: 'default' },
+    defaultVariants: { variant: 'default', size: 'default', shape: 'pill' },
   },
 )
 
