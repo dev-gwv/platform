@@ -69,21 +69,21 @@ export const useDisconnectPage = () =>
     () => 'Page disconnected',
   )
 
+const imported = z.object({ ok: z.boolean(), imported: z.number().int() })
+const pagesFound = (r: { imported: number }) =>
+  r.imported === 0 ? 'Facebook found no pages you manage' : `${r.imported} page${r.imported === 1 ? '' : 's'} found — pick the ones that run lead forms`
+
 /**
- * The manual token path, for a studio whose Meta app is not set up for OAuth.
- * The token is verified against the Graph API and the pages it can see are
- * imported; the token itself is never stored.
+ * The manual token path, for a studio without the Facebook login button. The
+ * token is checked against Meta and the pages it manages are kept, each
+ * with its own sealed token; the pasted token itself is not.
  */
 export const useVerifyMetaToken = () =>
-  useMetaMutation(
-    (token: string) =>
-      callApi('/meta/token', {
-        method: 'POST',
-        body: { token },
-        responseSchema: z.object({ ok: z.boolean(), imported: z.number().int() }),
-      }),
-    (r) => `Token accepted — ${r.imported} page${r.imported === 1 ? '' : 's'} imported`,
-  )
+  useMetaMutation((token: string) => callApi('/meta/token', { method: 'POST', body: { token }, responseSchema: imported }), pagesFound)
+
+/** "Connect with Facebook" sent the browser back with ?code=; the server trades it for the pages. */
+export const useExchangeMetaCode = () =>
+  useMetaMutation((code: string) => callApi('/meta/exchange', { method: 'POST', body: { code }, responseSchema: imported }), pagesFound)
 
 export interface ImportLogFilters {
   search?: string

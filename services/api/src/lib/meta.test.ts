@@ -75,12 +75,12 @@ describe('fetchMetaLead', () => {
       return new Response(JSON.stringify({ id: 'L1', field_data: [{ name: 'phone_number', values: ['9876543210'] }] }), { status: 200 })
     })
     vi.stubGlobal('fetch', fetchMock)
-    const lead = await fetchMetaLead({ META_PAGE_ACCESS_TOKEN: 'page-token' }, 'L1')
+    const lead = await fetchMetaLead('page-token', 'L1')
     expect(lead.phone).toBe('9876543210')
   })
 
   it('throws on a non-2xx so the caller logs it', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 400 })))
-    await expect(fetchMetaLead({ META_PAGE_ACCESS_TOKEN: 't' }, 'L1')).rejects.toThrow(/400/)
+    await expect(fetchMetaLead('t', 'L1')).rejects.toThrow(/400/)
   })
 })

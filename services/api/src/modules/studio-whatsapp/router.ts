@@ -16,6 +16,7 @@ import { audit } from '../../lib/audit'
 import { open, seal, secretBoxReady } from '../../lib/secret-box'
 import { GraphError, exchangeCode, readNumber, readTemplates, subscribeApp } from '../../lib/studio-whatsapp'
 import { log } from '../../lib/log'
+import { apiOrigin } from '../../lib/request-origin'
 
 /**
  * The studio's own WhatsApp number (0203), under /whatsapp. Owners and
@@ -27,14 +28,6 @@ import { log } from '../../lib/log'
 const MANAGERS = new Set(['super_admin', 'admin'])
 
 const token = () => randomBytes(24).toString('base64url')
-
-/** The address Meta can reach: behind Traefik the request URL is the inside one. */
-function apiOrigin(c: Context<AppEnv>): string {
-  const url = new URL(c.req.url)
-  const host = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? url.host
-  const proto = c.req.header('x-forwarded-proto') ?? url.protocol.replace(':', '')
-  return `${proto.split(',')[0]!.trim()}://${host.split(',')[0]!.trim()}`
-}
 
 async function entitled(c: Context<AppEnv>): Promise<boolean> {
   const rows = await withUser(c.env, c.get('auth').userId, (sql) => sql<{ ok: boolean }[]>`

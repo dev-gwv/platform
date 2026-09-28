@@ -383,12 +383,12 @@ export const settingsRouter = new Hono<AppEnv>()
       {
         key: 'meta_leads' as const,
         label: 'Meta lead ads',
-        configured: !!env.META_APP_SECRET && !!env.META_PAGE_ACCESS_TOKEN,
+        configured: !!env.META_APP_SECRET && !!env.META_APP_ID,
         detail:
-          env.META_APP_SECRET && env.META_PAGE_ACCESS_TOKEN
-            ? "Facebook and Instagram lead forms arrive signed, and the lead's own fields are fetched."
-            : 'Only a generic JSON webhook works. Posts are not signature-verified and form fields are not fetched from Meta.',
-        requires: ['META_VERIFY_TOKEN', 'META_APP_SECRET', 'META_PAGE_ACCESS_TOKEN'],
+          env.META_APP_SECRET && env.META_APP_ID
+            ? 'Each studio connects its own Facebook page; its lead forms arrive signed, with the lead\'s own fields.'
+            : 'Only a generic JSON webhook works. Studios cannot connect a Facebook page until the Meta app is set.',
+        requires: ['META_APP_ID', 'META_APP_SECRET', 'META_VERIFY_TOKEN'],
       },
       {
         key: 'errors' as const,

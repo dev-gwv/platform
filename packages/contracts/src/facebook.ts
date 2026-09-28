@@ -26,6 +26,12 @@ export const fbStatusResponse = z.object({
   missing_config: z.array(z.string()).default([]),
   last_synced_at: isoDateTime.nullable().default(null),
   last_error: z.string().nullable().default(null),
+  /** The server can seal page tokens (WHATSAPP_TOKEN_KEY, or a dev key). */
+  ready: z.boolean().default(true),
+  /** Where the Meta app's leadgen webhook must point; one address for every studio. */
+  webhook_url: z.string().nullable().default(null),
+  /** When the last lead came in through a connected page. */
+  last_lead_at: isoDateTime.nullable().default(null),
 })
 export type FbStatusResponse = z.infer<typeof fbStatusResponse>
 
@@ -39,6 +45,10 @@ export const fbPage = z.object({
   last_synced_at: isoDateTime.nullable(),
   last_error: z.string().nullable(),
   created_at: isoDateTime,
+  connected_via: z.enum(['oauth', 'token']).nullable().default(null),
+  subscribed_at: isoDateTime.nullable().default(null),
+  /** We hold a token for this page, so Connect will work. */
+  has_token: z.boolean().default(false),
 })
 export type FbPage = z.infer<typeof fbPage>
 
@@ -53,6 +63,12 @@ export const fbTokenRequest = z.object({
   token: z.string().trim().min(10).max(2000),
 })
 export type FbTokenRequest = z.infer<typeof fbTokenRequest>
+
+/** "Connect with Facebook" sent the browser back with ?code=; the server trades it for page tokens. */
+export const fbExchangeRequest = z.object({
+  code: z.string().trim().min(10).max(4000),
+})
+export type FbExchangeRequest = z.infer<typeof fbExchangeRequest>
 
 /** GET /crm/sources/:id/leads — the per-source FB import log. */
 export const fbImportStatus = z.enum(['imported', 'duplicate', 'failed', 'pending'])

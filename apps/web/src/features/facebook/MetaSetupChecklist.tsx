@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { config } from '@/shared/config'
-import { useMetaConnectUrl } from './api'
+import { useMetaConnectUrl, useMetaStatus } from './api'
 
 /**
  * What still has to be done in the Meta Developer Portal, and the exact values
@@ -59,12 +59,13 @@ function Row({ done, title, where }: { done: boolean; title: string; where?: str
 
 export function MetaSetupChecklist() {
   const connectUrl = useMetaConnectUrl()
+  const status = useMetaStatus()
   const missing = connectUrl.data?.missing_config ?? []
   const has = (k: string) => !missing.includes(k)
 
   const api = apiBase()
   const origin = typeof window === 'undefined' ? '' : window.location.origin
-  const webhook = `${api}/webhooks/meta`
+  const webhook = status.data?.webhook_url ?? `${api}/webhooks/meta`
   const redirect = connectUrl.data?.redirect_uri ?? `${api}/meta/callback`
   const domains = [origin, api]
     .map((u) => {
@@ -105,7 +106,7 @@ export function MetaSetupChecklist() {
               <Row done title="Lead webhook endpoint deployed" />
               <Row done title="Meta verification handshake handled" />
               <Row done title="Leads mirrored into the CRM on arrival" />
-              <Row done title="Page connect and disconnect" />
+              <Row done={(status.data?.webhook_subscribed_count ?? 0) > 0} title="A page connected and subscribed to lead forms" where="Connect with Facebook above, then Connect on a page" />
             </ul>
           </div>
 
@@ -133,21 +134,16 @@ export function MetaSetupChecklist() {
                 title="Set the verify token, and enter the same value in Meta"
                 where="Meta → App → Webhooks → Verify Token. The value must match exactly."
               />
-              <Row
-                done={has('META_PAGE_ACCESS_TOKEN')}
-                title="Add a page access token"
-                where="Without it a lead arrives as an id with no name or phone attached."
-              />
               <Row done={false} title="Add the OAuth redirect URI above" where="Meta → App → Facebook Login → Settings" />
               <Row done={false} title="Add the app domains and website URL above" where="Meta → App → Settings → Basic" />
-              <Row done={false} title="Subscribe the page to the leadgen field" where="Meta → App → Webhooks → Page → leadgen" />
+              <Row done={false} title="Point the app's Page webhook at the callback URL above, field leadgen" where="Meta → App → Webhooks → Page. Once, for every studio." />
             </ul>
           </div>
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          The last three cannot be checked from here — Meta does not expose whether they are set, so
-          they stay listed as a reminder rather than being reported as done.
+          The last three cannot be checked from here — Meta does not say whether they are set, so
+          they stay listed as a reminder. Each page's own permission is taken care of when a studio presses Connect.
         </p>
       </CardContent>
     </Card>
