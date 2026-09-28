@@ -227,6 +227,8 @@ export const updateLeadRequest = z
     is_hot: z.boolean().optional(),
     /** Lovable parity: explicit temperature + reach state (trigger keeps is_hot/last_contacted_at consistent). */
     quality: leadQuality.nullable().optional(),
+    /** Where it came from, in the studio's own words (0209). */
+    source: leadSource.optional(),
     contacted_status: contactedStatus.optional(),
     is_archived: z.boolean().optional(),
     deal_value: z.number().min(0).max(1_00_00_000).nullable().optional(),

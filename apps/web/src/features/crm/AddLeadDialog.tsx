@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus } from 'lucide-react'
-import { createLeadRequest, type CreateLeadRequest, type LeadQuality } from '@ipc/contracts'
+import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, createLeadRequest, type CreateLeadRequest } from '@ipc/contracts'
+import { LookupChip } from './fields'
 import { fieldErrors, type FieldErrors } from '@/shared/forms/field-errors'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -83,7 +84,7 @@ export function AddLeadDialog({
    * consistent with the is_hot flag the Hot chip reads — but no screen ever
    * offered it, so every lead was created without one.
    */
-  const [quality, setQuality] = useState<LeadQuality | ''>('')
+  const [quality, setQuality] = useState<string>('')
   const [errors, setErrors] = useState<FieldErrors<Field>>({})
   // A lead half-typed during a call survives a refresh or a closed tab.
   const draft = useFormDraft(
@@ -249,21 +250,15 @@ export function AddLeadDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Source</Label>
-                <Select
+                <LookupChip
+                  variant="field"
+                  category="lead_source"
+                  noun="source"
                   value={source}
-                  onChange={(e) => setSource(e.target.value as CreateLeadRequest['source'])}
-                >
-                  <option value="enquiry">Enquiry</option>
-                  <option value="referral">Referral</option>
-                  <option value="manual">Manual</option>
-                  <option value="webform">Web form</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="google_form">Google Form</option>
-                  <option value="csv_import">CSV import</option>
-                  <option value="other">Other</option>
-                </Select>
+                  defaults={LEAD_SOURCE_DEFAULTS}
+                  clearable={false}
+                  onChange={(v) => v && setSource(v)}
+                />
               </div>
             </div>
 
@@ -348,12 +343,15 @@ export function AddLeadDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Quality</Label>
-                <Select value={quality} onChange={(e) => setQuality(e.target.value as LeadQuality | '')}>
-                  <option value="">Not rated yet</option>
-                  <option value="hot">Hot — ready to book</option>
-                  <option value="warm">Warm — interested, no date</option>
-                  <option value="cold">Cold — just looking</option>
-                </Select>
+                <LookupChip
+                  variant="field"
+                  category="lead_quality"
+                  noun="quality"
+                  value={quality || null}
+                  defaults={LEAD_QUALITY_DEFAULTS}
+                  placeholder="Not rated yet"
+                  onChange={(v) => setQuality(v ?? '')}
+                />
               </div>
             </div>
 

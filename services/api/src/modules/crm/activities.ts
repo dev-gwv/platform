@@ -75,7 +75,7 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
             and ${type ? sql`a.type = ${type}` : sql`true`}
             and ${assigned_to ? sql`a.assigned_to = ${assigned_to}` : sql`true`}
             and ${open_tasks ? sql`a.type = 'task' and a.done_at is null` : sql`true`}
-            and ${mine ? sql`coalesce(a.assigned_to, l.assigned_to) = ${me}` : sql`true`}
+            and ${mine ? sql`coalesce(a.assigned_to, l.assigned_to, a.actor_id) = ${me}` : sql`true`}
             and ${due_before ? sql`a.due_at < ${due_before}` : sql`true`}
           order by ${open_tasks ? sql`a.due_at asc nulls last, a.created_at desc` : sql`a.created_at desc`}
           limit ${limit}`,
