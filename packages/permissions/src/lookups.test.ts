@@ -15,6 +15,12 @@ describe('canQuickAddLookup', () => {
     expect(canQuickAddLookup(can('crm'), false, 'expense_category')).toBe(false)
   })
   it('keeps an unlisted list owner-only', () => {
-    expect(canQuickAddLookup(can('crm', 'billing', 'projects'), false, 'lead_source')).toBe(false)
+    expect(canQuickAddLookup(can('crm', 'billing', 'projects'), false, 'enquiry_status')).toBe(false)
+  })
+  it('lets anyone working leads grow the CRM lists (0209)', () => {
+    for (const c of ['lead_quality', 'lead_source', 'follow_up_type', 'follow_up_priority']) {
+      expect(canQuickAddLookup(can('crm'), false, c)).toBe(true)
+      expect(canQuickAddLookup(can('billing'), false, c)).toBe(false)
+    }
   })
 })

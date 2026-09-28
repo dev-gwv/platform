@@ -721,13 +721,25 @@ export function useForecast(range: CrmStatsQuery) {
 }
 
 // ── activities ────────────────────────────────────────────────
-export function useActivities(opts: { leadId?: string; contactId?: string; type?: string; assignedTo?: string; openTasks?: boolean } = {}) {
+export function useActivities(
+  opts: {
+    leadId?: string
+    contactId?: string
+    type?: string
+    assignedTo?: string
+    openTasks?: boolean
+    mine?: boolean
+    dueBefore?: string
+  } = {},
+) {
   const params = new URLSearchParams()
   if (opts.leadId) params.set('lead_id', opts.leadId)
   if (opts.contactId) params.set('contact_id', opts.contactId)
   if (opts.type) params.set('type', opts.type)
   if (opts.assignedTo) params.set('assigned_to', opts.assignedTo)
   if (opts.openTasks) params.set('open_tasks', '1')
+  if (opts.mine) params.set('mine', '1')
+  if (opts.dueBefore) params.set('due_before', opts.dueBefore)
   const qs = params.toString()
   return useCrmQuery(['activities', qs], () => callApi(`/crm/activities${qs ? `?${qs}` : ''}`, { responseSchema: crmActivity.array() }))
 }

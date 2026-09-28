@@ -53,24 +53,9 @@ import { useProjectDataRecords } from '@/features/data/api'
 import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
-
-/**
- * The shoots a wedding studio books over and over. Used as one-click chips so
- * the common case is a single tap — the studio's own saved types take
- * precedence when it has any.
- */
-const QUICK_SHOOTS = [
-  'Engagement',
-  'Haldi',
-  'Mehendi',
-  'Sangeet',
-  'Wedding',
-  'Reception',
-  'Pre-Wedding',
-  'Cocktail',
-  'Bride Getting Ready',
-  'Groom Getting Ready',
-] as const
+import { HowToUse } from '@/shared/ui/how-to-use'
+import { shootNextStep } from '@/features/shoots/next-step'
+import { QUICK_SHOOTS } from '@/features/projects/wizard'
 
 /** The crew roles a studio reaches for, when it has not named its own yet. */
 const FALLBACK_ROLES = [
@@ -119,6 +104,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   const [customOpen, setCustomOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
+  /** Shoots a chip made with today's date, until someone sets the real one. */
+  const [placeholderDates, setPlaceholderDates] = useState<Set<string>>(() => new Set())
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['shoots', 'project', projectId],
@@ -144,7 +131,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
           ...(input.requirements?.length ? { requirements: input.requirements } : {}),
           status: 'planned',
         }),
-        responseSchema: shootListItem.partial().passthrough(),
+        responseSchema: shootListItem.pick({ id: true }).passthrough(),
       }),
     onSuccess: (_d, v) => {
       toast.success(`${v.name} added`)
@@ -167,48 +154,54 @@ export function ShootsTab({ projectId }: { projectId: string }) {
   return (
     <div className="mt-4 flex flex-col gap-3">
       {canEdit && <ProjectDataStrip projectId={projectId} />}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Plan every shoot day and assign crew per requirement
-        </h2>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {canEdit && (data?.length ?? 0) > 0 && (
-            <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-              <Users /> Bulk assign
-            </Button>
-          )}
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/shoots">
-              <ExternalLink /> All shoots
-            </Link>
+      <HowToUse
+        id="project-shoots"
+        title="Plan the shoot days"
+        description="Every function of this wedding is one shoot: Haldi, Mehendi, Wedding, Reception. Add each one, set its date and venue, then assign your team."
+        steps={['Add your functions below', 'Set the date, time and venue on each card', 'Tap Assign team and pick who is coming']}
+      />
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {canEdit && (data?.length ?? 0) > 1 && (
+          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+            <Users /> Assign one person to many days
           </Button>
-        </div>
+        )}
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/shoots">
+            <ExternalLink /> See all shoots
+          </Link>
+        </Button>
       </div>
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
       {canEdit && (
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Sparkles className="size-3.5" /> Quick add
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+        <section aria-labelledby="add-functions" className="rounded-xl border border-border bg-card p-4">
+          <h2 id="add-functions" className="flex items-center gap-2 text-base font-bold tracking-tight">
+            <Sparkles className="size-4 text-primary" /> Add your functions
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">Tap a function to add it. You can change the date and venue after.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
             {chips.map((name) => (
               <Button
                 key={name}
-                size="sm"
                 variant="outline"
+                className="h-10 gap-2 border-primary/30 bg-primary/[0.04] px-3 text-sm font-medium hover:border-primary hover:bg-primary/10"
                 disabled={create.isPending}
                 onClick={() => {
                   setPending(name)
-                  create.mutate({ name, shoot_date: todayISO() })
+                  create.mutate(
+                    { name, shoot_date: todayISO() },
+                    { onSuccess: (made) => setPlaceholderDates((d) => new Set(d).add(made.id)) },
+                  )
                 }}
               >
+                <Plus className="size-4 text-primary" />
                 <EventIcon name={name} />
                 {pending === name ? 'Adding…' : name}
               </Button>
             ))}
-            <Button size="sm" onClick={() => setCustomOpen(true)} disabled={create.isPending}>
-              <Plus /> Full form
+            <Button className="h-10" onClick={() => setCustomOpen(true)} disabled={create.isPending}>
+              <Plus /> Add another function
             </Button>
             {/* A preset used to be applicable only in the create-project wizard,
                 so a studio could save the shape of its wedding day and then
@@ -216,8 +209,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
             {(presets.data ?? []).length > 0 && (
               <Select
                 value=""
-                className="h-8 w-44"
-                aria-label="Apply a saved preset"
+                className="h-10 w-52"
+                aria-label="Add a saved set of functions"
                 onChange={(e) => {
                   const p = (presets.data ?? []).find((x) => x.id === e.target.value)
                   if (!p) return
@@ -229,7 +222,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
                   })
                 }}
               >
-                <option value="">Apply preset…</option>
+                <option value="">Add a set of functions…</option>
                 {(presets.data ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -238,10 +231,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
               </Select>
             )}
           </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            A chip creates the shoot dated today — set the real date, venue and crew on the card.
-          </p>
-        </div>
+        </section>
       )}
 
       {customOpen && (
@@ -266,8 +256,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
         <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (
         <EmptyState
-          title="No shoots yet"
-          description="Add a shoot to plan crew, requirements, and data for this project."
+          title="No functions added yet"
+          description="Start with the buttons above. Haldi, Mehendi, Wedding, Reception — one card each."
         />
       ) : (
         <div className="flex flex-col gap-3">
@@ -276,6 +266,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
               key={s.id}
               shoot={s}
               canEdit={canEdit}
+              dateIsPlaceholder={placeholderDates.has(s.id) && s.shoot_date === todayISO()}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
               records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
             />
@@ -292,11 +283,13 @@ function ShootPlanner({
   canEdit,
   slots,
   records,
+  dateIsPlaceholder = false,
 }: {
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
   records: DataRecord[]
+  dateIsPlaceholder?: boolean
 }) {
   const update = useUpdateShoot()
   const del = useDeleteShoot()
@@ -344,6 +337,14 @@ function ShootPlanner({
   const end = timeOf(shoot.end_at)
   const href = mapHref(shoot.map_link)
   const staffed = progress.required > 0 && progress.assigned >= progress.required
+  const next = shootNextStep({
+    shoot_date: shoot.shoot_date,
+    dateIsPlaceholder,
+    location: shoot.location,
+    roles: shoot.requirements.length,
+    assigned: progress.assigned,
+    required: progress.required,
+  })
 
   async function removeHolder(sl: TeamSlot) {
     const yes = await confirm({
@@ -378,7 +379,18 @@ function ShootPlanner({
               )}
             </span>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              {shoot.shoot_date && <span>{shoot.shoot_date}</span>}
+              {shoot.shoot_date &&
+                (dateIsPlaceholder ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
+                  >
+                    Date: today · tap to set the real day
+                  </button>
+                ) : (
+                  <span>{shoot.shoot_date}</span>
+                ))}
               {start && (
                 <span className="flex items-center gap-1">
                   <Clock className="size-3" />
@@ -421,17 +433,17 @@ function ShootPlanner({
           {canEdit && (
             <div className="flex flex-wrap items-center gap-1.5">
               <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
-                <Plus /> Add requirement
+                <Plus /> Add who this day needs
               </Button>
               <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
                 <UserPlus /> Assign team
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
-                <Pencil />
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
+                <Pencil /> Edit
               </Button>
               <Button size="sm" variant="ghost" asChild>
                 <Link to="/shoots/$shootId" params={{ shootId: shoot.id }}>
-                  Open
+                  Open this shoot
                 </Link>
               </Button>
               <Button
@@ -455,10 +467,27 @@ function ShootPlanner({
           )}
         </div>
 
+        {/* What to do next on this day, in one line -- the reference app's
+            "next action" on every card, which is what made its board readable. */}
+        {canEdit && (
+          <p
+            className={cn(
+              'mt-3 flex flex-wrap items-center gap-x-2 rounded-lg border px-3 py-2 text-sm',
+              next.tone === 'green'
+                ? 'border-tone-green/40 bg-tone-green-soft/60 text-tone-green'
+                : 'border-tone-amber/50 bg-tone-amber-soft/60 text-foreground',
+            )}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider opacity-70">{next.tone === 'green' ? 'Done' : 'Next'}</span>
+            <span className="font-semibold">{next.label}</span>
+            {next.tone !== 'green' && <span className="text-xs text-muted-foreground">{next.hint}</span>}
+          </p>
+        )}
+
         {progress.required > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Team allocation</span>
+              <span>Team assigned</span>
               <span className="tabular-nums">{progress.pct}%</span>
             </div>
             <div
@@ -484,10 +513,10 @@ function ShootPlanner({
             editing the requirement list there. */}
         {canEdit && roleChips.length > 0 && (
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-2.5">
-            <p className="flex items-center gap-1.5 text-xs font-medium">
-              <Users className="size-3.5 text-primary" /> Add more team
-              <span className="font-normal text-muted-foreground">— roles this shoot needs. Set how many on the row.</span>
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <Users className="size-4 text-primary" /> Who this day needs
             </p>
+            <p className="text-xs text-muted-foreground">Tap a role to add it. Set how many on its row.</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {roleChips.map((name, i) => (
                 <ToneChip
@@ -505,7 +534,7 @@ function ShootPlanner({
         <div className="mt-3 flex flex-col gap-2">
           {shoot.requirements.length === 0 ? (
             <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-              No roles on this day yet — add the ones it needs above, then assign the team.
+              Nobody planned for this day yet. Tap a role above, then assign your team.
             </p>
           ) : (
             fill.map((r) => {
@@ -588,8 +617,8 @@ function ShootPlanner({
                     <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 p-2 text-xs">
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
                       <div>
-                        <p className="font-medium text-warning">Team not assigned</p>
-                        <p className="text-muted-foreground">Assign a team member for this requirement using the button above.</p>
+                        <p className="font-medium text-warning">Nobody assigned yet</p>
+                        <p className="text-muted-foreground">Tap Assign team to pick someone.</p>
                       </div>
                     </div>
                   ) : (
@@ -667,7 +696,7 @@ function AddRequirementDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Add requirements" description="Pick the roles this shoot needs and how many of each.">
+      <DialogContent title="Who does this day need?" description="Tap the roles, and say how many of each.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-1.5">
             {pool.map((n, i) => (
@@ -760,7 +789,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Edit shoot" description="The day, the hours, and where the crew is going.">
+      <DialogContent title="Edit this function" description="The day, the hours, and where everyone is going.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-name">Name</Label>
@@ -867,7 +896,7 @@ function CustomShootDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Add a shoot" description="Anything the quick chips do not cover.">
+      <DialogContent title="Add a function" description="Give it a name, a date and a venue.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shoot-name">
@@ -912,7 +941,7 @@ function CustomShootDialog({
                 )
               }
             >
-              {busy ? 'Adding…' : 'Add shoot'}
+              {busy ? 'Adding…' : 'Add function'}
             </Button>
           </div>
         </div>

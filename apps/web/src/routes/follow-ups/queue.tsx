@@ -16,6 +16,7 @@ import { useCallQueue } from '@/features/crm-calls/api'
 import { useSendNow } from '@/features/crm-sequences/api'
 import { MyDayStrip } from '@/features/crm-calls/MyDay'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { FollowUpBuckets } from '@/features/crm/FollowUpBuckets'
 
 export function CallQueuePage() {
   return (
@@ -73,6 +74,7 @@ function CallQueue() {
         }
       />
       <MyDayStrip scope={scope} />
+      <FollowUpBuckets scope={scope} />
       {toSend > 0 && (
         <Link
           to="/follow-ups/send"

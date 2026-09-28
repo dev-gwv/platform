@@ -1,10 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, EyeOff, Eye, GripVertical, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DndContext,
   PointerSensor,
   closestCenter,
+  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -12,6 +13,10 @@ import {
 } from '@dnd-kit/core'
 import type { CrmLead, PipelineStage } from '@ipc/contracts'
 import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
+import { TONES, TONE_BG, toneVar, type ToneName } from '@/shared/ui/tones'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { Input } from '@/shared/ui/input'
+import { useConfirm } from '@/shared/ui/confirm'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Select } from '@/shared/ui/input'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -19,7 +24,18 @@ import { ErrorState } from '@/shared/ui/states'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useActivities, useCrmPrefs, useMoveStage, usePipelines, useUpdateActivity, useUpdateCrmPrefs } from '../api'
+import {
+  useActivities,
+  useCreateStage,
+  useCrmPrefs,
+  useDeleteStage,
+  useMoveStage,
+  usePipelines,
+  useReorderStages,
+  useUpdateActivity,
+  useUpdateCrmPrefs,
+  useUpdateStage,
+} from '../api'
 import { taskDueBy } from '@ipc/domain'
 import { Check, ClipboardList } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
@@ -257,10 +273,31 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     move.mutate({ leadId: lead.id, stage_id: stage.id })
   }
 
+  const reorder = useReorderStages()
+  const visible = useMemo(
+    () => stages.filter((s) => s.is_active || inPipeline.some((l) => l.stage_id === s.id)),
+    [stages, inPipeline],
+  )
+
+  /** Put `id` at `to` among all the pipeline's stages and save the order. */
+  function placeStage(id: string, to: number) {
+    if (!current) return
+    const ids = stages.map((s) => s.id).filter((x) => x !== id)
+    ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id)
+    reorder.mutate({ pipelineId: current.id, stage_ids: ids })
+  }
+
   function onDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id)
     const overId = e.over ? String(e.over.id) : null
     if (!overId || !overId.startsWith('stage-')) return
+    // A column dragged by its grip onto another column takes its place.
+    if (activeId.startsWith('col-')) {
+      const from = activeId.slice(4)
+      const target = overId.slice(6)
+      if (from !== target) placeStage(from, stages.findIndex((s) => s.id === target))
+      return
+    }
     const stage = stages.find((s) => s.id === overId.slice(6))
     const lead = leads.find((l) => l.id === activeId)
     if (!lead || !stage || lead.stage_id === stage.id) return
@@ -323,13 +360,31 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
         {/* Horizontal, with a minimum width so the columns keep their size and
             the row scrolls rather than squashing. */}
         <div className="overflow-x-auto pb-2">
-        <div className="flex gap-3" style={{ minWidth: stages.length * 282 }}>
-          {stages.map((s) => {
+        <div className="flex gap-3" style={{ minWidth: (visible.length + (canEdit ? 1 : 0)) * 282 }}>
+          {visible.map((s) => {
             const inStage = inPipeline.filter((l) => l.stage_id === s.id)
             const value = inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
             const full = s.wip_limit !== null && inStage.length >= s.wip_limit
             return (
-              <DroppableStage key={s.id} stage={s} count={inStage.length} value={value} full={full}>
+              <DroppableStage
+                key={s.id}
+                stage={s}
+                count={inStage.length}
+                value={value}
+                full={full}
+                menu={
+                  canEdit ? (
+                    <StageMenu
+                      stage={s}
+                      count={inStage.length}
+                      first={stages[0]?.id === s.id}
+                      last={stages[stages.length - 1]?.id === s.id}
+                      onMove={(dir) => placeStage(s.id, stages.findIndex((x) => x.id === s.id) + dir)}
+                    />
+                  ) : null
+                }
+                draggableHeader={canEdit}
+              >
                 {inStage.map((l) => (
                   <DealCard
                     key={l.id}
@@ -343,6 +398,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
               </DroppableStage>
             )
           })}
+          {canEdit && <AddStageColumn pipelineId={current.id} />}
         </div>
         </div>
       </DndContext>
@@ -378,24 +434,36 @@ function DroppableStage({
   count,
   value,
   full,
+  menu,
+  draggableHeader,
   children,
 }: {
   stage: PipelineStage
   count: number
   value: number
   full: boolean
+  menu?: ReactNode
+  draggableHeader?: boolean
   children: ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `stage-${stage.id}` })
+  const drag = useDraggable({ id: `col-${stage.id}`, disabled: !draggableHeader })
+  const shift = drag.transform ? { transform: `translate3d(${drag.transform.x}px, 0, 0)` } : undefined
   const gate =
     stage.required_fields.length > 0
       ? `Needs ${stage.required_fields.map((f) => REQUIRED_FIELD_LABEL[f] ?? f).join(', ')}`
       : null
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el)
+        drag.setNodeRef(el)
+      }}
+      style={shift}
       className={cn(
         'flex w-[270px] shrink-0 flex-col rounded-md border transition-colors',
+        drag.isDragging && 'z-20 opacity-80 shadow-lg',
+        !stage.is_active && 'opacity-60',
         isOver
           ? full
             ? 'border-destructive bg-destructive/5'
@@ -404,13 +472,34 @@ function DroppableStage({
       )}
     >
       <div
-        className="border-b-2 px-3 pb-2 pt-3"
-        style={{ borderBottomColor: stageHue(stage) }}
+        className="rounded-t-md border-b-2 px-3 pb-2 pt-3"
+        style={{
+          borderBottomColor: stageHue(stage),
+          // The stage's colour, used boldly: a tinted header you can find
+          // while scrolling, not only a thin rule.
+          background: `color-mix(in oklch, ${stageHue(stage)} 12%, transparent)`,
+        }}
       >
         <div className="flex items-center gap-1.5">
-          <span className="size-1.5 shrink-0 rounded-full" style={{ background: stageHue(stage) }} aria-hidden />
-          <p className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wider" title={stage.name}>
+          {draggableHeader && (
+            <button
+              type="button"
+              {...drag.attributes}
+              {...drag.listeners}
+              className="-ml-1 cursor-grab text-muted-foreground/70 hover:text-foreground active:cursor-grabbing"
+              aria-label={`Drag to reorder ${stage.name}`}
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+          )}
+          <span className="size-2 shrink-0 rounded-full" style={{ background: stageHue(stage) }} aria-hidden />
+          <p
+            className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider"
+            style={{ color: stageHue(stage) }}
+            title={stage.name}
+          >
             {stage.name}
+            {!stage.is_active && <span className="ml-1 normal-case text-muted-foreground">(hidden)</span>}
           </p>
           {stage.wip_limit !== null ? (
             <StatusBadge tone={full ? 'danger' : 'neutral'}>
@@ -418,8 +507,9 @@ function DroppableStage({
               {count}/{stage.wip_limit}
             </StatusBadge>
           ) : (
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
+            <span className="shrink-0 rounded-full bg-card/80 px-1.5 text-xs font-medium tabular-nums">{count}</span>
           )}
+          {menu}
         </div>
         {/* What this column is worth, under its name -- the question a studio
             asks of a pipeline before it asks anything else. */}
@@ -451,28 +541,159 @@ function DroppableStage({
   )
 }
 
-/**
- * A colour per stage, so the columns are tellable apart at a glance.
- *
- * The reference stores a colour on the stage. Ours does not, so this derives a
- * stable one from the stage's kind and name: won is the success tone, lost the
- * destructive one, and open stages cycle the six theme hues by name — the same
- * name always lands on the same hue, which is what makes it useful while
- * scrolling.
- */
-const OPEN_HUES = [
-  'var(--tone-blue)',
-  'var(--tone-violet)',
-  'var(--tone-teal)',
-  'var(--tone-amber)',
-  'var(--tone-green)',
-  'var(--tone-rose)',
-]
+/** The stage's own colour (0209), which the studio can change. */
 function stageHue(stage: PipelineStage): string {
-  if (stage.kind === 'won') return 'var(--success)'
-  if (stage.kind === 'lost') return 'var(--destructive)'
-  let h = 0
-  for (const ch of stage.name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  return OPEN_HUES[h % OPEN_HUES.length]!
+  return toneVar(stage.color)
 }
 
+/**
+ * A stage's own menu, on its column: rename it, colour it, move it, hide it,
+ * or remove it once nothing is in it. The owner's rule is that stages are
+ * edited where they are seen, not on a settings page nobody finds.
+ */
+function StageMenu({
+  stage,
+  count,
+  first,
+  last,
+  onMove,
+}: {
+  stage: PipelineStage
+  count: number
+  first: boolean
+  last: boolean
+  onMove: (dir: -1 | 1) => void
+}) {
+  const update = useUpdateStage()
+  const remove = useDeleteStage()
+  const confirm = useConfirm()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(stage.name)
+  const [renaming, setRenaming] = useState(false)
+
+  function rename() {
+    const v = name.trim()
+    if (v && v !== stage.name) update.mutate({ id: stage.id, patch: { name: v } })
+    setRenaming(false)
+  }
+
+  const item = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent'
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (o) {
+          setName(stage.name)
+          setRenaming(false)
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button type="button" className="rounded-sm p-0.5 text-muted-foreground hover:bg-card hover:text-foreground" aria-label={`${stage.name} options`}>
+          <MoreHorizontal className="size-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-1.5" align="end">
+        {renaming ? (
+          <div className="flex gap-1.5 p-1">
+            <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && rename()} autoFocus className="h-8" />
+            <Button size="sm" className="h-8" onClick={rename}>
+              Save
+            </Button>
+          </div>
+        ) : (
+          <button type="button" className={item} onClick={() => setRenaming(true)}>
+            <Pencil className="size-3.5" /> Rename
+          </button>
+        )}
+        <div className="flex items-center gap-1.5 px-2 py-2" role="radiogroup" aria-label="Colour">
+          {TONES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={stage.color === t}
+              aria-label={t}
+              onClick={() => update.mutate({ id: stage.id, patch: { color: t } })}
+              className={cn(
+                'size-5 rounded-full ring-offset-2 ring-offset-card transition',
+                TONE_BG[t],
+                stage.color === t ? 'ring-2 ring-foreground' : 'hover:scale-110',
+              )}
+            />
+          ))}
+        </div>
+        <button type="button" className={item} disabled={first} onClick={() => onMove(-1)}>
+          <ArrowLeft className="size-3.5" /> Move left
+        </button>
+        <button type="button" className={item} disabled={last} onClick={() => onMove(1)}>
+          <ArrowRight className="size-3.5" /> Move right
+        </button>
+        {stage.kind === 'open' && (
+          <button type="button" className={item} onClick={() => update.mutate({ id: stage.id, patch: { is_active: !stage.is_active } })}>
+            {stage.is_active ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {stage.is_active ? 'Hide from pickers' : 'Show again'}
+          </button>
+        )}
+        {stage.kind === 'open' && (
+          <button
+            type="button"
+            className={cn(item, 'text-destructive')}
+            disabled={count > 0}
+            title={count > 0 ? 'Move the deals out first' : undefined}
+            onClick={async () => {
+              const ok = await confirm({ title: `Delete “${stage.name}”?`, description: 'The column goes; no deal is in it.', confirmLabel: 'Delete', destructive: true })
+              if (ok) remove.mutate(stage.id)
+            }}
+          >
+            <Trash2 className="size-3.5" /> {count > 0 ? `Delete (move ${count} out first)` : 'Delete'}
+          </button>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** "+ Add stage" at the end of the board: a name and a colour, and it is there, before Won and Lost. */
+function AddStageColumn({ pipelineId }: { pipelineId: string }) {
+  const create = useCreateStage()
+  const [name, setName] = useState('')
+  const [color, setColor] = useState<ToneName>('teal')
+  function add() {
+    const v = name.trim()
+    if (!v) return
+    create.mutate({ pipelineId, name: v, kind: 'open', required_fields: [], color }, { onSuccess: () => setName('') })
+  }
+  return (
+    <div className="flex w-[240px] shrink-0 flex-col gap-2 self-start rounded-md border-2 border-dashed border-border p-3">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Plus className="size-3.5" /> Add a stage
+      </p>
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && add()}
+        placeholder="e.g. Site visit booked"
+        className={cn('h-8', name.trim() ? 'border-tone-green/60' : 'border-tone-amber/60 bg-tone-amber-soft/30')}
+        aria-label="New stage name"
+      />
+      <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Colour">
+        {TONES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={color === t}
+            aria-label={t}
+            onClick={() => setColor(t)}
+            className={cn('size-4 rounded-full ring-offset-2 ring-offset-card', TONE_BG[t], color === t ? 'ring-2 ring-foreground' : '')}
+          />
+        ))}
+      </div>
+      <Button size="sm" onClick={add} disabled={!name.trim() || create.isPending}>
+        Add stage
+      </Button>
+    </div>
+  )
+}

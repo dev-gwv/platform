@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AutoAttendance } from '@/features/attendance/auto'
+import { FollowUpReminders } from '@/features/crm/FollowUpReminders'
 import { Link, useLocation } from '@tanstack/react-router'
 import { BackButton } from './BackButton'
 import { RefreshButton } from './RefreshButton'
@@ -120,6 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="relative flex h-screen overflow-hidden bg-background print:static print:block print:h-auto print:overflow-visible">
       {/* Marks attendance by itself on open, inside the person's radius (0206). */}
       <AutoAttendance />
+      <FollowUpReminders />
       <Sidebar
         entries={entries}
         collapsed={railCollapsed}

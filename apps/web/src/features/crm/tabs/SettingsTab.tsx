@@ -44,6 +44,7 @@ import {
 } from '../api'
 import { DEFAULT_INBOX_COLUMNS } from './shared'
 import { TagChip } from '../TagChip'
+import { TONES, TONE_BG, type ToneName } from '@/shared/ui/tones'
 
 const REQUIRED_OPTIONS: StageRequiredField[] = ['deal_value', 'close_date', 'email', 'name', 'assigned_to', 'title', 'lost_reason']
 const STAGE_KINDS: Array<{ key: StageKind; label: string; hint: string }> = [
@@ -292,7 +293,9 @@ function PipelinesCard() {
                         </Button>
                       </span>
                       <span className="min-w-0 flex-1">
+                        <span className={`size-2.5 shrink-0 rounded-full ${TONE_BG[s.color]}`} aria-hidden />
                         <span className="font-medium">{s.name}</span>
+                        {!s.is_active && <span className="text-xs text-muted-foreground">(hidden)</span>}
                         <span className="ml-2 text-xs text-muted-foreground">{s.key}</span>
                       </span>
                       <StatusBadge tone={s.kind === 'won' ? 'success' : s.kind === 'lost' ? 'danger' : 'info'}>{s.kind}</StatusBadge>
@@ -358,7 +361,15 @@ function StageEditor({
   pending,
 }: {
   stage: PipelineStage
-  onSave: (patch: { name?: string; kind?: StageKind; probability_default?: number; wip_limit?: number | null; required_fields?: StageRequiredField[] }) => void
+  onSave: (patch: {
+    name?: string
+    kind?: StageKind
+    probability_default?: number
+    wip_limit?: number | null
+    required_fields?: StageRequiredField[]
+    color?: ToneName
+    is_active?: boolean
+  }) => void
   pending: boolean
 }) {
   const [name, setName] = useState(stage.name)
@@ -366,6 +377,8 @@ function StageEditor({
   const [prob, setProb] = useState(String(stage.probability_default))
   const [wip, setWip] = useState(stage.wip_limit === null ? '' : String(stage.wip_limit))
   const [required, setRequired] = useState<StageRequiredField[]>(stage.required_fields)
+  const [color, setColor] = useState<ToneName>(stage.color)
+  const [active, setActive] = useState(stage.is_active)
   const toggle = (f: StageRequiredField) => setRequired((r) => (r.includes(f) ? r.filter((x) => x !== f) : [...r, f]))
   const p = Number(prob)
   const w = wip === '' ? null : Number(wip)
@@ -412,8 +425,34 @@ function StageEditor({
           </div>
         </div>
       )}
+      <div className="flex flex-col gap-1 sm:col-span-3">
+        <Label>Colour</Label>
+        <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Colour">
+          {TONES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={color === t}
+              aria-label={t}
+              onClick={() => setColor(t)}
+              className={`size-6 rounded-full ring-offset-2 ring-offset-card ${TONE_BG[t]} ${color === t ? 'ring-2 ring-foreground' : ''}`}
+            />
+          ))}
+          {kind === 'open' && (
+            <label className="ml-4 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} />
+              Hide from pickers (deals already in it stay)
+            </label>
+          )}
+        </div>
+      </div>
       <div className="sm:col-span-3">
-        <Button size="sm" disabled={!valid || pending} onClick={() => onSave({ name: name.trim(), kind, probability_default: p, wip_limit: w, required_fields: required })}>
+        <Button
+          size="sm"
+          disabled={!valid || pending}
+          onClick={() => onSave({ name: name.trim(), kind, probability_default: p, wip_limit: w, required_fields: required, color, is_active: active })}
+        >
           Save stage
         </Button>
       </div>

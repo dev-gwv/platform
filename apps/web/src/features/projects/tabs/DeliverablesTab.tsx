@@ -10,6 +10,7 @@ import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { DeliveryPipeline, type PipelineFilter } from '@/features/projects/DeliveryPipeline'
 import { STAGE_LABEL, groupByShoot, isLate, stageOf, type ShootRef } from '@/features/projects/deliverable-stage'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { HowToUse } from '@/shared/ui/how-to-use'
 
 /**
  * One tap adds the usual thing to an empty group. Anything else goes through
@@ -77,11 +78,17 @@ export function DeliverablesTab({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      <HowToUse
+        id="project-deliverables"
+        title="What you promised the client"
+        description="The album, the film, the reels — each one is a card here, from started to delivered."
+        steps={['Add each item you promised', 'Give it a date', 'Assign who makes it']}
+      />
       {deliverables.length > 0 ? (
         <DeliveryPipeline deliverables={deliverables} filter={filter} onFilter={setFilter} />
       ) : (
         <div className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center">
-          <p className="text-sm font-semibold">Nothing owed yet</p>
+          <p className="text-sm font-semibold">Nothing promised yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Add what you promised the client — the album, the film, the reels — and track each one to delivery.</p>
         </div>
       )}

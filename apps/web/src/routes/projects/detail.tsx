@@ -50,7 +50,8 @@ import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ReferralCard } from '@/features/projects/ReferralCard'
 import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
-import { BillingTab, projectMoney } from '@/features/projects/tabs/BillingTab'
+import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
+import { HowToUse } from '@/shared/ui/how-to-use'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
 /** The tabs across a project. Each one is a view of the same project. */
@@ -311,7 +312,15 @@ function ProjectDetail() {
       </div>
 
       {tab === 'overview' && (
-        <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="mt-4 flex flex-col gap-4">
+        <HowToUse
+          id="project-overview"
+          title="Your project at a glance"
+          description="The money on top, what you owe the client on the left, and the link to share with them on the right."
+          steps={['Add the functions on the Shoots tab', 'Add what you promised on Deliverables', 'Share the client link once the terms are agreed']}
+        />
+        <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
+        <div className="grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
           <DeliverablesSummary
             deliverables={data.deliverables}
             onOpen={() => setTab('deliverables')}
@@ -331,6 +340,7 @@ function ProjectDetail() {
             />
             <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
           </div>
+        </div>
         </div>
       )}
 

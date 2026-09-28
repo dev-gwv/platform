@@ -12,6 +12,7 @@ import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeleteExpense, useProjectExpenses } from '@/features/financials/api'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
+import { HowToUse } from '@/shared/ui/how-to-use'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
@@ -56,6 +57,12 @@ export function ExpensesTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="mt-4 flex flex-col gap-3">
+      <HowToUse
+        id="project-expenses"
+        title="What you spent on this project"
+        description="Travel, rentals, prints — anything you paid for. It comes off the profit on the Billing tab."
+        steps={['Add each expense', 'Attach the bill if you have it', 'See the profit on Billing']}
+      />
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>

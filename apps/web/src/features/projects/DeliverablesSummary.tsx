@@ -29,7 +29,7 @@ export function DeliverablesSummary({
       </CardHeader>
       <CardContent>
         {counts.total === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing owed yet. Add what you promised the client.</p>
+          <p className="text-sm text-muted-foreground">Nothing promised yet. Add what you promised the client — the album, the film, the reels.</p>
         ) : (
           <DeliveryPipeline deliverables={deliverables} compact />
         )}
