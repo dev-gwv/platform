@@ -4624,8 +4624,11 @@ describe('Lovable parity: client, lead and referral fields (0065-0067)', () => {
     const rows = await db.query<{ source: string }>(`select source from crm_leads where id in (${ids.map((id) => `'${id}'`).join(',')});`)
     expect(rows.rows.map((r) => r.source).sort()).toEqual(['csv_import', 'google_form', 'instagram', 'other', 'whatsapp'])
 
+    // Since 0209 the source is the studio's own word ("Wedding fair"), bounded
+    // only in length.
+    await db.exec(`insert into crm_leads (company_id, phone, phone_norm, source) values ('${co}', '9000000099', '9000000099', 'Wedding fair');`)
     await expect(
-      db.exec(`insert into crm_leads (company_id, phone, phone_norm, source) values ('${co}', '9000000099', '9000000099', 'not_a_real_source');`),
+      db.exec(`insert into crm_leads (company_id, phone, phone_norm, source) values ('${co}', '9000000097', '9000000097', '${'x'.repeat(41)}');`),
     ).rejects.toThrow()
 
     const withGroup = await db.query<{ id: string }>(
@@ -5593,6 +5596,10 @@ describe('Lovable parity round 8: editing settings, invitations, payouts, and wo
       'enquiry_source',
       'invoice_line_preset',
       'enquiry_status',
+      // 0209: the CRM's own lists.
+      'lead_quality',
+      'follow_up_type',
+      'follow_up_priority',
     ].sort())
 
     const paymentTypes = await db.query<{ value: string }>(
