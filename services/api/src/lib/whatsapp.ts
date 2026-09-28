@@ -12,7 +12,13 @@ import type { Env } from '../context'
  */
 // WHATSAPP_GRAPH_URL points the API at a stand-in Graph server in local
 // end-to-end runs; production never sets it.
-export const GRAPH = (typeof process !== 'undefined' && process.env?.WHATSAPP_GRAPH_URL) || 'https://graph.facebook.com/v21.0'
+/**
+ * The one Graph API version for every Meta call. Meta retires a version about
+ * two years after release; v21.0 (Oct 2024) was about to go. Move this, the
+ * login dialog below and facebook-signup.ts together.
+ */
+export const GRAPH_VERSION = 'v24.0'
+export const GRAPH = (typeof process !== 'undefined' && process.env?.WHATSAPP_GRAPH_URL) || `https://graph.facebook.com/${GRAPH_VERSION}`
 
 export const whatsappConfigured = (env: Pick<Env, 'WHATSAPP_PHONE_NUMBER_ID' | 'WHATSAPP_ACCESS_TOKEN'>): boolean =>
   !!env.WHATSAPP_PHONE_NUMBER_ID && !!env.WHATSAPP_ACCESS_TOKEN

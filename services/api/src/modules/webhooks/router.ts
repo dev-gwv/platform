@@ -25,7 +25,7 @@ import {
   type MetaPage,
 } from '../../lib/meta'
 import { verifyRazorpaySignature } from '../../lib/razorpay'
-import { whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
+import { GRAPH_VERSION, whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
 import { routeStudioWhatsapp } from '../../lib/studio-whatsapp-inbound'
 import { open, seal, secretBoxReady } from '../../lib/secret-box'
 import { apiOrigin } from '../../lib/request-origin'
@@ -392,6 +392,9 @@ export const webhooksRouter = new Hono<AppEnv>()
  * page's own token sealed, and Connect on a page subscribes it to leadgen
  * so its leads post to /webhooks/meta. Tokens never go back to the browser.
  */
+/** What a studio grants so its lead-form leads reach us. */
+const META_LEAD_SCOPES = 'pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval'
+
 const metaMissing = (env: AppEnv['Bindings']): string[] => {
   const missing: string[] = []
   if (!env.META_APP_ID) missing.push('META_APP_ID')
@@ -401,6 +404,21 @@ const metaMissing = (env: AppEnv['Bindings']): string[] => {
 }
 
 const redirectUri = (env: AppEnv['Bindings']) => `${(env.APP_URL ?? '').replace(/\/+$/, '')}/lead-sources`
+
+/**
+ * The "Connect with Facebook" link. A Business-type app uses Facebook Login
+ * for Business: the permissions live in a configuration, named by its id.
+ * Without one, the classic scope list. Null until the app id and APP_URL are set.
+ */
+export function metaConnectUrl(env: Pick<AppEnv['Bindings'], 'META_APP_ID' | 'APP_URL' | 'META_LOGIN_CONFIG_ID'>): string | null {
+  if (!env.META_APP_ID || !env.APP_URL) return null
+  const base =
+    `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?client_id=${encodeURIComponent(env.META_APP_ID)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri(env as AppEnv['Bindings']))}`
+  return env.META_LOGIN_CONFIG_ID
+    ? `${base}&config_id=${encodeURIComponent(env.META_LOGIN_CONFIG_ID)}&response_type=code&override_default_response_type=true`
+    : `${base}&scope=${encodeURIComponent(META_LEAD_SCOPES)}`
+}
 
 /** Remember the pages a token can manage, with each page's own token sealed. */
 async function savePages(
@@ -443,12 +461,7 @@ export const metaRouter = new Hono<AppEnv>()
     const env = c.env
     const appId = env.META_APP_ID ?? null
     const missing = metaMissing(env)
-    const connectUrl =
-      appId && env.APP_URL
-        ? `https://www.facebook.com/v21.0/dialog/oauth?client_id=${encodeURIComponent(appId)}` +
-          `&redirect_uri=${encodeURIComponent(redirectUri(env))}` +
-          `&scope=${encodeURIComponent('pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval')}`
-        : null
+    const connectUrl = metaConnectUrl(env)
     return c.json(fbConnectUrlResponse.parse({ connect_url: connectUrl, app_id: appId, redirect_uri: redirectUri(env), missing_config: missing }))
   })
 
