@@ -119,6 +119,11 @@ export function PrivacyPage() {
         <ul>
           <li>Razorpay, for payments.</li>
           <li>Google, if you choose to sign in with Google.</li>
+          <li>
+            Meta (Facebook), if your studio connects its Facebook page: we receive the leads from your page's lead forms (the
+            answers the person typed, such as name, phone and email) and the page's name, and use them only to show those leads in
+            your studio. See <Link to="/data-deletion" className="text-primary hover:underline">Data Deletion</Link>.
+          </li>
           <li>Our cloud hosting and database providers, where the service and your data run.</li>
           <li>An email delivery service, for app emails, and an error-tracking service, for fixing problems.</li>
         </ul>
@@ -244,6 +249,45 @@ export function ContactPage() {
         <p>
           {LEGAL.operatorName}, {LEGAL.country}
           {LEGAL.gstin ? ` · GSTIN ${LEGAL.gstin}` : ''}
+        </p>
+      </LegalSection>
+    </LegalPage>
+  )
+}
+
+/**
+ * Meta asks every app that uses Facebook Login for a page saying how a person
+ * gets their data deleted. This is it; the app's settings point here.
+ */
+export function DataDeletionPage() {
+  return (
+    <LegalPage
+      title="Data Deletion"
+      intro={`How to remove what ${LEGAL.appName} holds from Facebook, or your whole account.`}
+    >
+      <LegalSection n={1} title="What we get from Facebook">
+        <p>
+          When a studio connects its Facebook page, we receive the leads from that page's lead forms and the page's name, so the
+          leads appear in the studio's Leads. We never post to your page and never see your personal Facebook profile.
+        </p>
+      </LegalSection>
+      <LegalSection n={2} title="Disconnect Facebook">
+        <p>
+          In the app, open Leads, then Lead Sources, and press Disconnect on the page. We stop receiving leads at once and delete
+          the stored access for that page. You can also remove the app from Facebook: Settings, then Business Integrations.
+        </p>
+      </LegalSection>
+      <LegalSection n={3} title="Delete your data">
+        <p>
+          Email <Email /> from the address you signed up with, and say what to delete: the Facebook leads, or your whole account.
+          We confirm within {LEGAL.responseTime.toLowerCase()} and finish within 30 days, apart from what the law requires us to
+          keep, such as payment records.
+        </p>
+      </LegalSection>
+      <LegalSection n={4} title="If you were a lead">
+        <p>
+          If you filled in a studio's Facebook form and want your details removed, ask that studio, or email <Email /> with the
+          studio's name and your phone number, and we will remove them.
         </p>
       </LegalSection>
     </LegalPage>
