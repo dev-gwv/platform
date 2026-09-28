@@ -12,7 +12,12 @@ export const leadStatus = z.enum([
 ])
 export type LeadStatus = z.infer<typeof leadStatus>
 
-export const leadSource = z.enum([
+/**
+ * Where a lead came from, and how warm it is, are the studio's own words
+ * (0209): the lists live in custom_lookups (lead_source, lead_quality) and grow
+ * from any form. These are the words every studio starts with.
+ */
+export const LEAD_SOURCE_DEFAULTS = [
   'facebook',
   'webform',
   'referral',
@@ -23,10 +28,13 @@ export const leadSource = z.enum([
   'google_form',
   'csv_import',
   'other',
-])
+] as const
+export const leadSource = z.string().trim().min(1).max(40)
 export type LeadSource = z.infer<typeof leadSource>
 
-export const leadQuality = z.enum(['hot', 'warm', 'cold'])
+/** Only 'hot' ranks a lead up the call list; the rest are labels. */
+export const LEAD_QUALITY_DEFAULTS = ['hot', 'warm', 'cold'] as const
+export const leadQuality = z.string().trim().min(1).max(40)
 export type LeadQuality = z.infer<typeof leadQuality>
 
 export const contactedStatus = z.enum(['uncontacted', 'contacted', 'unreachable'])
@@ -36,6 +44,10 @@ export type ContactedStatus = z.infer<typeof contactedStatus>
  *  tone rather than carrying a hex code of its own. */
 export const tagColor = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal'])
 export type TagColor = z.infer<typeof tagColor>
+
+/** A stage's or a list value's colour: the six hues and a quiet slate (0209). */
+export const toneColor = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'])
+export type ToneColor = z.infer<typeof toneColor>
 
 export const crmTag = z.object({
   id: uuid,
@@ -1182,6 +1194,9 @@ export const pipelineStage = z.object({
   probability_default: z.number().int().min(0).max(100),
   wip_limit: z.number().int().nullable(),
   required_fields: z.array(stageRequiredField),
+  color: toneColor.default('slate'),
+  /** An inactive stage is hidden from pickers; a deal already in it stays. */
+  is_active: z.boolean().default(true),
   /** Open, unarchived deals in the stage right now. */
   deal_count: z.number().int().default(0),
 })
@@ -1224,6 +1239,7 @@ export const createStageRequest = z.object({
   probability_default: z.number().int().min(0).max(100).optional(),
   wip_limit: z.number().int().min(1).max(1000).nullable().optional(),
   required_fields: z.array(stageRequiredField).max(7).default([]),
+  color: toneColor.optional(),
 })
 export type CreateStageRequest = z.infer<typeof createStageRequest>
 
@@ -1234,6 +1250,8 @@ export const updateStageRequest = z.object({
   probability_default: z.number().int().min(0).max(100).optional(),
   wip_limit: z.number().int().min(1).max(1000).nullable().optional(),
   required_fields: z.array(stageRequiredField).max(7).optional(),
+  color: toneColor.optional(),
+  is_active: z.boolean().optional(),
 })
 export type UpdateStageRequest = z.infer<typeof updateStageRequest>
 
@@ -1426,6 +1444,10 @@ export const crmActivity = z.object({
   external_id: z.string().nullable().default(null),
   /** Where a meeting is; collected by the form and kept on the row. */
   location: z.string().nullable().default(null),
+  /** A follow-up's urgency, from the studio's follow_up_priority list. */
+  priority: z.string().nullable().default(null),
+  /** pinned: the lead's old notes box; auto: made to stand behind a follow-up date. */
+  meta: z.record(z.string(), z.unknown()).default({}),
   created_at: isoDateTime,
 })
 export type CrmActivity = z.infer<typeof crmActivity>
@@ -1440,6 +1462,13 @@ export const activitiesQuery = z.object({
     .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
     .optional()
     .transform((v) => v === '1' || v === 'true'),
+  /** Only mine: assigned to the caller. */
+  mine: z
+    .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => v === '1' || v === 'true'),
+  /** Tasks due before this instant (reminders ask for the next hour). */
+  due_before: isoDateTime.optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(200),
 })
 export type ActivitiesQuery = z.infer<typeof activitiesQuery>
@@ -1458,6 +1487,7 @@ export const createActivityRequest = z
     duration_s: z.number().int().min(0).max(86400).optional(),
     due_at: isoDateTime.optional(),
     assigned_to: uuid.nullable().optional(),
+    priority: z.string().trim().max(40).optional(),
   })
   .refine((v) => !!v.lead_id || !!v.contact_id, { message: 'An activity belongs to a deal or a contact.', path: ['lead_id'] })
   .refine((v) => v.type !== 'task' || !!v.subject, { message: 'Say what the task is.', path: ['subject'] })
@@ -1475,6 +1505,7 @@ export const updateActivityRequest = z.object({
   /** true stamps done_at now; false clears it. */
   done: z.boolean().optional(),
   assigned_to: uuid.nullable().optional(),
+  priority: z.string().trim().max(40).nullable().optional(),
 })
 export type UpdateActivityRequest = z.infer<typeof updateActivityRequest>
 

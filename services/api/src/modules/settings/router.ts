@@ -29,6 +29,9 @@ import { audit } from '../../lib/audit'
 import { uuidParam } from '../../lib/params'
 import { listMemberDocs, readDocumentUpload, serveDocument } from '../../lib/member-docs'
 
+/** A list value may carry one of the app's tones (0209). */
+const LOOKUP_COLORS = new Set(['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'])
+
 const COMPANY_COLUMNS = [
   'name',
   'legal_name',
@@ -446,7 +449,7 @@ export const settingsRouter = new Hono<AppEnv>()
     const rows = await attempt(c, 'settings.lookups_active', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         return sql`
-          select id, category, value, sort_order
+          select id, category, value, sort_order, color
             from custom_lookups
            where company_id = ${c.get('auth').companyId}
              and category = ${category}
@@ -463,7 +466,7 @@ export const settingsRouter = new Hono<AppEnv>()
     const rows = await attempt(c, 'settings.lookups', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         return sql`
-          select id, category, value, sort_order, is_active
+          select id, category, value, sort_order, is_active, color
             from custom_lookups
            where company_id = ${c.get('auth').companyId}
              and ${category ? sql`category = ${category}` : sql`true`}
@@ -482,13 +485,17 @@ export const settingsRouter = new Hono<AppEnv>()
     const category = typeof body.category === 'string' ? body.category.trim() : ''
     const value = typeof body.value === 'string' ? body.value.trim() : ''
     if (!category || !value) fail(422, 'Category and value are required.')
+    if (value.length > 80) fail(422, 'Keep it under 80 characters.')
+    const color = typeof body.color === 'string' && LOOKUP_COLORS.has(body.color) ? body.color : null
     const auth = c.get('auth')
     if (!canQuickAddLookup(auth.access, auth.isOwner, category)) fail(403, 'You do not have access to this action.')
     const rows = await attempt(c, 'settings.lookup_create', () =>
       withUser(c.env, auth.userId, async (sql) => {
         const made = await sql<{ id: string }[]>`
-          insert into custom_lookups (company_id, category, value, sort_order)
-          values (${auth.companyId}, ${category}, ${value}, ${body.sort_order ?? 0})
+          insert into custom_lookups (company_id, category, value, sort_order, color)
+          values (${auth.companyId}, ${category}, ${value},
+                  ${typeof body.sort_order === 'number' ? body.sort_order : sql`coalesce((select max(sort_order) + 1 from custom_lookups where company_id = ${auth.companyId} and category = ${category}), 0)`},
+                  ${color})
           on conflict (company_id, category, value) do nothing
           returning id`
         return made
@@ -507,6 +514,7 @@ export const settingsRouter = new Hono<AppEnv>()
     if (typeof body.value === 'string' && body.value.trim()) patch.value = body.value.trim()
     if (typeof body.sort_order === 'number') patch.sort_order = body.sort_order
     if (typeof body.is_active === 'boolean') patch.is_active = body.is_active
+    if (body.color === null || (typeof body.color === 'string' && LOOKUP_COLORS.has(body.color))) patch.color = body.color
     if (Object.keys(patch).length === 0) fail(422, 'Nothing to change.')
     const auth = c.get('auth')
     const rows = await attempt(

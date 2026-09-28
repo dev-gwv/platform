@@ -16,6 +16,11 @@ export const LOOKUP_QUICK_ADD: Readonly<Record<string, readonly ModuleKey[]>> = 
   data_type: ['projects'],
   project_type: ['crm'],
   enquiry_source: ['crm'],
+  // The CRM's own lists (0209): anyone working leads may grow them in place.
+  lead_quality: ['crm'],
+  lead_source: ['crm'],
+  follow_up_type: ['crm'],
+  follow_up_priority: ['crm'],
   compensation_type: ['team_directory'],
 }
 

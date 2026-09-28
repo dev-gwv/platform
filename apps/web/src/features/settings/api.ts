@@ -117,6 +117,7 @@ const lookupSchema = z.object({
   value: z.string(),
   sort_order: z.number().int(),
   is_active: z.boolean(),
+  color: z.string().nullable().default(null),
 })
 const lookupArraySchema = lookupSchema.array()
 
@@ -138,7 +139,9 @@ const activeLookupSchema = z.object({
   category: z.string(),
   value: z.string(),
   sort_order: z.number().int(),
+  color: z.string().nullable().default(null),
 })
+export type ActiveLookup = z.infer<typeof activeLookupSchema>
 const activeLookupArraySchema = activeLookupSchema.array()
 
 /** The active values of one lookup category — open to any signed-in member, not just the owner. */
@@ -155,7 +158,7 @@ export function useActiveLookups(category: string) {
 export function useCreateCustomLookup() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { category: string; value: string; sort_order?: number }) =>
+    mutationFn: (body: { category: string; value: string; sort_order?: number; color?: string | null }) =>
       callApi('/settings/lookups', {
         method: 'POST',
         body,

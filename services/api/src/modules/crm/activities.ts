@@ -41,7 +41,7 @@ const remove = requireAction('crm', 'delete')
 const selectActivity = (sql: TransactionSql) => sql`
   select a.id, a.lead_id, l.name as lead_name, a.contact_id, ct.name as contact_name, a.type, a.direction, a.subject, a.body, a.outcome,
          a.started_at, a.ended_at, a.duration_s, a.due_at, a.done_at, a.assigned_to, au.name as assignee_name,
-         a.actor_id, ac.name as actor_name, a.provider, a.external_id, a.meta ->> 'location' as location, a.created_at
+         a.actor_id, ac.name as actor_name, a.provider, a.external_id, a.meta ->> 'location' as location, a.priority, a.meta, a.created_at
   from crm_activities a
   left join crm_leads l on l.id = a.lead_id
   left join users au on au.user_id = a.assigned_to
@@ -57,10 +57,13 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
       type: c.req.query('type'),
       assigned_to: c.req.query('assigned_to'),
       open_tasks: c.req.query('open_tasks'),
+      mine: c.req.query('mine'),
+      due_before: c.req.query('due_before'),
       limit: c.req.query('limit'),
     })
     if (!q.success) fail(422, 'Invalid query.')
-    const { lead_id, contact_id, type, assigned_to, open_tasks, limit } = q.data
+    const { lead_id, contact_id, type, assigned_to, open_tasks, mine, due_before, limit } = q.data
+    const me = c.get('auth').userId
     const rows = await attempt(c, 'crm.activities', () =>
       withUser(
         c.env,
@@ -72,6 +75,8 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
             and ${type ? sql`a.type = ${type}` : sql`true`}
             and ${assigned_to ? sql`a.assigned_to = ${assigned_to}` : sql`true`}
             and ${open_tasks ? sql`a.type = 'task' and a.done_at is null` : sql`true`}
+            and ${mine ? sql`coalesce(a.assigned_to, l.assigned_to) = ${me}` : sql`true`}
+            and ${due_before ? sql`a.due_at < ${due_before}` : sql`true`}
           order by ${open_tasks ? sql`a.due_at asc nulls last, a.created_at desc` : sql`a.created_at desc`}
           limit ${limit}`,
       ),
@@ -88,10 +93,10 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const [r] = await sql<{ id: string }[]>`
           insert into crm_activities (company_id, lead_id, contact_id, type, direction, subject, body, outcome,
-                                      started_at, ended_at, duration_s, due_at, assigned_to)
+                                      started_at, ended_at, duration_s, due_at, assigned_to, priority)
           values (get_current_company_id(), ${v.lead_id ?? null}, ${v.contact_id ?? null}, ${v.type}, ${v.direction},
                   ${v.subject ?? null}, ${v.body ?? null}, ${v.outcome ?? null}, ${v.started_at ?? null}, ${v.ended_at ?? null},
-                  ${v.duration_s ?? null}, ${v.due_at ?? null}, ${v.assigned_to ?? null})
+                  ${v.duration_s ?? null}, ${v.due_at ?? null}, ${v.assigned_to ?? null}, ${v.priority || null})
           returning id`
         if (!r) return null
         const [full] = await sql`${selectActivity(sql)} where a.id = ${r.id}`

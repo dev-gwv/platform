@@ -144,13 +144,20 @@ export function parseImportMoney(raw: string | null): number | null {
 }
 
 /** hot / warm / cold, however the column spelled it. */
-export function parseImportQuality(raw: string | null): 'hot' | 'warm' | 'cold' | null {
+/**
+ * A sheet's word for how warm a lead is. The usual synonyms map onto the
+ * three defaults; anything else is the studio's own word and is kept as
+ * typed (0209 opened the list), up to the column's 40 characters.
+ */
+export function parseImportQuality(raw: string | null): string | null {
   if (!raw) return null
-  const v = raw.trim().toLowerCase()
+  const typed = raw.trim()
+  const v = typed.toLowerCase()
+  if (!v) return null
   if (['hot', 'high', 'urgent', 'a'].includes(v)) return 'hot'
   if (['warm', 'medium', 'mid', 'b'].includes(v)) return 'warm'
   if (['cold', 'low', 'c'].includes(v)) return 'cold'
-  return null
+  return typed.slice(0, 40)
 }
 
 export type LeadColumn =

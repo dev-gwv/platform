@@ -83,8 +83,9 @@ describe('parseImportQuality', () => {
     expect(parseImportQuality('C')).toBe('cold')
   })
 
-  it('leaves a lead unrated rather than inventing a rating', () => {
-    expect(parseImportQuality('maybe')).toBeNull()
+  it("keeps a studio's own word as typed, and leaves a blank unrated", () => {
+    expect(parseImportQuality('  Very keen ')).toBe('Very keen')
+    expect(parseImportQuality('   ')).toBeNull()
     expect(parseImportQuality(null)).toBeNull()
   })
 })

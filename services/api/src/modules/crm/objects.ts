@@ -56,6 +56,7 @@ const selectPipelines = (sql: TransactionSql) => sql`
              'id', s.id, 'pipeline_id', s.pipeline_id, 'name', s.name, 'key', s.key, 'position', s.position,
              'kind', s.kind, 'probability_default', s.probability_default, 'wip_limit', s.wip_limit,
              'required_fields', to_jsonb(s.required_fields),
+             'color', s.color, 'is_active', s.is_active,
              'deal_count', (select count(*) from crm_leads l where l.stage_id = s.id and l.is_archived = false)
            ) order by s.position, s.created_at)
            from crm_pipeline_stages s where s.pipeline_id = p.id
@@ -185,15 +186,26 @@ export const crmObjectsRouter = new Hono<AppEnv>()
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
           const [s] = await sql`
-            insert into crm_pipeline_stages (pipeline_id, company_id, name, key, position, kind, probability_default, wip_limit, required_fields)
+            insert into crm_pipeline_stages (pipeline_id, company_id, name, key, position, kind, probability_default, wip_limit, required_fields, color)
             select ${pipelineId}, get_current_company_id(), ${v.name}, ${key},
                    ${v.position ?? null}::int,
                    ${v.kind}, ${v.probability_default ?? (v.kind === 'won' ? 100 : v.kind === 'lost' ? 0 : 10)},
-                   ${v.wip_limit ?? null}, ${sql.array(v.required_fields)}::text[]
+                   ${v.wip_limit ?? null}, ${sql.array(v.required_fields)}::text[], ${v.color ?? null}
             where exists (select 1 from crm_pipelines p where p.id = ${pipelineId})
             returning id`
           if (!s) return null
-          if (v.position === undefined) {
+          if (v.position === undefined && v.kind === 'open') {
+            // A new open stage goes after the last open one, before Won and
+            // Lost, which is where anyone adding "Site visit" means it to go.
+            const [at] = await sql<{ p: number }[]>`
+              select coalesce(max(position) filter (where kind = 'open'), -1) + 1 as p
+                from crm_pipeline_stages where pipeline_id = ${pipelineId} and id <> ${s.id}`
+            const pos = at?.p ?? 0
+            await sql`
+              update crm_pipeline_stages set position = position + 1
+               where pipeline_id = ${pipelineId} and id <> ${s.id} and position >= ${pos}`
+            await sql`update crm_pipeline_stages set position = ${pos} where id = ${s.id}`
+          } else if (v.position === undefined) {
             await sql`
               update crm_pipeline_stages set position = (select coalesce(max(position), -1) + 1 from crm_pipeline_stages where pipeline_id = ${pipelineId} and id <> ${s.id})
               where id = ${s.id}`
