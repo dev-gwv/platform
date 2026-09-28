@@ -11,13 +11,14 @@ jobs:
         run: |
           set +e
           t() { echo "== $*"; curl -sS -m 60 -o /tmp/b -w "HTTP %{http_code} in %{time_total}s\n" "$@"; head -c 300 /tmp/b; echo; }
+          getent hosts ipcstudios.duckdns.org; t -I http://ipcstudios.duckdns.org/health
           t https://studioautopilot.in/login
           JS=$(grep -oE '/assets/index-[^"]+\.js' /tmp/b | head -1)
           [ -z "$JS" ] && JS=$(curl -sS -m 30 https://studioautopilot.in/ | grep -oE '/assets/[^"]+\.js' | head -1)
           echo "bundle: $JS"
           API=$(curl -sS -m 60 "https://studioautopilot.in$JS" | grep -oE 'https://api[a-z0-9.-]*' | sort -u | head -3)
           echo "api urls in bundle: $API"
-          for a in $API https://api.studioautopilot.in; do
+          for a in https://ipcstudios.duckdns.org $API; do
             t "$a/health"
             t -X POST "$a/auth/login" -H 'Content-Type: application/json' -H 'Origin: https://studioautopilot.in' -d '{"email":"probe-nobody@example.com","password":"wrong-password-123"}'
             t "$a/auth/session"
