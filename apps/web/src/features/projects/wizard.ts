@@ -174,9 +174,14 @@ export const QUICK_SHOOTS = [
   'Engagement',
   'Haldi',
   'Mehendi',
+  'Sangeet',
   'Wedding Day',
   'Reception',
+  'Pre-Wedding',
   'Couple Shoot',
+  'Cocktail',
+  'Bride Getting Ready',
+  'Groom Getting Ready',
 ] as const
 
 /** What "Apply preset" lays down — the spine of a standard wedding booking. */

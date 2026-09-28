@@ -14,6 +14,7 @@ import { useMembers } from '@/features/allocation/api'
 import { useCreateTask, useDeleteTask, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { todayISO } from '@/features/tasks/board'
 import { RemindMe } from '@/features/reminders/RemindMe'
+import { HowToUse } from '@/shared/ui/how-to-use'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
@@ -52,6 +53,12 @@ export function TasksTab({
 
   return (
     <div className="mt-4 flex flex-col gap-3">
+      <HowToUse
+        id="project-tasks"
+        title="Small things to get done"
+        description="Anything for this wedding that is not a deliverable: call the florist, collect the outfits, book the drone permit."
+        steps={['Type the task', 'Give it to someone and a date', 'Tick it off when done']}
+      />
       {canEdit && <AddTaskRow projectId={projectId} />}
 
       {all.length === 0 ? (

@@ -6,6 +6,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { useProjectWorkSubmissions } from '@/features/work/api'
 import { ReviewButtons } from '@/features/work/ReviewButtons'
+import { HowToUse } from '@/shared/ui/how-to-use'
 
 const TONE: Record<WorkSubmission['status'], 'warning' | 'success' | 'danger'> = {
   submitted: 'warning',
@@ -32,9 +33,19 @@ export function CompletedWorkTab({ projectId, canReview }: { projectId: string; 
   const waiting = all.filter((s) => s.status === 'submitted')
   const rest = all.filter((s) => s.status !== 'submitted')
 
+  const guide = (
+    <HowToUse
+      id="project-review"
+      title="Check what the team hands in"
+      description="When someone finishes their part, it lands here for you to look at before the client sees it."
+      steps={['Open what is waiting', 'Approve it, or send it back with a note', 'Approved work goes to the client']}
+    />
+  )
   if (all.length === 0) {
     return (
-      <Card className="mt-4">
+      <div className="mt-4 flex flex-col gap-4">
+      {guide}
+      <Card>
         <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
           <FileCheck className="size-6 text-muted-foreground" aria-hidden />
           <p className="text-sm font-medium">Nothing handed in yet</p>
@@ -43,11 +54,13 @@ export function CompletedWorkTab({ projectId, canReview }: { projectId: string; 
           </p>
         </CardContent>
       </Card>
+      </div>
     )
   }
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {guide}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">
           {waiting.length > 0 ? `Waiting for your review (${waiting.length})` : 'Nothing waiting for review'}

@@ -879,7 +879,7 @@ function AddShootMenu({
   onAdd,
   extraNames = [],
   variant = 'default',
-  label = 'Add shoot',
+  label = 'Add another function',
 }: {
   shoots: ShootDraft[]
   onAdd: (name: string) => void
@@ -1132,9 +1132,9 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">Shoot schedule</p>
-          <p className="text-xs text-muted-foreground">
-            Add every shoot day. Pick a common one below, or add a custom shoot.
+          <p className="text-base font-bold tracking-tight">Add your functions</p>
+          <p className="text-sm text-muted-foreground">
+            Every function is one shoot day: Haldi, Mehendi, Wedding, Reception. Tap the ones below, or add your own.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1157,8 +1157,8 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Quick add{(shootTypes.data ?? []).length ? ' · from library' : ''}
+        <span className="text-xs font-semibold text-muted-foreground">
+          {(shootTypes.data ?? []).length ? 'Your functions' : 'Tap to add'}
         </span>
         {quickList.map((name, i) => {
           const already = draft.shoots.some(
@@ -1181,10 +1181,9 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
       {draft.shoots.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-border px-6 py-10 text-center">
           <CalendarDays className="size-5 text-muted-foreground" aria-hidden />
-          <p className="mt-1 font-medium">No shoots yet</p>
+          <p className="mt-1 font-semibold">No functions yet</p>
           <p className="text-sm text-muted-foreground">
-            Add Haldi, Wedding Day, Reception and the rest with the buttons above. Deliverable
-            dates count forward from these.
+            Tap Haldi, Wedding Day, Reception above — one card each. Delivery dates count forward from these.
           </p>
         </div>
       ) : (
