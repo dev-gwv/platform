@@ -1,0 +1,2 @@
+-- 0209: the CRM's closed fields open up, stages carry a colour, follow-ups
+-- become tasks. Claimed ahead of the body; see CLAUDE.md.
