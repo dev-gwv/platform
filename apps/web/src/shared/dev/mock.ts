@@ -978,7 +978,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
           requires: ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'] },
         { key: 'meta_leads', label: 'Meta lead ads', configured: false,
           detail: 'Only a generic JSON webhook works. Posts are not signature-verified.',
-          requires: ['META_VERIFY_TOKEN', 'META_APP_SECRET', 'META_PAGE_ACCESS_TOKEN'] },
+          requires: ['META_APP_ID', 'META_APP_SECRET', 'META_VERIFY_TOKEN'] },
         { key: 'errors', label: 'Error tracking (Sentry)', configured: true,
           detail: 'Errors, traces and nightly job check-ins are reported.',
           requires: ['SENTRY_DSN'] },

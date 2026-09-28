@@ -14,6 +14,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { CallButton } from '@/features/crm-calls/CallButton'
 import { useCallQueue } from '@/features/crm-calls/api'
 import { useSendNow } from '@/features/crm-sequences/api'
+import { MyDayStrip } from '@/features/crm-calls/MyDay'
 import { EventTile } from '@/shared/ui/icon-tile'
 
 export function CallQueuePage() {
@@ -71,6 +72,7 @@ function CallQueue() {
           )
         }
       />
+      <MyDayStrip scope={scope} />
       {toSend > 0 && (
         <Link
           to="/follow-ups/send"

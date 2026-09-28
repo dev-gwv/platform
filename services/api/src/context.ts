@@ -25,8 +25,8 @@ export interface Env {
   META_VERIFY_TOKEN: string
   /** Meta app secret: verifies X-Hub-Signature-256 on lead-ads webhook posts. */
   META_APP_SECRET: string
-  /** Page access token used to fetch a lead's fields from the Graph API by leadgen_id. */
-  META_PAGE_ACCESS_TOKEN: string
+  /** Legacy: one platform-wide page token. Since 0204 each studio's pages carry their own sealed token. */
+  META_PAGE_ACCESS_TOKEN?: string
   /** WhatsApp Cloud API: the sending phone number id and its access token. */
   WHATSAPP_PHONE_NUMBER_ID: string
   WHATSAPP_ACCESS_TOKEN: string

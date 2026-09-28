@@ -616,21 +616,33 @@ export const crmRouter = new Hono<AppEnv>()
     // pipeline value + warnings.
     const extra = await attempt(c, 'crm.team_stats_extras', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
+        // Two aggregates, joined after: one join of both tables multiplied
+        // each person's messages by their leads and their pipeline by their messages.
         return sql<{
           user_id: string; whatsapp: number; messages: number; notes: number; pipeline_value: number;
         }[]>`
           select m.user_id,
-                 count(a.id) filter (where a.type = 'whatsapp')::int as whatsapp,
-                 count(a.id) filter (where a.type in ('whatsapp', 'sms', 'email'))::int as messages,
-                 count(a.id) filter (where a.type = 'note')::int as notes,
-                 coalesce(sum(l.deal_value) filter (where l.status not in ('converted', 'lost')), 0) as pipeline_value
+                 coalesce(a.whatsapp, 0) as whatsapp, coalesce(a.messages, 0) as messages, coalesce(a.notes, 0) as notes,
+                 coalesce(l.pipeline_value, 0) as pipeline_value
           from users m
-          left join crm_activities a on a.actor_id = m.user_id
-            and a.created_at >= ${range.from}::timestamptz and a.created_at < (${range.to}::date + 1)::timestamptz
-          left join crm_leads l on l.assigned_to = m.user_id
-            and l.company_id = get_current_company_id() and l.is_archived = false
-          where m.company_id = get_current_company_id() and m.deleted_at is null
-          group by m.user_id`
+          left join (
+            select actor_id,
+                   count(*) filter (where type = 'whatsapp')::int as whatsapp,
+                   count(*) filter (where type in ('whatsapp', 'sms', 'email'))::int as messages,
+                   count(*) filter (where type = 'note')::int as notes
+              from crm_activities
+             where company_id = get_current_company_id()
+               and created_at >= ${range.from}::timestamptz and created_at < (${range.to}::date + 1)::timestamptz
+             group by actor_id
+          ) a on a.actor_id = m.user_id
+          left join (
+            select assigned_to, sum(deal_value) as pipeline_value
+              from crm_leads
+             where company_id = get_current_company_id() and is_archived = false
+               and status not in ('converted', 'lost')
+             group by assigned_to
+          ) l on l.assigned_to = m.user_id
+          where m.company_id = get_current_company_id() and m.deleted_at is null`
       }),
     )
     const byId = new Map((extra ?? []).map((e) => [e.user_id, e]))

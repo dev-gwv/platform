@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { callQueueItem, callQueueScope, crmActivity, z, type CallQueueScope } from '@ipc/contracts'
+import { callQueueItem, callQueueScope, crmActivity, dayReport, dayReportRow, z, type CallQueueScope } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -60,5 +60,31 @@ export function useLogCall() {
       void qc.invalidateQueries({ queryKey: ['crm'] })
     },
     onError: (e: Error) => toast.error(e.message || 'We could not log the call.'),
+  })
+}
+
+const teamResponse = z.object({ day: z.string(), items: dayReportRow.array() })
+
+/** "My day": what I did today. Under ['crm'] so a logged call moves the numbers at once. */
+export function useMyDay(userId?: string | null) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['crm', 'my-day', userId ?? 'me'],
+    queryFn: () => callApi(`/crm/queue/day${userId ? `?user=${userId}` : ''}`, { responseSchema: dayReport }),
+    enabled: !!session && access.hasModule('crm'),
+    staleTime: 20_000,
+  })
+}
+
+/** Everyone's day, one row per caller (owners and managers). */
+export function useTeamDay(enabled: boolean) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['crm', 'team-day'],
+    queryFn: () => callApi('/crm/queue/team', { responseSchema: teamResponse }),
+    enabled: enabled && !!session && access.hasModule('crm'),
+    staleTime: 20_000,
   })
 }

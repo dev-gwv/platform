@@ -291,9 +291,14 @@ as before; the client handles both.
 
 - `META_VERIFY_TOKEN` completes the subscription handshake; `META_APP_SECRET`
   verifies `X-Hub-Signature-256` on every post (a Meta-shaped post without one
-  is refused once the secret is set); `META_PAGE_ACCESS_TOKEN` fetches the
-  lead's fields by `leadgen_id` from the Graph API (v21.0). With the page token
-  unset, Meta notifications are acknowledged and logged but not imported.
+  is refused once the secret is set). Each studio connects its own Facebook
+  page (0204): `META_APP_ID` + `APP_URL/lead-sources` as an OAuth redirect give
+  the "Connect with Facebook" button, the page tokens are sealed with
+  `WHATSAPP_TOKEN_KEY`, and the Meta app's Page webhook points at
+  `<API>/webhooks/meta` (field `leadgen`) once, for every studio. The page id
+  in each post finds the studio. `META_PAGE_ACCESS_TOKEN` (one token for all)
+  is legacy: it still serves `/webhooks/lead/:sourceKey` for a page nobody
+  connected.
 - `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_ACCESS_TOKEN` make "send template"
   deliver through the WhatsApp Cloud API (text messages). Unset, the API hands
   back a `wa.me` link and the person's own WhatsApp opens with the text.
