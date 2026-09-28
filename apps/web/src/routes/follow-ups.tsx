@@ -18,6 +18,18 @@ import { toLeadQuery } from '@/features/crm/views'
 import { EMPTY_QUERY, applyQuery, countsFor, isOpen, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
+import { BoardFilters } from '@/features/crm/BoardFilters'
+import { NO_FACETS, applyFacets, type LeadFacets } from '@/features/crm/board-filters'
+
+const FACETS_KEY = 'crm:facets'
+function readFacets(): LeadFacets {
+  try {
+    const raw = localStorage.getItem(FACETS_KEY)
+    return raw ? { ...NO_FACETS, ...(JSON.parse(raw) as Partial<LeadFacets>) } : NO_FACETS
+  } catch {
+    return NO_FACETS
+  }
+}
 
 /**
  * One list, and nothing above it but a header and a line of controls.
@@ -57,6 +69,17 @@ function Crm() {
    * two full-width bars above the list a studio reads every morning.
    */
   const [showFilters, setShowFilters] = useState(false)
+  // The facet filters (stage, event, quality, owner, tag, source) stay put
+  // between visits: a studio that works "Weddings, hot" works it every day.
+  const [facets, setFacetsState] = useState<LeadFacets>(readFacets)
+  const setFacets = (f: LeadFacets) => {
+    setFacetsState(f)
+    try {
+      localStorage.setItem(FACETS_KEY, JSON.stringify(f))
+    } catch {
+      /* private window: the filter still works, it just is not remembered */
+    }
+  }
 
   /**
    * How the chosen leads are drawn: as a list, bucketed by when they are due,
@@ -147,7 +170,8 @@ function Crm() {
   // While the request is in flight the local matches stand in, so the list
   // never blinks empty between keystrokes. Once it lands, the server's answer
   // wins -- it is the one that has seen every lead.
-  const rows = searching && found.data ? found.data : clientMatch
+  const unfaceted = searching && found.data ? found.data : clientMatch
+  const rows = useMemo(() => applyFacets(unfaceted, facets), [unfaceted, facets])
 
   const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
   const selected =
@@ -221,6 +245,12 @@ function Crm() {
           <SlidersHorizontal /> Filter
         </Button>
       </div>
+
+      {!isEmptyStudio && (
+        <div className="mt-3">
+          <BoardFilters leads={unfaceted} value={facets} onChange={setFacets} />
+        </div>
+      )}
 
       {/* Search deliberately ignores the chosen view and the archive, because
           "where did that person go" is the question being asked. Saying so

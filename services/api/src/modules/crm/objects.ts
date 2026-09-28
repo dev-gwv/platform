@@ -188,7 +188,7 @@ export const crmObjectsRouter = new Hono<AppEnv>()
           const [s] = await sql`
             insert into crm_pipeline_stages (pipeline_id, company_id, name, key, position, kind, probability_default, wip_limit, required_fields, color)
             select ${pipelineId}, get_current_company_id(), ${v.name}, ${key},
-                   ${v.position ?? null}::int,
+                   coalesce(${v.position ?? null}::int, 0),
                    ${v.kind}, ${v.probability_default ?? (v.kind === 'won' ? 100 : v.kind === 'lost' ? 0 : 10)},
                    ${v.wip_limit ?? null}, ${sql.array(v.required_fields)}::text[], ${v.color ?? null}
             where exists (select 1 from crm_pipelines p where p.id = ${pipelineId})

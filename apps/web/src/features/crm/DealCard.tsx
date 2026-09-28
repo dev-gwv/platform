@@ -1,12 +1,17 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { Flame, MessageCircle, Phone } from 'lucide-react'
+import { Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
 import type { CrmLead } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Avatar } from '@/shared/ui/avatar'
 import { formatINR } from '@/shared/ui/format'
 import { DateBadge, DueBadge, ScoreBadge, lastTouch } from './tabs/shared'
 import { TagChips } from './TagChip'
+import { EventTile } from '@/shared/ui/icon-tile'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { TONE_CHIP } from '@/shared/ui/tones'
+import { NoteComposer } from './drawer/NotesThread'
+import { prettyWord, useLookupColor } from './fields'
 
 /**
  * A deal on the stage board.
@@ -55,6 +60,8 @@ export function DealCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
+  const qualityColor = useLookupColor('lead_quality')
+  const [noting, setNoting] = useState(false)
   const pct = lead.probability ?? stageProbability ?? null
   const title = lead.title ?? lead.name ?? 'Unnamed deal'
   // Where it came from, as the caption above the name.
@@ -82,10 +89,16 @@ export function DealCard({
       <button type="button" onClick={() => onOpen(lead.id)} className="block w-full text-left">
         {origin && <span className="micro-label mb-1 block truncate">{origin}</span>}
 
-        <span className="flex items-center gap-1.5">
-          {lead.is_hot && <Flame className="size-3.5 shrink-0 text-destructive" aria-label="Hot" />}
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{title}</span>
-          {lead.score > 0 && <ScoreBadge score={lead.score} />}
+        <span className="flex items-center gap-2">
+          {/* What kind of shoot, at a glance: the haldi sun, the wedding heart. */}
+          {lead.event_type && <EventTile name={lead.event_type} size="sm" />}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              {lead.is_hot && <Flame className="size-3.5 shrink-0 text-destructive" aria-label="Hot" />}
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{title}</span>
+              {lead.score > 0 && <ScoreBadge score={lead.score} />}
+            </span>
+          </span>
         </span>
 
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">{lead.phone ?? '—'}</span>
@@ -115,9 +128,19 @@ export function DealCard({
           </span>
         )}
 
-        {lead.tags.length > 0 && (
-          <span className="mt-1.5 block">
-            <TagChips tags={lead.tags} max={2} />
+        {(lead.quality || lead.tags.length > 0) && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-1">
+            {lead.quality && (
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-px text-[0.65rem] font-semibold uppercase tracking-wider',
+                  TONE_CHIP[qualityColor(lead.quality) ?? 'slate'],
+                )}
+              >
+                {prettyWord(lead.quality)}
+              </span>
+            )}
+            {lead.tags.length > 0 && <TagChips tags={lead.tags} max={2} />}
           </span>
         )}
       </button>
@@ -139,8 +162,32 @@ export function DealCard({
         * handle, and dnd-kit would otherwise take the press, so a tap would
         * start a drag instead of dialling.
         */}
+      <div
+        className={cn(
+          'absolute right-2 top-2 flex gap-1 transition-opacity focus-within:opacity-100 group-hover:opacity-100',
+          noting ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        <Popover open={noting} onOpenChange={setNoting}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-sm border border-border bg-card p-1 text-muted-foreground hover:text-foreground"
+              title="Add a note"
+            >
+              <NotebookPen className="size-3" />
+              <span className="sr-only">Add a note for {lead.name ?? 'this lead'}</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" onPointerDown={(e) => e.stopPropagation()}>
+            <p className="mb-2 text-sm font-semibold">{lead.name ?? 'Note'}</p>
+            <NoteComposer leadId={lead.id} autoFocus onSaved={() => setNoting(false)} />
+          </PopoverContent>
+        </Popover>
       {lead.phone && (
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <>
           <a
             href={`tel:${lead.phone}`}
             onPointerDown={(e) => e.stopPropagation()}
@@ -163,8 +210,9 @@ export function DealCard({
             <MessageCircle className="size-3" />
             <span className="sr-only">WhatsApp {lead.name ?? 'this lead'}</span>
           </a>
-        </div>
+        </>
       )}
+      </div>
     </div>
   )
 }
