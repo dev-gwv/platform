@@ -17,6 +17,7 @@ import { Select } from '@/shared/ui/input'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { formatINR } from '@/shared/ui/format'
+import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useActivities, useCrmPrefs, useMoveStage, usePipelines, useUpdateActivity, useUpdateCrmPrefs } from '../api'
 import { taskDueBy } from '@ipc/domain'
@@ -24,7 +25,7 @@ import { Check, ClipboardList } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LostReasonDialog } from '../LostReasonDialog'
 import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted, type DueBucket } from '../leads'
-import { BoardColumn, DueBadge, LeadCard, LeadTable, stageTone } from './shared'
+import { BoardColumn, DueBadge, LeadCard, LeadTable } from './shared'
 import { DealCard } from '../DealCard'
 
 /** Everything owed today or already late — the list to clear before going home. */
@@ -319,7 +320,10 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {/* Horizontal, with a minimum width so the columns keep their size and
+            the row scrolls rather than squashing. */}
+        <div className="overflow-x-auto pb-2">
+        <div className="flex gap-3" style={{ minWidth: stages.length * 282 }}>
           {stages.map((s) => {
             const inStage = inPipeline.filter((l) => l.stage_id === s.id)
             const value = inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
@@ -340,6 +344,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
             )
           })}
         </div>
+        </div>
       </DndContext>
 
       <LostReasonDialog
@@ -355,6 +360,19 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
   )
 }
 
+/**
+ * One stage, as a column of a pipeline rather than a card in a grid.
+ *
+ * The board used to be `grid md:grid-cols-3 xl:grid-cols-6`, which wraps: six
+ * stages became two rows of three, and a pipeline that wraps is not a pipeline,
+ * it is a set of boxes. Fixed 270px columns in a horizontal scroller is what
+ * makes the order left-to-right mean something, and it is the single biggest
+ * reason the reference board reads as a workspace and ours did not.
+ *
+ * The 2px coloured rule under the header is the only place the stage's own
+ * colour appears, which is enough to tell columns apart while scrolling without
+ * tinting the whole column.
+ */
 function DroppableStage({
   stage,
   count,
@@ -369,35 +387,92 @@ function DroppableStage({
   children: ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `stage-${stage.id}` })
-  const gate = stage.required_fields.length > 0 ? `Needs ${stage.required_fields.map((f) => REQUIRED_FIELD_LABEL[f] ?? f).join(', ')}` : null
+  const gate =
+    stage.required_fields.length > 0
+      ? `Needs ${stage.required_fields.map((f) => REQUIRED_FIELD_LABEL[f] ?? f).join(', ')}`
+      : null
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg border bg-card p-3 ${isOver ? (full ? 'border-destructive ring-2 ring-destructive/20' : 'border-primary ring-2 ring-primary/20') : 'border-border'}`}
+      className={cn(
+        'flex w-[270px] shrink-0 flex-col rounded-md border transition-colors',
+        isOver
+          ? full
+            ? 'border-destructive bg-destructive/5'
+            : 'border-primary bg-primary/5'
+          : 'border-border bg-muted/40',
+      )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate font-medium" title={stage.name}>
-          {stage.name}
-        </p>
-        <span className="flex items-center gap-1">
-          {stage.wip_limit !== null && (
+      <div
+        className="border-b-2 px-3 pb-2 pt-3"
+        style={{ borderBottomColor: stageHue(stage) }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="size-1.5 shrink-0 rounded-full" style={{ background: stageHue(stage) }} aria-hidden />
+          <p className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wider" title={stage.name}>
+            {stage.name}
+          </p>
+          {stage.wip_limit !== null ? (
             <StatusBadge tone={full ? 'danger' : 'neutral'}>
               {full && <Lock className="mr-1 size-3" />}
               {count}/{stage.wip_limit}
             </StatusBadge>
+          ) : (
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
           )}
-          {stage.wip_limit === null && <StatusBadge tone={stageTone(stage.kind)}>{count}</StatusBadge>}
-        </span>
+        </div>
+        {/* What this column is worth, under its name -- the question a studio
+            asks of a pipeline before it asks anything else. */}
+        <p className="mt-0.5 text-[0.7rem] tabular-nums text-muted-foreground">
+          {formatINR(value)}
+          {stage.kind === 'open' ? ` · ${stage.probability_default}%` : ''}
+        </p>
+        {gate && (
+          <p className="mt-0.5 truncate text-[0.65rem] text-muted-foreground" title={gate}>
+            {gate}
+          </p>
+        )}
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {formatINR(value)}
-        {stage.kind === 'open' ? ` · ${stage.probability_default}%` : ''}
-      </p>
-      {gate && <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground" title={gate}>{gate}</p>}
-      <div className="mt-3 flex flex-col gap-2">
-        {count === 0 ? <p className="py-4 text-center text-xs text-muted-foreground">Empty — drop here</p> : children}
+      <div className="flex min-h-32 flex-1 flex-col gap-2 p-2">
+        {count === 0 ? (
+          <p
+            className={cn(
+              'rounded-md border-2 border-dashed py-6 text-center text-[0.7rem] transition-colors',
+              isOver ? 'border-primary bg-primary/5 uppercase tracking-wider text-primary' : 'border-transparent text-muted-foreground',
+            )}
+          >
+            {isOver ? 'Drop here' : 'Drop leads here'}
+          </p>
+        ) : (
+          children
+        )}
       </div>
     </div>
   )
+}
+
+/**
+ * A colour per stage, so the columns are tellable apart at a glance.
+ *
+ * The reference stores a colour on the stage. Ours does not, so this derives a
+ * stable one from the stage's kind and name: won is the success tone, lost the
+ * destructive one, and open stages cycle the six theme hues by name — the same
+ * name always lands on the same hue, which is what makes it useful while
+ * scrolling.
+ */
+const OPEN_HUES = [
+  'var(--tone-blue)',
+  'var(--tone-violet)',
+  'var(--tone-teal)',
+  'var(--tone-amber)',
+  'var(--tone-green)',
+  'var(--tone-rose)',
+]
+function stageHue(stage: PipelineStage): string {
+  if (stage.kind === 'won') return 'var(--success)'
+  if (stage.kind === 'lost') return 'var(--destructive)'
+  let h = 0
+  for (const ch of stage.name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return OPEN_HUES[h % OPEN_HUES.length]!
 }
 
