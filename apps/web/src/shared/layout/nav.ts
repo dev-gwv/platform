@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarOff,
   MapPin,
+  Gauge,
   LayoutDashboard,
   KanbanSquare,
   CalendarClock,
@@ -94,6 +95,7 @@ export const NAV: NavEntry[] = [
   leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Attendance', '/attendance/my', MapPin, { roles: ['employee'] }),
+  leaf('My performance', '/performance/me', Gauge, { roles: ['employee'] }),
   leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
   {
@@ -165,6 +167,8 @@ export const NAV: NavEntry[] = [
     match: '/employees',
     children: [
       leaf('Team Directory', '/employees', Users, { module: 'team_directory' }),
+      // Each person's month: work on time, right first time, shoots, attendance (0208).
+      leaf('Performance', '/team/performance', Gauge, { module: 'team_directory' }),
       leaf('Attendance', '/attendance', Clock, { module: 'attendance' }),
       leaf('Leave & Holidays', '/leave', CalendarOff, { module: 'attendance' }),
       leaf('Roles & Access', '/settings/roles', ShieldCheck, { module: 'team_roles' }),

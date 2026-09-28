@@ -21,6 +21,7 @@ import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { TodayAttendanceCard } from '@/features/attendance/TodayAttendanceCard'
 import { SlotAnswer } from '@/features/allocation/SlotAnswer'
+import { MyMonthCard } from '@/features/performance/MyMonthCard'
 
 const myList = attendanceRecord.array()
 
@@ -101,6 +102,7 @@ export function EmployeeDashboard() {
       </div>
 
       <TodayAttendanceCard />
+      <MyMonthCard />
 
       <ProfileBanner />
 
