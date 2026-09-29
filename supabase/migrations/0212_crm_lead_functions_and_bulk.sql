@@ -1,0 +1,3 @@
+-- 0212: a lead holds several functions (Haldi, Mehendi, Wedding, Reception),
+-- each with its own date and venue; bulk edit gains labels, source and event
+-- type. Number claimed by the client's session -- body follows in the same PR.
