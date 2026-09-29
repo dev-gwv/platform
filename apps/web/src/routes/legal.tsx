@@ -4,8 +4,8 @@ import { LegalPage, LegalSection } from '@/features/legal/LegalPage'
 import { LEGAL, PLANS, PLAN_SUMMARY } from '@/features/legal/legal'
 
 /**
- * The four public policy pages a payment gateway asks for, about IPC Studios
- * as the software vendor. Plain words, no login needed.
+ * The four public policy pages a payment gateway asks for, about Studio AutoPilot
+ * and the company that runs it. Plain words, no login needed.
  */
 
 const Email = () => (
@@ -97,7 +97,7 @@ export function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      intro={`This explains what ${LEGAL.operatorName} collects when you use ${LEGAL.appName}, why, and what you can ask us to do with it.`}
+      intro={`This explains what ${LEGAL.appName}, run by ${LEGAL.operatorName}, collects when you use it, why, and what you can ask us to do with it.`}
     >
       <LegalSection n={1} title="What we collect">
         <ul>
@@ -105,6 +105,10 @@ export function PrivacyPage() {
           <li>What your studio enters: clients, projects, shoots, team, invoices, files and records.</li>
           <li>Payment details for your subscription: the amount, status and Razorpay reference. Never card or bank numbers.</li>
           <li>Basic technical logs: sign-ins, errors and device type, to keep the service secure and working.</li>
+          <li>
+            If your studio connects a Facebook page: the answers people give on that page's lead forms (name, phone, email and any
+            custom questions), the page's name, and the Facebook user id of the person who connected it.
+          </li>
         </ul>
       </LegalSection>
       <LegalSection n={2} title="How we use it">
@@ -120,25 +124,31 @@ export function PrivacyPage() {
           <li>Razorpay, for payments.</li>
           <li>Google, if you choose to sign in with Google.</li>
           <li>
-            Meta (Facebook), if your studio connects its Facebook page: we receive the leads from your page's lead forms (the
-            answers the person typed, such as name, phone and email) and the page's name, and use them only to show those leads in
-            your studio. See <Link to="/data-deletion" className="text-primary hover:underline">Data Deletion</Link>.
+            Meta (Facebook), if your studio connects its Facebook page: we receive the leads from your page's lead forms and use
+            them only to show them to your studio. We do not read your friends or posts. See <Link to="/data-deletion" className="text-primary hover:underline">Data Deletion</Link>.
           </li>
           <li>Our cloud hosting and database providers, where the service and your data run.</li>
           <li>An email delivery service, for app emails, and an error-tracking service, for fixing problems.</li>
+          <li>WhatsApp and SMS providers, only if your studio turns on messaging: they receive the number and the message.</li>
         </ul>
         <p>Each gets only what it needs to do its job.</p>
       </LegalSection>
       <LegalSection n={4} title="Keeping it safe">
         <p>
           All traffic is encrypted (HTTPS). Every studio's data is kept apart from every other studio's, and your team sees only
-          what your access settings allow.
+          what your access settings allow. The access Facebook gives us for a page is stored encrypted and is never sent to your
+          browser.
         </p>
       </LegalSection>
       <LegalSection n={5} title="How long we keep it">
         <p>
-          We keep your data while your account exists, including while a plan has lapsed, so nothing is lost when you renew. Ask us
-          and we will delete it, apart from what the law requires us to keep, such as payment records.
+          We keep your data while your account exists, including while a plan has lapsed, so nothing is lost when you renew.
+        </p>
+        <p>
+          You can delete leads yourself: archive a lead, then choose Delete permanently. That removes its name, phone, email, notes,
+          messages and Facebook import records from your studio. Or ask us to delete your account, and we will, apart from what
+          the law requires us to keep, such as payment records. Our safety backups are rewritten within 30 days, so deleted data
+          leaves them by then.
         </p>
       </LegalSection>
       <LegalSection n={6} title="Your choices">
@@ -263,28 +273,36 @@ export function DataDeletionPage() {
   return (
     <LegalPage
       title="Data Deletion"
-      intro={`How to remove what ${LEGAL.appName} holds from Facebook, or your whole account.`}
+      intro={`How to remove what ${LEGAL.appName}, run by ${LEGAL.operatorName}, holds from Facebook, or your whole account.`}
     >
       <LegalSection n={1} title="What we get from Facebook">
         <p>
           When a studio connects its Facebook page, we receive the leads from that page's lead forms and the page's name, so the
-          leads appear in the studio's Leads. We never post to your page and never see your personal Facebook profile.
+          leads appear in the studio's Leads. We never post to your page. We do not read your friends or posts; we see only
+          the Facebook user id of the person who connected the page and the list of pages they manage.
         </p>
       </LegalSection>
       <LegalSection n={2} title="Disconnect Facebook">
         <p>
-          In the app, open Leads, then Lead Sources, and press Disconnect on the page. We stop receiving leads at once and delete
-          the stored access for that page. You can also remove the app from Facebook: Settings, then Business Integrations.
+          In the app, open CRM &amp; Clients, then Lead Sources, and press Disconnect on the page. We stop receiving leads at once,
+          delete the stored access for that page and ask Facebook to stop sending; the app tells you if Facebook did not confirm.
+          You can also remove the app from Facebook: Settings, then Business Integrations.
         </p>
       </LegalSection>
-      <LegalSection n={3} title="Delete your data">
+      <LegalSection n={3} title="Delete leads yourself">
+        <p>
+          Open Leads, archive the lead, then choose Delete permanently. Its name, phone, email, notes, messages and Facebook import
+          record are removed for good.
+        </p>
+      </LegalSection>
+      <LegalSection n={4} title="Delete your data">
         <p>
           Email <Email /> from the address you signed up with, and say what to delete: the Facebook leads, or your whole account.
           We confirm within {LEGAL.responseTime.toLowerCase()} and finish within 30 days, apart from what the law requires us to
           keep, such as payment records.
         </p>
       </LegalSection>
-      <LegalSection n={4} title="If you were a lead">
+      <LegalSection n={5} title="If you were a lead">
         <p>
           If you filled in a studio's Facebook form and want your details removed, ask that studio, or email <Email /> with the
           studio's name and your phone number, and we will remove them.

@@ -1,5 +1,5 @@
 /**
- * Who runs IPC Studios, for the public policy pages (Terms, Privacy, Refund,
+ * Who runs Studio AutoPilot, for the public policy pages (Terms, Privacy, Refund,
  * Contact) a payment gateway asks every merchant to publish. This is the
  * software's own vendor -- not any studio using it -- so it lives here, in
  * one place, rather than in a studio's settings.
@@ -10,7 +10,8 @@
 export const LEGAL = {
   appName: 'Studio AutoPilot',
   productName: 'Studio AutoPilot studio management software',
-  operatorName: 'IPC Studios',
+  /** The company that owns and runs the product. The old trading name is not used on any public page. */
+  operatorName: 'Grateful World Ventures (OPC) Private Limited',
   supportEmail: 'support@studioautopilot.in',
   /** Registered or business address, one line per entry. */
   address: [] as string[],

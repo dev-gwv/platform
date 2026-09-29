@@ -10,6 +10,7 @@ import {
   type AnyRoute,
 } from '@tanstack/react-router'
 import { LoginPage } from '@/routes/login'
+import { HomePage } from '@/routes/home'
 import { MyProfilePage } from '@/routes/my-profile'
 import { LeavePage } from '@/routes/leave'
 import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
@@ -172,6 +173,7 @@ const route = (path: string, component: () => ReactNode): AnyRoute =>
   createRoute({ getParentRoute: () => authedLayout, path, component })
 
 const routeTree = rootRoute.addChildren([
+  publicRoute('/', HomePage),
   publicRoute('/login', LoginPage),
   ...LEGACY_PUBLIC_PATHS.map((p) => publicRoute(p, LegacyRedirect)),
   publicRoute('/complete-setup', CompleteSetupPage),
@@ -217,7 +219,6 @@ const routeTree = rootRoute.addChildren([
   ]),
 
   authedLayout.addChildren([
-  route('/', DashboardPage),
   route('/dashboard', DashboardPage),
   route('/reports', ReportsPage),
 
