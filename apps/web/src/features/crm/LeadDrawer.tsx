@@ -52,7 +52,8 @@ import { LostReasonDialog } from './LostReasonDialog'
 import { ArchiveDialog } from './ArchiveDialog'
 import { Timeline } from './Timeline'
 import { dateVerdict } from './availability'
-import { EventTypeChip, LookupChip, StagePicker, prettyWord } from './fields'
+import { LookupChip, StagePicker, prettyWord } from './fields'
+import { LeadEvents, toFunctions, type EventRow } from './LeadEvents'
 import { NoteComposer, NotesThread } from './drawer/NotesThread'
 import { FollowUpCard } from './drawer/FollowUpCard'
 import { TagPicker } from './TagPicker'
@@ -121,6 +122,19 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   }
 
   const patch = (p: Parameters<typeof update.mutate>[0]['patch']) => update.mutate({ id: lead.id, patch: p })
+
+  // The lead's functions as editable rows; a lead from before 0212 that only
+  // has the old single event shows that one.
+  const eventRows: EventRow[] = lead.functions.length
+    ? lead.functions.map((f) => ({ event_type: f.event_type, event_date: f.event_date, location: f.location }))
+    : lead.event_type || lead.event_date
+      ? [{ event_type: lead.event_type, event_date: lead.event_date, location: lead.event_location }]
+      : []
+  function saveEvents(rows: EventRow[]) {
+    const next = toFunctions(rows)
+    if (JSON.stringify(next) === JSON.stringify(toFunctions(eventRows))) return
+    patch({ functions: next })
+  }
   const sendable = (templates ?? []).filter((t) => t.kind !== 'note')
 
   function sendTemplate(templateId: string, channel: 'whatsapp' | 'email') {
@@ -257,11 +271,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               canAdd={canEdit}
               disabled={!canEdit || move.isPending}
             />
-            <EventTypeChip
-              value={lead.event_type}
-              onChange={(v) => v !== lead.event_type && patch({ event_type: v })}
-              disabled={!canEdit}
-            />
             <LookupChip
               category="lead_quality"
               noun="quality"
@@ -319,6 +328,14 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             )}
           </div>
           <TagPicker leadId={lead.id} tags={lead.tags} canEdit={canEdit} />
+
+          {/* Every function they asked for, each with its own day and venue. */}
+          <section aria-label="Events" className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Events{lead.functions.length > 1 ? ` · ${lead.functions.length}` : ''}
+            </p>
+            <LeadEvents value={eventRows} onCommit={saveEvents} disabled={!canEdit || update.isPending} compact />
+          </section>
           {lead.lost_reason && (
             <p className="-mt-2 text-xs text-muted-foreground">
               Lost: {lead.lost_reason}
@@ -390,21 +407,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="lead-event-date">Event date</Label>
-                  <Input
-                    id="lead-event-date"
-                    type="date"
-                    key={`d-${lead.event_date ?? ''}`}
-                    defaultValue={lead.event_date ?? ''}
-                    disabled={!canEdit}
-                    className={cn(!lead.event_date && 'border-tone-amber/60 bg-tone-amber-soft/30')}
-                    onBlur={(e) => {
-                      const v = e.target.value || null
-                      if (v !== lead.event_date) patch({ event_date: v })
-                    }}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="lead-budget">Budget (₹)</Label>
                   <Input
                     id="lead-budget"
@@ -418,20 +420,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                     onBlur={(e) => {
                       const v = e.target.value ? Number(e.target.value) : null
                       if (v !== lead.deal_value) patch({ deal_value: v })
-                    }}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="lead-venue">Venue</Label>
-                  <Input
-                    id="lead-venue"
-                    key={`l-${lead.event_location ?? ''}`}
-                    defaultValue={lead.event_location ?? ''}
-                    placeholder="Where is it?"
-                    disabled={!canEdit}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim() || null
-                      if (v !== lead.event_location) patch({ event_location: v })
                     }}
                   />
                 </div>
@@ -512,27 +500,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                     </option>
                   ))}
                 </Select>
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Event type</Label>
-                <EventTypeChip
-                  variant="field"
-                  value={lead.event_type}
-                  onChange={(v) => v !== lead.event_type && patch({ event_type: v })}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="lead-info-event-date">Event date</Label>
-                <Input id="lead-info-event-date" type="date" defaultValue={lead.event_date ?? ''} disabled={!canEdit}
-                  onBlur={(e) => { const v = e.target.value || null; if (v !== lead.event_date) patch({ event_date: v }) }} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="lead-event-location">Venue / location</Label>
-                <Input id="lead-event-location" defaultValue={lead.event_location ?? ''} disabled={!canEdit}
-                  onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== lead.event_location) patch({ event_location: v }) }} />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

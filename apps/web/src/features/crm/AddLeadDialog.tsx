@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
-import { Plus } from 'lucide-react'
+import { Plus, Tag as TagIcon } from 'lucide-react'
 import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, createLeadRequest, type CreateLeadRequest } from '@ipc/contracts'
 import { LookupChip } from './fields'
 import { fieldErrors, type FieldErrors } from '@/shared/forms/field-errors'
@@ -9,9 +9,12 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useAddLead, usePipelines } from './api'
 import { useMembers } from '@/features/allocation/api'
-import { LookupSelect } from '@/features/settings/LookupSelect'
-import { EVENT_TYPE_DEFAULTS } from './event-types'
+import { useAccess } from '@/shared/auth/useAccess'
 import { useCrmAccess } from './access'
+import { useTags } from './api'
+import { LabelMenu } from './LabelMenu'
+import { LeadEvents, toFunctions, type EventRow } from './LeadEvents'
+import { TagChip } from './TagChip'
 
 type Field = 'name' | 'phone' | 'email'
 
@@ -64,9 +67,11 @@ export function AddLeadDialog({
   const [notes, setNotes] = useState('')
   const [value, setValue] = useState('')
   const [closeDate, setCloseDate] = useState('')
-  const [eventType, setEventType] = useState('')
-  const [eventDate, setEventDate] = useState('')
-  const [eventLocation, setEventLocation] = useState('')
+  // Every function they asked for, and the labels to put on them.
+  const [events, setEvents] = useState<EventRow[]>([])
+  const [tagIds, setTagIds] = useState<string[]>([])
+  const allTags = useTags()
+  const canEdit = useAccess().hasAction('crm', 'edit')
   const [alternatePhone, setAlternatePhone] = useState('')
   const [city, setCity] = useState('')
   /**
@@ -89,7 +94,7 @@ export function AddLeadDialog({
   // A lead half-typed during a call survives a refresh or a closed tab.
   const draft = useFormDraft(
     open ? 'lead:new' : null,
-    { name, phone, email, source, notes, value, closeDate, eventType, eventDate, eventLocation, alternatePhone, city, assignedTo, followUpAt, stageId, quality },
+    { name, phone, email, source, notes, value, closeDate, events, tagIds, alternatePhone, city, assignedTo, followUpAt, stageId, quality },
     (v) => {
       setName(v.name)
       setPhone(v.phone)
@@ -98,9 +103,8 @@ export function AddLeadDialog({
       setNotes(v.notes)
       setValue(v.value)
       setCloseDate(v.closeDate)
-      setEventType(v.eventType)
-      setEventDate(v.eventDate)
-      setEventLocation(v.eventLocation)
+      setEvents(Array.isArray(v.events) ? v.events : [])
+      setTagIds(Array.isArray(v.tagIds) ? v.tagIds : [])
       setAlternatePhone(v.alternatePhone)
       setCity(v.city)
       setAssignedTo(v.assignedTo)
@@ -118,9 +122,8 @@ export function AddLeadDialog({
     setNotes('')
     setValue('')
     setCloseDate('')
-    setEventType('')
-    setEventDate('')
-    setEventLocation('')
+    setEvents([])
+    setTagIds([])
     setAlternatePhone('')
     setCity('')
     setAssignedTo('')
@@ -141,9 +144,8 @@ export function AddLeadDialog({
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(value.trim() && Number(value) >= 0 ? { deal_value: Number(value) } : {}),
       ...(closeDate ? { close_date: closeDate } : {}),
-      ...(eventType.trim() ? { event_type: eventType.trim() } : {}),
-      ...(eventDate ? { event_date: eventDate } : {}),
-      ...(eventLocation.trim() ? { event_location: eventLocation.trim() } : {}),
+      ...(toFunctions(events).length ? { functions: toFunctions(events) } : {}),
+      ...(tagIds.length ? { tag_ids: tagIds } : {}),
       ...(alternatePhone.trim() ? { alternate_phone: alternatePhone.trim() } : {}),
       ...(city.trim() ? { city: city.trim() } : {}),
       ...(assignedTo ? { assigned_to: assignedTo } : {}),
@@ -221,6 +223,30 @@ export function AddLeadDialog({
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label>Events</Label>
+            <LeadEvents value={events} onCommit={setEvents} compact />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <TagIcon className="size-3.5 text-muted-foreground" aria-hidden />
+            {(allTags.data ?? [])
+              .filter((t) => tagIds.includes(t.id))
+              .map((t) => (
+                <TagChip key={t.id} tag={t} onRemove={() => setTagIds((ids) => ids.filter((x) => x !== t.id))} />
+              ))}
+            <LabelMenu
+              selected={new Set(tagIds)}
+              canCreate={canEdit}
+              onToggle={(t, on) => setTagIds((ids) => (on ? [...new Set([...ids, t.id])] : ids.filter((x) => x !== t.id)))}
+              trigger={
+                <Button type="button" size="sm" variant="outline" className="h-7">
+                  <Plus /> {tagIds.length ? 'Label' : 'Add a label'}
+                </Button>
+              }
+            />
+          </div>
+
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
@@ -262,35 +288,9 @@ export function AddLeadDialog({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Event type</Label>
-                <LookupSelect
-                  category="project_type"
-                  aria-label="Event type"
-                  value={eventType}
-                  onChange={setEventType}
-                  defaults={EVENT_TYPE_DEFAULTS}
-                  placeholder="—"
-                  addLabel="Add an event type…"
-                  inputPlaceholder="e.g. Baby shower"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Event date</Label>
-                <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Venue / location</Label>
-                <Input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Optional" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>City</Label>
-                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>City</Label>
+              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Optional" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
