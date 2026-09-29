@@ -168,6 +168,7 @@ export function StagePicker({
   canAdd,
   disabled,
   variant = 'chip',
+  placeholder = 'Stage',
 }: {
   pipelineId: string | null
   value: string | null
@@ -175,6 +176,7 @@ export function StagePicker({
   canAdd: boolean
   disabled?: boolean | undefined
   variant?: 'chip' | 'field' | undefined
+  placeholder?: string | undefined
 }) {
   const pipelines = usePipelines()
   const create = useCreateStage()
@@ -191,7 +193,7 @@ export function StagePicker({
       colors
       disabled={disabled || !pipeline}
       variant={variant}
-      placeholder="Stage"
+      placeholder={placeholder}
       onCreate={
         canAdd && pipeline
           ? async (name, color) => {

@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bookmark, BookmarkPlus, Columns3, Download, Globe, Pencil, Save, Search, Users, X } from 'lucide-react'
-import type { CrmLead, InboxColumn, LeadStatus, SavedViewVisibility } from '@ipc/contracts'
+import { Bookmark, BookmarkPlus, Columns3, Globe, Pencil, Save, Search, Users, X } from 'lucide-react'
+import type { CrmLead, InboxColumn, SavedViewVisibility } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useMembers } from '@/features/allocation/api'
-import { useBulkPatch, useCrmPrefs, useCrmSettings, useDeleteView, useEnrollWorkflow, useSaveView, useSavedViews, useUpdateCrmPrefs, useUpdateView, useWorkflows,
-  useTagLeads,
-  useTags,
-} from '../api'
-import { LostReasonDialog } from '../LostReasonDialog'
+import { useCrmPrefs, useCrmSettings, useDeleteView, useSaveView, useSavedViews, useUpdateCrmPrefs, useUpdateView, useTags } from '../api'
 import {
   CREATED_RANGES,
   EMPTY_QUERY,
@@ -23,8 +19,8 @@ import {
   type QuickFilter,
 } from '../leads'
 import { isSaveable, takeLocalViews, toLeadQuery, toSavedQuery } from '../views'
-import { ArchiveDialog } from '../ArchiveDialog'
-import { DEFAULT_INBOX_COLUMNS, INBOX_COLUMNS, LeadTable, exportLeadsCsv } from './shared'
+import { LeadBulkBar } from '../LeadBulkBar'
+import { DEFAULT_INBOX_COLUMNS, INBOX_COLUMNS, LeadTable } from './shared'
 
 const SCOPE_LABEL: Record<SavedViewVisibility, string> = { private: 'Only me', team: 'My team', everyone: 'Everyone' }
 
@@ -61,13 +57,7 @@ export function InboxTab({
   const [renameValue, setRenameValue] = useState('')
   const [dismissed, setDismissed] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [losing, setLosing] = useState(false)
-  const bulk = useBulkPatch()
-  const workflows = useWorkflows()
   const tags = useTags()
-  const [askArchive, setAskArchive] = useState(false)
-  const tagLeads = useTagLeads()
-  const enroll = useEnrollWorkflow()
   const settings = useCrmSettings()
   const { session } = useAuth()
   const access = useAccess()
@@ -139,9 +129,6 @@ export function InboxTab({
       ...query,
       filters: query.filters.includes(f) ? query.filters.filter((x) => x !== f) : [...query.filters, f],
     })
-
-  const runBulk = (patch: Parameters<typeof bulk.mutate>[0]['patch']) =>
-    bulk.mutate({ ids: [...selected], patch }, { onSuccess: () => setSelected(new Set()) })
 
   // Every filter, not four of them. A Clear button that fails to appear because
   // the only thing filtering is `quality` is how a studio ends up staring at a
@@ -542,154 +529,12 @@ export function InboxTab({
         </div>
       )}
 
-      <ArchiveDialog
-        open={askArchive}
-        count={selected.size}
-        pending={bulk.isPending}
-        onCancel={() => setAskArchive(false)}
-        onConfirm={(reason) => {
-          runBulk(reason === null ? { is_archived: true } : { is_archived: true, archive_reason: reason })
-          setAskArchive(false)
-        }}
-      />
-
       {selected.size > 0 && (
-        <div className="no-print flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2" role="toolbar" aria-label="Bulk actions">
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <Select
-            value=""
-            aria-label="Move to stage"
-            onChange={(e) => {
-              const v = e.target.value as LeadStatus | ''
-              // Lost needs its reason up front — the API refuses it without
-              // one, so ask here instead of failing the whole batch after.
-              if (v === 'lost') setLosing(true)
-              else if (v) runBulk({ status: v })
-            }}
-            className="w-36"
-          >
-            <option value="">Move to…</option>
-            {STAGES.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value=""
-            aria-label="Assign to"
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === 'none') runBulk({ assigned_to: null })
-              else if (v) runBulk({ assigned_to: v })
-            }}
-            className="w-40"
-          >
-            <option value="">Assign to…</option>
-            <option value="none">Unassigned</option>
-            {assignees.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </Select>
-          <Button size="sm" variant="outline" disabled={bulk.isPending} onClick={() => runBulk({ is_hot: true })}>
-            Mark hot
-          </Button>
-          <Select
-            value=""
-            aria-label="Set the follow-up"
-            className="w-40"
-            onChange={(e) => {
-              const days = e.target.value
-              if (!days) return
-              if (days === 'clear') return runBulk({ follow_up_at: null })
-              const at = new Date()
-              at.setDate(at.getDate() + Number(days))
-              at.setHours(10, 0, 0, 0)
-              runBulk({ follow_up_at: at.toISOString() })
-            }}
-          >
-            <option value="">Follow up…</option>
-            <option value="0">Today</option>
-            <option value="1">Tomorrow</option>
-            <option value="3">In 3 days</option>
-            <option value="7">Next week</option>
-            <option value="clear">Clear the date</option>
-          </Select>
-          {(workflows.data ?? []).some((w) => w.is_active) && (
-            <Select
-              value=""
-              aria-label="Enroll in workflow"
-              onChange={(e) => {
-                if (e.target.value) enroll.mutate({ workflowId: e.target.value, lead_ids: [...selected] }, { onSuccess: () => setSelected(new Set()) })
-              }}
-              className="w-44"
-            >
-              <option value="">Enroll in…</option>
-              {(workflows.data ?? []).filter((w) => w.is_active).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
-          )}
-          {/* Both directions in one control: the studio that can label forty
-              leads at once is the studio that mislabels forty at once. */}
-          {(tags.data ?? []).filter((t) => t.is_active).length > 0 && (
-            <Select
-              value=""
-              aria-label="Tag the selected leads"
-              className="w-44"
-              onChange={(e) => {
-                const v = e.target.value
-                if (!v) return
-                const attach = !v.startsWith('-')
-                tagLeads.mutate(
-                  { ids: [...selected], tag_id: attach ? v : v.slice(1), attach },
-                  { onSuccess: () => setSelected(new Set()) },
-                )
-              }}
-            >
-              <option value="">Tag…</option>
-              {(tags.data ?? [])
-                .filter((t) => t.is_active)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    Add {t.name}
-                  </option>
-                ))}
-              {(tags.data ?? [])
-                .filter((t) => t.is_active)
-                .map((t) => (
-                  <option key={`off-${t.id}`} value={`-${t.id}`}>
-                    Remove {t.name}
-                  </option>
-                ))}
-            </Select>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={bulk.isPending}
-            onClick={() => (showArchived ? runBulk({ is_archived: false }) : setAskArchive(true))}
-          >
-            {showArchived ? 'Restore' : 'Archive'}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-            Clear
-          </Button>
-          {/* Downloading the client book is not the same act as reading a page
-              of it, and the permission registry has always said so: crm_export
-              is sensitive and off for every staff role by default. Nothing read
-              it until now, so any employee who could open this screen could
-              take the lot. */}
-          {access.hasModule('crm_export') && (
-            <Button size="sm" variant="outline" onClick={() => exportLeadsCsv(rows.filter((r) => selected.has(r.id)))}>
-              <Download /> CSV
-            </Button>
-          )}
-        </div>
+        <LeadBulkBar
+          leads={rows.filter((r) => selected.has(r.id))}
+          onClear={() => setSelected(new Set())}
+          showArchived={showArchived}
+        />
       )}
 
       {leads.length >= 2000 && (
@@ -699,16 +544,6 @@ export function InboxTab({
       )}
       <LeadTable leads={rows} now={now} total={leads.length} onOpen={onOpen} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} hotScore={settings.data?.hot_score ?? 60} columns={columns} density={density} />
 
-      <LostReasonDialog
-        open={losing}
-        count={selected.size}
-        pending={bulk.isPending}
-        onCancel={() => setLosing(false)}
-        onConfirm={(d) => {
-          setLosing(false)
-          runBulk({ status: 'lost', ...d })
-        }}
-      />
     </div>
   )
 }

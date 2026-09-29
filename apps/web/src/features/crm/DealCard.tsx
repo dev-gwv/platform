@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
+import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
 import type { CrmLead } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Avatar } from '@/shared/ui/avatar'
@@ -44,6 +44,9 @@ export function DealCard({
   onOpen,
   draggable,
   stageProbability,
+  ticked = false,
+  ticking = false,
+  onTick,
 }: {
   lead: CrmLead
   now: Date
@@ -51,6 +54,12 @@ export function DealCard({
   draggable: boolean
   /** Used for the bar when the deal carries no probability of its own. */
   stageProbability?: number | undefined
+  /** Picked for the bulk bar. */
+  ticked?: boolean | undefined
+  /** Something on the board is ticked: show every tick box, and a click ticks. */
+  ticking?: boolean | undefined
+  /** Omit where cards cannot be picked. `range` is a shift-click. */
+  onTick?: ((id: string, range: boolean) => void) | undefined
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
@@ -66,6 +75,8 @@ export function DealCard({
   const title = lead.title ?? lead.name ?? 'Unnamed deal'
   // Where it came from, as the caption above the name.
   const origin = lead.source_label ?? lead.crm_company_name ?? null
+  // The first function, and how many more they asked for: "Haldi · 12 Dec +2".
+  const more = Math.max(0, lead.functions.length - 1)
   const shoot = [lead.event_type, lead.event_date ? shootDate.format(new Date(lead.event_date)) : null]
     .filter(Boolean)
     .join(' · ')
@@ -81,12 +92,44 @@ export function DealCard({
         'hover:border-primary/30 hover:shadow-sm',
         draggable && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-40 shadow-md',
+        ticked && 'ring-2 ring-primary',
         // A hot lead earns a spine, not a tinted card: it has to be findable in
         // a column of twenty without shouting over the money.
         lead.is_hot ? 'border-l-2 border-l-destructive border-border' : 'border-border',
       )}
     >
-      <button type="button" onClick={() => onOpen(lead.id)} className="block w-full text-left">
+      {onTick && (
+        // A round tick, top left: on hover, and on every card once one is ticked.
+        // pointerdown stops here so a tap ticks rather than starting a drag.
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={ticked}
+          aria-label={`Select ${lead.name ?? 'this lead'}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onTick(lead.id, e.shiftKey)
+          }}
+          className={cn(
+            'absolute -left-2 -top-2 z-10 flex size-5 items-center justify-center rounded-full border-2 shadow-sm transition-opacity',
+            ticked ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card',
+            ticked || ticking ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+          )}
+        >
+          {ticked && <Check className="size-3" strokeWidth={3} />}
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={(e) => {
+          // While picking, a click on the card picks it instead of opening it.
+          if (onTick && (ticking || e.shiftKey || e.metaKey || e.ctrlKey)) onTick(lead.id, e.shiftKey)
+          else onOpen(lead.id)
+        }}
+        className="block w-full text-left"
+      >
         {origin && <span className="micro-label mb-1 block truncate">{origin}</span>}
 
         <span className="flex items-center gap-2">
@@ -107,6 +150,14 @@ export function DealCard({
         {(shoot || lead.date_status !== 'unknown') && (
           <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {shoot && <span className="truncate text-xs font-medium">{shoot}</span>}
+            {more > 0 && (
+              <span
+                className="shrink-0 rounded-full bg-muted px-1.5 text-[0.65rem] font-semibold text-muted-foreground"
+                title={lead.functions.map((f) => f.event_type ?? 'Event').join(', ')}
+              >
+                +{more}
+              </span>
+            )}
             <DateBadge lead={lead} />
           </span>
         )}
@@ -140,7 +191,7 @@ export function DealCard({
                 {prettyWord(lead.quality)}
               </span>
             )}
-            {lead.tags.length > 0 && <TagChips tags={lead.tags} max={2} />}
+            {lead.tags.length > 0 && <TagChips tags={lead.tags} max={3} />}
           </span>
         )}
       </button>
