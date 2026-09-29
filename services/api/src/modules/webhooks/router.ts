@@ -30,23 +30,62 @@ import { routeStudioWhatsapp } from '../../lib/studio-whatsapp-inbound'
 import { open, seal, secretBoxReady } from '../../lib/secret-box'
 import { apiOrigin } from '../../lib/request-origin'
 import { isDevLike } from '../../lib/env'
+import { cleanLead } from '../../lib/lead-fields'
 
 type Captured = string | 'unknown_source' | null
 
 interface IncomingLead {
   name?: string | null | undefined
-  phone: string
+  phone?: string | null | undefined
   email?: string | null | undefined
   meta?: Record<string, unknown> | undefined
 }
 
 /**
- * Hand a lead to capture_lead under a source key, and write the per-source
- * import log row ("did the form work" stays answerable). An unknown or
- * paused key is the one refusal a caller should see as such.
+ * Write one row to the source's import log. Its own transaction, so a failed
+ * capture (which rolls its own back) still leaves a "failed" row the studio
+ * can see on Lead Sources. Never throws: the log must not fail the webhook.
  */
-function captureLead(c: Context<AppEnv>, sourceKey: string, lead: IncomingLead, pageName: string | null = null): Promise<Captured> {
-  return attempt(
+async function logImport(
+  c: Context<AppEnv>,
+  sourceKey: string,
+  row: { name: string | null; phone: string | null; email: string | null; meta: Record<string, unknown>; pageName: string | null; status: 'imported' | 'failed'; error?: string | null; leadId?: string | null },
+): Promise<void> {
+  await withService(c.env, async (sql) => {
+    const [src] = await sql<{ id: string; company_id: string }[]>`
+      select id, company_id from crm_webhook_sources where source_key = ${sourceKey}`
+    if (!src) return
+    await sql`
+      insert into fb_lead_imports (company_id, source_id, page_id, page_name, leadgen_id,
+                                   name, phone, email, status, error, lead_id)
+      values (${src.company_id}, ${src.id},
+              ${String(row.meta.page_id ?? '') || null}, ${row.pageName},
+              ${String(row.meta.leadgen_id ?? '') || null},
+              ${row.name}, ${row.phone}, ${row.email}, ${row.status}, ${row.error ?? null}, ${row.leadId ?? null})`
+  }).catch((err: unknown) => {
+    // The code only: a Postgres error's detail can carry the row, phone included.
+    log.warn({ requestId: c.get('requestId'), sourceKey, code: (err as { code?: string }).code ?? null }, 'lead import log write failed')
+  })
+}
+
+/**
+ * Hand a lead to capture_lead under a source key, and log the result per
+ * source ("did the form work" stays answerable). The name, phone and email
+ * are cleaned first (lib/lead-fields.ts): a phone that is not a number is
+ * stored as null with the raw text in meta, so no lead is lost to it. An
+ * unknown or paused key is the one refusal a caller should see as such.
+ */
+async function captureLead(c: Context<AppEnv>, sourceKey: string, incoming: IncomingLead, pageName: string | null = null): Promise<Captured> {
+  const lead = cleanLead(incoming)
+  if (lead.phoneIssue) {
+    // Never the number itself: only where it came from and why it is empty.
+    log.warn(
+      { requestId: c.get('requestId'), sourceKey, leadgenId: lead.meta.leadgen_id ?? null, reason: `phone_${lead.phoneIssue}` },
+      'lead captured without a usable phone',
+    )
+  }
+  let failure: string | null = null
+  const id = await attempt(
     c,
     'webhooks.capture_lead',
     () =>
@@ -54,31 +93,30 @@ function captureLead(c: Context<AppEnv>, sourceKey: string, lead: IncomingLead, 
         const rows = await sql<{ id: string }[]>`
           select capture_lead(
             p_source_key => ${sourceKey},
-            p_name => ${lead.name ?? null},
+            p_name => ${lead.name},
             p_phone => ${lead.phone},
-            p_email => ${lead.email ?? null},
-            p_meta => ${sql.json((lead.meta ?? {}) as Parameters<typeof sql.json>[0])}
+            p_email => ${lead.email},
+            p_meta => ${sql.json(lead.meta as Parameters<typeof sql.json>[0])}
           ) as id`
-        const id = rows[0]?.id ?? null
-        if (id) {
-          const [src] = await sql<{ id: string; company_id: string }[]>`
-            select id, company_id from crm_webhook_sources where source_key = ${sourceKey}`
-          if (src) {
-            const meta = (lead.meta ?? {}) as Record<string, unknown>
-            await sql`
-              insert into fb_lead_imports (company_id, source_id, page_id, page_name, leadgen_id,
-                                           name, phone, email, status, lead_id)
-              values (${src.company_id}, ${src.id},
-                      ${String(meta.page_id ?? '') || null}, ${pageName},
-                      ${String(meta.leadgen_id ?? '') || null},
-                      ${lead.name ?? null}, ${lead.phone}, ${lead.email ?? null},
-                      'imported', ${id})`
-          }
-        }
-        return id
+        return rows[0]?.id ?? null
+      }).catch((err: unknown) => {
+        failure = (err as { code?: string }).code ? `Database refused the lead (${(err as { code?: string }).code}).` : 'The lead could not be saved.'
+        throw err
       }),
     { onCode: (code) => (code === '42501' ? ('unknown_source' as const) : undefined) },
   )
+  if (id === 'unknown_source') return id
+  await logImport(c, sourceKey, {
+    name: lead.name,
+    phone: lead.phone,
+    email: lead.email,
+    meta: lead.meta,
+    pageName,
+    status: id ? 'imported' : 'failed',
+    error: id ? null : (failure ?? 'The lead could not be saved.'),
+    leadId: id,
+  })
+  return id
 }
 
 /** The sealed token we hold for a page, opened; null when the studio never connected it. */
@@ -117,10 +155,17 @@ async function captureMetaPost(
       continue
     }
     const fetched = await attempt(c, 'webhooks.meta_fetch', () => fetchMetaLead(target.token, item.leadgen_id))
-    if (!fetched || !fetched.phone) {
+    if (!fetched) {
+      // Meta told us about a lead we could not read (token revoked, page
+      // access removed). Logged as failed so the studio sees it on Lead Sources.
       skipped += 1
+      await logImport(c, target.sourceKey, {
+        name: null, phone: null, email: null, meta: item.meta, pageName: target.pageName,
+        status: 'failed', error: 'Facebook did not let us read this lead. Reconnect the page and check its Leads Access.',
+      })
       continue
     }
+    // A lead with no phone is still a lead: it is saved, never skipped.
     const id = await captureLead(
       c,
       target.sourceKey,
@@ -474,7 +519,7 @@ export const metaRouter = new Hono<AppEnv>()
                  count(*) filter (where webhook_subscribed)::int as subscribed,
                  max(last_synced_at) as last_sync,
                  (select last_error from fb_pages where company_id = get_current_company_id() and last_error is not null order by updated_at desc limit 1) as last_error,
-                 (select max(created_at) from fb_lead_imports where company_id = get_current_company_id() and page_id is not null) as last_lead
+                 (select max(created_at) from fb_lead_imports where company_id = get_current_company_id() and page_id is not null and status = 'imported') as last_lead
           from fb_pages where company_id = get_current_company_id()`
         return pages[0] ?? null
       }),

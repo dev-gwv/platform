@@ -78,6 +78,7 @@ import { sendWhatsAppText, whatsappConfigured, whatsappLink } from '../../lib/wh
 import { crmObjectsRouter } from './objects'
 import { crmActivitiesRouter } from './activities'
 import { crmWorkflowsRouter } from './workflows'
+import { cleanLead } from '../../lib/lead-fields'
 import { crmQuotesRouter } from './quotes'
 
 const list = crmLead.array()
@@ -1441,12 +1442,13 @@ export const crmRouter = new Hono<AppEnv>()
         const [src] = await sql<{ id: string; source_key: string; kind: string }[]>`
           select id, source_key, kind from crm_webhook_sources where id = ${sourceId}`
         if (!src) return 'missing' as const
-        const [lead] = await sql<{ id: string }[]>`select capture_lead(${src.source_key}, ${t.name ?? null}, ${t.phone}, ${t.email ?? null}) as id`
+        const l = cleanLead({ name: t.name, phone: t.phone, email: t.email })
+        const [lead] = await sql<{ id: string }[]>`select capture_lead(${src.source_key}, ${l.name}, ${l.phone}, ${l.email}, ${sql.json(l.meta as Parameters<typeof sql.json>[0])}) as id`
         if (!lead) return null
         const [imp] = await sql`
           insert into fb_lead_imports (company_id, source_id, page_id, page_name, name, phone, email, status, lead_id)
           values (get_current_company_id(), ${sourceId}, ${t.page_id ?? null}, ${t.page_name ?? null},
-                  ${t.name ?? null}, ${t.phone}, ${t.email ?? null}, 'imported', ${lead.id})
+                  ${l.name}, ${l.phone}, ${l.email}, 'imported', ${lead.id})
           returning id, source_id, page_id, page_name, leadgen_id, name, phone, email, status, error, lead_id, created_at`
         return imp ?? null
       }),
@@ -1468,14 +1470,15 @@ export const crmRouter = new Hono<AppEnv>()
           select id, name, phone, email, source_id from fb_lead_imports
           where id = ${importId} and source_id = ${sourceId} and status = 'failed'`
         if (!imp) return null
-        // A Facebook lead with no phone can never become a lead — capture_lead
-        // needs one. Saying "not found" sends the studio hunting for a row
-        // that is right there on the screen; say what is actually wrong.
-        if (!imp.phone) return 'no-phone' as const
+        // A lead needs something to call back on. A missing or unusable phone
+        // is fine (lib/lead-fields.ts stores it as null) as long as there is
+        // an email or a name; with nothing at all, say so rather than "not found".
+        const l = cleanLead({ name: imp.name, phone: imp.phone, email: imp.email })
+        if (!l.phone && !l.email && !l.name) return 'no-phone' as const
         const [src] = await sql<{ source_key: string }[]>`
           select source_key from crm_webhook_sources where id = ${sourceId}`
         if (!src) return null
-        const [lead] = await sql<{ id: string }[]>`select capture_lead(${src.source_key}, ${imp.name}, ${imp.phone}, ${imp.email}) as id`
+        const [lead] = await sql<{ id: string }[]>`select capture_lead(${src.source_key}, ${l.name}, ${l.phone}, ${l.email}, ${sql.json(l.meta as Parameters<typeof sql.json>[0])}) as id`
         if (!lead) return null
         const [out] = await sql`
           update fb_lead_imports set status = 'imported', error = null, lead_id = ${lead.id}
@@ -1484,7 +1487,7 @@ export const crmRouter = new Hono<AppEnv>()
         return out ?? null
       }),
     )
-    if (row === 'no-phone') fail(422, 'That lead arrived without a phone number, so it cannot be imported.')
+    if (row === 'no-phone') fail(422, 'That lead arrived with no phone, email or name, so it cannot be imported.')
     if (!row) fail(404, 'That failed import was not found.')
     return c.json(fbLeadImport.parse(row))
   })
