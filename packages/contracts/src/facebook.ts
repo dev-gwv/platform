@@ -58,6 +58,10 @@ export const fbPageConnectRequest = z.object({
 })
 export type FbPageConnectRequest = z.infer<typeof fbPageConnectRequest>
 
+/** Our side is off and the token is gone; `unsubscribed` is whether Facebook confirmed it stopped posting. */
+export const fbDisconnectResponse = z.object({ ok: z.literal(true), unsubscribed: z.boolean() })
+export type FbDisconnectResponse = z.infer<typeof fbDisconnectResponse>
+
 export const fbTokenRequest = z.object({
   /** Manual long-lived page/user token (used when OAuth is not configured). */
   token: z.string().trim().min(10).max(2000),
