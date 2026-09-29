@@ -276,7 +276,13 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
   }
   useEffect(() => {
     if (ticked.size === 0) return
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && clearTicks()
+    // Esc clears the ticks -- unless it is closing a menu or a dialog opened from the bar.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const open = document.querySelector('[data-radix-popper-content-wrapper], [role="dialog"]')
+      const inside = (e.target as HTMLElement | null)?.closest?.('[data-radix-popper-content-wrapper], [role="dialog"]')
+      if (!open && !inside) clearTicks()
+    }
     document.addEventListener('keydown', esc)
     return () => document.removeEventListener('keydown', esc)
   }, [ticked.size])

@@ -104,7 +104,7 @@ export function LeadBulkBar({
           <Select
             value=""
             aria-label="Move to stage"
-            className="h-8 w-40"
+            className="h-8 w-40 text-sm"
             onChange={(e) => {
               const v = e.target.value as LeadStatus | ''
               if (v === 'lost') setLostStage('status')
@@ -145,7 +145,7 @@ export function LeadBulkBar({
         <Select
           value=""
           aria-label="Give to"
-          className="h-8 w-40"
+          className="h-8 w-40 text-sm"
           onChange={(e) => {
             const v = e.target.value
             if (v === 'none') run({ assigned_to: null })
@@ -164,7 +164,7 @@ export function LeadBulkBar({
         <Select
           value=""
           aria-label="When to call next"
-          className="h-8 w-40"
+          className="h-8 w-40 text-sm"
           onChange={(e) => {
             const days = e.target.value
             if (!days) return
@@ -191,7 +191,7 @@ export function LeadBulkBar({
           <Select
             value=""
             aria-label="Start a workflow"
-            className="h-8 w-44"
+            className="h-8 w-44 text-sm"
             onChange={(e) => {
               if (e.target.value) enroll.mutate({ workflowId: e.target.value, lead_ids: ids }, { onSuccess: onClear })
             }}
