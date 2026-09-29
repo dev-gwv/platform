@@ -13,6 +13,7 @@ import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
 import { runMorningEmails } from '../../lib/morning-email'
 import { runAccessEmails } from '../../lib/access-email'
+import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
 
 /**
@@ -99,6 +100,8 @@ export const cronRouter = new Hono<AppEnv>()
         const purged = dryRun
           ? 0
           : ((await sql<{ n: number }[]>`select purge_expired_refresh_tokens() as n`)[0]?.n ?? 0)
+        // Facebook page tokens for pages nobody connected are dropped after half an hour.
+        const idleTokens = dryRun ? 0 : await pruneIdlePageTokens(sql)
         // Workflows queue template sends; only the API can deliver them.
         const outbox = dryRun ? { claimed: 0, sent: 0, manual: 0, failed: 0 } : await drainOutbox(c.env, sql)
         // The quote sweep runs inside run_crm_followup_cron now, so its count
@@ -130,6 +133,7 @@ export const cronRouter = new Hono<AppEnv>()
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
+          removed_idle_page_tokens: idleTokens,
         }
       }),
     ))

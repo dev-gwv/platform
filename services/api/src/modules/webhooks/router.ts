@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { captureLeadRequest, fbConnectUrlResponse, fbDisconnectResponse, fbExchangeRequest, fbPage, fbPageConnectRequest, fbStatusResponse, fbTokenRequest } from '@ipc/contracts'
 import type { Context } from 'hono'
-import type { TransactionSql } from 'postgres'
 import type { AppEnv } from '../../context'
 import { fail } from '../../middleware/errors'
 import { requireAuth } from '../../middleware/auth'
@@ -21,6 +20,7 @@ import {
   readPages,
   subscribePage,
   unsubscribePage,
+  pruneIdlePageTokens,
   verifyMetaSignature,
   type MetaLeadgenPayload,
   type MetaPage,
@@ -466,23 +466,6 @@ export function metaConnectUrl(env: Pick<AppEnv['Bindings'], 'META_APP_ID' | 'AP
     : `${base}&scope=${encodeURIComponent(META_LEAD_SCOPES)}`
 }
 
-/**
- * Keep a page token only while it is useful. Connecting through Facebook seals a
- * token for every page the person manages, but a studio runs lead forms on one
- * or two of them: a token for a page that is not connected is access we hold
- * for nothing. They are dropped once a page has sat unconnected for half an
- * hour -- long enough to finish picking pages after one Facebook login.
- */
-async function pruneIdleTokens(sql: TransactionSql, companyId: string): Promise<void> {
-  await sql`
-    delete from fb_page_tokens t
-     where t.company_id = ${companyId}
-       and t.connected_at < now() - interval '30 minutes'
-       and not exists (
-         select 1 from fb_pages p
-          where p.company_id = t.company_id and p.page_id = t.page_id and p.is_connected)`
-}
-
 /** Remember the pages a token can manage, with each page's own token sealed. */
 async function savePages(
   c: Context<AppEnv>,
@@ -510,7 +493,7 @@ async function savePages(
             set token_enc = excluded.token_enc, fb_user_id = excluded.fb_user_id,
                 connected_by = excluded.connected_by, connected_at = now()`
       }
-      await pruneIdleTokens(sql, auth.companyId)
+      await pruneIdlePageTokens(sql, auth.companyId)
       return found.pages.length
     }),
   )
@@ -625,7 +608,7 @@ export const metaRouter = new Hono<AppEnv>()
                 webhook_subscribed = ${!error}, subscribed_at = ${error ? null : new Date()}, last_synced_at = now(), last_error = ${error}
           returning id, page_id, page_name, category, is_connected, webhook_subscribed,
                     last_synced_at, last_error, created_at, connected_via, subscribed_at, true as has_token`
-        await pruneIdleTokens(sql, companyId)
+        await pruneIdlePageTokens(sql, companyId)
         return r ?? null
       }),
     )

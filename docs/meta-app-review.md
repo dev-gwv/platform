@@ -50,8 +50,8 @@ the list of Pages they manage. We do not read friends, posts or the personal pro
 **Where it is stored.** In the studio's own rows of one PostgreSQL 16 database on the Studio AutoPilot server
 **[owner to confirm: provider and region]**. The web app (Cloudflare) holds no lead data. Pages tokens are stored
 encrypted (AES-256-GCM, key held only on the server) in a table no signed-in user can read, and never reach the browser.
-Tokens for Pages a studio did not connect are deleted 30 minutes after they were fetched; a disconnected Page's token is
-deleted at once.
+Tokens for Pages a studio did not connect are deleted once they are 30 minutes old (the hourly job sweeps them);
+a disconnected Page's token is deleted at once.
 
 **Who can access it.**
 - The studio's own team, according to the permissions the studio owner gives each person. Every query is limited to the
@@ -61,7 +61,7 @@ deleted at once.
   the database; that is why access to the server is limited to the owner. The platform admin's message list shows
   recipient addresses of messages the app has sent.
 - Processors that receive lead data to do their job: Meta (Graph API, and WhatsApp when a studio turns messaging on),
-  Resend (email), Sentry (error reports, personal fields masked), and, only if a studio enables them, Twilio or a
+  Resend (email), Sentry (error reports; session replay is masked), and, only if a studio enables them, Twilio or a
   connected mailbox. Nightly backups may be copied to an off-site storage bucket **[owner to confirm whether one is configured]**.
 
 **How long it is kept.** For as long as the studio keeps it: there is no automatic expiry of leads. A studio can delete
