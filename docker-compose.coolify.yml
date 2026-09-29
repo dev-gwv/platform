@@ -6,7 +6,8 @@
 # Bring up (caddy intentionally omitted):
 #   docker compose -f docker-compose.yml -f docker-compose.coolify.yml up -d --build --wait db api cron
 #
-# Requires API_DOMAIN in .env (your DuckDNS host) pointing at this VPS.
+# Requires API_DOMAIN in .env (your DuckDNS host) pointing at this VPS. The API
+# also answers on API_ALT_DOMAIN (default api.studioautopilot.in).
 services:
   api:
     networks:
@@ -26,6 +27,19 @@ services:
       - traefik.http.routers.ipcapi-http.entrypoints=http
       - traefik.http.routers.ipcapi-http.middlewares=ipcapi-redirect
       - traefik.http.middlewares.ipcapi-redirect.redirectscheme.scheme=https
+      # The same API on the brand's own address. A router of its own, so its
+      # certificate is issued separately: if this name's DNS is not in place
+      # yet, only this router waits -- API_DOMAIN keeps serving. Point an A
+      # record (DNS only, not proxied) at the VPS before deploying.
+      - "traefik.http.routers.ipcapi-alt.rule=Host(`${API_ALT_DOMAIN:-api.studioautopilot.in}`)"
+      - traefik.http.routers.ipcapi-alt.entrypoints=https
+      - traefik.http.routers.ipcapi-alt.tls=true
+      - traefik.http.routers.ipcapi-alt.tls.certresolver=letsencrypt
+      - traefik.http.routers.ipcapi-alt.service=ipcapi
+      - "traefik.http.routers.ipcapi-alt-http.rule=Host(`${API_ALT_DOMAIN:-api.studioautopilot.in}`)"
+      - traefik.http.routers.ipcapi-alt-http.entrypoints=http
+      - traefik.http.routers.ipcapi-alt-http.middlewares=ipcapi-redirect
+      - traefik.http.routers.ipcapi-alt-http.service=ipcapi
 
 networks:
   coolify:

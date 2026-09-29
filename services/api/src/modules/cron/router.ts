@@ -12,6 +12,7 @@ import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
 import { runMorningEmails } from '../../lib/morning-email'
+import { runAccessEmails } from '../../lib/access-email'
 import { runSequenceSends } from '../../lib/sequence-sender'
 
 /**
@@ -107,6 +108,9 @@ export const cronRouter = new Hono<AppEnv>()
         const onboarding = await runOnboardingNudges(c.env, dryRun)
         // Owners and admins get the day in one email, from 8 am.
         const morning = await runMorningEmails(c.env, dryRun)
+        // Owners hear 7 days and 1 day before their trial or plan ends, and
+        // once when it has ended (0211).
+        const accessEmails = await runAccessEmails(c.env, dryRun)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
@@ -122,6 +126,7 @@ export const cronRouter = new Hono<AppEnv>()
           onboarding_emails: onboarding,
           invoice_overdue: invoicesOverdue[0]?.summary ?? {},
           morning_emails: morning,
+          access_emails: accessEmails,
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
