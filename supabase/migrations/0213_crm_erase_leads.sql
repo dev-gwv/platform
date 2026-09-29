@@ -1,0 +1,2 @@
+-- 0213: permanent erasure of leads. Number claimed by the client's session;
+-- body follows in the same PR.
