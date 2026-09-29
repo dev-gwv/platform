@@ -88,6 +88,29 @@ export const tagLeadsRequest = z.object({
 })
 export type TagLeadsRequest = z.infer<typeof tagLeadsRequest>
 
+/**
+ * One function a lead is asking for -- Haldi on the 12th, Wedding on the 14th
+ * (0212). The lead's own event_type / event_date / event_location are kept
+ * equal to its first function, so older readers still see one event.
+ */
+export const leadFunction = z.object({
+  id: uuid,
+  event_type: z.string().nullable().default(null),
+  event_date: isoDate.nullable().default(null),
+  location: z.string().nullable().default(null),
+})
+export type LeadFunction = z.infer<typeof leadFunction>
+
+/** A function as a form sends it: a type, a date, or both. */
+export const leadFunctionInput = z
+  .object({
+    event_type: z.string().trim().max(80).nullable().optional(),
+    event_date: isoDate.nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+  })
+  .refine((f) => !!(f.event_type?.trim() || f.event_date), { message: 'Give the function a name or a date.' })
+export type LeadFunctionInput = z.infer<typeof leadFunctionInput>
+
 export const crmLead = z.object({
   id: uuid,
   name: z.string().nullable(),
@@ -163,6 +186,8 @@ export const crmLead = z.object({
    * read it moves over; nothing writes it any more.
    */
   tags: z.array(leadTag).default([]),
+  /** Every function this lead is asking for, earliest first (0212). */
+  functions: z.array(leadFunction).default([]),
   /** Why it was archived, and by whom (0200). Null on a live lead. */
   archive_reason: z.string().nullable().default(null),
   archived_by_name: z.string().nullable().default(null),
@@ -246,6 +271,8 @@ export const updateLeadRequest = z
     contact_id: uuid.nullable().optional(),
     crm_company_id: uuid.nullable().optional(),
     group_name: z.string().trim().max(120).nullable().optional(),
+    /** Replaces the lead's whole list of functions (0212). Wins over event_type/date/location. */
+    functions: z.array(leadFunctionInput).max(12).optional(),
   })
   .refine(lostNeedsReason, {
     message: 'Tell us why it was lost (3+ chars).',
@@ -309,6 +336,10 @@ export const createLeadRequest = z.object({
   quality: leadQuality.optional(),
   contacted_status: contactedStatus.optional(),
   lost_reason: z.string().trim().min(3).max(500).optional(),
+  /** Every function they asked for (0212). Wins over event_type/date/location. */
+  functions: z.array(leadFunctionInput).max(12).optional(),
+  /** Labels to put on the lead as it is added. */
+  tag_ids: z.array(uuid).max(20).optional(),
 })
 export type CreateLeadRequest = z.infer<typeof createLeadRequest>
 

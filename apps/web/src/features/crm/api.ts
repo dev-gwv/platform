@@ -436,7 +436,7 @@ export function useTags() {
 export function useCreateTag() {
   return useCrmMutation(
     (input: CreateTagRequest) => callApi('/crm/tags', { method: 'POST', body: input, responseSchema: crmTag }),
-    (t) => `Tag "${t.name}" ready`,
+    (t) => `Label “${t.name}” added to your list`,
   )
 }
 
@@ -465,6 +465,45 @@ export function useTagLeads() {
       callApi('/crm/leads/tags', { method: 'POST', body: input, responseSchema: z.object({ changed: z.number() }) }),
     (r) => `${r.changed} ${r.changed === 1 ? 'lead' : 'leads'} updated`,
   )
+}
+
+/**
+ * Put a label on (or take it off) many leads at once, with Undo.
+ *
+ * Undo touches only the leads this call changed: a lead that already carried
+ * the label keeps it when a bulk add is undone, and one that never had it is
+ * not given it when a bulk removal is undone.
+ */
+export function useBulkLabel() {
+  const qc = useQueryClient()
+  const call = (ids: string[], tag_id: string, attach: boolean) =>
+    callApi('/crm/leads/tags', {
+      method: 'POST',
+      body: { ids, tag_id, attach },
+      responseSchema: z.object({ changed: z.number() }),
+    })
+  return useMutation({
+    mutationFn: async (input: { ids: string[]; tagId: string; tagName: string; attach: boolean }) => {
+      await call(input.ids, input.tagId, input.attach)
+      return input
+    },
+    onSuccess: (v) => {
+      const n = v.ids.length
+      toast.success(`${v.attach ? 'Added' : 'Removed'} “${v.tagName}” ${v.attach ? 'to' : 'from'} ${n} lead${n === 1 ? '' : 's'}`, {
+        action: {
+          label: 'Undo',
+          onClick: () =>
+            void call(v.ids, v.tagId, !v.attach).then(
+              () => void qc.invalidateQueries({ queryKey: ['crm'] }),
+              (e: Error) => toast.error(e.message),
+            ),
+        },
+        duration: 8000,
+      })
+      void qc.invalidateQueries({ queryKey: ['crm'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
 }
 
 // ── cadences ──────────────────────────────────────────────────

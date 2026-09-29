@@ -2743,5 +2743,57 @@ if (listed) {
   check('whatsapp: an unknown studio address is refused', unknown.status === 404 && handshake.status === 403, { post: unknown.status, get: handshake.status })
 }
 
+// ── 0212: several functions per lead, labels on add, functions become shoots ──
+{
+  const tag = await api('/crm/tags', { token: aToken, method: 'POST', body: { name: `VIP ${rand()}`, color: 'violet' } })
+  const made = await api('/crm/leads', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      name: 'Two Functions',
+      phone: `9${String(Date.now()).slice(-9)}`,
+      tag_ids: [tag.json.id],
+      functions: [
+        { event_type: 'Wedding', event_date: '2027-02-14', location: 'Jaipur' },
+        { event_type: 'Haldi', event_date: '2027-02-12' },
+      ],
+    },
+  })
+  const lead = made.json.lead
+  check(
+    'functions: a lead keeps every function, earliest first, and its label',
+    made.status === 201 &&
+      lead?.functions?.map?.((f) => f.event_type).join(',') === 'Haldi,Wedding' &&
+      lead?.event_type === 'Haldi' && lead?.event_date === '2027-02-12' &&
+      lead?.tags?.some?.((t) => t.id === tag.json.id),
+    { status: made.status, functions: lead?.functions, event: lead?.event_type, tags: lead?.tags },
+  )
+
+  const patched = await api(`/crm/leads/${lead?.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { functions: [{ event_type: 'Reception', event_date: '2027-02-15' }, { event_type: 'Haldi', event_date: '2027-02-12' }, { event_type: 'Wedding', event_date: '2027-02-14' }] },
+  })
+  const all = await api('/crm/leads?include_archived=true', { token: aToken })
+  const after = (Array.isArray(all.json) ? all.json : all.json?.items ?? []).find((l) => l.id === lead?.id)
+  check(
+    'functions: an edit replaces the list and the lead still shows the first',
+    patched.status === 204 && after?.functions?.length === 3 && after?.event_type === 'Haldi',
+    { status: patched.status, functions: after?.functions },
+  )
+
+  const conv = await api(`/crm/leads/${lead?.id}/convert`, { token: aToken, method: 'POST', body: { project: { name: 'Two Functions wedding' } } })
+  const shoots = conv.json.project_id ? (await api(`/shoots?project_id=${conv.json.project_id}`, { token: aToken })).json ?? [] : []
+  check(
+    'functions: converting turns each function into a shoot on the new project',
+    conv.status === 201 && shoots.map?.((x) => x.name).sort().join(',') === 'Haldi,Reception,Wedding',
+    { status: conv.status, shoots: shoots.map?.((x) => [x.name, x.shoot_date]) },
+  )
+
+  const bList = await api('/crm/leads?include_archived=true', { token: reset.json.access_token })
+  const leaked = (Array.isArray(bList.json) ? bList.json : bList.json?.items ?? []).some((l) => l.id === lead?.id)
+  check('functions: another studio never sees them', !leaked)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

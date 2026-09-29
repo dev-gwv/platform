@@ -126,7 +126,7 @@ export const INBOX_COLUMNS: ReadonlyArray<{ key: InboxColumn; label: string }> =
   { key: 'company', label: 'Company' },
   { key: 'follow_up', label: 'Follow-up' },
   { key: 'created', label: 'Created' },
-  { key: 'tags', label: 'Tags' },
+  { key: 'tags', label: 'Labels' },
 ]
 
 /*

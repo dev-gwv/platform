@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Search, X, type LucideIcon } from 'lucide-react'
+import { Check, Loader2, Plus, Search, X, type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
 import { Input } from './input'
 
@@ -36,6 +36,8 @@ export function MultiSelectFilter({
   width = 280,
   searchable = true,
   className,
+  onCreate,
+  noun,
 }: {
   /** Plural and lower-cased in the button text: "All stages", "2 stages selected". */
   label: string
@@ -47,10 +49,20 @@ export function MultiSelectFilter({
   width?: number
   searchable?: boolean
   className?: string
+  /**
+   * Add a new option right here -- a quality, a label, a stage -- and filter by
+   * it at once (the owner's "no closed field"). Resolves with its value.
+   * Omit where the list cannot grow (owners).
+   */
+  onCreate?: ((label: string) => Promise<string>) | undefined
+  /** Singular, for "+ Add new {noun}": "quality", "label". */
+  noun?: string | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -86,6 +98,22 @@ export function MultiSelectFilter({
 
   const toggle = (v: string) =>
     onChange(chosen.has(v) ? selected.filter((x) => x !== v) : [...selected, v])
+
+  const exact = options.find((o) => o.label.toLowerCase() === needle)
+  const canAdd = !!onCreate && needle.length > 0 && !exact
+  async function add() {
+    if (!onCreate || !canAdd) return
+    try {
+      setAdding(true)
+      const v = await onCreate(q.trim())
+      onChange([...new Set([...selected, v])])
+      setQ('')
+    } catch {
+      // The create hook shows the server's reason.
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
     <div ref={box} className={cn('relative', className)}>
@@ -124,10 +152,17 @@ export function MultiSelectFilter({
             <div className="flex items-center gap-1.5 border-b border-border p-2">
               <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Input
+                ref={search}
                 autoFocus
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder={`Search ${label.toLowerCase()}…`}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  e.preventDefault()
+                  if (exact) toggle(exact.value)
+                  else if (canAdd) void add()
+                }}
+                placeholder={onCreate ? `Search or add ${noun ? `a ${noun}` : label.toLowerCase()}…` : `Search ${label.toLowerCase()}…`}
                 aria-label={`Search ${label.toLowerCase()}`}
                 className="h-7 border-0 px-0 text-xs shadow-none focus-visible:ring-0"
               />
@@ -159,7 +194,7 @@ export function MultiSelectFilter({
           </div>
 
           <div className="max-h-72 overflow-y-auto">
-            {shown.length === 0 && (
+            {shown.length === 0 && !canAdd && (
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">No matches</p>
             )}
             {shown.map((o) => {
@@ -195,6 +230,30 @@ export function MultiSelectFilter({
               )
             })}
           </div>
+
+          {onCreate && (
+            <div className="border-t border-border p-1.5">
+              {canAdd ? (
+                <button
+                  type="button"
+                  onClick={() => void add()}
+                  disabled={adding}
+                  className="flex w-full items-center gap-2 rounded-md bg-primary/10 px-2 py-1.5 text-left text-xs font-medium text-primary hover:bg-primary/15"
+                >
+                  {adding ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                  <span className="truncate">Add “{q.trim()}”</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => search.current?.focus()}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  <Plus className="size-3.5" /> Add new {noun ?? label.toLowerCase().replace(/s$/, '')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

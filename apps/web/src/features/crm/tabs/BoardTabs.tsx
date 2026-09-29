@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, EyeOff, Eye, GripVertical, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -26,6 +26,7 @@ import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import {
   useActivities,
+  useBulkPatch,
   useCreateStage,
   useCrmPrefs,
   useDeleteStage,
@@ -43,6 +44,7 @@ import { LostReasonDialog } from '../LostReasonDialog'
 import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted, type DueBucket } from '../leads'
 import { BoardColumn, DueBadge, LeadCard, LeadTable } from './shared'
 import { DealCard } from '../DealCard'
+import { LeadBulkBar } from '../LeadBulkBar'
 
 /** Everything owed today or already late — the list to clear before going home. */
 export function TodayTab({ leads, now, onOpen }: { leads: readonly CrmLead[]; now: Date; onOpen: (id: string) => void }) {
@@ -245,6 +247,12 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
   // snap back to the default on every visit.
   const prefs = useCrmPrefs()
   const savePrefs = useUpdateCrmPrefs()
+  const bulk = useBulkPatch()
+  // Ticked cards, for the bulk bar. `anchor` is the last one ticked, so a
+  // shift-click can pick everything between it and the next.
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
+  const [anchor, setAnchor] = useState<string | null>(null)
+  const [losingMany, setLosingMany] = useState<string | null>(null)
 
   const list = pipelines.data ?? []
   const remembered = list.find((p) => p.id === prefs.data?.pipeline_id) ?? null
@@ -259,6 +267,65 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     () => inPipeline.filter((l) => !stages.some((s) => s.id === l.stage_id)),
     [inPipeline, stages],
   )
+
+  // Only what is on screen counts: a filter that hides a ticked card un-ticks it.
+  const tickedHere = useMemo(() => inPipeline.filter((l) => ticked.has(l.id)), [inPipeline, ticked])
+  const clearTicks = () => {
+    setTicked(new Set())
+    setAnchor(null)
+  }
+  useEffect(() => {
+    if (ticked.size === 0) return
+    // Esc clears the ticks -- unless it is closing a menu or a dialog opened from the bar.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const open = document.querySelector('[data-radix-popper-content-wrapper], [role="dialog"]')
+      const inside = (e.target as HTMLElement | null)?.closest?.('[data-radix-popper-content-wrapper], [role="dialog"]')
+      if (!open && !inside) clearTicks()
+    }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [ticked.size])
+
+  function tick(id: string, range: boolean) {
+    const column = (stageId: string | null) =>
+      inPipeline.filter((l) => l.stage_id === stageId).map((l) => l.id)
+    const lead = inPipeline.find((l) => l.id === id)
+    const from = anchor ? inPipeline.find((l) => l.id === anchor) : null
+    setTicked((prev) => {
+      const next = new Set(prev)
+      if (range && lead && from && from.stage_id === lead.stage_id) {
+        const ids = column(lead.stage_id)
+        const i = ids.indexOf(from.id)
+        const j = ids.indexOf(id)
+        for (const x of ids.slice(Math.min(i, j), Math.max(i, j) + 1)) next.add(x)
+      } else if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setAnchor(id)
+  }
+
+  function tickColumn(stageId: string, on: boolean) {
+    const ids = inPipeline.filter((l) => l.stage_id === stageId).map((l) => l.id)
+    setTicked((prev) => {
+      const next = new Set(prev)
+      for (const x of ids) {
+        if (on) next.add(x)
+        else next.delete(x)
+      }
+      return next
+    })
+  }
+
+  /** Several ticked cards dragged together move together. */
+  function moveMany(ids: string[], stage: PipelineStage) {
+    if (stage.kind === 'lost') {
+      setLosingMany(stage.id)
+      return
+    }
+    bulk.mutate({ ids, patch: { stage_id: stage.id } }, { onSuccess: clearTicks })
+  }
 
   function attemptMove(lead: CrmLead, stage: PipelineStage) {
     if (stage.kind === 'lost') {
@@ -300,7 +367,13 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     }
     const stage = stages.find((s) => s.id === overId.slice(6))
     const lead = leads.find((l) => l.id === activeId)
-    if (!lead || !stage || lead.stage_id === stage.id) return
+    if (!lead || !stage) return
+    if (ticked.has(lead.id) && tickedHere.length > 1) {
+      const ids = tickedHere.filter((l) => l.stage_id !== stage.id).map((l) => l.id)
+      if (ids.length) moveMany(ids, stage)
+      return
+    }
+    if (lead.stage_id === stage.id) return
     attemptMove(lead, stage)
   }
 
@@ -317,6 +390,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
             value={current.id}
             onChange={(e) => {
               setPick(e.target.value)
+              clearTicks()
               savePrefs.mutate({ pipeline_id: e.target.value })
             }}
             className="w-56"
@@ -332,7 +406,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
         )}
         <p className="text-sm text-muted-foreground">
           {inPipeline.length} deal{inPipeline.length === 1 ? '' : 's'} · {formatINR(total)} in {current.name}
-          {canEdit ? ' · drag a card to move it' : ''}
+          {canEdit ? ' · drag a card to move it, tick cards to change many at once' : ''}
         </p>
       </div>
 
@@ -365,6 +439,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
             const inStage = inPipeline.filter((l) => l.stage_id === s.id)
             const value = inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
             const full = s.wip_limit !== null && inStage.length >= s.wip_limit
+            const tickedIn = inStage.filter((l) => ticked.has(l.id)).length
             return (
               <DroppableStage
                 key={s.id}
@@ -372,6 +447,14 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
                 count={inStage.length}
                 value={value}
                 full={full}
+                tickAll={
+                  canEdit && inStage.length > 0
+                    ? {
+                        state: tickedIn === 0 ? 'none' : tickedIn === inStage.length ? 'all' : 'some',
+                        onToggle: () => tickColumn(s.id, tickedIn < inStage.length),
+                      }
+                    : undefined
+                }
                 menu={
                   canEdit ? (
                     <StageMenu
@@ -391,8 +474,11 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
                     lead={l}
                     now={now}
                     onOpen={onOpen}
-                    draggable={canEdit && !move.isPending}
+                    draggable={canEdit && !move.isPending && !bulk.isPending}
                     stageProbability={s.probability_default}
+                    ticked={ticked.has(l.id)}
+                    ticking={ticked.size > 0}
+                    onTick={canEdit ? tick : undefined}
                   />
                 ))}
               </DroppableStage>
@@ -402,6 +488,28 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
         </div>
         </div>
       </DndContext>
+
+      {tickedHere.length > 0 && <LeadBulkBar leads={tickedHere} onClear={clearTicks} />}
+
+      <LostReasonDialog
+        open={losingMany !== null}
+        count={tickedHere.length}
+        pending={bulk.isPending}
+        onCancel={() => setLosingMany(null)}
+        onConfirm={(d) => {
+          if (!losingMany) return
+          const ids = tickedHere.filter((l) => l.stage_id !== losingMany).map((l) => l.id)
+          bulk.mutate(
+            { ids, patch: { stage_id: losingMany, status: 'lost', ...d } },
+            {
+              onSuccess: () => {
+                setLosingMany(null)
+                clearTicks()
+              },
+            },
+          )
+        }}
+      />
 
       <LostReasonDialog
         open={losing !== null}
@@ -436,6 +544,7 @@ function DroppableStage({
   full,
   menu,
   draggableHeader,
+  tickAll,
   children,
 }: {
   stage: PipelineStage
@@ -444,6 +553,8 @@ function DroppableStage({
   full: boolean
   menu?: ReactNode
   draggableHeader?: boolean
+  /** Tick every card in this column at once. */
+  tickAll?: { state: 'none' | 'some' | 'all'; onToggle: () => void } | undefined
   children: ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `stage-${stage.id}` })
@@ -492,7 +603,25 @@ function DroppableStage({
               <GripVertical className="size-3.5" />
             </button>
           )}
-          <span className="size-2 shrink-0 rounded-full" style={{ background: stageHue(stage) }} aria-hidden />
+          {tickAll ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={tickAll.state === 'all' ? true : tickAll.state === 'some' ? 'mixed' : false}
+              aria-label={`Select every lead in ${stage.name}`}
+              title={`Select all ${count}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={tickAll.onToggle}
+              className={cn(
+                'flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+                tickAll.state === 'none' ? 'border-input bg-card hover:border-primary' : 'border-primary bg-primary text-primary-foreground',
+              )}
+            >
+              {tickAll.state === 'all' ? <Check className="size-3" strokeWidth={3} /> : tickAll.state === 'some' ? <span className="h-0.5 w-2 rounded bg-current" /> : null}
+            </button>
+          ) : (
+            <span className="size-2 shrink-0 rounded-full" style={{ background: stageHue(stage) }} aria-hidden />
+          )}
           <p
             className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider"
             style={{ color: stageHue(stage) }}
