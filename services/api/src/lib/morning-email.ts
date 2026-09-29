@@ -38,7 +38,7 @@ export interface MorningFacts {
 
 const esc = (t: string) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const base = (env: Env) => (env.APP_URL || 'https://ipcstudios.in').replace(/\/+$/, '')
+const base = (env: Env) => (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
 const firstName = (name: string | null) => (name ?? '').trim().split(/\s+/)[0] || 'there'
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`

@@ -364,7 +364,7 @@ export async function sendMessageEmail(
             : esc(m.body ?? '').replace(/\n/g, '<br>'),
           // A studio's client has no Studio AutoPilot account: no "open the app" button.
           cta: m.toClient ? undefined : 'Open Studio AutoPilot',
-          link: m.toClient ? undefined : (link ?? (env.APP_URL || 'https://ipcstudios.in')),
+          link: m.toClient ? undefined : (link ?? (env.APP_URL || 'https://studioautopilot.in')),
           footer: `Sent for ${esc(m.studio)} by Studio AutoPilot.`,
         }),
       }),
