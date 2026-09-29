@@ -2795,5 +2795,30 @@ if (listed) {
   check('functions: another studio never sees them', !leaked)
 }
 
+// ── 0213: permanent erasure of leads ─────────────────────────────
+{
+  const phone = `9${String(Date.now()).slice(-9)}`
+  const made = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: 'Erase Me', phone, email: 'erase.me@example.com' } })
+  const id = made.json.lead?.id
+  const live = await api('/crm/leads/erase', { token: aToken, method: 'POST', body: { ids: [id] } })
+  check('erase: a live lead is refused (409)', live.status === 409, { status: live.status })
+
+  await api(`/crm/leads/${id}`, { token: aToken, method: 'PATCH', body: { is_archived: true } })
+  const otherStudio = await api('/crm/leads/erase', { token: reset.json.access_token, method: 'POST', body: { ids: [id] } })
+  check("erase: another studio cannot delete this studio's lead", otherStudio.status === 409, { status: otherStudio.status })
+
+  const done = await api('/crm/leads/erase', { token: aToken, method: 'POST', body: { ids: [id] } })
+  const all = await api('/crm/leads?include_archived=true', { token: aToken })
+  const list = Array.isArray(all.json) ? all.json : all.json?.items ?? []
+  check(
+    'erase: an archived lead is deleted for good',
+    done.status === 200 && done.json.erased === 1 && !list.some((l) => l.id === id),
+    { status: done.status, body: done.json },
+  )
+
+  const nothing = await api('/crm/leads/erase', { token: aToken, method: 'POST', body: { ids: [] } })
+  check('erase: an empty request is refused (422)', nothing.status === 422, { status: nothing.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

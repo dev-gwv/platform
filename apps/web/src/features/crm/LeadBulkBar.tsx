@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Download, Flame, Tag as TagIcon, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Download, Flame, Tag as TagIcon, Trash2, X } from 'lucide-react'
 import type { BulkLeadPatch, CrmLead, LeadStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Select } from '@/shared/ui/input'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useConfirm } from '@/shared/ui/confirm'
 import { useMembers } from '@/features/allocation/api'
-import { useBulkLabel, useBulkPatch, useEnrollWorkflow, usePipelines, useWorkflows } from './api'
+import { useBulkLabel, useBulkPatch, useEnrollWorkflow, useEraseLeads, usePipelines, useWorkflows } from './api'
 import { ArchiveDialog } from './ArchiveDialog'
 import { LabelMenu } from './LabelMenu'
 import { LostReasonDialog, type LostDetails } from './LostReasonDialog'
@@ -40,6 +41,9 @@ export function LeadBulkBar({
   const pipelines = usePipelines()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
+  const canDelete = access.hasAction('crm', 'delete')
+  const erase = useEraseLeads()
+  const confirm = useConfirm()
   const { data: members } = useMembers()
   const [lostStage, setLostStage] = useState<string | null | 'status'>(null)
   const [askArchive, setAskArchive] = useState(false)
@@ -75,6 +79,20 @@ export function LeadBulkBar({
     if (lostStage === 'status') run({ status: 'lost', ...d })
     else if (lostStage) run({ stage_id: lostStage, status: 'lost', ...d })
     setLostStage(null)
+  }
+
+  // Only archived leads can be deleted for good: archive first, then delete.
+  const archived = leads.filter((l) => l.is_archived)
+
+  async function eraseArchived() {
+    const yes = await confirm({
+      title: `Delete ${archived.length} lead${archived.length === 1 ? '' : 's'} permanently?`,
+      description:
+        'This removes their name, phone, email, notes, messages and Facebook import records from your studio for good. It cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      destructive: true,
+    })
+    if (yes) erase.mutate(archived.map((l) => l.id), { onSuccess: onClear })
   }
 
   const n = leads.length
@@ -216,6 +234,12 @@ export function LeadBulkBar({
           {showArchived ? <ArchiveRestore /> : <Archive />}
           {showArchived ? 'Restore' : 'Archive'}
         </Button>
+
+        {canDelete && archived.length > 0 && (
+          <Button size="sm" variant="outline" className="text-destructive" disabled={erase.isPending} onClick={() => void eraseArchived()}>
+            <Trash2 /> Delete permanently{archived.length < n ? ` (${archived.length})` : ''}
+          </Button>
+        )}
 
         {access.hasModule('crm_export') && (
           <Button size="sm" variant="outline" onClick={() => exportLeadsCsv(leads)}>
