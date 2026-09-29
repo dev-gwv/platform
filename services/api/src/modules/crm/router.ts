@@ -56,6 +56,7 @@ import {
   fbLeadImport,
   fbTestImportRequest,
   type CsvImportRow,
+  type LeadFunctionInput,
 } from '@ipc/contracts'
 import {
   leadsFromCsv,
@@ -111,13 +112,36 @@ const selectLead = (sql: TransactionSql) => sql`
              from crm_lead_tags lt
              join crm_tags t on t.id = lt.tag_id
             where lt.lead_id = l.id
-         ), '[]'::jsonb) as tags
+         ), '[]'::jsonb) as tags,
+         -- Every function the lead is asking for, earliest first (0212).
+         coalesce((
+           select jsonb_agg(jsonb_build_object('id', f.id, 'event_type', f.event_type,
+                                               'event_date', f.event_date, 'location', f.location)
+                            order by f.event_date nulls last, f.sort, f.created_at)
+             from crm_lead_functions f
+            where f.lead_id = l.id
+         ), '[]'::jsonb) as functions
   from crm_leads l
   left join users u on u.user_id = l.assigned_to
   left join users arch on arch.user_id = l.archived_by
   left join crm_pipeline_stages s on s.id = l.stage_id
   left join crm_companies co on co.id = l.crm_company_id
   left join crm_date_availability() av on av.on_date = l.event_date`
+
+/**
+ * Replace a lead's list of functions (0212). The trigger on the table keeps
+ * the lead's own event_type / event_date / event_location equal to the first.
+ */
+async function writeFunctions(sql: TransactionSql, leadId: string, list: readonly LeadFunctionInput[]) {
+  await sql`delete from crm_lead_functions where lead_id = ${leadId}`
+  for (const [i, f] of list.entries()) {
+    await sql`
+      insert into crm_lead_functions (company_id, lead_id, event_type, event_date, location, sort)
+      select l.company_id, l.id, ${f.event_type?.trim() || null}, ${f.event_date ?? null},
+             ${f.location?.trim() || null}, ${i}
+        from crm_leads l where l.id = ${leadId}`
+  }
+}
 
 /** What /crm/settings reads back, shared by the GET and the PATCH. */
 type CrmSettingsRow = { sla_hours: number; hot_score: number; assign_strategy: 'least_loaded' | 'round_robin' }
@@ -266,6 +290,10 @@ export const crmRouter = new Hono<AppEnv>()
         if (!known && v.pipeline_id !== undefined) extra.pipeline_id = v.pipeline_id
         if (!known && v.stage_id !== undefined) extra.stage_id = v.stage_id
         if (Object.keys(extra).length) await sql`update crm_leads set ${sql(extra)} where id = ${id}`
+        // A lead that was already known keeps its own functions and labels;
+        // only a fresh one takes what this form sent.
+        if (!known && v.functions?.length) await writeFunctions(sql, id, v.functions)
+        if (!known && v.tag_ids?.length) await sql`select crm_set_lead_tags(${id}, ${sql.array(v.tag_ids)}::uuid[])`
         const [lead] = await sql`${selectLead(sql)} where l.id = ${id}`
         return lead ? { lead, created: !known } : null
       }),
@@ -287,7 +315,13 @@ export const crmRouter = new Hono<AppEnv>()
     if (Object.keys(parsed.data).length === 0) return c.body(null, 204)
     // lost must carry a reason, otherwise 400 would leak DB 22023 raw text
     if (parsed.data.status === 'lost' && !parsed.data.lost_reason) fail(422, 'Tell us why it was lost (3+ chars).')
-    const patch = parsed.data
+    const { functions, ...rest } = parsed.data
+    // The list wins: the three event columns follow its first row by trigger.
+    const patch = functions
+      ? Object.fromEntries(
+          Object.entries(rest).filter(([k]) => !['event_type', 'event_date', 'event_location'].includes(k)),
+        )
+      : rest
     const id = uuidParam(c)
 
     const result = await attempt(c, 'crm.lead_update', () =>
@@ -306,7 +340,9 @@ export const crmRouter = new Hono<AppEnv>()
         if (patch.status && patch.status !== 'converted' && current.status === 'converted') {
           stamps.converted_at = null
         }
-        await sql`update crm_leads set ${sql({ ...patch, ...stamps })} where id = ${id}`
+        const cols = { ...patch, ...stamps }
+        if (Object.keys(cols).length) await sql`update crm_leads set ${sql(cols)} where id = ${id}`
+        if (functions) await writeFunctions(sql, id, functions)
         return { from: current.status }
       }),
       { onCode: (code) => (code === '22023' ? ('rule' as const) : undefined) },
@@ -879,7 +915,20 @@ export const crmRouter = new Hono<AppEnv>()
           const rows = await sql<{ client_id: string; project_id: string | null }[]>`
             select * from convert_lead_to_project(
               ${leadId}, ${v.client_id ?? null}, ${sql.json(v.client ?? {})}, ${v.project ? sql.json(v.project) : null}, ${v.quote_id ?? null})`
-          return rows[0] ?? null
+          const made = rows[0] ?? null
+          // Each function the couple asked for becomes a shoot on the new
+          // project -- Haldi, Wedding, Reception arrive already planned. Not
+          // when the project already has shoots (a quote may have brought them).
+          if (made?.project_id) {
+            await sql`
+              insert into shoots (company_id, project_id, name, shoot_date, location)
+              select f.company_id, ${made.project_id}, coalesce(f.event_type, 'Shoot'), f.event_date, f.location
+                from crm_lead_functions f
+               where f.lead_id = ${leadId}
+                 and not exists (select 1 from shoots s where s.project_id = ${made.project_id})
+               order by f.event_date nulls last, f.sort`
+          }
+          return made
         }),
       { onCode: (code, err) => (code === '22023' && String((err as { message?: string })?.message ?? '').includes('already') ? ('done' as const) : undefined) },
     )
