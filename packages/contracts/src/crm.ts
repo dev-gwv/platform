@@ -254,12 +254,22 @@ export const updateLeadRequest = z
 export type UpdateLeadRequest = z.infer<typeof updateLeadRequest>
 
 /** Public webhook body (Meta / web form). */
-export const captureLeadRequest = z.object({
-  name: z.string().max(160).optional(),
-  phone: z.string().max(30),
-  email: z.string().max(200).optional(),
-  meta: z.record(z.unknown()).optional(),
-})
+/**
+ * A lead posted to a web-form source. Loose on purpose: the API cleans the
+ * phone, name and email (lib/lead-fields.ts) and keeps anything unusable in
+ * meta, so a lead is never refused for how a number was typed. It only has
+ * to carry something to call back: a phone, an email or a name.
+ */
+export const captureLeadRequest = z
+  .object({
+    name: z.string().max(500).nullish(),
+    phone: z.string().max(200).nullish(),
+    email: z.string().max(500).nullish(),
+    meta: z.record(z.unknown()).optional(),
+  })
+  .refine((l) => !!(l.phone?.trim() || l.email?.trim() || l.name?.trim()), {
+    message: 'A lead needs a phone, an email or a name.',
+  })
 export type CaptureLeadRequest = z.infer<typeof captureLeadRequest>
 
 /** Adding a lead by hand. The phone is the identity — everything else can wait. */

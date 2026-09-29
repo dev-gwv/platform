@@ -98,18 +98,27 @@ interface GraphLead {
 
 /** Map Graph API field_data to the lead we store. Unknown fields are kept in `fields`. */
 export function mapGraphLead(lead: GraphLead): MetaLead {
+  // Every answer is kept as sent, custom questions included, under `fields`.
   const fields: Record<string, string> = {}
   for (const f of lead.field_data ?? []) {
     if (f.name && f.values && f.values.length > 0) fields[f.name] = f.values.join(', ')
   }
+  // Meta's standard questions are lower-case, but forms built elsewhere are
+  // not always: match the keys without case.
+  const lower: Record<string, string> = {}
+  for (const [k, v] of Object.entries(fields)) if (v.trim()) lower[k.toLowerCase()] = v.trim()
   const pick = (...keys: string[]) => {
-    for (const k of keys) if (fields[k]) return fields[k]!
+    for (const k of keys) if (lower[k]) return lower[k]!
     return null
   }
+  const full = pick('full_name', 'name', 'full name')
+  const first = pick('first_name', 'first name')
+  const last = pick('last_name', 'last name')
+  const name = full ?? ([first, last].filter(Boolean).join(' ').trim() || null)
   return {
-    name: pick('full_name', 'name', 'first_name') && [fields.full_name ?? fields.name ?? fields.first_name, fields.last_name].filter(Boolean).join(' ').trim(),
-    phone: pick('phone_number', 'phone', 'mobile', 'whatsapp_number'),
-    email: pick('email', 'email_address'),
+    name,
+    phone: pick('phone_number', 'phone', 'mobile', 'mobile_number', 'phone number', 'contact_number', 'whatsapp_number', 'whatsapp'),
+    email: pick('email', 'email_address', 'work_email'),
     fields,
   }
 }
