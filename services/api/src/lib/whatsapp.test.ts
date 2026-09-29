@@ -18,7 +18,7 @@ describe('whatsapp', () => {
 
   it('posts a text message to the phone number id and returns the message id', async () => {
     const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-      expect(url).toBe('https://graph.facebook.com/v21.0/123/messages')
+      expect(url).toBe('https://graph.facebook.com/v24.0/123/messages')
       expect(init.headers).toMatchObject({ Authorization: 'Bearer tok' })
       const body = JSON.parse(String(init.body)) as { to: string; text: { body: string }; type: string }
       expect(body).toMatchObject({ to: '919876543210', type: 'text', text: { body: 'Hi Priya' } })

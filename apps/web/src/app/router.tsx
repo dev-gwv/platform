@@ -12,7 +12,7 @@ import {
 import { LoginPage } from '@/routes/login'
 import { MyProfilePage } from '@/routes/my-profile'
 import { LeavePage } from '@/routes/leave'
-import { ContactPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
+import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { HelpSetupPage } from '@/routes/help-setup'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
@@ -199,6 +199,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/privacy-policy', PrivacyPage),
   publicRoute('/refund-policy', RefundPage),
   publicRoute('/contact-us', ContactPage),
+  publicRoute('/data-deletion', DataDeletionPage),
   // Setup tutorials; the setup emails link here, often opened signed out.
   publicRoute('/help/setup', HelpSetupPage),
 

@@ -40,6 +40,8 @@ export interface Env {
   /** Meta app id + Embedded Signup configuration id: "Connect with Facebook" for a studio's number. Optional. */
   META_APP_ID?: string
   WHATSAPP_CONFIG_ID?: string
+  /** Facebook Login for Business configuration for lead ads (pages + leads_retrieval). Optional: without it the dialog asks by scope. */
+  META_LOGIN_CONFIG_ID?: string
   /** Twilio Programmable Voice for click-to-call (lib/twilio.ts). All three or none. */
   TWILIO_ACCOUNT_SID: string
   TWILIO_AUTH_TOKEN: string

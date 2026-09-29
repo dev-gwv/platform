@@ -25,15 +25,16 @@ export const LEGAL = {
 export const PLANS = [
   { name: 'Monthly', price: '₹1,999', period: 'per month' },
   { name: 'Yearly', price: '₹18,000', period: 'per year' },
-  { name: '2-Year', price: '₹30,000', period: 'for two years' },
+  { name: '2-Year', price: '₹33,000', period: 'for two years' },
 ] as const
 
 export const PLAN_SUMMARY =
-  'Subscription plans are ₹1,999 per month, ₹18,000 per year, or ₹30,000 for two years, plus 18% GST, paid online through Razorpay.'
+  'Subscription plans are ₹1,999 per month, ₹18,000 per year, or ₹33,000 for two years, plus 18% GST, paid online through Razorpay.'
 
 export const LEGAL_LINKS = [
   { to: '/terms-and-conditions', label: 'Terms and Conditions' },
   { to: '/privacy-policy', label: 'Privacy Policy' },
   { to: '/refund-policy', label: 'Refund Policy' },
   { to: '/contact-us', label: 'Contact Us' },
+  { to: '/data-deletion', label: 'Data Deletion' },
 ] as const

@@ -21,7 +21,7 @@ function loadSdk(appId: string): Promise<FB> {
   if (window.FB) return Promise.resolve(window.FB)
   return new Promise((resolve, reject) => {
     window.fbAsyncInit = () => {
-      window.FB!.init({ appId, version: 'v21.0', xfbml: false, cookie: false })
+      window.FB!.init({ appId, version: 'v24.0', xfbml: false, cookie: false })
       resolve(window.FB!)
     }
     const s = document.createElement('script')
