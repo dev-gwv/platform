@@ -22,15 +22,37 @@ import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { useAccess } from '@/shared/auth/useAccess'
-import { NO_FACETS, applyFacets, type LeadFacets } from '@/features/crm/board-filters'
+import { NO_EXTRAS, NO_FACETS, activeExtrasCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
+import { DateField } from '@/shared/ui/date-field'
+import { cn } from '@/shared/ui/cn'
 
 const FACETS_KEY = 'crm:facets'
-function readFacets(): LeadFacets {
+const EXTRAS_KEY = 'crm:extras'
+const MODE_KEY = 'crm:mode'
+type Mode = 'list' | 'board' | 'pipeline'
+
+/** Read something this browser remembered; a private window just gets the default. */
+function remembered<T extends object>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(FACETS_KEY)
-    return raw ? { ...NO_FACETS, ...(JSON.parse(raw) as Partial<LeadFacets>) } : NO_FACETS
+    const raw = localStorage.getItem(key)
+    return raw ? { ...fallback, ...(JSON.parse(raw) as Partial<T>) } : fallback
   } catch {
-    return NO_FACETS
+    return fallback
+  }
+}
+function remember(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
+  } catch {
+    /* private window: it still works, it just is not remembered */
+  }
+}
+function rememberedMode(): Mode {
+  try {
+    const m = localStorage.getItem(MODE_KEY)
+    return m === 'list' || m === 'board' ? m : 'pipeline'
+  } catch {
+    return 'pipeline'
   }
 }
 
@@ -74,22 +96,31 @@ function Crm() {
   const [showFilters, setShowFilters] = useState(false)
   // The facet filters (stage, event, quality, owner, tag, source) stay put
   // between visits: a studio that works "Weddings, hot" works it every day.
-  const [facets, setFacetsState] = useState<LeadFacets>(readFacets)
+  const [facets, setFacetsState] = useState<LeadFacets>(() => remembered(FACETS_KEY, NO_FACETS))
   const setFacets = (f: LeadFacets) => {
     setFacetsState(f)
-    try {
-      localStorage.setItem(FACETS_KEY, JSON.stringify(f))
-    } catch {
-      /* private window: the filter still works, it just is not remembered */
-    }
+    remember(FACETS_KEY, f)
   }
+  // Behind the Filter button: when the next call is due, event dates, when
+  // they came in, budget, hot only, reached or not. Remembered the same way.
+  const [extras, setExtrasState] = useState<LeadExtras>(() => remembered(EXTRAS_KEY, NO_EXTRAS))
+  const setExtras = (x: LeadExtras) => {
+    setExtrasState(x)
+    remember(EXTRAS_KEY, x)
+  }
+  const extrasOn = activeExtrasCount(extras)
 
   /**
    * How the chosen leads are drawn: as a list, bucketed by when they are due,
    * or as the stage board. Separate from WHICH leads, so "Hot leads, on the
    * board" is now a thing that can be asked for.
    */
-  const [mode, setMode] = useState<'list' | 'board' | 'pipeline'>('pipeline')
+  // The pipeline unless this person chose otherwise; their choice sticks.
+  const [mode, setModeState] = useState<Mode>(rememberedMode)
+  const setMode = (m: Mode) => {
+    setModeState(m)
+    remember(MODE_KEY, m)
+  }
 
   // A ?lead= link (a reminder, a converted enquiry, an alert) opens straight
   // to that lead -- even an archived one -- then clears itself so closing the
@@ -115,7 +146,9 @@ function Crm() {
   // Which view to land on is a question about the data, so it can only be
   // answered once the data is here -- and only once, or every refetch would
   // drag someone back to Today while they were reading something else.
-  const landing = openingView(allOpen, now)
+  // The pipeline opens whole -- every open lead in its column. Only the list
+  // lands on "who do I owe a call" (Today's calls is one tap away either way).
+  const landing = mode === 'list' ? openingView(allOpen, now) : 'all'
   useEffect(() => {
     if (view === null && !active.isLoading) setView({ kind: 'builtin', key: landing })
   }, [view, active.isLoading, landing])
@@ -174,7 +207,7 @@ function Crm() {
   // never blinks empty between keystrokes. Once it lands, the server's answer
   // wins -- it is the one that has seen every lead.
   const unfaceted = searching && found.data ? found.data : clientMatch
-  const rows = useMemo(() => applyFacets(unfaceted, facets), [unfaceted, facets])
+  const rows = useMemo(() => applyExtras(applyFacets(unfaceted, facets), extras, now), [unfaceted, facets, extras, now])
 
   const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
   const selected =
@@ -247,6 +280,11 @@ function Crm() {
           aria-expanded={showFilters}
         >
           <SlidersHorizontal /> Filter
+          {extrasOn + (showArchived ? 1 : 0) > 0 && (
+            <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[0.65rem] font-semibold text-primary-foreground tabular-nums">
+              {extrasOn + (showArchived ? 1 : 0)}
+            </span>
+          )}
         </Button>
       </div>
 
@@ -261,23 +299,18 @@ function Crm() {
           selects -- above leads that were already filtered by the row
           above. The owner found it tiring; this is all it holds now. */}
       {showFilters && (
-        <div className="mt-2 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-3 py-2 text-sm">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-            Show archived leads
-          </label>
-          <button
-            type="button"
-            className="text-primary hover:underline"
-            onClick={() => {
-              setFacets(NO_FACETS)
-              setShowArchived(false)
-              setText('')
-            }}
-          >
-            Clear all filters
-          </button>
-        </div>
+        <MoreFilters
+          value={extras}
+          onChange={setExtras}
+          showArchived={showArchived}
+          onShowArchived={setShowArchived}
+          onClearAll={() => {
+            setFacets(NO_FACETS)
+            setExtras(NO_EXTRAS)
+            setShowArchived(false)
+            setText('')
+          }}
+        />
       )}
 
       {/* Search deliberately ignores the chosen view and the archive, because
@@ -324,6 +357,166 @@ function Crm() {
 
       {selected && <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />}
     </>
+  )
+}
+
+/** A short either/or as pills you can see: one is always chosen. */
+function Pills<T extends string | number>({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: T | null
+  onChange: (v: T | null) => void
+  options: ReadonlyArray<{ value: T | null; label: string }>
+  label: string
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const on = o.value === value
+        return (
+          <button
+            key={String(o.value)}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+              on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary/50',
+            )}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The filters behind the Filter button. Each is one short row: what it is,
+ * then the choices. Nothing is on until picked.
+ */
+function MoreFilters({
+  value,
+  onChange,
+  showArchived,
+  onShowArchived,
+  onClearAll,
+}: {
+  value: LeadExtras
+  onChange: (x: LeadExtras) => void
+  showArchived: boolean
+  onShowArchived: (on: boolean) => void
+  onClearAll: () => void
+}) {
+  const set = <K extends keyof LeadExtras>(k: K, v: LeadExtras[K]) => onChange({ ...value, [k]: v })
+  const money = (v: string) => (v.trim() === '' ? null : Math.max(0, Number(v.replace(/[^\d]/g, '')) || 0))
+  const row = 'grid items-center gap-2 sm:grid-cols-[8rem_1fr]'
+  const name = 'text-xs font-semibold text-muted-foreground'
+  return (
+    <div className="mt-2 grid gap-3 rounded-lg border border-border bg-card p-3 text-sm lg:grid-cols-2">
+      <div className={row}>
+        <span className={name}>Next call</span>
+        <Pills
+          label="Next call"
+          value={value.due}
+          onChange={(v) => set('due', v)}
+          options={[
+            { value: null, label: 'Any' },
+            { value: 'overdue', label: 'Overdue' },
+            { value: 'today', label: 'Today' },
+            { value: 'week', label: 'This week' },
+            { value: 'none', label: 'Not set' },
+          ]}
+        />
+      </div>
+      <div className={row}>
+        <span className={name}>Came in</span>
+        <Pills
+          label="Came in"
+          value={value.addedDays}
+          onChange={(v) => set('addedDays', v)}
+          options={[
+            { value: null, label: 'Any time' },
+            { value: 1, label: 'Today' },
+            { value: 7, label: 'Last 7 days' },
+            { value: 30, label: 'Last 30 days' },
+          ]}
+        />
+      </div>
+      <div className={row}>
+        <span className={name}>Event date</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <DateField
+            aria-label="Event from"
+            placeholder="From"
+            value={value.eventFrom ?? ''}
+            onChange={(e) => set('eventFrom', e.target.value || null)}
+            className="h-8 w-36"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <DateField
+            aria-label="Event to"
+            placeholder="To"
+            value={value.eventTo ?? ''}
+            onChange={(e) => set('eventTo', e.target.value || null)}
+            className="h-8 w-36"
+          />
+        </div>
+      </div>
+      <div className={row}>
+        <span className={name}>Budget (₹)</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            inputMode="numeric"
+            aria-label="Budget from"
+            placeholder="From"
+            value={value.budgetMin ?? ''}
+            onChange={(e) => set('budgetMin', money(e.target.value))}
+            className="h-8 w-28"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input
+            inputMode="numeric"
+            aria-label="Budget to"
+            placeholder="To"
+            value={value.budgetMax ?? ''}
+            onChange={(e) => set('budgetMax', money(e.target.value))}
+            className="h-8 w-28"
+          />
+        </div>
+      </div>
+      <div className={row}>
+        <span className={name}>Reached</span>
+        <Pills
+          label="Reached"
+          value={value.contacted}
+          onChange={(v) => set('contacted', v)}
+          options={[
+            { value: null, label: 'Any' },
+            { value: 'never', label: 'Never contacted' },
+            { value: 'yes', label: 'Contacted' },
+          ]}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={value.hotOnly} onChange={(e) => set('hotOnly', e.target.checked)} />
+          Hot only
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={showArchived} onChange={(e) => onShowArchived(e.target.checked)} />
+          Show archived
+        </label>
+        <button type="button" className="ml-auto text-sm font-medium text-primary hover:underline" onClick={onClearAll}>
+          Clear all filters
+        </button>
+      </div>
+    </div>
   )
 }
 
