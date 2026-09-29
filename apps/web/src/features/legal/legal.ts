@@ -11,14 +11,14 @@ export const LEGAL = {
   appName: 'Studio AutoPilot',
   productName: 'Studio AutoPilot studio management software',
   operatorName: 'IPC Studios',
-  supportEmail: 'support@ipcstudios.in',
+  supportEmail: 'support@studioautopilot.in',
   /** Registered or business address, one line per entry. */
   address: [] as string[],
   phone: '',
   gstin: '',
   country: 'India',
   responseTime: 'Within 1–2 working days',
-  lastUpdated: '25 September 2026',
+  lastUpdated: '29 September 2026',
 } as const
 
 /** Kept in step with the plans table (0141); prices exclude 18% GST. */

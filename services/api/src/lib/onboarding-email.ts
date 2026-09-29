@@ -56,7 +56,7 @@ const esc = (t: string) =>
 
 const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] || 'there'
 
-const base = (env: Env) => (env.APP_URL || 'https://ipcstudios.in').replace(/\/+$/, '')
+const base = (env: Env) => (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
 
 /** A short HMAC of `message`, for links that must not be forgeable. */
 export async function signFor(env: Env, message: string): Promise<string> {
