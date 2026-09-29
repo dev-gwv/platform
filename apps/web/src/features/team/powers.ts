@@ -25,8 +25,11 @@ export function useTeamPowers() {
     canDelete,
     /** Pay fields: the owner, or whoever edits salaries. */
     canPay: isOwner || access.hasAction('team_salaries', 'edit'),
-    /** Job roles are the studio's own list: only the owner adds to it. */
-    canAddJobRoles: isOwner,
+    /**
+     * Anyone who may add people may add a job role while doing it -- no
+     * closed field. Renaming and deleting roles stays the owner's.
+     */
+    canAddJobRoles: isOwner || access.hasAction('team_directory', 'create'),
     roles,
     mayGrant: (role: string) => (roles as string[]).includes(role),
     row: (m: { user_id: string; role: string }) => {

@@ -23,7 +23,7 @@ import {
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
-import { requireModule, requireOwner } from '../../middleware/permissions'
+import { requireModule, requireOwner, requireOwnerOr } from '../../middleware/permissions'
 import { rateLimit } from '../../middleware/security'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
@@ -580,7 +580,7 @@ export const teamRouter = new Hono<AppEnv>()
     return c.json(employeeRole.array().parse(rows))
   })
 
-  .post('/roles', requireOwner(), async (c) => {
+  .post('/roles', requireOwnerOr('team_directory', 'create'), async (c) => {
     const parsed = upsertEmployeeRoleRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the role name and code.')
     const { type_name, role_code, stage } = parsed.data
@@ -589,10 +589,11 @@ export const teamRouter = new Hono<AppEnv>()
     const rows = await attempt(
       c,
       'team.role_create',
+      // Anyone adding people may add a job role on the way (no closed field);
+      // a delegate writes through the service role, pinned to their studio.
       () =>
-        withUser(
-          c.env,
-          c.get('auth').userId,
+        asCaller(
+          c,
           (sql) => sql<{ id: string }[]>`
             insert into employee_roles (company_id, type_name, role_code, stage)
             values (${companyId}, ${type_name}, ${role_code}, ${stage ?? null})

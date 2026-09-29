@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pencil } from 'lucide-react'
 import type { DirectoryMember, ProductionStage } from '@ipc/contracts'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
@@ -6,10 +6,12 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { useUpdateMember, useAssignRoles, useCreateRole, useEmployeeRoles } from './api'
+import { useUpdateMember, useAssignRoles, useCreateRole, useEmployeeRoles, useRoleLibrary } from './api'
+import { pickableRoles, type PickableRole } from './bulk'
+import { JobRolePicker } from './JobRolePicker'
 import { CompensationFields, type CompensationDraft } from './CompensationFields'
 import { ROLE_LABEL, useTeamPowers } from './powers'
-import { STAGE_LABEL, STAGE_ORDER, byStage, toRoleCode } from './role-stages'
+import { toRoleCode } from './role-stages'
 
 /** The pay fields as they are on record, for the form to start from. */
 function compFrom(member: DirectoryMember): CompensationDraft {
@@ -53,26 +55,18 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
   )
   const [roleIds, setRoleIds] = useState<string[]>(member.role_ids)
   const createRole = useCreateRole()
-  const [addingRole, setAddingRole] = useState(false)
-  const [newRoleName, setNewRoleName] = useState('')
-  const [newRoleStage, setNewRoleStage] = useState<ProductionStage>('production')
+  const { data: library } = useRoleLibrary()
+  const pickable = useMemo(
+    () => pickableRoles(roles ?? [], powers.canAddJobRoles ? (library ?? []) : []),
+    [roles, library, powers.canAddJobRoles],
+  )
 
-  // A role the studio doesn't have yet is added here and ticked, rather than
-  // sending the owner off to settings mid-edit.
-  function addRole() {
-    const name = newRoleName.trim()
-    if (name.length < 2) return
-    createRole.mutate(
-      { type_name: name, role_code: toRoleCode(name), stage: newRoleStage },
-      {
-        onSuccess: (made) => {
-          setRoleIds((prev) => [...prev, made.id])
-          setNewRoleName('')
-          setAddingRole(false)
-        },
-      },
-    )
-  }
+  // A default or a role the studio doesn't have yet is made here and ticked,
+  // rather than sending the owner off to settings mid-edit.
+  const pickRole = async (r: PickableRole): Promise<string> =>
+    r.owned ? r.key : (await createRole.mutateAsync({ type_name: r.type_name, role_code: r.role_code, stage: r.stage })).id
+  const addRole = async (name: string, stage: ProductionStage): Promise<string> =>
+    (await createRole.mutateAsync({ type_name: name, role_code: toRoleCode(name), stage })).id
 
   const [comp, setComp] = useState<CompensationDraft>(() => compFrom(member))
   function setCompField<K extends keyof CompensationDraft>(key: K, value: CompensationDraft[K]) {
@@ -108,10 +102,6 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
     setEngagementType(member.engagement_type === 'freelancer' ? 'freelancer' : 'in_house')
     setRoleIds(member.role_ids)
     setComp(compFrom(member))
-  }
-
-  function toggleRole(id: string) {
-    setRoleIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]))
   }
 
   async function onSave() {
@@ -213,64 +203,16 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Job roles</Label>
-              {powers.canAddJobRoles && (
-                <Button type="button" size="sm" variant="outline" onClick={() => setAddingRole((v) => !v)}>
-                  {addingRole ? 'Cancel' : '+ Add new role'}
-                </Button>
-              )}
-            </div>
-            {addingRole && (
-              <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/30 p-3">
-                <div className="flex min-w-48 flex-1 flex-col gap-1.5">
-                  <Label htmlFor="new-role-name">Role name</Label>
-                  <Input
-                    id="new-role-name"
-                    autoFocus
-                    value={newRoleName}
-                    onChange={(e) => setNewRoleName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addRole()
-                      }
-                    }}
-                    placeholder="Generator Assistant"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="new-role-stage">Part of the job</Label>
-                  <Select id="new-role-stage" value={newRoleStage} onChange={(e) => setNewRoleStage(e.target.value as ProductionStage)}>
-                    {STAGE_ORDER.map((s) => (
-                      <option key={s} value={s}>
-                        {STAGE_LABEL[s]}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <Button type="button" onClick={addRole} disabled={newRoleName.trim().length < 2 || createRole.isPending}>
-                  {createRole.isPending ? 'Adding…' : 'Add'}
-                </Button>
-              </div>
-            )}
-            {byStage(roles ?? []).map(
-              (group) =>
-                group.roles.length > 0 && (
-                  <div key={group.stage}>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">{group.label}</p>
-                    <div className="grid gap-1.5 sm:grid-cols-2">
-                      {group.roles.map((r) => (
-                        <label key={r.id} className="flex items-center gap-2 rounded-md border border-border p-2 text-sm">
-                          <input type="checkbox" checked={roleIds.includes(r.id)} onChange={() => toggleRole(r.id)} />
-                          {r.type_name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ),
-            )}
+          <div className="flex flex-col gap-1.5">
+            <Label>Job roles</Label>
+            <JobRolePicker
+              pickable={pickable}
+              chosen={roleIds}
+              onChange={setRoleIds}
+              onPick={pickRole}
+              onCreate={powers.canAddJobRoles ? addRole : undefined}
+              compact
+            />
           </div>
 
           <hr className="border-border" />
