@@ -1,0 +1,3 @@
+-- 0211: trial and plan reminder emails -- 7 days before, 1 day before, and
+-- the day access ends -- so a studio that has not opened the app still hears
+-- that its 30 days (0210) or its paid plan are running out.
