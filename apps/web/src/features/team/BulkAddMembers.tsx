@@ -1,14 +1,16 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Check, ClipboardPaste, Eye, EyeOff, Loader2, Plus, X } from 'lucide-react'
+import type { ProductionStage } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { ToneChip, TONE_DOT, TONE_TEXT } from '@/shared/ui/tone-chip'
+import { TONE_CHIP_STATIC } from '@/shared/ui/tone-chip'
 import { useBulkTeamCalls, useEmployeeRoles, useRoleLibrary } from './api'
-import { STAGE_LABEL, STAGE_ORDER, STAGE_TONE } from './role-stages'
+import { JobRolePicker } from './JobRolePicker'
+import { STAGE_TONE, toRoleCode } from './role-stages'
 import {
   DEFAULT_PASTE_COLUMNS,
   isBlankRow,
@@ -75,7 +77,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
     () => pickableRoles(roles ?? [], canAddJobRoles ? (library ?? []) : []),
     [roles, library, canAddJobRoles],
   )
-  const roleName = useMemo(() => new Map(pickable.map((r) => [r.key, r.type_name])), [pickable])
+  const roleByKey = useMemo(() => new Map(pickable.map((r) => [r.key, r])), [pickable])
   const errors = useMemo(() => validateRows(rows), [rows])
   const todo = pendingRows(rows)
   const retrying = todo.some((r) => r.status === 'failed')
@@ -293,7 +295,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
       {unknownRoles.length > 0 && (
         <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
           We didn&apos;t recognise these job roles, so they were left off: <strong>{unknownRoles.join(', ')}</strong>.
-          Pick the closest one on each row, or create them under Roles &amp; Access.
+          Open Job roles on each row and type the name to add it as a new role.
           <button type="button" className="ml-2 underline" onClick={() => setUnknownRoles([])}>
             Dismiss
           </button>
@@ -326,7 +328,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
                 errors={showErrors ? errors.get(r.key) : undefined}
                 locked={running || r.status === 'added'}
                 showPasswords={showPasswords}
-                roleName={roleName}
+                roleByKey={roleByKey}
                 onEdit={(next) => edit(r.key, next)}
                 onPickRoles={() => setPicking(r.key)}
                 onRemove={() => removeRow(r.key)}
@@ -356,6 +358,15 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
       <RolePicker
         row={pickingRow}
         pickable={pickable}
+        onCreate={
+          canAddJobRoles
+            ? async (name, stage) => {
+                const made = await calls.createRole({ type_name: name, role_code: toRoleCode(name), stage })
+                await calls.refresh()
+                return made.id
+              }
+            : undefined
+        }
         onClose={() => setPicking(null)}
         onChange={(roleKeys) => pickingRow && edit(pickingRow.key, { roleKeys })}
         onApplyToAll={(roleKeys) =>
@@ -372,7 +383,7 @@ function Row({
   errors,
   locked,
   showPasswords,
-  roleName,
+  roleByKey,
   onEdit,
   onPickRoles,
   onRemove,
@@ -382,14 +393,14 @@ function Row({
   errors: Partial<Record<RowField, string>> | undefined
   locked: boolean
   showPasswords: boolean
-  roleName: Map<string, string>
+  roleByKey: Map<string, PickableRole>
   onEdit: (next: Partial<BulkRow>) => void
   onPickRoles: () => void
   onRemove: () => void
 }) {
   const powers = useTeamPowers()
   const noLogin = !row.email.trim()
-  const names = row.roleKeys.map((k) => roleName.get(k)).filter(Boolean) as string[]
+  const picked = row.roleKeys.map((k) => roleByKey.get(k)).filter((r): r is PickableRole => !!r)
 
   const cell = (field: RowField, input: ReactNode) => (
     <td className="px-2 py-1.5 align-top">
@@ -461,20 +472,39 @@ function Row({
           />,
         )}
         <td className="px-2 py-1.5 align-top">
+          {/* A box you can see: amber and dashed until a role is picked, then the role in its stage colour. */}
           <button
             type="button"
             onClick={onPickRoles}
             disabled={locked}
-            className="flex h-8 w-full items-center truncate rounded-md border border-input bg-card px-2.5 text-left text-sm shadow-sm transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'flex h-8 w-full items-center gap-1 overflow-hidden rounded-md border px-1.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+              picked.length === 0
+                ? 'border-dashed border-tone-amber/70 bg-tone-amber-soft/40 font-medium text-tone-amber hover:border-tone-amber'
+                : 'border-input bg-card hover:border-primary/40',
+            )}
             aria-label={`Row ${index + 1} job roles`}
           >
-            {names.length === 0 ? (
-              <span className="text-muted-foreground">Pick…</span>
-            ) : (
-              <span className="truncate">
-                {names[0]}
-                {names.length > 1 && <span className="text-muted-foreground"> +{names.length - 1}</span>}
+            {picked.length === 0 ? (
+              <span className="flex items-center gap-1 px-1">
+                <Plus className="size-3.5" aria-hidden /> Job roles
               </span>
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    'min-w-0 truncate rounded-full border px-2 py-0.5 text-xs font-medium',
+                    TONE_CHIP_STATIC[STAGE_TONE[picked[0]!.stage]],
+                  )}
+                >
+                  {picked[0]!.type_name}
+                </span>
+                {picked.length > 1 && (
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                    +{picked.length - 1}
+                  </span>
+                )}
+              </>
             )}
           </button>
         </td>
@@ -544,27 +574,28 @@ function Row({
 }
 
 /**
- * The job roles for one row. Library defaults appear alongside the studio's
- * own roles and are created on send, the same single list "Add one person" offers.
+ * The job roles for one row: the same picker "Add one person" uses. Library
+ * defaults are kept as `lib:` keys and created on send; a role typed in here
+ * is created at once, so it is on the list for every other row too.
  * "Use for every row" exists because a crew is usually one or two jobs
  * repeated — twelve candid photographers should be one click, not twelve.
  */
 function RolePicker({
   row,
   pickable,
+  onCreate,
   onClose,
   onChange,
   onApplyToAll,
 }: {
   row: BulkRow | null
   pickable: readonly PickableRole[]
+  onCreate: ((name: string, stage: ProductionStage) => Promise<string>) | undefined
   onClose: () => void
   onChange: (roleKeys: string[]) => void
   onApplyToAll: (roleKeys: string[]) => void
 }) {
   const chosen = row?.roleKeys ?? []
-  const toggle = (key: string) =>
-    onChange(chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key])
 
   return (
     <Dialog open={!!row} onOpenChange={(v) => !v && onClose()}>
@@ -572,40 +603,9 @@ function RolePicker({
         title={row?.name.trim() ? `Job roles for ${row.name.trim()}` : 'Job roles'}
         description="What they get booked for. Pick as many as apply."
       >
-        {pickable.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No job roles yet. You can add them under Roles &amp; Access and assign them later.
-          </p>
-        ) : (
-          // Grouped by when in the job the role works — the same grouping and
-          // colours as the roles page and the shoot requirement picker.
-          <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto">
-            {STAGE_ORDER.map((stage) => {
-              const inStage = pickable.filter((p) => p.stage === stage)
-              if (inStage.length === 0) return null
-              const tone = STAGE_TONE[stage]
-              return (
-                <div key={stage}>
-                  <p className={cn('mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider', TONE_TEXT[tone])}>
-                    <span className={cn('size-2 rounded-full', TONE_DOT[tone])} aria-hidden />
-                    {STAGE_LABEL[stage]}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {inStage.map((p) => (
-                      <ToneChip
-                        key={p.key}
-                        tone={tone}
-                        label={p.type_name}
-                        selected={chosen.includes(p.key)}
-                        onClick={() => toggle(p.key)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <div className="max-h-[60vh] overflow-y-auto">
+          <JobRolePicker pickable={pickable} chosen={chosen} onChange={onChange} onCreate={onCreate} compact />
+        </div>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <Button
             variant="outline"

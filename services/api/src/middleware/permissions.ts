@@ -29,6 +29,15 @@ export function requireOwner() {
   }
 }
 
+/** The owner, or anyone given this action -- for a write a delegate may also make. */
+export function requireOwnerOr(key: ModuleKey, action: ModuleAction) {
+  return async (c: Context<AppEnv>, next: Next) => {
+    const auth = c.get('auth')
+    if (!auth.isOwner && !auth.access.hasAction(key, action)) fail(403, DENIED)
+    await next()
+  }
+}
+
 /** Cross-tenant vendor console gate — the platform_admins allowlist only. */
 export function requirePlatformAdmin() {
   return async (c: Context<AppEnv>, next: Next) => {

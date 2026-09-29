@@ -652,8 +652,13 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/team/roles') return atStage(employeeRoles, 'partial')
   // Echoes the request so a role added from the library comes back under the
   // name that was tapped, not a placeholder.
-  if (method === 'POST' && path === '/team/roles')
-    return { id: uid(0xfa), stage: null, member_count: 0, ...(body as object) }
+  if (method === 'POST' && path === '/team/roles') {
+    // Kept, with an id of its own, so a role added in the preview shows up
+    // picked in the list the way it does against the real API.
+    const made = { id: uid(0xf000 + employeeRoles.length), stage: null, member_count: 0, ...(body as object) }
+    employeeRoles.push(made as (typeof employeeRoles)[number])
+    return made
+  }
   if ((method === 'PATCH' || method === 'DELETE') && path.startsWith('/team/roles/')) return { ok: true }
   if (method === 'PATCH' && /^\/team\/members\/[^/]+\/roles$/.test(path)) return { ok: true }
   if (method === 'POST' && path === '/team/members')
