@@ -7,7 +7,7 @@ import { useAddDeliverable, useDeleteDeliverable } from '@/features/projects/api
 import { DeliverableDialog } from '@/features/projects/DeliverableDialog'
 import { DeliverableCard } from '@/features/projects/DeliverableCard'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
-import type { PipelineFilter } from '@/features/projects/DeliveryPipeline'
+import { DeliveryPipeline, type PipelineFilter } from '@/features/projects/DeliveryPipeline'
 import { STAGE_LABEL, groupByShoot, isLate, stageOf, type ShootRef } from '@/features/projects/deliverable-stage'
 import { EventTile } from '@/shared/ui/icon-tile'
 
@@ -77,10 +77,12 @@ export function DeliverablesTab({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      {deliverables.length === 0 && (
+      {deliverables.length > 0 ? (
+        <DeliveryPipeline deliverables={deliverables} filter={filter} onFilter={setFilter} />
+      ) : (
         <div className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center">
-          <p className="text-sm font-semibold">No post-production work yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Add what you promised the client — the album, the film, the reels.</p>
+          <p className="text-sm font-semibold">Nothing promised yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Add what you promised the client — the album, the film, the reels — and track each one to delivery.</p>
         </div>
       )}
 
@@ -93,11 +95,13 @@ export function DeliverablesTab({
                 show all
               </button>
             </>
-          ) : null}
+          ) : (
+            'Grouped by the shoot each one comes from'
+          )}
         </p>
         {canEdit && (
           <Button onClick={() => setDialog({})}>
-            <Plus /> Add work
+            <Plus /> Add deliverable
           </Button>
         )}
       </div>

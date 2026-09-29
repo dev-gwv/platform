@@ -50,7 +50,7 @@ import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ReferralCard } from '@/features/projects/ReferralCard'
 import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
-import { BillingTab, projectMoney } from '@/features/projects/tabs/BillingTab'
+import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 
 /** The tabs across a project. Each one is a view of the same project. */
@@ -65,15 +65,6 @@ const TABS = [
   { value: 'tasks', label: 'Tasks', icon: CheckSquare },
 ] as const
 type Tab = (typeof TABS)[number]['value']
-
-/**
- * The tabs shown for now. The owner asked for the project page to be just
- * the project -- its overview, its shoots, and the post-production work --
- * and to bring the rest back later. The other tabs still work (a ?tab= link
- * or the Billing button on a money tile opens them); they are only not in
- * the bar.
- */
-const SHOWN_TABS: ReadonlySet<Tab> = new Set<Tab>(['overview', 'shoots', 'deliverables'])
 
 const STATUS_TONE: Record<ProjectStatus, 'info' | 'success' | 'danger' | 'warning'> = {
   active: 'info',
@@ -139,7 +130,6 @@ function ProjectDetail() {
   // Tabs for things this person cannot use are not shown at all.
   const visibleTabs = TABS.filter(
     (t) =>
-      SHOWN_TABS.has(t.value) &&
       (t.value !== 'tasks' || access.hasModule('tasks')) &&
       (t.value !== 'expenses' || access.hasModule('company_expenses')) &&
       (t.value !== 'completed_work' || access.hasModule('team_work_preview')),
@@ -322,6 +312,7 @@ function ProjectDetail() {
 
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
+        <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
         <div className="grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
           <DeliverablesSummary
             deliverables={data.deliverables}

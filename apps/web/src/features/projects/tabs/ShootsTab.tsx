@@ -167,8 +167,9 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
       {canEdit && (
-        <section aria-label="Add a function" className="rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap gap-2">
+        <section aria-labelledby="add-events" className="rounded-xl border border-border bg-card p-4">
+          <h2 id="add-events" className="text-base font-bold tracking-tight">Add your events</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
             {chips.map((name) => (
               <Button
                 key={name}
@@ -245,7 +246,7 @@ export function ShootsTab({ projectId }: { projectId: string }) {
       ) : !data || data.length === 0 ? (
         <EmptyState
           title="No functions added yet"
-          description="Tap a function above to add it."
+          description="Tap an event above to add it."
         />
       ) : (
         <div className="flex flex-col gap-3">
