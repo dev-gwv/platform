@@ -14,8 +14,6 @@ import { termsPayload, type TermsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { StatusBadge } from '@/shared/ui/status-badge'
 
-const termsBody = z.object({ body: z.string() })
-
 
 /**
  * PUBLIC page — no auth. A client opens the emailed link (?token=…), reads the
@@ -41,36 +39,32 @@ export function TermsAcknowledgePage() {
       setLoadError('This link is missing its token.')
       return
     }
-    // Rich payload first; fall back to the legacy body-only reader.
     callApi(`/public/terms/${token}/payload`, { responseSchema: termsPayload })
       .then((r) => {
-        if (r.revoked) {
-          setLoadError('This link was cancelled or replaced by a newer one. Please ask the studio to send it again.')
-          return
-        }
-        if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) {
-          setLoadError('This link has expired. Please ask the studio for a fresh one.')
-          return
-        }
+        // Agreed first: that is the client's copy, readable after the link's
+        // date has passed -- not an "expired" page.
         if (r.acknowledged_at || r.already_acknowledged) {
           setDoc(r)
           setName(r.acknowledged_by_name ?? '')
           setDone(true)
           return
         }
+        if (r.revoked) {
+          setLoadError(`${r.company_name ?? 'The studio'} has sent a newer version of these terms. Please ask them for the latest link.`)
+          return
+        }
+        if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) {
+          setLoadError(`This link has stopped working. Please ask ${r.company_name ?? 'the studio'} to send you a fresh one.`)
+          return
+        }
         setDoc(r)
+        // The studio already knows who this is for: save them typing it.
+        setName(r.client_name ?? '')
+        setEmail(r.client_email ?? '')
       })
-      .catch(() =>
-        callApi(`/public/terms/${token}`, { responseSchema: termsBody })
-          .then((r) => setDoc({
-            title: 'Terms & agreement', body: r.body, project_name: null, client_name: null,
-            client_phone: null, company_name: null, logo_url: null, company_phone: null,
-            company_email: null, company_address: null, payment_summary: null, sections: [],
-            expires_at: null, revoked: false, acknowledged_at: null, acknowledged_by_name: null, access_count: 0,
-            payment_terms: null, total_cost: null, legal_note: null, document_footer_note: null, already_acknowledged: null,
-          }))
-          .catch((e) => setLoadError(e instanceof Error ? e.message : 'This link is invalid or expired.')),
-      )
+      // The server says why a link will not open (replaced, past its date,
+      // not a link at all) -- show that, not one message for everything.
+      .catch((e) => setLoadError(e instanceof ApiError ? e.message : 'This link could not be opened. Please try again in a moment.'))
   }, [token])
 
   async function onAgree(e: FormEvent) {

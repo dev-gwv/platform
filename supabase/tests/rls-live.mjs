@@ -1770,7 +1770,7 @@ if (listed) {
   const again = await api(`/terms/documents/${sent.json.document_id}/link`, { token: aToken, method: 'POST', body: {} })
   const oldLink = await api(`/public/terms/${sent.json.token}/payload`)
   const newLink = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
-  check('terms: sending again makes a new link and stops the old one', again.status === 200 && oldLink.status === 404 && newLink.status === 200, {
+  check('terms: a new link stops the old one, and the old one says it was replaced (410)', again.status === 200 && oldLink.status === 410 && /newer version/.test(oldLink.json?.error?.message ?? oldLink.json?.message ?? JSON.stringify(oldLink.json)) && newLink.status === 200, {
     again: again.status, old: oldLink.status, fresh: newLink.status,
   })
 
@@ -1793,7 +1793,7 @@ if (listed) {
   const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
   const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)
   const lateAgree = await api(`/public/terms/${tokenOf(again.json.url)}/ack`, { method: 'POST', body: { name: 'Priya' } })
-  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 404 && legacy.status === 404 && lateAgree.status === 409, {
+  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 410 && legacy.status === 410 && lateAgree.status === 409, {
     cancelled: cancelled.status, afterCancel: afterCancel.status, legacy: legacy.status, lateAgree: lateAgree.status,
   })
 
@@ -1809,6 +1809,49 @@ if (listed) {
   )
   const other = await api(`/terms/projects/${pid}/documents`, { token: newPw.json.access_token })
   check("terms: another studio sees none of this project's terms", Array.isArray(other.json) && other.json.length === 0, other.json)
+
+  // ── 0215: the same link again, the email with it, and why a link fails ──
+  const v3 = await api('/terms/issue', {
+    token: aToken,
+    method: 'POST',
+    body: { project_id: pid, rendered_body: 'Version three.', email: true, to_email: 'client@example.com' },
+  })
+  const listed3 = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  const cur = listed3.json[0] ?? {}
+  check(
+    'terms 0215: "share again" hands out the same link the client already has',
+    v3.status === 201 && tokenOf(cur.share_url ?? '') === v3.json.token,
+    { share_url: cur.share_url, token: v3.json.token },
+  )
+  // No mail provider here: the send says so, and the card shows that answer.
+  check(
+    'terms 0215: sending with email on reports what happened to the email',
+    ['provider_missing', 'sent', 'failed'].includes(v3.json.email_status) && cur.last_email?.status === v3.json.email_status,
+    { email_status: v3.json.email_status, last_email: cur.last_email },
+  )
+  const stored = await api(`/terms/documents/${v3.json.document_id}/email`, { token: aToken, method: 'POST', body: { to_email: 'client@example.com' } })
+  const stillLive = await api(`/public/terms/${v3.json.token}/payload`)
+  check(
+    'terms 0215: emailing again uses the kept link and does not break it',
+    stored.status === 200 && stillLive.status === 200,
+    { stored: stored.status, live: stillLive.status },
+  )
+  const bogus = await api('/public/terms/not-a-real-link-at-all/payload')
+  check('terms 0215: a link that never existed is a plain 404 that says so', bogus.status === 404, { status: bogus.status })
+  const agreed3 = await api(`/public/terms/${v3.json.token}/ack`, { method: 'POST', body: { name: 'Priya Sharma' } })
+  const after3 = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  check(
+    'terms 0215: once agreed there is no link to share again',
+    agreed3.status === 200 && after3.json[0]?.share_url === null && !!after3.json[0]?.acknowledged_at,
+    { share_url: after3.json[0]?.share_url },
+  )
+
+  // Invoices: the customer's own projects, for anyone who may make invoices.
+  const cp = await api(`/clients/${client.json.id}/projects`, { token: aToken })
+  check('invoice: picking a customer lists that customer’s projects', cp.status === 200 && cp.json.some((x) => x.id === pid), {
+    status: cp.status,
+    ids: Array.isArray(cp.json) ? cp.json.map((x) => x.id) : cp.json,
+  })
 }
 
 // ── Project money: promised is not received; a payment can be changed ───

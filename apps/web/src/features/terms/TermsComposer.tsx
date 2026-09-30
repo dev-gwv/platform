@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, FileSignature, Plus, Save, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Input, Label, Select, Textarea } from '@/shared/ui/input'
+import { Input, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -119,7 +119,8 @@ export function TermsComposer({
   const [body, setBody] = useState(() => start?.body ?? fillPlaceholders(first.body, ctxFor(firstPlan)))
   const [plan, setPlan] = useState<PaymentTermDraft[]>(() => start?.plan ?? firstPlan)
   const [edited, setEdited] = useState(false)
-  const [expiryDays, setExpiryDays] = useState(14)
+  // The owner's rule: the email goes with the link unless they untick it.
+  const [emailIt, setEmailIt] = useState(!!project.client_email)
   const [savingAs, setSavingAs] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [restored, setRestored] = useState(false)
@@ -221,7 +222,11 @@ export function TermsComposer({
         payment_terms: plan.filter((p) => p.label.trim()),
         total_cost: project.total_cost || undefined,
         legal_note: DEFAULT_LEGAL_NOTE,
-        expiry_days: expiryDays,
+        // The link works for 14 days, stops the moment the client agrees, and
+        // stops when a new version is sent.
+        expiry_days: 14,
+        email: emailIt && !!project.client_email,
+        to_email: emailIt ? (project.client_email ?? null) : null,
       },
       { onSuccess: onSent },
     )
@@ -395,18 +400,21 @@ export function TermsComposer({
           </Section>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Label htmlFor="terms-expiry" className="text-xs font-normal">
-                Link works for
-              </Label>
-              <Select id="terms-expiry" value={String(expiryDays)} onChange={(e) => setExpiryDays(Number(e.target.value))} className="h-8 w-28">
-                {[7, 14, 30, 90].map((d) => (
-                  <option key={d} value={d}>
-                    {d} days
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {project.client_email ? (
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={emailIt}
+                  onChange={(e) => setEmailIt(e.target.checked)}
+                />
+                Email it to <span className="font-medium">{project.client_email}</span>
+              </label>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No email on {client}&apos;s details — you can send it on WhatsApp next.
+              </p>
+            )}
             <div className="flex gap-2">
               {onCancel && (
                 <Button variant="ghost" onClick={onCancel}>

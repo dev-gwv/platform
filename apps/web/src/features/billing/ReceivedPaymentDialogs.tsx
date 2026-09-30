@@ -6,7 +6,7 @@ import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
 import { useClients } from '@/features/clients/api'
-import { useProjects } from '@/features/projects/api'
+import { useClientProjectOptions } from './client-projects'
 import {
   useCreateReceivedPayment,
   useUpdateReceivedPayment,
@@ -73,7 +73,6 @@ export function ReceivedPaymentDialog({
   const update = useUpdateReceivedPayment(initial?.id ?? '')
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
-  const { data: projects } = useProjects()
   const [form, setForm] = useState<PaymentFormState>(emptyForm())
   const [error, setError] = useState<string | null>(null)
 
@@ -91,7 +90,7 @@ export function ReceivedPaymentDialog({
 
   const { data: invoices } = useInvoices()
   const pending = create.isPending || update.isPending
-  const clientProjects = (projects ?? []).filter((p) => !form.client_id || p.client_id === form.client_id)
+  const projectChoice = useClientProjectOptions(form.client_id)
   // The list endpoint answers with either an array or a page, depending on
   // whether it was asked for one; the client's name is all it carries, so the
   // list is narrowed by that rather than by id.
@@ -179,8 +178,8 @@ export function ReceivedPaymentDialog({
                 onChange={(e) => set('project_id', e.target.value)}
                 className="h-9 rounded-md border border-input bg-card px-3 text-sm"
               >
-                <option value="">Select project</option>
-                {clientProjects.map((p) => (
+                <option value="">{form.client_id ? projectChoice.blank : 'Select project'}</option>
+                {projectChoice.options.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>

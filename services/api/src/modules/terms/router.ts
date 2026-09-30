@@ -9,7 +9,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
-import { sendClientDocEmail } from '../../lib/email'
+import { sendClientDocEmail, sendTermsAgreedEmail } from '../../lib/email'
 import { currentStudioBrand } from '../../lib/studio-brand'
 
 const issueTermsRequest = z.object({
@@ -136,6 +136,12 @@ const projectTermsVersion = z.object({
   access_count: z.number().int(),
   link_live: z.boolean(),
   emailed_to: z.string().nullable(),
+  /** The live link to share again -- the same one the client already has. Only for people who may edit. */
+  share_url: z.string().nullable(),
+  /** The last email attempt, whatever it answered: "sent" or why not. */
+  last_email: z
+    .object({ to: z.string().nullable(), status: z.string(), at: z.string(), error: z.string().nullable() })
+    .nullable(),
 })
 
 /** The studio's own words for the email, when it wants them. */
@@ -176,8 +182,8 @@ async function emailTerms(
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error: string | null }> {
   const info = await attempt(c, 'terms.email_info', () =>
     withUser(c.env, c.get('auth').userId, async (sql) => {
-      const rows = await sql<{ client_email: string | null; project_name: string | null; company_name: string | null }[]>`
-        select cl.email as client_email, p.name as project_name, coalesce(co.display_name, co.name) as company_name
+      const rows = await sql<{ client_email: string | null; client_name: string | null; project_name: string | null; company_name: string | null }[]>`
+        select cl.email as client_email, cl.name as client_name, p.name as project_name, coalesce(co.display_name, co.name) as company_name
           from project_terms_documents d
           left join projects p on p.id = d.project_id
           left join clients cl on cl.id = p.client_id
@@ -187,23 +193,35 @@ async function emailTerms(
     }),
   )
   const to = toOverride || info?.client_email || null
+  const studio = info?.company_name ?? 'The studio'
+  const project = info?.project_name ? ` for ${escapeHtml(info.project_name)}` : ''
+  const subject =
+    words.subject || `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`
+  const brand = await currentStudioBrand(c)
   const result = await sendClientDocEmail(
     c.env,
     to,
-    words.subject || `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`,
+    subject,
     url,
     // The studio's message goes out as written, escaped: the email is HTML.
     words.message
       ? escapeHtml(words.message).replace(/\n/g, '<br>')
-      : `${info?.company_name ?? 'The studio'} has shared the terms${info?.project_name ? ` for ${info.project_name}` : ''}. Please open the link, read them, and tap "I agree".`,
-    await currentStudioBrand(c),
+      : `Hi ${escapeHtml(info?.client_name ?? 'there')},<br><br>${escapeHtml(studio)} has shared the terms${project}. ` +
+          `Please open the link, read them, and tap "I agree" at the end of the page.` +
+          (brand?.replyTo ? `<br><br>Questions? Just reply to this email.` : ''),
+    brand,
   )
   try {
     await withUser(c.env, c.get('auth').userId, async (sql) => {
-      await sql`insert into project_terms_email_logs (company_id, document_id, to_email, status, error, created_by)
-        values (${c.get('auth').companyId}, ${documentId}, ${to}, ${result.status}, ${result.error ?? null}, ${c.get('auth').userId})`
+      await sql`insert into project_terms_email_logs
+                  (company_id, document_id, to_email, status, error, subject, provider_message_id, created_by)
+        values (${c.get('auth').companyId}, ${documentId}, ${to}, ${result.status}, ${result.error ?? null},
+                ${subject}, ${result.id ?? null}, ${c.get('auth').userId})`
     })
-  } catch { /* the log never blocks the send */ }
+  } catch (e) {
+    // The log never blocks the send -- but a missing log is why "emailed to" would not show, so say so.
+    console.error('[terms] email log insert failed', e)
+  }
   return { status: result.status, error: result.error ?? null }
 }
 
@@ -264,7 +282,33 @@ export const termsRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, (sql) => sql`select * from list_project_terms(${projectId}::uuid)`),
     )
     if (!rows) fail(400, 'We could not load the terms for this project.')
-    return c.json(projectTermsVersion.array().parse(rows))
+    // The raw link lets whoever holds it agree on the client's behalf, so it
+    // goes only to people who may send the terms in the first place.
+    const canShare = c.get('auth').access.hasAction('projects', 'edit')
+    type Row = Record<string, unknown> & {
+      share_token: string | null
+      last_email_to: string | null
+      last_email_status: string | null
+      last_email_at: Date | string | null
+      last_email_error: string | null
+    }
+    return c.json(
+      projectTermsVersion.array().parse(
+        (rows as unknown as Row[]).map(({ share_token, last_email_to, last_email_status, last_email_at, last_email_error, ...r }) => ({
+          ...r,
+          share_url: canShare && share_token ? termsLink(c.env, share_token) : null,
+          last_email:
+            last_email_status && last_email_at
+              ? {
+                  to: last_email_to,
+                  status: last_email_status,
+                  at: last_email_at instanceof Date ? last_email_at.toISOString() : String(last_email_at),
+                  error: last_email_error,
+                }
+              : null,
+        })),
+      ),
+    )
   })
 
   /**
@@ -309,26 +353,31 @@ export const termsRouter = new Hono<AppEnv>()
   })
 
   /**
-   * Email a link the studio already holds (just made, maybe already sent on
-   * WhatsApp) without replacing it. The link must belong to this document and
-   * still work -- the server checks the token, it never trusts the URL.
+   * Email the link the client already has (maybe also sent on WhatsApp)
+   * without replacing it: the one passed in, or the document's kept link
+   * (0215). Either way it must belong to this document and still work -- the
+   * server checks the token, it never trusts a URL.
    */
   .post('/documents/:id/email', requireAction('projects', 'edit'), async (c) => {
     const id = c.req.param('id') ?? ''
     if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
     const parsed = z
-      .object({ token: z.string().min(10).max(200), to_email: z.string().trim().email().max(200).nullish(), ...emailWords })
+      .object({ token: z.string().min(10).max(200).nullish(), to_email: z.string().trim().email().max(200).nullish(), ...emailWords })
       .safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the email address.')
-    const live = await attempt(c, 'terms.email_check', () =>
+    const token = await attempt(c, 'terms.email_check', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const rows = await sql<{ ok: boolean }[]>`
-          select terms_link_is_live(${id}::uuid, ${parsed.data.token}) as ok`
-        return rows[0]?.ok ?? false
+        if (parsed.data.token) {
+          const rows = await sql<{ ok: boolean }[]>`
+            select terms_link_is_live(${id}::uuid, ${parsed.data.token}) as ok`
+          return rows[0]?.ok ? parsed.data.token : null
+        }
+        const rows = await sql<{ t: string | null }[]>`select terms_live_share_token(${id}::uuid) as t`
+        return rows[0]?.t ?? null
       }),
     )
-    if (!live) fail(409, 'That link no longer works. Send the terms again to make a new one.')
-    const url = termsLink(c.env, parsed.data.token)
+    if (!token) fail(409, 'That link no longer works. Make a new link first, then send it.')
+    const url = termsLink(c.env, token)
     const email = await emailTerms(c, id, url, parsed.data.to_email, { subject: parsed.data.subject, message: parsed.data.message })
     await audit(c, { action: 'terms.email', entityType: 'terms_document', entityId: id, after: { status: email.status } })
     return c.json({ status: email.status, error: email.error })
@@ -640,7 +689,7 @@ export const publicTermsRouter = new Hono<AppEnv>()
       withService(c.env, (sql) => sql`select * from get_terms_payload_for_token(p_raw => ${token})`),
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
-    if (!rows[0]) fail(404, 'This link is invalid or has expired.')
+    if (!rows[0]) await refuseLink(c, token)
     return c.json(termsPayload.parse({ ...rows[0] as Record<string, unknown>, body: (rows[0] as { body?: string }).body ?? '' }))
   })
 
@@ -651,7 +700,7 @@ export const publicTermsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     const body = rows[0]?.body
-    if (!body) fail(404, 'This link is invalid or has expired.')
+    if (!body) await refuseLink(c, token)
     return c.json(termsBody.parse({ body }))
   })
 
@@ -675,6 +724,45 @@ export const publicTermsRouter = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not record your agreement.')
-    if (rows[0]?.ok === false) fail(409, 'This link has already been used or has expired.')
+    if (rows[0]?.ok === false) await refuseLink(c, token, 409)
+    // The owner hears by email too; a failure here never undoes the agreement.
+    const notice = await attempt(c, 'terms.agreed_notice', () =>
+      withService(c.env, async (sql) => {
+        const r = await sql<{ owner_email: string | null; project_id: string | null; project_name: string | null; client_name: string | null; agreed_by: string | null }[]>`
+          select owner_email, project_id, project_name, client_name, agreed_by from terms_agreed_notice(${token})`
+        return r[0] ?? null
+      }),
+    )
+    if (notice?.owner_email) {
+      await sendTermsAgreedEmail(c.env, notice.owner_email, {
+        clientName: notice.client_name ?? parsed.data.name,
+        projectName: notice.project_name,
+        agreedBy: notice.agreed_by ?? parsed.data.name,
+        link: `${c.env.APP_URL ?? ''}${notice.project_id ? `/projects/${notice.project_id}?tab=terms` : '/project-documents'}`,
+      })
+    }
     return c.json({ ok: true })
   })
+
+/**
+ * A link that will not open, and why -- so the client knows whether to ask
+ * for a new one. Throws.
+ */
+async function refuseLink(c: Context<AppEnv>, token: string, status: 404 | 409 | 410 = 410): Promise<never> {
+  const rows = await attempt(c, 'terms.link_state', () =>
+    withService(c.env, (sql) => sql<{ state: string; expires_at: Date | null; company_name: string | null }[]>`
+      select state, expires_at, company_name from terms_link_state(${token})`),
+  )
+  const s = rows?.[0]
+  const studio = s?.company_name ?? 'the studio'
+  if (!s) fail(404, 'This link is not valid. Check that you opened the whole link, or ask the studio to send it again.')
+  if (s.state === 'agreed') fail(status, 'These terms have already been agreed to.')
+  if (s.state === 'expired') {
+    const on = s.expires_at ? ` on ${new Date(s.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''
+    fail(status, `This link stopped working${on}. Please ask ${studio} to send you a fresh one.`)
+  }
+  if (s.state === 'cancelled') {
+    fail(status, `${studio} has sent a newer version of these terms, or cancelled this link. Please ask ${studio} for the latest link.`)
+  }
+  fail(status, 'This link can no longer be used.')
+}

@@ -1,15 +1,24 @@
 import { useState } from 'react'
-import { Check, Copy, Mail, MessageCircle, Pencil } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, Copy, Mail, MessageCircle, Pencil } from 'lucide-react'
 import { buildWhatsAppUrl } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Input, Textarea } from '@/shared/ui/input'
 import { useEmailTermsLink } from './api'
 
+/** What happened to the email that went with the link, if one did. */
+export interface EmailOutcome {
+  status: string
+  error: string | null
+  to: string | null
+}
+
 /**
  * Three ways to get the link to the client, biggest first: WhatsApp (to
  * their number), email (to their address, editable), or copy it. The same
- * panel appears after the first send and after "send again".
+ * panel appears after the first send and after "share the link again" --
+ * and it is always the same link, so nothing the client already has stops
+ * working.
  */
 export function ShareTermsPanel({
   documentId,
@@ -20,17 +29,22 @@ export function ShareTermsPanel({
   clientEmail,
   projectName,
   studioName,
+  emailed: firstEmail,
 }: {
   documentId: string
-  token: string
+  /** The raw link; omit to use the document's kept link. */
+  token?: string | null | undefined
   url: string
   clientName: string | null | undefined
   clientPhone: string | null | undefined
   clientEmail: string | null | undefined
   projectName: string
   studioName?: string | undefined
+  /** The email that went out with the link, to report first. */
+  emailed?: EmailOutcome | null | undefined
 }) {
   const [to, setTo] = useState(clientEmail ?? '')
+  const [outcome, setOutcome] = useState<EmailOutcome | null>(firstEmail ?? null)
   // The email's words, the studio's to change: what it says above the button.
   const [editingWords, setEditingWords] = useState(false)
   const [subject, setSubject] = useState(`Terms & conditions for ${projectName}${studioName ? ` — ${studioName}` : ''}`)
@@ -57,12 +71,13 @@ export function ShareTermsPanel({
     email.mutate(
       {
         documentId,
-        token,
+        token: token ?? null,
         to_email: to.trim() || null,
         ...(editingWords ? { subject: subject.trim() || null, message: intro.trim() || null } : {}),
       },
       {
         onSuccess: (r) => {
+          setOutcome({ status: r.status, error: r.error, to: to.trim() })
           if (r.status === 'sent') {
             setEmailed(to.trim())
             toast.success(`Emailed to ${to.trim()}`)
@@ -79,6 +94,7 @@ export function ShareTermsPanel({
 
   return (
     <div className="flex flex-col gap-3">
+      <EmailOutcomeLine outcome={outcome} />
       <Button asChild size="lg" className="bg-[#25D366] text-white hover:bg-[#1ebe57]">
         <a href={buildWhatsAppUrl(clientPhone, message)} target="_blank" rel="noreferrer noopener">
           <MessageCircle /> Send on WhatsApp{clientPhone ? ` to ${clientPhone}` : ''}
@@ -99,7 +115,7 @@ export function ShareTermsPanel({
           />
           <Button variant="outline" disabled={!to.trim() || email.isPending} onClick={sendEmail}>
             {emailed === to.trim() && emailed ? <Check /> : null}
-            {email.isPending ? 'Sending…' : emailed === to.trim() && emailed ? 'Sent' : 'Send'}
+            {email.isPending ? 'Sending…' : emailed === to.trim() && emailed ? 'Sent' : outcome?.status === 'failed' ? 'Try again' : 'Send'}
           </Button>
         </div>
         {editingWords ? (
@@ -124,5 +140,27 @@ export function ShareTermsPanel({
         </Button>
       </div>
     </div>
+  )
+}
+
+/** One line on what happened to the email: sent (green), or why not (red), in plain words. */
+export function EmailOutcomeLine({ outcome }: { outcome: EmailOutcome | null }) {
+  if (!outcome || outcome.status === 'not_requested') return null
+  if (outcome.status === 'sent') {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+        <CheckCircle2 className="size-4 shrink-0" aria-hidden /> Emailed to {outcome.to ?? 'the client'}
+      </p>
+    )
+  }
+  return (
+    <p className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>
+        {outcome.status === 'provider_missing'
+          ? 'Email is not set up for this app yet, so nothing was emailed. Send it on WhatsApp or copy the link.'
+          : `${outcome.error ?? 'The email did not go out.'} Send it on WhatsApp for now.`}
+      </span>
+    </p>
   )
 }
