@@ -1,7 +1,7 @@
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { z, authToken, sessionState, type SessionState } from '@ipc/contracts'
-import { callApi, ApiError, markCookieSession, rotateTokens, setAuthLostHandler } from '../api/client'
+import { callApi, ApiError, markCookieSession, hasStoredSession, rotateTokens, setAuthLostHandler } from '../api/client'
 import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
 import { MOCK_ENABLED, mockSession } from '../dev/mock'
 import { setSentryUser } from '@/shared/error/sentry'
@@ -66,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A new tab has no access token (it is per tab); a refresh from the stored
     // token or the HttpOnly cookie mints one before anything is asked.
     if (!getToken() && !(await rotateTokens())) {
+      // Still holding a session means the refresh was not refused -- the
+      // server did not answer. Say so, with Retry, rather than sign them out.
+      if (hasStoredSession()) throw new Error('We could not reach the server. Check your connection and try again.')
       setSession(null)
       return null
     }

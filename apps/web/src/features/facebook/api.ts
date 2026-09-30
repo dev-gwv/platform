@@ -11,7 +11,7 @@ import {
   type FbPageConnectRequest,
   type FbTestImportRequest,
 } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
@@ -95,11 +95,11 @@ const pagesFound = (r: { imported: number }) =>
  * with its own sealed token; the pasted token itself is not.
  */
 export const useVerifyMetaToken = () =>
-  useMetaMutation((token: string) => callApi('/meta/token', { method: 'POST', body: { token }, responseSchema: imported }), pagesFound)
+  useMetaMutation((token: string) => callApi('/meta/token', { method: 'POST', body: { token }, responseSchema: imported, timeoutMs: SLOW_TIMEOUT_MS }), pagesFound)
 
 /** "Connect with Facebook" sent the browser back with ?code=; the server trades it for the pages. */
 export const useExchangeMetaCode = () =>
-  useMetaMutation((code: string) => callApi('/meta/exchange', { method: 'POST', body: { code }, responseSchema: imported }), pagesFound)
+  useMetaMutation((code: string) => callApi('/meta/exchange', { method: 'POST', body: { code }, responseSchema: imported, timeoutMs: SLOW_TIMEOUT_MS }), pagesFound)
 
 export interface ImportLogFilters {
   search?: string
