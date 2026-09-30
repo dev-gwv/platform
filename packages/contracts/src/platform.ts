@@ -185,3 +185,44 @@ export const emailTestResult = z.object({
 })
 /** What happened to a sent email after Resend took it: delivered, bounced, … */
 export const emailDelivery = z.object({ last_event: z.string().nullable(), note: z.string().nullable() })
+
+// ── The old app's subscribers (0218) ─────────────────────────────
+/** One row of the old app's Studio Access "Export CSV". */
+export const legacyStudioInput = z.object({
+  old_company_id: z.string().trim().min(1).max(120),
+  studio_name: z.string().trim().min(1).max(200),
+  owner_name: z.string().trim().max(200).nullish(),
+  email: z.string().trim().max(320).nullish(),
+  phone: z.string().trim().max(40).nullish(),
+  plan: z.string().trim().max(80).nullish(),
+  expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+  old_created_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+})
+export type LegacyStudioInput = z.infer<typeof legacyStudioInput>
+
+export const legacyImportRequest = z.object({ rows: z.array(legacyStudioInput).min(1).max(5000) })
+export type LegacyImportRequest = z.infer<typeof legacyImportRequest>
+
+export const legacyImportResult = z.object({
+  imported: z.number().int(),
+  updated: z.number().int(),
+  carried: z.number().int(),
+})
+export type LegacyImportResult = z.infer<typeof legacyImportResult>
+
+export const legacyStudio = z.object({
+  id: uuid,
+  old_company_id: z.string(),
+  studio_name: z.string(),
+  owner_name: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  plan: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  old_created_at: z.string().nullable(),
+  joined_company_id: uuid.nullable(),
+  joined_name: z.string().nullable(),
+  carried_at: isoDateTime.nullable(),
+})
+export type LegacyStudio = z.infer<typeof legacyStudio>
+export const legacyStudioList = z.array(legacyStudio)

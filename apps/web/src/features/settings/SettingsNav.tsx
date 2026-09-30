@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { ModuleKey } from '@ipc/permissions'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
 
@@ -31,6 +32,8 @@ export interface SettingsItem {
   module: ModuleKey
   /** Other addresses that open this same page (old links, focused views). */
   also?: readonly string[]
+  /** The vendor's own pages: shown only to a platform admin. */
+  platformOnly?: boolean
 }
 
 export interface SettingsGroup {
@@ -118,6 +121,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         also: ['/settings/services', '/settings/work-submissions'],
       },
       { to: '/settings/advanced', label: 'Advanced tools', icon: Wrench, module: 'settings' },
+      // Where the old app kept it: every studio's access, for the platform owner.
+      { to: '/platform/studios', label: 'Studio access', icon: ShieldCheck, module: 'settings', platformOnly: true },
     ],
   },
 ]
@@ -139,9 +144,10 @@ export function settingsItemFor(pathname: string): SettingsItem | null {
 
 function useVisibleGroups() {
   const access = useAccess()
+  const admin = useAuth().session?.is_platform_admin ?? false
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => access.hasModule(i.module)),
+    items: g.items.filter((i) => access.hasModule(i.module) && (!i.platformOnly || admin)),
   })).filter((g) => g.items.length > 0)
 }
 

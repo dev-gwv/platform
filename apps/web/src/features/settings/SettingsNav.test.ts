@@ -28,6 +28,8 @@ describe('the settings rail', () => {
         '/settings/whatsapp',
         '/settings/system',
         '/settings/advanced',
+        // The old app's Studio Access, for platform admins only (0218).
+        '/platform/studios',
       ].sort(),
     )
   })
@@ -46,5 +48,11 @@ describe('the settings rail', () => {
     expect(settingsItemFor('/settings/work-submissions')?.to).toBe('/settings/system')
     expect(settingsItemFor('/settings/roles/')?.to).toBe('/settings/roles')
     expect(settingsItemFor('/employees')).toBeNull()
+  })
+})
+
+describe('studio access', () => {
+  it('is the one platform-only line, so a studio never sees it', () => {
+    expect(items.filter((i) => i.platformOnly).map((i) => i.to)).toEqual(['/platform/studios'])
   })
 })

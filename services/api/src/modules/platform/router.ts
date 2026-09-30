@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -57,6 +57,50 @@ export const platformRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not load that file.')
     if (!rows.length) fail(404, 'That file was not found.')
     return serve(rows[0]!)
+  })
+
+  // The old app's subscribers (0218): its Studio Access export, imported here.
+  // Re-importing updates by the old Company ID; every studio already on the
+  // new app with a matching owner or admin email takes its paid time over.
+  .get('/legacy', async (c) => {
+    const rows = await attempt(c, 'platform.legacy', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from platform_legacy_studios()`),
+    )
+    if (!rows) fail(400, 'We could not load the old app\'s studios.')
+    return c.json(legacyStudioList.parse(rows.map((r) => ({ ...r, carried_at: r['carried_at'] ? new Date(r['carried_at'] as string).toISOString() : null }))))
+  })
+
+  .post('/legacy/import', async (c) => {
+    const parsed = legacyImportRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'That file does not look like the old app\'s Studio Access export.')
+    const rows = parsed.data.rows.map((r) => ({
+      old_company_id: r.old_company_id,
+      studio_name: r.studio_name,
+      owner_name: r.owner_name || null,
+      email: r.email ? r.email.toLowerCase() : null,
+      phone: r.phone || null,
+      plan: r.plan || null,
+      expires_at: r.expires_at || null,
+      old_created_at: r.old_created_at || null,
+    }))
+    const result = await attempt(c, 'platform.legacy.import', () =>
+      withService(c.env, async (sql) => {
+        const before = await sql<{ n: number }[]>`
+          select count(*)::int as n from legacy_studios where old_company_id in ${sql(rows.map((r) => r.old_company_id))}`
+        await sql`
+          insert into legacy_studios ${sql(rows, 'old_company_id', 'studio_name', 'owner_name', 'email', 'phone', 'plan', 'expires_at', 'old_created_at')}
+          on conflict (old_company_id) do update set
+            studio_name = excluded.studio_name, owner_name = excluded.owner_name, email = excluded.email,
+            phone = excluded.phone, plan = excluded.plan, expires_at = excluded.expires_at,
+            old_created_at = excluded.old_created_at, imported_at = now()`
+        const carried = await sql<{ n: number }[]>`select coalesce(sum(legacy_carry_over(id)), 0)::int as n from companies`
+        const updated = before[0]?.n ?? 0
+        return { imported: rows.length - updated, updated, carried: carried[0]?.n ?? 0 }
+      }),
+    )
+    if (!result) fail(400, 'We could not import that file.')
+    await audit(c, { action: 'platform.legacy_import', entityType: 'company', entityId: null, after: result })
+    return c.json(result)
   })
 
   .get('/studios', async (c) => {
