@@ -1,0 +1,3 @@
+-- 0214: IPC Diamond members: 7-day trial for everyone, 30 days and member
+-- pricing once a studio proves it is in the "IPC Diamonds - Premium" group.
+-- (Claimed; body follows in the same PR.)
