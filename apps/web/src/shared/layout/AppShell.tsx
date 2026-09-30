@@ -21,6 +21,9 @@ import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar } from '@/features/onboarding/setup-flow'
+import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
+import { PlanCard } from '@/features/billing/PlanCard'
+import { HubTabs } from './HubTabs'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -41,19 +44,30 @@ function activeTarget(entries: NavEntry[], pathname: string): string | null {
   const consider = (to: string) => {
     if (matches(pathname, to) && (best === null || to.length > best.length)) best = to
   }
+  // A hub entry stands for all its pages; any of them lights it.
+  const leafOf = (l: NavLeaf) => {
+    for (const t of l.hub ?? []) {
+      if (matches(pathname, t.to) && (best === null || t.to.length > best.length)) best = t.to
+    }
+    consider(l.to)
+  }
   for (const e of entries) {
-    if (e.kind === 'leaf') consider(e.to)
-    else for (const c of e.children) consider(c.to)
+    if (e.kind === 'leaf') leafOf(e)
+    else e.children.forEach(leafOf)
   }
   return best
 }
+
+/** The entry that is lit: the one whose own address or hub holds the active page. */
+const isActive = (l: NavLeaf, active: string | null) =>
+  active !== null && (l.to === active || !!l.hub?.some((t) => t.to === active))
 
 /** The group holding the page you are on, if it sits inside one. */
 function groupHolding(entries: NavEntry[], pathname: string): string | null {
   const active = activeTarget(entries, pathname)
   if (!active) return null
   for (const e of entries) {
-    if (e.kind === 'group' && e.children.some((c) => c.to === active)) return e.label
+    if (e.kind === 'group' && e.children.some((c) => isActive(c, active))) return e.label
   }
   return null
 }
@@ -207,7 +221,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="relative min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:static print:overflow-visible">
           <div key={pathname} className="page-enter">
             <SetupGuideBar />
-            {children}
+            <HubTabs />
+            {settingsItemFor(pathname) ? <SettingsFrame>{children}</SettingsFrame> : children}
           </div>
         </main>
         <MobileTabBar onMenu={() => setMobileOpen(true)} />
@@ -307,7 +322,7 @@ function Sidebar({
               to={e.to}
               label={e.label}
               icon={e.icon}
-              active={e.to === active}
+              active={isActive(e, active)}
               collapsed={collapsed}
               badge={e.badge}
             />
@@ -324,6 +339,9 @@ function Sidebar({
           ),
         )}
       </nav>
+      <div className={cn('shrink-0 px-3 pb-3', collapsed && 'px-2')}>
+        <PlanCard collapsed={collapsed} />
+      </div>
       {/* On a phone the bar has room only for the bulb; the menu says it in full. */}
       {onClose && (
         <div className="border-t border-border p-3">
@@ -349,7 +367,7 @@ function Group({
   onToggle: () => void
   onExpand?: (() => void) | undefined
 }) {
-  const hasActive = group.children.some((c) => c.to === active)
+  const hasActive = group.children.some((c) => isActive(c, active))
   const Icon = group.icon
 
   // Collapsed: the group icon is a stub — clicking it reopens the rail with the
@@ -389,7 +407,7 @@ function Group({
               to={c.to}
               label={c.label}
               icon={c.icon}
-              active={c.to === active}
+              active={isActive(c, active)}
               collapsed={false}
               badge={c.badge}
             />

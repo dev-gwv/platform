@@ -56,6 +56,7 @@ import { AttendancePage, MyAttendancePage } from '@/routes/attendance'
 import { MyPerformancePage, TeamPerformancePage } from '@/routes/performance'
 import { NotificationsPage } from '@/routes/notifications'
 import { EmployeesPage } from '@/routes/employees'
+import { TeamSalariesPage } from '@/routes/team-salaries'
 import { EmployeeDetailPage } from '@/routes/employees/$id'
 import { SubscriptionPage } from '@/routes/subscription'
 import { SettingsPage } from '@/routes/settings'
@@ -312,6 +313,7 @@ const routeTree = rootRoute.addChildren([
   route('/settings/project-templates', ProjectTemplatesPage),
   route('/team-payouts', TeamPayoutsPage),
   route('/payroll', PayrollPage),
+  route('/team/salaries', TeamSalariesPage),
   route('/payroll/payslip/$lineId', PayslipPage),
   route('/reminders', RemindersPage),
   route('/activity', ActivityPage),

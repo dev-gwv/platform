@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import type { WhatsappStatus } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -26,8 +25,7 @@ import { facebookSignup } from '@/features/studio-whatsapp/facebook-signup'
 export function WhatsappSettingsPage() {
   return (
     <AuthedPage module="settings">
-      <PageHeader title="Settings" description="Your studio's own WhatsApp number." />
-      <SettingsTabs />
+      <PageHeader title="WhatsApp" description="Your studio's own WhatsApp number." />
       <Whatsapp />
     </AuthedPage>
   )

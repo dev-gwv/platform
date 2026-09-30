@@ -29,7 +29,7 @@ import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { type CreateTeamPayoutRequest, type PayoutEntryType, type TeamPayout, type TeamSlot } from '@ipc/contracts'
-import { Plus, Trash2, Pencil, DollarSign, Clock, CheckCircle, History, Wallet } from 'lucide-react'
+import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, History, ListChecks, Users, Wallet } from 'lucide-react'
 
 const emptyForm = (): CreateTeamPayoutRequest => ({
   user_id: '',
@@ -147,8 +147,8 @@ function TeamPayoutsContent() {
 
       {summary && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Payouts" value={summary.total_payouts} icon={DollarSign} />
-          <StatCard label="Total Amount" value={`₹${summary.total_amount.toLocaleString()}`} icon={DollarSign} />
+          <StatCard label="Total Payouts" value={summary.total_payouts} icon={ListChecks} />
+          <StatCard label="Total Amount" value={`₹${summary.total_amount.toLocaleString()}`} icon={IndianRupee} />
           <StatCard label="Pending" value={`₹${summary.pending_amount.toLocaleString()}`} icon={Clock} />
           <StatCard label="Completed" value={`₹${summary.completed_amount.toLocaleString()}`} icon={CheckCircle} />
         </div>
@@ -399,11 +399,11 @@ function ShootPayoutsTracker() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Total due" value={formatINR(summary.due)} icon={DollarSign} />
+        <StatCard label="Total due" value={formatINR(summary.due)} icon={IndianRupee} />
         <StatCard label="Paid" value={formatINR(summary.paid)} icon={CheckCircle} />
         <StatCard label="Pending" value={formatINR(summary.pending)} icon={Clock} />
         <StatCard label="Partially paid" value={String(summary.partial)} icon={Wallet} />
-        <StatCard label="Members" value={String(summary.members)} icon={DollarSign} />
+        <StatCard label="Members" value={String(summary.members)} icon={Users} />
       </div>
 
       <Card>

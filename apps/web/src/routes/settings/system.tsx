@@ -4,7 +4,6 @@ import type { AuditLogEntry, CronRun } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton'
@@ -68,7 +67,6 @@ function System({ focus }: { focus?: 'services' | 'work-submissions' | undefined
         title="System"
         description="What changed, who changed it, and whether the machinery behind the studio is running."
       />
-      <SettingsTabs />
       <HowToUse
         title="Find out what happened"
         description="Every change to the studio is written here with who made it and a reference you can quote to support."

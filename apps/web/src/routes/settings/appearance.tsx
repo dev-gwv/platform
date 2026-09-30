@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { companyTheme, type CompanyTheme, type ThemeFontKey } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useTheme } from '@/shared/theme/ThemeProvider'
@@ -197,7 +196,6 @@ function Appearance() {
     return (
       <>
         <PageHeader title="Theme & Branding" description="How your studio's dashboard looks." />
-        <SettingsTabs />
         <SkeletonCards count={3} />
       </>
     )
@@ -209,7 +207,6 @@ function Appearance() {
         title="Theme & Branding"
         description="Pick the palette and typeface your whole studio sees."
       />
-      <SettingsTabs />
 
       <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4 text-sm">
         <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />

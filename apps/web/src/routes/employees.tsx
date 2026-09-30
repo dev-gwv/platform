@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Download, Plus, ShieldCheck, Users } from 'lucide-react'
@@ -6,7 +6,6 @@ import type { DirectoryMember } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
-import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
@@ -30,7 +29,6 @@ import { InvitationsPanel } from '@/features/team/InvitationsPanel'
 import { InviteDialog } from '@/features/team/InviteDialog'
 import { ManageAccessDialog } from '@/features/team/ManageAccessDialog'
 import { useTeamPowers } from '@/features/team/powers'
-import { SalariesTab } from '@/features/team/SalariesTab'
 import {
   EMPTY_FILTERS,
   sortDirectory,
@@ -48,7 +46,6 @@ export function EmployeesPage() {
   )
 }
 
-type Section = 'directory' | 'salaries'
 
 /** `?add=choose|single|bulk` opens straight into adding — how the setup journey links here. */
 function addModeFromUrl(): AddMode | null {
@@ -59,10 +56,11 @@ function addModeFromUrl(): AddMode | null {
 function TeamPage() {
   const navigate = useNavigate()
   const powers = useTeamPowers()
-  // ?section=salaries opens the salaries straight away (linked from Profit & Loss).
-  const [section, setSection] = useState<Section>(() =>
-    new URLSearchParams(window.location.search).get('section') === 'salaries' ? 'salaries' : 'directory',
-  )
+  // Salaries moved to Pay > Monthly salaries; an old ?section=salaries link goes there.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('section') === 'salaries')
+      void navigate({ to: '/team/salaries', replace: true })
+  }, [navigate])
   // Only someone allowed to add people is ever put into it -- anyone else
   // following an old link lands on the directory, not on a form that would
   // refuse them at the last step.
@@ -140,21 +138,9 @@ function TeamPage() {
 
   return (
     <>
-      <PageHeader
-        title="Team"
-        description="Manage employees, managers, salaries, and role assignments."
-      />
+      <PageHeader title="Team" description="Everyone who works with your studio." />
 
-      <SectionTabs<Section>
-        tabs={[
-          { value: 'directory', label: 'Directory' },
-          { value: 'salaries', label: 'Salaries' },
-        ]}
-        value={section}
-        onChange={setSection}
-      />
-
-      {section === 'salaries' ? <SalariesTab /> : <Directory onAdd={() => setAdding('choose')} />}
+      <Directory onAdd={() => setAdding('choose')} />
     </>
   )
 }

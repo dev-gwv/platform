@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { ArrowDown, ArrowUp, Check, Plus, Trash2, Users } from 'lucide-react'
 import type { DeliverableStage, StepKey } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -49,7 +48,6 @@ function Stages() {
         title="Delivery stages"
         description="Name the stages your work really goes through. The one-tap button on each deliverable walks them in this order."
       />
-      <SettingsTabs />
       {q.isLoading ? (
         <SkeletonList rows={4} />
       ) : q.isError ? (

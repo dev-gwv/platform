@@ -4,16 +4,15 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { DirectoryMember, EmployeeRole, LibraryRole, ProductionStage } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { HowToUse } from '@/shared/ui/how-to-use'
+import { RoleTile } from '@/shared/ui/icon-tile'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -50,124 +49,103 @@ function RolesAccess() {
   const roles = useEmployeeRoles()
   const directory = useDirectory()
   const isOwner = !!session?.is_owner
+  const [tab, setTab] = useState<'roles' | 'people'>('roles')
 
   return (
     <>
       <PageHeader
-        title="Roles & Access"
-        description="The job roles your studio books people for, and who holds them."
+        title="Roles & access"
+        description="What each person does on a shoot."
         actions={isOwner ? <RoleDialog /> : undefined}
       />
-      <SettingsTabs />
 
-      <HowToUse
-        title="Create work roles"
-        description="Job roles say what a person does. Access level, set on the member, says what they can open."
-        steps={[
-          'Pick roles like Photographer, Editor or Cinematographer.',
-          'Keep them grouped by the stage of work they belong to.',
-          'Assign them while adding a team member, or below.',
+      <SectionTabs
+        variant="underline"
+        label="Roles"
+        className="mb-4"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          {
+            value: 'roles',
+            label: `Your roles${roles.data ? ` \u00b7 ${roles.data.length}` : ''}`,
+          },
+          { value: 'people', label: 'Who does what' },
         ]}
       />
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-4">
-          <div>
-            <CardTitle>Role library</CardTitle>
-            <CardDescription>Grouped by the stage of production they belong to.</CardDescription>
-          </div>
-          {isOwner && <RoleDialog />}
-        </CardHeader>
-        <CardContent>
-          {roles.isLoading ? (
-            <SkeletonCards count={3} />
-          ) : roles.isError ? (
-            <ErrorState onRetry={() => void roles.refetch()} />
-          ) : (
-            <RoleGrid owned={roles.data ?? []} isOwner={isOwner} />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader className="pb-4">
-          <CardTitle>Role assignments</CardTitle>
-          <CardDescription>Assign roles to existing team members.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {directory.isLoading ? (
-            <SkeletonCards count={3} />
-          ) : directory.isError ? (
-            <ErrorState onRetry={() => void directory.refetch()} />
-          ) : !directory.data || directory.data.length === 0 ? (
-            <EmptyState
-              title="No team members yet"
-              description="Job roles are assigned to people, so there is nobody to assign them to yet."
-              action={
-                <Button variant="outline" asChild>
-                  <Link to="/employees">Go to team directory</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {directory.data.map((m) => (
-                <li key={m.user_id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{m.name}</p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {m.role_names.length ? m.role_names.join(', ') : 'No job roles'}
-                    </p>
-                  </div>
-                  {isOwner && <AssignDialog member={m} roles={roles.data ?? []} />}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {tab === 'roles' ? (
+        roles.isLoading ? (
+          <SkeletonCards count={3} />
+        ) : roles.isError ? (
+          <ErrorState onRetry={() => void roles.refetch()} />
+        ) : (
+          <RoleList owned={roles.data ?? []} isOwner={isOwner} />
+        )
+      ) : (
+        <Card>
+          <CardContent className="pt-4">
+            {directory.isLoading ? (
+              <SkeletonCards count={3} />
+            ) : directory.isError ? (
+              <ErrorState onRetry={() => void directory.refetch()} />
+            ) : !directory.data || directory.data.length === 0 ? (
+              <EmptyState
+                title="No team members yet"
+                description="Roles are given to people, so add your team first."
+                action={
+                  <Button variant="outline" asChild>
+                    <Link to="/employees">Go to the team</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <ul className="divide-y divide-border">
+                {directory.data.map((m) => (
+                  <li
+                    key={m.user_id}
+                    className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{m.name}</p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {m.role_names.length ? m.role_names.join(', ') : 'No role yet'}
+                      </p>
+                    </div>
+                    {isOwner && <AssignDialog member={m} roles={roles.data ?? []} />}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 }
 
 /**
- * Every role a studio could book, in one grid: the ones they have made, and
- * the platform defaults they have not.
+ * The studio's roles, one short list per stage of work, with the roles it
+ * could add shown as chips underneath.
  *
- * Two lists would ask the reader to care which side of that line a role sits
- * on before they can find it. They are the same choice — "Candid
- * Photographer" is Candid Photographer either way — so it is one grid, and the
- * Default badge is the only thing separating them. Tapping a default copies it
- * into the studio's own roles; it does not point at the catalogue, so renaming
- * it afterwards is nobody else's business.
+ * This replaced one grid where every suggested role was a full dashed card
+ * with a "Default" badge beside the studio's own. The owner found it
+ * scattered: the eye could not tell the roles the studio has from the ones it
+ * might want. Now the list is what you have; a chip is one tap to add.
  */
-function RoleGrid({ owned, isOwner }: { owned: readonly EmployeeRole[]; isOwner: boolean }) {
+function RoleList({ owned, isOwner }: { owned: readonly EmployeeRole[]; isOwner: boolean }) {
   const library = useRoleLibrary()
   const create = useCreateRole()
   const taken = new Set(owned.map((r) => r.role_code))
+  const suggestions: readonly LibraryRole[] = isOwner
+    ? (library.data ?? []).filter((r) => !taken.has(r.role_code))
+    : []
 
-  type Cell =
-    | { kind: 'owned'; key: string; stage: ProductionStage; role: EmployeeRole }
-    | { kind: 'default'; key: string; stage: ProductionStage; role: LibraryRole }
-
-  const cells: Cell[] = [
-    ...owned.map(
-      (role): Cell => ({ kind: 'owned', key: role.id, stage: stageOf(role), role }),
-    ),
-    // Owners can adopt a default; everyone else would only be looking at a
-    // button they are not allowed to press.
-    ...(isOwner
-      ? (library.data ?? [])
-          .filter((r) => !taken.has(r.role_code))
-          .map((role): Cell => ({ kind: 'default', key: role.role_code, stage: role.stage, role }))
-      : []),
-  ]
-
-  if (cells.length === 0) {
+  if (owned.length === 0 && suggestions.length === 0) {
     return (
       <EmptyState
-        title="No job roles yet"
-        description="Create your first role to start assigning people to shoots by what they do."
+        title="No roles yet"
+        description="Add what people do, like Photographer or Editor, so you can book them by it."
         action={isOwner ? <RoleDialog /> : undefined}
       />
     )
@@ -176,59 +154,64 @@ function RoleGrid({ owned, isOwner }: { owned: readonly EmployeeRole[]; isOwner:
   return (
     <div className="flex flex-col gap-4">
       {STAGE_ORDER.map((stage) => {
-        const inStage = cells
-          .filter((c) => c.stage === stage)
-          .sort((a, b) => a.role.type_name.localeCompare(b.role.type_name))
-        if (inStage.length === 0) return null
+        const mine = owned
+          .filter((r) => stageOf(r) === stage)
+          .sort((a, b) => a.type_name.localeCompare(b.type_name))
+        const more = suggestions
+          .filter((r) => r.stage === stage)
+          .sort((a, b) => a.type_name.localeCompare(b.type_name))
+        if (mine.length === 0 && more.length === 0) return null
         return (
-          <div key={stage}>
-            <p className="mb-2 text-sm font-medium">{STAGE_LABEL[stage]}</p>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {inStage.map((cell) =>
-                cell.kind === 'owned' ? (
-                  <div key={cell.key} className="rounded-lg border border-border p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="min-w-0 flex-1 truncate font-medium">{cell.role.type_name}</p>
-                      <StatusBadge>
-                        {cell.role.member_count}{' '}
-                        {cell.role.member_count === 1 ? 'member' : 'members'}
-                      </StatusBadge>
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                        {STAGE_LABEL[cell.stage]}
-                      </p>
-                      {isOwner && <RoleRowActions role={cell.role} />}
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    disabled={create.isPending}
-                    title={`Add ${cell.role.type_name} to your roles`}
-                    onClick={() =>
-                      create.mutate({
-                        type_name: cell.role.type_name,
-                        role_code: cell.role.role_code,
-                        stage: cell.role.stage,
-                      })
-                    }
-                    className="rounded-lg border border-dashed border-border p-3 text-left transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-60"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="min-w-0 flex-1 truncate font-medium">{cell.role.type_name}</p>
-                      <StatusBadge tone="info">Default</StatusBadge>
-                    </div>
-                    <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-                      <Plus className="size-3" aria-hidden />
-                      Add to your roles
-                    </p>
-                  </button>
-                ),
+          <Card key={stage}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {STAGE_LABEL[stage]}
+                <span className="ml-2 text-sm font-normal text-muted-foreground tabular-nums">
+                  {mine.length}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {mine.length > 0 && (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {mine.map((r) => (
+                    <li key={r.id} className="flex items-center gap-3 px-3 py-2">
+                      <RoleTile name={r.type_name} size="sm" />
+                      <p className="min-w-0 flex-1 truncate font-medium">{r.type_name}</p>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        {r.member_count === 0
+                          ? 'Nobody yet'
+                          : `${r.member_count} ${r.member_count === 1 ? 'person' : 'people'}`}
+                      </span>
+                      {isOwner && <RoleRowActions role={r} />}
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-          </div>
+              {more.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-xs text-muted-foreground">Add:</span>
+                  {more.map((r) => (
+                    <button
+                      key={r.role_code}
+                      type="button"
+                      disabled={create.isPending}
+                      onClick={() =>
+                        create.mutate({
+                          type_name: r.type_name,
+                          role_code: r.role_code,
+                          stage: r.stage,
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                    >
+                      <Plus className="size-3" aria-hidden /> {r.type_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )
       })}
     </div>

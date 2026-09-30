@@ -4,12 +4,10 @@ import type { SaveTeamTermsTemplateRequest, TeamTermsCategory, TeamTermsTemplate
 import { TEAM_TERMS_VARIABLES, teamTermsVariablesUsed } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -53,82 +51,79 @@ function TeamTerms() {
   const [showArchived, setShowArchived] = useState(false)
   const templates = useTeamTermsTemplates(showArchived)
   const archive = useArchiveTeamTermsTemplate()
+  const owned = templates.data ?? []
 
   return (
     <>
       <PageHeader
-        title="Team Terms"
-        description="What the crew agrees to when you book them."
-        actions={<TemplateDialog allTemplates={templates.data ?? []} />}
-      />
-      <SettingsTabs />
-
-      <HowToUse
-        title="Agreements for the people you book"
-        description="A template is written once and sent per shoot, with the names and dates filled in."
-        steps={[
-          'Start from the library, or write your own.',
-          'Tag it with the job roles it covers.',
-          'Send it from a shoot — they read it and agree on a link.',
-        ]}
-      />
-
-      <Card className="mt-6">
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-4">
-          <div>
-            <CardTitle>{showArchived ? 'Archived terms' : 'Your terms'}</CardTitle>
-            <CardDescription>
-              {showArchived
-                ? 'Kept because sends still point at them.'
-                : 'Grouped by the stage of work they cover.'}
-            </CardDescription>
+        title="Team terms"
+        description="What your crew agrees to when you book them."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <StarterLibrary owned={owned} />
+            <TemplateDialog allTemplates={owned} />
           </div>
-          <Button size="sm" variant="outline" onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? 'Back to active' : 'Show archived'}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {templates.isLoading ? (
-            <SkeletonCards count={3} />
-          ) : templates.isError ? (
-            <ErrorState onRetry={() => void templates.refetch()} />
-          ) : !templates.data || templates.data.length === 0 ? (
+        }
+      />
+
+      {templates.isLoading ? (
+        <SkeletonCards count={3} />
+      ) : templates.isError ? (
+        <ErrorState onRetry={() => void templates.refetch()} />
+      ) : owned.length === 0 ? (
+        <Card>
+          <CardContent className="py-8">
             <EmptyState
               title={showArchived ? 'Nothing archived' : 'No terms yet'}
               description={
                 showArchived
-                  ? 'Terms you archive will be kept here.'
-                  : 'Copy one from the library below, or write your own.'
+                  ? 'Terms you archive are kept here.'
+                  : 'Start from one of our drafts and make it yours, or write your own.'
+              }
+              action={
+                showArchived ? (
+                  <Button variant="outline" onClick={() => setShowArchived(false)}>
+                    Back to your terms
+                  </Button>
+                ) : (
+                  <StarterLibrary owned={owned} primary />
+                )
               }
             />
-          ) : (
-            <div className="flex flex-col gap-4">
-              {CATEGORY_ORDER.map((category) => {
-                const inCategory = templates.data.filter((t) => (t.category ?? 'general') === category)
-                if (inCategory.length === 0) return null
-                return (
-                  <div key={category}>
-                    <p className="mb-2 text-sm font-medium">{CATEGORY_LABELS[category]}</p>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      {inCategory.map((t) => (
-                        <TemplateCard
-                          key={t.id}
-                          template={t}
-                          archived={showArchived}
-                          allTemplates={templates.data ?? []}
-                          onArchive={() => archive.mutate({ id: t.id, restore: showArchived })}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {CATEGORY_ORDER.map((category) => {
+            const inCategory = owned.filter((t) => (t.category ?? 'general') === category)
+            if (inCategory.length === 0) return null
+            return (
+              <section key={category}>
+                <p className="mb-2 text-sm font-semibold">{CATEGORY_LABELS[category]}</p>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {inCategory.map((t) => (
+                    <TemplateCard
+                      key={t.id}
+                      template={t}
+                      archived={showArchived}
+                      allTemplates={owned}
+                      onArchive={() => archive.mutate({ id: t.id, restore: showArchived })}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
 
-      {!showArchived && <StarterLibrary owned={templates.data ?? []} />}
+      <button
+        type="button"
+        onClick={() => setShowArchived((v) => !v)}
+        className="mt-4 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      >
+        {showArchived ? '← Back to your terms' : 'Show archived terms'}
+      </button>
     </>
   )
 }
@@ -259,37 +254,46 @@ function TemplateCard({
  * point: the moment it is theirs, they can rewrite a clause and nothing here
  * touches it again.
  */
-function StarterLibrary({ owned }: { owned: readonly TeamTermsTemplate[] }) {
+function StarterLibrary({
+  owned,
+  primary = false,
+}: {
+  owned: readonly TeamTermsTemplate[]
+  primary?: boolean
+}) {
   const save = useSaveTeamTermsTemplate()
+  const [open, setOpen] = useState(false)
   const taken = new Set(owned.map((t) => t.title.trim().toLowerCase()))
   const offer = TEMPLATE_LIBRARY.filter((t) => !taken.has(t.title.trim().toLowerCase()))
   if (offer.length === 0) return null
 
   return (
-    <Card className="mt-6">
-      <CardHeader className="pb-4">
-        <CardTitle>Starter library</CardTitle>
-        <CardDescription>
-          Drafts to copy and make your own. Have a legal advisor read one before you send it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-3 lg:grid-cols-2">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant={primary ? 'default' : 'outline'}>
+          <FileText /> Start from a template
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title="Start from a template"
+        description="Drafts to copy and make your own. Have a legal advisor read one before you send it."
+        className="max-w-2xl"
+      >
+        <ul className="divide-y divide-border rounded-lg border border-border">
           {offer.map((t) => (
-            <div key={t.key} className="flex flex-col rounded-lg border border-dashed border-border p-4">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 flex-1 font-medium">{t.title}</p>
-                <StatusBadge>{CATEGORY_LABELS[t.category]}</StatusBadge>
+            <li key={t.key} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{t.title}</p>
+                <p className="truncate text-xs text-muted-foreground">{t.description}</p>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{t.description}</p>
-              <p className="mt-2 text-xs text-muted-foreground">Best for: {t.best_for.join(', ')}</p>
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={save.isPending}
-                  onClick={() =>
-                    save.mutate({
+              <StatusBadge>{CATEGORY_LABELS[t.category]}</StatusBadge>
+              <PreviewDialog title={t.title} body={t.body} />
+              <Button
+                size="sm"
+                disabled={save.isPending}
+                onClick={() =>
+                  save.mutate(
+                    {
                       body: {
                         title: t.title,
                         description: t.description,
@@ -300,18 +304,18 @@ function StarterLibrary({ owned }: { owned: readonly TeamTermsTemplate[] }) {
                         is_active: true,
                         role_ids: [],
                       },
-                    })
-                  }
-                >
-                  <Plus /> Use this template
-                </Button>
-                <PreviewDialog title={t.title} body={t.body} />
-              </div>
-            </div>
+                    },
+                    { onSuccess: () => setOpen(false) },
+                  )
+                }
+              >
+                <Plus /> Use
+              </Button>
+            </li>
           ))}
-        </div>
-      </CardContent>
-    </Card>
+        </ul>
+      </DialogContent>
+    </Dialog>
   )
 }
 
