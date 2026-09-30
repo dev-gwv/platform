@@ -44,6 +44,8 @@ import { ReferralCard } from '@/features/projects/ReferralCard'
 import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
 import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
+import { DataTab } from '@/features/projects/tabs/DataTab'
+import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { PROJECT_TABS, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import type { JourneyKey } from '@/features/projects/journey'
@@ -99,8 +101,6 @@ function ProjectDetail() {
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
   const [tab, setTabState] = useState<Tab>(() => {
     const wanted = new URLSearchParams(window.location.search).get('tab')
-    // Data now lives on the Shoots tab, beside each person who shot it.
-    if (wanted === 'data') return 'shoots'
     return PROJECT_TABS.some((t) => t.value === wanted && t.value !== 'quotation') ? (wanted as Tab) : 'overview'
   })
   // The journey's buttons land on a tab with the next thing already open:
@@ -370,6 +370,16 @@ function ProjectDetail() {
         />
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
+      {tab === 'data' && <DataTab projectId={id} />}
+      {tab === 'referrals' && (
+        <ReferralsTab
+          projectId={id}
+          projectName={data.name}
+          clientName={data.client_name}
+          clientPhone={data.client_phone}
+          canEdit={access.hasAction('referrals', 'edit')}
+        />
+      )}
       {tab === 'tasks' && (
         <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
       )}

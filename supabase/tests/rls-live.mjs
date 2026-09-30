@@ -2897,5 +2897,66 @@ if (listed) {
   check('diamond: a studio cannot open the platform inbox', inbox.status === 403, { status: inbox.status })
 }
 
+// ── A project's own referral campaign (its Referrals tab) ──
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Refer Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Refer project ${rand()}`, client_id: client.json.id, package_cost: 90000 } })
+  const pid = project.json.id
+  const first = await api('/referrals/campaigns/for-project', { token: aToken, method: 'POST', body: { project_id: pid } })
+  const again = await api('/referrals/campaigns/for-project', { token: aToken, method: 'POST', body: { project_id: pid } })
+  check(
+    'referrals: a project gets one campaign of its own, however often the tab is opened',
+    first.status === 200 && again.status === 200 && first.json.id === again.json.id &&
+      first.json.project_id === pid && first.json.client_id === client.json.id && !!first.json.slug,
+    { first: first.json, again: again.status },
+  )
+  // B's first token has long expired by here; B's password was reset above.
+  const bLogin = await api('/auth/login', { method: 'POST', body: { email: b.email, password: NEW_PW } })
+  const bNow = bLogin.json.access_token ?? newPw.json.access_token
+  const other = await api('/referrals/campaigns/for-project', { token: bNow, method: 'POST', body: { project_id: pid } })
+  check('referrals: another studio cannot make a campaign on this project (404)', other.status === 404, { status: other.status, login: bLogin.status, err: bLogin.json.error })
+
+  const saved = await api(`/referrals/${first.json.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { name: first.json.name, reward_type: 'custom', reward_value: 0, reward_title: 'Free album', reward_description: 'A 20-page album' },
+  })
+  const listed = await api('/referrals/campaigns', { token: aToken })
+  const mine = (listed.json.campaigns ?? []).find((x) => x.id === first.json.id)
+  check(
+    'referrals: the list shows the project and the reward title the tab saved',
+    saved.status === 200 && mine?.project_id === pid && mine?.reward_title === 'Free album',
+    mine,
+  )
+  // The Referrals page's own form sends no title: saving it keeps the tab's.
+  await api(`/referrals/${first.json.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { name: first.json.name, reward_type: 'custom', reward_value: 0, reward_description: 'A 20-page album' },
+  })
+  const kept = (await api('/referrals/campaigns', { token: aToken })).json.campaigns?.find((x) => x.id === first.json.id)
+  check('referrals: saving without a title leaves the title alone', kept?.reward_title === 'Free album', kept?.reward_title)
+
+  const sub = await api(`/public/referrals/submit?campaign_id=${first.json.id}`, {
+    method: 'POST',
+    body: { referrer_name: 'Pulkit', client_name: 'Friend Of Pulkit', client_phone: randPhone() },
+  })
+  const subs = await api(`/referrals/submissions?campaign_id=${first.json.id}`, { token: aToken })
+  const got = (subs.json.items ?? []).find((x) => x.campaign_id === first.json.id)
+  check('referrals: a friend sent through the link shows on the project', sub.status < 300 && !!got, { sub: sub.status, got })
+  if (got) {
+    const booked = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: { status: 'converted', reward_status: 'due' } })
+    const given = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: { reward_status: 'given' } })
+    const after = ((await api(`/referrals/submissions?campaign_id=${first.json.id}`, { token: aToken })).json.items ?? []).find((x) => x.id === got.id)
+    check(
+      'referrals: booked, then reward given -- the status stays booked, the reward is marked given',
+      booked.status === 200 && given.status === 200 && after?.status === 'converted' && after?.reward_status === 'given',
+      after,
+    )
+    const bad = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: {} })
+    check('referrals: an empty status change is refused (422)', bad.status === 422, { status: bad.status })
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

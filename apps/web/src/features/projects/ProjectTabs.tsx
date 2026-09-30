@@ -1,4 +1,5 @@
-import { Camera, CheckSquare, FileCheck, FileSignature, FileText, LayoutGrid, Package, Receipt, Wallet } from 'lucide-react'
+import { Camera, CheckSquare, Database, FileCheck, FileSignature, FileText, Gift, LayoutGrid, Package, Receipt, Wallet } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
 
@@ -17,6 +18,10 @@ export const PROJECT_TABS = [
   { value: 'billing', label: 'Billing', icon: Wallet },
   { value: 'expenses', label: 'Expenses', icon: Receipt },
   { value: 'tasks', label: 'Tasks', icon: CheckSquare },
+  // As in the old app: this project's data and its referrals, each also a
+  // page of its own in the sidebar (Data & Backup, Referrals).
+  { value: 'data', label: 'Data', icon: Database },
+  { value: 'referrals', label: 'Referrals', icon: Gift },
 ] as const
 export type ProjectTab = (typeof PROJECT_TABS)[number]['value']
 
@@ -27,7 +32,9 @@ export function useVisibleProjectTabs() {
     (t) =>
       (t.value !== 'tasks' || access.hasModule('tasks')) &&
       (t.value !== 'expenses' || access.hasModule('company_expenses')) &&
-      (t.value !== 'completed_work' || access.hasModule('team_work_preview')),
+      (t.value !== 'completed_work' || access.hasModule('team_work_preview')) &&
+      (t.value !== 'data' || access.hasAction('projects', 'edit')) &&
+      (t.value !== 'referrals' || access.hasModule('referrals')),
   )
 }
 
@@ -41,8 +48,17 @@ export function ProjectTabStrip({
   className?: string
 }) {
   const tabs = useVisibleProjectTabs()
+  const strip = useRef<HTMLDivElement>(null)
+  // On a phone the row scrolls sideways: keep the open tab in sight.
+  useEffect(() => {
+    const row = strip.current
+    const on = row?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (row && on && row.scrollWidth > row.clientWidth) {
+      row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2
+    }
+  }, [active])
   return (
-    <div className={cn('flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5 sm:flex-wrap', className)}>
+    <div ref={strip} className={cn('flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5 sm:flex-wrap', className)}>
       {tabs.map((t) => (
         <button
           key={t.value}

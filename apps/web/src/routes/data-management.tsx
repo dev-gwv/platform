@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Settings2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Settings2, X } from 'lucide-react'
 import { shootListItem, type CreateDataRecordRequest, type DataBoardRow, type DataRecord } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -50,7 +50,9 @@ export function DataManagementPage({ initialTab }: { initialTab?: DmTab } = {}) 
  */
 function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
   const canManage = useAccess().hasAction('projects', 'edit')
-  const board = useDataBoard()
+  // Opened from a project's Data tab: the same board, narrowed to that project.
+  const [projectFilter, setProjectFilter] = useState(() => new URLSearchParams(window.location.search).get('project') ?? '')
+  const board = useDataBoard(projectFilter || undefined)
   const [tab, setTab] = useState<DmTab>(initialTab ?? 'records')
   const [opened, setOpened] = useState<DataBoardRow | null>(null)
 
@@ -67,6 +69,12 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
   }
 
   const rows = board.data?.rows ?? []
+  const clearProject = () => {
+    setProjectFilter('')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('project')
+    window.history.replaceState(window.history.state, '', url)
+  }
 
   return (
     <>
@@ -94,6 +102,16 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
           </button>
         ))}
       </div>
+      {projectFilter && tab === 'records' && (
+        <button
+          type="button"
+          onClick={clearProject}
+          className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+        >
+          Project: {rows[0]?.project_name ?? 'this project'}
+          <X className="size-3.5" aria-label="Show every project" />
+        </button>
+      )}
 
       {tab === 'locations' ? (
         <LocationsTab />
