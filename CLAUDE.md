@@ -47,6 +47,11 @@ network. The API stays healthy and becomes unreachable, and the browser
 reports "Failed to fetch" — the 503 comes from the proxy, so it carries no
 CORS headers and the page cannot read it. This has taken the site down once.
 
+`api.studioautopilot.in` goes through Cloudflare's proxy (orange cloud), not
+straight to the VPS address: a home Wi-Fi provider that could not reach
+72.61.239.209 left the app on "Failed to fetch" while a phone hotspot worked.
+`lib/client-ip.ts` trusts `CF-Connecting-IP` only from Cloudflare's own ranges.
+
 `docs/vps-deploy.md` still describes the Caddy setup; that is the shape for a
 host where IPC owns the ports, not for this one.
 
