@@ -63,9 +63,13 @@ async function makeStudio(label) {
     throw new Error(`register ${label}: ${reg.status} ${JSON.stringify(reg.json)}`)
   }
 
-  // Login is refused until verified.
-  const blocked = await api('/auth/login', { method: 'POST', body: { email, password: 'Testpass12345!' } })
-  check(`${label}: login blocked before verification (403)`, blocked.status === 403)
+  // In straight away: sign-up hands back a session, and the password alone
+  // signs in before the email is confirmed (the app asks for it inside).
+  check(`${label}: sign-up signs the owner straight in`, !!reg.json.session?.access_token, reg.json.session ? 'session' : reg.json)
+  const early = await api('/auth/login', { method: 'POST', body: { email, password: 'Testpass12345!' } })
+  check(`${label}: login works before the email is confirmed`, early.status === 200 && !!early.json.access_token, { status: early.status })
+  const unconfirmed = await api('/auth/session', { token: early.json.access_token })
+  check(`${label}: the session says the email is not confirmed yet`, unconfirmed.json.email_verified === false, unconfirmed.json.email_verified)
 
   const verified = await api('/auth/verify', { method: 'POST', body: { token: reg.json.verification_token } })
   check(`${label}: verify returns a token`, verified.status === 200 && !!verified.json.access_token)
@@ -2992,6 +2996,48 @@ if (listed) {
   const dir = await api('/team/directory', { token: aToken })
   const drow = (Array.isArray(dir.json) ? dir.json : []).find((m) => m.user_id === me)
   check('last seen: the directory carries it too', dir.status === 200 && typeof drow?.last_seen_at === 'string', drow?.last_seen_at)
+}
+
+// ── Email log, costs, expenses, Diamond link (0217) ──
+{
+  const notAdmin = await api('/platform/email', { token: aToken })
+  check('email health: a studio owner cannot open the platform email page (403)', notAdmin.status === 403, { status: notAdmin.status })
+  const confirmed = await api('/auth/session', { token: aToken })
+  check('sign-in: a confirmed owner is not nagged', confirmed.json.email_verified === true, confirmed.json.email_verified)
+
+  const cats = await api('/settings/lookups/active?category=expense_category', { token: aToken })
+  const names = (Array.isArray(cats.json) ? cats.json : []).map((x) => String(x.value ?? x.label ?? '').toLowerCase())
+  check('expenses: a studio has photography expense categories ready', names.includes('equipment rental') && names.includes('album & printing'), names)
+
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Cost Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Cost project ${rand()}`, client_id: client.json.id, package_cost: 200000 } })
+  const pid = project.json.id
+  const exp = await api('/financials/expenses', { token: aToken, method: 'POST', body: { amount: 4500, category: 'Equipment rental', description: 'Gimbal', project_id: pid, expense_date: '2026-09-01' } })
+  const list = await api(`/financials/expenses?project_id=${pid}`, { token: aToken })
+  const row = (Array.isArray(list.json) ? list.json : list.json.items ?? []).find((e) => e.id === exp.json.id)
+  check('expenses: the list names the project each cost belongs to', exp.status < 300 && /^Cost project /.test(row?.project_name ?? ''), row)
+
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const day = new Date(Date.now() + (40 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10)
+  const shoot = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', shoot_date: day } })
+  await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: me, shoot_id: shoot.json.id, service_name: 'Candid Photographer', start_at: `${day}T04:00:00.000Z`, end_at: `${day}T06:00:00.000Z`, estimated_cost: 15000 },
+  })
+  const costs = await api(`/projects/${pid}/costs`, { token: aToken })
+  check(
+    'cost sheet: team payouts and expenses add up against the project value',
+    costs.status === 200 && costs.json.team_total === 15000 && costs.json.expenses_total === 4500 &&
+      costs.json.total_cost === 19500 && costs.json.profit === 180500 && costs.json.team.length === 1,
+    costs.json,
+  )
+  const bNow2 = (await api('/auth/login', { method: 'POST', body: { email: b.email, password: NEW_PW } })).json.access_token ?? newPw.json.access_token
+  const otherCosts = await api(`/projects/${pid}/costs`, { token: bNow2 })
+  check('cost sheet: another studio gets 404', otherCosts.status === 404 || otherCosts.status === 403, { status: otherCosts.status })
+
+  const status = await api('/subscription/status', { token: aToken })
+  check('diamond: the status carries the group link (none set yet)', status.status === 200 && 'diamond_group_link' in status.json, status.json.diamond_group_link)
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

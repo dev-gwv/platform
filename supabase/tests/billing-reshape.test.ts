@@ -105,7 +105,8 @@ describe('one expenses ledger', () => {
       `select id, amount::float as amount, paid_by_user_id, reimbursement_status, gst_rate::float as gst_rate, tax_amount::float as tax_amount, category
          from expenses where source_personal_expense_id = '${PE}'`,
     )
-    expect(e).toMatchObject({ amount: 1200, paid_by_user_id: CREW, reimbursement_status: 'none', gst_rate: 5, tax_amount: 60, category: 'travel' })
+    // 0217 gave the old default word its proper name, and moved its expenses with it.
+    expect(e).toMatchObject({ amount: 1200, paid_by_user_id: CREW, reimbursement_status: 'none', gst_rate: 5, tax_amount: 60, category: 'Travel' })
     const a = await one<{ n: number }>(`select count(*)::int as n from expense_attachments where expense_id = '${e.id}' and file_name = 'cab.jpg'`)
     expect(a.n).toBe(1)
   })

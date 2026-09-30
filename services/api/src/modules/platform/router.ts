@@ -6,10 +6,11 @@ import { requireAuth } from '../../middleware/auth'
 import { requirePlatformAdmin } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { platformMessagingRouter } from './messaging'
+import { platformEmailRouter } from './email'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -242,6 +243,29 @@ export const platformRouter = new Hono<AppEnv>()
 
   // IPC Diamond claims: every screenshot, how it was decided, and the owner's
   // approve / reject / revoke (0214).
+  /** The IPC Diamonds group link shown on every studio's verify card (0217). */
+  .get('/diamond/settings', async (c) => {
+    const rows = await attempt(c, 'platform.diamond_settings', () =>
+      withService(c.env, (sql) => sql<{ l: string | null }[]>`select diamond_group_link as l from platform_settings limit 1`),
+    )
+    if (!rows) fail(400, 'We could not load the setting.')
+    return c.json({ group_link: rows[0]?.l ?? null })
+  })
+
+  .put('/diamond/settings', async (c) => {
+    const parsed = z
+      .object({ group_link: z.string().trim().max(300).url().startsWith('https://').nullable() })
+      .safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'The link must start with https://')
+    const ok = await attempt(c, 'platform.diamond_settings_save', () =>
+      withService(c.env, (sql) => sql`
+        update platform_settings set diamond_group_link = ${parsed.data.group_link || null}, updated_at = now()`),
+    )
+    if (!ok) fail(400, 'We could not save the link.')
+    await audit(c, { action: 'platform.diamond_group_link', entityType: 'platform_settings', entityId: null, after: parsed.data })
+    return c.json({ group_link: parsed.data.group_link || null })
+  })
+
   .get('/diamond', async (c) => {
     const want = c.req.query('status')
     const status = want ? diamondClaimStatus.safeParse(want) : null
@@ -292,3 +316,4 @@ export const platformRouter = new Hono<AppEnv>()
 
   // Messaging wallets, recharge requests, prices, templates, outbox, margin.
   .route('/messaging', platformMessagingRouter)
+  .route('/email', platformEmailRouter)

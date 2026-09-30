@@ -122,13 +122,14 @@ export const financialsRouter = new Hono<AppEnv>()
     const result = await attempt(c, 'financials.expenses', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const rows = await sql`
-          select e.id, e.project_id, e.party_id, p.name as party_name, e.category, e.description,
+          select e.id, e.project_id, pr.name as project_name, e.party_id, p.name as party_name, e.category, e.description,
                   e.amount, e.expense_date, e.gst_treatment, e.gst_rate, e.is_fixed_overhead,
                   e.invoice_number, e.amount_is, e.tax_name, e.tax_amount, e.reverse_charge, e.itemize_json,
                   e.paid_by_user_id, u.name as paid_by_name, e.reimbursement_status, e.reimbursed_at,
                   (select count(*)::int from expense_attachments a where a.expense_id = e.id) as attachment_count
           from expenses e
           left join parties p on p.id = e.party_id
+          left join projects pr on pr.id = e.project_id
           left join users u on u.user_id = e.paid_by_user_id
           ${expenseWhere(sql, f)}
           order by ${sort === 'amount' ? sql`e.amount` : sql`e.expense_date`} ${dir === 'asc' ? sql`asc` : sql`desc`}

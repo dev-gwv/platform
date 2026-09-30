@@ -712,3 +712,44 @@ export const updateDeliverableStageRequest = z.object({
   sort_order: z.number().int().min(0).max(1000).optional(),
 })
 export type UpdateDeliverableStageRequest = z.infer<typeof updateDeliverableStageRequest>
+
+// ── Cost sheet ──────────────────────────────────────────────
+/**
+ * Everything a project costs, in one place: what each person booked on it is
+ * paid (and how much of that has gone out), every expense put against it,
+ * and what is left of the project value.
+ */
+export const projectCostSheet = z.object({
+  project_value: money,
+  team: z
+    .object({
+      slot_id: uuid,
+      user_name: z.string().nullable(),
+      role: z.string().nullable(),
+      shoot_name: z.string().nullable(),
+      shoot_date: isoDate.nullable(),
+      cost: money,
+      /** 'final' once agreed, 'tentative' while not. */
+      cost_status: z.string().nullable(),
+      paid: money,
+    })
+    .array(),
+  /** Null when the person cannot see the studio's expenses. */
+  expenses: z
+    .object({
+      id: uuid,
+      category: z.string().nullable(),
+      description: z.string().nullable(),
+      party_name: z.string().nullable(),
+      expense_date: isoDate,
+      amount: money,
+    })
+    .array()
+    .nullable(),
+  team_total: money,
+  team_paid: money,
+  expenses_total: money,
+  total_cost: money,
+  profit: money,
+})
+export type ProjectCostSheet = z.infer<typeof projectCostSheet>

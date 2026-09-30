@@ -52,6 +52,7 @@ export const mockSession: SessionState = {
   // `?setup=fresh|partial` previews a studio still being set up.
   setup_done: setupStage() === 'full',
   setup_step: setupStage() === 'fresh' ? 1 : setupStage() === 'partial' ? 3 : null,
+  email_verified: true,
   // Two studios, so the switcher in the account menu shows in a preview.
   studios: [
     { profile_id: uid(1), company_id: uid(0xaa), company_name: 'Demo Studio', role: 'super_admin', is_owner: true },

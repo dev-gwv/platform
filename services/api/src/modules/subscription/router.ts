@@ -120,7 +120,8 @@ export const subscriptionRouter = new Hono<AppEnv>()
           select status, reason, created_at::text as created_at from diamond_claims
            where company_id = ${auth.companyId} and decided_by is distinct from 'superseded'
            order by created_at desc limit 1`
-        return { comp: comp[0] ?? {}, orders, claim: claim[0] ?? null }
+        const link = await sql<{ l: string | null }[]>`select diamond_group_link as l from platform_settings limit 1`
+        return { comp: comp[0] ?? {}, orders, claim: claim[0] ?? null, groupLink: link[0]?.l ?? null }
       }),
     )
     if (!row) fail(400, 'We could not load subscription status.')
@@ -148,6 +149,7 @@ export const subscriptionRouter = new Hono<AppEnv>()
       webhook_configured: Boolean(c.env.RAZORPAY_WEBHOOK_SECRET),
       member_tier: comp['member_tier'] === 'diamond' ? 'diamond' : 'outsider',
       diamond_claim: row.claim,
+      diamond_group_link: row.groupLink,
       history: orders.map((o) => ({
         id: String(o['id']),
         plan_name: str(o['plan_name']),

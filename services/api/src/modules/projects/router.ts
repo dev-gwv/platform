@@ -13,6 +13,7 @@ import {
   updatePaymentRequest,
   projectDetail,
   projectBilling,
+  projectCostSheet,
   type PlanInstalment,
   projectListItem,
   projectListPage,
@@ -1284,6 +1285,68 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.json(projectBilling.parse(data))
   })
 
+  /**
+   * The cost sheet: every person booked on the project with what they are
+   * paid and how much has gone out, every expense put against it, and what
+   * is left of the project value. Crew costs are for people who plan crew
+   * (projects: edit); expenses only for those who can see the studio's.
+   */
+  .get('/:id/costs', requireAction('projects', 'edit'), async (c) => {
+    const projectId = uuidParam(c)
+    const seeExpenses = c.get('auth').access.hasModule('company_expenses')
+    const data = await attempt(c, 'projects.costs', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [p] = await sql<{ value: number }[]>`
+          select coalesce(total_cost, package_cost, 0)::float8 as value from projects where id = ${projectId}`
+        if (!p) return 'missing' as const
+        const team = await sql`
+          select t.id as slot_id, u.name as user_name, t.service_name as role, s.name as shoot_name, s.shoot_date::text as shoot_date,
+                 coalesce(t.final_cost, t.estimated_cost, 0)::float8 as cost, t.cost_status,
+                 coalesce((select sum(ss.amount_paid) from team_slot_settlements ss where ss.slot_id = t.id), 0)::float8 as paid
+            from team_assignment_slots t
+            join shoots s on s.id = t.shoot_id
+            left join users u on u.user_id = t.user_id
+           where s.project_id = ${projectId} and t.status not in ('cancelled', 'released')
+           order by s.shoot_date nulls last, s.name, u.name`
+        const expenses = seeExpenses
+          ? await sql`
+              select e.id, e.category, e.description, pa.name as party_name, e.expense_date::text as expense_date,
+                     expense_cash_out(e)::float8 as amount
+                from expenses e
+                left join parties pa on pa.id = e.party_id
+               where e.project_id = ${projectId}
+               order by e.expense_date desc, e.created_at desc`
+          : null
+        return { value: p.value, team, expenses }
+      }),
+    )
+    if (!data) fail(400, 'We could not load the costs.')
+    if (data === 'missing') fail(404, 'That project was not found.')
+    const team = (data.team as Record<string, unknown>[]).map(
+      (r): Record<string, unknown> => ({ ...r, shoot_date: r['shoot_date'] ? isoDay(r['shoot_date']) : null }),
+    )
+    const expenses = data.expenses
+      ? (data.expenses as Record<string, unknown>[]).map((r): Record<string, unknown> => ({ ...r, expense_date: isoDay(r['expense_date']) }))
+      : null
+    const round = (n: number) => Math.round(n * 100) / 100
+    const teamTotal = round(team.reduce((a, r) => a + Number(r['cost'] ?? 0), 0))
+    const teamPaid = round(team.reduce((a, r) => a + Number(r['paid'] ?? 0), 0))
+    const expensesTotal = round((expenses ?? []).reduce((a, r) => a + Number(r['amount'] ?? 0), 0))
+    const totalCost = round(teamTotal + expensesTotal)
+    return c.json(
+      projectCostSheet.parse({
+        project_value: data.value,
+        team,
+        expenses,
+        team_total: teamTotal,
+        team_paid: teamPaid,
+        expenses_total: expensesTotal,
+        total_cost: totalCost,
+        profit: round(data.value - totalCost),
+      }),
+    )
+  })
+
   // Record a payment against a project.
   .post('/:id/payments', requireAction('projects', 'edit'), async (c) => {
     const parsed = paymentInput.safeParse(await c.req.json().catch(() => ({})))
@@ -1407,4 +1470,9 @@ function planInstalmentsFrom(raw: unknown): PlanInstalment[] {
     })
   }
   return out
+}
+
+/** A date column as YYYY-MM-DD, whether the driver handed back a Date or a string. */
+function isoDay(v: unknown): string {
+  return v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)
 }

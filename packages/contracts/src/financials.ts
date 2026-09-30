@@ -6,6 +6,8 @@ export const gstTreatment = z.enum(['non_gst', 'gst_applicable', 'exempt', 'reve
 export const expense = z.object({
   id: uuid,
   project_id: uuid.nullable(),
+  /** The project's name, so a list shows where the cost went without a second lookup. */
+  project_name: z.string().nullable().default(null),
   party_id: uuid.nullable(),
   party_name: z.string().nullable(),
   category: z.string().nullable(),

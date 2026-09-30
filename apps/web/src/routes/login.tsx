@@ -207,12 +207,18 @@ export function LoginPage() {
         return
       }
       if (isRegister) {
-        await callApi('/auth/register', {
+        const made = await callApi('/auth/register', {
           method: 'POST',
           body: payload(),
           responseSchema: registerResult,
         })
-        setPendingEmail(email) // show the "check your inbox" screen
+        // Straight in: the confirmation email is asked for inside the app.
+        if (made.session) {
+          rememberSession(made.session)
+          goNext(await refresh())
+          return
+        }
+        setPendingEmail(email) // an older API: show the "check your inbox" screen
         return
       }
       rememberSession(

@@ -66,6 +66,39 @@ export function DiamondVerifyCard({ status, className }: { status: SubscriptionS
           </div>
         </div>
 
+        {/* What the screenshot should look like: open the group, tap its name,
+            screenshot that page. Seeing it beats describing it. */}
+        {lastStatus !== 'approved' && send.data?.status !== 'approved' && (
+          <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+            <a href="/diamond/group-example.png" target="_blank" rel="noreferrer" className="shrink-0" title="Open the example">
+              <img
+                src="/diamond/group-example.png"
+                alt="Example: the IPC Diamonds - Premium group info page, with the group name and members count"
+                className="h-40 w-auto rounded-md border border-border object-cover"
+                loading="lazy"
+              />
+            </a>
+            <div className="min-w-[12rem] flex-1 text-sm">
+              <p className="font-medium">Your screenshot should look like this</p>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-muted-foreground">
+                <li>Open the IPC Diamonds - Premium group in WhatsApp.</li>
+                <li>Tap the group name at the top.</li>
+                <li>Take a screenshot of that page and upload it below.</li>
+              </ol>
+              {status.diamond_group_link && (
+                <a
+                  href={status.diamond_group_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#25D366] px-3 py-1 text-xs font-semibold text-white hover:bg-[#1fb857]"
+                >
+                  Open the group
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         {lastStatus === 'pending' && !send.isPending && (
           <p className="flex items-center gap-2 rounded-lg bg-tone-amber-soft px-3 py-2 text-sm text-tone-amber">
             <Clock className="size-4 shrink-0" aria-hidden /> We have your screenshot. Our team will check it and email you.

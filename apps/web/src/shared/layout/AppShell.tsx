@@ -24,6 +24,7 @@ import { SetupGuideBar } from '@/features/onboarding/setup-flow'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HubTabs } from './HubTabs'
+import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -220,6 +221,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             inside it animates in, keyed so each navigation replays it. */}
         <main className="relative min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:static print:overflow-visible">
           <div key={pathname} className="page-enter">
+            <ConfirmEmailBanner />
             <SetupGuideBar />
             <HubTabs />
             {settingsItemFor(pathname) ? <SettingsFrame>{children}</SettingsFrame> : children}

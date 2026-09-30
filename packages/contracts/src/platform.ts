@@ -144,3 +144,44 @@ export const platformDiamondDecision = z.object({
   reason: z.string().trim().max(500).optional(),
 })
 export type PlatformDiamondDecision = z.infer<typeof platformDiamondDecision>
+
+// ── Email health (0217) ─────────────────────────────────────
+/** One email the app tried to send, and what the email service said. */
+export const emailLogRow = z.object({
+  id: z.string().uuid(),
+  kind: z.string(),
+  to_address: z.string(),
+  subject: z.string().nullable(),
+  status: z.enum(['sent', 'failed', 'skipped']),
+  provider_message_id: z.string().nullable(),
+  error: z.string().nullable(),
+  created_at: z.string(),
+})
+export type EmailLogRow = z.infer<typeof emailLogRow>
+
+/**
+ * Is email set up, and is it working? Never carries the key itself -- only
+ * whether one is set.
+ */
+export const emailHealth = z.object({
+  key_set: z.boolean(),
+  from: z.string().nullable(),
+  from_domain: z.string().nullable(),
+  app_url: z.string().nullable(),
+  /** The sending domain as Resend sees it; null when it could not be read. */
+  domain: z.object({ name: z.string(), status: z.string() }).nullable(),
+  /** Why the domain could not be read (a send-only key, no key, not added). */
+  domain_note: z.string().nullable(),
+  last_7_days: z.object({ sent: z.number(), failed: z.number(), skipped: z.number() }),
+  recent: emailLogRow.array(),
+})
+export type EmailHealth = z.infer<typeof emailHealth>
+
+export const emailTestRequest = z.object({ to: z.string().trim().email().max(320) })
+export const emailTestResult = z.object({
+  status: z.enum(['sent', 'provider_missing', 'failed']),
+  id: z.string().nullable().default(null),
+  error: z.string().nullable().default(null),
+})
+/** What happened to a sent email after Resend took it: delivered, bounced, … */
+export const emailDelivery = z.object({ last_event: z.string().nullable(), note: z.string().nullable() })
