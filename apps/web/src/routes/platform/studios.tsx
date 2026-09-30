@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Building2, Users, FolderKanban, Download, Copy, Search } from 'lucide-react'
+import { Building2, Users, FolderKanban, Download, Copy, Search, Upload, History } from 'lucide-react'
 import { toast } from 'sonner'
-import type { PlanGate, PlatformStudio } from '@ipc/contracts'
+import type { LegacyStudio, PlanGate, PlatformStudio } from '@ipc/contracts'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -15,7 +15,8 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
-import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio } from '@/features/platform/api'
+import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios } from '@/features/platform/api'
+import { inviteMessage, legacyDaysLeft, legacyState, parseLegacyCsv, type LegacyParse } from '@/features/platform/legacy'
 
 const GATE_TONE: Record<PlanGate, 'success' | 'info' | 'warning' | 'danger'> = {
   active: 'success',
@@ -102,6 +103,9 @@ function Studios() {
   const [pageSize, setPageSize] = useState(25)
   const [selected, setSelected] = useState<PlatformStudio | null>(null)
   const [extendPreview, setExtendPreview] = useState<PlatformStudio | null>(null)
+  // All / New app / Old app, not joined -- the old app's subscribers live beside the new ones (0218).
+  const [where, setWhere] = useState<'all' | 'new' | 'old'>('all')
+  const legacy = useLegacyStudios()
 
   const onExpire = async (s: PlatformStudio) => {
     const okToExpire = await confirm({
@@ -124,15 +128,21 @@ function Studios() {
   const all = data ?? []
   const now = Date.now()
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime()
-  const activeCount = all.filter((s) => s.plan_gate === 'active').length
-  const graceCount = all.filter((s) => s.plan_gate === 'grace').length
-  const expiredCount = all.filter((s) => s.plan_gate === 'expired').length
-  const grandCount = all.filter((s) => s.plan_gate === 'grandfathered').length
+  // As the old board counted it: everyone who can still get in -- paid, on a trial or in grace.
+  const activeCount = all.filter((s) => s.plan_gate !== 'expired').length
+  const oldOnly = (legacy.data ?? []).filter((l) => !l.joined_company_id)
+  const soonNew = all.filter((s) => {
+    const d = daysLeftOf(s)
+    return s.plan_gate !== 'expired' && d != null && d <= 7
+  }).length
+  const soonCount = soonNew + oldOnly.filter((l) => legacyState(l.expires_at) === 'soon').length
+  const oldActive = oldOnly.filter((l) => legacyState(l.expires_at) === 'active' || legacyState(l.expires_at) === 'soon').length
+  const expiredCount = all.filter((s) => s.plan_gate === 'expired').length + oldOnly.filter((l) => legacyState(l.expires_at) === 'expired').length
   const newMonth = all.filter((s) => new Date(s.created_at).getTime() >= monthStart).length
-  if (all.length === 0)
+  if (all.length === 0 && oldOnly.length === 0)
     return (
       <>
-        <PageHeader title="Studios" description="Every tenant on the platform." actions={<CreateStudioDialog />} />
+        <PageHeader title="Studios" description="Every tenant on the platform." actions={<div className="flex gap-2"><ImportOldAppButton /><CreateStudioDialog /></div>} />
         <EmptyState title="No studios yet" description="Studios appear here as they register." />
       </>
     )
@@ -201,9 +211,10 @@ function Studios() {
     <>
       <PageHeader
         title="Studios"
-        description={`${all.length} studios · ${activeCount} active · ${expiredCount} expired`}
+        description={`${all.length + oldOnly.length} studios · ${activeCount + oldActive} active · ${expiredCount} expired${oldOnly.length ? ` · ${oldOnly.length} still on the old app` : ''}`}
         actions={
           <div className="flex gap-2">
+            <ImportOldAppButton />
             <CreateStudioDialog />
             <Button size="sm" variant="outline" onClick={() => downloadStudiosCsv(rows)}>
               <Download className="mr-1 size-4" /> CSV
@@ -212,17 +223,24 @@ function Studios() {
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard label="Total Studios" value={all.length} hint="All tenants" />
-        <StatCard label="Active" value={activeCount} hint="Currently accessible" tone="text-success" />
-        <StatCard label="Grace" value={graceCount} hint="Expiring soon" tone="text-warning" />
+        <StatCard label="Total Studios" value={all.length + oldOnly.length} hint={oldOnly.length ? `${oldOnly.length} on the old app` : 'All studios'} />
+        <StatCard label="Active" value={activeCount + oldActive} hint="Currently accessible" tone="text-success" />
+        <StatCard label="Expiring Soon" value={soonCount} hint="Next 7 days" tone="text-warning" />
         <StatCard label="Expired" value={expiredCount} hint="Access ended" tone="text-destructive" />
-        <StatCard label="New This Month" value={newMonth} hint={`Grandfathered ${grandCount}`} />
+        <StatCard label="New This Month" value={newMonth} hint="Joined this month" />
       </div>
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <div className="relative">
           <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Search name, owner…" className="pl-8" />
+          <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Search studio, owner, email, phone…" className="pl-8" />
         </div>
+        {oldOnly.length > 0 && (
+          <Select value={where} onChange={(e) => { setWhere(e.target.value as 'all' | 'new' | 'old'); setPage(1) }} aria-label="Where">
+            <option value="all">New and old app</option>
+            <option value="new">New app</option>
+            <option value="old">Old app, not joined</option>
+          </Select>
+        )}
         <Select value={gate} onChange={(e) => { setGate(e.target.value); setPage(1) }} aria-label="Plan status">
           <option value="">All statuses</option>
           <option value="active">Active</option>
@@ -263,6 +281,7 @@ function Studios() {
           <option value="100">100 / page</option>
         </Select>
       </div>
+      {where !== 'old' && (<>
       <div className="table-wrap rounded-lg border border-border">
         <table className="table-sticky w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">
@@ -314,6 +333,8 @@ function Studios() {
           <Button size="sm" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
         </div>
       </div>
+      </>)}
+      {where !== 'new' && oldOnly.length > 0 && <OldAppStudios rows={oldOnly} search={q} expiry={expiry} />}
       {selected && (<StudioDetailsDialog studio={selected} onClose={() => setSelected(null)} onExpire={() => void onExpire(selected)} />)}
       {extendPreview && (
         <Dialog open onOpenChange={(o) => { if (!o) setExtendPreview(null) }}>
@@ -426,6 +447,140 @@ function StudioDetailsDialog({ studio, onClose, onExpire }: { studio: PlatformSt
         <div className="mt-4 flex flex-col gap-2">
           <AssignPlanForm studio={studio} />
           <Button size="sm" variant="ghost" className="text-destructive" onClick={onExpire}>Expire plan</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * The old app's subscribers who have not signed up here yet (0218). Their
+ * access and days left come from the old app's export; "Copy invite" gives
+ * the message to send so they move over with their time.
+ */
+function OldAppStudios({ rows, search, expiry }: { rows: LegacyStudio[]; search: string; expiry: string }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const shown = rows.filter((l) => {
+    if (search && !`${l.studio_name} ${l.owner_name ?? ''} ${l.email ?? ''} ${l.phone ?? ''}`.toLowerCase().includes(search)) return false
+    const st = legacyState(l.expires_at, today)
+    const d = legacyDaysLeft(l.expires_at, today)
+    if (expiry === 'expired' && st !== 'expired') return false
+    if (['7', '15', '30'].includes(expiry) && !(st !== 'expired' && d != null && d <= Number(expiry))) return false
+    return true
+  })
+  const [limit, setLimit] = useState(50)
+  async function copyInvite(l: LegacyStudio) {
+    try {
+      await navigator.clipboard.writeText(inviteMessage(l))
+      toast.success('Invite copied. Paste it on WhatsApp.')
+    } catch {
+      toast.error('Could not copy.')
+    }
+  }
+  return (
+    <section className="mt-6" aria-labelledby="old-app">
+      <h2 id="old-app" className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <History className="size-4 text-muted-foreground" aria-hidden /> On the old app, not joined yet
+        <span className="font-normal text-muted-foreground">· {shown.length}</span>
+      </h2>
+      <div className="table-wrap rounded-lg border border-border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2 font-medium">Studio</th>
+              <th className="px-4 py-2 font-medium">Owner</th>
+              <th className="px-4 py-2 font-medium">Phone</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Expires</th>
+              <th className="px-4 py-2 font-medium">Days left</th>
+              <th className="px-4 py-2 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.slice(0, limit).map((l) => {
+              const st = legacyState(l.expires_at, today)
+              return (
+                <tr key={l.id} className="border-t border-border">
+                  <td className="px-4 py-2">
+                    <p className="font-medium">{l.studio_name}</p>
+                    {l.plan && <p className="text-xs text-muted-foreground">{l.plan}</p>}
+                  </td>
+                  <td className="px-4 py-2">
+                    <p>{l.owner_name ?? '—'}</p>
+                    <p className="text-xs text-muted-foreground">{l.email ?? '—'}</p>
+                  </td>
+                  <td className="px-4 py-2 tabular-nums">{l.phone ?? '—'}</td>
+                  <td className="px-4 py-2">
+                    <StatusBadge tone={st === 'expired' ? 'danger' : st === 'soon' ? 'warning' : st === 'active' ? 'success' : 'neutral'}>
+                      {st === 'expired' ? 'Expired' : st === 'soon' ? 'Expiring soon' : st === 'active' ? 'Active' : 'Unknown'}
+                    </StatusBadge>
+                  </td>
+                  <td className="px-4 py-2">{l.expires_at ? fmtDate(`${l.expires_at}T00:00:00`) : '—'}</td>
+                  <td className="px-4 py-2 tabular-nums">{st === 'expired' ? '—' : (legacyDaysLeft(l.expires_at, today) ?? '—')}</td>
+                  <td className="px-4 py-2 text-right">
+                    <Button size="sm" variant="outline" onClick={() => void copyInvite(l)}>
+                      <Copy className="size-4" /> Copy invite
+                    </Button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {shown.length > limit && (
+        <div className="mt-2 text-center">
+          <Button size="sm" variant="outline" onClick={() => setLimit((n) => n + 100)}>Show more ({shown.length - limit} left)</Button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Bring the old app's Studio Access export in: pick the file, check the counts, import. */
+function ImportOldAppButton() {
+  const [open, setOpen] = useState(false)
+  const [parsed, setParsed] = useState<LegacyParse | null>(null)
+  const [bad, setBad] = useState(false)
+  const imp = useImportLegacyStudios()
+  const today = new Date().toISOString().slice(0, 10)
+  const live = parsed?.rows.filter((r) => legacyState(r.expires_at, today) !== 'expired').length ?? 0
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setParsed(null); setBad(false) } }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline"><Upload className="mr-1 size-4" /> Import from old app</Button>
+      </DialogTrigger>
+      <DialogContent title="Import from the old app" description="On the old app open Studio Access, press Export CSV, then pick that file here.">
+        <div className="flex flex-col gap-3">
+          <Input
+            type="file"
+            accept=".csv,text/csv"
+            aria-label="The old app's Studio Access export"
+            onChange={async (e) => {
+              const f = e.target.files?.[0]
+              if (!f) return
+              const r = parseLegacyCsv(await f.text())
+              setParsed(r)
+              setBad(!r || r.rows.length === 0)
+            }}
+          />
+          {bad && <p className="text-sm text-destructive">That file is not the old app's Studio Access export.</p>}
+          {parsed && parsed.rows.length > 0 && (
+            <p className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <b>{parsed.rows.length}</b> studios · <b>{live}</b> still have access
+              {parsed.skipped > 0 && <span className="text-muted-foreground"> · {parsed.skipped} lines skipped</span>}. Anyone already on the new
+              app with the same email gets their remaining time now; the rest get it when they sign up.
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!parsed || parsed.rows.length === 0 || imp.isPending}
+              onClick={() => parsed && imp.mutate(parsed.rows, { onSuccess: () => { setOpen(false); setParsed(null) } })}
+            >
+              {imp.isPending ? 'Importing…' : `Import ${parsed?.rows.length ?? ''} studios`}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

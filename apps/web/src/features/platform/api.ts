@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, platformStudioList, platformUsage, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, legacyImportResult, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
-import { callApi } from '@/shared/api/client'
+import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
 const ok = z.object({ ok: z.boolean() })
@@ -97,4 +97,28 @@ export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** The old app's subscribers, imported from its Studio Access export (0218). */
+export function useLegacyStudios() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['platform', 'legacy'],
+    queryFn: () => callApi('/platform/legacy', { responseSchema: legacyStudioList }),
+    enabled: !!session?.is_platform_admin,
+    staleTime: 30_000,
+  })
+}
+
+export function useImportLegacyStudios() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (rows: LegacyStudioInput[]) =>
+      callApi('/platform/legacy/import', { method: 'POST', body: { rows }, responseSchema: legacyImportResult, timeoutMs: SLOW_TIMEOUT_MS }),
+    onSuccess: (r) => {
+      toast.success(`${r.imported} added, ${r.updated} updated${r.carried ? ` · ${r.carried} already on the new app got their time` : ''}.`)
+      void qc.invalidateQueries({ queryKey: ['platform'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
 }
