@@ -105,6 +105,9 @@ These come from the owner reviewing the live app. Apply them to anything you tou
 - **The Overview is money and work only**: no share-with-client or referral card. The client link is under More → Share with client; asking for a referral is the Referrals tab.
 - **The Shoots tab starts with the days.** One slim row above them (+ Add event, Bulk assign), no data strip, no "See all shoots". The event chips fold behind "+ Add event" once a day exists; the "Who this day needs" chips show only while a day has no roles; no "Next: …" line on a card. Green that reads: a filled role and a person whose data is in are `bg-success/15` (`dataRowTone` in `features/data/stage.ts`), a fully staffed day gets `bg-success/[0.06]` with its green top bar. The card's Assign team button is solid, never outline.
 - **A client agrees to terms by signing.** The public terms page (`routes/terms-acknowledge.tsx`) asks for a finger signature (`shared/ui/signature-pad.tsx`) before "I agree"; the signature shows on the client's copy and the studio's (`TermsDocumentSheet`).
+- **`Select` shows `<optgroup>` groups** (`shared/ui/select.tsx`, `itemsFrom`). Before this it dropped them, and the data dialog's "Copied by" lost the team and every saved helper.
+- **The data dialog is short and remembers.** Copied by · Received on, then one line per copy (disk + status; folder/link on "+ Folder or link"); type, size, cards, label and notes under "More details". A new record starts from the studio's last copier and main/backup disks (`data-defaults:<company>` in the browser, ids only).
+- **After Book, Done is the next thing.** In Assign team, once someone is booked and nothing is left to book, Done turns solid with the `ipc-nudge` and Book goes quiet.
 - **When the owner gives a standing instruction, write it here** in this list, so the next session follows it without being told again.
 
 ## Who is working on what

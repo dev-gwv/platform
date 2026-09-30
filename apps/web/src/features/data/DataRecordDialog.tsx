@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { HardDrive, Loader2, Ruler, ShieldCheck } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronDown, HardDrive, Link2, Loader2, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CustodyStatus, DataRecord, ShootListItem, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -32,13 +32,39 @@ interface Copy {
 }
 
 /**
+ * The last copier and disks this studio used, so the next record starts
+ * from them ("quick save"). Ids only, per studio, in this browser.
+ */
+interface Remembered {
+  copiedBy?: string
+  primary?: string
+  backup?: string
+}
+const rememberKey = (company: string | undefined) => `data-defaults:${company ?? 'none'}`
+function readRemembered(company: string | undefined): Remembered {
+  try {
+    const raw = localStorage.getItem(rememberKey(company))
+    return raw ? (JSON.parse(raw) as Remembered) : {}
+  } catch {
+    return {}
+  }
+}
+function writeRemembered(company: string | undefined, v: Remembered) {
+  try {
+    localStorage.setItem(rememberKey(company), JSON.stringify(v))
+  } catch {
+    // Private windows and full storage: nothing to remember, nothing breaks.
+  }
+}
+
+/**
  * The data from one booking: what came in, and where its two copies went.
  *
- * The old platform's version was three steps (data, link work, assign task)
- * with a status manager and a dozen fields in view. This keeps what a studio
- * actually checks the next morning -- whose cards, who copied them, where the
- * main copy and the backup are, and whether each is done -- and puts the rest
- * one click away under "More".
+ * What a studio checks the next morning is in view -- who copied the cards,
+ * where the main copy and the backup went, and whether each is done. Folder
+ * and link open per copy; type, size, cards, label and notes sit under
+ * "More details". A new record starts from the copier and disks used last
+ * (the owner: "every time I have to enter it fresh").
  */
 export function DataRecordDialog({
   projectId,
@@ -64,11 +90,12 @@ export function DataRecordDialog({
   const [type, setType] = useState(record?.data_type ?? defaultDataType(slot.service_name))
   const [received, setReceived] = useState(record?.date_received ?? slotDay(slot))
   // A team member's id, "p:<id>" for an outside helper, OTHER to type a new name.
+  const [remembered] = useState(() => (record ? {} : readRemembered(session?.company_id)))
   const [copiedBy, setCopiedBy] = useState(
     record
       ? (record.copied_by_uid ??
           (record.copied_by_person_id ? `p:${record.copied_by_person_id}` : record.copied_by_name ? OTHER : ''))
-      : (session?.user_id ?? ''),
+      : (remembered.copiedBy ?? session?.user_id ?? ''),
   )
   const [copiedByName, setCopiedByName] = useState(record && !record.copied_by_uid ? (record.copied_by_name ?? '') : '')
   const [size, setSize] = useState(record?.size_gb ? String(record.size_gb) : '')
@@ -76,13 +103,13 @@ export function DataRecordDialog({
   const [label, setLabel] = useState(record?.data_label ?? defaultLabel(shoot, slot))
   const [notes, setNotes] = useState(record?.notes ?? '')
   const [primary, setPrimary] = useState<Copy>({
-    location: record?.primary_location_id ?? '',
+    location: record?.primary_location_id ?? remembered.primary ?? '',
     folder: record?.folder_path ?? '',
     link: record?.cloud_link ?? '',
     status: record?.primary_status ?? 'pending',
   })
   const [backup, setBackup] = useState<Copy>({
-    location: record?.backup_location_id ?? '',
+    location: record?.backup_location_id ?? remembered.backup ?? '',
     folder: record?.backup_folder_path ?? '',
     link: record?.backup_cloud_link ?? '',
     status: record?.backup_status ?? 'pending',
@@ -109,6 +136,26 @@ export function DataRecordDialog({
   }
 
   const who = slot.user_name ?? 'this booking'
+  const locations = useStorageLocations()
+  const [more, setMore] = useState(
+    () => !!(record?.size_gb || record?.card_count || record?.notes || (record?.data_type && record.data_type !== defaultDataType(slot.service_name))),
+  )
+
+  // A remembered disk or helper that has since been removed is not offered.
+  useEffect(() => {
+    if (record || !locations.data) return
+    const live = new Set(locations.data.filter((l) => l.is_active).map((l) => l.id))
+    setPrimary((p) => (p.location && !live.has(p.location) ? { ...p, location: '' } : p))
+    setBackup((b) => (b.location && !live.has(b.location) ? { ...b, location: '' } : b))
+  }, [record, locations.data])
+  useEffect(() => {
+    if (record || !people.data || !members.data) return
+    setCopiedBy((c) => {
+      if (c.startsWith('p:')) return people.data.some((p) => `p:${p.id}` === c && p.is_active) ? c : (session?.user_id ?? '')
+      if (c && c !== OTHER && c !== slot.user_id && !members.data.some((m) => m.user_id === c)) return session?.user_id ?? ''
+      return c
+    })
+  }, [record, people.data, members.data, session?.user_id, slot.user_id])
 
 
   async function save() {
@@ -174,6 +221,11 @@ export function DataRecordDialog({
           team_member_name: slot.user_name ?? undefined,
           requirement_name: slot.service_name ?? undefined,
         })
+      writeRemembered(session?.company_id, {
+        copiedBy: helper ? `p:${helper.id}` : fields.copied_by_uid ?? '',
+        primary: fields.primary_location_id ?? '',
+        backup: fields.backup_location_id ?? '',
+      })
       draft.clear()
       onClose()
     } catch {
@@ -197,29 +249,8 @@ export function DataRecordDialog({
               restore(initial)
             }}
           />
-          {/* What came in, and who handled it. */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="dr-type" className="text-xs">
-                Data type
-              </Label>
-              <LookupSelect
-                category="data_type"
-                id="dr-type"
-                aria-label="Data type"
-                value={type}
-                onChange={setType}
-                defaults={DATA_TYPES}
-                addLabel="Add a type…"
-                inputPlaceholder="e.g. Reels, 360° video"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="dr-received" className="text-xs">
-                Received on
-              </Label>
-              <Input id="dr-received" type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
-            </div>
+          {/* Who copied the cards, and when they came in. */}
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dr-copied" className="text-xs">
                 Copied by
@@ -254,13 +285,20 @@ export function DataRecordDialog({
                 <option value={OTHER}>+ New helper…</option>
               </Select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dr-received" className="text-xs">
+                Received on
+              </Label>
+              <Input id="dr-received" type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
+            </div>
             {copiedBy === OTHER && (
-              <div className="flex flex-col gap-1.5 sm:col-span-3">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="dr-copied-name" className="text-xs">
                   Helper's name (saved for next time)
                 </Label>
                 <Input
                   id="dr-copied-name"
+                  className={nudge(copiedByName)}
                   value={copiedByName}
                   onChange={(e) => setCopiedByName(e.target.value)}
                   placeholder="e.g. Aman (studio intern)"
@@ -270,32 +308,50 @@ export function DataRecordDialog({
             )}
           </div>
 
-          <CopySection
-            title="Main copy"
-            hint="Where the cards were copied to first — hard disk, NAS or cloud."
-            icon={<HardDrive className="size-4" />}
-            tone="primary"
-            value={primary}
-            onChange={setPrimary}
-            statuses={['pending', 'copied', 'verified', 'issue']}
-          />
-          <CopySection
-            title="Backup copy"
-            hint="The second copy, somewhere else. Mark it not needed if this data doesn’t need one."
-            icon={<ShieldCheck className="size-4" />}
-            tone="backup"
-            value={backup}
-            onChange={setBackup}
-            statuses={['pending', 'copied', 'verified', 'issue', 'not_required']}
-          />
+          {/* The two copies: one line each. */}
+          <div className="divide-y divide-border rounded-lg border border-border">
+            <CopyRow
+              title="Main copy"
+              icon={<HardDrive className="size-4" />}
+              value={primary}
+              onChange={setPrimary}
+              statuses={['pending', 'copied', 'verified', 'issue']}
+            />
+            <CopyRow
+              title="Backup copy"
+              icon={<ShieldCheck className="size-4" />}
+              value={backup}
+              onChange={setBackup}
+              statuses={['pending', 'copied', 'verified', 'issue', 'not_required']}
+            />
+          </div>
 
-          {/* Size and cards are what gets asked about later ("how much did the
-              wedding come to?"), so they sit in view, not behind a toggle. */}
-          <section className="rounded-lg border border-tone-violet/30 bg-tone-violet-soft/40 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-tone-violet">
-              <Ruler className="size-4" /> Size, cards &amp; notes
-            </p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            className="flex w-fit items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} /> More details
+            <span className="font-normal">· type, size, cards, notes</span>
+          </button>
+          {more && (
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="dr-type" className="text-xs">
+                  Data type
+                </Label>
+                <LookupSelect
+                  category="data_type"
+                  id="dr-type"
+                  aria-label="Data type"
+                  value={type}
+                  onChange={setType}
+                  defaults={DATA_TYPES}
+                  addLabel="Add a type…"
+                  inputPlaceholder="e.g. Reels, 360° video"
+                />
+              </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dr-size" className="text-xs">
                   Size (GB)
@@ -320,7 +376,7 @@ export function DataRecordDialog({
                   onChange={(e) => setCards(e.target.value.replace(/\D/g, ''))}
                 />
               </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-4">
                 <Label htmlFor="dr-label" className="text-xs">
                   Label
                 </Label>
@@ -333,13 +389,13 @@ export function DataRecordDialog({
                 <Textarea
                   id="dr-notes"
                   rows={2}
-                  placeholder="Anything the editor should know — a corrupted card, a missing clip…"
+                  placeholder="A corrupted card, a missing clip…"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
             </div>
-          </section>
+          )}
         </div>
 
         <DialogFooter>
@@ -355,81 +411,87 @@ export function DataRecordDialog({
   )
 }
 
-const SEG_ON: Record<CustodyStatus, string> = {
-  pending: 'border-border bg-muted text-foreground',
-  copied: 'border-warning bg-warning/15 text-warning',
-  verified: 'border-success bg-success/15 text-success',
-  issue: 'border-destructive bg-destructive/15 text-destructive',
-  not_required: 'border-border bg-muted text-foreground',
+/** Amber until something is filled in, green once it is. */
+const nudge = (v: string) => (v.trim() ? 'border-success/50' : 'border-warning/60 bg-warning/5')
+
+const STATUS_TONE: Record<CustodyStatus, string> = {
+  pending: '',
+  copied: 'text-warning',
+  verified: 'text-success',
+  issue: 'text-destructive',
+  not_required: 'text-muted-foreground',
 }
 
-function CopySection({
+/**
+ * One copy on one line: where it went and how far it got. Folder and link
+ * open on demand, or by themselves when they already hold something.
+ */
+function CopyRow({
   title,
-  hint,
   icon,
-  tone,
   value,
   onChange,
   statuses,
 }: {
   title: string
-  hint: string
   icon: ReactNode
-  tone: 'primary' | 'backup'
   value: Copy
   onChange: (next: Copy) => void
   statuses: CustodyStatus[]
 }) {
   const skipped = value.status === 'not_required'
+  const [paths, setPaths] = useState(!!(value.folder || value.link))
+  const open = paths || !!(value.folder || value.link)
   return (
-    <section
-      className={cn(
-        'rounded-lg border p-3',
-        tone === 'primary' ? 'border-tone-blue/30 bg-tone-blue-soft/40' : 'border-tone-amber/30 bg-tone-amber-soft/40',
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className={cn('flex items-center gap-1.5 text-sm font-semibold', tone === 'primary' ? 'text-tone-blue' : 'text-tone-amber')}>
-          {icon} {title}
+    <div className="flex flex-col gap-2 p-3">
+      <div className="grid items-center gap-2 sm:grid-cols-[8.5rem_1fr_9rem]">
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          <span className="text-muted-foreground">{icon}</span> {title}
         </p>
-        {/* Where this copy stands: one tap, no dropdown. */}
-        <div role="radiogroup" aria-label={`${title} status`} className="flex flex-wrap gap-1">
-          {statuses.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={value.status === s}
-              onClick={() => onChange({ ...value, status: s })}
-              className={cn(
-                'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                value.status === s ? SEG_ON[s] : 'border-transparent text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {TRACK_LABEL[s]}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
-      {!skipped && (
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        {skipped ? (
+          <p className="text-sm text-muted-foreground">Not needed for this data.</p>
+        ) : (
           <LocationPicker value={value.location} onChange={(location) => onChange({ ...value, location })} label={`${title} location`} />
-          <Input
-            aria-label={`${title} folder`}
-            placeholder="Folder, e.g. /2026/Haldi/Photos"
-            value={value.folder}
-            onChange={(e) => onChange({ ...value, folder: e.target.value })}
-          />
-          <Input
-            aria-label={`${title} link`}
-            placeholder="Link (Drive, Dropbox…)"
-            value={value.link}
-            onChange={(e) => onChange({ ...value, link: e.target.value })}
-          />
-        </div>
-      )}
-    </section>
+        )}
+        <Select
+          aria-label={`${title} status`}
+          className={STATUS_TONE[value.status]}
+          value={value.status}
+          onChange={(e) => onChange({ ...value, status: e.target.value as CustodyStatus })}
+        >
+          {statuses.map((st) => (
+            <option key={st} value={st}>
+              {TRACK_LABEL[st]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {!skipped &&
+        (open ? (
+          <div className="grid gap-2 sm:grid-cols-2 sm:pl-[9rem]">
+            <Input
+              aria-label={`${title} folder`}
+              placeholder="Folder, e.g. /2026/Haldi/Photos"
+              value={value.folder}
+              onChange={(e) => onChange({ ...value, folder: e.target.value })}
+            />
+            <Input
+              aria-label={`${title} link`}
+              placeholder="Link (Drive, Dropbox…)"
+              value={value.link}
+              onChange={(e) => onChange({ ...value, link: e.target.value })}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPaths(true)}
+            className="flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground sm:ml-[9rem]"
+          >
+            <Link2 className="size-3.5" /> + Folder or link
+          </button>
+        ))}
+    </div>
   )
 }
 
@@ -443,7 +505,7 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
 
   if (adding) {
     return (
-      <div className="flex flex-wrap items-center gap-1.5 sm:col-span-3">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Input
           aria-label="New location name"
           placeholder="Name, e.g. Studio HDD 4"
@@ -482,6 +544,7 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
   return (
     <Select
       aria-label={label}
+      className={cn('[&>button]:transition-colors', value ? '[&>button]:border-success/50' : '[&>button]:border-warning/60 [&>button]:bg-warning/5')}
       value={value}
       onChange={(e) => (e.target.value === NEW ? setAdding(true) : onChange(e.target.value))}
     >
