@@ -1,0 +1,6 @@
+-- 0217: a record of every email the app tries to send, and what the email
+-- service answered -- so "the mail did not arrive" can be answered from the
+-- app instead of guessed at.
+--
+-- Claimed first; the body follows in the same PR. See CLAUDE.md
+-- ("Email that arrives").
