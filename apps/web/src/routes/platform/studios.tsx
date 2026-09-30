@@ -15,7 +15,8 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
-import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios } from '@/features/platform/api'
+import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
+import { DateField, toIso } from '@/shared/ui/date-field'
 import { inviteMessage, legacyDaysLeft, legacyState, parseLegacyCsv, type LegacyParse } from '@/features/platform/legacy'
 
 const GATE_TONE: Record<PlanGate, 'success' | 'info' | 'warning' | 'danger'> = {
@@ -90,7 +91,6 @@ type SortKey = 'name' | 'expiry' | 'joined' | 'days' | 'users'
 function Studios() {
   const { data, isLoading, isError, refetch } = usePlatformStudios()
   const planAction = usePlatformPlanAction()
-  const customAction = usePlatformCustomPlanAction()
   const confirm = useConfirm()
   const [search, setSearch] = useState('')
   const [gate, setGate] = useState('')
@@ -200,13 +200,6 @@ function Studios() {
     }
   }
 
-  const extendDate = (s: PlatformStudio, months: number) => {
-    const base = s.plan_expiry && new Date(s.plan_expiry).getTime() > now ? new Date(s.plan_expiry) : new Date()
-    const next = new Date(base)
-    next.setMonth(next.getMonth() + months)
-    return next
-  }
-
   return (
     <>
       <PageHeader
@@ -314,8 +307,7 @@ function Studios() {
                 <td className="px-4 py-2 text-muted-foreground">{fmtDate(s.created_at)}</td>
                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-1.5">
-                    <Button size="sm" variant="outline" disabled={planAction.isPending} onClick={() => setExtendPreview(s)}>Extend…</Button>
-                    <Button size="sm" variant="outline" disabled={customAction.isPending} onClick={() => customAction.mutate({ studioId: s.id, months: 3 })}>+3mo</Button>
+                    <Button size="sm" onClick={() => setExtendPreview(s)}>Give access</Button>
                     <Button size="sm" variant="outline" disabled={planAction.isPending} onClick={() => planAction.mutate({ studioId: s.id, action: 'trial' })}>Trial</Button>
                     <Button size="sm" variant="ghost" disabled={planAction.isPending} onClick={() => void copyMessage(s)}><Copy className="size-4" /></Button>
                     <Button size="sm" variant="ghost" className="text-destructive" disabled={planAction.isPending} onClick={() => void onExpire(s)}>Expire</Button>
@@ -336,23 +328,59 @@ function Studios() {
       </>)}
       {where !== 'new' && oldOnly.length > 0 && <OldAppStudios rows={oldOnly} search={q} expiry={expiry} />}
       {selected && (<StudioDetailsDialog studio={selected} onClose={() => setSelected(null)} onExpire={() => void onExpire(selected)} />)}
-      {extendPreview && (
-        <Dialog open onOpenChange={(o) => { if (!o) setExtendPreview(null) }}>
-          <DialogContent title={`Extend ${extendPreview.name}`} description="Preview the new expiry before confirming.">
-            <div className="flex flex-col gap-2 text-sm">
-              <p className="text-muted-foreground">Current expiry: {fmtDate(extendPreview.plan_expiry)}</p>
-              {[3, 12].map((m) => (
-                <div key={m} className="flex items-center justify-between rounded-lg border border-border p-2">
-                  <span>+{m} month{m === 1 ? '' : 's'} → {fmtDate(extendDate(extendPreview, m).toISOString())}</span>
-                  <Button size="sm" variant="outline" disabled={planAction.isPending || customAction.isPending} onClick={() => { customAction.mutate({ studioId: extendPreview.id, months: m }); setExtendPreview(null) }}>Confirm</Button>
-                </div>
-              ))}
-              <Button size="sm" variant="outline" disabled={planAction.isPending} onClick={() => { planAction.mutate({ studioId: extendPreview.id, action: 'extend', months: 12 }); setExtendPreview(null) }}>Extend 1y (plan action)</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      {extendPreview && <GiveAccessDialog studio={extendPreview} onClose={() => setExtendPreview(null)} />}
     </>
+  )
+}
+
+/**
+ * Give a studio access, as the old Studio Access board did: 30, 90 or 180
+ * days or a year on from when its access ends now (or from today, once it
+ * has ended), or to a date picked on the calendar. Each line says the date
+ * it lands on before anything is saved.
+ */
+function GiveAccessDialog({ studio, onClose }: { studio: PlatformStudio; onClose: () => void }) {
+  const setUntil = useSetAccessUntil()
+  const [picked, setPicked] = useState('')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const end = endsOf(studio)
+  const base = end && new Date(end).getTime() > Date.now() ? new Date(end) : today
+  const plus = (days: number) => {
+    const d = new Date(base)
+    d.setDate(d.getDate() + days)
+    return toIso(d)
+  }
+  const give = (until: string) => setUntil.mutate({ studioId: studio.id, until }, { onSuccess: onClose })
+  const options = [
+    { label: '30 days', until: plus(30) },
+    { label: '90 days', until: plus(90) },
+    { label: '180 days', until: plus(180) },
+    { label: '1 year', until: plus(365) },
+  ]
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent
+        title={`Give ${studio.name} access`}
+        description={end && new Date(end).getTime() > Date.now() ? `Access now ends on ${fmtDate(end)}.` : 'Access has ended; these count from today.'}
+      >
+        <div className="flex flex-col gap-2 text-sm">
+          {options.map((o) => (
+            <div key={o.label} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
+              <span><span className="font-medium">+{o.label}</span> <span className="text-muted-foreground">→ until {fmtDate(o.until)}</span></span>
+              <Button size="sm" disabled={setUntil.isPending} onClick={() => give(o.until)}>Give</Button>
+            </div>
+          ))}
+          <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-2 ${picked ? 'border-success/50 bg-success/5' : 'border-warning/60 bg-warning/5'}`}>
+            <span className="font-medium">Until a date</span>
+            <div className="flex items-center gap-2">
+              <DateField aria-label="Access until" value={picked} min={toIso(today)} onChange={(e) => setPicked(e.target.value)} />
+              <Button size="sm" disabled={!picked || setUntil.isPending} onClick={() => give(picked)}>Set</Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

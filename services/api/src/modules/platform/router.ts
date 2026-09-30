@@ -253,13 +253,25 @@ export const platformRouter = new Hono<AppEnv>()
     // `assign` + `custom` are Lovable-parity aliases handled here; the contract
     // still validates extend/expire/trial.
     const extended = z.object({
-      action: z.enum(['extend', 'expire', 'trial', 'custom', 'assign']),
+      action: z.enum(['extend', 'expire', 'trial', 'custom', 'assign', 'until']),
       months: z.number().int().min(1).max(60).optional(),
       plan_key: z.string().trim().max(80).optional(),
+      // 'until': access to the end of this day (0220), as the old board's
+      // Extend 30 / 90 / 180 days and Custom expiry did.
+      until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).safeParse(raw)
     if (!extended.success) fail(422, 'Please check the action.')
     const id = uuidParam(c)
-    const { action, months, plan_key } = extended.data
+    const { action, months, plan_key, until } = extended.data
+    if (action === 'until') {
+      if (!until) fail(422, 'Pick the date access should run until.')
+      const done = await attempt(c, 'platform.plan_until', () =>
+        withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_set_access_until(${id}, ${until}::date)`),
+      )
+      if (!done) fail(422, 'Pick today or a later date.')
+      await audit(c, { action: 'platform.plan_until', entityType: 'company', entityId: id, after: { until } })
+      return c.json({ ok: true })
+    }
     const parsed = action === 'custom'
       ? { action: 'extend' as const, months: months ?? 12 }
       : action === 'assign'

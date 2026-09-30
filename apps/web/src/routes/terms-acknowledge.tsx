@@ -8,16 +8,16 @@ import { DownloadDocumentButton } from '@/shared/ui/download-document'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { Skeleton } from '@/shared/ui/skeleton'
+import { SignaturePad } from '@/shared/ui/signature-pad'
 // Shared with the in-app viewer: the studio and the client must read the
 // same document, so the shape and the rendering live in one place.
 import { termsPayload, type TermsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
-import { StatusBadge } from '@/shared/ui/status-badge'
 
 
 /**
  * PUBLIC page — no auth. A client opens the emailed link (?token=…), reads the
- * terms, and taps "I agree". No app shell; this is the only thing they see.
+ * terms, signs with a finger and taps "I agree". No app shell; this is the only thing they see.
  *
  * Lovable parity: rich payload header (title/project/client/company/payment),
  * sections list, Print + acked view, email/WhatsApp share, expiry/revoke
@@ -30,6 +30,7 @@ export function TermsAcknowledgePage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [signature, setSignature] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,14 +70,20 @@ export function TermsAcknowledgePage() {
 
   async function onAgree(e: FormEvent) {
     e.preventDefault()
+    if (!signature) {
+      setError('Please sign in the box above before you agree.')
+      return
+    }
     setError(null)
     setBusy(true)
     try {
       await callApi(`/public/terms/${token}/ack`, {
         method: 'POST',
-        body: { name: name.trim(), email: email.trim() || undefined },
+        body: { name: name.trim(), email: email.trim() || undefined, signature },
         responseSchema: z.object({ ok: z.boolean() }),
       })
+      // Their copy shows the agreement and the signature straight away.
+      setDoc((d) => (d ? { ...d, acknowledged_at: new Date().toISOString(), acknowledged_by_name: name.trim(), signature } : d))
       setDone(true)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not record your agreement.')
@@ -89,7 +96,7 @@ export function TermsAcknowledgePage() {
     <div className="relative overflow-hidden">
       <PageBackdrop />
       <div className="paper relative mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-4">
-      {doc && <TermsDocumentLetterhead doc={doc} trailing={done ? <StatusBadge tone="success">Agreed</StatusBadge> : null} />}
+      {doc && <TermsDocumentLetterhead doc={doc} />}
 
       {loadError ? (
         <Card>
@@ -145,12 +152,16 @@ export function TermsAcknowledgePage() {
                   <Label>Email (optional)</Label>
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Your signature</Label>
+                  <SignaturePad onChange={setSignature} label="Sign here with your finger" />
+                </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button type="submit" size="lg" disabled={busy || !name.trim()}>
+                <Button type="submit" size="lg" disabled={busy || !name.trim() || !signature}>
                   {busy ? 'Recording…' : 'I have read these terms and I agree'}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Your name, time and IP address are recorded as evidence of agreement.
+                  Your name, signature, time and IP address are recorded as evidence of agreement.
                 </p>
               </form>
             </CardContent>

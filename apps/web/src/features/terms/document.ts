@@ -56,6 +56,8 @@ export const termsPayload = z.object({
   legal_note: z.string().nullable().nullish(),
   document_footer_note: z.string().nullable().nullish(),
   already_acknowledged: z.boolean().nullish(),
+  // The client's finger-drawn signature (0220), a PNG data URL.
+  signature: z.string().nullish(),
 })
 export type TermsPayload = z.infer<typeof termsPayload>
 
