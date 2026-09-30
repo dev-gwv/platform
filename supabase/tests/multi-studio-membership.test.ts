@@ -137,4 +137,17 @@ describe('a login on two studios', () => {
       ),
     ).rejects.toThrow(/auth_users_profile_shape/)
   })
+
+  it('keeps a platform admin one inside a studio they joined as a profile (0219)', async () => {
+    await db.exec(`insert into platform_admins (user_id) values ('${LOGIN}')`)
+    for (const who of [LOGIN, PROFILE_B]) {
+      await db.exec(`select set_config('request.jwt.claim.sub', '${who}', false)`)
+      expect((await one<{ ok: boolean }>(`select is_platform_admin() as ok`)).ok).toBe(true)
+      expect((await one<{ ok: boolean }>(`select is_platform_admin as ok from get_auth_context()`)).ok).toBe(true)
+    }
+    await db.exec(`select set_config('request.jwt.claim.sub', '${OWNER_B}', false)`)
+    expect((await one<{ ok: boolean }>(`select is_platform_admin() as ok`)).ok).toBe(false)
+    await db.exec(`select set_config('request.jwt.claim.sub', '', false)`)
+    await db.exec(`delete from platform_admins where user_id = '${LOGIN}'`)
+  })
 })
