@@ -1,0 +1,2 @@
+-- 0215: terms links the studio can share again, and emails it can see.
+-- (Claimed; body follows.)
