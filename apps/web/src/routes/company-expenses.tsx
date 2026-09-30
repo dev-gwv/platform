@@ -59,7 +59,7 @@ function exportCsv(rows: Expense[]) {
         e.expense_date,
         e.category ?? '',
         e.description ?? '',
-        e.project_id ?? '',
+        e.project_name ?? (e.project_id ? 'Project' : 'Studio'),
         e.party_name ?? '',
         e.paid_by_name ?? 'Studio',
         e.paid_by_user_id ? e.reimbursement_status : '',
@@ -331,6 +331,7 @@ function Expenses() {
                   subtitle={[e.description, e.party_name].filter(Boolean).join(' · ') || '—'}
                   badge={paidChip(e) ?? undefined}
                   fields={[
+                    { label: 'Project', value: e.project_name ?? 'Studio' },
                     { label: 'Date', value: shortDate(e.expense_date) },
                     { label: 'Amount', value: formatINR(cashOut(e)), strong: true },
                   ]}
@@ -380,7 +381,7 @@ function Expenses() {
                       <td className="px-3 py-2 text-xs">
                         {e.project_id ? (
                           <Link to="/projects/$id" params={{ id: e.project_id }} search={{ tab: 'expenses' }} className="text-primary hover:underline">
-                            {(projects ?? []).find((p) => p.id === e.project_id)?.name ?? 'Project'}
+                            {e.project_name ?? (projects ?? []).find((p) => p.id === e.project_id)?.name ?? 'Project'}
                           </Link>
                         ) : (
                           <span className="text-muted-foreground">Studio</span>

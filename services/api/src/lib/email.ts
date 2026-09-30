@@ -1,30 +1,73 @@
 import type { Env } from '../context'
+import { withService } from './db'
+
+/** What the email service is asked to send. */
+export interface Outgoing {
+  from?: string
+  to: string
+  subject: string
+  html: string
+  text?: string
+  reply_to?: string
+}
+
+export type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }
 
 /**
- * Transactional email via Resend. Non-fatal by design: if it fails (or no key is
- * configured in dev), we log and move on — the studio still exists and the user
- * can request a resend. Never let a mail hiccup fail a request.
+ * Every email the app sends goes through here (0217): one call to Resend, and
+ * one row in email_log saying what Resend answered. Before this, sign-up and
+ * password emails only wrote a failure to the server log, so "the mail did not
+ * arrive" could not be told apart from "the mail was never sent". Never throws.
  */
-async function send(env: Env, to: string, subject: string, html: string): Promise<void> {
+export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; companyId?: string | null }): Promise<DeliveryResult> {
+  let result: DeliveryResult
   if (!env.RESEND_API_KEY) {
-    console.warn(`[email] RESEND_API_KEY unset — skipping "${subject}" to ${to}`)
-    return
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html }),
-    })
-    if (!res.ok) {
-      console.error(`[email] send failed ${res.status}: ${await res.text().catch(() => '')}`)
+    console.warn(`[email] RESEND_API_KEY unset — skipping "${mail.subject}" to ${mail.to}`)
+    result = { status: 'provider_missing', error: 'Email is not set up on the server (RESEND_API_KEY is empty).' }
+  } else if (!(mail.from ?? env.EMAIL_FROM)) {
+    result = { status: 'failed', error: 'Email not sent: the server has no sender address (EMAIL_FROM is empty).' }
+  } else {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...mail, from: mail.from ?? env.EMAIL_FROM }),
+      })
+      if (!res.ok) {
+        result = { status: 'failed', error: await providerRefusal(res) }
+      } else {
+        const json = (await res.json().catch(() => ({}))) as { id?: string }
+        result = { status: 'sent', ...(json.id ? { id: json.id } : {}) }
+      }
+    } catch (e) {
+      console.error('[email] send threw', e)
+      result = { status: 'failed', error: 'Email not sent: could not reach the email service.' }
     }
-  } catch (e) {
-    console.error('[email] send threw', e)
   }
+  await logDelivery(env, mail, meta, result)
+  return result
+}
+
+/** One row per send. A log that cannot be written never costs the email. */
+async function logDelivery(env: Env, mail: Outgoing, meta: { kind: string; companyId?: string | null }, r: DeliveryResult) {
+  if (!env.DATABASE_URL) return
+  try {
+    await withService(env, (sql) => sql`
+      insert into email_log (company_id, kind, to_address, subject, status, provider_message_id, error)
+      values (${meta.companyId ?? null}, ${meta.kind.slice(0, 40)}, ${mail.to.slice(0, 320)}, ${mail.subject.slice(0, 300)},
+              ${r.status === 'sent' ? 'sent' : r.status === 'provider_missing' ? 'skipped' : 'failed'},
+              ${r.id ?? null}, ${r.error?.slice(0, 500) ?? null})`)
+  } catch (e) {
+    console.error('[email] could not write email_log', e)
+  }
+}
+
+/**
+ * Transactional email. Non-fatal by design: the studio still exists and the
+ * user can ask for it again. The outcome is in email_log either way.
+ */
+async function send(env: Env, to: string, subject: string, html: string, kind = 'notice'): Promise<void> {
+  await deliver(env, { to, subject, html }, { kind })
 }
 
 export function sendVerificationEmail(env: Env, to: string, link: string): Promise<void> {
@@ -40,6 +83,7 @@ export function sendVerificationEmail(env: Env, to: string, link: string): Promi
       link,
       footer: "This link expires in 24 hours. If you didn't create an account, you can ignore this email.",
     }),
+    'verification',
   )
 }
 
@@ -57,6 +101,7 @@ export function sendPasswordResetEmail(env: Env, to: string, link: string): Prom
       footer:
         "This link expires in 1 hour and can be used once. If you didn't request a reset, ignore this email — your password stays unchanged.",
     }),
+    'password_reset',
   )
 }
 
@@ -84,6 +129,7 @@ export function sendInvitationEmail(
       footer:
         "This invitation expires in 7 days. If you weren't expecting it, you can ignore this email.",
     }),
+    'invitation',
   )
 }
 
@@ -258,37 +304,27 @@ export async function sendClientDocEmail(
     return { status: 'failed', error: 'Email not sent: the server does not know its own web address (APP_URL is not set).', url: link }
   }
   const footer = brand ? studioFooter(brand) : 'If you were not expecting this, you can ignore this email.'
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: brand ? studioFrom(env.EMAIL_FROM, brand) : env.EMAIL_FROM,
-        to,
-        subject,
-        ...(brand?.replyTo ? { reply_to: brand.replyTo } : {}),
-        text: `${plainText(intro)}\n\nOpen it here: ${link}\n\n${plainText(footer)}`,
-        html: brandedHtml({
-          title: esc(subject),
-          preheader: plainText(intro).slice(0, 140),
-          body: intro,
-          cta: 'Open document',
-          link,
-          footer,
-          brand: brand ?? undefined,
-        }),
+  const r = await deliver(
+    env,
+    {
+      ...(brand ? { from: studioFrom(env.EMAIL_FROM, brand) } : {}),
+      to,
+      subject,
+      ...(brand?.replyTo ? { reply_to: brand.replyTo } : {}),
+      text: `${plainText(intro)}\n\nOpen it here: ${link}\n\n${plainText(footer)}`,
+      html: brandedHtml({
+        title: esc(subject),
+        preheader: plainText(intro).slice(0, 140),
+        body: intro,
+        cta: 'Open document',
+        link,
+        footer,
+        brand: brand ?? undefined,
       }),
-    })
-    if (!res.ok) return { status: 'failed', error: await providerRefusal(res), url: link }
-    const json = (await res.json().catch(() => ({}))) as { id?: string }
-    return { status: 'sent', ...(json.id ? { id: json.id } : {}), url: link }
-  } catch (e) {
-    console.error('[email] client doc send threw', e)
-    return { status: 'failed', error: 'Email not sent: could not reach the email service.', url: link }
-  }
+    },
+    { kind: 'client_doc' },
+  )
+  return { ...r, url: link }
 }
 
 /**
@@ -313,6 +349,7 @@ export function sendTermsAgreedEmail(
       link: about.link,
       footer: 'You get this email each time a client agrees to terms you sent from Studio AutoPilot.',
     }),
+    'terms_agreed',
   )
 }
 
@@ -325,32 +362,24 @@ export async function sendStudioEmail(
   m: { to: string; subject: string; text: string; brand: StudioBrand },
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing' }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: studioFrom(env.EMAIL_FROM, m.brand),
-        to: m.to,
-        subject: m.subject,
-        ...(m.brand.replyTo ? { reply_to: m.brand.replyTo } : {}),
-        text: m.text,
-        html: brandedHtml({
-          title: esc(m.subject),
-          preheader: esc(m.text.slice(0, 120)),
-          body: `<span style="display:block;text-align:left;">${linkify(esc(m.text)).replace(/\n/g, '<br>')}</span>`,
-          footer: studioFooter(m.brand),
-          brand: m.brand,
-        }),
+  return deliver(
+    env,
+    {
+      from: studioFrom(env.EMAIL_FROM, m.brand),
+      to: m.to,
+      subject: m.subject,
+      ...(m.brand.replyTo ? { reply_to: m.brand.replyTo } : {}),
+      text: m.text,
+      html: brandedHtml({
+        title: esc(m.subject),
+        preheader: esc(m.text.slice(0, 120)),
+        body: `<span style="display:block;text-align:left;">${linkify(esc(m.text)).replace(/\n/g, '<br>')}</span>`,
+        footer: studioFooter(m.brand),
+        brand: m.brand,
       }),
-    })
-    if (!res.ok) return { status: 'failed', error: `Email provider refused it (${res.status}).` }
-    const json = (await res.json().catch(() => ({}))) as { id?: string }
-    return { status: 'sent', ...(json.id ? { id: json.id } : {}) }
-  } catch (e) {
-    console.error('[email] studio send threw', e)
-    return { status: 'failed', error: 'Email could not be sent.' }
-  }
+    },
+    { kind: 'sequence' },
+  )
 }
 
 /** Make the links in already-escaped text clickable. */
@@ -372,15 +401,9 @@ export async function sendTeamTermsEmail(
 ): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false
   const forShoot = about.shootName ? ` for ${about.shootName}` : ''
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: env.EMAIL_FROM,
+  const r = await deliver(
+    env,
+    {
         to,
         subject: `${about.companyName}: ${about.title}${forShoot}`,
         html: brandedHtml({
@@ -393,17 +416,10 @@ export async function sendTeamTermsEmail(
           link,
           footer: 'If you were not expecting this, you can ignore this email.',
         }),
-      }),
-    })
-    if (!res.ok) {
-      console.error(`[email] team terms send failed ${res.status}`)
-      return false
-    }
-    return true
-  } catch (e) {
-    console.error('[email] team terms send threw', e)
-    return false
-  }
+    },
+    { kind: 'team_terms' },
+  )
+  return r.status === 'sent'
 }
 
 /**
@@ -417,12 +433,9 @@ export async function sendMessageEmail(
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing' }
   const link = m.link ? (m.link.startsWith('http') ? m.link : `${(env.APP_URL ?? '').replace(/\/+$/, '')}${m.link}`) : null
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: env.EMAIL_FROM,
+  return deliver(
+    env,
+    {
         to: m.to,
         subject: m.subject,
         html: brandedHtml({
@@ -436,15 +449,9 @@ export async function sendMessageEmail(
           link: m.toClient ? undefined : (link ?? (env.APP_URL || 'https://studioautopilot.in')),
           footer: `Sent for ${esc(m.studio)} by Studio AutoPilot.`,
         }),
-      }),
-    })
-    if (!res.ok) return { status: 'failed', error: `Email provider refused it (${res.status}).` }
-    const json = (await res.json().catch(() => ({}))) as { id?: string }
-    return { status: 'sent', ...(json.id ? { id: json.id } : {}) }
-  } catch (e) {
-    console.error('[email] message send threw', e)
-    return { status: 'failed', error: 'Email could not be sent.' }
-  }
+    },
+    { kind: 'message' },
+  )
 }
 
 /** The studio's logo when it has a web address for one, else its name. */
@@ -486,6 +493,7 @@ export function sendFeatureRequestEmail(
       link: s.link,
       footer: 'Sent from the "Suggest a feature" button.',
     }),
+    'feature_request',
   )
 }
 
@@ -521,6 +529,7 @@ export function sendDiamondResultEmail(
       link: `${app}/settings/subscription`,
       footer: 'Sent because someone asked to verify this studio as an IPC Diamond member.',
     }),
+    'diamond_result',
   )
 }
 
@@ -547,5 +556,6 @@ export function sendDiamondClaimNotice(
       link: `${app}/platform/diamond`,
       footer: 'Every claim is listed with its screenshot; you can approve, reject or revoke there.',
     }),
+    'diamond_notice',
   )
 }

@@ -9,6 +9,7 @@ import { PlatformPage } from '@/shared/layout/PlatformPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
@@ -20,6 +21,7 @@ export function PlatformDiamondPage() {
   return (
     <PlatformPage>
       <Claims />
+      <GroupLinkSetting />
     </PlatformPage>
   )
 }
@@ -182,6 +184,62 @@ function ClaimCard({ claim: r }: { claim: PlatformDiamondClaim }) {
             )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const groupLink = z.object({ group_link: z.string().nullable() })
+
+/**
+ * The link on every studio's "Are you an IPC Diamond member?" card. Anyone
+ * who opens that card sees it, members or not.
+ */
+function GroupLinkSetting() {
+  const { session } = useAuth()
+  const qc = useQueryClient()
+  const current = useQuery({
+    queryKey: ['platform', 'diamond', 'settings'],
+    queryFn: () => callApi('/platform/diamond/settings', { responseSchema: groupLink }),
+    enabled: !!session,
+  })
+  const [value, setValue] = useState<string | null>(null)
+  const shown = value ?? current.data?.group_link ?? ''
+  const save = useMutation({
+    mutationFn: () => callApi('/platform/diamond/settings', { method: 'PUT', body: { group_link: shown.trim() || null }, responseSchema: groupLink }),
+    onSuccess: () => {
+      toast.success('Link saved.')
+      setValue(null)
+      void qc.invalidateQueries({ queryKey: ['platform', 'diamond', 'settings'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not save.'),
+  })
+  return (
+    <Card className="mt-4">
+      <CardContent className="flex flex-col gap-2 p-4">
+        <p className="text-sm font-semibold">Group link on the member card</p>
+        <p className="text-xs text-muted-foreground">
+          Shown as "Open the group" to every studio that sees the card, members or not. An invite link would let anyone join and
+          claim member prices, so a link to IPC support is the safer choice.
+        </p>
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save.mutate()
+          }}
+        >
+          <Input
+            value={shown}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="https://wa.me/91…"
+            className={shown ? 'max-w-md border-success/50' : 'max-w-md border-warning/60'}
+            aria-label="Group link"
+          />
+          <Button type="submit" disabled={save.isPending || value === null}>
+            Save
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )

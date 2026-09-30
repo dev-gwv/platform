@@ -92,6 +92,18 @@ async function signIn(c: Context<AppEnv>, uid: string, profile?: string): Promis
  * 0191). A failure reads as "done": the worst case is a studio not walked
  * through setup, never an established one sent back to step 1.
  */
+/** Whether this login has confirmed its email; a failed read never nags anyone. */
+async function emailVerifiedOf(c: Context<AppEnv>, uid: string): Promise<boolean> {
+  const v = await attempt(c, 'auth.session.email_verified', () =>
+    withService(c.env, async (sql) => {
+      const [r] = await sql<{ v: boolean }[]>`
+        select au.email_verified as v from auth.users au where au.id = auth_identity_of(${uid})`
+      return r?.v ?? true
+    }),
+  )
+  return v ?? true
+}
+
 async function setupStateOf(c: Context<AppEnv>, uid: string) {
   const row = await attempt(c, 'auth.session.setup', () =>
     withUser(c.env, uid, async (sql) => {
@@ -193,10 +205,23 @@ export const authRouter = new Hono<AppEnv>()
 
     await sendVerificationEmail(c.env, email, verifyLink(c.env, token))
 
+    // In straight away. The owner signed up to use the studio, not to wait on
+    // an inbox: when the confirmation email was slow or never came, they were
+    // locked out of the account they had just made. Confirming the email is
+    // asked for inside the app instead (session.email_verified).
+    const uid = await attempt(c, 'auth.register_uid', () =>
+      withService(c.env, async (sql) => {
+        const [u] = await sql<{ id: string }[]>`select id from auth.users where email = ${email}`
+        return u?.id ?? null
+      }),
+    )
+    const session = uid ? await signIn(c, uid) : undefined
+
     return c.json(
       registerResult.parse({
         verification_required: true,
         email,
+        ...(session ? { session } : {}),
         // Expose the token in test environments so automated suites can verify.
         ...(echoesTokens(c.env) ? { verification_token: token } : {}),
       }),
@@ -266,9 +291,9 @@ export const authRouter = new Hono<AppEnv>()
     if (!row?.encrypted_password || !ok) {
       fail(401, 'Invalid email or password.')
     }
-    if (!row.email_verified) {
-      fail(403, 'Please verify your email before signing in. Check your inbox for the link.')
-    }
+    // An unconfirmed email no longer locks the owner out: the app asks for
+    // the confirmation from inside (session.email_verified). The password is
+    // the proof of who they are; the email link proves the mailbox.
 
     return c.json(await signIn(c, row.id))
   })
@@ -686,6 +711,7 @@ export const authRouter = new Hono<AppEnv>()
         plan_expiry: a.planExpiry,
         permissions: serializeAccess(a.access),
         studios,
+        email_verified: await emailVerifiedOf(c, a.userId),
         ...(await setupStateOf(c, a.userId)),
       }),
     )

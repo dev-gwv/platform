@@ -1,4 +1,4 @@
-import { Camera, CheckSquare, Database, FileCheck, FileSignature, FileText, Gift, LayoutGrid, Package, Receipt, Wallet } from 'lucide-react'
+import { Calculator, Camera, CheckSquare, Database, FileCheck, FileSignature, FileText, Gift, LayoutGrid, Package, Receipt, Wallet } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
@@ -17,6 +17,8 @@ export const PROJECT_TABS = [
   { value: 'terms', label: 'Terms', icon: FileSignature },
   { value: 'billing', label: 'Billing', icon: Wallet },
   { value: 'expenses', label: 'Expenses', icon: Receipt },
+  // Every cost of the project -- team payouts and expenses -- against its value.
+  { value: 'costs', label: 'Cost sheet', icon: Calculator },
   { value: 'tasks', label: 'Tasks', icon: CheckSquare },
   // As in the old app: this project's data and its referrals, each also a
   // page of its own in the sidebar (Data & Backup, Referrals).
@@ -34,6 +36,7 @@ export function useVisibleProjectTabs() {
       (t.value !== 'expenses' || access.hasModule('company_expenses')) &&
       (t.value !== 'completed_work' || access.hasModule('team_work_preview')) &&
       (t.value !== 'data' || access.hasAction('projects', 'edit')) &&
+      (t.value !== 'costs' || access.hasAction('projects', 'edit')) &&
       (t.value !== 'referrals' || access.hasModule('referrals')),
   )
 }

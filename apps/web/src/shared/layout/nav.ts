@@ -5,6 +5,7 @@ import { TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hub
 import type { AppRole } from '@ipc/permissions'
 import {
   BarChart3,
+  Mail,
   CalendarOff,
   MapPin,
   Gauge,
@@ -217,6 +218,7 @@ export const NAV: NavEntry[] = [
       leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
       leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),
       leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
+      leaf('Email', '/platform/email', Mail, { platformOnly: true }),
     ],
   },
 ]

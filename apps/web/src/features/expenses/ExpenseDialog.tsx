@@ -203,19 +203,24 @@ export function AddExpenseDialog({
                 </p>
               )}
             </div>
-            {!projectMode && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="exp-project">Project</Label>
-                <Select id="exp-project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                  <option value="">Studio cost, no project</option>
-                  {(projects ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
+            {/* Always shown -- opened from a project it is already set to it,
+                so the studio sees which project the cost lands on. */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="exp-project">Project</Label>
+              <Select
+                id="exp-project"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className={cn(projectId ? 'border-success/50' : '')}
+              >
+                <option value="">Studio cost, no project</option>
+                {(projects ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           <PartyPicker value={partyId} onChange={setPartyId} />

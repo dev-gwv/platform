@@ -52,6 +52,8 @@ export const subscriptionStatus = z.object({
     })
     .nullable()
     .default(null),
+  /** Where to find the IPC Diamonds group, set by the platform (0217). */
+  diamond_group_link: z.string().nullable().default(null),
   history: z.array(z.object({
     id: z.string(), plan_name: z.string().nullable(), amount: z.number().nullable(),
     status: z.string().nullable(), created_at: z.string().nullable(), expires_at: z.string().nullable(),

@@ -1,5 +1,6 @@
 import type { Env } from '../context'
 import { timingSafeEqual, toHex } from './crypto'
+import { deliver } from './email'
 
 /**
  * Onboarding emails for a new studio, under the Studio AutoPilot name: a
@@ -221,20 +222,6 @@ export async function nudgeMail(
 
 /** Send through Resend. Never throws: a mail hiccup must not fail sign-in or the cron. */
 export async function sendOnboardingMail(env: Env, to: string, mail: OnboardingMail): Promise<boolean> {
-  if (!env.RESEND_API_KEY) {
-    console.warn(`[email] RESEND_API_KEY unset — skipping "${mail.subject}" to ${to}`)
-    return false
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to, subject: mail.subject, html: mail.html }),
-    })
-    if (!res.ok) console.error(`[email] onboarding send failed ${res.status}: ${await res.text().catch(() => '')}`)
-    return res.ok
-  } catch (e) {
-    console.error('[email] onboarding send threw', e)
-    return false
-  }
+  const r = await deliver(env, { to, subject: mail.subject, html: mail.html }, { kind: 'onboarding' })
+  return r.status === 'sent'
 }

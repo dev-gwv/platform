@@ -59,10 +59,15 @@ export type RefreshRequest = z.infer<typeof refreshRequest>
 export const logoutRequest = z.object({ refresh_token: z.string().min(1).optional() })
 export type LogoutRequest = z.infer<typeof logoutRequest>
 
-/** /auth/register response — email verification is required before sign-in. */
+/**
+ * /auth/register response. The new studio is signed in straight away
+ * (`session`); confirming the email is asked for inside the app, not before
+ * it -- a verification email that never arrived used to lock the owner out.
+ */
 export const registerResult = z.object({
-  verification_required: z.literal(true),
+  verification_required: z.boolean(),
   email,
+  session: authToken.optional(),
   /** Present only outside production (ENVIRONMENT !== 'production') for tests. */
   verification_token: z.string().optional(),
 })
@@ -152,6 +157,8 @@ export const sessionState = z.object({
   setup_done: z.boolean().default(true),
   /** The first setup step still outstanding (1 team, 2 client, 3 project), or null. */
   setup_step: z.number().int().min(1).max(3).nullable().default(null),
+  /** False until the owner opens the link in the confirmation email. */
+  email_verified: z.boolean().default(true),
 })
 export type SessionState = z.infer<typeof sessionState>
 

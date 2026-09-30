@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from '@ipc/contracts'
 import {
+  projectCostSheet,
   projectBilling,
   createProjectRequest,
   deliverableSet,
@@ -382,6 +383,17 @@ export function useDeleteProject() {
 }
 
 /** The agreed payment plan and (with Billing access) the project's invoices. */
+/** Everything the project costs: crew payouts and expenses, against its value. */
+export function useProjectCosts(id: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['projects', id, 'costs'],
+    queryFn: () => callApi(`/projects/${id}/costs`, { responseSchema: projectCostSheet }),
+    enabled: !!session && !!id,
+    staleTime: 10_000,
+  })
+}
+
 export function useProjectBilling(id: string) {
   const { session } = useAuth()
   return useQuery({
