@@ -1,0 +1,5 @@
+-- 0216: small per-person memory for one-time notes, and when a member last
+-- opened the app.
+--
+-- Claimed first; the body follows in the same PR. See CLAUDE.md
+-- ("Client journey").
