@@ -1,0 +1,2 @@
+-- 0220: a client signs the terms with a finger, and the platform admin sets
+-- a studio's access to an exact date.
