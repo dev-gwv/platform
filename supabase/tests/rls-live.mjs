@@ -1770,7 +1770,7 @@ if (listed) {
   const again = await api(`/terms/documents/${sent.json.document_id}/link`, { token: aToken, method: 'POST', body: {} })
   const oldLink = await api(`/public/terms/${sent.json.token}/payload`)
   const newLink = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
-  check('terms: sending again makes a new link and stops the old one', again.status === 200 && oldLink.status === 404 && newLink.status === 200, {
+  check('terms: a new link stops the old one, and the old one says it was replaced (410)', again.status === 200 && oldLink.status === 410 && /newer version/.test(oldLink.json?.error?.message ?? oldLink.json?.message ?? JSON.stringify(oldLink.json)) && newLink.status === 200, {
     again: again.status, old: oldLink.status, fresh: newLink.status,
   })
 
@@ -1793,7 +1793,7 @@ if (listed) {
   const afterCancel = await api(`/public/terms/${tokenOf(again.json.url)}/payload`)
   const legacy = await api(`/public/terms/${tokenOf(again.json.url)}`)
   const lateAgree = await api(`/public/terms/${tokenOf(again.json.url)}/ack`, { method: 'POST', body: { name: 'Priya' } })
-  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 404 && legacy.status === 404 && lateAgree.status === 409, {
+  check('terms: a cancelled link does not open, on either reader, and cannot be agreed', cancelled.status === 200 && afterCancel.status === 410 && legacy.status === 410 && lateAgree.status === 409, {
     cancelled: cancelled.status, afterCancel: afterCancel.status, legacy: legacy.status, lateAgree: lateAgree.status,
   })
 
@@ -1809,6 +1809,49 @@ if (listed) {
   )
   const other = await api(`/terms/projects/${pid}/documents`, { token: newPw.json.access_token })
   check("terms: another studio sees none of this project's terms", Array.isArray(other.json) && other.json.length === 0, other.json)
+
+  // ── 0215: the same link again, the email with it, and why a link fails ──
+  const v3 = await api('/terms/issue', {
+    token: aToken,
+    method: 'POST',
+    body: { project_id: pid, rendered_body: 'Version three.', email: true, to_email: 'client@example.com' },
+  })
+  const listed3 = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  const cur = listed3.json[0] ?? {}
+  check(
+    'terms 0215: "share again" hands out the same link the client already has',
+    v3.status === 201 && tokenOf(cur.share_url ?? '') === v3.json.token,
+    { share_url: cur.share_url, token: v3.json.token },
+  )
+  // No mail provider here: the send says so, and the card shows that answer.
+  check(
+    'terms 0215: sending with email on reports what happened to the email',
+    ['provider_missing', 'sent', 'failed'].includes(v3.json.email_status) && cur.last_email?.status === v3.json.email_status,
+    { email_status: v3.json.email_status, last_email: cur.last_email },
+  )
+  const stored = await api(`/terms/documents/${v3.json.document_id}/email`, { token: aToken, method: 'POST', body: { to_email: 'client@example.com' } })
+  const stillLive = await api(`/public/terms/${v3.json.token}/payload`)
+  check(
+    'terms 0215: emailing again uses the kept link and does not break it',
+    stored.status === 200 && stillLive.status === 200,
+    { stored: stored.status, live: stillLive.status },
+  )
+  const bogus = await api('/public/terms/not-a-real-link-at-all/payload')
+  check('terms 0215: a link that never existed is a plain 404 that says so', bogus.status === 404, { status: bogus.status })
+  const agreed3 = await api(`/public/terms/${v3.json.token}/ack`, { method: 'POST', body: { name: 'Priya Sharma' } })
+  const after3 = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  check(
+    'terms 0215: once agreed there is no link to share again',
+    agreed3.status === 200 && after3.json[0]?.share_url === null && !!after3.json[0]?.acknowledged_at,
+    { share_url: after3.json[0]?.share_url },
+  )
+
+  // Invoices: the customer's own projects, for anyone who may make invoices.
+  const cp = await api(`/clients/${client.json.id}/projects`, { token: aToken })
+  check('invoice: picking a customer lists that customer’s projects', cp.status === 200 && cp.json.some((x) => x.id === pid), {
+    status: cp.status,
+    ids: Array.isArray(cp.json) ? cp.json.map((x) => x.id) : cp.json,
+  })
 }
 
 // ── Project money: promised is not received; a payment can be changed ───
@@ -2379,6 +2422,11 @@ if (listed) {
   )
   const shown = await api(`/projects/${pid}`, { token: aToken })
   check('quotation: sending a link switches "Show to client" on', shown.json.show_quotation === true, shown.json.show_quotation)
+  check(
+    'journey: the project knows its quotation went out (the first step is ticked)',
+    project.json.id && typeof shown.json.quotation_issued_at === 'string' && !Number.isNaN(Date.parse(shown.json.quotation_issued_at)),
+    shown.json.quotation_issued_at,
+  )
 
   const hide = await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: false } })
   const hidden = await api(`/public/quotation/${tok}`)
@@ -2847,6 +2895,103 @@ if (listed) {
 
   const inbox = await api('/platform/diamond', { token: aToken })
   check('diamond: a studio cannot open the platform inbox', inbox.status === 403, { status: inbox.status })
+}
+
+// ── A project's own referral campaign (its Referrals tab) ──
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Refer Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Refer project ${rand()}`, client_id: client.json.id, package_cost: 90000 } })
+  const pid = project.json.id
+  const first = await api('/referrals/campaigns/for-project', { token: aToken, method: 'POST', body: { project_id: pid } })
+  const again = await api('/referrals/campaigns/for-project', { token: aToken, method: 'POST', body: { project_id: pid } })
+  check(
+    'referrals: a project gets one campaign of its own, however often the tab is opened',
+    first.status === 200 && again.status === 200 && first.json.id === again.json.id &&
+      first.json.project_id === pid && first.json.client_id === client.json.id && !!first.json.slug,
+    { first: first.json, again: again.status },
+  )
+  // B's first token has long expired by here; B's password was reset above.
+  const bLogin = await api('/auth/login', { method: 'POST', body: { email: b.email, password: NEW_PW } })
+  const bNow = bLogin.json.access_token ?? newPw.json.access_token
+  const other = await api('/referrals/campaigns/for-project', { token: bNow, method: 'POST', body: { project_id: pid } })
+  check('referrals: another studio cannot make a campaign on this project (404)', other.status === 404, { status: other.status, login: bLogin.status, err: bLogin.json.error })
+
+  const saved = await api(`/referrals/${first.json.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { name: first.json.name, reward_type: 'custom', reward_value: 0, reward_title: 'Free album', reward_description: 'A 20-page album' },
+  })
+  const listed = await api('/referrals/campaigns', { token: aToken })
+  const mine = (listed.json.campaigns ?? []).find((x) => x.id === first.json.id)
+  check(
+    'referrals: the list shows the project and the reward title the tab saved',
+    saved.status === 200 && mine?.project_id === pid && mine?.reward_title === 'Free album',
+    mine,
+  )
+  // The Referrals page's own form sends no title: saving it keeps the tab's.
+  await api(`/referrals/${first.json.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { name: first.json.name, reward_type: 'custom', reward_value: 0, reward_description: 'A 20-page album' },
+  })
+  const kept = (await api('/referrals/campaigns', { token: aToken })).json.campaigns?.find((x) => x.id === first.json.id)
+  check('referrals: saving without a title leaves the title alone', kept?.reward_title === 'Free album', kept?.reward_title)
+
+  const sub = await api(`/public/referrals/submit?campaign_id=${first.json.id}`, {
+    method: 'POST',
+    body: { referrer_name: 'Pulkit', client_name: 'Friend Of Pulkit', client_phone: randPhone() },
+  })
+  const subs = await api(`/referrals/submissions?campaign_id=${first.json.id}`, { token: aToken })
+  const got = (subs.json.items ?? []).find((x) => x.campaign_id === first.json.id)
+  check('referrals: a friend sent through the link shows on the project', sub.status < 300 && !!got, { sub: sub.status, got })
+  if (got) {
+    const booked = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: { status: 'converted', reward_status: 'due' } })
+    const given = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: { reward_status: 'given' } })
+    const after = ((await api(`/referrals/submissions?campaign_id=${first.json.id}`, { token: aToken })).json.items ?? []).find((x) => x.id === got.id)
+    check(
+      'referrals: booked, then reward given -- the status stays booked, the reward is marked given',
+      booked.status === 200 && given.status === 200 && after?.status === 'converted' && after?.reward_status === 'given',
+      after,
+    )
+    const bad = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: {} })
+    check('referrals: an empty status change is refused (422)', bad.status === 422, { status: bad.status })
+  }
+}
+
+// ── One-time notes and "last seen" (0216) ──
+{
+  const empty = await api('/auth/hints', { token: aToken })
+  check('hints: a person starts with no notes seen', empty.status === 200 && empty.json.assign_note === undefined, empty.json)
+  const set1 = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: 1, closed: false } } })
+  const after = await api('/auth/hints', { token: aToken })
+  check(
+    'hints: showing the assign note counts it, on the person\'s own row',
+    set1.status === 200 && after.json.assign_note?.shown === 1 && after.json.assign_note?.closed === false,
+    after.json,
+  )
+  const closed = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: 1, closed: true } } })
+  check('hints: "don\'t show again" is kept', closed.status === 200 && closed.json.assign_note?.closed === true, closed.json)
+  const unknown = await api('/auth/hints/anything_else', { token: aToken, method: 'PUT', body: { value: { shown: 1 } } })
+  const bad = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: -3 } } })
+  const anon = await api('/auth/hints')
+  check('hints: an unknown note is 404, a bad value 422, no session 401', unknown.status === 404 && bad.status === 422 && anon.status === 401, {
+    unknown: unknown.status,
+    bad: bad.status,
+    anon: anon.status,
+  })
+
+  await api('/activity/track', { token: aToken, method: 'POST', body: { route: '/dashboard', module: 'dashboard' } })
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const team = await api('/team/members', { token: aToken })
+  const row = (Array.isArray(team.json) ? team.json : []).find((m) => m.user_id === me)
+  check(
+    'last seen: the team list says when someone last had the app open, and whether they can log in',
+    team.status === 200 && typeof row?.last_seen_at === 'string' && row?.login_enabled === true,
+    row,
+  )
+  const dir = await api('/team/directory', { token: aToken })
+  const drow = (Array.isArray(dir.json) ? dir.json : []).find((m) => m.user_id === me)
+  check('last seen: the directory carries it too', dir.status === 200 && typeof drow?.last_seen_at === 'string', drow?.last_seen_at)
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

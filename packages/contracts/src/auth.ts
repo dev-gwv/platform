@@ -162,3 +162,25 @@ export const switchStudioRequest = z.object({
   refresh_token: z.string().min(10).max(500).optional(),
 })
 export type SwitchStudioRequest = z.infer<typeof switchStudioRequest>
+
+// ── One-time notes (0216) ──────────────────────────────────
+/**
+ * A note the app shows a person a few times and then stops: how often it has
+ * been shown, and whether they closed it for good.
+ */
+export const hintNote = z.object({
+  shown: z.number().int().min(0).default(0),
+  closed: z.boolean().default(false),
+})
+export type HintNote = z.infer<typeof hintNote>
+
+export const HINT_KEYS = ['assign_note'] as const
+export const hintKey = z.enum(HINT_KEYS)
+export type HintKey = z.infer<typeof hintKey>
+
+/** The caller's own notes, keyed by hint. Unknown keys pass through untouched. */
+export const userHints = z.object({ assign_note: hintNote.optional() }).passthrough()
+export type UserHints = z.infer<typeof userHints>
+
+export const setHintRequest = z.object({ value: hintNote.nullable() })
+export type SetHintRequest = z.infer<typeof setHintRequest>

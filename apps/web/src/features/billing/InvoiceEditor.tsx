@@ -33,7 +33,8 @@ import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useClients } from '@/features/clients/api'
-import { useProject, useProjects } from '@/features/projects/api'
+import { useProject } from '@/features/projects/api'
+import { useClientProjectOptions } from './client-projects'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import {
   BankAccountPicker,
@@ -121,7 +122,6 @@ export function InvoiceEditor({
   const { data: states } = useStates()
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
-  const { data: projects } = useProjects()
   const { data: templateData } = useInvoiceTemplates()
   const { data: savedItems } = useInvoiceItems()
   const saveItem = useSaveInvoiceItem()
@@ -140,9 +140,19 @@ export function InvoiceEditor({
   const gst = !values.no_gst
   const studioState = matchStudioState(states, company?.state)
   const selectedClient = clients.find((c) => c.id === values.client_id)
-  const clientProjects = (projects ?? []).filter((p) => !values.client_id || p.client_id === values.client_id)
+  const projectChoice = useClientProjectOptions(
+    values.client_id,
+    values.project_id && linkedProject.data ? { id: values.project_id, name: linkedProject.data.name } : null,
+  )
   const templates = templateData?.items ?? []
   const defaultSac = company?.invoice_sac_code?.trim() || ''
+
+  // A customer with one project: that is almost always what the invoice is
+  // for, so link it (the studio can still pick "No project").
+  useEffect(() => {
+    if (isEdit || values.project_id || !projectChoice.loaded || projectChoice.count !== 1) return
+    set('project_id', projectChoice.options[0]!.id)
+  }, [projectChoice.loaded, projectChoice.count, values.client_id])
 
   // Place of supply starts at the studio's own state.
   useEffect(() => {
@@ -418,8 +428,8 @@ export function InvoiceEditor({
           </Field>
           <Field label="Project">
             <Select value={values.project_id} onChange={(e) => set('project_id', e.target.value)} disabled={!values.client_id} aria-label="Project">
-              <option value="">{values.client_id ? 'Not linked to a project' : 'Choose the customer first'}</option>
-              {clientProjects.map((p) => (
+              <option value="">{projectChoice.blank}</option>
+              {projectChoice.options.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

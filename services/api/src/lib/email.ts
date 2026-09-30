@@ -202,9 +202,45 @@ function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailC
 }
 
 /**
+ * Why the email service said no, in words a studio can act on -- and the
+ * full answer in the server log. "Email failed to send." told nobody that
+ * the sending domain was not verified, which is the usual reason.
+ */
+export async function providerRefusal(res: Response): Promise<string> {
+  const raw = await res.text().catch(() => '')
+  console.error(`[email] provider refused ${res.status}: ${raw.slice(0, 500)}`)
+  let said = ''
+  try {
+    said = String((JSON.parse(raw) as { message?: unknown }).message ?? '')
+  } catch {
+    said = raw
+  }
+  const why =
+    res.status === 403
+      ? 'the email service does not allow this sender yet (the sending domain needs verifying in Resend)'
+      : res.status === 429
+        ? 'too many emails at once, try again in a minute'
+        : res.status === 422 || res.status === 400
+          ? 'the email service rejected the message'
+          : `the email service answered ${res.status}`
+  return `Email not sent: ${why}${said ? ` (${said.replace(/\s+/g, ' ').trim().slice(0, 160)})` : ''}.`
+}
+
+/** The plain-text twin of an email body: some inboxes read only this, and spam filters like to see it. */
+const plainText = (html: string) =>
+  html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+
+/**
  * Client document emails (receipt / quotation / terms / delivery).
  * Returns 'sent' | 'provider_missing' so the studio UI can fall back to
- * mailto:/copy-link instead of claiming an email went. Never throws.
+ * mailto:/copy-link instead of claiming an email went; on 'sent' the email
+ * service's message id, so a send can be looked up. Never throws.
  */
 export async function sendClientDocEmail(
   env: Env,
@@ -213,9 +249,15 @@ export async function sendClientDocEmail(
   link: string,
   intro: string,
   brand?: StudioBrand | null,
-): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error?: string; url: string }> {
+): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error?: string; id?: string; url: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing', url: link }
   if (!to) return { status: 'failed', error: 'Client email not found for this project.', url: link }
+  // A link without the site in front of it opens nothing from an inbox.
+  if (!/^https?:\/\//.test(link)) {
+    console.error('[email] refusing to email a relative link; set APP_URL on the server')
+    return { status: 'failed', error: 'Email not sent: the server does not know its own web address (APP_URL is not set).', url: link }
+  }
+  const footer = brand ? studioFooter(brand) : 'If you were not expecting this, you can ignore this email.'
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -228,23 +270,50 @@ export async function sendClientDocEmail(
         to,
         subject,
         ...(brand?.replyTo ? { reply_to: brand.replyTo } : {}),
+        text: `${plainText(intro)}\n\nOpen it here: ${link}\n\n${plainText(footer)}`,
         html: brandedHtml({
-          title: subject,
-          preheader: intro,
+          title: esc(subject),
+          preheader: plainText(intro).slice(0, 140),
           body: intro,
           cta: 'Open document',
           link,
-          footer: brand ? studioFooter(brand) : 'If you were not expecting this, you can ignore this email.',
+          footer,
           brand: brand ?? undefined,
         }),
       }),
     })
-    if (!res.ok) return { status: 'failed', error: 'Email failed to send.', url: link }
-    return { status: 'sent', url: link }
+    if (!res.ok) return { status: 'failed', error: await providerRefusal(res), url: link }
+    const json = (await res.json().catch(() => ({}))) as { id?: string }
+    return { status: 'sent', ...(json.id ? { id: json.id } : {}), url: link }
   } catch (e) {
     console.error('[email] client doc send threw', e)
-    return { status: 'failed', error: 'Email failed to send.', url: link }
+    return { status: 'failed', error: 'Email not sent: could not reach the email service.', url: link }
   }
+}
+
+/**
+ * The studio owner hears when a client agrees -- by email as well as the bell,
+ * because the owner is often not in the app when it happens.
+ */
+export function sendTermsAgreedEmail(
+  env: Env,
+  to: string,
+  about: { clientName: string; projectName: string | null; agreedBy: string; link: string },
+): Promise<void> {
+  const what = about.projectName ? `the terms for ${esc(about.projectName)}` : 'your terms'
+  return send(
+    env,
+    to,
+    `${about.agreedBy} agreed to ${about.projectName ? `the terms for ${about.projectName}` : 'your terms'}`,
+    brandedHtml({
+      title: `${esc(about.agreedBy)} agreed`,
+      preheader: `${about.clientName} agreed to ${what}.`,
+      body: `${esc(about.agreedBy)} (${esc(about.clientName)}) read and agreed to ${what}. Their name, the time and their IP address are on record.`,
+      cta: 'Open the project',
+      link: about.link,
+      footer: 'You get this email each time a client agrees to terms you sent from Studio AutoPilot.',
+    }),
+  )
 }
 
 /**

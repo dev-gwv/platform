@@ -178,6 +178,14 @@
     overflow: visible !important;
     max-height: none !important;
   }
+  /* Same for the terms: on screen the body scrolls in a short card; on
+     paper every clause has to be there. */
+  .terms-body,
+  .paper.overflow-y-auto,
+  .paper .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
   /* Hover cannot happen on paper, so hover-revealed actions would print as an
      empty column. */
   .row-actions {

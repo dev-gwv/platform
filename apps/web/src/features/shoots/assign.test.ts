@@ -29,6 +29,8 @@ const member = (id: string, name: string, over: Partial<TeamMember> = {}): TeamM
   email: null,
   payout_type: null,
   freelancer_rate: null,
+  login_enabled: true,
+  last_seen_at: null,
   ...over,
 })
 

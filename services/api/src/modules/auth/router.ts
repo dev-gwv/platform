@@ -19,6 +19,9 @@ import {
   completeSetupRequest,
   switchStudioRequest,
   studioMembership,
+  hintKey,
+  userHints,
+  setHintRequest,
   type AuthToken,
   type PlanGate,
 } from '@ipc/contracts'
@@ -686,4 +689,34 @@ export const authRouter = new Hono<AppEnv>()
         ...(await setupStateOf(c, a.userId)),
       }),
     )
+  })
+
+  // One-time notes (0216): how often a note has been shown to this person and
+  // whether they closed it -- kept on their row so it follows them across
+  // devices. Only ever the caller's own.
+  .get('/hints', requireAuth, async (c) => {
+    const a = c.get('auth')
+    const rows = await attempt(c, 'auth.hints', () =>
+      withUser(c.env, a.userId, (sql) => sql<{ hints: unknown }[]>`select hints from users where user_id = ${a.userId}`),
+    )
+    if (!rows) fail(400, 'We could not load your notes.')
+    return c.json(userHints.parse(rows[0]?.hints ?? {}))
+  })
+
+  .put('/hints/:key', requireAuth, async (c) => {
+    const key = hintKey.safeParse(c.req.param('key'))
+    if (!key.success) fail(404, 'Unknown note.')
+    const parsed = setHintRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Invalid note.')
+    const a = c.get('auth')
+    const rows = await attempt(c, 'auth.hint_set', () =>
+      withUser(
+        c.env,
+        a.userId,
+        (sql) => sql<{ hints: unknown }[]>`
+          select set_user_hint(${key.data}, ${parsed.data.value === null ? null : sql.json(parsed.data.value)}) as hints`,
+      ),
+    )
+    if (!rows) fail(400, 'We could not save that.')
+    return c.json(userHints.parse(rows[0]?.hints ?? {}))
   })

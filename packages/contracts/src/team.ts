@@ -105,6 +105,8 @@ export const directoryMember = z.object({
   created_at: isoDateTime,
   role_names: z.array(z.string()),
   role_ids: z.array(uuid),
+  /** When they last had the app open (0117 heartbeats); null = never. */
+  last_seen_at: isoDateTime.nullable().default(null),
 })
 export type DirectoryMember = z.infer<typeof directoryMember>
 

@@ -148,6 +148,7 @@ const projectDetail: ProjectDetail = {
   quotation_display_prefs: {},
   quotation_accepted_at: null,
   quotation_accepted_by: null,
+  quotation_issued_at: null,
   deliverables: [
     delv(uid(0xd1), 'Wedding album (40 sheets)', 'client', true, 30000, [], { due: 40 }),
     delv(uid(0xd2), 'Highlight film', 'client', true, 12000, [{ id: uid(0x61), name: 'Engagement shoot' }], {

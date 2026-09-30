@@ -1062,6 +1062,7 @@ export const projectsRouter = new Hono<AppEnv>()
                  p.additional_deliverables_cost, p.total_cost, p.show_quotation, p.created_at,
                  p.quotation_terms, coalesce(p.quotation_display_prefs,'{}'::jsonb) as quotation_display_prefs,
                  qa.accepted_at as quotation_accepted_at, qa.accepted_by_name as quotation_accepted_by,
+                 (select max(pq.created_at) from project_quotations pq where pq.project_id = p.id) as quotation_issued_at,
                  cl.name as client_name, cl.phone as client_phone,
                  cl.email as client_email, cl.address as client_address,
                  coalesce((

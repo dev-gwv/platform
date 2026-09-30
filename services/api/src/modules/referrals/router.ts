@@ -1,7 +1,10 @@
 import { Hono } from 'hono'
 import {
   createReferralCampaignRequest,
+  getOrCreateCampaignRequest,
   publicReferralCampaign,
+  referralCampaign,
+  updateReferralSubmissionRequest,
   referralCampaignList,
   referralCampaignStatus,
   referralSubmissionList,
@@ -30,12 +33,18 @@ export const referralsRouter = new Hono<AppEnv>()
   .get('/campaigns', requireModule('referrals'), async (c) => {
     const rows = await attempt(c, 'referrals.campaigns', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
+        // The project and client each campaign belongs to, so a project's own
+        // campaign can be found -- without them the project's referral card
+        // always fell back to the first campaign in the studio.
         const campaigns = await sql`
-          select id, company_id, name, slug, description, reward_type, reward_value,
-                 reward_description, status, created_at
-            from referral_campaigns
-           where company_id = ${c.get('auth').companyId}
-           order by created_at desc`
+          select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,
+                 rc.reward_description, rc.reward_title, rc.project_id, p.name as project_name,
+                 rc.client_id, cl.name as client_name, rc.status, rc.created_at
+            from referral_campaigns rc
+            left join projects p on p.id = rc.project_id
+            left join clients cl on cl.id = rc.client_id
+           where rc.company_id = ${c.get('auth').companyId}
+           order by rc.created_at desc`
         const summary = await sql`
           select count(*)::int as total_campaigns,
                  count(*) filter (where status = 'active')::int as active_campaigns,
@@ -70,6 +79,42 @@ export const referralsRouter = new Hono<AppEnv>()
     return c.json({ id: rows[0].id, slug: rows[0].slug }, 201)
   })
 
+  /**
+   * The project's own campaign, made the first time it is asked for (one per
+   * project, 0102's unique index) -- the old app's Referrals tab worked this
+   * way: open it, and the project already has a link to share.
+   */
+  .post('/campaigns/for-project', requireAction('referrals', 'edit'), async (c) => {
+    const parsed = getOrCreateCampaignRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'A project is required.')
+    const auth = c.get('auth')
+    const pid = parsed.data.project_id
+    const row = await attempt(c, 'referrals.campaign_for_project', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [project] = await sql<{ name: string; client_id: string | null }[]>`
+          select name, client_id from projects where id = ${pid} and company_id = ${auth.companyId}`
+        if (!project) return null
+        const name = `${project.name} referrals`.slice(0, 160)
+        await sql`
+          insert into referral_campaigns
+            (company_id, name, reward_type, reward_value, project_id, client_id, created_by, slug)
+          values (${auth.companyId}, ${name}, 'custom', 0, ${pid}, ${project.client_id}, ${auth.userId}, generate_referral_slug(${name}))
+          on conflict (company_id, project_id) where project_id is not null do nothing`
+        const [made] = await sql`
+          select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,
+                 rc.reward_description, rc.reward_title, rc.project_id, p.name as project_name,
+                 rc.client_id, cl.name as client_name, rc.status, rc.created_at
+            from referral_campaigns rc
+            left join projects p on p.id = rc.project_id
+            left join clients cl on cl.id = rc.client_id
+           where rc.company_id = ${auth.companyId} and rc.project_id = ${pid}`
+        return made ?? null
+      }),
+    )
+    if (!row) fail(404, 'That project was not found.')
+    return c.json(referralCampaign.parse(row))
+  })
+
   .patch('/:id', requireAction('referrals', 'edit'), async (c) => {
     const id = uuidParam(c)
     const parsed = createReferralCampaignRequest.safeParse(await c.req.json().catch(() => ({})))
@@ -82,7 +127,9 @@ export const referralsRouter = new Hono<AppEnv>()
           update referral_campaigns
              set name = ${d.name}, description = ${d.description ?? null},
                  reward_type = ${d.reward_type}, reward_value = ${d.reward_value},
-                 reward_description = ${d.reward_description ?? null}
+                 reward_description = ${d.reward_description ?? null},
+                 -- Left alone when not sent: the Referrals page's form has no title field.
+                 reward_title = ${d.reward_title === undefined ? sql`reward_title` : d.reward_title}
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),
@@ -154,6 +201,8 @@ export const referralsRouter = new Hono<AppEnv>()
                  rs.client_name, rs.client_phone, rs.client_email,
                  rs.status, rs.reward_granted, rs.reward_amount, rs.notes,
                  rs.event_type, rs.event_date, rs.functions_count,
+                 rs.reward_status, rs.referring_client_name, rs.referred_name, rs.referred_phone,
+                 rs.referred_email, rs.project_id, rs.source, rs.crm_lead_id,
                  rs.created_at
             from referral_submissions rs
             join referral_campaigns rc on rc.id = rs.campaign_id
@@ -177,24 +226,27 @@ export const referralsRouter = new Hono<AppEnv>()
 
   .patch('/submissions/:id/status', requireAction('referrals', 'edit'), async (c) => {
     const id = uuidParam(c)
-    const body = await c.req.json().catch(() => ({}))
-    const status = z.enum(['pending', 'converted', 'rewarded', 'rejected']).safeParse(body.status)
-    if (!status.success) fail(422, 'Invalid status.')
+    // Where the referred couple has got to, and -- separately -- whether the
+    // client who referred them has had their reward. Either or both.
+    const parsed = updateReferralSubmissionRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success || (!parsed.data.status && !parsed.data.reward_status)) fail(422, 'Invalid status.')
+    const { status = null, reward_status: rewardStatus = null } = parsed.data
     const auth = c.get('auth')
     const rows = await attempt(c, 'referrals.submission_status', () =>
       withUser(c.env, auth.userId, async (sql) => {
         return sql<{ id: string }[]>`
           update referral_submissions
-             set status = ${status.data},
-                 reward_granted = ${status.data === 'rewarded'},
-                 reward_amount = case when ${status.data} = 'rewarded' then reward_amount else reward_amount end
+             set status = coalesce(${status}, status),
+                 reward_status = coalesce(${rewardStatus}, reward_status),
+                 reward_granted = coalesce(${rewardStatus}, reward_status) = 'given'
+                                  or coalesce(${status}, status) = 'rewarded'
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),
     )
     if (!rows) fail(400, 'We could not update this submission.')
     if (!rows.length) fail(404, 'We could not find that submission.')
-    await audit(c, { action: 'referral_submission.status', entityType: 'referral_submission', entityId: id, after: { status: status.data } })
+    await audit(c, { action: 'referral_submission.status', entityType: 'referral_submission', entityId: id, after: parsed.data })
     return c.json(okResponse.parse({ ok: true }))
   })
 

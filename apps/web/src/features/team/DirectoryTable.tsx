@@ -1,5 +1,5 @@
-import { KeyRound, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
-import { PROFILE_FIELD_LABEL } from '@ipc/contracts'
+import { KeyRound, MessageCircle, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
+import { PROFILE_FIELD_LABEL, buildWhatsAppUrl } from '@ipc/contracts'
 import { useTeamProfileGaps } from '@/features/profile/api'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -14,6 +14,8 @@ import { Avatar } from '@/shared/ui/avatar'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useRemoveMember, useSendReset, useUpdateMember } from './api'
 import { EditMemberDialog } from './EditMemberDialog'
+import { loginMessage } from './assign-note'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import type { DirectoryFilters, SortKey } from './filters'
 
 const ROLE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
@@ -127,6 +129,7 @@ export function ContactBadges({ member }: { member: DirectoryMember }) {
         </StatusBadge>
       )}
       {!member.login_enabled && <StatusBadge>No login</StatusBadge>}
+      {member.login_enabled && !member.last_seen_at && member.role !== 'super_admin' && <StatusBadge>Never logged in</StatusBadge>}
       {!member.email && !member.phone && <StatusBadge tone="danger">Contact missing</StatusBadge>}
       {!member.email && member.phone && <StatusBadge> Email missing</StatusBadge>}
       {!member.phone && member.email && <StatusBadge>Phone missing</StatusBadge>}
@@ -336,6 +339,7 @@ function RowActions({
   const remove = useRemoveMember()
   const reset = useSendReset()
   const confirm = useConfirm()
+  const { session } = useAuth()
   const isOwnerRow = member.role === 'super_admin'
   const active = member.status === 'active'
 
@@ -364,6 +368,20 @@ function RowActions({
   const more: RowMenuItem[] = [
     ...(onManageAccess && member.login_enabled
       ? [{ label: 'Manage access', icon: <ShieldCheck />, onSelect: () => onManageAccess(member) }]
+      : []),
+    // Where their work is and how to get in -- no password, no reset link.
+    ...(member.login_enabled && member.phone
+      ? [
+          {
+            label: 'Share login details',
+            icon: <MessageCircle />,
+            onSelect: () => {
+              const studio = session?.studios.find((x) => x.company_id === session.company_id)?.company_name ?? 'the studio'
+              const text = loginMessage({ name: member.name, studio, email: member.email, loginUrl: `${window.location.origin}/login` })
+              window.open(buildWhatsAppUrl(member.phone, text), '_blank', 'noopener,noreferrer')
+            },
+          },
+        ]
       : []),
     ...(member.login_enabled && member.email
       ? [

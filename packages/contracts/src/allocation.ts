@@ -152,6 +152,10 @@ export const teamMember = z.object({
    */
   payout_type: z.string().nullable().default(null),
   freelancer_rate: money.nullable().default(null),
+  /** False for a directory-only member: they have no login to see work on. */
+  login_enabled: z.boolean().default(true),
+  /** When they last had the app open (0117 heartbeats); null = never. */
+  last_seen_at: isoDateTime.nullable().default(null),
 })
 export type TeamMember = z.infer<typeof teamMember>
 

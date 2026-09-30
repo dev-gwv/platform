@@ -27,6 +27,7 @@ const member = (over: Partial<DirectoryMember> & { name: string }): DirectoryMem
   created_at: '2026-06-01T10:00:00Z',
   role_names: [],
   role_ids: [],
+  last_seen_at: null,
   ...over,
 })
 

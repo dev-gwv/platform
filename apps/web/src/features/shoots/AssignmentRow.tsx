@@ -45,6 +45,10 @@ export function AssignmentRow({
   const stage = slotStage(slot, record)
   const payout = slot.final_cost ?? slot.estimated_cost
   const otherDay = !!shoot.shoot_date && slotDay(slot) !== shoot.shoot_date
+  // Before the shoot day there are no cards yet: no chip, and a quiet button.
+  const dayPassed = slotDay(slot) <= new Date().toLocaleDateString('en-CA')
+  // Owed but not in is the one thing to chase -- amber, not alarm red.
+  const tone = stage === 'missing' ? 'warning' : STAGE_TONE[stage]
 
   const where = record
     ? [
@@ -74,9 +78,11 @@ export function AssignmentRow({
       </div>
 
       <div className="flex min-w-[10rem] flex-col items-start gap-0.5">
-        <StatusBadge tone={STAGE_TONE[stage]} title={stage === 'opted_out' ? (slot.data_not_required_reason ?? undefined) : undefined}>
-          <Database className="mr-1 size-3" aria-hidden /> {STAGE_LABEL[stage]}
-        </StatusBadge>
+        {(dayPassed || record) && (
+          <StatusBadge tone={tone} title={stage === 'opted_out' ? (slot.data_not_required_reason ?? undefined) : undefined}>
+            {STAGE_LABEL[stage]}
+          </StatusBadge>
+        )}
         {where.length > 0 && <p className="text-[11px] text-muted-foreground">{where.join(' · ')}</p>}
       </div>
 
@@ -87,13 +93,8 @@ export function AssignmentRow({
       {canEdit && (
         <div className="flex items-center gap-1">
           {!optedOut(slot) && (
-            <Button
-              size="sm"
-              variant={record ? 'outline' : 'default'}
-              className={cn(!record && 'bg-destructive text-destructive-foreground hover:bg-destructive/90')}
-              onClick={() => setEditing(true)}
-            >
-              {record ? <Pencil /> : <Database />} Data
+            <Button size="sm" variant={record || dayPassed ? 'outline' : 'ghost'} onClick={() => setEditing(true)}>
+              {record ? <Pencil /> : <Database />} {record ? 'Data' : 'Add data'}
             </Button>
           )}
           <RowMenu

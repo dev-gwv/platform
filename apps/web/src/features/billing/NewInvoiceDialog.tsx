@@ -40,11 +40,14 @@ export function NewInvoiceDialog({
   initial,
   onClose,
   openAfter = true,
+  next,
 }: {
   initial?: Partial<InvoiceFormValues> | undefined
   onClose: () => void
   /** Go to the new invoice once it is made. */
   openAfter?: boolean
+  /** The step after the invoice, offered on the "saved" message (e.g. "Book the team"). */
+  next?: { label: string; onClick: () => void } | undefined
 }) {
   const create = useCreateInvoice()
   const navigate = useNavigate()
@@ -63,6 +66,7 @@ export function NewInvoiceDialog({
               : req.payment
                 ? `${made.invoice_number} saved, and the payment is recorded.`
                 : `${made.invoice_number} saved. Share it on WhatsApp or email.`,
+            next ? { action: { label: next.label, onClick: next.onClick }, duration: 10_000 } : undefined,
           )
           onClose()
           if (openAfter) void navigate({ to: '/billing/invoices/$id', params: { id: made.id } })

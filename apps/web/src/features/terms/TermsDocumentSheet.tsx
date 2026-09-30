@@ -102,10 +102,28 @@ export function TermsDocumentSheet({
       )}
 
       <Card>
-        <CardContent className={`whitespace-pre-wrap p-4 text-sm leading-relaxed ${bodyClassName}`}>
+        <CardContent className={`terms-body whitespace-pre-wrap p-4 text-sm leading-relaxed ${bodyClassName}`}>
           {doc.body}
         </CardContent>
       </Card>
+
+      {/* The acceptance: who agreed and when, once they have; until then, on
+          paper only, the lines to sign by hand. */}
+      {doc.acknowledged_at ? (
+        <div className="paper-block rounded-lg border border-success/30 bg-success/5 p-3 text-sm">
+          <p className="font-semibold">Agreed</p>
+          <p className="text-muted-foreground">
+            {doc.acknowledged_by_name ?? doc.client_name ?? 'The client'} agreed to these terms on{' '}
+            {new Date(doc.acknowledged_at).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+            Their name, the time and their IP address are on record.
+          </p>
+        </div>
+      ) : (
+        <div className="paper-block hidden grid-cols-2 gap-8 pt-8 text-xs print:grid">
+          <p className="border-t border-foreground pt-1">{doc.client_name ?? 'Client'} — signature &amp; date</p>
+          <p className="border-t border-foreground pt-1">For {doc.company_name ?? 'the studio'}</p>
+        </div>
+      )}
 
       {doc.legal_note && (
         <p className="border-t border-border pt-3 text-[11px] italic text-muted-foreground">{doc.legal_note}</p>

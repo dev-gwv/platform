@@ -393,6 +393,8 @@ export const projectDetail = z.object({
   /** When the client last accepted a quotation link, and the name they typed. */
   quotation_accepted_at: isoDateTime.nullable().default(null),
   quotation_accepted_by: z.string().nullable().default(null),
+  /** When a quotation link was last made for the client -- the journey's first step. */
+  quotation_issued_at: isoDateTime.nullable().default(null),
   deliverables: z.array(deliverable),
   payments: z.array(
     z.object({

@@ -2,23 +2,15 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Camera,
-  CheckSquare,
   CircleCheck,
   Clock,
-  FileSignature,
   FileText,
   IndianRupee,
-  LayoutGrid,
-  Package,
   PauseCircle,
   Pencil,
   Phone,
-  Receipt,
   Send,
-  FileCheck,
   Trash2,
-  Wallet,
   X,
 } from 'lucide-react'
 import { shootListItem, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
@@ -52,19 +44,13 @@ import { ReferralCard } from '@/features/projects/ReferralCard'
 import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
 import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
+import { DataTab } from '@/features/projects/tabs/DataTab'
+import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
+import { PROJECT_TABS, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
+import { ProjectJourney } from '@/features/projects/ProjectJourney'
+import type { JourneyKey } from '@/features/projects/journey'
 
-/** The tabs across a project. Each one is a view of the same project. */
-const TABS = [
-  { value: 'overview', label: 'Overview', icon: LayoutGrid },
-  { value: 'shoots', label: 'Shoots', icon: Camera },
-  { value: 'deliverables', label: 'Post-production work', icon: Package },
-  { value: 'completed_work', label: 'Work to review', icon: FileCheck },
-  { value: 'terms', label: 'Terms', icon: FileSignature },
-  { value: 'billing', label: 'Billing', icon: Wallet },
-  { value: 'expenses', label: 'Expenses', icon: Receipt },
-  { value: 'tasks', label: 'Tasks', icon: CheckSquare },
-] as const
-type Tab = (typeof TABS)[number]['value']
+type Tab = Exclude<ProjectTab, 'quotation'>
 
 const STATUS_TONE: Record<ProjectStatus, 'info' | 'success' | 'danger' | 'warning'> = {
   active: 'info',
@@ -115,25 +101,42 @@ function ProjectDetail() {
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
   const [tab, setTabState] = useState<Tab>(() => {
     const wanted = new URLSearchParams(window.location.search).get('tab')
-    // Data now lives on the Shoots tab, beside each person who shot it.
-    if (wanted === 'data') return 'shoots'
-    return TABS.some((t) => t.value === wanted) ? (wanted as Tab) : 'overview'
+    return PROJECT_TABS.some((t) => t.value === wanted && t.value !== 'quotation') ? (wanted as Tab) : 'overview'
   })
+  // The journey's buttons land on a tab with the next thing already open:
+  // ?invoice=next opens the booking-amount invoice, ?focus=assign points at
+  // the first role still to fill.
+  const [invoiceNext, setInvoiceNext] = useState(() => new URLSearchParams(window.location.search).get('invoice') === 'next')
+  const [focusAssign, setFocusAssign] = useState(() => new URLSearchParams(window.location.search).get('focus') === 'assign')
   // The tab is kept in the address, so refresh and Back land where you were.
-  const setTab = (t: Tab) => {
+  const setTab = (t: ProjectTab) => {
+    if (t === 'quotation') {
+      void navigate({ to: '/projects/$id/quotation', params: { id } })
+      return
+    }
     setTabState(t)
     const url = new URL(window.location.href)
     if (t === 'overview') url.searchParams.delete('tab')
     else url.searchParams.set('tab', t)
+    url.searchParams.delete('invoice')
+    url.searchParams.delete('focus')
     window.history.replaceState(window.history.state, '', url)
   }
-  // Tabs for things this person cannot use are not shown at all.
-  const visibleTabs = TABS.filter(
-    (t) =>
-      (t.value !== 'tasks' || access.hasModule('tasks')) &&
-      (t.value !== 'expenses' || access.hasModule('company_expenses')) &&
-      (t.value !== 'completed_work' || access.hasModule('team_work_preview')),
-  )
+  /** Where each step of the journey is done. */
+  const go = (key: JourneyKey) => {
+    if (key === 'quotation') return setTab('quotation')
+    if (key === 'invoice') {
+      setTab('billing')
+      setInvoiceNext(true)
+      return
+    }
+    if (key === 'team') {
+      setTab('shoots')
+      setFocusAssign(true)
+      return
+    }
+    setTab('deliverables')
+  }
 
   // The shoots' dates give the terms their {{event_date}}. Same query key the
   // Shoots tab uses, so this shares its cache; it sits above the loading guard
@@ -290,25 +293,9 @@ function ProjectDetail() {
         />
       </div>
 
-      <div className="mt-4 flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5 sm:flex-wrap">
-        {visibleTabs.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => setTab(t.value)}
-            aria-current={tab === t.value ? 'page' : undefined}
-            className={cn(
-              'flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-              tab === t.value
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-            )}
-          >
-            <t.icon className="size-4" aria-hidden />
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {canEdit && <ProjectJourney project={data} className="mt-3" onGo={go} onSkipToTeam={() => go('team')} />}
+
+      <ProjectTabStrip className="mt-4" active={tab} onSelect={setTab} />
 
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
@@ -351,9 +338,18 @@ function ProjectDetail() {
         />
       )}
 
-      {tab === 'billing' && <BillingTab project={data} canEdit={canEdit} onOpenTab={setTab} />}
+      {tab === 'billing' && (
+        <BillingTab
+          project={data}
+          canEdit={canEdit}
+          onOpenTab={setTab}
+          invoiceNext={invoiceNext}
+          onInvoiceNextDone={() => setInvoiceNext(false)}
+          onBookTeam={() => go('team')}
+        />
+      )}
 
-      {tab === 'shoots' && <ShootsTab projectId={id} />}
+      {tab === 'shoots' && <ShootsTab projectId={id} focusAssign={focusAssign} onFocused={() => setFocusAssign(false)} />}
       {tab === 'completed_work' && <CompletedWorkTab projectId={id} canReview={canReviewWork} />}
       {tab === 'terms' && (
         <TermsTab
@@ -374,6 +370,16 @@ function ProjectDetail() {
         />
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
+      {tab === 'data' && <DataTab projectId={id} />}
+      {tab === 'referrals' && (
+        <ReferralsTab
+          projectId={id}
+          projectName={data.name}
+          clientName={data.client_name}
+          clientPhone={data.client_phone}
+          canEdit={access.hasAction('referrals', 'edit')}
+        />
+      )}
       {tab === 'tasks' && (
         <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
       )}

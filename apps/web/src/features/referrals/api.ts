@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  referralCampaign,
   referralCampaignList,
   referralSubmissionList,
   z,
@@ -24,6 +25,31 @@ export function useReferralCampaigns() {
     enabled: !!session && access.hasModule('referrals'),
     staleTime: 15_000,
   })
+}
+
+/**
+ * This project's own campaign. Someone who may edit referrals gets it made on
+ * first open (one per project, the same call every time); anyone else sees it
+ * only if it already exists.
+ */
+export function useProjectCampaign(projectId: string, canEdit: boolean) {
+  const { session } = useAuth()
+  const access = useAccess()
+  const list = useReferralCampaigns()
+  const made = useQuery({
+    queryKey: ['referrals', 'project', projectId],
+    queryFn: () =>
+      callApi('/referrals/campaigns/for-project', { method: 'POST', body: { project_id: projectId }, responseSchema: referralCampaign }),
+    enabled: !!session && canEdit && access.hasModule('referrals'),
+    staleTime: 60_000,
+  })
+  if (canEdit) return { data: made.data ?? null, isLoading: made.isLoading, isError: made.isError, refetch: made.refetch }
+  return {
+    data: (list.data?.campaigns ?? []).find((c) => c.project_id === projectId) ?? null,
+    isLoading: list.isLoading,
+    isError: list.isError,
+    refetch: list.refetch,
+  }
 }
 
 export function useReferralSubmissions(campaignId?: string) {
@@ -89,10 +115,10 @@ export function useDeleteReferralCampaign() {
 export function useUpdateSubmissionStatus() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
+    mutationFn: ({ id, status, reward_status }: { id: string; status?: string; reward_status?: string }) =>
       callApi(`/referrals/submissions/${id}/status`, {
         method: 'PATCH',
-        body: { status },
+        body: { ...(status ? { status } : {}), ...(reward_status ? { reward_status } : {}) },
         responseSchema: anySchema,
       }),
     onSuccess: () => {

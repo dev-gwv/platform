@@ -44,6 +44,13 @@ export const projectTermsVersion = z.object({
   access_count: z.number().int(),
   link_live: z.boolean(),
   emailed_to: z.string().nullable(),
+  /** The live link to share again -- the same one the client already has (0215). */
+  share_url: z.string().nullable().default(null),
+  /** The last email attempt: sent, or why not. */
+  last_email: z
+    .object({ to: z.string().nullable(), status: z.string(), at: z.string(), error: z.string().nullable() })
+    .nullable()
+    .default(null),
 })
 export type ProjectTermsVersion = z.infer<typeof projectTermsVersion>
 
@@ -74,7 +81,7 @@ export function useSendNewTerms() {
   })
 }
 
-/** A fresh link for terms already sent (the old one stops working). */
+/** A fresh link for terms whose link ran out (the old one stops working). */
 export function useSendTermsAgain() {
   const qc = useQueryClient()
   return useMutation({
@@ -233,6 +240,7 @@ export const termsEmailLog = z.object({
 })
 export type TermsEmailLog = z.infer<typeof termsEmailLog>
 export function useEmailTermsLink() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: ({
       documentId,
@@ -242,16 +250,19 @@ export function useEmailTermsLink() {
       message,
     }: {
       documentId: string
-      token: string
+      /** Omit to email the document's kept link (0215). */
+      token?: string | null
       to_email?: string | null
       subject?: string | null
       message?: string | null
     }) =>
       callApi(`/terms/documents/${documentId}/email`, {
         method: 'POST',
-        body: { token, to_email: to_email || null, subject: subject || null, message: message || null },
+        body: { token: token || null, to_email: to_email || null, subject: subject || null, message: message || null },
         responseSchema: z.object({ status: z.string(), error: z.string().nullable() }),
       }),
+    // The card's "emailed … to …" line reads the log.
+    onSettled: () => invalidateTerms(qc),
     onError: (e: Error) => toast.error(e.message),
   })
 }

@@ -30,6 +30,7 @@ import {
 } from './assign'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
 import { RoleTile } from '@/shared/ui/icon-tile'
+import { AssignedNote } from '@/features/team/AssignedNote'
 
 /**
  * "Assign team" for one shoot: the roles it needs, who is in each, and an
@@ -138,6 +139,8 @@ function AssignBoard({
   })
   const [editing, setEditing] = useState<TeamSlot | null>(null)
   const [quickAdd, setQuickAdd] = useState<string | null>(null)
+  /** Who was just booked, for the "they see it on their own login" note. */
+  const [justBooked, setJustBooked] = useState<TeamMember[]>([])
 
   // A half-picked crew survives a refresh or a closed tab until it is booked.
   const draft = useFormDraft(
@@ -186,6 +189,7 @@ function AssignBoard({
       await update.mutateAsync({ id: slot.id, patch: { user_id: member.user_id } })
       toast.success(`${member.name} is now on ${slot.service_name ?? 'this role'}.`)
       setPicker(null)
+      setJustBooked([member])
     } catch (e) {
       toast.error(e instanceof Error && /409|already/i.test(e.message) ? 'They are already booked at this time.' : 'We could not change this.')
     }
@@ -229,6 +233,8 @@ function AssignBoard({
       }
       setPicks(nextPicks)
       setFailed(nextFailed)
+      const booked = [...new Set(results.filter((r) => r.id).map((r) => rows[r.index]!.id))]
+      setJustBooked(booked.map((id) => byId.get(id)).filter((m): m is TeamMember => !!m))
       if (ok > 0) toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} booked.`)
       if (Object.keys(nextFailed).length === 0) draft.clear()
     } catch (e) {
@@ -313,6 +319,8 @@ function AssignBoard({
           />
         ))}
       </ul>
+
+      {justBooked.length > 0 && <AssignedNote members={justBooked} onClose={() => setJustBooked([])} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div className="flex items-center gap-3 text-sm">

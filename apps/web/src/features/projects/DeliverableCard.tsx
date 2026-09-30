@@ -15,7 +15,8 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import type { Deliverable, DeliverableStage } from '@ipc/contracts'
+import type { Deliverable, DeliverableStage, TeamMember } from '@ipc/contracts'
+import { AssignedNote } from '@/features/team/AssignedNote'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -318,6 +319,8 @@ export function DeliverableCard({
   const activity = activityText(d, stages)
   // Just gave it to someone: offer them a voice brief, for a few seconds.
   const [briefFor, setBriefFor] = useState<string | null>(null)
+  // ...and, for a studio's first few assignments, that they see it on their own login.
+  const [noteFor, setNoteFor] = useState<TeamMember | null>(null)
   useEffect(() => {
     if (!briefFor) return
     const t = window.setTimeout(() => setBriefFor(null), 10_000)
@@ -383,7 +386,13 @@ export function DeliverableCard({
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5" onClick={keepControlClicks}>
               {canEdit && !dropped && stage !== 'completed' ? (
-                <EditorPicker d={d} onAssigned={setBriefFor} />
+                <EditorPicker
+                  d={d}
+                  onAssigned={(m) => {
+                    setBriefFor(m.name)
+                    setNoteFor(m)
+                  }}
+                />
               ) : (
                 <EditorName name={d.assignee_name} />
               )}
@@ -411,6 +420,7 @@ export function DeliverableCard({
                 </a>
               )}
             </div>
+            {noteFor && <AssignedNote members={[noteFor]} onClose={() => setNoteFor(null)} className="mt-2" />}
 
             {(d.description || activity || d.notes_count > 0) && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -486,7 +496,7 @@ export function EditorName({ name }: { name: string | null | undefined }) {
  * thing you see. `onAssigned` hears who was picked -- the card offers a voice
  * brief to them straight away.
  */
-export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (name: string) => void }) {
+export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (member: TeamMember) => void }) {
   const { data: members } = useMembers()
   const update = useUpdateDeliverable(d.project_id)
   const [open, setOpen] = useState(false)
@@ -496,13 +506,14 @@ export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (
     .filter((m) => !find || m.name.toLowerCase().includes(find.toLowerCase()))
     .sort((a, b) => Number(isEditor(b.role_names)) - Number(isEditor(a.role_names)) || a.name.localeCompare(b.name))
 
-  function pick(userId: string | null, name: string | null) {
+  function pick(member: TeamMember | null) {
     setOpen(false)
     setFind('')
+    const userId = member?.user_id ?? null
     if (userId === (d.assignee_id ?? null)) return
     update.mutate(
       { deliverableId: d.id, patch: { assignee_id: userId } },
-      { onSuccess: () => userId && name && onAssigned?.(name) },
+      { onSuccess: () => member && onAssigned?.(member) },
     )
   }
 
@@ -538,7 +549,7 @@ export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (
             <button
               key={m.user_id}
               type="button"
-              onClick={() => pick(m.user_id, m.name)}
+              onClick={() => pick(m)}
               className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted', m.user_id === d.assignee_id && 'bg-muted')}
             >
               <Avatar name={m.name} size="sm" />
@@ -554,7 +565,7 @@ export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (
         {d.assignee_id && (
           <button
             type="button"
-            onClick={() => pick(null, null)}
+            onClick={() => pick(null)}
             className="mt-1 w-full rounded-lg border-t border-border px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-muted"
           >
             Remove the editor

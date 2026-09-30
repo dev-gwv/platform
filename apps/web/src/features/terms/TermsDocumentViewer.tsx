@@ -51,7 +51,7 @@ export function TermsDocumentViewer({
             ))}
           </div>
         ) : (
-          <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
+          <div className="paper flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
             <TermsDocumentLetterhead doc={data} />
 
             {/*
@@ -80,7 +80,7 @@ export function TermsDocumentViewer({
 
             <TermsDocumentSheet doc={data} bodyClassName="" />
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+            <div className="no-print flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
               <StatusBadge tone="neutral">
                 Opened by the client {data.access_count} {data.access_count === 1 ? 'time' : 'times'}
               </StatusBadge>

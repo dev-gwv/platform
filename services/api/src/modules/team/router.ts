@@ -184,6 +184,9 @@ export const teamRouter = new Hono<AppEnv>()
           select u.user_id, u.name, u.role, u.engagement_type, u.phone, u.email,
                  ${canPlan ? sql`u.payout_type` : sql`null::text`} as payout_type,
                  ${canPlan ? sql`u.freelancer_rate` : sql`null::numeric`} as freelancer_rate,
+                 coalesce(u.login_enabled, true) as login_enabled,
+                 -- Heartbeats are company-scoped by RLS; 0216 indexes this.
+                 (select max(ue.occurred_at) from usage_events ue where ue.user_id = u.user_id) as last_seen_at,
                  coalesce(
                    array_agg(er.type_name order by er.type_name) filter (where er.id is not null),
                    '{}'::text[]
@@ -279,7 +282,8 @@ export const teamRouter = new Hono<AppEnv>()
             coalesce(
               array_agg(er.id order by er.type_name) filter (where er.id is not null),
               '{}'::uuid[]
-            ) as role_ids
+            ) as role_ids,
+            (select max(ue.occurred_at) from usage_events ue where ue.user_id = u.user_id) as last_seen_at
           from users u
           left join employee_role_assignments era on era.user_id = u.user_id
           left join employee_roles er on er.id = era.role_id

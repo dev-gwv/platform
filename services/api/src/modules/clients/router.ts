@@ -125,13 +125,19 @@ export const clientsRouter = new Hono<AppEnv>()
   })
 
   // Project history for the client detail page (avoids fetching every project).
-  .get('/:id/projects', requireAction('clients', 'view'), async (c) => {
+  // Also what the invoice editor lists once a customer is picked, so anyone who
+  // may see invoices may read it -- not only people with the Clients page.
+  .get('/:id/projects', async (c, next) => {
+    const a = c.get('auth').access
+    if (!a.hasAction('clients', 'view') && !a.hasAction('billing', 'view')) fail(403, 'You do not have access to this.')
+    await next()
+  }, async (c) => {
     const id = uuidParam(c)
     const rows = await attempt(c, 'clients.projects', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
         select p.id, p.name, p.status, p.client_id, cl.name as client_name, cl.phone as client_phone,
                p.package_cost, p.total_cost,
-               coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id),0) as received,
+               coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),0) as received,
                p.created_at, null::date as next_shoot_date, 0::int as tasks_overdue
         from projects p left join clients cl on cl.id = p.client_id
         where p.client_id = ${id} order by p.created_at desc`),

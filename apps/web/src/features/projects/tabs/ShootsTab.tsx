@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
-  AlertTriangle,
+  Check,
   Clock,
   Database,
   ExternalLink,
@@ -70,9 +70,10 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 
 const list = shootListItem.array()
 
-const TONE: Record<ShootStatus, 'info' | 'success' | 'warning' | 'danger'> = {
-  planned: 'warning',
-  confirmed: 'info',
+// Calm by default: only a finished day (green) or a cancelled one (red) is coloured.
+const TONE: Record<ShootStatus, 'neutral' | 'success' | 'danger'> = {
+  planned: 'neutral',
+  confirmed: 'neutral',
   completed: 'success',
   cancelled: 'danger',
 }
@@ -90,7 +91,16 @@ const timeOf = (iso: string | null) =>
  * preset could only ever be applied while first creating the project. Planning
  * one wedding meant three screens.
  */
-export function ShootsTab({ projectId }: { projectId: string }) {
+export function ShootsTab({
+  projectId,
+  focusAssign = false,
+  onFocused,
+}: {
+  projectId: string
+  /** Arrived from "Book the team": point at the first day still short of people. */
+  focusAssign?: boolean
+  onFocused?: (() => void) | undefined
+}) {
   const { session } = useAuth()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
@@ -148,6 +158,17 @@ export function ShootsTab({ projectId }: { projectId: string }) {
     const own = (shootTypes.data ?? []).filter((t) => !t.is_archived).map((t) => t.name)
     return own.length ? own.slice(0, 10) : [...QUICK_SHOOTS]
   })()
+
+  // The first day still short of people -- or, with none short, the first day.
+  const focusId = useMemo(() => {
+    if (!focusAssign || !data || !slots.data) return null
+    const short = data.find((s) => {
+      if (s.status === 'cancelled') return false
+      const p = shootProgress(requirementFill(s, slots.data.filter((x) => x.shoot_id === s.id && isLive(x))))
+      return p.required === 0 || p.assigned < p.required
+    })
+    return (short ?? data[0])?.id ?? null
+  }, [focusAssign, data, slots.data])
 
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -254,6 +275,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
             <ShootPlanner
               key={s.id}
               shoot={s}
+              focus={s.id === focusId}
+              onFocused={onFocused}
               canEdit={canEdit}
               dateIsPlaceholder={placeholderDates.has(s.id) && s.shoot_date === todayISO()}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
@@ -273,13 +296,28 @@ function ShootPlanner({
   slots,
   records,
   dateIsPlaceholder = false,
+  focus = false,
+  onFocused,
 }: {
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
   records: DataRecord[]
   dateIsPlaceholder?: boolean
+  focus?: boolean
+  onFocused?: (() => void) | undefined
 }) {
+  // "Book the team" lands here: bring this day into view and mark it for a moment.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [marked, setMarked] = useState(false)
+  useEffect(() => {
+    if (!focus) return
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setMarked(true)
+    onFocused?.()
+    const t = window.setTimeout(() => setMarked(false), 2500)
+    return () => window.clearTimeout(t)
+  }, [focus])
   const update = useUpdateShoot()
   const del = useDeleteShoot()
   const services = useServices()
@@ -326,6 +364,8 @@ function ShootPlanner({
   const end = timeOf(shoot.end_at)
   const href = mapHref(shoot.map_link)
   const staffed = progress.required > 0 && progress.assigned >= progress.required
+  // Before the day there are no cards to chase, so data stays out of sight.
+  const dayPassed = !!shoot.shoot_date && shoot.shoot_date <= new Date().toLocaleDateString('en-CA')
   const next = shootNextStep({
     shoot_date: shoot.shoot_date,
     dateIsPlaceholder,
@@ -346,7 +386,15 @@ function ShootPlanner({
   }
 
   return (
-    <Card className={cn('overflow-hidden border-t-4', staffed ? 'border-t-success' : 'border-t-primary')}>
+    <Card
+      ref={cardRef}
+      className={cn(
+        'scroll-mt-4 overflow-hidden transition-shadow',
+        // Green only when every seat is filled; otherwise a plain card.
+        staffed && 'border-t-4 border-t-success',
+        marked && 'ring-2 ring-primary ring-offset-2',
+      )}
+    >
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -414,9 +462,12 @@ function ShootPlanner({
                 <Users className="size-3" />
                 {progress.assigned}/{progress.required} assigned
               </span>
-              <span className="flex items-center gap-1">
-                <Database className="size-3" /> Data {dataTally.done}/{dataTally.needed}
-              </span>
+              {/* Cards only exist once the day has been shot. */}
+              {dayPassed && dataTally.needed > 0 && (
+                <span className="flex items-center gap-1">
+                  <Database className="size-3" /> Data {dataTally.done}/{dataTally.needed}
+                </span>
+              )}
             </div>
           </div>
           {canEdit && (
@@ -424,7 +475,7 @@ function ShootPlanner({
               <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
                 <Plus /> Add who this day needs
               </Button>
-              <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
+              <Button size="sm" variant="outline" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
                 <UserPlus /> Assign team
               </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
@@ -438,7 +489,7 @@ function ShootPlanner({
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-destructive"
+                className="text-muted-foreground hover:text-destructive"
                 aria-label={`Delete ${shoot.name}`}
                 onClick={async () => {
                   const yes = await confirm({
@@ -490,7 +541,7 @@ function ShootPlanner({
               <div
                 className={cn(
                   'h-full rounded-full transition-[width] duration-500',
-                  progress.pct === 100 ? 'bg-success' : progress.pct > 0 ? 'bg-warning' : 'bg-destructive',
+                  progress.pct === 100 ? 'bg-success' : 'bg-primary/40',
                 )}
                 style={{ width: `${progress.pct}%` }}
               />
@@ -507,14 +558,16 @@ function ShootPlanner({
             </p>
             <p className="text-xs text-muted-foreground">Tap a role to add it. Set how many on its row.</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {roleChips.map((name, i) => (
-                <ToneChip
+              {roleChips.map((name) => (
+                <button
                   key={name}
-                  tone={toneAt(i)}
-                  label={name}
+                  type="button"
                   disabled={update.isPending}
                   onClick={() => setRequirements([...asInput(), { name, quantity: 1 }])}
-                />
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                >
+                  <Plus className="size-3.5" aria-hidden /> {name}
+                </button>
               ))}
             </div>
           </div>
@@ -534,22 +587,24 @@ function ShootPlanner({
                 <div
                   key={req.service_id}
                   className={cn(
-                    'rounded-md border border-l-4 p-3',
-                    full ? 'border-success/40 border-l-success bg-success/5' : 'border-warning/40 border-l-warning bg-warning/5',
+                    'rounded-md border p-3',
+                    full ? 'border-l-4 border-success/40 border-l-success bg-success/5' : 'border-border bg-card',
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <RoleTile name={r.name} size="sm" />
                     <span className="text-sm font-semibold">{r.name}</span>
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                        full ? 'bg-success/15 text-success' : 'bg-destructive/10 text-destructive',
-                      )}
-                    >
-                      <Users className="size-3" /> Assigned {r.assigned}/{r.required}
-                    </span>
-                    {on.length > 0 &&
+                    {full ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">
+                        <Check className="size-3" aria-hidden /> {r.assigned}/{r.required}
+                      </span>
+                    ) : (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {r.assigned} of {r.required}
+                      </span>
+                    )}
+                    {dayPassed &&
+                      on.length > 0 &&
                       (() => {
                         const t = dataCounts(on, records)
                         if (t.needed === 0) return null
@@ -557,14 +612,10 @@ function ShootPlanner({
                           <span
                             className={cn(
                               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                              t.done >= t.needed
-                                ? 'bg-success/15 text-success'
-                                : t.done > 0
-                                  ? 'bg-warning/15 text-warning'
-                                  : 'bg-destructive/10 text-destructive',
+                              t.done >= t.needed ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning',
                             )}
                           >
-                            <Database className="size-3" /> Data {t.done}/{t.needed}
+                            Data {t.done}/{t.needed}
                           </span>
                         )
                       })()}
@@ -591,7 +642,7 @@ function ShootPlanner({
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-destructive"
+                            className="text-muted-foreground hover:text-destructive"
                             aria-label={`Remove ${r.name}`}
                             onClick={() => setRequirements(asInput().filter((x) => x.name !== r.name))}
                           >
@@ -603,13 +654,7 @@ function ShootPlanner({
                   </div>
 
                   {on.length === 0 ? (
-                    <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 p-2 text-xs">
-                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                      <div>
-                        <p className="font-medium text-warning">Nobody assigned yet</p>
-                        <p className="text-muted-foreground">Tap Assign team to pick someone.</p>
-                      </div>
-                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">Nobody yet · tap Assign team</p>
                   ) : (
                     <ul className="mt-2 flex flex-col gap-1.5">
                       {on.map((sl) => (
