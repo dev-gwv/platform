@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, Gem, ImageUp, Loader2, XCircle } from 'lucide-react'
 import { diamondClaimResult, type SubscriptionStatus } from '@ipc/contracts'
-import { callApi, uploadFile } from '@/shared/api/client'
+import { callApi, SLOW_TIMEOUT_MS, uploadFile } from '@/shared/api/client'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
@@ -30,6 +30,7 @@ export function DiamondVerifyCard({ status, className }: { status: SubscriptionS
         method: 'POST',
         body: { file_id: stored.id },
         responseSchema: diamondClaimResult,
+        timeoutMs: SLOW_TIMEOUT_MS,
       })
     },
     onSettled: () => {

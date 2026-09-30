@@ -104,7 +104,7 @@ import {
   type UpdateTagRequest,
   type TagLeadsRequest,
 } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
@@ -372,7 +372,7 @@ export function useSendTemplate() {
 export function useImportPreview() {
   return useMutation({
     mutationFn: (csv: string) =>
-      callApi('/crm/imports/preview', { method: 'POST', body: { csv }, responseSchema: csvImportPreviewResponse }),
+      callApi('/crm/imports/preview', { method: 'POST', body: { csv }, responseSchema: csvImportPreviewResponse, timeoutMs: SLOW_TIMEOUT_MS }),
     onError: (e: Error) => toast.error(e.message),
   })
 }
@@ -380,7 +380,7 @@ export function useImportPreview() {
 export function useImportCommit() {
   return useCrmMutation(
     (input: CsvImportCommitRequest) =>
-      callApi('/crm/imports/commit', { method: 'POST', body: input, responseSchema: csvImportCommitResponse }),
+      callApi('/crm/imports/commit', { method: 'POST', body: input, responseSchema: csvImportCommitResponse, timeoutMs: SLOW_TIMEOUT_MS }),
     (r) => `Imported ${r.created}${r.skipped ? `, skipped ${r.skipped} known` : ''}`,
   )
 }
@@ -851,7 +851,7 @@ export function useScheduleMeeting() {
 export function useEmailSync() {
   return useCrmMutation(
     (sinceDays: number) =>
-      callApi('/crm/activities/email/sync', { method: 'POST', body: { since_days: sinceDays }, responseSchema: emailSyncResponse }),
+      callApi('/crm/activities/email/sync', { method: 'POST', body: { since_days: sinceDays }, responseSchema: emailSyncResponse, timeoutMs: SLOW_TIMEOUT_MS }),
     (r) =>
       r.status === 'ok'
         ? `Synced ${r.imported} new message${r.imported === 1 ? '' : 's'}${r.unmatched ? ` · ${r.unmatched} unmatched` : ''}`

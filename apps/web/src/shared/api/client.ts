@@ -40,6 +40,31 @@ const UNAUTHENTICATED_PATHS = new Set([
 let rotating: Promise<boolean> | null = null
 
 /**
+ * How long a request may go unanswered. Without a limit, a server that takes
+ * the connection and never replies kept the whole app on its loading shell.
+ */
+const REFRESH_TIMEOUT_MS = 15_000
+const DEFAULT_TIMEOUT_MS = 30_000
+export const SLOW_TIMEOUT_MS = 120_000
+export const TIMEOUT_MESSAGE = 'The server is taking too long to answer. Try again in a moment.'
+const TIMED_OUT = 'timed-out'
+
+/**
+ * A signal that aborts after `ms`, or when `outer` does. Built by hand because
+ * AbortSignal.any is missing on phones a year or two old.
+ */
+function deadline(ms: number, outer?: AbortSignal): AbortSignal {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(TIMED_OUT), ms)
+  ctrl.signal.addEventListener('abort', () => clearTimeout(timer), { once: true })
+  if (outer) {
+    if (outer.aborted) ctrl.abort(outer.reason)
+    else outer.addEventListener('abort', () => ctrl.abort(outer.reason), { once: true })
+  }
+  return ctrl.signal
+}
+
+/**
  * Called when a refresh is refused outright, so AuthProvider can drop the
  * session and let the route guard bounce to /login. Without it a dead session
  * leaves the shell rendered with every panel erroring.
@@ -65,6 +90,8 @@ export async function rotateTokens(): Promise<boolean> {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(before ? { refresh_token: before } : {}),
+        // A refresh that never answers must not hold every caller forever.
+        signal: deadline(REFRESH_TIMEOUT_MS),
       })
       if (!res.ok) {
         // Only an auth refusal means the session is over. A 429 from the shared
@@ -108,6 +135,13 @@ export async function rotateTokens(): Promise<boolean> {
  */
 const COOKIE_FLAG = 'ipc_cookie_session'
 function hasCookieSession(): boolean {
+  return readCookieFlag()
+}
+/** A session is still held here (not refused), so a failed refresh means the server could not be reached. */
+export function hasStoredSession(): boolean {
+  return !!getRefreshToken() || readCookieFlag()
+}
+function readCookieFlag(): boolean {
   try {
     return localStorage.getItem(COOKIE_FLAG) === '1'
   } catch {
@@ -129,6 +163,8 @@ interface CallOptions<TOut extends z.ZodTypeAny> {
   /** Contract the response is parsed against. */
   responseSchema: TOut
   signal?: AbortSignal
+  /** Give up after this long (default 30 s). Imports and syncs pass SLOW_TIMEOUT_MS. */
+  timeoutMs?: number
 }
 
 export async function callApi<TOut extends z.ZodTypeAny>(
@@ -156,8 +192,12 @@ export async function callApi<TOut extends z.ZodTypeAny>(
       },
       body: opts.body === undefined ? null : JSON.stringify(opts.body),
     }
-    if (opts.signal) init.signal = opts.signal
-    return fetch(`${config.apiBaseUrl}${path}`, init)
+    const limit = deadline(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal)
+    init.signal = limit
+    return fetch(`${config.apiBaseUrl}${path}`, init).catch((e: unknown) => {
+      if (limit.aborted && limit.reason === TIMED_OUT) throw new ApiError(0, TIMEOUT_MESSAGE)
+      throw e
+    })
   }
 
   let res = await send()
