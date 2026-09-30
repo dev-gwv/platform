@@ -89,6 +89,9 @@ These come from the owner reviewing the live app. Apply them to anything you tou
 - **Labels are the pick-many field; quality is one temperature.** A lead carries as many labels as it needs (drawer, Add lead, pipeline bulk bar -- all through `features/crm/LabelMenu.tsx`); quality stays single because 'hot' ranks the call queue. A lead holds several events (`crm_lead_functions`, 0212) -- edit them with `LeadEvents`, never a single event box.
 - **Every filter chip and every bulk-bar list has "+ Add".** `MultiSelectFilter` takes `onCreate`; the new value joins the studio's list and the filter switches to it.
 - **Anything shown as cards can be ticked and changed many at once** (`LeadBulkBar` on the leads pipeline and list; `BulkBar` on the production board).
+- **Settings is a grouped rail, never a tab strip.** Every settings page is listed once in `features/settings/SettingsNav.tsx` (`SETTINGS_GROUPS`: Studio, Team, Projects, Money, Messages, More; at most four each) and `AppShell` wraps it in the rail. A new settings page adds a line there, not another tab. (The owner: sixteen tabs across the top were "draining".)
+- **The Team menu is four hubs** (`shared/layout/hubs.ts`): People, Attendance & leave, Pay, Roles & terms. A new team page joins a hub's tab row instead of adding a sidebar line. The plan card at the foot of the sidebar (`features/billing/PlanCard.tsx`) is where "Upgrade" lives.
+- **Money is rupees.** Use `IndianRupee`, never `DollarSign`; a test fails on any `DollarSign` in `apps/web`.
 - **When the owner gives a standing instruction, write it here** in this list, so the next session follows it without being told again.
 
 ## Who is working on what

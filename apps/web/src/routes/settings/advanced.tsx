@@ -1,10 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import { Camera, ChevronRight, Eye, Facebook, FileText, FileSignature, MapPin, Shield, BarChart3, Users } from 'lucide-react'
+import { Camera, ChevronRight, Eye, Facebook, Shield, BarChart3, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 
 export function AdvancedSettingsPage() {
   return (
@@ -15,9 +14,9 @@ export function AdvancedSettingsPage() {
 }
 
 /**
- * Lovable parity (/settings/advanced): secondary tools and admin utilities.
- * Daily workflows stay in the sidebar; this hub links to existing
- * dialogs/pages so nothing is a dead end.
+ * The tools that have no other home. It used to repeat Documents, Team terms,
+ * Attendance location and the System page as well; those are in the settings
+ * rail now, so listing them twice only made the page longer.
  */
 function Advanced() {
   const { session } = useAuth()
@@ -26,23 +25,18 @@ function Advanced() {
   const isAdmin = session?.role === 'admin' || session?.role === 'super_admin' || isOwner
   const isManager = isAdmin || session?.role === 'manager'
 
-  const tools: Array<{ to: string; title: string; desc: string; icon: typeof FileText; show: boolean }> = [
-    { to: '/project-documents', title: 'Project Documents', desc: 'Track signed agreements and project paperwork.', icon: FileText, show: access.hasModule('projects') },
+  const tools: Array<{ to: string; title: string; desc: string; icon: LucideIcon; show: boolean }> = [
     { to: '/shoots', title: 'Shoots', desc: 'Browse all shoots across every project.', icon: Camera, show: isManager },
-    { to: '/settings/team-terms', title: 'Team Terms', desc: 'Manage acknowledged team terms and versions.', icon: FileSignature, show: access.hasModule('projects') },
     { to: '/team/work-preview', title: 'Team Work Preview', desc: 'Preview team submissions before sharing.', icon: Eye, show: access.hasModule('projects') },
-    { to: '/settings/attendance-location', title: 'Attendance Location', desc: 'Configure office location for attendance check-in.', icon: MapPin, show: isAdmin },
     { to: '/platform/studios', title: 'Studio Access', desc: 'Platform-level studio management.', icon: Shield, show: session?.is_platform_admin ?? false },
     { to: '/platform/usage', title: 'Usage Analytics', desc: 'Platform-level usage and analytics.', icon: BarChart3, show: session?.is_platform_admin ?? false },
     { to: '/lead-sources', title: 'Facebook Import Log', desc: 'Recent leads imported from Facebook.', icon: Facebook, show: access.hasModule('settings') },
-    { to: '/settings/system', title: 'Source Logs', desc: 'Audit log and scheduled-job history.', icon: Users, show: isAdmin },
   ]
   const visible = tools.filter((t) => t.show)
 
   return (
     <>
-      <PageHeader title="Advanced Tools" description="Secondary tools and admin utilities. Daily workflows remain in the main sidebar." />
-      <SettingsTabs />
+      <PageHeader title="Advanced tools" description="Tools you need now and then." />
       {visible.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           No advanced tools available for your role.

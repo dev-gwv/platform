@@ -3,7 +3,6 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -60,7 +59,6 @@ function Bundles() {
           </Button>
         }
       />
-      <SettingsTabs />
       {q.isLoading ? (
         <SkeletonCards count={3} />
       ) : q.isError ? (

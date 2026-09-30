@@ -283,7 +283,7 @@ function Statement({ lines: l, className }: { lines: PnlLines; className?: strin
           {row('Project expenses', l.project_expenses, '/company-expenses', 'Travel, prints, albums — spent on a project')}
           {total('Gross profit', l.gross_profit)}
           <li className="pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Running the studio</li>
-          {row('Salaries', l.salaries, '/employees', undefined, { section: 'salaries' })}
+          {row('Salaries', l.salaries, '/team/salaries')}
           {row('Fixed overheads', l.overheads, null, 'Rent, internet, software — see below')}
           {row('Studio expenses', l.studio_expenses, '/company-expenses', 'Spent on the studio, not a project')}
           {total(l.net_profit >= 0 ? 'Net profit' : 'Net loss', l.net_profit, true)}

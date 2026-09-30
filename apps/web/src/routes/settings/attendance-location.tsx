@@ -8,12 +8,10 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { Switch } from '@/shared/ui/switch'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { PlacesAndRules } from '@/features/attendance/PlacesAndRules'
 
 export function AttendanceLocationPage() {
@@ -162,13 +160,7 @@ function AttendanceLocation() {
 
   return (
     <>
-      <PageHeader title="Attendance Location" description="Configure the geo-fence employees must be inside to check in." />
-      <SettingsTabs />
-      <HowToUse
-        title="Set attendance location"
-        description="Set your studio or office location for team check-ins."
-        steps={['Add your studio location.', 'Set allowed radius.', 'Save before asking team to check in.']}
-      />
+      <PageHeader title="Attendance location" description="Where your team must be to check in." />
       {!isOwner ? (
         <Card className="mt-4">
           <CardContent className="p-4 text-sm text-muted-foreground">

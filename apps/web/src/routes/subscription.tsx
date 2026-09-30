@@ -14,7 +14,6 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -138,7 +137,6 @@ function Subscription() {
           )
         }
       />
-      <SettingsTabs />
       {/* One line only when a payment is in flight; the card below says the rest. */}
       {status.data?.latest_order_status && status.data.latest_order_status !== 'paid' && (
         <p className="mb-2 text-sm text-muted-foreground">Latest payment: {humanize(status.data.latest_order_status)}</p>

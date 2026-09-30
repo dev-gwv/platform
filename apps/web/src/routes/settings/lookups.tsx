@@ -3,7 +3,6 @@ import { Plus, Pencil, Power } from 'lucide-react'
 import { toast } from 'sonner'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
@@ -126,7 +125,6 @@ function Lookups() {
         description="Manage dropdown values used across leads, enquiries, expenses and billing."
         actions={<Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>}
       />
-      <SettingsTabs />
       <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5">
         {CATEGORIES.map((c) => (
           <button

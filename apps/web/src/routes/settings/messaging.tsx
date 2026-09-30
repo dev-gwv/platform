@@ -12,7 +12,7 @@ import {
 import { formatPaise, freeEmailsLeft, messagesLeft } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -92,7 +92,6 @@ function Messaging() {
     return (
       <>
         <PageHeader title="Messaging" />
-        <SettingsTabs />
         <EmptyState title="Only the studio owner can see this" description="The messaging wallet is the studio's money." />
       </>
     )
@@ -108,7 +107,6 @@ function Messaging() {
             : 'WhatsApp and email to your team, paid from your messaging wallet.'
         }
       />
-      <SettingsTabs />
       {q.isLoading ? (
         <SkeletonCards />
       ) : q.isError || !q.data ? (
@@ -122,81 +120,139 @@ function Messaging() {
 
 function Loaded({ data }: { data: MessagingSummary }) {
   const wa = data.whatsapp_enabled
-  const whatsappPrice = data.prices.find((p) => p.channel === 'whatsapp' && p.category === 'utility')
+  const whatsappPrice = data.prices.find(
+    (p) => p.channel === 'whatsapp' && p.category === 'utility',
+  )
   const emailPrice = data.prices.find((p) => p.channel === 'email')
   const u = data.usage
   const notSent = u.skipped_no_balance + u.skipped_limit
+  const [tab, setTab] = useState<'wallet' | 'alerts' | 'history'>('wallet')
+  const freeLeft = freeEmailsLeft(u.email_free_used, u.email_free_monthly)
   return (
     <>
-      {data.wallet.low && (
-        <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <p>
-            Your balance is low ({formatPaise(data.wallet.balance_paise)}). Recharge so your messages keep going out.
-          </p>
-        </div>
+      {/* The page in one sentence, before any card: what is in the wallet, what
+          is left free, and whether anything failed to go out. */}
+      <p className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+        <strong className="tabular-nums">{formatPaise(data.wallet.balance_paise)}</strong> in your
+        wallet ·{' '}
+        <strong className="tabular-nums">
+          {freeLeft} of {u.email_free_monthly}
+        </strong>{' '}
+        free emails left this month ·{' '}
+        {notSent === 0 ? (
+          <span className="text-success">nothing skipped</span>
+        ) : (
+          <span className="text-warning">{notSent} not sent</span>
+        )}
+      </p>
+
+      <SectionTabs
+        variant="underline"
+        label="Messaging"
+        className="mb-4"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'wallet', label: 'Wallet' },
+          { value: 'alerts', label: 'What gets sent' },
+          { value: 'history', label: 'History' },
+        ]}
+      />
+
+      {tab === 'wallet' && (
+        <>
+          {data.wallet.low && (
+            <div
+              role="alert"
+              className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+              <p>
+                Your balance is low ({formatPaise(data.wallet.balance_paise)}). Recharge so your
+                messages keep going out.
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BalanceCard
+              data={data}
+              pricePaise={(wa ? whatsappPrice : emailPrice)?.price_paise ?? 0}
+            />
+            <RechargeCard data={data} />
+          </div>
+
+          <Section title="This month" description="Messages sent for your studio since the 1st.">
+            <div className={cn('grid gap-3', wa ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+              {wa && (
+                <StatCard
+                  label="WhatsApp"
+                  icon={MessageCircle}
+                  value={`${u.whatsapp_count} sent`}
+                  hint={`${formatPaise(u.whatsapp_paise)} used`}
+                />
+              )}
+              <StatCard
+                label="Emails"
+                icon={Mail}
+                value={`${u.email_month_count.toLocaleString('en-IN')} sent`}
+                hint={`${freeEmailsLeft(u.email_free_used, u.email_free_monthly)} of ${u.email_free_monthly} free left${
+                  u.email_charged_count ? ` · ${formatPaise(u.email_paise)} used` : ''
+                } · limit ${u.email_monthly_cap.toLocaleString('en-IN')} a month`}
+              />
+              <StatCard
+                label="Not sent"
+                icon={AlertTriangle}
+                value={notSent}
+                hint={
+                  u.skipped_limit
+                    ? `${u.skipped_limit} over the monthly limit, ${u.skipped_no_balance} for low balance`
+                    : 'Skipped because the balance was too low'
+                }
+              />
+            </div>
+          </Section>
+        </>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BalanceCard data={data} pricePaise={(wa ? whatsappPrice : emailPrice)?.price_paise ?? 0} />
-        <RechargeCard data={data} />
-      </div>
+      {tab === 'alerts' && <EventsSection data={data} />}
 
-      <Section title="This month" description="Messages sent for your studio since the 1st.">
-        <div className={cn('grid gap-3', wa ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
-          {wa && (
-            <StatCard
-              label="WhatsApp"
-              icon={MessageCircle}
-              value={`${u.whatsapp_count} sent`}
-              hint={`${formatPaise(u.whatsapp_paise)} used`}
-            />
-          )}
-          <StatCard
-            label="Emails"
-            icon={Mail}
-            value={`${u.email_month_count.toLocaleString('en-IN')} sent`}
-            hint={`${freeEmailsLeft(u.email_free_used, u.email_free_monthly)} of ${u.email_free_monthly} free left${
-              u.email_charged_count ? ` · ${formatPaise(u.email_paise)} used` : ''
-            } · limit ${u.email_monthly_cap.toLocaleString('en-IN')} a month`}
-          />
-          <StatCard
-            label="Not sent"
-            icon={AlertTriangle}
-            value={notSent}
-            hint={
-              u.skipped_limit
-                ? `${u.skipped_limit} over the monthly limit, ${u.skipped_no_balance} for low balance`
-                : 'Skipped because the balance was too low'
-            }
-          />
-        </div>
-      </Section>
+      {tab === 'wallet' && (
+        <Section title="Prices" description="What your studio pays. Nothing else is added.">
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {wa && (
+                <PriceRow
+                  label="WhatsApp message"
+                  value={
+                    whatsappPrice ? `${formatPaise(whatsappPrice.price_paise)} each` : 'Not set yet'
+                  }
+                />
+              )}
+              <PriceRow
+                label="Email"
+                value={
+                  emailPrice
+                    ? `${emailPrice.free_monthly} free a month, then ${formatPaise(emailPrice.price_paise)} each`
+                    : 'Not set yet'
+                }
+              />
+              <PriceRow
+                label="Emails a month"
+                value={`Up to ${u.email_monthly_cap.toLocaleString('en-IN')}`}
+              />
+              <PriceRow label="Failed or skipped messages" value="Free. Any charge is returned." />
+            </CardContent>
+          </Card>
+        </Section>
+      )}
 
-      <EventsSection data={data} />
-
-      <Section title="Prices" description="What your studio pays. Nothing else is added.">
-        <Card>
-          <CardContent className="divide-y divide-border p-0">
-            {wa && (
-              <PriceRow label="WhatsApp message" value={whatsappPrice ? `${formatPaise(whatsappPrice.price_paise)} each` : 'Not set yet'} />
-            )}
-            <PriceRow
-              label="Email"
-              value={
-                emailPrice
-                  ? `${emailPrice.free_monthly} free a month, then ${formatPaise(emailPrice.price_paise)} each`
-                  : 'Not set yet'
-              }
-            />
-            <PriceRow label="Emails a month" value={`Up to ${u.email_monthly_cap.toLocaleString('en-IN')}`} />
-            <PriceRow label="Failed or skipped messages" value="Free. Any charge is returned." />
-          </CardContent>
-        </Card>
-      </Section>
-
-      <RecentSection recent={data.recent} />
-      <LedgerSection whatsapp={wa} />
+      {tab === 'history' && (
+        <>
+          <RecentSection recent={data.recent} />
+          <LedgerSection whatsapp={wa} />
+        </>
+      )}
     </>
   )
 }

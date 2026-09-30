@@ -16,7 +16,6 @@ import {
 } from '@ipc/contracts'
 import { presetFor } from '@/shared/theme/presets'
 import { fontOr } from '@/shared/theme/fonts'
-import { SettingsTabs } from '@/features/settings/SettingsTabs'
 import { useChangePassword } from '@/features/settings/api'
 import { callApi, uploadFile } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -27,7 +26,6 @@ import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { Card, CardContent } from '@/shared/ui/card'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 
@@ -49,25 +47,9 @@ function Settings() {
 
   return (
     <>
-      <PageHeader
-        title="Settings"
-        description="Manage your company profile, roles and subscription."
-      />
-      <SettingsTabs />
+      <PageHeader title="Company profile" description="Your studio's details, as clients see them." />
 
-      <h2 className="text-lg font-semibold tracking-tight">Company profile</h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        View and update your company and admin profile.
-      </p>
-
-      <HowToUse
-        className="mt-4"
-        title="Manage studio settings"
-        description="Update your company profile, job roles, appearance, and plan."
-        steps={['Update company details.', 'Manage roles and access.', 'Pick your theme and font.']}
-      />
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <ProfileCard className="lg:col-span-2" canEditCompany={isOwner} />
         <AccountStatusCard />
       </div>
@@ -75,20 +57,6 @@ function Settings() {
       <BrandIdentityCard readOnly={!isOwner} />
       <EmailBrandingCard readOnly={!isOwner && session?.role !== 'admin'} />
 
-      <Section
-        title="Advanced hubs"
-        description="Project templates, documents, delivery stages, task bundles and other set-once tools live on their own pages."
-      >
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" asChild><Link to="/settings/project-templates">Project Templates</Link></Button>
-          <Button variant="outline" asChild><Link to="/project-documents">Documents</Link></Button>
-          <Button variant="outline" asChild><Link to="/projects/stages">Delivery Stages</Link></Button>
-          <Button variant="outline" asChild><Link to="/settings/task-bundles">Task Bundles</Link></Button>
-          <Button variant="outline" asChild><Link to="/settings/attendance-location">Attendance Location</Link></Button>
-          <Button variant="outline" asChild><Link to="/settings/lookups">Lookups</Link></Button>
-          <Button variant="outline" asChild><Link to="/settings/advanced">Advanced Tools</Link></Button>
-        </div>
-      </Section>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <ThemeSummaryCard readOnly={!isOwner} className="lg:col-span-2" />

@@ -1,5 +1,7 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
+import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
+import { TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
 import type { AppRole } from '@ipc/permissions'
 import {
   BarChart3,
@@ -33,11 +35,8 @@ import {
   ShieldCheck,
   Building2,
   Activity,
-  DollarSign,
-  FileSignature,
-  Eye,
+  IndianRupee,
   Ellipsis,
-  HandCoins,
   type LucideIcon,
   MessageCircle,
 } from 'lucide-react'
@@ -53,6 +52,11 @@ export interface NavLeaf {
   platformOnly?: boolean
   /** A live count beside the label (the viewer's overdue tasks). */
   badge?: 'tasks-overdue'
+  /**
+   * The pages this entry stands for (hubs.ts). It shows while any of them
+   * can be opened, links to the first that can, and stays lit on all of them.
+   */
+  hub?: readonly HubTab[]
 }
 
 export interface NavGroup {
@@ -166,16 +170,11 @@ export const NAV: NavEntry[] = [
     icon: Users,
     match: '/employees',
     children: [
-      leaf('Team Directory', '/employees', Users, { module: 'team_directory' }),
-      // Each person's month: work on time, right first time, shoots, attendance (0208).
-      leaf('Performance', '/team/performance', Gauge, { module: 'team_directory' }),
-      leaf('Attendance', '/attendance', Clock, { module: 'attendance' }),
-      leaf('Leave & Holidays', '/leave', CalendarOff, { module: 'attendance' }),
-      leaf('Roles & Access', '/settings/roles', ShieldCheck, { module: 'team_roles' }),
-      leaf('Team Terms', '/settings/team-terms', FileSignature, { module: 'team_terms' }),
-      leaf('Payroll', '/payroll', HandCoins, { module: 'team_salaries' }),
-      leaf('Team Payouts', '/team-payouts', DollarSign, { module: 'team_payouts' }),
-      leaf('Work Preview', '/team/work-preview', Eye, { module: 'team_work_preview' }),
+      // Four hubs, from nine links: each opens a page with its own tab row.
+      leaf('People', '/employees', Users, { hub: TEAM_PEOPLE }),
+      leaf('Attendance & leave', '/attendance', Clock, { hub: TEAM_TIME }),
+      leaf('Pay', '/payroll', IndianRupee, { hub: TEAM_PAY }),
+      leaf('Roles & terms', '/settings/roles', ShieldCheck, { hub: TEAM_SETUP }),
     ],
   },
 
@@ -199,11 +198,11 @@ export const NAV: NavEntry[] = [
     ],
   },
 
-  // The studio's own plan: what it is on, when it ends, and the plans to
-  // move to. Its own line so an owner never has to hunt for it (the owner
-  // asked for "their own billing section").
-  leaf('Subscription', '/settings/subscription', CreditCard, { module: 'settings_subscription' }),
-  leaf('Settings', '/settings/company', Settings, { module: 'settings' }),
+  // The studio's plan is not a menu line any more: it is the card pinned at
+  // the foot of the sidebar (PlanCard), with its days left and an Upgrade
+  // button always in sight. Settings > Plan & billing opens the same page.
+  // Stays lit on every settings page, and search finds each one by name.
+  leaf('Settings', '/settings/company', Settings, { module: 'settings', hub: SETTINGS_PAGES }),
 
   {
     kind: 'group',
@@ -220,11 +219,24 @@ export const NAV: NavEntry[] = [
   },
 ]
 
-function leafVisible(leaf: NavLeaf, role: string, access: Access, isPlatformAdmin: boolean): boolean {
+function leafVisible(
+  leaf: NavLeaf,
+  role: string,
+  access: Access,
+  isPlatformAdmin: boolean,
+): boolean {
   if (leaf.platformOnly) return isPlatformAdmin
+  if (leaf.hub && !leaf.hub.some((t) => access.hasModule(t.module))) return false
   if (leaf.roles && !leaf.roles.includes(role as never)) return false
   if (leaf.module && !access.hasModule(leaf.module as ModuleKey)) return false
   return true
+}
+
+/** A hub entry keeps only the pages this person can open, and links to the first. */
+function narrowHub(leaf: NavLeaf, access: Access): NavLeaf {
+  if (!leaf.hub) return leaf
+  const hub = leaf.hub.filter((t) => access.hasModule(t.module))
+  return { ...leaf, hub, to: hub[0]?.to ?? leaf.to }
 }
 
 /** Drop entries failing role/module/platform checks; drop groups left empty. */
@@ -237,11 +249,13 @@ export function filterNav(
   const out: NavEntry[] = []
   for (const e of entries) {
     if (e.kind === 'leaf') {
-      if (leafVisible(e, role, access, isPlatformAdmin)) out.push(e)
+      if (leafVisible(e, role, access, isPlatformAdmin)) out.push(narrowHub(e, access))
     } else {
       if (e.platformOnly && !isPlatformAdmin) continue
       if (e.roles && !e.roles.includes(role as never)) continue
-      const children = e.children.filter((c) => leafVisible(c, role, access, isPlatformAdmin))
+      const children = e.children
+        .filter((c) => leafVisible(c, role, access, isPlatformAdmin))
+        .map((c) => narrowHub(c, access))
       if (children.length) out.push({ ...e, children })
     }
   }
@@ -249,15 +263,17 @@ export function filterNav(
 }
 
 /** Every destination this user can actually open, flattened for searching. */
-export function navDestinations(
-  role: string,
-  access: Access,
-  isPlatformAdmin: boolean,
-): NavLeaf[] {
+export function navDestinations(role: string, access: Access, isPlatformAdmin: boolean): NavLeaf[] {
   const out: NavLeaf[] = []
+  // A hub is searched as its pages, so "Payroll" or "Leave" still finds its page.
+  const add = (l: NavLeaf) => {
+    if (!l.hub) return out.push(l)
+    for (const t of l.hub)
+      out.push({ kind: 'leaf', label: t.label, to: t.to, ...(l.icon ? { icon: l.icon } : {}) })
+  }
   for (const e of filterNav(NAV, role, access, isPlatformAdmin)) {
-    if (e.kind === 'leaf') out.push(e)
-    else out.push(...e.children)
+    if (e.kind === 'leaf') add(e)
+    else e.children.forEach(add)
   }
   return out
 }
