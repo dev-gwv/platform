@@ -24,15 +24,25 @@ export const LEGAL = {
   lastUpdated: '29 September 2026',
 } as const
 
-/** Kept in step with the plans table (0141); prices exclude 18% GST. */
-export const PLANS = [
+/**
+ * What a studio pays, kept in step with the plans table. Since 0214 there are
+ * two audiences: the public price, and the member prices an IPC Diamond member
+ * sees once verified. Prices exclude 18% GST.
+ */
+export const PLANS = [{ name: 'Yearly', price: '₹1,00,000', period: 'per year' }] as const
+
+export const MEMBER_PLANS = [
   { name: 'Monthly', price: '₹1,999', period: 'per month' },
   { name: 'Yearly', price: '₹18,000', period: 'per year' },
   { name: '2-Year', price: '₹33,000', period: 'for two years' },
 ] as const
 
+export const TRIAL_DAYS = 7
+export const MEMBER_TRIAL_DAYS = 30
+
 export const PLAN_SUMMARY =
-  'Subscription plans are ₹1,999 per month, ₹18,000 per year, or ₹33,000 for two years, plus 18% GST, paid online through Razorpay.'
+  'Studio AutoPilot is ₹1,00,000 a year plus 18% GST, paid online through Razorpay, after a 7-day free trial. ' +
+  'IPC Diamond members get a 30-day trial and member prices: ₹1,999 a month, ₹18,000 a year or ₹33,000 for two years, plus GST.'
 
 export const LEGAL_LINKS = [
   { to: '/terms-and-conditions', label: 'Terms and Conditions' },

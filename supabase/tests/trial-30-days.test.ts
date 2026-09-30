@@ -56,9 +56,9 @@ describe('the 30-day trial', () => {
     expect(await days(PAID)).toBeGreaterThan(3000)
   })
 
-  it('is what a new studio gets', async () => {
+  it('is no longer what a new studio gets: 0214 made that 7 days, 30 for IPC Diamond members', async () => {
     const [{ id }] = await q<{ id: string }>(`insert into companies (name, owner_user_id) values ('New', '${FREE_OWNER}') returning id`)
-    expect(await days(id!)).toBe(30)
+    expect(await days(id!)).toBe(7)
   })
 
   it('ends access on the trial date when no plan is paid', async () => {

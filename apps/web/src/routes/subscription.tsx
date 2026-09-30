@@ -24,6 +24,7 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { openCheckout } from '@/features/billing/razorpay-checkout'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
+import { DiamondVerifyCard } from '@/features/billing/DiamondVerifyCard'
 
 const plans = plan.array()
 
@@ -141,7 +142,7 @@ function Subscription() {
       {status.data?.latest_order_status && status.data.latest_order_status !== 'paid' && (
         <p className="mb-2 text-sm text-muted-foreground">Latest payment: {humanize(status.data.latest_order_status)}</p>
       )}
-      {/* When it ends, in one line anyone can read: the 30-day trial (0210)
+      {/* When it ends, in one line anyone can read: the free trial (7 days, 30 for IPC Diamond members, 0214)
           or the paid plan, with the days left in big type. */}
       {status.data?.access_until && (
         <Card
@@ -177,6 +178,8 @@ function Subscription() {
           </CardContent>
         </Card>
       )}
+      {/* Outsiders see one price; an IPC Diamond member proves it here (0214). */}
+      {status.data && session?.is_owner && <DiamondVerifyCard status={status.data} className="mb-4" />}
       {outcome && (
         <p role="status" className={`mb-4 rounded-md px-3 py-2 text-sm ${outcomeClass[outcome.tone]}`}>
           {outcome.text}

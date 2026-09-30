@@ -70,6 +70,11 @@ export function PlanExpiredPage() {
                 Go to billing &amp; renew
               </Button>
             )}
+            {isOwner && (
+              <p className="text-xs text-muted-foreground">
+                IPC Diamond member? Verify on the billing page with a screenshot of the IPC Diamonds - Premium group to get 30 days.
+              </p>
+            )}
             <Button variant="outline" className="w-full" onClick={() => void onSignOut()}>
               Sign out
             </Button>

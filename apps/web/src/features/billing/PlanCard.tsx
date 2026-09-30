@@ -80,6 +80,16 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
       >
         {cta}
       </Link>
+      {/* The other door: an IPC Diamond member proves it and gets 30 days and member prices (0214). */}
+      {s?.member_tier === 'outsider' && trial && (
+        <Link
+          to="/settings/subscription"
+          hash="diamond"
+          className="mt-1.5 block text-center text-xs font-medium text-tone-violet hover:underline"
+        >
+          IPC Diamond member?
+        </Link>
+      )}
     </div>
   )
 }

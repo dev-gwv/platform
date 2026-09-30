@@ -2820,5 +2820,34 @@ if (listed) {
   check('erase: an empty request is refused (422)', nothing.status === 422, { status: nothing.status })
 }
 
+// ── 0214: IPC Diamond members and outsiders ──────────────────────
+{
+  const plans = await api('/subscription/plans', { token: aToken })
+  const keys = Array.isArray(plans.json) ? plans.json.map((p) => p.key) : []
+  check('diamond: a new studio sees only the outsider plan', keys.length === 1 && keys[0] === 'studio_yearly', { keys })
+
+  const status = await api('/subscription/status', { token: aToken })
+  check('diamond: a new studio is an outsider', status.status === 200 && status.json.member_tier === 'outsider', status.json)
+
+  // A 1x1 PNG, uploaded the way the verify card does.
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), (ch) => ch.charCodeAt(0))
+  const form = new FormData()
+  form.append('file', new Blob([png], { type: 'image/png' }), 'group.png')
+  const up = await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${aToken}` }, body: form })
+  const file = await up.json().catch(() => ({}))
+  const claim = await api('/subscription/diamond/claim', { token: aToken, method: 'POST', body: { file_id: file.id } })
+  // No Anthropic key in CI: nothing can read the screenshot, so a person decides.
+  check('diamond: a claim that cannot be read waits for the team', claim.status === 201 && claim.json.status === 'pending', { status: claim.status, body: claim.json })
+
+  const after = await api('/subscription/status', { token: aToken })
+  check('diamond: the studio sees its claim waiting', after.json.diamond_claim?.status === 'pending', after.json.diamond_claim)
+
+  const bogus = await api('/subscription/diamond/claim', { token: aToken, method: 'POST', body: { file_id: '00000000-0000-4000-8000-000000000000' } })
+  check('diamond: a file that is not the studio\'s image is refused (422)', bogus.status === 422, { status: bogus.status })
+
+  const inbox = await api('/platform/diamond', { token: aToken })
+  check('diamond: a studio cannot open the platform inbox', inbox.status === 403, { status: inbox.status })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

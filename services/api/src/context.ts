@@ -12,6 +12,8 @@ export interface Env {
   /** Email (Resend) for verification mail. */
   RESEND_API_KEY: string
   EMAIL_FROM: string
+  /** Reads IPC Diamond screenshots (lib/diamond-check.ts). Optional: without it a person approves each claim. */
+  ANTHROPIC_API_KEY?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
   /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */

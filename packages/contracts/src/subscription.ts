@@ -41,12 +41,35 @@ export const subscriptionStatus = z.object({
   latest_order_id: z.string().nullable().nullish(),
   latest_order_status: z.string().nullable().nullish(),
   webhook_configured: z.boolean().nullish(),
+  /** IPC Diamond members get 30 days and member prices; everyone else 7 days and one plan (0214). */
+  member_tier: z.enum(['outsider', 'diamond']).default('outsider'),
+  /** The studio's latest screenshot claim, for the verify card. */
+  diamond_claim: z
+    .object({
+      status: z.enum(['pending', 'approved', 'rejected', 'revoked']),
+      reason: z.string().nullable(),
+      created_at: z.string(),
+    })
+    .nullable()
+    .default(null),
   history: z.array(z.object({
     id: z.string(), plan_name: z.string().nullable(), amount: z.number().nullable(),
     status: z.string().nullable(), created_at: z.string().nullable(), expires_at: z.string().nullable(),
   })).nullish(),
 })
 export type SubscriptionStatus = z.infer<typeof subscriptionStatus>
+
+/** "I am an IPC Diamond member": the screenshot of the group, uploaded through /files first. */
+export const diamondClaimRequest = z.object({ file_id: uuid })
+export type DiamondClaimRequest = z.infer<typeof diamondClaimRequest>
+
+export const diamondClaimResult = z.object({
+  status: z.enum(['pending', 'approved', 'rejected']),
+  reason: z.string().nullable(),
+  /** When access now ends, after an approval. */
+  access_until: z.string().nullable(),
+})
+export type DiamondClaimResult = z.infer<typeof diamondClaimResult>
 
 export const createOrderRequest = z.object({ plan_id: uuid })
 export type CreateOrderRequest = z.infer<typeof createOrderRequest>

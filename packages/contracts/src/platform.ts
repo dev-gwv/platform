@@ -26,6 +26,8 @@ export const platformStudio = z.object({
   last_seen: isoDateTime.nullable().nullish(),
   /** When this studio's access ends: the paid plan, else the trial, else grace (0210). */
   access_until: isoDateTime.nullable().nullish(),
+  /** IPC Diamond member or not (0214). */
+  member_tier: z.enum(['outsider', 'diamond']).nullish(),
 })
 export type PlatformStudio = z.infer<typeof platformStudio>
 
@@ -107,3 +109,38 @@ export const platformPlanAction = z
     path: ['months'],
   })
 export type PlatformPlanAction = z.infer<typeof platformPlanAction>
+
+/** One "I am an IPC Diamond member" screenshot, for the platform inbox (0214). */
+export const diamondClaimStatus = z.enum(['pending', 'approved', 'rejected', 'revoked'])
+export type DiamondClaimStatus = z.infer<typeof diamondClaimStatus>
+
+export const platformDiamondClaim = z.object({
+  id: uuid,
+  company_id: uuid,
+  company_name: z.string(),
+  member_tier: z.enum(['outsider', 'diamond']),
+  owner_email: z.string().nullable(),
+  file_id: uuid.nullable(),
+  status: diamondClaimStatus,
+  /** 'auto' when Claude decided, a user id when a person did. */
+  decided_by: z.string().nullable(),
+  decided_at: isoDateTime.nullable(),
+  reason: z.string().nullable(),
+  reading: z
+    .object({
+      is_whatsapp_group_chat: z.boolean().optional(),
+      group_title: z.string().nullable().optional(),
+      confidence: z.string().optional(),
+    })
+    .passthrough()
+    .nullable(),
+  created_at: isoDateTime,
+  access_until: isoDateTime.nullable(),
+})
+export type PlatformDiamondClaim = z.infer<typeof platformDiamondClaim>
+
+export const platformDiamondDecision = z.object({
+  approve: z.boolean(),
+  reason: z.string().trim().max(500).optional(),
+})
+export type PlatformDiamondDecision = z.infer<typeof platformDiamondDecision>
