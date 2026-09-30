@@ -33,7 +33,7 @@ const daysLeftOf = (s: PlatformStudio) => {
   const end = endsOf(s)
   return end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)) : (s.days_remaining ?? null)
 }
-/** A studio on open access that ends within two months is on the 30-day trial. */
+/** A studio on open access that ends within two months is on its trial (7 days, or 30 for an IPC Diamond member). */
 const gateLabel = (s: PlatformStudio) =>
   s.plan_gate === 'grandfathered' && (daysLeftOf(s) ?? 999) <= 60 ? 'Free trial' : humanize(s.plan_gate)
 const ago = (iso: string | null | undefined) => {
@@ -286,7 +286,7 @@ function Studios() {
                 <td className="px-4 py-2 font-medium"><Building2 className="mr-1.5 inline h-4 w-4 text-muted-foreground" />{s.name}</td>
                 <td className="px-4 py-2 text-muted-foreground">{s.owner_name ?? s.owner_email ?? '—'}</td>
                 <td className="px-4 py-2 text-muted-foreground">{s.owner_phone ?? '—'}</td>
-                <td className="px-4 py-2"><StatusBadge tone={GATE_TONE[s.plan_gate]}>{gateLabel(s)}</StatusBadge>{s.plan_key && <span className="ml-1 text-xs text-muted-foreground">{s.plan_key}</span>}</td>
+                <td className="px-4 py-2"><StatusBadge tone={GATE_TONE[s.plan_gate]}>{gateLabel(s)}</StatusBadge>{s.plan_key && <span className="ml-1 text-xs text-muted-foreground">{s.plan_key}</span>}{s.member_tier === 'diamond' && <span className="ml-1 text-xs font-medium text-tone-violet">IPC Diamond</span>}</td>
                 <td className="px-4 py-2 text-muted-foreground">{daysLeftOf(s) ?? '—'}</td>
                 <td className="px-4 py-2 text-right">{s.user_count}</td>
                 <td className="px-4 py-2 text-right">{s.project_count}</td>

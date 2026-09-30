@@ -77,11 +77,18 @@ const plan = async (key: string) => {
 }
 
 describe('plan pricing', () => {
-  it('offers exactly the three plans, in the order they should be read', async () => {
+  it('offers members exactly the three plans, in the order they should be read', async () => {
     const r = await db.query<{ key: string }>(
-      `select key from plans where is_active order by sort_order, price;`,
+      `select key from plans where is_active and audience = 'diamond' order by sort_order, price;`,
     )
     expect(r.rows.map((x) => x.key)).toEqual(['ipc_monthly', 'ipc_yearly', 'ipc_2year'])
+  })
+
+  it('offers outsiders one plan, ₹1,00,000 for a year (0214)', async () => {
+    const r = await db.query<{ key: string; price: string; duration_days: number }>(
+      `select key, price, duration_days from plans where is_active and audience = 'outsider';`,
+    )
+    expect(r.rows.map((x) => [x.key, Number(x.price), x.duration_days])).toEqual([['studio_yearly', 100000, 365]])
   })
 
   it('carries the old app’s prices', async () => {
@@ -136,7 +143,7 @@ describe('plan pricing', () => {
     // policy that filters every row away looks exactly like an empty table --
     // which is the state this whole change set out to fix.
     const r = await asUser<{ key: string }>(OWNER, `select key from plans where is_active;`)
-    expect(r.rows.map((x) => x.key).sort()).toEqual(['ipc_2year', 'ipc_monthly', 'ipc_yearly'])
+    expect(r.rows.map((x) => x.key).sort()).toEqual(['ipc_2year', 'ipc_monthly', 'ipc_yearly', 'studio_yearly'])
   })
 
   it('hides a plan the platform has withdrawn', async () => {
@@ -150,6 +157,6 @@ describe('plan pricing', () => {
     // The whole suite applies every migration twice in the idempotency check.
     await db.exec(readFileSync(join(migDir, '0141_plan_pricing.sql'), 'utf8'))
     const r = await db.query<{ n: string }>(`select count(*) as n from plans;`)
-    expect(Number(r.rows[0]!.n)).toBe(3)
+    expect(Number(r.rows[0]!.n)).toBe(4) // three member plans + the outsider's Yearly (0214)
   })
 })

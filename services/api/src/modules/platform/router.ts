@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -237,6 +237,56 @@ export const platformRouter = new Hono<AppEnv>()
     )
     if (!ok) fail(400, 'We could not update the plan.')
     await audit(c, { action: `platform.plan_${action}`, entityType: 'company', entityId: id, after: extended.data })
+    return c.json({ ok: true })
+  })
+
+  // IPC Diamond claims: every screenshot, how it was decided, and the owner's
+  // approve / reject / revoke (0214).
+  .get('/diamond', async (c) => {
+    const want = c.req.query('status')
+    const status = want ? diamondClaimStatus.safeParse(want) : null
+    if (want && !status?.success) fail(422, 'Unknown status.')
+    const rows = await attempt(c, 'platform.diamond', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select * from platform_list_diamond_claims(${status?.success ? status.data : null})`),
+    )
+    if (!rows) fail(400, 'We could not load the claims.')
+    return c.json(platformDiamondClaim.array().parse(rows))
+  })
+
+  .get('/diamond/:id/file', async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'platform.diamond_file', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ name: string; mime: string; bytes: Buffer }[]>`
+        select * from platform_diamond_claim_file(${id})`),
+    )
+    if (!rows) fail(400, 'We could not load that screenshot.')
+    if (!rows.length) fail(404, 'That screenshot was not found.')
+    return serve(rows[0]!)
+  })
+
+  .post('/diamond/:id/decide', async (c) => {
+    const parsed = platformDiamondDecision.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Approve or reject.')
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'platform.diamond_decide', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ s: string }[]>`
+        select platform_diamond_decide(${id}, ${parsed.data.approve}, ${parsed.data.reason ?? null}) as s`),
+    )
+    if (!rows) fail(400, 'We could not save that.')
+    await audit(c, { action: parsed.data.approve ? 'platform.diamond_approve' : 'platform.diamond_reject', entityType: 'diamond_claim', entityId: id })
+    return c.json({ ok: true, status: rows[0]?.s ?? null })
+  })
+
+  .post('/studios/:id/diamond/revoke', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown }
+    const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : null
+    const id = uuidParam(c)
+    const ok = await attempt(c, 'platform.diamond_revoke', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_diamond_revoke(${id}, ${reason})`),
+    )
+    if (!ok) fail(400, 'We could not revoke that.')
+    await audit(c, { action: 'platform.diamond_revoke', entityType: 'company', entityId: id, after: { reason } })
     return c.json({ ok: true })
   })
 

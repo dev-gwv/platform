@@ -5,7 +5,7 @@ import { buttonVariants } from '@/shared/ui/button'
 import { IconTile, type Tone } from '@/shared/ui/icon-tile'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { LegalLinks } from '@/features/legal/LegalPage'
-import { LEGAL, PLANS } from '@/features/legal/legal'
+import { LEGAL, PLANS, TRIAL_DAYS } from '@/features/legal/legal'
 
 /**
  * What a stranger sees at the front door: who we are, what the software does,
@@ -58,7 +58,7 @@ export function Landing() {
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <Link to="/login" search={{ mode: 'register' } as never} className={buttonVariants({ size: 'lg' })}>
-              Start your 30-day free trial
+              Start your {TRIAL_DAYS}-day free trial
             </Link>
             <Link to="/login" className={buttonVariants({ variant: 'outline', size: 'lg' })}>
               Sign in
@@ -104,17 +104,24 @@ export function Landing() {
           </div>
         </Section>
 
-        <Section title="Plans">
-          <div className="grid gap-3 sm:grid-cols-3">
+        <Section title="Price">
+          <div className="grid gap-3 sm:grid-cols-2">
             {PLANS.map((p) => (
-              <div key={p.name} className="rounded-2xl border border-border bg-card p-4">
+              <div key={p.name} className="rounded-2xl border border-border bg-card p-5">
                 <p className="text-sm font-medium text-muted-foreground">{p.name}</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{p.price}</p>
+                <p className="mt-1 text-3xl font-bold tabular-nums">{p.price}</p>
                 <p className="text-sm text-muted-foreground">{p.period}, plus 18% GST</p>
+                <p className="mt-2 text-sm">Every studio starts with a {TRIAL_DAYS}-day free trial.</p>
               </div>
             ))}
+            <div className="rounded-2xl border border-tone-violet/30 bg-tone-violet-soft/40 p-5">
+              <p className="text-sm font-semibold text-tone-violet">IPC Diamond member?</p>
+              <p className="mt-1 text-sm">
+                Start your trial, then verify from your plan with a screenshot of the IPC Diamonds - Premium group. Members get 30 days
+                and member prices.
+              </p>
+            </div>
           </div>
-          <p className="mt-3 text-sm text-muted-foreground">Every studio starts with a 30-day free trial.</p>
         </Section>
       </main>
 

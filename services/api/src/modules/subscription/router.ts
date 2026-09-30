@@ -4,6 +4,8 @@ import {
   activateResponse,
   createOrderRequest,
   createOrderResponse,
+  diamondClaimRequest,
+  diamondClaimResult,
   plan,
   subscriptionStatus,
 } from '@ipc/contracts'
@@ -17,6 +19,8 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { isDevLike, razorpayConfigured } from '../../lib/env'
 import { createRazorpayOrder, verifyRazorpaySignature } from '../../lib/razorpay'
+import { checkDiamondScreenshot } from '../../lib/diamond-check'
+import { sendDiamondClaimNotice, sendDiamondResultEmail } from '../../lib/email'
 
 /**
  * Plans + checkout. The order is priced in SQL (create_payment_order); when
@@ -36,7 +40,12 @@ export const subscriptionRouter = new Hono<AppEnv>()
           select id, key, name, price, billing_interval,
                  description, currency, duration_days, features, is_active,
                  badge, billing_label, savings_label, monthly_equivalent, sort_order
-          from plans where is_active = true order by sort_order, price`,
+          from plans
+         where is_active = true
+           -- A studio sees only its own audience's plans: IPC Diamond members the
+           -- member prices, everyone else the one outsider plan (0214).
+           and audience = (select member_tier from companies where id = get_current_company_id())
+         order by sort_order, price`,
       ),
     )
     if (!rows) fail(400, 'We could not load plans.')
@@ -78,6 +87,7 @@ export const subscriptionRouter = new Hono<AppEnv>()
                  p.name as plan_name,
                  c.plan_expiry::text as plan_expiry,
                  company_access_until(c.plan_expiry, c.grandfathered_until, c.grace_until)::text as access_until,
+                 c.member_tier,
                  case
                    when coalesce(c.plan_expiry,         'epoch'::timestamptz) > now() then 'active'
                    when coalesce(c.grandfathered_until, 'epoch'::timestamptz) > now() then 'grandfathered'
@@ -106,7 +116,11 @@ export const subscriptionRouter = new Hono<AppEnv>()
            where o.company_id = ${auth.companyId}
            order by o.created_at desc
            limit 10`
-        return { comp: comp[0] ?? {}, orders }
+        const claim = await sql<{ status: string; reason: string | null; created_at: string }[]>`
+          select status, reason, created_at::text as created_at from diamond_claims
+           where company_id = ${auth.companyId} and decided_by is distinct from 'superseded'
+           order by created_at desc limit 1`
+        return { comp: comp[0] ?? {}, orders, claim: claim[0] ?? null }
       }),
     )
     if (!row) fail(400, 'We could not load subscription status.')
@@ -132,6 +146,8 @@ export const subscriptionRouter = new Hono<AppEnv>()
       latest_order_id: (orders[0]?.['id'] as string | undefined) ?? null,
       latest_order_status: (orders[0]?.['status'] as string | undefined) ?? null,
       webhook_configured: Boolean(c.env.RAZORPAY_WEBHOOK_SECRET),
+      member_tier: comp['member_tier'] === 'diamond' ? 'diamond' : 'outsider',
+      diamond_claim: row.claim,
       history: orders.map((o) => ({
         id: String(o['id']),
         plan_name: str(o['plan_name']),
@@ -200,6 +216,78 @@ export const subscriptionRouter = new Hono<AppEnv>()
       }),
       201,
     )
+  })
+
+  // "I am an IPC Diamond member": the owner sends a screenshot of the IPC
+  // Diamonds - Premium group (uploaded through /files first). Claude reads the
+  // group name off it and a match approves at once; anything else is either
+  // rejected with the reason or, when it could not be read, left for the
+  // platform team. Every claim is in the platform inbox, revocable (0214).
+  .post('/diamond/claim', requireOwner(), async (c) => {
+    const parsed = diamondClaimRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Upload a screenshot first.')
+    const auth = c.get('auth')
+
+    const claimId = await attempt(
+      c,
+      'subscription.diamond_claim',
+      () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          const [r] = await sql<{ id: string }[]>`select diamond_submit_claim(${parsed.data.file_id}) as id`
+          return r?.id ?? null
+        }),
+      { onCode: (code) => (code === '22023' ? 'bad' : undefined) },
+    )
+    if (claimId === 'bad') fail(422, 'Upload a screenshot image (PNG, JPEG or WEBP) of the group.')
+    if (!claimId) fail(400, 'We could not send that. Please try again.')
+
+    const file = await attempt(c, 'subscription.diamond_file', () =>
+      withService(c.env, (sql) => sql<{ mime: string; bytes: Buffer; name: string }[]>`
+        select f.mime, f.bytes, co.name
+          from files f join companies co on co.id = f.company_id
+         where f.id = ${parsed.data.file_id} and f.company_id = ${auth.companyId}`),
+    )
+    const img = file?.[0]
+    const verdict = img
+      ? await checkDiamondScreenshot(c.env.ANTHROPIC_API_KEY, { mime: img.mime, bytes: img.bytes })
+      : ({ decision: 'manual', reason: 'The screenshot could not be read; the team will look at it.' } as const)
+
+    let status: 'pending' | 'approved' | 'rejected' = 'pending'
+    let reason: string | null = verdict.decision === 'approve' ? null : verdict.reason
+    if (verdict.decision !== 'manual') {
+      const decided = await attempt(c, 'subscription.diamond_decide', () =>
+        withService(c.env, (sql) => sql<{ s: string }[]>`
+          select diamond_decide(${claimId}, ${verdict.decision === 'approve'}, 'auto', ${reason},
+                                ${verdict.reading ? sql.json(verdict.reading as never) : null}) as s`),
+      )
+      if (decided?.[0]?.s === 'approved' || decided?.[0]?.s === 'rejected') status = decided[0].s
+    } else {
+      // Nothing read: the reason says so, and a person decides from the inbox.
+      await attempt(c, 'subscription.diamond_note', () =>
+        withService(c.env, (sql) => sql`update diamond_claims set reason = ${reason} where id = ${claimId}`),
+      )
+    }
+
+    const until = await attempt(c, 'subscription.diamond_until', () =>
+      withService(c.env, (sql) => sql<{ u: string | null }[]>`
+        select company_access_until(plan_expiry, grandfathered_until, grace_until)::text as u
+          from companies where id = ${auth.companyId}`),
+    )
+    const accessUntil = until?.[0]?.u ?? null
+    const studio = img?.name ?? 'Your studio'
+
+    await audit(c, { action: `subscription.diamond_${status}`, entityType: 'company', entityId: auth.companyId })
+    if (status !== 'pending') {
+      await sendDiamondResultEmail(c.env, auth.email, { studio, approved: status === 'approved', reason, accessUntil })
+    }
+    const title = verdict.decision === 'manual' ? null : (verdict.reading?.group_title ?? null)
+    await sendDiamondClaimNotice(c.env, {
+      studio,
+      outcome: status === 'approved' ? 'approved automatically' : status === 'rejected' ? 'not approved' : 'waiting for you',
+      title,
+    })
+    if (status === 'approved') reason = null
+    return c.json(diamondClaimResult.parse({ status, reason, access_until: accessUntil }), 201)
   })
 
   .post('/activate', requireOwner(), async (c) => {

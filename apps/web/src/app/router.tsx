@@ -79,6 +79,7 @@ import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
 import { PlatformStudiosPage } from '@/routes/platform/studios'
 import { PlatformUsagePage } from '@/routes/platform/usage'
 import { PlatformFeedbackPage } from '@/routes/platform/feedback'
+import { PlatformDiamondPage } from '@/routes/platform/diamond'
 import { SystemPage } from '@/routes/settings/system'
 import { MessagingSettingsPage } from '@/routes/settings/messaging'
 import { WhatsappSettingsPage } from '@/routes/settings/whatsapp'
@@ -320,6 +321,7 @@ const routeTree = rootRoute.addChildren([
   route('/platform/studios', PlatformStudiosPage),
   route('/platform/usage', PlatformUsagePage),
   route('/platform/feedback', PlatformFeedbackPage),
+  route('/platform/diamond', PlatformDiamondPage),
   route('/platform/messaging', PlatformMessagingPage),
   route('/settings/messaging', MessagingSettingsPage),
   route('/settings/whatsapp', WhatsappSettingsPage),

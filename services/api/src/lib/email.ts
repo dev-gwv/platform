@@ -419,3 +419,64 @@ export function sendFeatureRequestEmail(
     }),
   )
 }
+
+/**
+ * The answer to "I am an IPC Diamond member", to the studio owner. Approved:
+ * the trial now runs 30 days and the member prices are on. Not approved: why,
+ * and that the team will look at it.
+ */
+export function sendDiamondResultEmail(
+  env: Env,
+  to: string,
+  r: { studio: string; approved: boolean; reason: string | null; accessUntil: string | null },
+): Promise<void> {
+  const app = (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
+  const until = r.accessUntil
+    ? new Date(r.accessUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null
+  const body = r.approved
+    ? `Welcome, IPC Diamond member. <strong>${esc(r.studio)}</strong> now has the member prices` +
+      (until ? `, and its free trial runs until <strong>${until}</strong>.` : '.')
+    : `We could not confirm <strong>${esc(r.studio)}</strong> as an IPC Diamond member from that screenshot.` +
+      (r.reason ? `<br><br>${esc(r.reason)}` : '') +
+      '<br><br>Our team will take a look. You can also upload a clearer screenshot of the IPC Diamonds - Premium group.'
+  return send(
+    env,
+    to,
+    r.approved ? 'You are verified as an IPC Diamond member' : 'About your IPC Diamond membership',
+    brandedHtml({
+      title: r.approved ? 'IPC Diamond member' : 'IPC Diamond membership',
+      preheader: r.approved ? 'Member prices and a 30-day trial are on.' : 'We could not confirm it from the screenshot.',
+      body,
+      cta: r.approved ? 'See your plan' : 'Try again',
+      link: `${app}/settings/subscription`,
+      footer: 'Sent because someone asked to verify this studio as an IPC Diamond member.',
+    }),
+  )
+}
+
+/** A new Diamond claim, to the platform team, so a doubtful one can be revoked. */
+export function sendDiamondClaimNotice(
+  env: Env,
+  c: { studio: string; outcome: string; title: string | null },
+): Promise<void> {
+  const to = env.PLATFORM_FEEDBACK_EMAIL
+  if (!to) return Promise.resolve()
+  const app = (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
+  return send(
+    env,
+    to,
+    `IPC Diamond claim from ${c.studio}: ${c.outcome}`,
+    brandedHtml({
+      title: 'An IPC Diamond claim',
+      preheader: `${c.studio}: ${c.outcome}`,
+      body:
+        `<strong>${esc(c.studio)}</strong> sent a screenshot to verify as an IPC Diamond member.<br><br>` +
+        `Result: <strong>${esc(c.outcome)}</strong>` +
+        (c.title ? `<br>Group name read: &ldquo;${esc(c.title)}&rdquo;` : ''),
+      cta: 'Open the claims',
+      link: `${app}/platform/diamond`,
+      footer: 'Every claim is listed with its screenshot; you can approve, reject or revoke there.',
+    }),
+  )
+}

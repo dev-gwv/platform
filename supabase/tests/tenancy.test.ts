@@ -1161,7 +1161,8 @@ describe('subscription — activation + replay safety (Phase 14)', () => {
     await asUser(db, OWNER)
     await db.query(`select register_company_and_admin('Studio','Owner');`)
     const p = await db.query<{ id: string }>(
-      `insert into plans (key, name, price, billing_interval) values ('pro','Pro', 5000, 'monthly') returning id;`,
+      // A new studio is an outsider (0214), and may only order its own audience's plans.
+      `insert into plans (key, name, price, billing_interval, audience) values ('pro','Pro', 5000, 'monthly', 'outsider') returning id;`,
     )
     planId = p.rows[0]!.id
   })
@@ -2303,7 +2304,8 @@ describe('plan gate sits on feature access, not identity (0034)', () => {
        values ('${member}', get_current_company_id(), 'employee', 'Member', 'member@gate.test');`,
     )
     const p = await db.query<{ id: string }>(
-      `insert into plans (key, name, price, billing_interval) values ('renew','Renew', 1000, 'monthly') returning id;`,
+      // A new studio is an outsider (0214), and may only order its own audience's plans.
+      `insert into plans (key, name, price, billing_interval, audience) values ('renew','Renew', 1000, 'monthly', 'outsider') returning id;`,
     )
     planId = p.rows[0]!.id
     // Lapse the plan entirely: no expiry, no trial, no grace.
