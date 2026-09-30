@@ -11,9 +11,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Copy,
-  FileText,
-  Send,
   Clock,
   MapPin,
   Package,
@@ -60,7 +57,6 @@ import {
   useDeleteDeliverableSet,
   useDeliverableSets,
   useDeliverableTypeList,
-  useIssueQuotation,
   useSaveDeliverableSet,
   useShootTypes,
 } from '@/features/projects/api'
@@ -79,7 +75,7 @@ import {
   stageOfRequirement,
 } from '@/features/projects/requirements'
 import { STAGE_TONE } from '@/features/team/role-stages'
-import { SetupFinished, useFromSetup } from '@/features/onboarding/setup-flow'
+import { useCloseSetup, useFromSetup } from '@/features/onboarding/setup-flow'
 import { QuantityStepper, ToneChip, TONE_CHIP_STATIC, TONE_DOT, TONE_TEXT, toneAt } from '@/shared/ui/tone-chip'
 import {
   BUILT_IN_SETS,
@@ -146,6 +142,7 @@ export function NewProjectPage() {
 function NewProject() {
   const navigate = useNavigate()
   const fromSetup = useFromSetup()
+  const closeSetup = useCloseSetup()
   const qc = useQueryClient()
   const confirm = useConfirm()
   const createClient = useCreateClient()
@@ -164,7 +161,6 @@ function NewProject() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** Set once the project exists; the dialog takes over from there. */
-  const [created, setCreated] = useState<{ id: string; warning: string | null } | null>(null)
   const loaded = useRef(false)
   const sectionRef = useRef<HTMLDivElement>(null)
 
@@ -321,16 +317,17 @@ function NewProject() {
       clearDraft()
       const warning = missedWarning(failed, failedWork)
       // The project exists now, so the wizard's job is done whether or not
-      // every shoot landed. The first-project setup journey keeps its own
-      // ending; everyone else goes straight to the quotation -- the owner's
-      // order is quotation, then invoice, then team -- with any bad news
-      // carried along as a message that stays until it is read.
+      // every shoot landed. Everyone goes straight to the quotation -- the
+      // owner's order is quotation, then invoice, then team -- a new studio's
+      // first project included (it used to stop on a "set up" dialog that
+      // only offered the dashboard). Any bad news rides along as a message
+      // that stays until it is read.
       if (fromSetup) {
-        setCreated({ id, warning })
-      } else {
-        if (warning) toast.warning(warning, { duration: 15_000 })
-        void navigate({ to: '/projects/$id/quotation', params: { id } })
+        void closeSetup('done')
+        toast.success('Your studio is set up. Check the quotation, then create the invoice.')
       }
+      if (warning) toast.warning(warning, { duration: 15_000 })
+      void navigate({ to: '/projects/$id/quotation', params: { id } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the project.')
     } finally {
@@ -345,13 +342,6 @@ function NewProject() {
 
   return (
     <>
-      {created && (
-        <CreatedDialog
-          projectId={created.id}
-          warning={created.warning}
-          onClose={() => void navigate({ to: '/projects/$id', params: { id: created.id } })}
-        />
-      )}
       <Breadcrumbs items={[{ label: 'Home', to: '/dashboard' }, { label: 'Projects', to: '/projects' }, { label: 'New' }]} />
       <PageHeader
         title="Create project"
@@ -488,106 +478,6 @@ function Money({ label, value, strong }: { label: string; value: number; strong?
         {formatINR(value)}
       </p>
     </div>
-  )
-}
-
-/**
- * What now? — the moment after a project is created.
- *
- * The wizard's last press is not really the end of the job: nine times in ten
- * the next thing is the quotation, and hunting for it on a page they have
- * never seen is a poor reward for finishing six steps. So the three things
- * anyone actually does next are offered here, and "Continue to project" stays
- * plain because it is the least likely of them.
- */
-function CreatedDialog({
-  projectId,
-  warning,
-  onClose,
-}: {
-  projectId: string
-  warning: string | null
-  onClose: () => void
-}) {
-  const navigate = useNavigate()
-  const issue = useIssueQuotation()
-  const [link, setLink] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const fromSetup = useFromSetup()
-
-  const openProject = (quotation?: boolean) =>
-    void navigate({ to: quotation ? '/projects/$id/quotation' : '/projects/$id', params: { id: projectId } })
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        title="Project created"
-        description={fromSetup ? 'Your first project is saved.' : 'What would you like to do next?'}
-      >
-        {/* A shoot that failed to save is the one thing here worth
-            interrupting for — the project exists either way. */}
-        {warning && (
-          <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-            {warning}
-          </p>
-        )}
-
-        {/* The last setup step: say so, and offer the one obvious next place. */}
-        {fromSetup && !link ? (
-          <SetupFinished />
-        ) : link ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm">
-              Send the client this link. It opens without an account, and the prices on it stay as
-              they are today.
-            </p>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(link)
-                  setCopied(true)
-                }}
-              >
-                {copied ? <Check /> : <Copy />}
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-            <Button variant="outline" onClick={() => openProject()}>
-              Go to the project
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Button className="w-full justify-start" onClick={() => openProject(true)}>
-              <FileText /> View / edit quotation
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              disabled={issue.isPending}
-              onClick={() =>
-                issue.mutate(
-                  { project_id: projectId, notes: null },
-                  { onSuccess: (r) => setLink(r.link) },
-                )
-              }
-            >
-              <Send /> {issue.isPending ? 'Preparing…' : 'Share quotation'}
-            </Button>
-            {issue.isError && (
-              <p className="text-sm text-destructive">
-                {issue.error instanceof Error ? issue.error.message : 'Could not build the link.'}
-              </p>
-            )}
-            <Button variant="ghost" className="w-full" onClick={() => openProject()}>
-              Continue to project
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
   )
 }
 

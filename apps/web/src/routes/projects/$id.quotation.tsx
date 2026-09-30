@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   buildWhatsAppUrl,
@@ -16,8 +16,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  Eye,
-  EyeOff,
+  ChevronDown,
+  Ellipsis,
   FileText,
   Link2,
   Mail,
@@ -26,7 +26,6 @@ import {
   RefreshCw,
   RotateCcw,
   Send,
-  SlidersHorizontal,
 } from 'lucide-react'
 import { callApi } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -36,7 +35,6 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { StatusBadge } from '@/shared/ui/status-badge'
 import { Switch } from '@/shared/ui/switch'
 import { ErrorState } from '@/shared/ui/states'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -57,6 +55,8 @@ import {
   type QuotationPrefKey,
   type QuotationPrefs,
 } from '@/features/projects/QuotationDocument'
+import { ProjectJourney } from '@/features/projects/ProjectJourney'
+import type { JourneyKey } from '@/features/projects/journey'
 
 const TERMS_LIMIT = 5000
 const PRESET_KEY = 'ipc.quotation.presets'
@@ -126,6 +126,7 @@ export function ProjectQuotationPage() {
 
 function ProjectQuotation() {
   const { id } = useParams({ from: '/authed/projects/$id/quotation' })
+  const navigate = useNavigate()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
   const { data, isLoading, isError, refetch, isFetching } = useProject(id)
@@ -160,6 +161,8 @@ function ProjectQuotation() {
   const [emailTo, setEmailTo] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [emailMessage, setEmailMessage] = useState('')
+  // "Send to client" lives in one menu; the journey bar opens the same menu.
+  const [sendOpen, setSendOpen] = useState(false)
 
   useEffect(() => {
     setPresets(readPresets())
@@ -419,6 +422,18 @@ function ProjectQuotation() {
     }, 1000)
   }
 
+  /**
+   * The journey's next step, taken from here: the project page opens on the
+   * right tab with the next thing already open (?invoice=next opens the
+   * booking-amount invoice; ?focus=assign points at the first day short of
+   * people).
+   */
+  function go(key: JourneyKey) {
+    const search =
+      key === 'invoice' ? '?tab=billing&invoice=next' : key === 'team' ? '?tab=shoots&focus=assign' : key === 'deliver' ? '?tab=deliverables' : ''
+    void navigate({ href: `/projects/${id}${search}` })
+  }
+
   /** Another tab of the project, from the same row. */
   const refreshing = isFetching || shoots.isFetching
   const emailBusy = issue.isPending || sendEmail.isPending
@@ -434,97 +449,97 @@ function ProjectQuotation() {
         ]}
       />
 
-      {/* Only the document and its toolbar, as the invoice page does: the
-          owner wants nothing else in view here. Back to project is the way
-          out, and the project's journey line names the next step there. */}
+      {/* The document, one short toolbar, and the journey's next step. The
+          owner: "only the quotation should be visible" -- and then "quotation
+          is good, next step", which is the bar under the toolbar. */}
       {/* Solid card, no blur: the paper scrolls under it. */}
-      <div className="no-print sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      <div className="no-print sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-2.5 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" asChild>
             <Link to="/projects/$id" params={{ id }}>
               <ArrowLeft /> Back to project
             </Link>
           </Button>
-          <StatusBadge tone={project.show_quotation ? 'success' : 'warning'}>
-            <span className="flex items-center gap-1">
-              {project.show_quotation ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
-              {project.show_quotation ? 'Visible' : 'Hidden'}
-            </span>
-          </StatusBadge>
-          {canEdit && (
+          {canEdit ? (
             <Switch
               className="w-auto"
-              label="Show to client"
+              label={project.show_quotation ? 'Client can see it' : 'Hidden from client'}
               checked={project.show_quotation}
               onChange={(v) => void toggleVisibility(v)}
               disabled={update.isPending}
             />
+          ) : (
+            <span className="text-xs text-muted-foreground">{project.show_quotation ? 'Client can see it' : 'Hidden from client'}</span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
-            <Popover>
+            <Popover open={sendOpen} onOpenChange={setSendOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
-                  <SlidersHorizontal /> Display options
+                  <Send /> Send to client <ChevronDown className="size-3.5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72">
-                <p className="text-sm font-semibold">Show on quotation</p>
-                <p className="text-xs text-muted-foreground">
-                  Choose what the client sees. Saved for this project and its links.
-                </p>
-                <div className="mt-3 flex flex-col gap-2.5">
-                  {QUOTATION_PREFS.map((p) => (
-                    <Switch
-                      key={p.key}
-                      label={p.label}
-                      checked={prefs[p.key]}
-                      onChange={(v) => void togglePref(p.key, v)}
-                      disabled={
-                        (p.key === 'showDeliverablesEstimated' && !prefs.showDeliverables) ||
-                        (p.key === 'showShootServices' && !prefs.showEventSchedule)
-                      }
-                    />
-                  ))}
-                </div>
+              <PopoverContent align="end" className="w-56 p-1.5">
+                <MenuItem icon={<Mail />} label="Email" onSelect={() => { setSendOpen(false); openEmail() }} />
+                <MenuItem icon={<MessageCircle />} label="WhatsApp" disabled={issue.isPending} onSelect={() => { setSendOpen(false); void onWhatsApp() }} />
+                <MenuItem icon={<Link2 />} label={issue.isPending ? 'Preparing…' : 'Copy link'} disabled={issue.isPending} onSelect={() => { setSendOpen(false); void onShare() }} />
               </PopoverContent>
             </Popover>
           )}
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={openTerms}>
-              <FileText /> Edit terms
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void Promise.all([refetch(), shoots.refetch()])}
-            disabled={refreshing}
-          >
-            <RefreshCw className={refreshing ? 'animate-spin' : undefined} /> Refresh
+          <Button size="sm" variant="outline" onClick={onPrint}>
+            <Printer /> Print / PDF
           </Button>
-          {canEdit && (
-            <>
-              <Button variant="outline" size="sm" onClick={openEmail}>
-                <Mail /> Email quotation
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" aria-label="More">
+                <Ellipsis />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void onWhatsApp()} disabled={issue.isPending}>
-                <MessageCircle /> WhatsApp
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void onShare()} disabled={issue.isPending}>
-                <Link2 /> {issue.isPending ? 'Preparing…' : 'Share link'}
-              </Button>
-            </>
-          )}
-          <Button size="sm" onClick={onPrint}>
-            <Printer /> Print / Save PDF
-          </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-1.5">
+              {canEdit && <MenuItem icon={<FileText />} label="Edit terms" onSelect={openTerms} />}
+              <MenuItem
+                icon={<RefreshCw className={refreshing ? 'animate-spin' : undefined} />}
+                label="Refresh"
+                disabled={refreshing}
+                onSelect={() => void Promise.all([refetch(), shoots.refetch()])}
+              />
+              {canEdit && (
+                <div className="mt-1 border-t border-border px-2 pb-1 pt-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Show on quotation</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {QUOTATION_PREFS.map((p) => (
+                      <Switch
+                        key={p.key}
+                        label={p.label}
+                        checked={prefs[p.key]}
+                        onChange={(v) => void togglePref(p.key, v)}
+                        disabled={
+                          (p.key === 'showDeliverablesEstimated' && !prefs.showDeliverables) ||
+                          (p.key === 'showShootServices' && !prefs.showEventSchedule)
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
+      {canEdit && (
+        <ProjectJourney
+          project={project}
+          here="quotation"
+          onGo={go}
+          onSend={() => setSendOpen(true)}
+          className="mt-2"
+        />
+      )}
+
       {project.quotation_accepted_at && (
-        <div className="no-print mt-3 flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 p-3 text-sm" role="status">
+        <div className="no-print mt-2 flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-1.5 text-sm" role="status">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
           <p className="font-medium">
             Client acknowledged on{' '}
@@ -544,20 +559,20 @@ function ProjectQuotation() {
           a draft. The studio cannot see that from here — they are reading their
           own document and their eye fills in what is missing. */}
       {missingBranding.length > 0 && (
-        <div className="no-print mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+        <div className="no-print mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs">
           <AlertTriangle className="size-4 shrink-0 text-warning" aria-hidden />
           <span className="min-w-0 flex-1">
             Complete your studio branding to make quotations look professional. Missing:{' '}
             {missingBranding.join(', ')}.
           </span>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" className="h-7" asChild>
             <Link to="/settings/company">Open settings</Link>
           </Button>
         </div>
       )}
 
-      <div className="mt-4">
-        <QuotationDocument data={doc} prefs={prefs} onEditTerms={canEdit ? openTerms : undefined} />
+      <div className="mt-3">
+        <QuotationDocument data={doc} prefs={prefs} compact onEditTerms={canEdit ? openTerms : undefined} />
       </div>
 
       <Dialog open={termsOpen} onOpenChange={(o) => !update.isPending && setTermsOpen(o)}>
@@ -663,5 +678,30 @@ function ProjectQuotation() {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/** One row of the toolbar's menus. */
+function MenuItem({
+  icon,
+  label,
+  onSelect,
+  disabled,
+}: {
+  icon: ReactNode
+  label: string
+  onSelect: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onSelect}
+      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50 [&_svg]:size-4 [&_svg]:text-muted-foreground"
+    >
+      {icon}
+      {label}
+    </button>
   )
 }

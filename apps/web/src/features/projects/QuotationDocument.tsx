@@ -103,11 +103,19 @@ export function QuotationDocument({
   data,
   prefs,
   onEditTerms,
+  compact = false,
 }: {
   data: QuotationDocumentData
   prefs: QuotationPrefs
   /** The studio's view: an Edit button on the terms, and a note when they are hidden. */
   onEditTerms?: (() => void) | undefined
+  /**
+   * The studio's own screen: tighter, so the whole quotation reads in one
+   * view (the owner: "I want it compact... see all the things in one shot").
+   * Screen only -- print and the client's link are the full paper
+   * (`.quotation-compact` rules in styles.css sit under @media screen).
+   */
+  compact?: boolean
 }) {
   const { studio, client, project, summary } = data
   const number = `#${data.number}`
@@ -117,26 +125,26 @@ export function QuotationDocument({
 
   return (
     <article
-      className="paper quotation-paper relative overflow-hidden rounded-xl border border-border bg-card p-5 pt-7 shadow-sm sm:p-10 sm:pt-12"
+      className={`paper quotation-paper relative overflow-hidden rounded-xl border border-border bg-card p-5 pt-7 shadow-sm sm:p-10 sm:pt-12${compact ? ' quotation-compact' : ''}`}
       style={style}
     >
       <div className="quotation-brand-stripe" aria-hidden />
 
       {/* A div, not <header>: print hides every <header> as app chrome. */}
-      <div className="paper-block flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
+      <div className="q-head paper-block flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
         <div className="flex min-w-0 items-start gap-4">
           {studio.logoUrl && (
             <img
               src={studio.logoUrl}
               alt=""
-              className="size-14 shrink-0 rounded-md border border-border bg-white object-contain p-1"
+              className="q-logo size-14 shrink-0 rounded-md border border-border bg-white object-contain p-1"
             />
           )}
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               Project Quotation
             </p>
-            <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{studio.name}</h1>
+            <h1 className="q-title mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{studio.name}</h1>
             {studio.legalName && studio.legalName !== studio.name && (
               <p className="mt-0.5 text-xs text-muted-foreground">{studio.legalName}</p>
             )}
@@ -163,7 +171,7 @@ export function QuotationDocument({
       </div>
 
       {(prefs.showBillTo || prefs.showProject) && (
-        <section className="paper-block grid gap-6 py-6 sm:grid-cols-2">
+        <section className="q-cards paper-block grid gap-6 py-6 sm:grid-cols-2">
           {prefs.showBillTo && (
             <SummaryCard title="Bill to">
               {client.name ? (
@@ -192,7 +200,7 @@ export function QuotationDocument({
 
       {prefs.showDeliverables &&
         (data.deliverables.length === 0 && data.additional.length === 0 ? (
-          <section className="paper-block mt-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+          <section className="q-empty paper-block mt-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
             Deliverables will be shared separately.
           </section>
         ) : (
@@ -207,8 +215,8 @@ export function QuotationDocument({
       )}
 
       {prefs.showCostSummary && (
-        <section className="paper-block mt-8 flex justify-end">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-muted/30 p-5">
+        <section className="q-section paper-block mt-8 flex justify-end">
+          <div className="q-summary w-full max-w-sm rounded-xl border border-border bg-muted/30 p-5">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Summary</h3>
             <TotalsRow label="Package cost" value={formatINR(summary.packageCost)} />
             {hasAdditional && <TotalsRow label="Additional deliverables" value={formatINR(summary.additional)} />}
@@ -226,7 +234,7 @@ export function QuotationDocument({
       )}
 
       {prefs.showTerms ? (
-        <section className="paper-block mt-10 border-t border-border pt-5">
+        <section className="q-section q-terms paper-block mt-10 border-t border-border pt-5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Terms &amp; notes</h3>
             {onEditTerms && (
@@ -260,7 +268,7 @@ export function QuotationDocument({
         </p>
       )}
 
-      <footer className="paper-block mt-8 space-y-2 border-t border-border pt-4 text-[11px] text-muted-foreground">
+      <footer className="q-section q-foot paper-block mt-8 space-y-2 border-t border-border pt-4 text-[11px] text-muted-foreground">
         {studio.footerNote && <p className="whitespace-pre-line text-foreground/80">{studio.footerNote}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>{studio.name} · Project Quotation</span>
@@ -273,7 +281,7 @@ export function QuotationDocument({
 
 function SummaryCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4">
+    <div className="q-card rounded-xl border border-border bg-muted/20 p-4">
       <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{title}</h3>
       {children}
     </div>
@@ -307,7 +315,7 @@ function AdditionalPill({ children }: { children: ReactNode }) {
 function DeliverablesBlock({ title, rows, showEstimated }: { title: string; rows: QuotationDocRow[]; showEstimated: boolean }) {
   if (rows.length === 0) return null
   return (
-    <section className="paper-block mt-6">
+    <section className="q-section paper-block mt-6">
       <h3 className="mb-3 text-sm font-semibold">{title}</h3>
       <div className="quotation-table hidden overflow-x-auto rounded-lg border border-border sm:block">
         <table className="w-full text-sm">
@@ -357,7 +365,7 @@ function DeliverablesBlock({ title, rows, showEstimated }: { title: string; rows
 function ShootsBlock({ shoots, showServices }: { shoots: QuotationDocShoot[]; showServices: boolean }) {
   const when = (s: QuotationDocShoot) => `${formatQuotationDate(s.date)}${s.time ? ` · ${s.time.slice(0, 5)}` : ''}`
   return (
-    <section className="paper-block mt-6">
+    <section className="q-section paper-block mt-6">
       <h3 className="mb-3 text-sm font-semibold">Event schedule</h3>
       <div className="quotation-table hidden overflow-x-auto rounded-lg border border-border sm:block">
         <table className="w-full text-sm">

@@ -468,8 +468,9 @@ function ShootPlanner({
           </div>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-1.5">
-              {/* Solid, first: the owner could not see it as an outline. */}
-              <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
+              {/* Solid, first: the owner could not see it as an outline. It
+                  pulses when the journey ("Book the team") brought them here. */}
+              <Button size="sm" className={marked && shoot.requirements.length > 0 ? 'ipc-nudge' : undefined} onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
                 <UserPlus /> Assign team
               </Button>
               <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
