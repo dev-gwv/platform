@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, CalendarX, CheckCircle2, Clock, Lightbulb, Loader2, MapPin, Search, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
-import { shootListItem, type ShootListItem, type SlotCostStatus } from '@ipc/contracts'
+import { shootListItem, type ShootListItem, type SlotCostStatus, type TeamMember } from '@ipc/contracts'
 import { useQuery } from '@tanstack/react-query'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -12,6 +12,7 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { Avatar } from '@/shared/ui/avatar'
 import { cn } from '@/shared/ui/cn'
 import { useBookSlots, useMembers, useSlots } from '@/features/allocation/api'
+import { AssignedNote } from '@/features/team/AssignedNote'
 import {
   clashFor,
   defaultWindowFields,
@@ -95,6 +96,8 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const [defaultHours, setDefaultHours] = useState(4)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [rows, setRows] = useState<Record<string, Row>>({})
+  /** Who was just booked, for the "they see it on their own login" note. */
+  const [justBooked, setJustBooked] = useState<TeamMember | null>(null)
   const [showBlocked, setShowBlocked] = useState(false)
   // Ticked shoots and their times and payouts survive a refresh or a closed
   // tab until they are booked. Kept once at least one shoot is ticked.
@@ -216,6 +219,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
       if (ok > 0) toast.success(`${member.name} assigned to ${ok} shoot${ok === 1 ? '' : 's'}.${skipped ? ` ${skipped} could not be booked.` : ''}`)
       else toast.error('None of those could be booked — they clash with other bookings.')
       if (ok > 0 && skipped === 0) draft.clear()
+      if (ok > 0) setJustBooked(member)
       setPicked(new Set(results.filter((r) => !r.id).map((r) => ready[r.index]!.shoot.id)))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'We could not book these.')
@@ -457,6 +461,8 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
             </div>
           </div>
         </div>
+
+        {justBooked && <AssignedNote members={[justBooked]} onClose={() => setJustBooked(null)} />}
 
         <DialogFooter className="sm:justify-between">
           <p className="mr-auto self-center text-xs text-muted-foreground">

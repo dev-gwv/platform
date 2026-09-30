@@ -2958,5 +2958,41 @@ if (listed) {
   }
 }
 
+// ── One-time notes and "last seen" (0216) ──
+{
+  const empty = await api('/auth/hints', { token: aToken })
+  check('hints: a person starts with no notes seen', empty.status === 200 && empty.json.assign_note === undefined, empty.json)
+  const set1 = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: 1, closed: false } } })
+  const after = await api('/auth/hints', { token: aToken })
+  check(
+    'hints: showing the assign note counts it, on the person\'s own row',
+    set1.status === 200 && after.json.assign_note?.shown === 1 && after.json.assign_note?.closed === false,
+    after.json,
+  )
+  const closed = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: 1, closed: true } } })
+  check('hints: "don\'t show again" is kept', closed.status === 200 && closed.json.assign_note?.closed === true, closed.json)
+  const unknown = await api('/auth/hints/anything_else', { token: aToken, method: 'PUT', body: { value: { shown: 1 } } })
+  const bad = await api('/auth/hints/assign_note', { token: aToken, method: 'PUT', body: { value: { shown: -3 } } })
+  const anon = await api('/auth/hints')
+  check('hints: an unknown note is 404, a bad value 422, no session 401', unknown.status === 404 && bad.status === 422 && anon.status === 401, {
+    unknown: unknown.status,
+    bad: bad.status,
+    anon: anon.status,
+  })
+
+  await api('/activity/track', { token: aToken, method: 'POST', body: { route: '/dashboard', module: 'dashboard' } })
+  const me = (await api('/auth/session', { token: aToken })).json.user_id
+  const team = await api('/team/members', { token: aToken })
+  const row = (Array.isArray(team.json) ? team.json : []).find((m) => m.user_id === me)
+  check(
+    'last seen: the team list says when someone last had the app open, and whether they can log in',
+    team.status === 200 && typeof row?.last_seen_at === 'string' && row?.login_enabled === true,
+    row,
+  )
+  const dir = await api('/team/directory', { token: aToken })
+  const drow = (Array.isArray(dir.json) ? dir.json : []).find((m) => m.user_id === me)
+  check('last seen: the directory carries it too', dir.status === 200 && typeof drow?.last_seen_at === 'string', drow?.last_seen_at)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

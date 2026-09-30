@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, FolderOpen, Camera, Pencil, Send, Trash2, X } from 'lucide-react'
-import type { Deliverable, DeliverableNote, DeliverableStage } from '@ipc/contracts'
+import type { Deliverable, DeliverableNote, DeliverableStage, TeamMember } from '@ipc/contracts'
+import { AssignedNote } from '@/features/team/AssignedNote'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import { Input, Textarea } from '@/shared/ui/input'
@@ -89,6 +90,7 @@ function DrawerBody({
   // before a word is read. Late turns it red.
   const tone = TONE_CLASSES[stageTone(d, stages)]
   const late = isLate(d)
+  const [noteFor, setNoteFor] = useState<TeamMember | null>(null)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -123,7 +125,9 @@ function DrawerBody({
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-lg bg-card/90 px-3 py-2 shadow-sm">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Editor</dt>
-            <dd className="mt-1">{canEdit && !dropped && stage !== 'completed' ? <EditorPicker d={d} /> : <EditorName name={d.assignee_name} />}</dd>
+            <dd className="mt-1">
+              {canEdit && !dropped && stage !== 'completed' ? <EditorPicker d={d} onAssigned={setNoteFor} /> : <EditorName name={d.assignee_name} />}
+            </dd>
           </div>
           <div className="rounded-lg bg-card/90 px-3 py-2 shadow-sm">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</dt>
@@ -138,6 +142,7 @@ function DrawerBody({
             </dd>
           </div>
         </dl>
+        {noteFor && <AssignedNote members={[noteFor]} onClose={() => setNoteFor(null)} className="mt-3" />}
 
         {canWrite && !dropped && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
