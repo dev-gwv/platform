@@ -1,3 +1,4 @@
+import type { TransactionSql } from 'postgres'
 import { timingSafeEqual, toHex } from './crypto'
 import { GRAPH } from './whatsapp'
 
@@ -182,4 +183,27 @@ export async function subscribePage(pageToken: string, pageId: string): Promise<
 
 export async function unsubscribePage(pageToken: string, pageId: string): Promise<void> {
   await graph(`${encodeURIComponent(pageId)}/subscribed_apps?access_token=${encodeURIComponent(pageToken)}`, { method: 'DELETE' })
+}
+
+/**
+ * Keep a page token only while it is useful. Connecting through Facebook seals a
+ * token for every page the person manages, but a studio runs lead forms on one
+ * or two of them: a token for a page that is not connected is access we hold for
+ * nothing. They are dropped once half an hour old -- long enough to finish
+ * picking pages after one Facebook login. One studio, or every studio when
+ * `companyId` is left out (the hourly cron). Returns how many were removed.
+ */
+export async function pruneIdlePageTokens(sql: TransactionSql, companyId?: string): Promise<number> {
+  const co = companyId ?? null
+  const rows = await sql<{ n: number }[]>`
+    with gone as (
+      delete from fb_page_tokens t
+       where (${co}::uuid is null or t.company_id = ${co}::uuid)
+         and t.connected_at < now() - interval '30 minutes'
+         and not exists (
+           select 1 from fb_pages p
+            where p.company_id = t.company_id and p.page_id = t.page_id and p.is_connected)
+      returning 1)
+    select count(*)::int as n from gone`
+  return rows[0]?.n ?? 0
 }

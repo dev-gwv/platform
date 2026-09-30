@@ -5,6 +5,8 @@ import {
   bulkPatchResponse,
   bulkUndoRequest,
   bulkUndoResponse,
+  eraseLeadsRequest,
+  eraseLeadsResponse,
   cadence,
   cadenceStartResponse,
   convertLeadRequest,
@@ -402,6 +404,26 @@ export const crmRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not undo that change.')
     await audit(c, { action: 'lead.bulk_undo', entityType: 'crm_lead', after: { restored: rows[0]?.n ?? 0 } })
     return c.json(bulkUndoResponse.parse({ restored: rows[0]?.n ?? 0 }))
+  })
+
+  // Permanent erasure of archived leads and every copy of the person's details
+  // (0213). Not undoable, so the audit entry records how many, never who.
+  .post('/leads/erase', remove, async (c) => {
+    const parsed = eraseLeadsRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick the leads to delete.')
+    const ids = parsed.data.ids
+    const rows = await attempt(c, 'crm.erase', () =>
+      withUser(
+        c.env,
+        c.get('auth').userId,
+        (sql) => sql<{ n: number }[]>`select crm_erase_leads(${sql.array(ids)}::uuid[]) as n`,
+      ),
+    )
+    if (!rows) fail(400, 'We could not delete these leads.')
+    const erased = rows[0]?.n ?? 0
+    if (erased === 0) fail(409, 'Only archived leads can be deleted permanently. Archive them first.')
+    await audit(c, { action: 'lead.erase', entityType: 'crm_lead', after: { requested: ids.length, erased } })
+    return c.json(eraseLeadsResponse.parse({ erased }))
   })
 
   // ── Duplicates ──────────────────────────────────────────────

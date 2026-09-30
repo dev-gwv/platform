@@ -530,6 +530,16 @@ export type BulkUndoRequest = z.infer<typeof bulkUndoRequest>
 export const bulkUndoResponse = z.object({ restored: z.number().int() })
 export type BulkUndoResponse = z.infer<typeof bulkUndoResponse>
 
+/**
+ * Permanent erasure (0213): only archived leads, so nothing live goes by a
+ * mis-click. The response is how many were erased -- more than were sent when
+ * duplicates merged into them went too.
+ */
+export const eraseLeadsRequest = z.object({ ids: z.array(uuid).min(1).max(200) })
+export type EraseLeadsRequest = z.infer<typeof eraseLeadsRequest>
+export const eraseLeadsResponse = z.object({ erased: z.number().int() })
+export type EraseLeadsResponse = z.infer<typeof eraseLeadsResponse>
+
 // ── duplicates ────────────────────────────────────────────────
 export const duplicateLead = z.object({
   id: uuid,

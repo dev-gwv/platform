@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { captureLeadRequest, fbConnectUrlResponse, fbExchangeRequest, fbPage, fbPageConnectRequest, fbStatusResponse, fbTokenRequest } from '@ipc/contracts'
+import { captureLeadRequest, fbConnectUrlResponse, fbDisconnectResponse, fbExchangeRequest, fbPage, fbPageConnectRequest, fbStatusResponse, fbTokenRequest } from '@ipc/contracts'
 import type { Context } from 'hono'
 import type { AppEnv } from '../../context'
 import { fail } from '../../middleware/errors'
@@ -20,6 +20,7 @@ import {
   readPages,
   subscribePage,
   unsubscribePage,
+  pruneIdlePageTokens,
   verifyMetaSignature,
   type MetaLeadgenPayload,
   type MetaPage,
@@ -492,6 +493,7 @@ async function savePages(
             set token_enc = excluded.token_enc, fb_user_id = excluded.fb_user_id,
                 connected_by = excluded.connected_by, connected_at = now()`
       }
+      await pruneIdlePageTokens(sql, auth.companyId)
       return found.pages.length
     }),
   )
@@ -606,6 +608,7 @@ export const metaRouter = new Hono<AppEnv>()
                 webhook_subscribed = ${!error}, subscribed_at = ${error ? null : new Date()}, last_synced_at = now(), last_error = ${error}
           returning id, page_id, page_name, category, is_connected, webhook_subscribed,
                     last_synced_at, last_error, created_at, connected_via, subscribed_at, true as has_token`
+        await pruneIdlePageTokens(sql, companyId)
         return r ?? null
       }),
     )
@@ -631,13 +634,16 @@ export const metaRouter = new Hono<AppEnv>()
       }),
     )
     if (rows === null) fail(404, 'That page was not found.')
-    // Best effort: Meta stops posting for this page. The token is gone either way.
+    // Meta stops posting for this page once it is told. Our side is off and the
+    // token is gone either way; `unsubscribed` says whether Facebook confirmed,
+    // so the card can tell the person to remove the app in Facebook if not.
+    let unsubscribed = false
     if (rows.token_enc) {
       const token = await open(c.env, rows.token_enc).catch(() => null)
-      if (token) await unsubscribePage(token, rows.page_id).catch(() => undefined)
+      if (token) unsubscribed = await unsubscribePage(token, rows.page_id).then(() => true, () => false)
     }
-    await audit(c, { action: 'meta.page_disconnect', entityType: 'fb_page', entityId: id })
-    return c.body(null, 204)
+    await audit(c, { action: 'meta.page_disconnect', entityType: 'fb_page', entityId: id, after: { unsubscribed } })
+    return c.json(fbDisconnectResponse.parse({ ok: true, unsubscribed }))
   })
 
   // Manual token flow: a long-lived user token, for a studio without the

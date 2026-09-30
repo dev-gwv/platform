@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { LegalLinks } from '@/features/legal/LegalPage'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { MailCheck } from 'lucide-react'
 import {
   z,
@@ -355,7 +355,9 @@ export function LoginPage() {
             * large-text threshold, which is why the wordmark may carry it and
             * the links below may not.
             */}
-          <Wordmark />
+          <Link to="/" aria-label="Studio AutoPilot home">
+            <Wordmark />
+          </Link>
         </h1>
 
         {resetSentTo ? (

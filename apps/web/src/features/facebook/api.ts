@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   fbConnectUrlResponse,
+  fbDisconnectResponse,
   fbImportsSummary,
   fbLeadImport,
   fbPage,
@@ -15,7 +16,6 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
 const pages = fbPage.array()
-const noContent = z.any()
 
 /** The import log comes back as rows plus a summary computed over the whole set. */
 const importsResponse = z.object({
@@ -63,11 +63,27 @@ export const useConnectPage = () =>
     (p) => `${p.page_name} connected`,
   )
 
-export const useDisconnectPage = () =>
-  useMetaMutation<string, unknown>(
-    (id: string) => callApi(`/meta/pages/${id}/disconnect`, { method: 'POST', responseSchema: noContent }),
-    () => 'Page disconnected',
-  )
+/**
+ * Our side is off the moment this returns. When Facebook could not be told,
+ * the page can still post to us, so say so and where to finish the job.
+ */
+export const useDisconnectPage = () => {
+  const qc = useQueryClient()
+  return useMutation<{ unsubscribed: boolean }, Error, string>({
+    mutationFn: (id) => callApi(`/meta/pages/${id}/disconnect`, { method: 'POST', responseSchema: fbDisconnectResponse }),
+    onSuccess: (out) => {
+      if (out.unsubscribed) toast.success('Page disconnected')
+      else
+        toast.warning('Disconnected here, but Facebook did not confirm', {
+          description: 'To be sure it stops, remove Studio AutoPilot in Facebook: Settings → Business integrations.',
+          duration: 12000,
+        })
+      void qc.invalidateQueries({ queryKey: ['meta'] })
+      void qc.invalidateQueries({ queryKey: ['crm'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
 
 const imported = z.object({ ok: z.boolean(), imported: z.number().int() })
 const pagesFound = (r: { imported: number }) =>

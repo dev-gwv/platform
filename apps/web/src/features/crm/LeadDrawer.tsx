@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Archive,
+  Trash2,
   ArchiveRestore,
   Building2,
   Check,
@@ -25,6 +26,7 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
+import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { useMembers } from '@/features/allocation/api'
@@ -43,6 +45,7 @@ import {
   useSendTemplate,
   useTemplates,
   useUpdateLead,
+  useEraseLeads,
   useWorkflows,
 } from './api'
 import { QuoteBuilder } from './QuoteBuilder'
@@ -122,6 +125,21 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   }
 
   const patch = (p: Parameters<typeof update.mutate>[0]['patch']) => update.mutate({ id: lead.id, patch: p })
+
+  // Deleting for good is offered only on an archived lead, behind a confirm.
+  const canDelete = access.hasAction('crm', 'delete')
+  const erase = useEraseLeads()
+  const confirm = useConfirm()
+  async function eraseThis() {
+    const yes = await confirm({
+      title: `Delete ${lead.name ?? 'this lead'} permanently?`,
+      description:
+        'This removes their name, phone, email, notes, messages and Facebook import records from your studio for good. It cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      destructive: true,
+    })
+    if (yes) erase.mutate([lead.id], { onSuccess: onClose })
+  }
 
   // The lead's functions as editable rows; a lead from before 0212 that only
   // has the old single event shows that one.
@@ -579,6 +597,11 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               </Button>
             ) : (
               <span />
+            )}
+            {canDelete && lead.is_archived && (
+              <Button size="sm" variant="ghost" className="mr-auto text-destructive" disabled={erase.isPending} onClick={() => void eraseThis()}>
+                <Trash2 /> Delete permanently
+              </Button>
             )}
             <Button size="sm" onClick={onClose}>
               Done

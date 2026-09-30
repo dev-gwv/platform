@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import {
   bulkPatchResponse,
   bulkUndoResponse,
+  eraseLeadsResponse,
   cadence,
   cadenceStartResponse,
   convertLeadRequest,
@@ -256,6 +257,23 @@ export function useBulkPatch() {
           : undefined,
         duration: 8000,
       })
+      void qc.invalidateQueries({ queryKey: ['crm'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/**
+ * Delete archived leads for good, with every copy of their details. No undo,
+ * so the callers ask first and the toast says what was removed.
+ */
+export function useEraseLeads() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      callApi('/crm/leads/erase', { method: 'POST', body: { ids }, responseSchema: eraseLeadsResponse }),
+    onSuccess: (r) => {
+      toast.success(`Deleted ${r.erased} lead${r.erased === 1 ? '' : 's'} permanently`)
       void qc.invalidateQueries({ queryKey: ['crm'] })
     },
     onError: (e: Error) => toast.error(e.message),
