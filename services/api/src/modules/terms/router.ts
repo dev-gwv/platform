@@ -105,8 +105,15 @@ const termsPayload = z.object({
   payment_terms: z.array(z.record(z.string(), z.unknown())).nullish(),
   total_cost: z.coerce.number().nullish(),
   legal_note: z.string().nullable().nullish(),
+  // The client's finger-drawn signature (0220), a PNG data URL.
+  signature: z.string().nullish(),
 })
-const ackRequest = z.object({ name: z.string().trim().min(1).max(160), email: z.string().max(200).optional() })
+const SIGNATURE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
+const ackRequest = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.string().max(200).optional(),
+  signature: z.string().max(400_000).regex(SIGNATURE).optional(),
+})
 
 /** One row per project: its most recent terms document and whether it's been agreed to. */
 const termsDocument = z.object({
@@ -266,10 +273,15 @@ export const termsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not open this document.')
     if (!rows[0]) fail(404, 'That document was not found.')
+    const sig = await attempt(c, 'terms.document_signature', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ s: string | null }[]>`
+        select acknowledged_signature as s from project_terms_documents where id = ${id}::uuid`),
+    )
     return c.json(
       termsPayload.parse({
         ...(rows[0] as Record<string, unknown>),
         body: (rows[0] as { body?: string }).body ?? '',
+        signature: sig?.[0]?.s ?? null,
       }),
     )
   })
@@ -690,7 +702,14 @@ export const publicTermsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]) await refuseLink(c, token)
-    return c.json(termsPayload.parse({ ...rows[0] as Record<string, unknown>, body: (rows[0] as { body?: string }).body ?? '' }))
+    const sig = await attempt(c, 'terms.public_signature', () =>
+      withService(c.env, (sql) => sql<{ s: string | null }[]>`select terms_signature_for_token(${token}) as s`),
+    )
+    return c.json(termsPayload.parse({
+      ...rows[0] as Record<string, unknown>,
+      body: (rows[0] as { body?: string }).body ?? '',
+      signature: sig?.[0]?.s ?? null,
+    }))
   })
 
   .get('/terms/:token', async (c) => {
@@ -706,7 +725,11 @@ export const publicTermsRouter = new Hono<AppEnv>()
 
   .post('/terms/:token/ack', async (c) => {
     const parsed = ackRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Please enter your name to agree.')
+    if (!parsed.success) {
+      fail(422, parsed.error.issues.some((i) => i.path[0] === 'signature')
+        ? 'Your signature could not be read. Please clear it and sign again.'
+        : 'Please enter your name to agree.')
+    }
     const token = textParam(c, 'token', 400)
     const ip = resolveClientIp(c.req.raw.headers, c.env.CLIENT_IP_HEADER)
     const ua = c.req.header('User-Agent') ?? null
@@ -725,6 +748,13 @@ export const publicTermsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not record your agreement.')
     if (rows[0]?.ok === false) await refuseLink(c, token, 409)
+    // The signature rides on the agreement just recorded; a failure here is
+    // logged by attempt() and never undoes the agreement.
+    if (parsed.data.signature) {
+      await attempt(c, 'terms.sign', () =>
+        withService(c.env, (sql) => sql`select terms_sign(${token}, ${parsed.data.signature!})`),
+      )
+    }
     // The owner hears by email too; a failure here never undoes the agreement.
     const notice = await attempt(c, 'terms.agreed_notice', () =>
       withService(c.env, async (sql) => {

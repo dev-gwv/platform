@@ -122,3 +122,17 @@ export function useImportLegacyStudios() {
     onError: (e: Error) => toast.error(e.message),
   })
 }
+
+/** Access to the end of a chosen day (0220): the old board's Extend 30 / 90 / 180 days and Custom expiry. */
+export function useSetAccessUntil() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ studioId, until }: { studioId: string; until: string }) =>
+      callApi(`/platform/studios/${studioId}/plan`, { method: 'POST', body: { action: 'until', until }, responseSchema: ok }),
+    onSuccess: (_d, v) => {
+      toast.success(`Access now runs until ${new Date(`${v.until}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`)
+      void qc.invalidateQueries({ queryKey: ['platform'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change access.'),
+  })
+}

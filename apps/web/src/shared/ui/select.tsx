@@ -1,5 +1,6 @@
 import {
   Children,
+  Fragment,
   isValidElement,
   useCallback,
   useEffect,
@@ -46,6 +47,8 @@ interface Item {
   /** Plain text, for typeahead and for the trigger when nothing is selected. */
   text: string
   disabled: boolean
+  /** The <optgroup> label it sits under, drawn as a header above the group. */
+  group?: string
 }
 
 interface Box {
@@ -66,10 +69,25 @@ function textOf(node: ReactNode): string {
   return ''
 }
 
-function itemsFrom(children: ReactNode): Item[] {
+/**
+ * The options, in order, including those inside an <optgroup>. Missing the
+ * groups once hid the whole team and every saved helper from the data
+ * dialog's "Copied by" -- only the loose options were left.
+ */
+export function itemsFrom(children: ReactNode, group?: string): Item[] {
   const out: Item[] = []
   for (const child of Children.toArray(children)) {
-    if (!isValidElement(child) || child.type !== 'option') continue
+    if (!isValidElement(child)) continue
+    if (child.type === Fragment) {
+      out.push(...itemsFrom((child.props as { children?: ReactNode }).children, group))
+      continue
+    }
+    if (child.type === 'optgroup') {
+      const g = child.props as ComponentProps<'optgroup'>
+      out.push(...itemsFrom(g.children, g.label === undefined ? undefined : String(g.label)))
+      continue
+    }
+    if (child.type !== 'option') continue
     const props = child.props as ComponentProps<'option'>
     const text = textOf(props.children)
     out.push({
@@ -78,6 +96,7 @@ function itemsFrom(children: ReactNode): Item[] {
       label: props.children,
       text,
       disabled: props.disabled === true,
+      ...(group ? { group } : {}),
     })
   }
   return out
@@ -265,11 +284,17 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
       {items.length === 0 && <p className="px-2.5 py-2 text-sm text-muted-foreground">Nothing to choose from</p>}
       {items.map((item, i) => {
         const isSelected = item.value === current
+        const header = item.group && item.group !== items[i - 1]?.group ? item.group : null
         return (
+          // Values repeat across a list often enough (two blanks, say) to
+          // need the index as well.
+          <Fragment key={`${item.value}-${i}`}>
+          {header && (
+            <p role="presentation" className="px-2.5 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-1">
+              {header}
+            </p>
+          )}
           <button
-            // Values repeat across a list often enough (two blanks, say) to
-            // need the index as well.
-            key={`${item.value}-${i}`}
             type="button"
             role="option"
             aria-selected={isSelected}
@@ -288,6 +313,7 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {isSelected && <Check className="size-3.5 shrink-0 text-brand" aria-hidden />}
           </button>
+          </Fragment>
         )
       })}
     </div>

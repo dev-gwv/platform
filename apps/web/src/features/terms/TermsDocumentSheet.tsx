@@ -117,6 +117,9 @@ export function TermsDocumentSheet({
             {new Date(doc.acknowledged_at).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
             Their name, the time and their IP address are on record.
           </p>
+          {doc.signature && (
+            <img src={doc.signature} alt={`Signature of ${doc.acknowledged_by_name ?? doc.client_name ?? 'the client'}`} className="mt-2 h-20 max-w-full rounded border border-border bg-white object-contain p-1" />
+          )}
         </div>
       ) : (
         <div className="paper-block hidden grid-cols-2 gap-8 pt-8 text-xs print:grid">

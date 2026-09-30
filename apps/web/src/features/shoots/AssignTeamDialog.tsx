@@ -141,6 +141,8 @@ function AssignBoard({
   const [quickAdd, setQuickAdd] = useState<string | null>(null)
   /** Who was just booked, for the "they see it on their own login" note. */
   const [justBooked, setJustBooked] = useState<TeamMember[]>([])
+  /** Someone was booked in this sitting: Done becomes the next thing to press. */
+  const [bookedOnce, setBookedOnce] = useState(false)
 
   // A half-picked crew survives a refresh or a closed tab until it is booked.
   const draft = useFormDraft(
@@ -160,6 +162,7 @@ function AssignBoard({
   const taken = pickedIds(picks)
   const byId = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members])
   const total = taken.size
+  const finished = bookedOnce && total === 0
 
   // Roles still needing people first, then the full ones -- the to-do on top.
   const ordered = [...fill].sort((a, b) => Number(a.open === 0) - Number(b.open === 0))
@@ -235,7 +238,10 @@ function AssignBoard({
       setFailed(nextFailed)
       const booked = [...new Set(results.filter((r) => r.id).map((r) => rows[r.index]!.id))]
       setJustBooked(booked.map((id) => byId.get(id)).filter((m): m is TeamMember => !!m))
-      if (ok > 0) toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} booked.`)
+      if (ok > 0) {
+        toast.success(`${ok} ${ok === 1 ? 'person' : 'people'} booked.`)
+        setBookedOnce(true)
+      }
       if (Object.keys(nextFailed).length === 0) draft.clear()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'We could not book the team.')
@@ -324,8 +330,14 @@ function AssignBoard({
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <div className="flex items-center gap-3 text-sm">
-          <Button variant="outline" onClick={onClose}>
-            Done
+          {/* After a booking with nothing left to book, Done is the one next
+              step: solid, with the same nudge the project wizard's Next has. */}
+          <Button
+            variant={finished ? 'default' : 'outline'}
+            className={finished ? 'ipc-nudge' : undefined}
+            onClick={onClose}
+          >
+            {finished && <Check />} Done
           </Button>
           <button
             type="button"
@@ -346,7 +358,11 @@ function AssignBoard({
                 : 'Set the time'}
           </button>
         </div>
-        <Button disabled={!slotWindow || total === 0 || bookMany.isPending} onClick={() => void book()}>
+        <Button
+          variant={finished ? 'outline' : 'default'}
+          disabled={!slotWindow || total === 0 || bookMany.isPending}
+          onClick={() => void book()}
+        >
           {bookMany.isPending ? <Loader2 className="animate-spin" /> : <Check />}
           {total === 0 ? 'Book' : `Book ${total} ${total === 1 ? 'person' : 'people'}`}
         </Button>
