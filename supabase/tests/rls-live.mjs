@@ -2422,6 +2422,11 @@ if (listed) {
   )
   const shown = await api(`/projects/${pid}`, { token: aToken })
   check('quotation: sending a link switches "Show to client" on', shown.json.show_quotation === true, shown.json.show_quotation)
+  check(
+    'journey: the project knows its quotation went out (the first step is ticked)',
+    project.json.id && typeof shown.json.quotation_issued_at === 'string' && !Number.isNaN(Date.parse(shown.json.quotation_issued_at)),
+    shown.json.quotation_issued_at,
+  )
 
   const hide = await api(`/projects/${pid}/quotation`, { token: aToken, method: 'PATCH', body: { show_quotation: false } })
   const hidden = await api(`/public/quotation/${tok}`)

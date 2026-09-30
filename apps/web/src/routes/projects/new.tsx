@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -144,6 +145,7 @@ export function NewProjectPage() {
 
 function NewProject() {
   const navigate = useNavigate()
+  const fromSetup = useFromSetup()
   const qc = useQueryClient()
   const confirm = useConfirm()
   const createClient = useCreateClient()
@@ -317,13 +319,18 @@ function NewProject() {
       void qc.invalidateQueries({ queryKey: ['shoots'] })
 
       clearDraft()
+      const warning = missedWarning(failed, failedWork)
       // The project exists now, so the wizard's job is done whether or not
-      // every shoot landed. Hand over to the "what next?" dialog and carry the
-      // bad news into it rather than dropping someone on a page with a toast.
-      setCreated({
-        id,
-        warning: missedWarning(failed, failedWork),
-      })
+      // every shoot landed. The first-project setup journey keeps its own
+      // ending; everyone else goes straight to the quotation -- the owner's
+      // order is quotation, then invoice, then team -- with any bad news
+      // carried along as a message that stays until it is read.
+      if (fromSetup) {
+        setCreated({ id, warning })
+      } else {
+        if (warning) toast.warning(warning, { duration: 15_000 })
+        void navigate({ to: '/projects/$id/quotation', params: { id } })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the project.')
     } finally {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   buildWhatsAppUrl,
@@ -32,6 +32,9 @@ import { callApi } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
+import { ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
+import { ProjectJourney } from '@/features/projects/ProjectJourney'
+import type { JourneyKey } from '@/features/projects/journey'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Textarea } from '@/shared/ui/input'
@@ -126,6 +129,7 @@ export function ProjectQuotationPage() {
 
 function ProjectQuotation() {
   const { id } = useParams({ from: '/authed/projects/$id/quotation' })
+  const navigate = useNavigate()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
   const { data, isLoading, isError, refetch, isFetching } = useProject(id)
@@ -419,6 +423,23 @@ function ProjectQuotation() {
     }, 1000)
   }
 
+  /** Another tab of the project, from the same row. */
+  function openTab(t: ProjectTab, extra: Record<string, string> = {}) {
+    if (t === 'quotation') return
+    void navigate({
+      to: '/projects/$id',
+      params: { id },
+      search: (t === 'overview' ? { ...extra } : { tab: t, ...extra }) as never,
+    })
+  }
+  /** The journey's next step, from the quotation: share it, or go on to the invoice / team / delivery. */
+  function go(key: JourneyKey) {
+    if (key === 'quotation') return void onShare()
+    if (key === 'invoice') return openTab('billing', { invoice: 'next' })
+    if (key === 'team') return openTab('shoots', { focus: 'assign' })
+    openTab('deliverables')
+  }
+
   const refreshing = isFetching || shoots.isFetching
   const emailBusy = issue.isPending || sendEmail.isPending
 
@@ -432,6 +453,14 @@ function ProjectQuotation() {
           { label: 'Quotation' },
         ]}
       />
+
+      {/* The same row of tabs as the project, Quotation lit: this page is one
+          of the project's views, not somewhere else. */}
+      <div className="no-print mb-3 flex flex-col gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
+        <ProjectTabStrip active="quotation" onSelect={openTab} />
+        {canEdit && <ProjectJourney project={project} onGo={go} onSkipToTeam={() => go('team')} />}
+      </div>
 
       {/* Solid card, no blur: the paper scrolls under it. */}
       <div className="no-print sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, Link2, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
 import type { ProjectBilling, ProjectDetail } from '@ipc/contracts'
@@ -17,6 +17,7 @@ import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/Record
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
 import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
+import { nextInvoiceFromPlan } from '@/features/billing/from-plan'
 import { dueText, isOverdue, shortDate } from '@/features/billing/status'
 import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-money'
 import { IconTile } from '@/shared/ui/icon-tile'
@@ -218,10 +219,18 @@ export function BillingTab({
   project,
   canEdit,
   onOpenTab,
+  invoiceNext = false,
+  onInvoiceNextDone,
+  onBookTeam,
 }: {
   project: ProjectDetail
   canEdit: boolean
   onOpenTab?: ((tab: 'terms') => void) | undefined
+  /** Open the next instalment's invoice straight away (the journey's "Create the invoice"). */
+  invoiceNext?: boolean
+  onInvoiceNextDone?: (() => void) | undefined
+  /** The step after the invoice. */
+  onBookTeam?: (() => void) | undefined
 }) {
   const access = useAccess()
   const canBill = access.hasModule('billing')
@@ -244,6 +253,34 @@ export function BillingTab({
       status: 'sent',
       ...(line ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] } : {}),
     })
+
+  // "Create the invoice" from the journey: the booking amount (or whichever
+  // part of the plan is next), already filled in -- client, project, subject,
+  // one line at the right amount. The studio checks it and presses Save.
+  const plan = billing.data?.plan ?? null
+  useEffect(() => {
+    if (!invoiceNext || billing.isLoading) return
+    onInvoiceNextDone?.()
+    if (!canBill || !canInvoice) return
+    const next = nextInvoiceFromPlan({
+      projectName: project.name,
+      total: plan?.total_cost ?? project.total_cost,
+      instalments: plan?.instalments ?? null,
+      received: m.received,
+      invoiced: live.reduce((n, i) => n + i.taxable, 0),
+    })
+    setInvoicing({
+      client_id: project.client_id,
+      project_id: project.id,
+      status: 'sent',
+      ...(next
+        ? {
+            subject: next.description,
+            lines: [{ description: next.description, quantity: '1', rate: String(next.amount), gst_rate: 0 }],
+          }
+        : {}),
+    })
+  }, [invoiceNext, billing.isLoading])
 
   // Invoices and payments on one timeline, newest first.
   const rows: Array<{ kind: 'invoice'; at: string; inv: BillingInvoice } | { kind: 'payment'; at: string; p: Payment }> = [
@@ -329,7 +366,14 @@ export function BillingTab({
           onClose={() => setEditing(null)}
         />
       )}
-      {invoicing && <NewInvoiceDialog initial={invoicing} openAfter={false} onClose={() => setInvoicing(null)} />}
+      {invoicing && (
+        <NewInvoiceDialog
+          initial={invoicing}
+          openAfter={false}
+          onClose={() => setInvoicing(null)}
+          next={onBookTeam ? { label: 'Book the team', onClick: onBookTeam } : undefined}
+        />
+      )}
     </div>
   )
 }

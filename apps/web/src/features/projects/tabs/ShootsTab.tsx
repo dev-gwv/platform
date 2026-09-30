@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -90,7 +90,16 @@ const timeOf = (iso: string | null) =>
  * preset could only ever be applied while first creating the project. Planning
  * one wedding meant three screens.
  */
-export function ShootsTab({ projectId }: { projectId: string }) {
+export function ShootsTab({
+  projectId,
+  focusAssign = false,
+  onFocused,
+}: {
+  projectId: string
+  /** Arrived from "Book the team": point at the first day still short of people. */
+  focusAssign?: boolean
+  onFocused?: (() => void) | undefined
+}) {
   const { session } = useAuth()
   const access = useAccess()
   const canEdit = access.hasAction('projects', 'edit')
@@ -148,6 +157,17 @@ export function ShootsTab({ projectId }: { projectId: string }) {
     const own = (shootTypes.data ?? []).filter((t) => !t.is_archived).map((t) => t.name)
     return own.length ? own.slice(0, 10) : [...QUICK_SHOOTS]
   })()
+
+  // The first day still short of people -- or, with none short, the first day.
+  const focusId = useMemo(() => {
+    if (!focusAssign || !data || !slots.data) return null
+    const short = data.find((s) => {
+      if (s.status === 'cancelled') return false
+      const p = shootProgress(requirementFill(s, slots.data.filter((x) => x.shoot_id === s.id && isLive(x))))
+      return p.required === 0 || p.assigned < p.required
+    })
+    return (short ?? data[0])?.id ?? null
+  }, [focusAssign, data, slots.data])
 
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -254,6 +274,8 @@ export function ShootsTab({ projectId }: { projectId: string }) {
             <ShootPlanner
               key={s.id}
               shoot={s}
+              focus={s.id === focusId}
+              onFocused={onFocused}
               canEdit={canEdit}
               dateIsPlaceholder={placeholderDates.has(s.id) && s.shoot_date === todayISO()}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
@@ -273,13 +295,28 @@ function ShootPlanner({
   slots,
   records,
   dateIsPlaceholder = false,
+  focus = false,
+  onFocused,
 }: {
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
   records: DataRecord[]
   dateIsPlaceholder?: boolean
+  focus?: boolean
+  onFocused?: (() => void) | undefined
 }) {
+  // "Book the team" lands here: bring this day into view and mark it for a moment.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [marked, setMarked] = useState(false)
+  useEffect(() => {
+    if (!focus) return
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setMarked(true)
+    onFocused?.()
+    const t = window.setTimeout(() => setMarked(false), 2500)
+    return () => window.clearTimeout(t)
+  }, [focus])
   const update = useUpdateShoot()
   const del = useDeleteShoot()
   const services = useServices()
@@ -346,7 +383,14 @@ function ShootPlanner({
   }
 
   return (
-    <Card className={cn('overflow-hidden border-t-4', staffed ? 'border-t-success' : 'border-t-primary')}>
+    <Card
+      ref={cardRef}
+      className={cn(
+        'scroll-mt-4 overflow-hidden border-t-4 transition-shadow',
+        staffed ? 'border-t-success' : 'border-t-primary',
+        marked && 'ring-2 ring-primary ring-offset-2',
+      )}
+    >
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
