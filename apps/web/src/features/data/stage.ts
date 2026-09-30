@@ -30,6 +30,18 @@ export function deriveStage(r: StageInput): DataStage {
 /** A booking's data: a record's stage, or why there is none. */
 export type SlotStage = DataStage | 'missing' | 'opted_out'
 
+/**
+ * The person's row on a shoot day: green once their data is in hand
+ * (received, copied or backed up), red when something is wrong with it, and
+ * plain until then -- so a day reads at a glance, as the owner asked.
+ */
+export type RowTone = 'green' | 'red' | 'plain'
+export function dataRowTone(stage: SlotStage): RowTone {
+  if (stage === 'issue') return 'red'
+  if (stage === 'received' || stage === 'copied' || stage === 'backed_up' || stage === 'verified' || stage === 'archived') return 'green'
+  return 'plain'
+}
+
 export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
 export const STAGE_LABEL: Record<SlotStage, string> = {

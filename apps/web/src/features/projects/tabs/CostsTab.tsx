@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router'
 import { Printer } from 'lucide-react'
 import type { ProjectCostSheet } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -20,7 +19,7 @@ const day = (iso: string | null) =>
  * project value. The owner asked for "all the cost of the project, including
  * the payouts to the team", in one place.
  */
-export function CostsTab({ projectId }: { projectId: string }) {
+export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookTeam?: (() => void) | undefined }) {
   const costs = useProjectCosts(projectId)
   const canAddExpense = useAccess().hasModule('company_expenses')
 
@@ -54,9 +53,11 @@ export function CostsTab({ projectId }: { projectId: string }) {
         {c.team.length === 0 ? (
           <Empty>
             Nobody is booked yet.{' '}
-            <Link to="/projects/$id" params={{ id: projectId }} search={{ tab: 'shoots' } as never} className="font-medium text-primary hover:underline">
-              Book the team
-            </Link>
+            {onBookTeam && (
+              <button type="button" onClick={onBookTeam} className="font-medium text-primary hover:underline">
+                Book the team
+              </button>
+            )}
           </Empty>
         ) : (
           <table className="w-full text-sm">

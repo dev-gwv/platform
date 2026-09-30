@@ -49,10 +49,8 @@ import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
 import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
-import { ProjectDataStrip } from '@/features/data/ProjectDataStrip'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
-import { shootNextStep } from '@/features/shoots/next-step'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 
 /** The crew roles a studio reaches for, when it has not named its own yet. */
@@ -110,6 +108,10 @@ export function ShootsTab({
   const slots = useSlots()
   const dataRecords = useProjectDataRecords(projectId)
   const [customOpen, setCustomOpen] = useState(false)
+  // The event chips are the empty state; once a day exists they fold behind
+  // "+ Add event" so the first card sits right under the toolbar. The owner:
+  // "I'm going to the shoot, and then again 'Add your events' is coming up".
+  const [addOpen, setAddOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   /** Shoots a chip made with today's date, until someone sets the real one. */
@@ -143,6 +145,7 @@ export function ShootsTab({
       }),
     onSuccess: (_d, v) => {
       toast.success(`${v.name} added`)
+      setAddOpen(false)
       void qc.invalidateQueries({ queryKey: ['shoots'] })
       void qc.invalidateQueries({ queryKey: ['projects'] })
     },
@@ -170,24 +173,28 @@ export function ShootsTab({
     return (short ?? data[0])?.id ?? null
   }, [focusAssign, data, slots.data])
 
+  const hasShoots = (data?.length ?? 0) > 0
+  const chipsOpen = canEdit && !isLoading && (!hasShoots || addOpen)
+
   return (
     <div className="mt-4 flex flex-col gap-3">
-      {canEdit && <ProjectDataStrip projectId={projectId} />}
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        {canEdit && (data?.length ?? 0) > 1 && (
-          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-            <Users /> Assign one person to many days
+      {/* One slim row, nothing else above the days: add a day, or book one
+          person across many days. */}
+      {canEdit && hasShoots && (
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <Button size="sm" variant={addOpen ? 'outline' : 'default'} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen}>
+            <Plus /> Add event
           </Button>
-        )}
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/shoots">
-            <ExternalLink /> See all shoots
-          </Link>
-        </Button>
-      </div>
+          {(data?.length ?? 0) > 1 && (
+            <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+              <Users /> Bulk assign
+            </Button>
+          )}
+        </div>
+      )}
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
 
-      {canEdit && (
+      {chipsOpen && (
         <section aria-labelledby="add-events" className="rounded-xl border border-border bg-card p-4">
           <h2 id="add-events" className="text-base font-bold tracking-tight">Add your events</h2>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -265,10 +272,7 @@ export function ShootsTab({
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (
-        <EmptyState
-          title="No functions added yet"
-          description="Tap an event above to add it."
-        />
+        !canEdit && <EmptyState title="No functions added yet" />
       ) : (
         <div className="flex flex-col gap-3">
           {data.map((s) => (
@@ -366,14 +370,6 @@ function ShootPlanner({
   const staffed = progress.required > 0 && progress.assigned >= progress.required
   // Before the day there are no cards to chase, so data stays out of sight.
   const dayPassed = !!shoot.shoot_date && shoot.shoot_date <= new Date().toLocaleDateString('en-CA')
-  const next = shootNextStep({
-    shoot_date: shoot.shoot_date,
-    dateIsPlaceholder,
-    location: shoot.location,
-    roles: shoot.requirements.length,
-    assigned: progress.assigned,
-    required: progress.required,
-  })
 
   async function removeHolder(sl: TeamSlot) {
     const yes = await confirm({
@@ -391,7 +387,7 @@ function ShootPlanner({
       className={cn(
         'scroll-mt-4 overflow-hidden transition-shadow',
         // Green only when every seat is filled; otherwise a plain card.
-        staffed && 'border-t-4 border-t-success',
+        staffed && 'border-success/40 border-t-4 border-t-success bg-success/[0.06]',
         marked && 'ring-2 ring-primary ring-offset-2',
       )}
     >
@@ -472,11 +468,12 @@ function ShootPlanner({
           </div>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-1.5">
+              {/* Solid, first: the owner could not see it as an outline. */}
+              <Button size="sm" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
+                <UserPlus /> Assign team
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
                 <Plus /> Add who this day needs
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
-                <UserPlus /> Assign team
               </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
                 <Pencil /> Edit
@@ -507,23 +504,6 @@ function ShootPlanner({
           )}
         </div>
 
-        {/* What to do next on this day, in one line -- the reference app's
-            "next action" on every card, which is what made its board readable. */}
-        {canEdit && (
-          <p
-            className={cn(
-              'mt-3 flex flex-wrap items-center gap-x-2 rounded-lg border px-3 py-2 text-sm',
-              next.tone === 'green'
-                ? 'border-tone-green/40 bg-tone-green-soft/60 text-tone-green'
-                : 'border-tone-amber/50 bg-tone-amber-soft/60 text-foreground',
-            )}
-          >
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-70">{next.tone === 'green' ? 'Done' : 'Next'}</span>
-            <span className="font-semibold">{next.label}</span>
-            {next.tone !== 'green' && <span className="text-xs text-muted-foreground">{next.hint}</span>}
-          </p>
-        )}
-
         {progress.required > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -549,14 +529,13 @@ function ShootPlanner({
           </div>
         )}
 
-        {/* Adding a role used to mean opening the global shoots page and
-            editing the requirement list there. */}
-        {canEdit && roleChips.length > 0 && (
+        {/* Only while the day has no roles: after that, "Add who this day
+            needs" opens the same chips, and the card stays short. */}
+        {canEdit && shoot.requirements.length === 0 && roleChips.length > 0 && (
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-2.5">
             <p className="flex items-center gap-1.5 text-sm font-bold">
               <Users className="size-4 text-primary" /> Who this day needs
             </p>
-            <p className="text-xs text-muted-foreground">Tap a role to add it. Set how many on its row.</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {roleChips.map((name) => (
                 <button
@@ -588,7 +567,8 @@ function ShootPlanner({
                   key={req.service_id}
                   className={cn(
                     'rounded-md border p-3',
-                    full ? 'border-l-4 border-success/40 border-l-success bg-success/5' : 'border-border bg-card',
+                    // A filled role is plainly green, not a hint of it.
+                    full ? 'border-l-4 border-success/50 border-l-success bg-success/15' : 'border-border bg-card',
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2">
