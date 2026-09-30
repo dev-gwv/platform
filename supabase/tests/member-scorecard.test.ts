@@ -70,6 +70,9 @@ beforeAll(async () => {
       ('${PROJECT}', '${COMPANY}', '${CLIENT}', 'Sharma Wedding', 200000, '${OWNER}');
     grant usage on schema auth to authenticated;
   `)
+  // The card counts days in India time (0208). Read "today" the same way, or
+  // after 18:30 UTC the test's current_date is a day behind the card's.
+  await db.exec(`set time zone 'Asia/Kolkata'`)
 })
 
 beforeEach(async () => {
