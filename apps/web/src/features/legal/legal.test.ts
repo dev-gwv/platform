@@ -32,6 +32,13 @@ describe('public pages name the product and the company', () => {
     )
   })
 
+  it("carries the company's registration details from its certificates", () => {
+    expect(LEGAL.cin).toBe('U80301DL2022OPC401949')
+    expect(LEGAL.gstin).toBe('07AAJCG9243K1Z5')
+    expect(LEGAL.address.join(' ')).toContain('Shahdara, Delhi 110053')
+    expect(landing).toContain('LEGAL.cin &&')
+  })
+
   it('prints the address, phone and GSTIN only when they are filled in', () => {
     expect(landing).toContain('LEGAL.address.length > 0')
     expect(landing).toContain('LEGAL.gstin &&')

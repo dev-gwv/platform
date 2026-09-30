@@ -2,7 +2,7 @@
 
 Everything the owner needs for Meta's review of Studio AutoPilot's Facebook lead-ads access,
 in the order it is used. Written only from what the code does: where a statement depends on
-something the owner controls, it says so and marks it **[owner to confirm]**.
+something the owner controls, it says so and marks it **[NOT VERIFIED]**.
 
 | What | Where | Status |
 | --- | --- | --- |
@@ -13,9 +13,12 @@ something the owner controls, it says so and marks it **[owner to confirm]**.
 | Screen-recording script | section 1 | ready |
 | Data handling summary | section 2 | ready |
 
-Three things the code cannot supply and Meta's business verification will ask for:
-the company's **registered address**, **CIN / GSTIN** (put them in `features/legal/legal.ts`; the pages print a line
-only when it is filled, so nothing untrue is shown), and the **hosting region** of the server.
+Company details are filled in from the certificates of incorporation and GST registration (`features/legal/legal.ts`):
+registered office, CIN and GSTIN. PAN, TAN and director details are deliberately not published.
+
+Two facts the repository cannot show, because they live in the server's own settings: the **hosting region** and whether
+**off-site backups** are switched on. Both are marked **NOT VERIFIED** below until prompt C (read-only) reports them; then
+replace the marker with exactly what it says.
 
 ---
 
@@ -48,7 +51,7 @@ questions), the Page's name and id, and Meta's lead id. From the person connecti
 the list of Pages they manage. We do not read friends, posts or the personal profile.
 
 **Where it is stored.** In the studio's own rows of one PostgreSQL 16 database on the Studio AutoPilot server
-**[owner to confirm: provider and region]**. The web app (Cloudflare) holds no lead data. Pages tokens are stored
+**[NOT VERIFIED: provider and region; run prompt C]**. The web app (Cloudflare) holds no lead data. Pages tokens are stored
 encrypted (AES-256-GCM, key held only on the server) in a table no signed-in user can read, and never reach the browser.
 Tokens for Pages a studio did not connect are deleted once they are 30 minutes old (the hourly job sweeps them);
 a disconnected Page's token is deleted at once.
@@ -62,7 +65,7 @@ a disconnected Page's token is deleted at once.
   recipient addresses of messages the app has sent.
 - Processors that receive lead data to do their job: Meta (Graph API, and WhatsApp when a studio turns messaging on),
   Resend (email), Sentry (error reports; session replay is masked), and, only if a studio enables them, Twilio or a
-  connected mailbox. Nightly backups may be copied to an off-site storage bucket **[owner to confirm whether one is configured]**.
+  connected mailbox. Nightly backups may be copied to an off-site storage bucket **[NOT VERIFIED: run prompt C. The code copies dumps off-site only when `BACKUP_S3_BUCKET` is set; otherwise backups stay on the same server for 7 days]**.
 
 **How long it is kept.** For as long as the studio keeps it: there is no automatic expiry of leads. A studio can delete
 leads at any time (below). If a studio closes its account or asks us to delete it, we delete it within 30 days, apart from
@@ -137,3 +140,19 @@ is not the demo studio.
 > 7. Afterwards, archive that test lead and press **Delete permanently**, and report that the lead is gone.
 
 Until a run of prompt B comes back with a time, "within seconds" is a claim to test, not to make in the review notes.
+
+### C. Read-only server check: hosting region and backups
+
+> Use the browser terminal for the production server. This is read-only: never run `docker compose up`, `down`,
+> `restart` or `--build`, never edit a file, and never print the contents of `.env`, any key, password or token.
+>
+> 1. `cd /root/ipc/platform`
+> 2. For each name below, print only `set` or `unset` (do not print values):
+>    `for k in BACKUP_S3_BUCKET BACKUP_S3_ENDPOINT BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do v=$(grep -E "^$k=" .env | cut -d= -f2-); [ -n "$v" ] && echo "$k set" || echo "$k unset"; done`
+> 3. Print only the provider and region words (not secrets):
+>    `grep -E '^(BACKUP_S3_PROVIDER|BACKUP_S3_REGION|BACKUP_KEEP_DAYS|BACKUP_OFFSITE_KEEP_DAYS)=' .env`
+> 4. `docker compose -f docker-compose.yml -f docker-compose.coolify.yml logs --tail 20 backup` and report the last
+>    "uploaded"/"local-only" line and its date.
+> 5. Report where the server is: the provider name and datacenter/region shown in the provider's console for this
+>    server, or, if no console is open, the country and city that a public IP lookup gives for the server's own public IP.
+> 6. Report all of the above as plain lines. Do not guess: write "unknown" for anything you could not see.

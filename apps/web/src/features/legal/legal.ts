@@ -14,9 +14,11 @@ export const LEGAL = {
   operatorName: 'Grateful World Ventures (OPC) Private Limited',
   supportEmail: 'support@studioautopilot.in',
   /** Registered or business address, one line per entry. */
-  address: [] as string[],
+  address: ['E-2, Nai Basti, New Silampur, Shahdara, Delhi 110053'] as string[],
   phone: '',
-  gstin: '',
+  gstin: '07AAJCG9243K1Z5',
+  /** Corporate Identity Number, from the certificate of incorporation. */
+  cin: 'U80301DL2022OPC401949',
   country: 'India',
   responseTime: 'Within 1–2 working days',
   lastUpdated: '29 September 2026',

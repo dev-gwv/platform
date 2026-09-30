@@ -258,6 +258,7 @@ export function ContactPage() {
       <LegalSection title="Who runs this service">
         <p>
           {LEGAL.operatorName}, {LEGAL.country}
+          {LEGAL.cin ? ` · CIN ${LEGAL.cin}` : ''}
           {LEGAL.gstin ? ` · GSTIN ${LEGAL.gstin}` : ''}
         </p>
       </LegalSection>

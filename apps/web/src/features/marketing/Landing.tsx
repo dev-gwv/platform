@@ -123,6 +123,7 @@ export function Landing() {
           <p className="text-sm text-foreground/85">
             <Wordmark /> is run by <strong>{LEGAL.operatorName}</strong>, {LEGAL.country}.
             {LEGAL.address.length > 0 && <> {LEGAL.address.join(', ')}.</>}
+            {LEGAL.cin && <> CIN {LEGAL.cin}.</>}
             {LEGAL.gstin && <> GSTIN {LEGAL.gstin}.</>}
           </p>
           <p className="text-sm text-muted-foreground">
