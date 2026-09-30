@@ -11,7 +11,7 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useSetSlotData } from '@/features/allocation/api'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
-import { STAGE_LABEL, STAGE_TONE, optedOut, slotDay, slotStage, whenLabel } from '@/features/data/stage'
+import { STAGE_LABEL, STAGE_TONE, dataRowTone, optedOut, slotDay, slotStage, whenLabel } from '@/features/data/stage'
 
 /**
  * One person on one shoot day: who, which day and hours, what they are paid,
@@ -49,6 +49,7 @@ export function AssignmentRow({
   const dayPassed = slotDay(slot) <= new Date().toLocaleDateString('en-CA')
   // Owed but not in is the one thing to chase -- amber, not alarm red.
   const tone = stage === 'missing' ? 'warning' : STAGE_TONE[stage]
+  const row = dataRowTone(stage)
 
   const where = record
     ? [
@@ -64,7 +65,12 @@ export function AssignmentRow({
     : []
 
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-card px-3 py-2">
+    <li
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2',
+        row === 'green' ? 'border-success/50 bg-success/15' : row === 'red' ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card',
+      )}
+    >
       <Avatar name={slot.user_name ?? '?'} size="md" />
       <div className="min-w-[12rem] flex-1">
         <p className="truncate text-sm font-semibold">{slot.user_name ?? 'Unknown'}</p>

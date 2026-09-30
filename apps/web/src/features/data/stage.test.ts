@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DataRecord, TeamSlot } from '@ipc/contracts'
 import { dataRecord } from '@ipc/contracts'
-import { dataCounts, defaultDataType, defaultLabel, deriveStage, recordForSlot, slotStage, whenLabel } from './stage'
+import { dataCounts, dataRowTone, defaultDataType, defaultLabel, deriveStage, recordForSlot, slotStage, whenLabel } from './stage'
 
 const SHOOT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
@@ -116,5 +116,17 @@ describe('labels', () => {
     expect(defaultDataType('Traditional Videographer')).toBe('videos')
     expect(defaultDataType('Candid Photographer')).toBe('photos')
     expect(defaultLabel({ name: 'Haldi' }, slot())).toBe('Haldi · Candid Photographer · Rahul Verma')
+  })
+})
+
+describe('dataRowTone', () => {
+  it('turns a person green once their data is in, red on an issue, plain before', () => {
+    expect(dataRowTone('missing')).toBe('plain')
+    expect(dataRowTone('opted_out')).toBe('plain')
+    expect(dataRowTone('with_shooter')).toBe('plain')
+    expect(dataRowTone('received')).toBe('green')
+    expect(dataRowTone('copied')).toBe('green')
+    expect(dataRowTone('backed_up')).toBe('green')
+    expect(dataRowTone('issue')).toBe('red')
   })
 })

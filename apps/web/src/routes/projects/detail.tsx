@@ -5,6 +5,7 @@ import {
   CircleCheck,
   Clock,
   FileText,
+  Globe,
   IndianRupee,
   PauseCircle,
   Pencil,
@@ -41,13 +42,12 @@ import { CostsTab } from '@/features/projects/tabs/CostsTab'
 import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
-import { ReferralCard } from '@/features/projects/ReferralCard'
-import { ClientPortalCard } from '@/features/client-portal/ClientPortalCard'
+import { ClientPortalDialog } from '@/features/client-portal/ClientPortalDialog'
 import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
-import { PROJECT_TABS, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
+import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import type { JourneyKey } from '@/features/projects/journey'
 
@@ -99,6 +99,9 @@ function ProjectDetail() {
   const removeProject = useDeleteProject()
   const confirm = useConfirm()
   const [quoting, setQuoting] = useState(false)
+  // The client's private page lives behind More -> Share with client, not as
+  // a card on the overview (the owner: "it is again creating chaos").
+  const [sharing, setSharing] = useState(false)
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
   const [tab, setTabState] = useState<Tab>(() => {
     const wanted = new URLSearchParams(window.location.search).get('tab')
@@ -250,6 +253,7 @@ function ProjectDetail() {
                   onSelect: () => void navigate({ to: '/projects/$id/edit', params: { id } }),
                 },
                 { label: 'Send quotation link', icon: <Send />, onSelect: () => setQuoting(true) },
+                { label: 'Share with client', icon: <Globe />, onSelect: () => setSharing(true) },
                 {
                   label: 'Preview & edit quotation',
                   icon: <FileText />,
@@ -264,6 +268,15 @@ function ProjectDetail() {
               ]}
             />
             <QuotationLinkDialog projectId={id} open={quoting} onOpenChange={setQuoting} />
+            {sharing && (
+              <ClientPortalDialog
+                projectId={id}
+                projectName={data.name}
+                clientName={data.client_name}
+                clientPhone={data.client_phone}
+                onClose={() => setSharing(false)}
+              />
+            )}
           </div>
         )}
       </div>
@@ -297,31 +310,13 @@ function ProjectDetail() {
       {canEdit && <ProjectJourney project={data} className="mt-3" onGo={go} onSkipToTeam={() => go('team')} />}
 
       <ProjectTabStrip className="mt-4" active={tab} onSelect={setTab} />
+      <ProjectSubTabs className="mt-3" active={tab} onSelect={setTab} />
 
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
-        <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
-        <div className="grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
-          <DeliverablesSummary
-            deliverables={data.deliverables}
-            onOpen={() => setTab('deliverables')}
-          />
-          <div className="flex flex-col gap-4">
-            <ClientPortalCard
-              projectId={id}
-              projectName={data.name}
-              clientName={data.client_name}
-              clientPhone={data.client_phone}
-            />
-            <ReferralCard
-              projectId={id}
-              projectName={data.name}
-              clientName={data.client_name}
-              clientPhone={data.client_phone}
-            />
-            <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
-          </div>
-        </div>
+          <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
+          <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
+          <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
         </div>
       )}
 
@@ -371,7 +366,7 @@ function ProjectDetail() {
         />
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
-      {tab === 'costs' && <CostsTab projectId={id} />}
+      {tab === 'costs' && <CostsTab projectId={id} onBookTeam={() => go('team')} />}
       {tab === 'data' && <DataTab projectId={id} />}
       {tab === 'referrals' && (
         <ReferralsTab

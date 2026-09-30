@@ -47,6 +47,11 @@ network. The API stays healthy and becomes unreachable, and the browser
 reports "Failed to fetch" — the 503 comes from the proxy, so it carries no
 CORS headers and the page cannot read it. This has taken the site down once.
 
+`api.studioautopilot.in` goes through Cloudflare's proxy (orange cloud), not
+straight to the VPS address: a home Wi-Fi provider that could not reach
+72.61.239.209 left the app on "Failed to fetch" while a phone hotspot worked.
+`lib/client-ip.ts` trusts `CF-Connecting-IP` only from Cloudflare's own ranges.
+
 `docs/vps-deploy.md` still describes the Caddy setup; that is the shape for a
 host where IPC owns the ports, not for this one.
 
@@ -92,10 +97,13 @@ These come from the owner reviewing the live app. Apply them to anything you tou
 - **Settings is a grouped rail, never a tab strip.** Every settings page is listed once in `features/settings/SettingsNav.tsx` (`SETTINGS_GROUPS`: Studio, Team, Projects, Money, Messages, More; at most four each) and `AppShell` wraps it in the rail. A new settings page adds a line there, not another tab. (The owner: sixteen tabs across the top were "draining".)
 - **The Team menu is four hubs** (`shared/layout/hubs.ts`): People, Attendance & leave, Pay, Roles & terms. A new team page joins a hub's tab row instead of adding a sidebar line. The plan card at the foot of the sidebar (`features/billing/PlanCard.tsx`) is where "Upgrade" lives.
 - **Two audiences.** An outsider gets a 7-day trial and one plan, ₹1,00,000 + GST a year; an **IPC Diamond member** (`companies.member_tier`, 0214) gets 30 days from sign-up and the member plans (₹1,999 / ₹18,000 / ₹33,000). A member proves it with a screenshot of the "IPC Diamonds - Premium" WhatsApp group (`features/billing/DiamondVerifyCard.tsx`); it is checked automatically and every claim is listed at `/platform/diamond`, where the owner can revoke. `plans.audience` decides who sees a plan and `create_payment_order` enforces it.
-- **Every project page carries the journey line** (`features/projects/ProjectJourney.tsx`): Quotation · Invoice · Team · Deliver, the next step named with one button. Creating a project lands on the quotation; its "Create the invoice" opens the booking amount from the payment plan; saving it offers "Book the team", which lands on the first shoot still short of people. A new step in the studio's flow joins that line, not a guide box.
+- **Every project page carries the journey line** (`features/projects/ProjectJourney.tsx`): Quotation · Invoice · Team · Deliver, the next step named with one button. The quotation page is the one exception: it shows only the document and its toolbar, like the invoice page (the owner: "only the quotation should be visible"). Creating a project lands on the quotation; its "Create the invoice" opens the booking amount from the payment plan; saving it offers "Book the team", which lands on the first shoot still short of people. A new step in the studio's flow joins that line, not a guide box.
 - **Money is rupees.** Use `IndianRupee`, never `DollarSign`; a test fails on any `DollarSign` in `apps/web`.
 - **Neutral by default; green = done; amber = the one next thing; red only for a real problem** (a cancelled day, an issue) **or on hover for delete.** A shoot card is plain until every seat is filled, then green. Data chips appear only once the shoot day has passed. (The owner called the old Shoots tab "a lot of colours, a lot of chaos".)
 - **Teach once, then get out of the way.** A note that explains the app (e.g. "Nitin will see this on their own login") shows for a person's first few times only, through `users.hints` (0216), with a plain close and a "don't show again". Never a box that shows forever.
+- **The project page has eight tabs** (`features/projects/ProjectTabs.tsx`): Overview · Quotation · Shoots · Post-production (Work · Work to review · Tasks) · Terms · Finance (Billing · Expenses · Cost sheet) · Data · Referrals. A new project view joins a group (`PROJECT_GROUPS`) and its sub-tab row, never the strip. View ids (`billing`, `expenses`, `costs`, `deliverables`, `completed_work`, `tasks`…) never change: links, `tracking.ts` and notifications stored in the database use them. (The owner: twelve tabs were "a lot of chaos".)
+- **The Overview is money and work only**: no share-with-client or referral card. The client link is under More → Share with client; asking for a referral is the Referrals tab.
+- **The Shoots tab starts with the days.** One slim row above them (+ Add event, Bulk assign), no data strip, no "See all shoots". The event chips fold behind "+ Add event" once a day exists; the "Who this day needs" chips show only while a day has no roles; no "Next: …" line on a card. Green that reads: a filled role and a person whose data is in are `bg-success/15` (`dataRowTone` in `features/data/stage.ts`), a fully staffed day gets `bg-success/[0.06]` with its green top bar. The card's Assign team button is solid, never outline.
 - **When the owner gives a standing instruction, write it here** in this list, so the next session follows it without being told again.
 
 ## Who is working on what

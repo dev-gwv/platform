@@ -30,7 +30,12 @@ services:
       # The same API on the brand's own address. A router of its own, so its
       # certificate is issued separately: if this name's DNS is not in place
       # yet, only this router waits -- API_DOMAIN keeps serving. Point an A
-      # record (DNS only, not proxied) at the VPS before deploying.
+      # record at the VPS and turn Cloudflare's proxy ON (orange cloud, SSL
+      # mode Full (strict)): some home internet providers cannot reach the
+      # VPS address directly, and the app then fails with "Failed to fetch"
+      # on their Wi-Fi while a phone hotspot works. lib/client-ip.ts reads
+      # the person's address from CF-Connecting-IP only when the peer is
+      # really Cloudflare.
       - "traefik.http.routers.ipcapi-alt.rule=Host(`${API_ALT_DOMAIN:-api.studioautopilot.in}`)"
       - traefik.http.routers.ipcapi-alt.entrypoints=https
       - traefik.http.routers.ipcapi-alt.tls=true
