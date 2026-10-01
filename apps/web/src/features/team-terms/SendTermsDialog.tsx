@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Copy, FileSignature, Send, Undo2 } from 'lucide-react'
 import type { ShootListItem, TeamTermsSend, TeamTermsStatus } from '@ipc/contracts'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -37,7 +37,16 @@ export function TeamTermsStatusBadge({ send }: { send: TeamTermsSend }) {
  * and whether to email them. Everything else — the names and dates inside the
  * document — is filled in by the server at send time.
  */
-export function SendTermsDialog({ shoot }: { shoot: ShootListItem }) {
+export function SendTermsDialog({
+  shoot,
+  forMember,
+  trigger,
+}: {
+  shoot: Pick<ShootListItem, 'id' | 'name'>
+  /** Opened from one person's row: they are already picked. */
+  forMember?: string | undefined
+  trigger?: ReactNode
+}) {
   const [open, setOpen] = useState(false)
   const templates = useTeamTermsTemplates()
   const roles = useEmployeeRoles()
@@ -84,6 +93,10 @@ export function SendTermsDialog({ shoot }: { shoot: ShootListItem }) {
   }, [active, roleId])
 
   const chosen = ordered.find((t) => t.id === templateId) ?? ordered[0]
+
+  useEffect(() => {
+    if (open && forMember && directory.data && memberId !== forMember) pickMember(forMember)
+  }, [open, forMember, directory.data])
 
   function pickMember(userId: string) {
     setMemberId(userId)
@@ -132,9 +145,11 @@ export function SendTermsDialog({ shoot }: { shoot: ShootListItem }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <FileSignature /> Terms
-        </Button>
+        {trigger ?? (
+          <Button size="sm" variant="outline">
+            <FileSignature /> Terms
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent
         title={`Terms for ${shoot.name}`}

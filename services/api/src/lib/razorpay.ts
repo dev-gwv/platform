@@ -58,3 +58,33 @@ export async function createRazorpayOrder(
   if (!body.id) throw new Error('razorpay order response had no id')
   return { id: body.id, amount: body.amount ?? 0, currency: body.currency ?? 'INR' }
 }
+
+export interface RazorpayPayment {
+  id: string
+  status: string
+  amount: number
+  order_id: string | null
+  email: string | null
+}
+
+/**
+ * The payments Razorpay holds for one order. Used before crediting an order
+ * by hand: the payment id comes from Razorpay itself, never from a request.
+ */
+export async function fetchOrderPayments(
+  env: Pick<Env, 'RAZORPAY_KEY_ID' | 'RAZORPAY_KEY_SECRET'>,
+  razorpayOrderId: string,
+): Promise<RazorpayPayment[]> {
+  const auth = btoa(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`)
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}/payments`, {
+    headers: { Authorization: `Basic ${auth}` },
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`razorpay payments lookup failed ${res.status}: ${detail.slice(0, 200)}`)
+  }
+  const body = (await res.json()) as { items?: Array<Partial<RazorpayPayment>> }
+  return (body.items ?? [])
+    .filter((p): p is Partial<RazorpayPayment> & { id: string } => typeof p.id === 'string')
+    .map((p) => ({ id: p.id, status: p.status ?? '', amount: p.amount ?? 0, order_id: p.order_id ?? null, email: p.email ?? null }))
+}

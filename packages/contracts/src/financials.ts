@@ -1,7 +1,21 @@
 import { z } from 'zod'
-import { uuid, isoDate, isoDateTime, money, gstRate } from './shared/primitives'
+import { uuid, isoDate, isoDateTime, money } from './shared/primitives'
 
 export const gstTreatment = z.enum(['non_gst', 'gst_applicable', 'exempt', 'reverse_charge'])
+
+/**
+ * An expense's tax rate: the GST slabs, or a studio's own (0226 expense_tax_rates,
+ * e.g. 3% on gold-plated covers). Invoices stay on the slabs.
+ */
+export const expenseRate = z.coerce.number().min(0).max(100)
+
+export const expenseTaxRate = z.object({ id: uuid, name: z.string(), rate: z.coerce.number(), is_active: z.boolean() })
+export type ExpenseTaxRate = z.infer<typeof expenseTaxRate>
+export const saveExpenseTaxRateRequest = z.object({
+  name: z.string().trim().min(1).max(80),
+  rate: z.number().min(0).max(100),
+  is_active: z.boolean().optional(),
+})
 
 export const expense = z.object({
   id: uuid,
@@ -15,7 +29,7 @@ export const expense = z.object({
   amount: money,
   expense_date: isoDate,
   gst_treatment: gstTreatment,
-  gst_rate: gstRate.nullable(),
+  gst_rate: expenseRate.nullable(),
   is_fixed_overhead: z.boolean(),
   // Lovable parity (optional so old rows still parse).
   invoice_number: z.string().nullable().nullish(),
@@ -96,7 +110,7 @@ export const createExpenseRequest = z.object({
   amount: money,
   expense_date: isoDate.optional(),
   gst_treatment: gstTreatment.default('non_gst'),
-  gst_rate: gstRate.optional(),
+  gst_rate: expenseRate.optional(),
   is_fixed_overhead: z.boolean().default(false),
   invoice_number: z.string().trim().max(80).nullish(),
   amount_is: z.enum(['including_tax', 'excluding_tax']).nullish(),
@@ -117,7 +131,7 @@ export const updateExpenseRequest = z.object({
   amount: money.optional(),
   expense_date: isoDate.optional(),
   gst_treatment: gstTreatment.optional(),
-  gst_rate: gstRate.nullable().optional(),
+  gst_rate: expenseRate.nullable().optional(),
   is_fixed_overhead: z.boolean().optional(),
   invoice_number: z.string().trim().max(80).nullable().optional(),
   amount_is: z.enum(['including_tax', 'excluding_tax']).nullable().optional(),

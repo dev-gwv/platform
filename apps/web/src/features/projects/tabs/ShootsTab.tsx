@@ -1,3 +1,4 @@
+import { SavePresetButton } from '@/features/shoots/SavePresetButton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -23,10 +24,12 @@ import {
   type DataRecord,
   type ShootStatus,
   type TeamSlot,
+  type TeamTermsSend,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useTeamTermsSends } from '@/features/team-terms/api'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -44,7 +47,8 @@ import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/
 import { useReleaseSlot, useSlots } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { AssignmentRow } from '@/features/shoots/AssignmentRow'
-import { dataCounts, recordForSlot } from '@/features/data/stage'
+import { dataCounts, optedOut, recordForSlot } from '@/features/data/stage'
+import { CrewDataDialog } from '@/features/data/CrewDataDialog'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootHours, shootProgress } from '@/features/shoots/assign'
 import { ShootWhenFields, whenOfShoot, whenToPatch, type WhenFields } from '@/features/shoots/ShootWhenFields'
@@ -340,8 +344,17 @@ function ShootPlanner({
   const [assign, setAssign] = useState<{ requirement?: string } | null>(null)
   const [editing, setEditing] = useState(false)
   const [addingReq, setAddingReq] = useState(false)
+  const [crewData, setCrewData] = useState(false)
 
   const live = slots.filter(isLive)
+  // Crew terms, for studios that use them: each person's latest send.
+  const planAccess = useAccess()
+  const usesTerms = canEdit && planAccess.hasModule('team_terms')
+  const termSends = useTeamTermsSends(usesTerms && live.length > 0 ? shoot.id : null)
+  const termsFor = (userId: string | null): TeamTermsSend | null | undefined => {
+    if (!usesTerms || !termSends.data) return undefined
+    return termSends.data.find((t) => t.user_id === userId) ?? null
+  }
   const fill = requirementFill(shoot, live)
   const progress = shootProgress(fill)
 
@@ -357,6 +370,8 @@ function ShootPlanner({
 
   // "Data 2/3": bookings whose footage is copied and backed up, of those that owe it.
   const dataTally = dataCounts(live, records)
+  /** Booked, needing data, nothing recorded yet. */
+  const owing = live.filter((sl) => !optedOut(sl) && !recordForSlot(sl, records))
 
   /** Roles this studio uses that are not yet on this day. */
   const roleChips = (() => {
@@ -489,6 +504,11 @@ function ShootPlanner({
                   <Database className="size-3" /> Data {dataTally.done}/{dataTally.needed}
                 </span>
               )}
+              {canEdit && dayPassed && owing.length > 1 && (
+                <button type="button" onClick={() => setCrewData(true)} className="font-medium text-primary hover:underline">
+                  Record everyone’s cards
+                </button>
+              )}
             </div>
           </div>
           {canEdit && (
@@ -504,6 +524,16 @@ function ShootPlanner({
               <Button size="sm" variant="outline" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
                 <Pencil /> Edit
               </Button>
+              {/* Save this day's shape (who it needs, how long) for the next
+                  wedding; it appears under "Add a set of functions…". */}
+              <SavePresetButton
+                kind="shoot"
+                defaultName={shoot.name}
+                label="Save as preset"
+                disabled={shoot.requirements.length === 0}
+                disabledHint="Add who this day needs first"
+                payload={{ requirements: asInput(), internal_work: [], duration_hours: hours || null }}
+              />
               <Button size="sm" variant="ghost" asChild>
                 <Link to="/shoots/$shootId" params={{ shootId: shoot.id }}>
                   Open this shoot
@@ -673,6 +703,7 @@ function ShootPlanner({
                           canEdit={canEdit}
                           onRemove={() => void removeHolder(sl)}
                           daySlots={allSlots}
+                          terms={termsFor(sl.user_id)}
                         />
                       ))}
                     </ul>
@@ -701,6 +732,7 @@ function ShootPlanner({
           />
         )}
         {editing && <EditShootDialog shoot={shoot} onClose={() => setEditing(false)} />}
+        {crewData && <CrewDataDialog projectId={shoot.project_id} shoot={shoot} slots={owing} onClose={() => setCrewData(false)} />}
       </CardContent>
     </Card>
   )

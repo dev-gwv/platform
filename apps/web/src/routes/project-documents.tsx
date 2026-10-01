@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, CheckCircle2, CircleDashed, Clock, Eye, Hourglass, Search } from 'lucide-react'
+import { ArrowRight, CheckCircle2, CircleDashed, Clock, Eye, Hourglass, MessageCircle, Search } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
@@ -13,6 +13,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
 import { useTermsDocuments, type TermsDocument } from '@/features/terms/api'
 import { useProjects } from '@/features/projects/api'
+import { waNumber } from '@/features/data/board-model'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
 
 const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -118,10 +119,10 @@ function ProjectDocuments() {
         <FilterTabs
           tabs={[
             { value: 'all', label: 'All', count: rows.length },
-            { value: 'agreed', label: 'Agreed' },
-            { value: 'waiting', label: 'Waiting' },
-            { value: 'closed', label: 'Link closed' },
-            { value: 'not_sent', label: 'Not sent' },
+            { value: 'agreed', label: 'Agreed', count: count('agreed') },
+            { value: 'waiting', label: 'Waiting', count: count('waiting') },
+            { value: 'closed', label: 'Link closed', count: count('closed') },
+            { value: 'not_sent', label: 'Not sent', count: count('not_sent') },
           ]}
           value={filter}
           onChange={setFilter}
@@ -154,6 +155,13 @@ function ProjectDocuments() {
                     </div>
                     <StatusBadge tone={LOOK[r.state].tone}>{LOOK[r.state].label}</StatusBadge>
                     <div className="flex gap-1.5">
+                      {r.state === 'waiting' && r.doc?.client_phone && (
+                        <Button size="sm" variant="outline" asChild>
+                          <a href={remindHref(r)} target="_blank" rel="noreferrer" title="A gentle WhatsApp reminder to read and agree">
+                            <MessageCircle /> Remind
+                          </a>
+                        </Button>
+                      )}
                       {r.doc && (
                         <Button size="sm" variant="ghost" onClick={() => setViewing(r.doc!.id)}>
                           <Eye /> View
@@ -185,7 +193,17 @@ function sub(r: Row): string | null {
   const d = r.doc
   if (!d) return null
   if (r.state === 'agreed') return `Agreed${d.acknowledged_by_name ? ` by ${d.acknowledged_by_name}` : ''} on ${when.format(new Date(d.acknowledged_at!))}`
-  if (r.state === 'waiting')
-    return `Sent ${when.format(new Date(d.created_at))}${d.link_expires_at ? ` · link works till ${when.format(new Date(d.link_expires_at))}` : ''}`
+  if (r.state === 'waiting') {
+    const left = d.link_expires_at ? Math.ceil((new Date(d.link_expires_at).getTime() - Date.now()) / 86_400_000) : null
+    const closing = left !== null && left <= 3 ? ` · link closes ${left <= 0 ? 'today' : left === 1 ? 'tomorrow' : `in ${left} days`}` : ''
+    return `Sent ${when.format(new Date(d.created_at))}${closing || (d.link_expires_at ? ` · link works till ${when.format(new Date(d.link_expires_at))}` : '')}`
+  }
   return `Sent ${when.format(new Date(d.created_at))} · not agreed`
+}
+
+/** A WhatsApp nudge in the studio's words; the link itself is in the message they already have. */
+function remindHref(r: Row): string {
+  const to = waNumber(r.doc?.client_phone) ?? ''
+  const text = `Hello${r.client ? ` ${r.client}` : ''}, a gentle reminder to read and agree to the terms for ${r.project}. The link is in the message we sent you. Thank you!`
+  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`
 }

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -11,6 +11,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { platformMessagingRouter } from './messaging'
 import { platformEmailRouter } from './email'
+import { fetchOrderPayments } from '../../lib/razorpay'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -279,11 +280,11 @@ export const platformRouter = new Hono<AppEnv>()
         : platformPlanAction.parse({ action, months })
     const ok = await attempt(c, 'platform.plan', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        if (parsed.action === 'extend') {
+        if (action === 'assign' && plan_key) {
+          // 0226: the real plan column and the plan's own length.
+          await sql`select platform_assign_plan(${id}, ${plan_key})`
+        } else if (parsed.action === 'extend') {
           await sql`select platform_extend_plan(p_company_id => ${id}, p_months => ${parsed.months!})`
-          if (action === 'assign' && plan_key) {
-            await sql`update companies set plan_key = ${plan_key} where id = ${id}`.catch(() => [])
-          }
         } else if (parsed.action === 'expire') {
           await sql`select platform_expire_plan(p_company_id => ${id})`
         } else {
@@ -295,6 +296,93 @@ export const platformRouter = new Hono<AppEnv>()
     if (!ok) fail(400, 'We could not update the plan.')
     await audit(c, { action: `platform.plan_${action}`, entityType: 'company', entityId: id, after: extended.data })
     return c.json({ ok: true })
+  })
+
+  /** The whole plan catalogue, both audiences, for "Assign plan". */
+  .get('/plans', async (c) => {
+    const rows = await attempt(c, 'platform.plans', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from platform_plans()`),
+    )
+    if (!rows) fail(400, 'We could not load the plans.')
+    return c.json(platformPlanList.parse(rows))
+  })
+
+  .post('/studios/:id/assign-plan', async (c) => {
+    const parsed = platformAssignPlanRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick a plan.')
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'platform.assign_plan',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const r = await sql<{ until: string }[]>`select platform_assign_plan(${id}, ${parsed.data.plan_key})::text as until`
+          return r[0]?.until ?? null
+        }),
+      { onCode: (code) => (code === '22023' ? fail(422, 'That plan is not in the catalogue.') : undefined) },
+    )
+    if (!row) fail(400, 'We could not assign the plan.')
+    await audit(c, { action: 'platform.plan_assign', entityType: 'company', entityId: id, after: { plan_key: parsed.data.plan_key, until: row } })
+    return c.json({ ok: true, until: row })
+  })
+
+  /** Razorpay took the money, the studio did not get its plan. */
+  .get('/payments/recovery', async (c) => {
+    const row = await attempt(c, 'platform.payment_recovery', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const r = await sql<{ platform_payment_recovery: unknown }[]>`select platform_payment_recovery()`
+        return r[0]?.platform_payment_recovery ?? null
+      }),
+    )
+    if (!row) fail(400, 'We could not load the payments.')
+    const can = !!(c.env.RAZORPAY_KEY_ID && c.env.RAZORPAY_KEY_SECRET)
+    return c.json(paymentRecovery.parse({ ...(row as object), can_check: can }))
+  })
+
+  /**
+   * Credit one stuck order. The payment id is never taken from the request:
+   * it is a captured payment the webhook ledger already holds for this order,
+   * or one Razorpay itself reports for it. activate_subscription is
+   * idempotent, so a second press says "already credited".
+   */
+  .post('/payments/:id/credit', async (c) => {
+    const id = uuidParam(c)
+    const order = await attempt(c, 'platform.payment_order', () =>
+      withService(c.env, async (sql) => {
+        const r = await sql<{ razorpay_order_id: string | null; status: string; captured: string | null }[]>`
+          select o.razorpay_order_id, o.status,
+                 (select e.payload #>> '{payload,payment,entity,id}' from razorpay_webhook_events e
+                   where e.payload #>> '{payload,payment,entity,order_id}' = o.razorpay_order_id
+                     and e.payload ->> 'event' in ('payment.captured', 'order.paid')
+                   order by e.processed_at desc limit 1) as captured
+            from payment_orders o where o.id = ${id}`
+        return r[0] ?? null
+      }),
+    )
+    if (!order) fail(404, 'That order was not found.')
+    if (!order.razorpay_order_id) fail(409, 'This order never reached Razorpay, so there is nothing to credit.')
+    let paymentId = order.captured
+    if (!paymentId) {
+      if (!c.env.RAZORPAY_KEY_ID || !c.env.RAZORPAY_KEY_SECRET) fail(409, 'No captured payment on record, and Razorpay keys are not set to ask.')
+      let payments: Awaited<ReturnType<typeof fetchOrderPayments>> = []
+      try {
+        payments = await fetchOrderPayments(c.env, order.razorpay_order_id)
+      } catch {
+        fail(503, 'Razorpay did not answer. Try again in a minute.')
+      }
+      paymentId = payments.find((p) => p.status === 'captured')?.id ?? null
+      if (!paymentId) fail(409, 'Razorpay has no captured payment for this order, so the studio was not charged.')
+    }
+    const result = await attempt(c, 'platform.payment_credit', () =>
+      withService(c.env, async (sql) => {
+        const r = await sql<{ duplicate: boolean; expires_at: string | null }[]>`
+          select duplicate, expires_at::text from activate_subscription(p_order_id => ${id}, p_payment_id => ${paymentId})`
+        return r[0] ?? null
+      }),
+    )
+    if (!result) fail(400, 'We could not credit the order.')
+    await audit(c, { action: 'platform.payment_credit', entityType: 'payment_order', entityId: id, after: { payment_id: paymentId, duplicate: result.duplicate } })
+    return c.json(paymentCreditResult.parse({ expires_at: result.expires_at, duplicate: result.duplicate, payment_id: paymentId }))
   })
 
   // IPC Diamond claims: every screenshot, how it was decided, and the owner's

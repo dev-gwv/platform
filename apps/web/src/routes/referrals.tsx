@@ -19,6 +19,7 @@ import {
 } from '@/features/referrals/api'
 import { type CreateReferralCampaignRequest, type ReferralCampaignStatus } from '@ipc/contracts'
 import { toast } from 'sonner'
+import { RewardsBoard } from '@/features/referrals/RewardsBoard'
 import { Plus, Trash2, Pencil, Copy, Trophy, Users, TrendingUp, Target } from 'lucide-react'
 
 function ReferralsContent() {
@@ -107,7 +108,12 @@ function ReferralsContent() {
         <TabsList>
           <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
           <TabsTrigger value="submissions">Submissions</TabsTrigger>
+          <TabsTrigger value="rewards">Rewards</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="rewards">
+          <RewardsBoard campaigns={campaigns} />
+        </TabsContent>
 
         <TabsContent value="campaigns" className="space-y-4">
           {campaigns.map((campaign) => (
@@ -209,6 +215,12 @@ function ReferralsContent() {
                   <option value="rejected">Rejected</option>
                 </Select>
               </div>
+              {/* A booked referral earns the referring client their reward. */}
+              {(sub.status === 'converted' || sub.status === 'rewarded') && sub.reward_status === 'not_due' && (
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => updateStatus.mutate({ id: sub.id, reward_status: 'due' })}>
+                  Reward due
+                </Button>
+              )}
             </div>
           ))}
           {submissions.length === 0 && (

@@ -13,6 +13,7 @@ import { useLeads } from '@/features/crm/api'
 import { ReportsTab } from '@/features/crm/tabs/ReportsTab'
 import { TeamTab } from '@/features/crm/tabs/TeamTab'
 import { ForecastTab } from '@/features/crm/tabs/ForecastTab'
+import { CrmChecks } from '@/features/crm/tabs/CrmChecks'
 
 /**
  * How the leads are going: the funnel, the team, and what may close.
@@ -33,6 +34,7 @@ const SECTIONS = [
   { key: 'funnel', label: 'Funnel & sources', hint: 'Where leads come from, where they stop, and why they were lost' },
   { key: 'team', label: 'Team', hint: 'Who is carrying what, how fast they answer, and who converts' },
   { key: 'forecast', label: 'Forecast', hint: 'What could close, weighted by the stage each deal is in' },
+  { key: 'checks', label: 'Checks', hint: 'Are leads arriving, and can the studio reach them' },
 ] as const
 
 type SectionKey = (typeof SECTIONS)[number]['key']
@@ -138,6 +140,8 @@ function CrmReports() {
           <TeamTab range={range} />
         ) : section === 'forecast' ? (
           <ForecastTab range={range} />
+        ) : section === 'checks' ? (
+          <CrmChecks range={range} />
         ) : needsLeads && leads.isLoading ? (
           <SkeletonList rows={5} columns={4} />
         ) : needsLeads && leads.isError ? (

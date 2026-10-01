@@ -409,7 +409,11 @@ export const webhooksRouter = new Hono<AppEnv>()
     if (fresh === false) return c.json({ ok: true, duplicate: true })
 
     const pay = body!.payload?.payment?.entity
-    if (pay?.order_id && pay.id) {
+    // Only money that actually arrived gives a plan. A `payment.failed` (or
+    // `payment.authorized` not yet captured) carries the same order_id and
+    // payment id, and used to activate the subscription all the same.
+    const paid = body!.event === 'payment.captured' || body!.event === 'order.paid'
+    if (paid && pay?.order_id && pay.id) {
       const orderId = pay.order_id
       const paymentId = pay.id
       const activated = await attempt(c, 'webhooks.razorpay.activate', () =>

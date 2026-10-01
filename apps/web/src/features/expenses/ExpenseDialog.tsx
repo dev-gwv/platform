@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { useCreateExpense, useUpdateExpense } from '@/features/financials/api'
+import { useCreateExpense, useCreateExpenseTaxRate, useExpenseTaxRates, useUpdateExpense } from '@/features/financials/api'
 import { useProjects } from '@/features/projects/api'
 import { useDirectory } from '@/features/team/api'
 import { PartyPicker } from '@/features/parties/PartyPicker'
@@ -62,6 +62,11 @@ export function AddExpenseDialog({
   const [gstTreatment, setGstTreatment] = useState<CreateExpenseRequest['gst_treatment']>(expense?.gst_treatment ?? 'non_gst')
   const [gstRate, setGstRate] = useState(expense?.gst_rate ?? 18)
   const [amountIs, setAmountIs] = useState<'including_tax' | 'excluding_tax'>(expense?.amount_is ?? 'excluding_tax')
+  const [taxName, setTaxName] = useState(expense?.tax_name ?? '')
+  const [addingRate, setAddingRate] = useState(false)
+  const [newRate, setNewRate] = useState({ name: '', rate: '' })
+  const taxRates = useExpenseTaxRates()
+  const createRate = useCreateExpenseTaxRate()
   const [invoiceNumber, setInvoiceNumber] = useState(expense?.invoice_number ?? '')
   const [taxAmount, setTaxAmount] = useState(expense?.tax_amount ? String(expense.tax_amount) : '')
   const [reverse, setReverse] = useState(expense?.reverse_charge ?? false)
@@ -73,7 +78,7 @@ export function AddExpenseDialog({
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `expense:${expense?.id ?? `new${presetProjectId ? `:${presetProjectId}` : ''}`}` : null,
-    { category, description, amount, expenseDate, projectId, partyId, paidBy, gstTreatment, gstRate, amountIs, invoiceNumber, taxAmount, reverse, items },
+    { category, description, amount, expenseDate, projectId, partyId, paidBy, gstTreatment, gstRate, amountIs, invoiceNumber, taxAmount, reverse, items, taxName },
     (v) => {
       setCategory(v.category)
       setDescription(v.description)
@@ -89,6 +94,7 @@ export function AddExpenseDialog({
       setTaxAmount(v.taxAmount)
       setReverse(v.reverse)
       setItems(v.items ?? [])
+      setTaxName(v.taxName ?? '')
       if (v.gstTreatment !== 'non_gst' || v.invoiceNumber || v.taxAmount) setShowTax(true)
     },
   )
@@ -118,6 +124,7 @@ export function AddExpenseDialog({
     setReverse(false)
     setShowTax(false)
     setItems([])
+    setTaxName('')
   }
 
   async function onSubmit(e: FormEvent) {
@@ -137,6 +144,7 @@ export function AddExpenseDialog({
         gst_rate: gstTreatment === 'gst_applicable' ? gstRate : null,
         amount_is: amountIs,
         invoice_number: invoiceNumber.trim() || null,
+        tax_name: gstTreatment === 'gst_applicable' && taxName ? taxName : null,
         tax_amount: taxAmount.trim() ? Number(taxAmount) : gstTreatment === 'gst_applicable' ? Math.round(taxGuess * 100) / 100 : 0,
         reverse_charge: reverse,
         paid_by_user_id: paidBy || null,
@@ -298,13 +306,66 @@ export function AddExpenseDialog({
                 <div className="grid grid-cols-3 gap-3">
                   <div className="flex flex-col gap-1.5">
                     <Label>Rate</Label>
-                    <Select value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))}>
-                      {GST_RATES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}%
-                        </option>
-                      ))}
-                    </Select>
+                    {addingRate ? (
+                      <div className="flex flex-col gap-1">
+                        <Input value={newRate.name} onChange={(e) => setNewRate((v) => ({ ...v, name: e.target.value }))} placeholder="Name, e.g. GST 3%" aria-label="New tax name" autoFocus />
+                        <div className="flex gap-1">
+                          <Input value={newRate.rate} onChange={(e) => setNewRate((v) => ({ ...v, rate: e.target.value }))} inputMode="decimal" placeholder="%" aria-label="New tax rate" />
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!newRate.name.trim() || !(Number(newRate.rate) >= 0) || newRate.rate === '' || createRate.isPending}
+                            onClick={async () => {
+                              const r = await createRate.mutateAsync({ name: newRate.name.trim(), rate: Number(newRate.rate) })
+                              setGstRate(r.rate)
+                              setTaxName(r.name)
+                              setAddingRate(false)
+                              setNewRate({ name: '', rate: '' })
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Select
+                        aria-label="Tax rate"
+                        value={taxName ? `tax:${taxName}` : `slab:${gstRate}`}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === '__add__') return setAddingRate(true)
+                          if (v.startsWith('tax:')) {
+                            const t = (taxRates.data ?? []).find((x) => `tax:${x.name}` === v)
+                            if (t) {
+                              setTaxName(t.name)
+                              setGstRate(t.rate)
+                            }
+                          } else {
+                            setTaxName('')
+                            setGstRate(Number(v.slice(5)))
+                          }
+                        }}
+                      >
+                        {GST_RATES.map((r) => (
+                          <option key={r} value={`slab:${r}`}>
+                            {r}%
+                          </option>
+                        ))}
+                        {(taxRates.data ?? [])
+                          .filter((t) => t.is_active || t.name === taxName)
+                          .map((t) => (
+                            <option key={t.id} value={`tax:${t.name}`}>
+                              {t.name} · {t.rate}%
+                            </option>
+                          ))}
+                        {taxName && !(taxRates.data ?? []).some((t) => t.name === taxName) && (
+                          <option value={`tax:${taxName}`}>
+                            {taxName} · {gstRate}%
+                          </option>
+                        )}
+                        <option value="__add__">+ Add a tax rate…</option>
+                      </Select>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Amount is</Label>

@@ -1,3 +1,4 @@
+import { matchesDate, monthsOf, type DateChoice } from '@/features/shoots/list-filters'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -57,7 +58,7 @@ export function ShootsPage() {
 }
 
 type SortKey = 'date_asc' | 'date_desc' | 'name_az' | 'recent'
-type DateFilter = 'all' | 'upcoming' | 'past' | 'today'
+type DateFilter = DateChoice
 type CrewFilter = 'all' | CrewState
 
 /** Warning, not danger: an uncrewed shoot is work to do, not a failure. */
@@ -85,6 +86,8 @@ function Shoots() {
   const [status, setStatus] = useState<'all' | ShootStatus>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
   const [sort, setSort] = useState<SortKey>('date_asc')
+  const [projectId, setProjectId] = useState('')
+  const [role, setRole] = useState('')
   const [crew, setCrew] = useState<CrewFilter>(
     // ?crew=unassigned arrives from Team Booking's tile.
     () => {
@@ -133,9 +136,9 @@ function Shoots() {
     const q = search.trim().toLowerCase()
     const filtered = all.filter((s) => {
       if (status !== 'all' && s.status !== status) return false
-      if (dateFilter === 'upcoming' && !(s.shoot_date && s.shoot_date >= today)) return false
-      if (dateFilter === 'past' && !(s.shoot_date && s.shoot_date < today)) return false
-      if (dateFilter === 'today' && s.shoot_date !== today) return false
+      if (!matchesDate(s.shoot_date, dateFilter, today)) return false
+      if (projectId && s.project_id !== projectId) return false
+      if (role && !s.requirements.some((r) => r.name.toLowerCase() === role.toLowerCase())) return false
       if (crew !== 'all' && crewOf.get(s.id)?.state !== crew) return false
       if (q) {
         const hay = [s.name, s.project_name ?? '', s.location ?? '', s.client_name ?? '']
@@ -154,7 +157,7 @@ function Shoots() {
       return sort === 'date_desc' ? bk.localeCompare(ak) : ak.localeCompare(bk)
     })
     return sorted
-  }, [all, search, status, dateFilter, crew, crewOf, sort, today])
+  }, [all, search, status, dateFilter, crew, crewOf, sort, today, projectId, role])
 
   async function onDelete(s: ShootListItem) {
     const yes = await confirm({
@@ -166,7 +169,12 @@ function Shoots() {
     if (yes) del.mutate(s.id)
   }
 
-  const hasFilters = search.trim() !== '' || status !== 'all' || dateFilter !== 'all'
+  const hasFilters = search.trim() !== '' || status !== 'all' || dateFilter !== 'all' || crew !== 'all' || !!projectId || !!role
+  const months = monthsOf(all.map((s) => s.shoot_date))
+  const projectOptions = [...new Map(all.filter((s) => s.project_id).map((s) => [s.project_id!, s.project_name ?? 'Project'])).entries()].sort((a, b) =>
+    a[1].localeCompare(b[1]),
+  )
+  const roleOptions = [...new Set(all.flatMap((s) => s.requirements.map((r) => r.name)))].sort((a, b) => a.localeCompare(b))
 
   return (
     <>
@@ -187,7 +195,9 @@ function Shoots() {
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Upcoming" value={stats.upcoming} />
         <StatCard label="Past" value={stats.past} />
-        <StatCard label="Unscheduled" value={stats.unscheduled} />
+        <button type="button" className="text-left" onClick={() => setDateFilter('unscheduled')} title="Show shoots with no date yet">
+          <StatCard label="Unscheduled" value={stats.unscheduled} />
+        </button>
         <StatCard label="Needs crew" value={stats.needsCrew} />
       </div>
 
@@ -208,9 +218,32 @@ function Shoots() {
           </Select>
           <Select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)} aria-label="Date">
             <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="this_week">This week</option>
             <option value="upcoming">Upcoming</option>
             <option value="past">Past</option>
-            <option value="today">Today</option>
+            <option value="unscheduled">No date yet</option>
+            {months.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Project">
+            <option value="">All projects</option>
+            {projectOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </Select>
+          <Select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
+            <option value="">Any role</option>
+            {roleOptions.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
           </Select>
           <Select
             value={crew}
@@ -234,7 +267,7 @@ function Shoots() {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Showing {rows.length} of {all.length} shoots</span>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatus('all'); setDateFilter('all'); setSort('date_asc') }}>
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatus('all'); setDateFilter('all'); setCrew('all'); setProjectId(''); setRole(''); setSort('date_asc') }}>
               <X /> Clear filters
             </Button>
           )}

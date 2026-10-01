@@ -3375,5 +3375,54 @@ if (listed) {
   )
 }
 
+// ── Step 2: referral rewards, money checks, tax rates, platform plans and payments ──
+{
+  const campaign = await api('/referrals/campaigns', { token: aToken, method: 'POST', body: { name: `Thank you ${rand()}`, reward_type: 'fixed', reward_value: 2500 } })
+  await api(`/public/referrals/submit?campaign_id=${campaign.json.id}`, { method: 'POST', body: { referrer_name: 'Neha', client_name: 'Friend of Neha', client_phone: randPhone() } })
+  const sub = ((await api(`/referrals/submissions?campaign_id=${campaign.json.id}`, { token: aToken })).json.items ?? [])[0]
+  await api(`/referrals/submissions/${sub?.id}/status`, { token: aToken, method: 'PATCH', body: { status: 'converted', reward_status: 'due' } })
+  const due = await api('/referrals/submissions?reward_status=due', { token: aToken })
+  const given = await api(`/referrals/submissions/${sub?.id}/status`, { token: aToken, method: 'PATCH', body: { reward_status: 'given', reward_amount: 2500 } })
+  const givenList = await api('/referrals/submissions?reward_status=given', { token: aToken })
+  const row = (givenList.json.items ?? []).find((x) => x.id === sub?.id)
+  const badFilter = await api('/referrals/submissions?reward_status=maybe', { token: aToken })
+  check(
+    'step 2: the rewards board lists due and given apart, and keeps what was given',
+    (due.json.items ?? []).some((x) => x.id === sub?.id) && given.status === 200 && row?.reward_amount === 2500 && badFilter.status === 422,
+    { due: due.status, given: given.status, row, badFilter: badFilter.status },
+  )
+
+  // Expenses with no category, and a studio's own tax rate.
+  await api('/financials/expenses', { token: aToken, method: 'POST', body: { amount: 120 } })
+  const missing = await api('/financials/expenses/summary?missing=category', { token: aToken })
+  const wrong = await api('/financials/expenses?missing=project', { token: aToken })
+  check('step 2: expenses with no category can be counted and listed; an unknown filter is refused', missing.status === 200 && missing.json.count >= 1 && wrong.status === 422, { missing: missing.json, wrong: wrong.status })
+
+  const rateName = `GST ${rand().slice(0, 4)} 3%`
+  const rate = await api('/financials/tax-rates', { token: aToken, method: 'POST', body: { name: rateName, rate: 3 } })
+  const dupe = await api('/financials/tax-rates', { token: aToken, method: 'POST', body: { name: rateName.toLowerCase(), rate: 3 } })
+  const listed = await api('/financials/tax-rates', { token: aToken })
+  const exp = await api('/financials/expenses', {
+    token: aToken,
+    method: 'POST',
+    body: { amount: 10000, gst_treatment: 'gst_applicable', gst_rate: 3, tax_name: rateName, tax_amount: 300 },
+  })
+  check(
+    'step 2: a studio adds its own tax rate once, and an expense at 3% keeps the rate and its name',
+    rate.status === 201 && dupe.status === 409 && listed.json.some((r) => r.name === rateName) && exp.status === 201 && Number(exp.json.gst_rate) === 3 && exp.json.tax_name === rateName,
+    { rate: rate.status, dupe: dupe.status, exp: exp.status, body: exp.json },
+  )
+
+  // The platform's screens are the platform admin's alone.
+  const plans = await api('/platform/plans', { token: aToken })
+  const assign = await api(`/platform/studios/${crypto.randomUUID()}/assign-plan`, { token: aToken, method: 'POST', body: { plan_key: 'x' } })
+  const recovery = await api('/platform/payments/recovery', { token: aToken })
+  check(
+    'step 2: plans, assigning one and the payments to check answer 403 to a studio owner',
+    plans.status === 403 && assign.status === 403 && recovery.status === 403,
+    { plans: plans.status, assign: assign.status, recovery: recovery.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

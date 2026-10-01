@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, legacyImportResult, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -134,5 +134,54 @@ export function useSetAccessUntil() {
       void qc.invalidateQueries({ queryKey: ['platform'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change access.'),
+  })
+}
+
+/** The whole plan catalogue (both audiences), for "Assign plan". */
+export function usePlatformPlans(enabled = true) {
+  return useQuery({
+    queryKey: ['platform', 'plans'],
+    queryFn: () => callApi('/platform/plans', { responseSchema: platformPlanList }),
+    enabled,
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useAssignPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ studioId, planKey }: { studioId: string; planKey: string }) =>
+      callApi(`/platform/studios/${studioId}/assign-plan`, {
+        method: 'POST',
+        body: { plan_key: planKey },
+        responseSchema: z.object({ ok: z.boolean(), until: z.string() }),
+      }),
+    onSuccess: (r) => {
+      toast.success(`Plan given · access until ${new Date(r.until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`)
+      void qc.invalidateQueries({ queryKey: ['platform'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not assign the plan.'),
+  })
+}
+
+/** Orders Razorpay charged that never gave a plan, and payments for orders we do not know. */
+export function usePaymentRecovery() {
+  return useQuery({
+    queryKey: ['platform', 'payments', 'recovery'],
+    queryFn: () => callApi('/platform/payments/recovery', { responseSchema: paymentRecovery }),
+    staleTime: 30_000,
+  })
+}
+
+export function useCreditPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      callApi(`/platform/payments/${orderId}/credit`, { method: 'POST', responseSchema: paymentCreditResult }),
+    onSuccess: (r) => {
+      toast.success(r.duplicate ? 'Already credited earlier' : 'Credited · the studio has its plan')
+      void qc.invalidateQueries({ queryKey: ['platform'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not credit the order.'),
   })
 }

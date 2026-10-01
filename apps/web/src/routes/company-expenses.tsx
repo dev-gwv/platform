@@ -106,6 +106,7 @@ function Expenses() {
   const [paidBy, setPaidBy] = useUrlParam('paid_by')
   const [gst, setGst] = useUrlParam('gst')
   const [view, setView] = useUrlParam('view', 'all')
+  const [missing, setMissing] = useUrlParam('missing')
   const [sort, setSort] = useState<'date' | 'amount'>('date')
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
@@ -123,6 +124,7 @@ function Expenses() {
     gst: gst || undefined,
     paid_by: paidBy || undefined,
     reimbursement: view === 'to_reimburse' ? ('pending' as const) : undefined,
+    missing: missing === 'category' ? ('category' as const) : undefined,
   }
   const { data: summary } = useExpenseSummary(filters)
   const { data: pageData, isLoading, isError, refetch, isFetching } = useExpensePage({ ...filters, sort, dir, page, page_size: PAGE_SIZE })
@@ -130,7 +132,7 @@ function Expenses() {
   const total = pageData?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const activeCount = [search.trim(), category, projectId, paidBy, gst].filter(Boolean).length + (periodKey !== 'this_month' ? 1 : 0)
+  const activeCount = [search.trim(), category, projectId, paidBy, gst, missing].filter(Boolean).length + (periodKey !== 'this_month' ? 1 : 0)
   const change = (fn: () => void) => {
     fn()
     setPage(1)
@@ -147,6 +149,7 @@ function Expenses() {
       setCustomFrom('')
       setCustomTo('')
       setView('all')
+      setMissing('')
     })
   }
 
@@ -258,8 +261,20 @@ function Expenses() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => change(() => setSearch(e.target.value))} placeholder="Search description, invoice…" className="pl-9" aria-label="Search expenses" />
           </div>
-          <Select value={category} onChange={(e) => change(() => setCategory(e.target.value))} className="w-full sm:w-40" aria-label="Filter by category">
+          <Select
+            value={missing === 'category' ? '__none__' : category}
+            onChange={(e) =>
+              change(() => {
+                const v = e.target.value
+                setMissing(v === '__none__' ? 'category' : '')
+                setCategory(v === '__none__' ? '' : v)
+              })
+            }
+            className="w-full sm:w-40"
+            aria-label="Filter by category"
+          >
             <option value="">All categories</option>
+            <option value="__none__">No category yet</option>
             {(categories ?? []).map((c) => (
               <option key={c.id} value={c.value}>
                 {c.value}

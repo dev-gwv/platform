@@ -871,6 +871,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && (path === '/financials/expenses' || path.startsWith('/financials/expenses?')))
     return expensesFx
   if (method === 'POST' && path === '/financials/expenses') return expensesFx[0]
+  if (method === 'GET' && path === '/financials/tax-rates') return [{ id: uid(0x7c5), name: 'GST 3%', rate: 3, is_active: true }]
+  if (method === 'POST' && path === '/financials/tax-rates') return { id: uid(0x7c6), is_active: true, ...(body as object) }
   if (method === 'GET' && path === '/financials/projects') return projectFin
   if (method === 'GET' && path.startsWith('/financials/monthly-profit-summary'))
     return {
@@ -1155,6 +1157,21 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   if (method === 'POST' && path.includes('/terms/') && path.endsWith('/ack')) return { ok: true }
   if (method === 'GET' && path === '/platform/studios') return platformStudiosFx
+  if (method === 'GET' && path === '/platform/plans')
+    return [
+      { id: uid(0x7c1), key: 'diamond-annual', name: 'Diamond Annual', price: 18000, billing_interval: 'yearly', duration_days: 365, audience: 'diamond', is_active: true },
+      { id: uid(0x7c2), key: 'outsider-annual', name: 'Studio Annual', price: 100000, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: true },
+    ]
+  if (method === 'POST' && /^\/platform\/studios\/[^/]+\/assign-plan$/.test(path)) return { ok: true, until: '2027-10-01T00:00:00Z' }
+  if (method === 'GET' && path === '/platform/payments/recovery')
+    return {
+      stuck: [
+        { order_id: uid(0x7c3), company_id: uid(0x7c4), company_name: 'Mehta Studio', plan_name: 'Diamond Annual', amount: 21240, created_at: '2026-09-30T09:00:00Z', razorpay_order_id: 'order_Abc123', captured_payment_id: 'pay_Xyz789' },
+      ],
+      unmatched: [],
+      can_check: false,
+    }
+  if (method === 'POST' && /^\/platform\/payments\/[^/]+\/credit$/.test(path)) return { expires_at: '2027-10-01T00:00:00Z', duplicate: false, payment_id: 'pay_Xyz789' }
   if (method === 'POST' && path === '/feedback/features') return { id: uid(0xfe1) }
   if (method === 'GET' && path.startsWith('/platform/feedback')) return feedbackFx
   if (method === 'PATCH' && path.startsWith('/platform/feedback/')) return {}
