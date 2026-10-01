@@ -26,6 +26,7 @@ import {
   RefreshCw,
   RotateCcw,
   Send,
+  Star,
 } from 'lucide-react'
 import { callApi } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -56,34 +57,17 @@ import {
   type QuotationPrefs,
 } from '@/features/projects/QuotationDocument'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
+import {
+  defaultTermsBody,
+  useDeleteTermsPreset,
+  useMoveLocalPresets,
+  useSaveTermsPreset,
+  useTermsPresets,
+  useUpdateTermsPreset,
+} from '@/features/projects/terms-presets'
 import type { JourneyKey } from '@/features/projects/journey'
 
 const TERMS_LIMIT = 5000
-const PRESET_KEY = 'ipc.quotation.presets'
-
-interface TermsPreset {
-  id: string
-  title: string
-  body: string
-}
-
-function readPresets(): TermsPreset[] {
-  try {
-    const raw = localStorage.getItem(PRESET_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : null
-    return Array.isArray(parsed) ? (parsed as TermsPreset[]) : []
-  } catch {
-    return []
-  }
-}
-
-function writePresets(next: TermsPreset[]) {
-  try {
-    localStorage.setItem(PRESET_KEY, JSON.stringify(next))
-  } catch {
-    // Storage full or blocked — the list still works for this session.
-  }
-}
 
 /** "18:30" from a shoot's start, in the studio's own time zone. */
 function clockTime(iso: string | null): string | null {
@@ -132,6 +116,15 @@ function ProjectQuotation() {
   const { data, isLoading, isError, refetch, isFetching } = useProject(id)
   const update = useUpdateQuotation(id)
   const issue = useIssueQuotation()
+  // The studio's own presets; the default stands in for a project with no terms.
+  const presetsQ = useTermsPresets(canEdit)
+  const presets = presetsQ.data ?? []
+  const studioTerms = defaultTermsBody(presets)
+  const baseTerms = studioTerms ?? DEFAULT_QUOTATION_TERMS_TEXT
+  useMoveLocalPresets(presetsQ.data, canEdit)
+  const savePresetM = useSaveTermsPreset()
+  const updatePreset = useUpdateTermsPreset()
+  const deletePresetM = useDeleteTermsPreset()
   const sendEmail = useSendQuotationEmail()
 
   // Same key the project's Shoots tab uses, so the two share one cache.
@@ -155,7 +148,6 @@ function ProjectQuotation() {
   const [loaded, setLoaded] = useState(false)
   const [termsOpen, setTermsOpen] = useState(false)
   const [termsDraft, setTermsDraft] = useState('')
-  const [presets, setPresets] = useState<TermsPreset[]>([])
   const [presetTitle, setPresetTitle] = useState('')
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
@@ -163,10 +155,6 @@ function ProjectQuotation() {
   const [emailMessage, setEmailMessage] = useState('')
   // "Send to client" lives in one menu; the journey bar opens the same menu.
   const [sendOpen, setSendOpen] = useState(false)
-
-  useEffect(() => {
-    setPresets(readPresets())
-  }, [])
 
   useEffect(() => {
     if (data && !loaded) {
@@ -235,7 +223,7 @@ function ProjectQuotation() {
       received,
       balance,
     },
-    terms: project.quotation_terms,
+    terms: project.quotation_terms?.trim() ? project.quotation_terms : studioTerms,
   }
 
   /**
@@ -297,17 +285,19 @@ function ProjectQuotation() {
       toast.error('Give the preset a name and some text first.')
       return
     }
-    const next = [{ id: `${Date.now()}`, title, body }, ...presets]
-    setPresets(next)
-    writePresets(next)
-    setPresetTitle('')
-    toast.success('Preset saved')
+    savePresetM.mutate(
+      { title, body },
+      {
+        onSuccess: () => {
+          setPresetTitle('')
+          toast.success('Preset saved for your whole studio')
+        },
+      },
+    )
   }
 
   function deletePreset(presetId: string) {
-    const next = presets.filter((p) => p.id !== presetId)
-    setPresets(next)
-    writePresets(next)
+    deletePresetM.mutate(presetId)
   }
 
   /**
@@ -319,7 +309,8 @@ function ProjectQuotation() {
     const body: IssueQuotationRequest = {
       project_id: id,
       notes: null,
-      terms_text: project.quotation_terms?.trim().slice(0, 8000) || null,
+      // The project's own terms, else the studio's default preset.
+      terms_text: (project.quotation_terms?.trim() || studioTerms?.trim() || '').slice(0, 8000) || null,
       display_prefs: prefs,
       shoots_schedule: schedule.map((s) => ({ ...s })),
     }
@@ -579,7 +570,7 @@ function ProjectQuotation() {
         <DialogContent
           className="sm:max-w-2xl"
           title="Edit terms & notes"
-          description="These appear at the bottom of the quotation. One point per line. Leave it empty to use the default terms."
+          description={`These appear at the bottom of the quotation. One point per line. Leave it empty to use ${studioTerms ? 'your studio’s default terms' : 'the standard terms'}.`}
         >
           <div className="flex flex-col gap-3">
             <DraftRestoredBanner
@@ -594,7 +585,7 @@ function ProjectQuotation() {
               value={termsDraft}
               onChange={(e) => setTermsDraft(e.target.value)}
               rows={12}
-              placeholder={DEFAULT_QUOTATION_TERMS_TEXT}
+              placeholder={baseTerms}
               aria-label="Terms"
               className="min-h-[14rem] text-sm leading-relaxed"
             />
@@ -610,6 +601,17 @@ function ProjectQuotation() {
                       <button type="button" className="min-w-0 flex-1 truncate text-left hover:underline" title={p.body} onClick={() => setTermsDraft(p.body)}>
                         {p.title}
                       </button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={p.is_default ? 'text-warning' : 'text-muted-foreground'}
+                        aria-pressed={p.is_default}
+                        title={p.is_default ? 'Used on every project without its own terms. Press to stop.' : 'Use on every project without its own terms'}
+                        disabled={updatePreset.isPending}
+                        onClick={() => updatePreset.mutate({ id: p.id, patch: { is_default: !p.is_default } })}
+                      >
+                        <Star className={p.is_default ? 'fill-current' : undefined} aria-hidden /> {p.is_default ? 'Default' : 'Make default'}
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => deletePreset(p.id)}>
                         Delete
                       </Button>
@@ -619,13 +621,13 @@ function ProjectQuotation() {
               )}
               <div className="mt-2 flex flex-wrap gap-2">
                 <Input value={presetTitle} onChange={(e) => setPresetTitle(e.target.value)} placeholder="Preset name" className="w-44" aria-label="Preset name" />
-                <Button size="sm" variant="outline" onClick={savePreset}>
+                <Button size="sm" variant="outline" onClick={savePreset} disabled={savePresetM.isPending}>
                   Save as preset
                 </Button>
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" size="sm" className="mr-auto" onClick={() => setTermsDraft(DEFAULT_QUOTATION_TERMS_TEXT)}>
+              <Button variant="outline" size="sm" className="mr-auto" onClick={() => setTermsDraft(baseTerms)}>
                 <RotateCcw /> Reset to default
               </Button>
               <Button

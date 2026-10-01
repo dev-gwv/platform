@@ -33,6 +33,8 @@ import {
   updateDeliverableStageRequest,
   productionBoard,
   bulkDeliverableRequest,
+  quotationTermsPreset,
+  saveQuotationTermsPresetRequest,
   z,
 } from '@ipc/contracts'
 import { projectHealth, type ProjectCounters } from '@ipc/domain'
@@ -49,6 +51,14 @@ import { requireStudioWork, studioWork, worksOn } from '../../lib/scope'
 /** postgres.js writes `undefined` as a column; leave those out instead. */
 function withoutUndefined<T extends Record<string, unknown>>(o: T): Partial<T> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
+/** A terms preset write the database refused. */
+function presetRefused(code: string): never | undefined {
+  if (code === '23505') fail(409, 'A preset with that name already exists.')
+  if (code === '42501') fail(403, 'Only an owner or a manager can change the terms presets.')
+  if (code === 'P0002') fail(404, 'That preset was not found.')
+  return undefined
 }
 
 /** The deliverable trigger's own refusals (0161), said plainly. */
@@ -812,6 +822,76 @@ export const projectsRouter = new Hono<AppEnv>()
    * The studio's named stages, step by step. Anyone in the studio reads them:
    * an editor's own list shows them too.
    */
+  /**
+   * The studio's own quotation terms presets (0227), shared by everyone who
+   * writes a quotation. One can be the default, used where a project has no
+   * terms of its own. Owners and managers keep the list (RLS).
+   */
+  .get('/quotation-terms', requireAction('projects', 'view'), async (c) => {
+    const rows = await attempt(c, 'projects.terms_presets', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, title, body, is_default from quotation_terms_presets order by is_default desc, lower(title)`),
+    )
+    if (!rows) fail(400, 'We could not load the terms presets.')
+    return c.json(quotationTermsPreset.array().parse(rows))
+  })
+
+  .post('/quotation-terms', requireAction('projects', 'edit'), async (c) => {
+    const parsed = saveQuotationTermsPresetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Give the preset a name and some terms.')
+    const { is_default, ...data } = parsed.data
+    const row = await attempt(
+      c,
+      'projects.terms_preset_create',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const [r] = await sql<{ id: string }[]>`insert into quotation_terms_presets ${sql(data)} returning id`
+          if (r && is_default) await sql`select set_default_quotation_terms(${r.id})`
+          return r ? (await sql`select id, title, body, is_default from quotation_terms_presets where id = ${r.id}`)[0] ?? null : null
+        }),
+      { onCode: presetRefused },
+    )
+    if (!row) fail(400, 'We could not save the preset.')
+    return c.json(quotationTermsPreset.parse(row), 201)
+  })
+
+  .patch('/quotation-terms/:pid', requireAction('projects', 'edit'), async (c) => {
+    const parsed = saveQuotationTermsPresetRequest.partial().safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success || Object.keys(parsed.data).length === 0) fail(422, 'Nothing to change.')
+    const id = uuidParam(c, 'pid')
+    const { is_default, ...data } = parsed.data
+    const row = await attempt(
+      c,
+      'projects.terms_preset_update',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          if (Object.keys(data).length) {
+            const r = await sql`update quotation_terms_presets set ${sql(withoutUndefined(data))} where id = ${id} returning id`
+            if (!r.length) return null
+          }
+          if (is_default === true) await sql`select set_default_quotation_terms(${id})`
+          if (is_default === false) await sql`update quotation_terms_presets set is_default = false where id = ${id}`
+          return (await sql`select id, title, body, is_default from quotation_terms_presets where id = ${id}`)[0] ?? null
+        }),
+      { onCode: presetRefused },
+    )
+    if (!row) fail(404, 'That preset was not found.')
+    return c.json(quotationTermsPreset.parse(row))
+  })
+
+  .delete('/quotation-terms/:pid', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c, 'pid')
+    const rows = await attempt(
+      c,
+      'projects.terms_preset_delete',
+      () => withUser(c.env, c.get('auth').userId, (sql) => sql`delete from quotation_terms_presets where id = ${id} returning id`),
+      { onCode: presetRefused },
+    )
+    if (!rows) fail(400, 'We could not delete the preset.')
+    if (!rows.length) fail(404, 'That preset was not found.')
+    return c.body(null, 204)
+  })
+
   .get('/stages', async (c) => {
     const rows = await attempt(c, 'projects.stages', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
@@ -1084,6 +1164,18 @@ export const projectsRouter = new Hono<AppEnv>()
                      to_jsonb(d) || jsonb_build_object(
                        'shoot_name', (select s.name from shoots s where s.id = d.shoot_id),
                        'shoot_date', (select s.shoot_date from shoots s where s.id = d.shoot_id),
+                       -- Several shoots live in the links (0227); one is just shoot_id.
+                       'shoot_ids', coalesce(
+                         (select jsonb_agg(l.shoot_id order by s.shoot_date nulls last, s.created_at)
+                            from deliverable_shoot_links l join shoots s on s.id = l.shoot_id
+                           where l.deliverable_id = d.id),
+                         case when d.shoot_id is null then '[]'::jsonb else jsonb_build_array(d.shoot_id) end),
+                       'shoot_names', coalesce(
+                         (select jsonb_agg(s.name order by s.shoot_date nulls last, s.created_at)
+                            from deliverable_shoot_links l join shoots s on s.id = l.shoot_id
+                           where l.deliverable_id = d.id),
+                         (select jsonb_build_array(s.name) from shoots s where s.id = d.shoot_id),
+                         '[]'::jsonb),
                        'assignee_name', (select u.name from users u where u.user_id = d.assignee_id),
                        'notes_count', (select count(*) from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event'),
                        'voice_count', (select count(*) from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice'),
@@ -1200,9 +1292,11 @@ export const projectsRouter = new Hono<AppEnv>()
           // row's trigger refuses them too, but a plain 404 is the answer.
           const owns = await sql`select 1 from projects where id = ${projectId}`
           if (!owns.length) return 'missing' as const
+          const { shoot_ids, ...data } = parsed.data
           const rows = await sql<{ id: string }[]>`
-            insert into deliverables ${sql(withoutUndefined({ ...parsed.data, project_id: projectId, company_id: auth.companyId }))}
+            insert into deliverables ${sql(withoutUndefined({ ...data, project_id: projectId, company_id: auth.companyId }))}
             returning id`
+          if (rows[0] && shoot_ids) await sql`select set_deliverable_shoots(${rows[0].id}, ${shoot_ids}::uuid[])`
           return rows[0] ?? null
         }),
       { onCode: deliverableRuleBroken },
@@ -1216,20 +1310,24 @@ export const projectsRouter = new Hono<AppEnv>()
   .patch('/:id/deliverables/:did', requireAction('projects', 'edit'), async (c) => {
     const parsed = updateDeliverableRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the deliverable details.')
-    const patch = withoutUndefined(parsed.data)
-    if (Object.keys(patch).length === 0) fail(422, 'Nothing to change.')
+    const { shoot_ids, ...rest } = parsed.data
+    // The list decides the shoot; a shoot_id beside it would only be undone.
+    const patch = withoutUndefined(shoot_ids ? { ...rest, shoot_id: undefined } : rest)
+    if (Object.keys(patch).length === 0 && !shoot_ids) fail(422, 'Nothing to change.')
     const projectId = uuidParam(c)
     const did = uuidParam(c, 'did')
     const rows = await attempt(
       c,
       'projects.deliverable_update',
       () =>
-        withUser(
-          c.env,
-          c.get('auth').userId,
-          (sql) => sql<{ id: string }[]>`
-            update deliverables set ${sql(patch)} where id = ${did} and project_id = ${projectId} returning id`,
-        ),
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const found = Object.keys(patch).length
+            ? await sql<{ id: string }[]>`
+                update deliverables set ${sql(patch)} where id = ${did} and project_id = ${projectId} returning id`
+            : await sql<{ id: string }[]>`select id from deliverables where id = ${did} and project_id = ${projectId}`
+          if (found.length && shoot_ids) await sql`select set_deliverable_shoots(${did}, ${shoot_ids}::uuid[])`
+          return found
+        }),
       { onCode: deliverableRuleBroken },
     )
     if (!rows) fail(400, 'We could not update the deliverable.')

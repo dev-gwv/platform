@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
-import { myFollowUp } from '@ipc/contracts'
+import { myFollowUp, z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withService } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 
@@ -58,4 +58,26 @@ export const meRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That follow-up is not yours, or it is already done.')
     await audit(c, { action: 'activity.update', entityType: 'crm_activity', entityId: id, after: { done: true } })
     return c.json({ ok: true })
+  })
+
+  // Email copies of my alerts (0227): on unless I turned them off.
+  .get('/alert-emails', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'me.alert_emails', () =>
+      withService(c.env, (sql) => sql<{ on: boolean; email: string | null }[]>`
+        select alert_emails as on, email from users
+         where user_id = ${auth.userId} and company_id = ${auth.companyId} and deleted_at is null`),
+    )
+    if (!rows) fail(400, 'We could not load your email setting.')
+    return c.json({ on: rows[0]?.on ?? true, email: rows[0]?.email ?? null })
+  })
+
+  .put('/alert-emails', async (c) => {
+    const parsed = z.object({ on: z.boolean() }).safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Say on or off.')
+    const rows = await attempt(c, 'me.alert_emails_set', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ on: boolean }[]>`select set_my_alert_emails(${parsed.data.on}) as on`),
+    )
+    if (!rows) fail(400, 'We could not save your email setting.')
+    return c.json({ on: rows[0]?.on ?? parsed.data.on })
   })

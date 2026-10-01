@@ -3424,5 +3424,62 @@ if (listed) {
   )
 }
 
+// ── Step 3 (0227): shared terms presets, one deliverable from several shoots, alert emails ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `s3-${rand()}@madeup.test`
+  await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Step Three Staff', phone: randPhone(), email, password: 'S3-pass-1234', create_login: true } })
+  const staff = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'S3-pass-1234' } })).json.access_token
+
+  const title = `Wedding terms ${rand().slice(0, 5)}`
+  const made = await api('/projects/quotation-terms', { token: aToken, method: 'POST', body: { title, body: '50% advance to hold the date.', is_default: true } })
+  const dupe = await api('/projects/quotation-terms', { token: aToken, method: 'POST', body: { title: title.toUpperCase(), body: 'again' } })
+  const other = await api('/projects/quotation-terms', { token: aToken, method: 'POST', body: { title: `${title} B`, body: 'Full payment upfront.' } })
+  const moved = await api(`/projects/quotation-terms/${other.json.id}`, { token: aToken, method: 'PATCH', body: { is_default: true } })
+  const list = await api('/projects/quotation-terms', { token: aToken })
+  const defaults = (list.json ?? []).filter((p) => p.is_default).map((p) => p.id)
+  const staffWrite = await api('/projects/quotation-terms', { token: staff, method: 'POST', body: { title: 'Mine', body: 'x' } })
+  const gone = await api(`/projects/quotation-terms/${made.json.id}`, { token: aToken, method: 'DELETE' })
+  check(
+    'step 3: terms presets are the studio’s, one default at a time; a name twice is 409; staff cannot write them',
+    made.status === 201 && made.json.is_default === true && dupe.status === 409 && moved.status === 200 && defaults.length === 1 && defaults[0] === other.json.id &&
+      staffWrite.status === 403 && gone.status === 204,
+    { made: made.status, dupe: dupe.status, moved: moved.status, defaults, staffWrite: staffWrite.status, gone: gone.status },
+  )
+  await api(`/projects/quotation-terms/${other.json.id}`, { token: aToken, method: 'DELETE' })
+
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `S3 Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `S3 project ${rand()}`, client_id: client.json.id } })).json.id
+  const haldi = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', shoot_date: '2027-01-10' } })).json.id
+  const wedding = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Wedding', shoot_date: '2027-01-12' } })).json.id
+  const otherPid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `S3 other ${rand()}`, client_id: client.json.id } })).json.id
+  const elsewhere = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: otherPid, name: 'Elsewhere' } })).json.id
+  const dl = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Highlights', shoot_ids: [wedding, haldi] } })
+  const detail = await api(`/projects/${pid}`, { token: aToken })
+  const d = (detail.json.deliverables ?? []).find((x) => x.id === dl.json.id)
+  const bad = await api(`/projects/${pid}/deliverables/${dl.json.id}`, { token: aToken, method: 'PATCH', body: { shoot_ids: [haldi, elsewhere] } })
+  const one = await api(`/projects/${pid}/deliverables/${dl.json.id}`, { token: aToken, method: 'PATCH', body: { shoot_ids: [haldi] } })
+  const after = ((await api(`/projects/${pid}`, { token: aToken })).json.deliverables ?? []).find((x) => x.id === dl.json.id)
+  check(
+    'step 3: a deliverable keeps several shoots (shoot_id on the last); a shoot from another project is refused; one shoot is plain again',
+    dl.status === 201 && d?.shoot_id === wedding && JSON.stringify(d?.shoot_ids) === JSON.stringify([haldi, wedding]) &&
+      JSON.stringify(d?.shoot_names) === JSON.stringify(['Haldi', 'Wedding']) && d?.start_rule === 'specific_shoots' &&
+      bad.status === 422 && one.status === 204 && after?.shoot_id === haldi && after?.shoot_ids?.length === 1 && after?.start_rule === 'whole_project',
+    { dl: dl.status, d: d && { shoot_id: d.shoot_id, shoot_ids: d.shoot_ids, names: d.shoot_names, rule: d.start_rule }, bad: bad.status, one: one.status, after: after && { shoot_id: after.shoot_id, ids: after.shoot_ids } },
+  )
+
+  const mine = await api('/me/alert-emails', { token: staff })
+  const off = await api('/me/alert-emails', { token: staff, method: 'PUT', body: { on: false } })
+  const again = await api('/me/alert-emails', { token: staff })
+  const cron = await fetch(`${API}/cron/reminders?dry=1`, { method: 'POST', headers: { 'x-cron-secret': process.env.CRON_SECRET ?? 'ci-cron' } })
+  const cronJson = await cron.json().catch(() => ({}))
+  check(
+    'step 3: a person turns their alert emails off; the hourly cron counts the alert emails',
+    mine.status === 200 && mine.json.on === true && mine.json.email === email && off.json.on === false && again.json.on === false &&
+      cron.status === 200 && JSON.stringify(cronJson).includes('alert_emails'),
+    { mine: mine.json, off: off.json, again: again.json, cron: cron.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

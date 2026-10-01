@@ -112,6 +112,24 @@ export const DEFAULT_QUOTATION_TERMS: readonly string[] = [
   'Quotation is valid for 30 days from the date of issue. All amounts in INR unless stated otherwise.',
 ]
 export const DEFAULT_QUOTATION_TERMS_TEXT = DEFAULT_QUOTATION_TERMS.join('\n')
+/**
+ * A studio's own terms preset (0227). One may be the default: a project with
+ * no terms of its own shows it instead of DEFAULT_QUOTATION_TERMS.
+ */
+export const quotationTermsPreset = z.object({
+  id: uuid,
+  title: z.string(),
+  body: z.string(),
+  is_default: z.boolean(),
+})
+export type QuotationTermsPreset = z.infer<typeof quotationTermsPreset>
+export const saveQuotationTermsPresetRequest = z.object({
+  title: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(10000),
+  is_default: z.boolean().optional(),
+})
+export type SaveQuotationTermsPresetRequest = z.infer<typeof saveQuotationTermsPresetRequest>
+
 export function parseQuotationTerms(raw: string | null | undefined): string[] {
   const text = (raw ?? '').trim()
   if (!text) return [...DEFAULT_QUOTATION_TERMS]

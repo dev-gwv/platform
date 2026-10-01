@@ -152,3 +152,9 @@ export function deliverableCounts(deliverables: readonly Dated[], today = todayI
     late: live.filter((d) => isLate(d, today)).length,
   }
 }
+
+/** "Haldi + Wedding", the one shoot, or the whole project. */
+export function fromLabel(d: { shoot_name?: string | null | undefined; shoot_names?: readonly string[] | undefined }): string {
+  if (d.shoot_names && d.shoot_names.length > 1) return d.shoot_names.join(' + ')
+  return d.shoot_name ?? 'Whole project'
+}

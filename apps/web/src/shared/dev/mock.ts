@@ -284,6 +284,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
   if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/me/alert-emails') return { on: true, email: 'you@example.com' }
+  if (method === 'PUT' && path === '/me/alert-emails') return { on: (body as { on?: boolean } | undefined)?.on ?? true }
+  if (method === 'GET' && path === '/projects/quotation-terms')
+    return [{ id: uid(0x7d1), title: 'Wedding terms', body: '50% advance to book the date.\nBalance before delivery.', is_default: true }]
+  if (method === 'POST' && path === '/projects/quotation-terms') return { id: uid(0x7d2), is_default: false, ...(body as object) }
+  if (method === 'PATCH' && /^\/projects\/quotation-terms\/[^/]+$/.test(path))
+    return { id: path.split('/').pop(), title: 'Wedding terms', body: '50% advance', is_default: false, ...(body as object) }
+  if (method === 'DELETE' && /^\/projects\/quotation-terms\/[^/]+$/.test(path)) return null
   if (method === 'POST' && /^\/team\/members\/[^/]+\/sign-in$/.test(path))
     return { email: (body as { email?: string } | undefined)?.email ?? 'member@example.com' }
   if (method === 'POST' && path === '/auth/reset-password')

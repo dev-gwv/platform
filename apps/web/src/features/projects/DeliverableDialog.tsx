@@ -52,7 +52,9 @@ export function DeliverableDialog({
   const { data: members } = useMembers()
 
   const [title, setTitle] = useState(deliverable?.title ?? '')
-  const [shootId, setShootId] = useState(deliverable?.shoot_id ?? defaultShootId ?? '')
+  const startShoots = (): string[] =>
+    deliverable ? (deliverable.shoot_ids?.length ? deliverable.shoot_ids : deliverable.shoot_id ? [deliverable.shoot_id] : []) : defaultShootId ? [defaultShootId] : []
+  const [shootIds, setShootIds] = useState<string[]>(startShoots)
   const [scope, setScope] = useState<'client' | 'internal'>(deliverable?.visibility_scope ?? 'client')
   const [assigneeId, setAssigneeId] = useState(deliverable?.assignee_id ?? '')
   const [due, setDue] = useState(deliverable?.estimated_date ?? '')
@@ -66,10 +68,10 @@ export function DeliverableDialog({
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     `deliverable:${deliverable?.id ?? `new:${projectId}${defaultShootId ? `:${defaultShootId}` : ''}`}`,
-    { title, shootId, scope, assigneeId, due, status, link, charged, amount, brief },
+    { title, shootIds, scope, assigneeId, due, status, link, charged, amount, brief },
     (v) => {
       setTitle(v.title)
-      setShootId(v.shootId)
+      setShootIds(Array.isArray(v.shootIds) ? v.shootIds : [])
       setScope(v.scope)
       setAssigneeId(v.assigneeId)
       setDue(v.due)
@@ -84,7 +86,7 @@ export function DeliverableDialog({
   function startFresh() {
     draft.clear()
     setTitle(deliverable?.title ?? '')
-    setShootId(deliverable?.shoot_id ?? defaultShootId ?? '')
+    setShootIds(startShoots())
     setScope(deliverable?.visibility_scope ?? 'client')
     setAssigneeId(deliverable?.assignee_id ?? '')
     setDue(deliverable?.estimated_date ?? '')
@@ -102,7 +104,8 @@ export function DeliverableDialog({
   function save() {
     const body = {
       title: title.trim(),
-      shoot_id: shootId || null,
+      // The server keeps the list and points shoot_id at the last of them.
+      shoot_ids: shootIds.filter((s) => shoots.some((x) => x.id === s)),
       visibility_scope: scope,
       show_on_quotation: client,
       assignee_id: assigneeId || null,
@@ -153,18 +156,9 @@ export function DeliverableDialog({
             />
           </div>
 
+          <ShootChips shoots={shoots} value={shootIds} onChange={setShootIds} />
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="dl-shoot">From</Label>
-              <Select id="dl-shoot" aria-label="From shoot" value={shootId} onChange={(e) => setShootId(e.target.value)}>
-                <option value="">Whole project</option>
-                {shoots.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
             <div className="flex flex-col gap-1.5">
               <Label>Who sees it</Label>
               <div role="radiogroup" aria-label="Who sees it" className="flex h-9 gap-1 rounded-md border border-input p-0.5">
@@ -271,5 +265,51 @@ export function DeliverableDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Which shoots it comes from: none is the whole project, and any number can
+ * be picked ("Highlights from Haldi + Wedding"). Each tap shows at once.
+ */
+function ShootChips({
+  shoots,
+  value,
+  onChange,
+}: {
+  shoots: readonly ShootRef[]
+  value: readonly string[]
+  onChange: (next: string[]) => void
+}) {
+  const picked = new Set(value)
+  const ordered = [...shoots].sort((a, b) => (a.shoot_date ?? '9999').localeCompare(b.shoot_date ?? '9999') || a.name.localeCompare(b.name))
+  const names = ordered.filter((s) => picked.has(s.id)).map((s) => s.name)
+  const chip = (on: boolean) =>
+    cn(
+      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+      on ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card text-foreground hover:bg-muted',
+    )
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label id="dl-from">
+        From <span className="font-normal text-muted-foreground">· {names.length === 0 ? 'the whole project' : names.join(' + ')}</span>
+      </Label>
+      <div role="group" aria-labelledby="dl-from" className="flex flex-wrap gap-1.5">
+        <button type="button" aria-pressed={value.length === 0} className={chip(value.length === 0)} onClick={() => onChange([])}>
+          Whole project
+        </button>
+        {ordered.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={picked.has(s.id)}
+            className={chip(picked.has(s.id))}
+            onClick={() => onChange(picked.has(s.id) ? value.filter((x) => x !== s.id) : [...value, s.id])}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -56,6 +56,7 @@ export const cronRunResult = z.object({
   invoice_overdue: z.unknown().optional(),
   morning_emails: z.object({ due: z.number().int(), sent: z.number().int() }).optional(),
   access_emails: z.object({ due: z.number().int(), sent: z.number().int() }).optional(),
+  alert_emails: z.object({ due: z.number().int(), people: z.number().int(), sent: z.number().int() }).optional(),
   sequence_sends: z.object({ claimed: z.number().int(), sent: z.number().int(), failed: z.number().int() }).optional(),
   purged_refresh_tokens: z.number().int(),
   removed_idle_page_tokens: z.number().int().optional(),
