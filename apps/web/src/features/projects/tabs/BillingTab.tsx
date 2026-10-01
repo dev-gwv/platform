@@ -17,7 +17,7 @@ import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/Record
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
 import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
-import { nextInvoiceFromPlan } from '@/features/billing/from-plan'
+import { projectInvoiceLines, unappliedPayments } from '@/features/billing/project-lines'
 import { dueText, isOverdue, shortDate } from '@/features/billing/status'
 import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-money'
 import { IconTile } from '@/shared/ui/icon-tile'
@@ -254,10 +254,11 @@ export function BillingTab({
       ...(line ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] } : {}),
     })
 
-  // "Create the invoice" from the journey: the booking amount (or whichever
-  // part of the plan is next), already filled in -- client, project, subject,
-  // one line at the right amount. The studio checks it and presses Save.
-  const plan = billing.data?.plan ?? null
+  // "Create the invoice" from the journey: the whole project, already filled
+  // in -- client, project, the package and every chargeable extra as lines,
+  // and the advance the wizard recorded ticked to count against it. The
+  // owner: "the entire project amount should be shown inside automatically".
+  // The studio checks it and presses Save.
   // Opened by the journey: saving it goes straight on to booking the team.
   const [fromJourney, setFromJourney] = useState(false)
   useEffect(() => {
@@ -265,23 +266,14 @@ export function BillingTab({
     onInvoiceNextDone?.()
     if (!canBill || !canInvoice) return
     setFromJourney(true)
-    const next = nextInvoiceFromPlan({
-      projectName: project.name,
-      total: plan?.total_cost ?? project.total_cost,
-      instalments: plan?.instalments ?? null,
-      received: m.received,
-      invoiced: live.reduce((n, i) => n + i.taxable, 0),
-    })
+    const lines = projectInvoiceLines(project)
     setInvoicing({
       client_id: project.client_id,
       project_id: project.id,
       status: 'sent',
-      ...(next
-        ? {
-            subject: next.description,
-            lines: [{ description: next.description, quantity: '1', rate: String(next.amount), gst_rate: 0 }],
-          }
-        : {}),
+      subject: project.name,
+      applied: unappliedPayments(project),
+      ...(lines.length > 0 ? { lines } : {}),
     })
   }, [invoiceNext, billing.isLoading])
 

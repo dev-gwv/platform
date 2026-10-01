@@ -109,5 +109,15 @@ describe('securityHeaders', () => {
     const res = await app.request('/raw')
     expect(res.headers.get('X-Frame-Options')).toBe('DENY')
     expect(res.headers.get('Content-Security-Policy')).toContain("default-src 'none'")
+    expect(res.headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin')
+  })
+
+  it('keeps the resource policy a handler set, so a public logo can show on the app origin', async () => {
+    const app = new Hono<AppEnv>()
+    app.use('*', securityHeaders)
+    app.get('/logo', () => new Response('png', { headers: { 'Cross-Origin-Resource-Policy': 'cross-origin' } }))
+    const res = await app.request('/logo')
+    expect(res.headers.get('Cross-Origin-Resource-Policy')).toBe('cross-origin')
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY')
   })
 })

@@ -46,7 +46,8 @@ import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { AssignmentRow } from '@/features/shoots/AssignmentRow'
 import { dataCounts, recordForSlot } from '@/features/data/stage'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
-import { isLive, requirementFill, shootProgress } from '@/features/shoots/assign'
+import { isLive, requirementFill, shootHours, shootProgress } from '@/features/shoots/assign'
+import { ShootWhenFields, whenOfShoot, whenToPatch, type WhenFields } from '@/features/shoots/ShootWhenFields'
 import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
@@ -128,6 +129,8 @@ export function ShootsTab({
     mutationFn: (input: {
       name: string
       shoot_date?: string
+      start_at?: string
+      end_at?: string
       location?: string
       requirements?: ShootRequirementInput[]
     }) =>
@@ -137,6 +140,8 @@ export function ShootsTab({
           project_id: projectId,
           name: input.name,
           ...(input.shoot_date ? { shoot_date: input.shoot_date } : {}),
+          ...(input.start_at ? { start_at: input.start_at } : {}),
+          ...(input.end_at ? { end_at: input.end_at } : {}),
           ...(input.location ? { location: input.location } : {}),
           ...(input.requirements?.length ? { requirements: input.requirements } : {}),
           status: 'planned',
@@ -366,6 +371,7 @@ function ShootPlanner({
 
   const start = timeOf(shoot.start_at)
   const end = timeOf(shoot.end_at)
+  const hours = shootHours(shoot)
   const href = mapHref(shoot.map_link)
   const staffed = progress.required > 0 && progress.assigned >= progress.required
   // Before the day there are no cards to chase, so data stays out of sight.
@@ -424,13 +430,28 @@ function ShootPlanner({
                 ) : (
                   <span>{shoot.shoot_date}</span>
                 ))}
-              {start && (
+              {/* The hours the day runs, or the one amber ask when nobody has
+                  said yet: the team cannot be planned without them. */}
+              {start && hours ? (
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" />
+                  {start}–{end} · {Number.isInteger(hours) ? hours : hours.toFixed(1)} h
+                </span>
+              ) : shoot.status !== 'cancelled' && shoot.status !== 'completed' && canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="flex items-center gap-1 rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
+                >
+                  <Clock className="size-3" />
+                  {start ? `${start} · set the duration` : 'Set start time & duration'}
+                </button>
+              ) : start ? (
                 <span className="flex items-center gap-1">
                   <Clock className="size-3" />
                   {start}
-                  {end ? `–${end}` : ''}
                 </span>
-              )}
+              ) : null}
               {shoot.location && (
                 <span className="flex items-center gap-1">
                   <MapPin className="size-3" />
@@ -785,18 +806,16 @@ function AddRequirementDialog({
 function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: () => void }) {
   const update = useUpdateShoot()
   const [name, setName] = useState(shoot.name)
-  const [date, setDate] = useState(shoot.shoot_date ?? '')
-  const [start, setStart] = useState(shoot.start_at ? shoot.start_at.slice(0, 16) : '')
-  const [end, setEnd] = useState(shoot.end_at ? shoot.end_at.slice(0, 16) : '')
+  // Day, start and hours in the studio's own clock (the stored instants are
+  // UTC; reading them back as text used to shift every save by 5½ hours).
+  const [when, setWhen] = useState<WhenFields>(() => ({ ...whenOfShoot(shoot), date: shoot.shoot_date ?? whenOfShoot(shoot).date }))
   const [location, setLocation] = useState(shoot.location ?? '')
   const [mapLink, setMapLink] = useState(shoot.map_link ?? '')
   const [status, setStatus] = useState<ShootStatus>(shoot.status)
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, date, start, end, location, mapLink, status }, (v) => {
+  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, when, location, mapLink, status }, (v) => {
     setName(v.name)
-    setDate(v.date)
-    setStart(v.start)
-    setEnd(v.end)
+    if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
     setMapLink(v.mapLink)
     setStatus(v.status)
@@ -810,29 +829,16 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
             <Label htmlFor="edit-name">Name</Label>
             <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-date">Date</Label>
-              <Input id="edit-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-status">Status</Label>
-              <Select id="edit-status" value={status} onChange={(e) => setStatus(e.target.value as ShootStatus)}>
-                {(['planned', 'confirmed', 'completed', 'cancelled'] as ShootStatus[]).map((s) => (
-                  <option key={s} value={s}>
-                    {humanize(s)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-start">Starts</Label>
-              <Input id="edit-start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-end">Ends</Label>
-              <Input id="edit-end" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
-            </div>
+          <ShootWhenFields value={when} onChange={setWhen} idPrefix="edit" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-status">Status</Label>
+            <Select id="edit-status" value={status} onChange={(e) => setStatus(e.target.value as ShootStatus)}>
+              {(['planned', 'confirmed', 'completed', 'cancelled'] as ShootStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {humanize(s)}
+                </option>
+              ))}
+            </Select>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-loc">Venue</Label>
@@ -860,9 +866,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
                     patch: {
                       name: name.trim(),
                       status,
-                      shoot_date: date || null,
-                      start_at: start ? new Date(start).toISOString() : null,
-                      end_at: end ? new Date(end).toISOString() : null,
+                      ...whenToPatch(when),
                       location: location.trim() || null,
                       // '' clears it; the contract turns that into null.
                       map_link: mapLink.trim(),
@@ -897,21 +901,21 @@ function CustomShootDialog({
   busy: boolean
   onClose: () => void
   /** `saved` drops the kept draft once the shoot is really created. */
-  onCreate: (v: { name: string; shoot_date?: string; location?: string }, saved: () => void) => void
+  onCreate: (v: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string }, saved: () => void) => void
 }) {
   const [name, setName] = useState('')
-  const [date, setDate] = useState(todayISO())
+  const [when, setWhen] = useState<WhenFields>({ date: todayISO(), time: '', hours: null })
   const [location, setLocation] = useState('')
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, date, location }, (v) => {
+  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, when, location }, (v) => {
     setName(v.name)
-    setDate(v.date)
+    if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
   })
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Add a function" description="Give it a name, a date and a venue.">
+      <DialogContent title="Add a function" description="Its name, when it runs, and the venue.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shoot-name">
@@ -924,20 +928,15 @@ function CustomShootDialog({
               placeholder="Cocktail night"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="shoot-date">Date</Label>
-              <Input id="shoot-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="shoot-loc">Venue</Label>
-              <Input
-                id="shoot-loc"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Taj Lands End, Mumbai"
-              />
-            </div>
+          <ShootWhenFields value={when} onChange={setWhen} idPrefix="shoot" compact />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="shoot-loc">Venue</Label>
+            <Input
+              id="shoot-loc"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Taj Lands End, Mumbai"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
@@ -949,7 +948,14 @@ function CustomShootDialog({
                 onCreate(
                   {
                     name: name.trim(),
-                    ...(date ? { shoot_date: date } : {}),
+                    ...(() => {
+                      const w = whenToPatch(when)
+                      return {
+                        ...(w.shoot_date ? { shoot_date: w.shoot_date } : {}),
+                        ...(w.start_at ? { start_at: w.start_at } : {}),
+                        ...(w.end_at ? { end_at: w.end_at } : {}),
+                      }
+                    })(),
                     ...(location.trim() ? { location: location.trim() } : {}),
                   },
                   draft.clear,

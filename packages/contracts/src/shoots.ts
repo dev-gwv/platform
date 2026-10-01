@@ -88,6 +88,9 @@ export const createShootRequest = z.object({
   // Optional rather than defaulted: a caller with no crew to record should not
   // have to send an empty array to say so.
   requirements: z.array(shootRequirementInput).max(40).optional(),
+}).refine((v) => !v.start_at || !v.end_at || new Date(v.end_at) > new Date(v.start_at), {
+  message: 'A function must end after it starts.',
+  path: ['end_at'],
 })
 export type CreateShootRequest = z.infer<typeof createShootRequest>
 
@@ -100,6 +103,9 @@ export const updateShootRequest = z.object({
   map_link: mapLink.optional(),
   status: shootStatus.optional(),
   requirements: z.array(shootRequirementInput).max(40).optional(),
+}).refine((v) => !v.start_at || !v.end_at || new Date(v.end_at) > new Date(v.start_at), {
+  message: 'A function must end after it starts.',
+  path: ['end_at'],
 })
 export type UpdateShootRequest = z.infer<typeof updateShootRequest>
 
@@ -115,6 +121,8 @@ export type ShootPresetKind = z.infer<typeof shootPresetKind>
 export const shootPresetPayload = z.object({
   requirements: z.array(shootRequirementInput).max(40).default([]),
   internal_work: z.array(z.string().trim().min(1).max(200)).max(40).default([]),
+  /** How long this kind of day usually runs, so applying the preset fills the duration too. */
+  duration_hours: z.number().positive().max(24).nullish(),
 })
 export type ShootPresetPayload = z.infer<typeof shootPresetPayload>
 

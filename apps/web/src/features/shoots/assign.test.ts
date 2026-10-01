@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamMember, TeamSlot } from '@ipc/contracts'
 import {
+  availabilityLine,
   candidatesFor,
   clashFor,
+  dayLoad,
   defaultWindowFields,
+  freeFrom,
+  gapBetween,
+  nearestClash,
+  normalizePicks,
   overlaps,
   pickedIds,
   progressWithPicks,
+  rangeLabel,
   requirementFill,
   roleMatches,
   seatsLeft,
+  shootHours,
+  timeLabel,
+  windowFor,
   withPicks,
   shootProgress,
   suggestedPayout,
@@ -142,6 +152,136 @@ describe('candidatesFor', () => {
   })
 })
 
+describe('by the clock: nearest clash, tight vs busy, the day', () => {
+  const IST = 'Asia/Kolkata'
+  // 10:30–14:30 IST on 1 Oct (the fixture's default booking).
+  const booking = () => slot({ user_id: 'u1', shoot_id: OTHER, shoot_name: 'Sharma wedding' })
+
+  it('measures the gap between two windows, negative when they overlap', () => {
+    const a = { start: '2026-10-01T04:00:00Z', end: '2026-10-01T08:00:00Z' }
+    expect(gapBetween(a, { start: '2026-10-01T08:30:00Z', end: '2026-10-01T10:00:00Z' })).toBe(30)
+    expect(gapBetween({ start: '2026-10-01T08:30:00Z', end: '2026-10-01T10:00:00Z' }, a)).toBe(30)
+    expect(gapBetween(a, { start: '2026-10-01T07:00:00Z', end: '2026-10-01T10:00:00Z' })).toBe(-60)
+    expect(gapBetween(a, { start: '2026-10-01T08:00:00Z', end: '2026-10-01T10:00:00Z' })).toBe(0)
+  })
+
+  it('picks the closer of two bookings, and ignores the one being changed', () => {
+    const far = slot({ user_id: 'u1', start_at: '2026-10-01T00:00:00Z', end_at: '2026-10-01T02:00:00Z' })
+    const near = slot({ user_id: 'u1', start_at: '2026-10-01T03:00:00Z', end_at: '2026-10-01T04:00:00Z' })
+    const w = { start: '2026-10-01T04:30:00Z', end: '2026-10-01T06:00:00Z' }
+    expect(nearestClash('u1', w, [far, near], { bufferMin: 180 })).toMatchObject({ slot: { id: near.id }, gapMin: 30 })
+    expect(nearestClash('u1', w, [far, near], { bufferMin: 180, ignoreSlotId: near.id })?.slot.id).toBe(far.id)
+    expect(nearestClash('u1', w, [far, near], { bufferMin: 0 })).toBeNull()
+  })
+
+  it('tells a tight gap from a real overlap, and ranks free, tight, busy', () => {
+    const members = [member('u1', 'Rahul', { role_names: ['Photographer'] }), member('u2', 'Bala')]
+    const base = { members, requirement: 'Photographer', shootId: SHOOT, slots: [booking()] }
+    const tight = candidatesFor({ ...base, window: { start: '2026-10-01T09:00:00Z', end: '2026-10-01T11:00:00Z' }, bufferMin: 60 })
+    expect(tight[0]!.member.name).toBe('Bala')
+    expect(tight[1]!.availability).toMatchObject({ state: 'tight', gapMin: 30 })
+    const busy = candidatesFor({ ...base, window: { start: '2026-10-01T08:00:00Z', end: '2026-10-01T10:00:00Z' }, bufferMin: 60 })
+    expect(busy[1]!.availability).toMatchObject({ state: 'busy', onThisShoot: false })
+    const free = candidatesFor({ ...base, window: { start: '2026-10-01T09:00:00Z', end: '2026-10-01T11:00:00Z' }, bufferMin: 0 })
+    expect(free[0]!.availability.state).toBe('free')
+    expect(free[0]!.member.name).toBe('Rahul')
+  })
+
+  it('knows when the clash is this very shoot, in another role', () => {
+    const members = [member('u1', 'Rahul')]
+    const out = candidatesFor({
+      members,
+      requirement: 'Drone',
+      window: { start: '2026-10-01T05:00:00Z', end: '2026-10-01T07:00:00Z' },
+      shootId: SHOOT,
+      slots: [slot({ user_id: 'u1', shoot_id: SHOOT, service_name: 'Candid Photographer' })],
+    })
+    expect(out[0]!.availability).toMatchObject({ state: 'busy', onThisShoot: true })
+    expect(availabilityLine(out[0]!, { hours: 0, slots: [], left: 24 }, 2, 60, IST).text).toBe('Already on this shoot as Candid Photographer')
+  })
+
+  it("adds up a person's day, counting only the part of a booking on that day", () => {
+    const day = slot({ user_id: 'u1', start_at: '2026-10-01T04:30:00Z', end_at: '2026-10-01T09:30:00Z' }) // 5 h
+    const evening = slot({ user_id: 'u1', start_at: '2026-10-01T13:30:00Z', end_at: '2026-10-01T16:30:00Z' }) // 3 h
+    const gone = slot({ user_id: 'u1', status: 'released', start_at: '2026-10-01T10:00:00Z', end_at: '2026-10-01T12:00:00Z' })
+    const other = slot({ user_id: 'u2', start_at: '2026-10-01T10:00:00Z', end_at: '2026-10-01T12:00:00Z' })
+    const load = dayLoad('u1', '2026-10-01', [evening, gone, other, day])
+    expect(load).toMatchObject({ hours: 8, left: 16 })
+    expect(load.slots.map((s) => s.id)).toEqual([day.id, evening.id])
+    expect(dayLoad('u1', '2026-10-01', [day, evening], { ignoreSlotId: evening.id }).hours).toBe(5)
+    // Past midnight local: the part before midnight on the 1st, the rest on the 2nd.
+    const late = slot({
+      user_id: 'u1',
+      start_at: new Date(2026, 9, 1, 22, 0).toISOString(),
+      end_at: new Date(2026, 9, 2, 3, 0).toISOString(),
+    })
+    expect(dayLoad('u1', '2026-10-01', [late]).hours).toBe(2)
+    expect(dayLoad('u1', '2026-10-02', [late]).hours).toBe(3)
+    // A full day and more never reads as negative hours left.
+    const marathon = slot({ user_id: 'u1', start_at: new Date(2026, 9, 1, 0, 0).toISOString(), end_at: new Date(2026, 9, 2, 2, 0).toISOString() })
+    expect(dayLoad('u1', '2026-10-01', [marathon])).toMatchObject({ hours: 24, left: 0 })
+  })
+
+  it('says when they are free again: the end plus the gap', () => {
+    expect(freeFrom({ end_at: '2026-10-01T08:30:00Z' }, 60)).toBe('2026-10-01T09:30:00.000Z')
+    expect(freeFrom({ end_at: '2026-10-01T08:30:00Z' })).toBe('2026-10-01T08:30:00.000Z')
+  })
+
+  it('labels times and ranges the way a studio says them', () => {
+    expect(timeLabel('2026-10-01T10:30:00Z', IST)).toBe('4 PM')
+    expect(timeLabel('2026-10-01T10:45:00Z', IST)).toBe('4:15 PM')
+    expect(rangeLabel({ start: '2026-10-01T10:30:00Z', end: '2026-10-01T15:30:00Z' }, IST)).toBe('4–9 PM · 5 h')
+    expect(rangeLabel({ start: '2026-10-01T05:30:00Z', end: '2026-10-01T09:30:00Z' }, IST)).toBe('11 AM–3 PM · 4 h')
+    expect(rangeLabel({ start: '2026-10-01T10:30:00Z', end: '2026-10-01T13:00:00Z' }, IST)).toBe('4–6:30 PM · 2.5 h')
+  })
+
+  it('writes the one line under a name', () => {
+    const free = { availability: { state: 'free' as const } }
+    expect(availabilityLine(free, { hours: 0, slots: [], left: 24 }, 5, 60, IST)).toEqual({ tone: 'green', text: 'Free all day' })
+    const b = booking()
+    expect(availabilityLine(free, { hours: 4, slots: [b], left: 20 }, 5, 60, IST)).toEqual({
+      tone: 'green',
+      text: 'Free · also 10 AM–2 PM, Sharma wedding · 20 h left',
+    })
+    expect(availabilityLine(free, { hours: 21, slots: [b], left: 3 }, 5, 60, IST)).toMatchObject({ tone: 'amber', text: expect.stringMatching(/^Only 3 h left today/) })
+    expect(availabilityLine({ availability: { state: 'tight', slot: b, gapMin: 30 } }, { hours: 4, slots: [b], left: 20 }, 2, 60, IST)).toEqual({
+      tone: 'amber',
+      text: 'Tight · only 30 min from Sharma wedding (10 AM–2 PM), needs 1 h',
+    })
+    expect(availabilityLine({ availability: { state: 'busy', slot: b, onThisShoot: false } }, { hours: 4, slots: [b], left: 20 }, 2, 60, IST)).toEqual({
+      tone: 'muted',
+      text: 'Busy 10 AM–2 PM, Sharma wedding · free from 3 PM',
+    })
+  })
+
+  it("a pick books the shoot's window unless it says otherwise", () => {
+    const base = { date: '2026-10-01', time: '16:00', hours: 5 }
+    const whole = windowFor({ id: 'a', payout: '' }, base)!
+    expect(Date.parse(whole.end) - Date.parse(whole.start)).toBe(5 * 3_600_000)
+    const two = windowFor({ id: 'a', payout: '', hours: 2 }, base)!
+    expect(Date.parse(two.end) - Date.parse(two.start)).toBe(2 * 3_600_000)
+    expect(two.start).toBe(whole.start)
+    const later = windowFor({ id: 'a', payout: '', start: '18:00' }, base)!
+    expect(Date.parse(later.start) - Date.parse(whole.start)).toBe(2 * 3_600_000)
+    expect(windowFor({ id: 'a', payout: '' }, { ...base, hours: null })).toBeNull()
+    expect(windowFor({ id: 'a', payout: '', hours: 2 }, { ...base, hours: null })).not.toBeNull()
+  })
+
+  it('reads a saved draft back without trusting it', () => {
+    expect(normalizePicks({ Candid: [{ id: 'a', payout: '500' }, { id: 'b', hours: 'x', start: 'noon' }, { nope: 1 }], junk: 'no' })).toEqual({
+      Candid: [{ id: 'a', payout: '500' }, { id: 'b', payout: '' }],
+    })
+    expect(normalizePicks({ Candid: [{ id: 'a', payout: '', hours: 2, start: '18:00' }] })).toEqual({ Candid: [{ id: 'a', payout: '', hours: 2, start: '18:00' }] })
+    expect(normalizePicks(null)).toEqual({})
+  })
+
+  it('knows how long a shoot runs', () => {
+    expect(shootHours({ start_at: '2026-10-01T10:30:00Z', end_at: '2026-10-01T15:30:00Z' })).toBe(5)
+    expect(shootHours({ start_at: '2026-10-01T10:30:00Z', end_at: null })).toBeNull()
+    expect(shootHours({ start_at: '2026-10-01T10:30:00Z', end_at: '2026-10-01T10:00:00Z' })).toBeNull()
+  })
+})
+
 describe('roleMatches / suggestedPayout / defaultWindowFields', () => {
   it('matches a role named more or less specifically', () => {
     expect(roleMatches({ role_names: ['Photographer'] }, 'Candid Photographer')).toBe(true)
@@ -154,12 +294,14 @@ describe('roleMatches / suggestedPayout / defaultWindowFields', () => {
     expect(suggestedPayout({ freelancer_rate: null, payout_type: null, engagement_type: 'freelancer' })).toBeNull()
   })
 
-  it("uses the shoot's own hours, else 9am for four hours on its day", () => {
+  it("uses the shoot's own hours, else 9am on its day with the hours left to ask", () => {
     expect(defaultWindowFields({ shoot_date: '2026-10-01', start_at: null, end_at: null })).toEqual({
       date: '2026-10-01',
       time: '09:00',
-      hours: 4,
+      hours: null,
     })
+    const only = new Date(2026, 9, 1, 16, 0)
+    expect(defaultWindowFields({ shoot_date: '2026-10-01', start_at: only.toISOString(), end_at: null }).hours).toBeNull()
     const s = new Date(2026, 9, 1, 16, 0)
     const e = new Date(2026, 9, 1, 22, 30)
     expect(

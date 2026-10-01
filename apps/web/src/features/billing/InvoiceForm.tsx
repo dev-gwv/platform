@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
 import { toAmount, type InvoiceLineDraft } from './invoice-math'
+import { appliedTotal, type AppliedPayment } from './project-lines'
 import { useInvoiceBankAccounts, useInvoiceNoteTemplates, useCreateInvoiceNoteTemplate } from './api'
 
 export { toAmount, type InvoiceLineDraft } from './invoice-math'
@@ -54,6 +55,8 @@ export interface InvoiceFormValues {
   attachments: { id: string; name: string }[]
   /** Money already in hand, recorded as the invoice is created (create only). */
   payment: { on: boolean; amount: string; paid_on: string; mode: string; reference: string }
+  /** The project's payments already received, each ticked to count against this invoice (create only). */
+  applied: AppliedPayment[]
   lines: InvoiceLineDraft[]
 }
 
@@ -88,6 +91,7 @@ export function emptyInvoiceForm(): InvoiceFormValues {
     payment_terms: 'Due on receipt',
     attachments: [],
     payment: { on: false, amount: '', paid_on: todayISO(), mode: '', reference: '' },
+    applied: [],
     lines: [{ description: '', quantity: '1', rate: '', gst_rate: 0 }],
   }
 }
@@ -180,11 +184,12 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
     }
     if (typed.length > 0 && totals.total <= 0) out.push('The invoice total must be more than ₹0.')
     if (typed.some((l) => l.hsn_sac && !/^\d{4,8}$/.test(l.hsn_sac.trim()))) out.push('An HSN/SAC code is 4 to 8 digits.')
+    const applied = appliedTotal(values.applied)
     if (values.payment.on) {
       const amt = toAmount(values.payment.amount)
       if (amt <= 0) out.push('Enter the payment amount received, or untick “Payment received”.')
-      else if (amt > totals.total) out.push('The payment received is more than the invoice total.')
-    }
+      else if (amt + applied > totals.total) out.push('The money received is more than the invoice total.')
+    } else if (applied > totals.total) out.push('The advance applied is more than the invoice total.')
     return out
   }
 
@@ -209,6 +214,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
       subject: values.subject.trim() || undefined,
       payment_terms: values.payment_terms.trim() || undefined,
       attachment_file_ids: values.attachments.map((a) => a.id),
+      ...(values.applied.some((a) => a.on) ? { attach_payment_ids: values.applied.filter((a) => a.on).map((a) => a.id) } : {}),
       ...(values.payment.on && toAmount(values.payment.amount) > 0
         ? {
             payment: {

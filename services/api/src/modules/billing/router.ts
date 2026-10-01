@@ -279,11 +279,31 @@ export const billingRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not create the invoice.')
     // Money already received goes on the invoice as it is made, so it is
     // never a draft: a draft cannot be paid.
-    const status = req.payment ? 'sent' : req.status
+    const attachIds = req.attach_payment_ids ?? []
+    const status = req.payment || attachIds.length > 0 ? 'sent' : req.status
     const extras = await attempt(c, 'billing.invoice_extras', () =>
       withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, row.id, { ...req, status }, gstNumber)),
     )
     if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
+    // The project's advance counts against this invoice: the same ledger
+    // rows, now linked, so the invoice reads partly paid and the project's
+    // received total does not move. The trigger on received_payments
+    // recomputes the invoice's paid and balance.
+    if (attachIds.length > 0 && req.project_id) {
+      const attached = await attempt(c, 'billing.invoice_attach_payments', () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql<{ id: string }[]>`
+            update received_payments set invoice_id = ${row.id}
+             where id = any(${attachIds}::uuid[])
+               and project_id = ${req.project_id}
+               and invoice_id is null
+               and status = 'paid'
+             returning id`
+          return rows.length
+        }),
+      )
+      if (attached == null) fail(400, `Invoice ${row.invoice_number} was created, but the advance could not be applied to it. Record it from the invoice.`)
+    }
     if (req.payment) {
       const pay = req.payment
       const paid = await attempt(c, 'billing.invoice_create_payment', () =>

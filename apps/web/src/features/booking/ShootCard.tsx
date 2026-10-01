@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
-import { hoursLabel } from '@/features/shoots/assign'
+import { hoursLabel, rangeLabel, shootHours, timeLabel } from '@/features/shoots/assign'
 import { mapHref } from '@/features/shoots/map-link'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
 import { EventTile } from '@/shared/ui/icon-tile'
@@ -54,8 +54,11 @@ export function ShootCard({
   const unanswered = live ? booked.filter((s) => s.response === 'pending').length : 0
   const declined = live ? booked.filter((s) => s.response === 'declined').length : 0
   const d = shoot.shoot_date ? dateParts(shoot.shoot_date) : null
+  // "4–9 PM · 5 h" when the shoot has its hours; the start alone when not.
   const time = shoot.start_at
-    ? new Date(shoot.start_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+    ? shoot.end_at && shootHours(shoot)
+      ? rangeLabel({ start: shoot.start_at, end: shoot.end_at })
+      : timeLabel(shoot.start_at)
     : null
   const href = mapHref(shoot.map_link)
 

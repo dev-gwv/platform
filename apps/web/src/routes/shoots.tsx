@@ -26,6 +26,7 @@ import { useProjects } from '@/features/projects/api'
 import { useDeleteShoot, useUpdateShoot } from '@/features/shoots/api'
 import { mapHref } from '@/features/shoots/map-link'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
+import { ShootWhenFields, whenOfShoot, whenToPatch, type WhenFields } from '@/features/shoots/ShootWhenFields'
 import { RemindMe } from '@/features/reminders/RemindMe'
 
 const list = shootListItem.array()
@@ -533,7 +534,7 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
   const update = useUpdateShoot()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(shoot.name)
-  const [date, setDate] = useState(shoot.shoot_date ?? '')
+  const [when, setWhen] = useState<WhenFields>(() => ({ ...whenOfShoot(shoot), date: shoot.shoot_date ?? whenOfShoot(shoot).date }))
   const [location, setLocation] = useState(shoot.location ?? '')
   const [mapLink, setMapLink] = useState(shoot.map_link ?? '')
   const [status, setStatus] = useState<ShootStatus>(shoot.status)
@@ -544,10 +545,10 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `shoots-page:edit:${shoot.id}` : null,
-    { name, date, location, mapLink, status, requirements },
+    { name, when, location, mapLink, status, requirements },
     (v) => {
       setName(v.name)
-      setDate(v.date)
+      if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
       setLocation(v.location)
       setMapLink(v.mapLink)
       setStatus(v.status)
@@ -561,7 +562,7 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
     try {
       const body: UpdateShootRequest = {
         name: name.trim(),
-        shoot_date: date || null,
+        ...whenToPatch(when),
         location: location.trim() || null,
         map_link: mapLink.trim() || '',
         status,
@@ -588,21 +589,18 @@ function EditShootDialog({ shoot }: { shoot: ShootListItem }) {
             <Label>Shoot name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </div>
+          <ShootWhenFields value={when} onChange={setWhen} idPrefix={`edit-${shoot.id}`} compact />
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
             <div className="flex flex-col gap-1.5">
               <Label>Location</Label>
               <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Venue" />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Map link</Label>
               <Input value={mapLink} onChange={(e) => setMapLink(e.target.value)} placeholder="Paste the map link" />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Status</Label>
               <Select value={status} onChange={(e) => setStatus(e.target.value as ShootStatus)}>
