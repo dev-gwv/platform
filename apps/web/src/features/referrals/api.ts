@@ -112,13 +112,29 @@ export function useDeleteReferralCampaign() {
   )
 }
 
+/** Every referral whose reward is at one stage: "due" (to give) or "given". */
+export function useRewardSubmissions(reward: 'due' | 'given') {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['referrals', 'rewards', reward],
+    queryFn: () => callApi(`/referrals/submissions?reward_status=${reward}&limit=200`, { responseSchema: referralSubmissionList }),
+    enabled: !!session && access.hasModule('referrals'),
+    staleTime: 15_000,
+  })
+}
+
 export function useUpdateSubmissionStatus() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, status, reward_status }: { id: string; status?: string; reward_status?: string }) =>
+    mutationFn: ({ id, status, reward_status, reward_amount }: { id: string; status?: string; reward_status?: string; reward_amount?: number }) =>
       callApi(`/referrals/submissions/${id}/status`, {
         method: 'PATCH',
-        body: { ...(status ? { status } : {}), ...(reward_status ? { reward_status } : {}) },
+        body: {
+          ...(status ? { status } : {}),
+          ...(reward_status ? { reward_status } : {}),
+          ...(reward_amount != null ? { reward_amount } : {}),
+        },
         responseSchema: anySchema,
       }),
     onSuccess: () => {

@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { TransactionSql } from 'postgres'
 import {
+  expenseTaxRate,
+  saveExpenseTaxRateRequest,
   createExpenseRequest,
   createFixedOverheadRequest,
   updateExpenseRequest,
@@ -52,6 +54,12 @@ function expenseFilters(c: Context<AppEnv>) {
     maxAmount: numberQuery(c, 'max_amount', 'amount_max'),
     gst: gstRaw || null,
     paidBy: uuidQuery(c, 'paid_by'),
+    // "Needs a category": the money check on Profit & Loss links here.
+    missing: (() => {
+      const m = c.req.query('missing')?.trim() ?? ''
+      if (m && m !== 'category') fail(422, 'That filter is not one we use.')
+      return m || null
+    })(),
     reimbursement: (() => {
       const r = c.req.query('reimbursement')?.trim() ?? ''
       if (r && !['none', 'pending', 'reimbursed'].includes(r)) fail(422, 'That reimbursement filter is not one we use.')
@@ -72,6 +80,7 @@ function expenseWhere(sql: TransactionSql, f: ReturnType<typeof expenseFilters>)
       and (${f.maxAmount}::numeric is null or e.amount <= ${f.maxAmount}::numeric)
       and (${f.paidBy}::uuid is null or e.paid_by_user_id = ${f.paidBy}::uuid)
       and (${f.reimbursement}::text is null or e.reimbursement_status = ${f.reimbursement})
+      and (${f.missing}::text is null or e.category is null or btrim(e.category) = '')
       and ${
         f.gst === 'reverse_charge'
           ? // Two columns say this: the treatment, and the boolean the tile counts.
@@ -579,6 +588,52 @@ export const financialsRouter = new Hono<AppEnv>()
   // than no endpoint, so it is gone rather than repaired twice.
 
   // FixedOverheads CRUD (9 cats + 4 alloc bases).
+  // ── a studio's own tax rates for expenses (0226) ────────────────
+  .get('/tax-rates', requireModule('company_expenses'), async (c) => {
+    const rows = await attempt(c, 'financials.tax_rates', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, name, rate, is_active from expense_tax_rates order by is_active desc, rate, name`),
+    )
+    if (!rows) fail(400, 'We could not load the tax rates.')
+    return c.json(expenseTaxRate.array().parse(rows))
+  })
+
+  .post('/tax-rates', requireModule('company_expenses'), async (c) => {
+    const parsed = saveExpenseTaxRateRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Give the tax a name and a rate between 0 and 100.')
+    const row = await attempt(
+      c,
+      'financials.tax_rate_create',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const r = await sql`insert into expense_tax_rates (name, rate) values (${parsed.data.name}, ${parsed.data.rate})
+                              returning id, name, rate, is_active`
+          return r[0] ?? null
+        }),
+      { onCode: (code) => (code === '23505' ? fail(409, 'A tax with that name already exists.') : code === '42501' ? fail(403, 'Only an owner or a manager can add a tax rate.') : undefined) },
+    )
+    if (!row) fail(400, 'We could not save the tax rate.')
+    return c.json(expenseTaxRate.parse(row), 201)
+  })
+
+  .patch('/tax-rates/:id', requireModule('company_expenses'), async (c) => {
+    const parsed = saveExpenseTaxRateRequest.partial().safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success || Object.keys(parsed.data).length === 0) fail(422, 'Nothing to change.')
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'financials.tax_rate_update',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const r = await sql`update expense_tax_rates set ${sql(parsed.data)} where id = ${id} returning id, name, rate, is_active`
+          return r[0] ?? null
+        }),
+      { onCode: (code) => (code === '23505' ? fail(409, 'A tax with that name already exists.') : undefined) },
+    )
+    if (!row) fail(404, 'That tax rate was not found.')
+    return c.json(expenseTaxRate.parse(row))
+  })
+
   .get('/fixed-overheads', requireModule('financials'), async (c) => {
     const month = c.req.query('month') || null
     const rows = await attempt(c, 'financials.overheads_list', () =>

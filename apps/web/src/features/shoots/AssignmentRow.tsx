@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { CalendarDays, Database, Pencil, X } from 'lucide-react'
-import type { DataRecord, ShootListItem, TeamSlot } from '@ipc/contracts'
+import { CalendarDays, Database, FileSignature, Pencil, X } from 'lucide-react'
+import type { DataRecord, ShootListItem, TeamSlot, TeamTermsSend } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -10,6 +10,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useSetSlotData } from '@/features/allocation/api'
+import { SendTermsDialog } from '@/features/team-terms/SendTermsDialog'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
 import { AlsoBookedLine, dayOfSlot } from './PersonDay'
 import { STAGE_LABEL, STAGE_TONE, dataRowTone, optedOut, slotDay, slotStage, whenLabel } from '@/features/data/stage'
@@ -33,6 +34,7 @@ export function AssignmentRow({
   canEdit,
   onRemove,
   daySlots,
+  terms,
 }: {
   projectId: string
   shoot: ShootListItem
@@ -42,6 +44,8 @@ export function AssignmentRow({
   onRemove: () => void
   /** Everyone's bookings, so the row can say what else this person has that day. */
   daySlots?: readonly TeamSlot[] | undefined
+  /** Their latest terms for this shoot: undefined when the studio does not use team terms, null when none were sent. */
+  terms?: TeamTermsSend | null | undefined
 }) {
   const [editing, setEditing] = useState(false)
   const [optingOut, setOptingOut] = useState(false)
@@ -104,6 +108,7 @@ export function AssignmentRow({
           </StatusBadge>
         )}
         {where.length > 0 && <p className="text-[11px] text-muted-foreground">{where.join(' · ')}</p>}
+        {terms !== undefined && <TermsLine send={terms} />}
       </div>
 
       <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
@@ -112,6 +117,17 @@ export function AssignmentRow({
 
       {canEdit && (
         <div className="flex items-center gap-1">
+          {terms !== undefined && terms?.status !== 'acknowledged' && slot.user_id && (
+            <SendTermsDialog
+              shoot={shoot}
+              forMember={slot.user_id}
+              trigger={
+                <Button size="sm" variant="ghost" title={`Send ${slot.user_name ?? 'them'} the team terms`}>
+                  <FileSignature /> {terms ? 'Resend terms' : 'Send terms'}
+                </Button>
+              }
+            />
+          )}
           {!optedOut(slot) && (
             <Button size="sm" variant={record || dayPassed ? 'outline' : 'ghost'} onClick={() => setEditing(true)}>
               {record ? <Pencil /> : <Database />} {record ? 'Data' : 'Add data'}
@@ -198,4 +214,13 @@ function NoDataDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Neutral until it matters: green once signed, amber while it waits, plain when never sent. */
+function TermsLine({ send }: { send: TeamTermsSend | null }) {
+  if (!send) return <p className="text-[11px] text-muted-foreground">Terms not sent</p>
+  if (send.status === 'acknowledged') return <p className="text-[11px] font-medium text-success">Terms signed</p>
+  if (send.status === 'revoked' || send.status === 'expired')
+    return <p className="text-[11px] text-muted-foreground">Terms link {send.status === 'revoked' ? 'withdrawn' : 'expired'}</p>
+  return <p className="text-[11px] font-medium text-warning">Terms {send.status === 'viewed' ? 'opened, not signed' : 'sent, not opened'}</p>
 }

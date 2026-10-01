@@ -118,6 +118,8 @@ export const updateReferralSubmissionRequest = z.object({
   status: referralSubmissionStatus.optional(),
   reward_status: referralRewardStatus.optional(),
   notes: z.string().trim().max(2000).nullish(),
+  /** What the referring client was actually given, in rupees. */
+  reward_amount: z.number().finite().min(0).max(10_00_000).nullish(),
 })
 export type UpdateReferralSubmissionRequest = z.infer<typeof updateReferralSubmissionRequest>
 

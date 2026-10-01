@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  expenseTaxRate,
   monthlyProfitSummary,
+  profitabilityReport,
   expense,
   expenseAttachment,
   expenseSummary,
@@ -35,6 +37,8 @@ export interface ExpenseFilters {
   /** Who paid from their own pocket. */
   paid_by?: string | undefined
   reimbursement?: 'none' | 'pending' | 'reimbursed' | undefined
+  /** Only expenses with no category. */
+  missing?: 'category' | undefined
   sort?: 'date' | 'amount' | undefined
   dir?: 'asc' | 'desc' | undefined
   page?: number | undefined
@@ -54,6 +58,7 @@ function expenseParams(f: ExpenseFilters): URLSearchParams {
   if (f.gst) p.set('gst', f.gst)
   if (f.paid_by) p.set('paid_by', f.paid_by)
   if (f.reimbursement) p.set('reimbursement', f.reimbursement)
+  if (f.missing) p.set('missing', f.missing)
   return p
 }
 
@@ -257,6 +262,47 @@ export function useProfitAndLoss(q: PnlQuery, enabled = true) {
     enabled: enabled && !!session && access.hasModule('financials'),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
+  })
+}
+
+/**
+ * Projects paid past their full value (a double-recorded payment, or a value
+ * never updated after an add-on). Lifetime, not the period: money over the
+ * value is a mistake whenever it arrived.
+ */
+export function useOverCollected() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['financials', 'over-collected'],
+    queryFn: async () => {
+      const r = await callApi('/financials/profitability?page_size=100&sort_by=receivables&sort_direction=asc', { responseSchema: profitabilityReport })
+      return r.items.filter((p) => p.balance_status === 'over_collected')
+    },
+    enabled: !!session && access.hasModule('financials'),
+    staleTime: 60_000,
+  })
+}
+
+/** The studio's own tax rates for expenses, beside the GST slabs. */
+export function useExpenseTaxRates() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['financials', 'tax-rates'],
+    queryFn: () => callApi('/financials/tax-rates', { responseSchema: expenseTaxRate.array() }),
+    enabled: !!session && access.hasModule('company_expenses'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useCreateExpenseTaxRate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; rate: number }) =>
+      callApi('/financials/tax-rates', { method: 'POST', body, responseSchema: expenseTaxRate }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['financials', 'tax-rates'] }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

@@ -224,6 +224,7 @@ export const NAV: NavEntry[] = [
       leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),
       leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
       leaf('Email', '/platform/email', Mail, { platformOnly: true }),
+      leaf('Payments to check', '/platform/payments', CreditCard, { platformOnly: true }),
     ],
   },
 ]

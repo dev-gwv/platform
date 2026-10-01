@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, ChevronRight, ReceiptText, TrendingDown, Users } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Coins, Percent, ReceiptText, Tag, TrendingDown, Users } from 'lucide-react'
 import type { ProfitAndLoss } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useBillingOverview } from '@/features/billing/api'
-import { useExpenseSummary } from './api'
+import { useExpenseSummary, useOverCollected } from './api'
 
 /**
  * What needs doing about money, on top of Profit & Loss: late invoices,
@@ -21,11 +21,18 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
   const access = useAccess()
   const overview = useBillingOverview()
   const expenses = useExpenseSummary({ reimbursement: 'pending' })
+  const noCategory = useExpenseSummary({ missing: 'category' })
+  const overCollected = useOverCollected()
+  const [all, setAll] = useState(false)
 
   const overdue = overview.data?.overdue
   const reimburse = access.hasModule('company_expenses') ? (expenses.data?.to_reimburse ?? 0) : 0
   const owed = data.rail.owed_to_team
   const losing = data.projects.filter((p) => p.profit < 0).length
+  // Under 20% kept, but not losing: worth a look before the next quote.
+  const thin = data.projects.filter((p) => p.income > 0 && p.profit >= 0 && p.margin != null && p.margin < 20).length
+  const uncategorised = access.hasModule('company_expenses') ? (noCategory.data?.count ?? 0) : 0
+  const over = overCollected.data ?? []
 
   const lines: ReactNode[] = []
   if (overdue && overdue.count > 0) {
@@ -75,12 +82,59 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
     )
   }
 
+  if (thin > 0) {
+    lines.push(
+      <Line
+        key="thin"
+        icon={<Percent className="size-4 text-tone-amber" aria-hidden />}
+        label={`${thin} ${thin === 1 ? 'project keeps' : 'projects keep'} less than 20% of what came in`}
+        value="See below"
+        href="#pnl-projects"
+      />,
+    )
+  }
+  if (over.length > 0) {
+    const first = over[0]!
+    lines.push(
+      <Line
+        key="over"
+        icon={<Coins className="size-4 text-tone-amber" aria-hidden />}
+        label={
+          over.length === 1
+            ? `${first.project_name} has received ${formatINR(-first.receivables)} more than its value`
+            : `${over.length} projects have received more than their value`
+        }
+        value={over.length === 1 ? 'Check' : over.map((p) => p.project_name).slice(0, 2).join(', ')}
+        to={`/projects/${first.project_id}`}
+        search={{ tab: 'billing' }}
+      />,
+    )
+  }
+  if (uncategorised > 0) {
+    lines.push(
+      <Line
+        key="uncategorised"
+        icon={<Tag className="size-4 text-muted-foreground" aria-hidden />}
+        label={`${uncategorised} ${uncategorised === 1 ? 'expense has' : 'expenses have'} no category`}
+        value="Sort them"
+        to="/company-expenses"
+        search={{ missing: 'category', period: 'all' }}
+      />,
+    )
+  }
+
   if (lines.length === 0) return null
   return (
     <Card className="border-destructive/30">
       <CardContent className="flex flex-col gap-0.5 p-3">
         <p className="px-2 pb-1 pt-0.5 text-sm font-semibold">Needs attention</p>
-        {lines}
+        {/* Four at a time, in order of how much they cost to leave. */}
+        {all ? lines : lines.slice(0, 4)}
+        {lines.length > 4 && (
+          <button type="button" onClick={() => setAll((v) => !v)} className="px-2 py-1 text-left text-xs font-medium text-primary hover:underline">
+            {all ? 'Show fewer' : `${lines.length - 4} more`}
+          </button>
+        )}
       </CardContent>
     </Card>
   )

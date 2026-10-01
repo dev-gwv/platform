@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
-import { usePlatformStudios, usePlatformPlanAction, usePlatformCustomPlanAction, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
+import { usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
 import { DateField, toIso } from '@/shared/ui/date-field'
 import { inviteMessage, legacyDaysLeft, legacyState, parseLegacyCsv, type LegacyParse } from '@/features/platform/legacy'
 
@@ -447,12 +447,29 @@ function CreateStudioDialog() {
 }
 
 function AssignPlanForm({ studio }: { studio: PlatformStudio }) {
-  const custom = usePlatformCustomPlanAction()
-  const [planKey, setPlanKey] = useState(studio.plan_key ?? '')
+  const plans = usePlatformPlans()
+  const assign = useAssignPlan()
+  const [planKey, setPlanKey] = useState('')
+  const chosen = (plans.data ?? []).find((p) => p.key === planKey)
+  const length = (p: NonNullable<typeof chosen>) => (p.duration_days ? `${p.duration_days} days` : p.billing_interval === 'yearly' ? '1 year' : '1 month')
   return (
-    <div className="flex gap-2">
-      <Input value={planKey} onChange={(e) => setPlanKey(e.target.value)} placeholder="paid plan key (e.g. studio-annual)" />
-      <Button size="sm" variant="outline" disabled={custom.isPending || !planKey.trim()} onClick={() => custom.mutate({ studioId: studio.id, planKey: planKey.trim() })}>Assign paid plan</Button>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-2">
+        <Select value={planKey} onChange={(e) => setPlanKey(e.target.value)} aria-label="Plan to give" className={planKey ? undefined : 'border-warning/60'}>
+          <option value="">Pick a plan…</option>
+          {(plans.data ?? [])
+            .filter((p) => p.is_active)
+            .map((p) => (
+              <option key={p.id} value={p.key}>
+                {p.name} · ₹{p.price.toLocaleString('en-IN')} · {length(p)}{p.audience ? ` · ${p.audience === 'diamond' ? 'Diamond' : 'outsider'}` : ''}
+              </option>
+            ))}
+        </Select>
+        <Button size="sm" disabled={assign.isPending || !planKey} onClick={() => assign.mutate({ studioId: studio.id, planKey })}>
+          Give plan
+        </Button>
+      </div>
+      {chosen && <p className="text-xs text-muted-foreground">Adds {length(chosen)} from {studio.plan_expiry && new Date(studio.plan_expiry) > new Date() ? 'their current end date' : 'today'}. No payment is taken.</p>}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import {
   updateReferralSubmissionRequest,
   referralCampaignList,
   referralCampaignStatus,
+  referralRewardStatus,
   referralSubmissionList,
   submitReferralRequest,
   z,
@@ -192,6 +193,11 @@ export const referralsRouter = new Hono<AppEnv>()
     if (cursor && Number.isNaN(Date.parse(cursor))) fail(422, 'Invalid cursor.')
     const limitRaw = Number(c.req.query('limit') ?? 100)
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 200) : 100
+    // The rewards board asks for "due" and "given" on their own.
+    const rewardRaw = c.req.query('reward_status') || null
+    const rewardStatus = rewardRaw ? referralRewardStatus.safeParse(rewardRaw) : null
+    if (rewardStatus && !rewardStatus.success) fail(422, 'That reward filter is not one we use.')
+    const reward: string | null = rewardStatus?.success ? rewardStatus.data : null
 
     const rows = await attempt(c, 'referrals.submissions', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
@@ -209,6 +215,7 @@ export const referralsRouter = new Hono<AppEnv>()
            where rs.company_id = ${c.get('auth').companyId}
              and (${campaignId}::uuid is null or rs.campaign_id = ${campaignId}::uuid)
              and (${cursor}::timestamptz is null or rs.created_at < ${cursor}::timestamptz)
+             and (${reward}::text is null or rs.reward_status = ${reward})
            order by rs.created_at desc
            limit ${limit + 1}`
       }),
@@ -229,8 +236,11 @@ export const referralsRouter = new Hono<AppEnv>()
     // Where the referred couple has got to, and -- separately -- whether the
     // client who referred them has had their reward. Either or both.
     const parsed = updateReferralSubmissionRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success || (!parsed.data.status && !parsed.data.reward_status)) fail(422, 'Invalid status.')
-    const { status = null, reward_status: rewardStatus = null } = parsed.data
+    if (!parsed.success || (!parsed.data.status && !parsed.data.reward_status && parsed.data.reward_amount == null && parsed.data.notes === undefined))
+      fail(422, 'Invalid status.')
+    const { status = null, reward_status: rewardStatus = null, reward_amount: rewardAmount = null } = parsed.data
+    const notesGiven = parsed.data.notes !== undefined
+    const notes = parsed.data.notes ?? null
     const auth = c.get('auth')
     const rows = await attempt(c, 'referrals.submission_status', () =>
       withUser(c.env, auth.userId, async (sql) => {
@@ -239,7 +249,9 @@ export const referralsRouter = new Hono<AppEnv>()
              set status = coalesce(${status}, status),
                  reward_status = coalesce(${rewardStatus}, reward_status),
                  reward_granted = coalesce(${rewardStatus}, reward_status) = 'given'
-                                  or coalesce(${status}, status) = 'rewarded'
+                                  or coalesce(${status}, status) = 'rewarded',
+                 reward_amount = coalesce(${rewardAmount}::numeric, reward_amount),
+                 notes = case when ${notesGiven} then ${notes} else notes end
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),

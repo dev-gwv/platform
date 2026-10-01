@@ -226,3 +226,49 @@ export const legacyStudio = z.object({
 })
 export type LegacyStudio = z.infer<typeof legacyStudio>
 export const legacyStudioList = z.array(legacyStudio)
+
+/** The whole plan catalogue, for the platform's "Assign plan" (0226). */
+export const platformPlan = z.object({
+  id: uuid,
+  key: z.string(),
+  name: z.string(),
+  price: z.coerce.number(),
+  billing_interval: z.string(),
+  duration_days: z.number().int().nullable(),
+  audience: z.string().nullable(),
+  is_active: z.boolean(),
+})
+export type PlatformPlan = z.infer<typeof platformPlan>
+export const platformPlanList = z.array(platformPlan)
+
+export const platformAssignPlanRequest = z.object({ plan_key: z.string().trim().min(1).max(80) })
+
+/** Orders Razorpay took money for that never gave the studio its plan (0226). */
+export const paymentRecovery = z.object({
+  stuck: z.array(
+    z.object({
+      order_id: uuid,
+      company_id: uuid,
+      company_name: z.string().nullable(),
+      plan_name: z.string().nullable(),
+      amount: z.coerce.number(),
+      created_at: z.string(),
+      razorpay_order_id: z.string(),
+      captured_payment_id: z.string().nullable(),
+    }),
+  ),
+  unmatched: z.array(
+    z.object({
+      event_id: z.string(),
+      processed_at: z.string(),
+      payment_id: z.string().nullable(),
+      razorpay_order_id: z.string().nullable(),
+      amount: z.coerce.number().nullable(),
+      email: z.string().nullable(),
+    }),
+  ),
+  /** Can the API ask Razorpay directly (keys set)? */
+  can_check: z.boolean(),
+})
+export type PaymentRecovery = z.infer<typeof paymentRecovery>
+export const paymentCreditResult = z.object({ expires_at: z.string().nullable(), duplicate: z.boolean(), payment_id: z.string() })
