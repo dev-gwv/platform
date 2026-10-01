@@ -12,6 +12,7 @@ import {
   type ProfileField,
 } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
+import { SecurityCard } from '@/features/account/SecurityCard'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
@@ -256,6 +257,7 @@ function MyProfileForm() {
 
       <IdProofSection needed={missing.has('id_document')} />
       <MorningEmailCard />
+      <SecurityCard />
 
       <div className="sticky bottom-3 flex justify-end">
         <Button onClick={submit} disabled={save.isPending} className="shadow-lg">

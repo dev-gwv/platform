@@ -137,6 +137,21 @@ export function monthGrid(members: readonly PersonMonth['member'][], slots: read
   return rows.sort((a, b) => b.days - a.days || b.hours - a.hours || a.member.name.localeCompare(b.member.name))
 }
 
+/**
+ * Whether any two of these bookings overlap in time. Two bookings on the
+ * same day are fine -- a morning haldi and an evening sangeet -- and only a
+ * real overlap is a problem worth red.
+ */
+export function hasClash(list: readonly Pick<TeamSlot, 'start_at' | 'end_at'>[]): boolean {
+  for (let i = 0; i < list.length; i++)
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i]!
+      const b = list[j]!
+      if (a.start_at < b.end_at && b.start_at < a.end_at) return true
+    }
+  return false
+}
+
 // ── what needs fixing ──────────────────────────────────────────────
 export type ConflictSeverity = 'critical' | 'warning' | 'info'
 export type ConflictType = 'double_booking' | 'invalid_time_range' | 'missing_service' | 'past_active'

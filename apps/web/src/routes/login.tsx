@@ -236,9 +236,10 @@ export function LoginPage() {
       // re-route the first two.
       goNext(await refresh())
     } catch (err) {
-      // A 403 on sign-in means the email isn't verified yet.
+      // Nothing on sign-in waits for an email check. A 403 here is the
+      // studio having turned this person's sign-in off: say so, plainly.
       if (err instanceof ApiError && err.status === 403) {
-        setPendingEmail(email)
+        setError(err.message)
         return
       }
       // "Email already taken" is a fact about one field, so it belongs under
@@ -379,6 +380,9 @@ export function LoginPage() {
                 <p className="text-sm text-muted-foreground">
                   If an account exists for <span className="font-medium">{resetSentTo}</span>, we've
                   sent a link to reset the password. It expires in 1 hour.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Signing in with a work username your studio gave you? Ask your studio to set a new password.
                 </p>
               </div>
               <button

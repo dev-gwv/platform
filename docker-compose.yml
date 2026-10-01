@@ -179,7 +179,8 @@ services:
           # 10# so that 0905 is nine-oh-five and not a bad octal literal.
           hm=$$((10#$$(date -u +%H%M)))
           if [ "$$hm" -ge 1830 ] && [ "$$last" != "$$today" ]; then
-            if curl -fsS -X POST "http://api:8787/cron/attendance" \n                 -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1; then
+            if curl -fsS -X POST "http://api:8787/cron/attendance" \
+                 -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1; then
               last="$$today"
             fi
           fi

@@ -16,7 +16,6 @@ import { AssignedNote } from '@/features/team/AssignedNote'
 import {
   clashFor,
   defaultWindowFields,
-  freeFrom,
   isLive,
   overlaps,
   payBasisLabel,
@@ -26,7 +25,6 @@ import {
   windowOf,
   type TimeWindow,
 } from './assign'
-import { readGap } from './booking-gap'
 import { DurationField } from '@/shared/ui/duration-field'
 
 const list = shootListItem.array()
@@ -67,8 +65,9 @@ const fmtDay = (d: string) =>
  * that time, already on it, seat already filled), a suggested start time when
  * they clash, and per-shoot hours and payout. Tick, and book them together.
  *
- * A travel/rest buffer is applied between bookings, so two shoots on the same
- * day are allowed only when there is time to get from one to the other.
+ * Two shoots on the same day are fine as long as the hours do not overlap;
+ * whether there is time to get from one to the other is the planner's call,
+ * and each row says when the other booking ends.
  */
 export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | undefined; onClose: () => void }) {
   const { session } = useAuth()
@@ -96,7 +95,6 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const [memberId, setMemberId] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
   const [role, setRole] = useState('')
-  const [bufferMin, setBufferMin] = useState(() => readGap(session?.company_id))
   const [defaultHours, setDefaultHours] = useState(4)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [rows, setRows] = useState<Record<string, Row>>({})
@@ -107,13 +105,12 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   // tab until they are booked. Kept once at least one shoot is ticked.
   const draft = useFormDraft(
     `bulk-assign:${projectId ?? 'all'}`,
-    { from, to, memberId, role, bufferMin, defaultHours, picked: [...picked], rows },
+    { from, to, memberId, role, defaultHours, picked: [...picked], rows },
     (v) => {
       setFrom(v.from)
       setTo(v.to)
       setMemberId(v.memberId)
       setRole(v.role)
-      setBufferMin(v.bufferMin)
       setDefaultHours(v.defaultHours)
       setPicked(new Set(v.picked))
       setRows(v.rows)
@@ -146,7 +143,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
       )
       const r = rowOf(s)
       const w = windowOf(defaultWindowFields(s).date, r.time, r.hours)
-      const hit = w ? clashFor(member.user_id, w, all, { bufferMin }) : null
+      const hit = w ? clashFor(member.user_id, w, all) : null
       const hitShoot = hit ? (shoots.data ?? []).find((x) => x.id === hit.shoot_id) : null
       out.push({
         shoot: s,
@@ -163,20 +160,20 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
         (a.shoot.shoot_date ?? '').localeCompare(b.shoot.shoot_date ?? '') ||
         (a.window?.start ?? '').localeCompare(b.window?.start ?? ''),
     )
-  }, [member, role, inRange, all, rows, bufferMin, defaultHours, shoots.data])
+  }, [member, role, inRange, all, rows, defaultHours, shoots.data])
 
-  // Two ticked shoots that clash with each other (same day, too close).
+  // Two ticked shoots that clash with each other (their hours overlap).
   const batchClash = useMemo(() => {
     const sel = cands.filter((c) => picked.has(c.shoot.id) && c.window)
     const bad = new Set<string>()
     for (let i = 0; i < sel.length; i++)
       for (let j = i + 1; j < sel.length; j++)
-        if (overlaps(sel[i]!.window!, sel[j]!.window!, bufferMin)) {
+        if (overlaps(sel[i]!.window!, sel[j]!.window!)) {
           bad.add(sel[i]!.shoot.id)
           bad.add(sel[j]!.shoot.id)
         }
     return bad
-  }, [cands, picked, bufferMin])
+  }, [cands, picked])
 
   const stateOf = (c: Cand): RowState =>
     c.already ? 'already' : c.open <= 0 ? 'full' : !c.window ? 'no_time' : c.clash ? 'conflict' : batchClash.has(c.shoot.id) ? 'batch' : 'ok'
@@ -331,19 +328,6 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                   <Input id="bulk-to" type="date" value={dateTo} onChange={(e) => setTo(e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="bulk-buffer" className="text-[11px] text-muted-foreground">
-                    Travel / rest gap (min)
-                  </Label>
-                  <Input
-                    id="bulk-buffer"
-                    type="number"
-                    min={0}
-                    max={720}
-                    value={bufferMin}
-                    onChange={(e) => setBufferMin(Math.max(0, Number(e.target.value) || 0))}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
                   <Label htmlFor="bulk-dur" className="text-[11px] text-muted-foreground">
                     Default hours (for shoots without their own)
                   </Label>
@@ -406,7 +390,6 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                             state={stateOf(c)}
                             row={rowOf(c.shoot)}
                             checked={picked.has(c.shoot.id)}
-                            bufferMin={bufferMin}
                             onToggle={() =>
                               setPicked((p) => {
                                 const n = new Set(p)
@@ -443,7 +426,6 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                                   row={rowOf(c.shoot)}
                                   checked={false}
                                   disabled
-                                  bufferMin={bufferMin}
                                   onToggle={() => {}}
                                   onRow={(p) => patchRow(c.shoot, p)}
                                 />
@@ -492,7 +474,6 @@ function CandRow({
   row,
   checked,
   disabled,
-  bufferMin,
   onToggle,
   onRow,
 }: {
@@ -501,7 +482,6 @@ function CandRow({
   row: Row
   checked: boolean
   disabled?: boolean
-  bufferMin: number
   onToggle: () => void
   onRow: (p: Partial<Row>) => void
 }) {
@@ -514,7 +494,7 @@ function CandRow({
           ? 'border-warning/30 bg-warning/[0.04]'
           : 'border-border bg-muted/40'
   const locked = state === 'full' || state === 'already'
-  const suggested = c.clash ? fmtTime(freeFrom(c.clash, bufferMin)) : null
+  const suggested = c.clash ? fmtTime(c.clash.end_at) : null
   return (
     <li className={cn('rounded-md border p-3', tone)}>
       <div className="flex items-start gap-3">
@@ -562,7 +542,6 @@ function CandRow({
             <div className="rounded-md border border-destructive/30 bg-destructive/[0.06] p-2 text-xs">
               <p className="font-medium text-destructive">
                 Clashes with {c.clash.name}: {fmtTime(c.clash.start_at)} – {fmtTime(c.clash.end_at)}
-                {bufferMin > 0 ? ` (+${bufferMin} min gap)` : ''}
               </p>
               {suggested && (
                 <p className="mt-0.5 inline-flex items-center gap-1">

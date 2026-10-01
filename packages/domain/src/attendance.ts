@@ -12,7 +12,7 @@
  * than storing a fourth status means it can never disagree with the times
  * shown beside it.
  */
-export type DisplayStatus = 'present' | 'late' | 'absent' | 'not_checked_out' | 'on_leave' | 'day_off'
+export type DisplayStatus = 'present' | 'late' | 'half_day' | 'absent' | 'not_checked_out' | 'on_leave' | 'day_off'
 
 /** The row shape this needs — the API's query result satisfies it too. */
 export interface RosterRow {
@@ -100,3 +100,100 @@ export function summariseRoster(rows: readonly RosterRow[]): AttendanceSummary {
 // `RosterRow` is deliberately structural rather than an import of the
 // contract type: this package stays free of that dependency, and both the
 // API's query result and the contract's row satisfy the shape as they are.
+
+// ── the month register (0224) ──────────────────────────────────────
+
+/**
+ * One letter per person per day, the way a muster roll reads:
+ * P present · L late · H half day · A absent · S on a shoot · Lv leave ·
+ * ½Lv half-day leave · Off weekly off · Hol holiday · blank: not tracked yet
+ * (before attendance went on, a future day, or today before the sweep).
+ */
+export type DayCode = 'P' | 'L' | 'H' | 'A' | 'S' | 'Lv' | '½Lv' | 'Off' | 'Hol' | ''
+
+export interface RegisterDay {
+  day: string
+  status: string | null
+  source: string | null
+  day_off: string | null
+  leave: 'full' | 'half' | null
+  leave_unpaid: boolean
+  shoot: boolean
+}
+
+export interface RegisterContext {
+  today: string
+  /** The first day the studio tracked; null when attendance is off. */
+  trackedFrom: string | null
+  /** 0 = lateness never costs pay. */
+  lateMarksPerHalfDay?: number
+}
+
+const tracked = (day: string, ctx: RegisterContext) => !!ctx.trackedFrom && day >= ctx.trackedFrom && day <= ctx.today
+
+export function dayCode(d: RegisterDay, ctx: RegisterContext): DayCode {
+  const offCode: DayCode = d.day_off === 'Weekly off' ? 'Off' : 'Hol'
+  if (d.status && tracked(d.day, ctx)) {
+    if (d.status === 'half_day') return 'H'
+    if (d.status === 'present' || d.status === 'late') return d.source === 'shoot' ? 'S' : d.status === 'late' ? 'L' : 'P'
+    // An absent row on a day nobody was due in is not an absence.
+    if (d.leave === 'full') return 'Lv'
+    if (d.leave === 'half') return '½Lv'
+    if (d.shoot) return 'S'
+    if (d.day_off) return offCode
+    return 'A'
+  }
+  if (d.day_off) return offCode
+  if (!tracked(d.day, ctx)) return ''
+  if (d.leave === 'full') return 'Lv'
+  if (d.leave === 'half') return '½Lv'
+  if (d.shoot) return 'S'
+  return ''
+}
+
+export interface RegisterTotals {
+  present: number
+  late: number
+  half: number
+  absent: number
+  /** Days of leave, a half day counting 0.5. */
+  leave: number
+  workingDays: number
+  /** Working days less what payroll cuts: absent, half of each half day, unpaid leave, late marks. */
+  payable: number
+}
+
+/** The same arithmetic payroll_generate does, so the register and the payslip agree. */
+export function registerTotals(days: readonly RegisterDay[], ctx: RegisterContext): RegisterTotals {
+  let present = 0
+  let late = 0
+  let half = 0
+  let absent = 0
+  let leave = 0
+  let unpaid = 0
+  let working = 0
+  for (const d of days) {
+    if (!d.day_off) working++
+    const code = dayCode(d, ctx)
+    if (code === 'P' || code === 'L' || code === 'S') present++
+    if (code === 'L') late++
+    if (code === 'H') half++
+    if (code === 'A') absent++
+    if (code === 'Lv' || code === '½Lv') {
+      const n = code === 'Lv' ? 1 : 0.5
+      leave += n
+      if (d.leave_unpaid && !d.day_off) unpaid += n
+    }
+  }
+  const marks = ctx.lateMarksPerHalfDay ?? 0
+  const latePenalty = marks > 0 ? Math.floor(late / marks) * 0.5 : 0
+  return {
+    present,
+    late,
+    half,
+    absent,
+    leave,
+    workingDays: working,
+    payable: Math.max(0, working - absent - half * 0.5 - unpaid - latePenalty),
+  }
+}

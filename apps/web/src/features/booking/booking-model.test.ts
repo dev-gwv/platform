@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamSlot } from '@ipc/contracts'
-import { bookingMessage, conflictItems, daysOf, figures, monthDays, monthGrid, roleCards, shiftMonth, staffing } from './booking-model'
+import { bookingMessage, conflictItems, daysOf, figures, hasClash, monthDays, monthGrid, roleCards, shiftMonth, staffing } from './booking-model'
 import { icsForSlot } from './share'
 
 const SHOOT = '00000000-0000-4000-8000-0000000000a1'
@@ -157,5 +157,17 @@ describe('outside the app', () => {
     expect(ics).toContain('SUMMARY:Haldi · Candid Photographer')
     expect(ics).toContain('DTSTART:20260926T043000Z')
     expect(ics).toContain('LOCATION:Jaipur')
+  })
+})
+
+describe('hasClash', () => {
+  const b = (start_at: string, end_at: string) => ({ start_at, end_at })
+  it('is red only for a real overlap, never for two bookings on one day', () => {
+    // A morning haldi and an evening sangeet: same day, no clash.
+    expect(hasClash([b('2026-10-01T03:30:00Z', '2026-10-01T06:30:00Z'), b('2026-10-01T12:30:00Z', '2026-10-01T15:30:00Z')])).toBe(false)
+    // Back to back is not a clash either.
+    expect(hasClash([b('2026-10-01T03:30:00Z', '2026-10-01T06:30:00Z'), b('2026-10-01T06:30:00Z', '2026-10-01T08:30:00Z')])).toBe(false)
+    expect(hasClash([b('2026-10-01T03:30:00Z', '2026-10-01T06:30:00Z'), b('2026-10-01T06:00:00Z', '2026-10-01T08:30:00Z')])).toBe(true)
+    expect(hasClash([])).toBe(false)
   })
 })

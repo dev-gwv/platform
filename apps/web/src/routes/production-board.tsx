@@ -27,7 +27,7 @@ type View = 'stages' | 'people' | 'tasks'
 
 export function ProductionBoardPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <Board />
     </AuthedPage>
   )

@@ -1,12 +1,11 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
-import { TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
-import type { AppRole } from '@ipc/permissions'
+import { MY_TIME, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
+import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import {
   BarChart3,
   Mail,
-  CalendarOff,
   MapPin,
   Gauge,
   LayoutDashboard,
@@ -59,6 +58,11 @@ export interface NavLeaf {
    * can be opened, links to the first that can, and stays lit on all of them.
    */
   hub?: readonly HubTab[]
+  /**
+   * The studio's work -- every project, the booking calendar, the data book.
+   * Hidden from staff, who see their own work (seesStudioWork).
+   */
+  studioWork?: boolean
 }
 
 export interface NavGroup {
@@ -90,7 +94,9 @@ const leaf = (
  * set; admins/managers get workflow groups.
  */
 export const NAV: NavEntry[] = [
-  leaf('Dashboard', '/dashboard', LayoutDashboard, { module: 'dashboard' }),
+  leaf('Dashboard', '/dashboard', LayoutDashboard, { module: 'dashboard', roles: ['super_admin', 'admin', 'manager', 'platform_admin'] }),
+  // Staff: the same page is their day -- what to do today and what is next.
+  leaf('Home', '/dashboard', LayoutDashboard, { module: 'dashboard', roles: ['employee'] }),
   // How the studio is doing for a period: sales, money, delivery, team.
   leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
 
@@ -100,9 +106,8 @@ export const NAV: NavEntry[] = [
   // submit work and see what was sent back.
   leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
-  leaf('Attendance', '/attendance/my', MapPin, { roles: ['employee'] }),
+  leaf('Attendance & leave', '/attendance/my', MapPin, { roles: ['employee'], hub: MY_TIME }),
   leaf('My performance', '/performance/me', Gauge, { roles: ['employee'] }),
-  leaf('Leave', '/leave', CalendarOff, { roles: ['employee'] }),
 
   {
     kind: 'group',
@@ -110,9 +115,9 @@ export const NAV: NavEntry[] = [
     icon: KanbanSquare,
     match: '/production',
     children: [
-      leaf('Production Board', '/production-board', KanbanSquare, { module: 'projects' }),
-      leaf('Team Booking', '/team-allocation', CalendarClock, { module: 'projects' }),
-      leaf('Data & Backup', '/data-management', Database, { module: 'projects' }),
+      leaf('Production Board', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
+      leaf('Team Booking', '/team-allocation', CalendarClock, { module: 'projects', studioWork: true }),
+      leaf('Data & Backup', '/data-management', Database, { module: 'projects', studioWork: true }),
     ],
   },
   {
@@ -121,9 +126,9 @@ export const NAV: NavEntry[] = [
     icon: Briefcase,
     match: '/projects',
     children: [
-      leaf('All Projects', '/projects', Briefcase, { module: 'projects' }),
-      leaf('Create Project', '/projects/new', Plus, { module: 'projects' }),
-      leaf('Project Tracking', '/project-tracking', Target, { module: 'projects' }),
+      leaf('All Projects', '/projects', Briefcase, { module: 'projects', studioWork: true }),
+      leaf('Create Project', '/projects/new', Plus, { module: 'projects', studioWork: true }),
+      leaf('Project Tracking', '/project-tracking', Target, { module: 'projects', studioWork: true }),
       // Templates, documents and delivery stages are set up once and then left
       // alone, so they live under Settings rather than in the daily menu.
     ],
@@ -195,7 +200,7 @@ export const NAV: NavEntry[] = [
       leaf('Alerts', '/notifications', Bell),
       leaf('Reminders', '/reminders', Bell),
       // Activity trail: see what's changed across the studio.
-      leaf('Activity', '/activity', Activity),
+      leaf('Activity', '/activity', Activity, { studioWork: true }),
       leaf('Referrals', '/referrals', Target, { module: 'referrals' }),
     ],
   },
@@ -233,6 +238,7 @@ function leafVisible(
   if (leaf.hub && !leaf.hub.some((t) => access.hasModule(t.module))) return false
   if (leaf.roles && !leaf.roles.includes(role as never)) return false
   if (leaf.module && !access.hasModule(leaf.module as ModuleKey)) return false
+  if (leaf.studioWork && !seesStudioWork(access)) return false
   return true
 }
 

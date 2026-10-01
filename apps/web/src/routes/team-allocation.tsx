@@ -30,7 +30,7 @@ type View = 'shoots' | 'people' | 'conflicts'
 
 export function TeamAllocationPage({ initialTab }: { initialTab?: 'calendar' | 'conflicts' } = {}) {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <TeamBooking initialView={initialTab === 'conflicts' ? 'conflicts' : 'shoots'} />
     </AuthedPage>
   )

@@ -18,6 +18,7 @@ import { textParam, uuidParam, uuidQuery } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { requireStudioWork } from '../../lib/scope'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendTeamTermsEmail } from '../../lib/email'
 
@@ -209,7 +210,7 @@ export const teamTermsRouter = new Hono<AppEnv>()
   })
 
   // ── sends ───────────────────────────────────────────────────
-  .get('/sends', requireAction('projects', 'view'), async (c) => {
+  .get('/sends', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const shoot = uuidQuery(c, 'shoot_id')
     const project = uuidQuery(c, 'project_id')
     const rows = await attempt(c, 'team_terms.sends', () =>

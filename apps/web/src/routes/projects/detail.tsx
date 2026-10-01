@@ -76,9 +76,21 @@ const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
 
 const shootsList = shootListItem.array()
 
+/**
+ * Staff do not open the studio's project page: a notification about one of
+ * their edits (?d=) opens it on My work, and anything else opens their own
+ * view of the project.
+ */
+const staffWay = ({ pathname, search }: { pathname: string; search: URLSearchParams }) => {
+  const d = search.get('d')
+  if (d) return `/my-work?d=${encodeURIComponent(d)}`
+  const id = pathname.split('/')[2]
+  return id ? `/my-work/project/${id}` : '/my-work'
+}
+
 export function ProjectDetailPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork={staffWay}>
       <ProjectDetail />
     </AuthedPage>
   )

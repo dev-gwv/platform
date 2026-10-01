@@ -33,12 +33,19 @@ const check = (name, ok, detail) => {
   ok ? pass++ : fail++
 }
 
-async function api(path, { token, method = 'GET', body } = {}) {
+/**
+ * `ip` signs a call in from another device -- a team member on their own
+ * phone -- so its sign-ins do not count against this run's own per-IP
+ * credential limit. (With no proxy in front, the API reads the last
+ * X-Forwarded-For hop as the peer.)
+ */
+async function api(path, { token, method = 'GET', body, ip } = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(ip ? { 'X-Forwarded-For': ip } : {}),
     },
     body: body === undefined ? null : JSON.stringify(body),
   })
@@ -719,18 +726,35 @@ if (listed) {
   const twiceC = await api('/team/members', { token: c.token, method: 'POST', body: member('Other12345!') })
   check('multi: the same email twice in one studio is still refused (409)', twiceC.status === 409, twiceC.json)
 
-  const inD = await api('/team/members', { token: d.token, method: 'POST', body: member('Ignored12345!') })
+  // 0223: studio B cannot take over a login that belongs to studio A's
+  // person by typing its email -- the same person joins B through an invite,
+  // with their own password.
+  const typedD = await api('/team/members', { token: d.token, method: 'POST', body: member('Ignored12345!') })
   check(
-    'multi: studio B adds the same email -- linked to the existing login, not refused',
-    inD.status === 201 && inD.json.linked_existing_login === true && inD.json.user_id !== inC.json.user_id,
-    inD.json,
+    'multi: studio B adding an email that signs in elsewhere is refused (409), never linked',
+    typedD.status === 409 && /another studio/i.test(JSON.stringify(typedD.json)),
+    typedD.json,
   )
 
-  // D's typed password was not used: it is the freelancer's own that works.
-  const wrong = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Ignored12345!' } })
-  check("multi: the password studio B typed does not sign in", wrong.status === 401, wrong.json)
-  const login = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Freelance12345!' } })
-  check('multi: the freelancer signs in with their own password', login.status === 200, login.json)
+  const invD = await api('/team/invitations', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Shared Freelancer', email: shared, role: 'admin' },
+  })
+  const invDToken = /[?&]token=([^&]+)/.exec(invD.json.invite_link ?? '')?.[1] ?? ''
+  const joinD = await api('/auth/accept-invite', { method: 'POST', body: { token: invDToken, password: 'Freelance12345!' } })
+  const joinedD = await api('/auth/session', { token: joinD.json.access_token })
+  const inD = { json: { user_id: joinedD.json.user_id } }
+  check(
+    'multi: through an invite, studio B gets them on their existing login',
+    joinD.status === 200 && joinedD.json.user_id !== inC.json.user_id && (joinedD.json.studios ?? []).length === 2,
+    joinedD.json,
+  )
+
+  // Accepting signed them in, with their own password: that is the sign-in
+  // the rest of this block uses (the credential endpoints share one per-IP
+  // limit across the whole file).
+  const login = joinD
 
   const s1 = await api('/auth/session', { token: login.json.access_token })
   const studios = s1.json.studios ?? []
@@ -843,6 +867,38 @@ if (listed) {
   )
   const newLogin = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Changed12345!' } })
   check('multi: the new password works', newLogin.status === 200, newLogin.json)
+
+  // 0223: a no-login person's email in one studio is not a door into it.
+  // Studio A keeps someone in its directory with no login; studio B types the
+  // same email, first with a login (refused), then without (kept apart).
+  const quiet = `rls-quiet-${rand()}@example.com`
+  const dirC = await api('/team/members', {
+    token: c.token,
+    method: 'POST',
+    body: { name: 'Directory Only', phone: randPhone(), email: quiet, create_login: false },
+  })
+  const grabD = await api('/team/members', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Not Them', phone: randPhone(), email: quiet, password: 'Grab12345!', create_login: true },
+  })
+  check(
+    "multi: a login on another studio's no-login email is refused (409)",
+    dirC.status === 201 && grabD.status === 409,
+    { dirC: dirC.status, grabD: grabD.status },
+  )
+  const grabLogin = await api('/auth/login', { method: 'POST', body: { email: quiet, password: 'Grab12345!' } })
+  check('multi: and nobody can sign in to it with the typed password', grabLogin.status === 401, grabLogin.json)
+  const dirD = await api('/team/members', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Their Own', phone: randPhone(), email: quiet, create_login: false },
+  })
+  check(
+    'multi: a no-login add with that email is its own person, not linked',
+    dirD.status === 201 && dirD.json.user_id !== dirC.json.user_id && dirD.json.linked_existing_login === false,
+    dirD.json,
+  )
 }
 
 // ── Assign team: bulk booking, payout set with the booking ─────────
@@ -3066,7 +3122,9 @@ if (listed) {
   check('expenses: the list names the project each cost belongs to', exp.status < 300 && /^Cost project /.test(row?.project_name ?? ''), row)
 
   const me = (await api('/auth/session', { token: aToken })).json.user_id
-  const day = new Date(Date.now() + (40 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10)
+  // Years out, clear of every other booking this run makes for the owner: two
+  // random days that met used to refuse this one as a double booking.
+  const day = new Date(Date.now() + (3000 + Math.floor(Math.random() * 3000)) * 86_400_000).toISOString().slice(0, 10)
   const shoot = await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', shoot_date: day } })
   await api('/allocation', {
     token: aToken,
@@ -3086,6 +3144,168 @@ if (listed) {
 
   const status = await api('/subscription/status', { token: aToken })
   check('diamond: the status carries the group link (none set yet)', status.status === 200 && 'diamond_group_link' in status.json, status.json.diamond_group_link)
+}
+
+// ── Staff: any email signs in, they see only their own work, the owner sets
+// their sign-in, and a removed login is told why ──
+{
+  const pw = 'Asha-pass-123'
+  const phone = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `asha-${rand()}@madeup.test`
+  const add = await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Asha Staff', phone: randPhone(), email, password: pw, create_login: true } })
+  const asha = add.json.user_id
+  const login = await api('/auth/login', { ip: phone, method: 'POST', body: { email, password: pw } })
+  const t = login.json.access_token
+  check('staff login: a made-up email signs in with its password', add.status === 201 && login.status === 200 && !!t, { add: add.status, login: login.status })
+  const sess = await api('/auth/session', { token: t })
+  check('staff login: never asked to confirm an email', sess.json.email_verified === true, sess.json.email_verified)
+
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Staff Co ${rand()}`, phone: randPhone() } })
+  const p1 = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Hers ${rand()}`, client_id: client.json.id, package_cost: 90000 } })).json.id
+  const p2 = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Not hers ${rand()}`, client_id: client.json.id, package_cost: 70000 } })).json.id
+  const day = new Date(Date.now() + (400 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10)
+  const s1 = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: p1, name: 'Engagement', shoot_date: day } })).json.id
+  await api('/shoots', { token: aToken, method: 'POST', body: { project_id: p2, name: 'Haldi', shoot_date: day } })
+  const booked = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: asha, shoot_id: s1, service_name: 'Candid Photographer', start_at: `${day}T09:30:00.000Z`, end_at: `${day}T12:30:00.000Z` },
+  })
+  check('staff: the owner books her on one shoot', booked.status < 300, { status: booked.status, json: booked.json })
+
+  const list = await api('/projects', { token: t })
+  const ids = (Array.isArray(list.json) ? list.json : []).map((r) => r.id)
+  check('staff: the project list holds only the projects she works on', list.status === 200 && ids.includes(p1) && !ids.includes(p2), { status: list.status, ids })
+  const row = (Array.isArray(list.json) ? list.json : []).find((r) => r.id === p1)
+  check(
+    'staff: no money and no client phone on her projects',
+    !!row && row.package_cost === 0 && row.total_cost === 0 && row.received === 0 && row.client_phone === null,
+    row,
+  )
+  const paged = await api('/projects?page=1&page_size=50', { token: t })
+  check(
+    'staff: the paged list is scoped too, with no money summary',
+    paged.status === 200 && paged.json.items.every((r) => r.id === p1) && paged.json.summary.value === 0,
+    { status: paged.status, n: paged.json.items?.length, summary: paged.json.summary },
+  )
+  const closed = [`/projects/${p1}`, `/projects/${p1}/billing`, '/projects/tracking', '/projects/board', `/client-portal/projects/${p1}`, '/terms/documents', `/terms/projects/${p1}/documents`, '/team-terms/sends']
+  const denied = await Promise.all(closed.map((path) => api(path, { token: t })))
+  check("staff: 403 on the studio's project screens", denied.every((r) => r.status === 403), Object.fromEntries(closed.map((path, i) => [path, denied[i].status])))
+  const shoots = await api('/shoots', { token: t })
+  check('staff: the shoots list holds only her bookings', shoots.status === 200 && shoots.json.length === 1 && shoots.json[0].id === s1, { status: shoots.status, n: shoots.json.length })
+  const ownPaths = ['/shoots/my', '/tasks/my', '/projects/deliverables/mine', '/allocation', '/me/follow-ups', '/data/mine']
+  const own = await Promise.all(ownPaths.map((path) => api(path, { token: t })))
+  check('staff: her own work still opens', own.every((r) => r.status === 200), Object.fromEntries(ownPaths.map((path, i) => [path, own[i].status])))
+  const ownerStill = await api(`/projects/${p1}`, { token: aToken })
+  const ownerList = await api('/projects', { token: aToken })
+  check(
+    'staff: the owner still sees every project, with its money',
+    ownerStill.status === 200 && ownerList.json.some((r) => r.id === p2 && r.package_cost === 70000),
+    { detail: ownerStill.status },
+  )
+
+  // Sign-in details: the owner sets her password; the old one and its session stop.
+  const newPw = 'Asha-new-456'
+  const notHers = await api(`/team/members/${asha}/sign-in`, { token: t, method: 'POST', body: { password: newPw } })
+  check('sign-in details: staff cannot set anyone\'s sign-in (403)', notHers.status === 403 || notHers.status === 409, { status: notHers.status })
+  const set = await api(`/team/members/${asha}/sign-in`, { token: aToken, method: 'POST', body: { password: newPw } })
+  check('sign-in details: the owner sets a new password', set.status === 200 && set.json.email === email, set.json)
+  const oldPw = await api('/auth/login', { ip: phone, method: 'POST', body: { email, password: pw } })
+  const oldSession = await api('/auth/session', { token: t })
+  check('sign-in details: the old password and her old session stop working', oldPw.status === 401 && oldSession.status === 401, { login: oldPw.status, session: oldSession.status })
+  const email2 = `asha-${rand()}@madeup.test`
+  const moved = await api(`/team/members/${asha}/sign-in`, { token: aToken, method: 'POST', body: { email: email2, password: newPw } })
+  const onNew = await api('/auth/login', { ip: phone, method: 'POST', body: { email: email2, password: newPw } })
+  check('sign-in details: a mistyped email is fixed and signs in', moved.status === 200 && onNew.status === 200, { moved: moved.status, login: onNew.status })
+  const taken = await api(`/team/members/${asha}/sign-in`, { token: aToken, method: 'POST', body: { email: a.email, password: newPw } })
+  check("sign-in details: someone else's email is refused (409)", taken.status === 409, { status: taken.status })
+
+  // Removed: she is told her sign-in is off, not "wrong password".
+  await api(`/team/members/${asha}`, { token: aToken, method: 'DELETE' })
+  const gone = await api('/auth/login', { ip: phone, method: 'POST', body: { email: email2, password: newPw } })
+  check('staff login: a removed person is told their sign-in is turned off (403)', gone.status === 403 && /turned off/.test(JSON.stringify(gone.json)), { status: gone.status, json: gone.json })
+}
+
+// ── Attendance v2 (0224): off until the owner turns it on, then done properly ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const mk = async (name) => {
+    const email = `att-${rand()}@madeup.test`
+    const added = await api('/team/members', { token: aToken, method: 'POST', body: { name, phone: randPhone(), email, password: 'Att-pass-123', create_login: true } })
+    const login = await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Att-pass-123' } })
+    return { id: added.json.user_id, token: login.json.access_token }
+  }
+  const ravi = await mk('Ravi Att')
+  const meera = await mk('Meera Att')
+  const STUDIO = { lat: 19.076, lng: 72.8777 }
+
+  // Make sure it starts off (an earlier block may have set a location).
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: false } })
+  const off = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: STUDIO })
+  check('attendance v2: nobody checks in while it is off', off.status === 422 && /not switched on/.test(off.json.error ?? ''), off)
+  const meOff = await api('/hr/attendance/me', { token: ravi.token })
+  check('attendance v2: the app is told it is off', meOff.status === 200 && meOff.json.enabled === false, meOff.json)
+
+  const staffSet = await api('/hr/policy', { token: ravi.token, method: 'PATCH', body: { enabled: true } })
+  check('attendance v2: only the owner turns it on (403)', staffSet.status === 403, { status: staffSet.status })
+  const on = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: true, day_start: '00:00', grace_min: 0, day_end: '23:30', half_day_hours: 4 } })
+  check('attendance v2: the owner turns it on with working hours', on.status === 200 && on.json.enabled === true && on.json.day_start === '00:00' && on.json.half_day_hours === 4, on.json)
+  const bad = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { day_start: '19:00', day_end: '10:00' } })
+  check('attendance v2: a day that ends before it starts is refused (422)', bad.status === 422, bad)
+  const pinned = await api('/hr/location', {
+    token: aToken,
+    method: 'PATCH',
+    body: { ...STUDIO, radius_m: 150, timezone: 'Asia/Kolkata', is_active: true, expected_checkin_time: '00:00', late_grace_minutes: 0, missed_cutoff_time: null },
+  })
+  check('attendance v2: the owner pins the studio', pinned.status === 200, pinned)
+
+  const rough = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { ...STUDIO, accuracy_m: 2000 } })
+  check('attendance v2: a rough fix is refused, saying how rough', rough.status === 422 && /too rough right now \(±2\.0 km\)/.test(rough.json.error ?? ''), rough.json)
+  const far = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { lat: 28.6, lng: 77.2, accuracy_m: 10 } })
+  check('attendance v2: outside the circle is refused with the distance', far.status === 422 && /from Studio \(allowed 150 m\)/.test(far.json.error ?? ''), far.json)
+  const inside = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { ...STUDIO, accuracy_m: 12 } })
+  check('attendance v2: inside, checked in -- and late against a 00:00 start', inside.status === 201 && inside.json.status === 'late' && inside.json.place_name === 'Studio', inside.json)
+  await api('/hr/check-out', { token: ravi.token, method: 'POST', body: STUDIO })
+  const after = await api('/hr/attendance/me', { token: ravi.token })
+  check('attendance v2: out within the half-day hours is a half day', after.json.today?.status === 'half_day' && after.json.today?.accuracy_m === 12, after.json.today)
+
+  // A selfie, when asked for.
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { selfie_required: true } })
+  const noSelfie = await api('/hr/check-in', { token: meera.token, method: 'POST', body: STUDIO })
+  check('attendance v2: with a selfie asked for, none is refused', noSelfie.status === 422 && /selfie/.test(noSelfie.json.error ?? ''), noSelfie.json)
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), (ch) => ch.charCodeAt(0))
+  const form = new FormData()
+  form.append('file', new Blob([png], { type: 'image/png' }), 'selfie.png')
+  const up = await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${meera.token}` }, body: form })
+  const upJson = await up.json().catch(() => ({}))
+  const withSelfie = await api('/hr/check-in', { token: meera.token, method: 'POST', body: { ...STUDIO, selfie_file_id: upJson.id } })
+  check('attendance v2: with her own fresh selfie she is in', up.ok && withSelfie.status === 201, { up: up.status, json: withSelfie.json })
+  const ownerSees = await api(`/files/${upJson.id}`, { token: aToken })
+  const otherSees = await api(`/files/${upJson.id}`, { token: ravi.token })
+  check('attendance v2: the owner can open the selfie, a teammate cannot', ownerSees.status === 200 && otherSees.status !== 200, { owner: ownerSees.status, other: otherSees.status })
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { selfie_required: false } })
+
+  // The owner's screens.
+  const today = await api('/hr/today', { token: aToken })
+  const names = (today.json.rows ?? []).map((r) => r.name)
+  check('attendance v2: the Today board lists who is tracked, with today’s marks', today.status === 200 && today.json.enabled === true && names.includes('Ravi Att') && names.includes('Meera Att'), { status: today.status, names })
+  const todayStaff = await api('/hr/today', { token: ravi.token })
+  check('attendance v2: staff cannot open the Today board (403)', todayStaff.status === 403, { status: todayStaff.status })
+  const month = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 7)
+  const reg = await api(`/hr/register?month=${month}`, { token: aToken })
+  const regStaff = await api(`/hr/register?month=${month}`, { token: ravi.token })
+  const regMine = await api(`/hr/register?month=${month}&user=me`, { token: ravi.token })
+  check(
+    'attendance v2: the month register is the owner’s; a person sees only their own',
+    reg.status === 200 && reg.json.people.length >= 2 && regStaff.status === 403 && regMine.status === 200 && regMine.json.people.length === 1,
+    { owner: reg.status, staff: regStaff.status, mine: regMine.status },
+  )
+  const plain = await api('/hr/places/resolve-link', { token: aToken, method: 'POST', body: { url: 'https://www.google.com/maps/place/x/@19.07,72.87,17z/data=!3d19.0760!4d72.8777' } })
+  const nopin = await api('/hr/places/resolve-link', { token: aToken, method: 'POST', body: { url: 'Bandra West, Mumbai' } })
+  check('attendance v2: a Maps link becomes a pin; a link with none says so', plain.status === 200 && plain.json.lat === 19.076 && nopin.status === 422 && /no pin/.test(nopin.json.error ?? ''), { plain: plain.json, nopin: nopin.json })
+  const cron = await fetch(`${API}/cron/messages`, { method: 'POST', headers: { 'x-cron-secret': process.env.CRON_SECRET ?? 'ci-cron' } })
+  check('attendance v2: the five-minute cron runs the reminders', cron.status === 200, { status: cron.status })
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: false } })
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

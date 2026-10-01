@@ -58,7 +58,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       { to: '/settings/appearance', label: 'Theme & branding', icon: Palette, module: 'settings' },
       {
         to: '/settings/attendance-location',
-        label: 'Attendance location',
+        label: 'Attendance',
         icon: MapPin,
         module: 'settings',
       },

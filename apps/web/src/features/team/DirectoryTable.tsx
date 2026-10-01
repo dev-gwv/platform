@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { KeyRound, MessageCircle, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
 import { PROFILE_FIELD_LABEL, buildWhatsAppUrl } from '@ipc/contracts'
 import { useTeamProfileGaps } from '@/features/profile/api'
@@ -13,8 +14,10 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Avatar } from '@/shared/ui/avatar'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useRemoveMember, useSendReset, useUpdateMember } from './api'
+import { SignInDetailsDialog } from './SignInDetailsDialog'
 import { EditMemberDialog } from './EditMemberDialog'
 import { loginMessage } from './assign-note'
+import { useTeamPowers } from './powers'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import type { DirectoryFilters, SortKey } from './filters'
 
@@ -340,6 +343,8 @@ function RowActions({
   const reset = useSendReset()
   const confirm = useConfirm()
   const { session } = useAuth()
+  const powers = useTeamPowers()
+  const [signIn, setSignIn] = useState(false)
   const isOwnerRow = member.role === 'super_admin'
   const active = member.status === 'active'
 
@@ -383,10 +388,15 @@ function RowActions({
           },
         ]
       : []),
+    // Set the email and password themselves: works for a made-up email,
+    // and gives a no-login member a login.
+    ...(powers.canSetSignIn && member.user_id !== session?.user_id
+      ? [{ label: member.login_enabled ? 'Sign-in details' : 'Give a login', icon: <KeyRound />, onSelect: () => setSignIn(true) }]
+      : []),
     ...(member.login_enabled && member.email
       ? [
           {
-            label: 'Send password reset',
+            label: 'Email a reset link',
             icon: <KeyRound />,
             disabled: reset.isPending,
             onSelect: () =>
@@ -409,6 +419,7 @@ function RowActions({
     <div className="row-actions flex items-center justify-end gap-0.5">
       {allowed.edit && <EditMemberDialog member={member} />}
       {allowed.edit && <RowMenu items={more} label={`More actions for ${member.name}`} />}
+      {powers.canSetSignIn && <SignInDetailsDialog member={member} open={signIn} onOpenChange={setSignIn} />}
       {allowed.remove && (
         <Button
           size="sm"

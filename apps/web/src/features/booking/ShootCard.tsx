@@ -8,6 +8,7 @@ import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { hoursLabel, rangeLabel, shootHours, timeLabel } from '@/features/shoots/assign'
+import { AlsoBookedLine, dayOfSlot } from '@/features/shoots/PersonDay'
 import { mapHref } from '@/features/shoots/map-link'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
 import { EventTile } from '@/shared/ui/icon-tile'
@@ -140,7 +141,7 @@ export function ShootCard({
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {cards.map((c) => (
-              <RoleCardView key={c.name} card={c} canPlan={canPlan} menuFor={menuFor} onAssign={() => onAssign(shoot, c.name)} />
+              <RoleCardView key={c.name} card={c} canPlan={canPlan} menuFor={menuFor} daySlots={slots} onAssign={() => onAssign(shoot, c.name)} />
             ))}
           </div>
         )}
@@ -149,7 +150,7 @@ export function ShootCard({
             <p className="text-xs font-semibold text-muted-foreground">Also booked (on a role this shoot does not list)</p>
             <ul className="mt-2 flex flex-col gap-1.5">
               {extra.map((s) => (
-                <BookedPerson key={s.id} slot={s} canPlan={canPlan} menu={menuFor(s)} showRole />
+                <BookedPerson key={s.id} slot={s} canPlan={canPlan} menu={menuFor(s)} daySlots={slots} showRole />
               ))}
             </ul>
           </div>
@@ -185,11 +186,13 @@ function RoleCardView({
   card,
   canPlan,
   menuFor,
+  daySlots,
   onAssign,
 }: {
   card: RoleCard
   canPlan: boolean
   menuFor: (s: TeamSlot) => RowMenuItem[]
+  daySlots: readonly TeamSlot[]
   onAssign: () => void
 }) {
   const tone = FILL_TONE[card.fill]
@@ -207,7 +210,7 @@ function RoleCardView({
       ) : (
         <ul className="mt-2 flex flex-col gap-1.5">
           {card.people.map((s) => (
-            <BookedPerson key={s.id} slot={s} canPlan={canPlan} menu={menuFor(s)} />
+            <BookedPerson key={s.id} slot={s} canPlan={canPlan} menu={menuFor(s)} daySlots={daySlots} />
           ))}
         </ul>
       )}
@@ -230,8 +233,24 @@ function RoleCardView({
   )
 }
 
-/** A booked person: face, name, hours -- and, for whoever plans crew, the payout. */
-export function BookedPerson({ slot, canPlan, menu, showRole = false }: { slot: TeamSlot; canPlan: boolean; menu: RowMenuItem[]; showRole?: boolean }) {
+/**
+ * A booked person: face, name, hours -- and, for whoever plans crew, the
+ * payout and anything else they are booked on that day.
+ */
+export function BookedPerson({
+  slot,
+  canPlan,
+  menu,
+  showRole = false,
+  daySlots,
+}: {
+  slot: TeamSlot
+  canPlan: boolean
+  menu: RowMenuItem[]
+  showRole?: boolean
+  /** Everyone's bookings around this day: shows "Also booked …" under the name. */
+  daySlots?: readonly TeamSlot[] | undefined
+}) {
   const pay = slot.final_cost ?? slot.estimated_cost
   return (
     <li className="flex items-center gap-2 rounded-lg bg-card/90 px-2 py-1.5 shadow-sm">
@@ -253,6 +272,16 @@ export function BookedPerson({ slot, canPlan, menu, showRole = false }: { slot: 
             </span>
           )}
         </p>
+        {canPlan && daySlots && (
+          <AlsoBookedLine
+            userId={slot.user_id}
+            name={slot.user_name ?? 'Someone'}
+            day={dayOfSlot(slot)}
+            slots={daySlots}
+            ignoreSlotId={slot.id}
+            className="mt-0.5"
+          />
+        )}
       </div>
       <ResponseChip slot={slot} />
       {menu.length > 0 && <RowMenu label={`More for ${slot.user_name ?? 'this booking'}`} items={menu} />}

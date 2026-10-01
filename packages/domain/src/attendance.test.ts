@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayStatus, matchesRoster, summariseRoster, type RosterRow } from './attendance'
+import { dayCode, displayStatus, matchesRoster, registerTotals, summariseRoster, type RegisterDay, type RosterRow } from './attendance'
 
 /**
  * The roster rules, now that both sides run them.
@@ -105,5 +105,45 @@ describe('summariseRoster', () => {
     const freelancers = ROSTER.filter((r) => matchesRoster(r, { type: 'freelancer' }))
     expect(summariseRoster(freelancers).total).toBe(1)
     expect(summariseRoster(ROSTER.slice(0, 2)).total).toBe(2)
+  })
+})
+
+describe('the month register', () => {
+  const day = (d: string, over: Partial<RegisterDay> = {}): RegisterDay => ({
+    day: d, status: null, source: null, day_off: null, leave: null, leave_unpaid: false, shoot: false, ...over,
+  })
+  const ctx = { today: '2026-10-10', trackedFrom: '2026-10-02' }
+
+  it('writes one letter a day, and nothing before tracking began or after today', () => {
+    const codes = [
+      day('2026-10-01', { status: 'absent' }),
+      day('2026-10-02', { status: 'present' }),
+      day('2026-10-03', { status: 'late' }),
+      day('2026-10-04', { day_off: 'Weekly off' }),
+      day('2026-10-05', { status: 'half_day' }),
+      day('2026-10-06', { status: 'absent' }),
+      day('2026-10-07', { status: 'absent', leave: 'full' }),
+      day('2026-10-08', { status: 'present', source: 'shoot' }),
+      day('2026-10-09', { leave: 'half' }),
+      day('2026-10-10', { day_off: 'Diwali' }),
+      day('2026-10-11', { status: 'present' }),
+    ].map((d) => dayCode(d, ctx))
+    expect(codes).toEqual(['', 'P', 'L', 'Off', 'H', 'A', 'Lv', 'S', '½Lv', 'Hol', ''])
+  })
+
+  it('totals the month like payroll does', () => {
+    const days = [
+      day('2026-10-02', { status: 'present' }),
+      day('2026-10-03', { status: 'late' }),
+      day('2026-10-04', { day_off: 'Weekly off' }),
+      day('2026-10-05', { status: 'half_day' }),
+      day('2026-10-06', { status: 'absent' }),
+      day('2026-10-07', { leave: 'full', leave_unpaid: true }),
+      day('2026-10-08', { status: 'late' }),
+      day('2026-10-09', { status: 'late' }),
+    ]
+    expect(registerTotals(days, ctx)).toEqual({ present: 4, late: 3, half: 1, absent: 1, leave: 1, workingDays: 7, payable: 4.5 })
+    expect(registerTotals(days, { ...ctx, lateMarksPerHalfDay: 3 }).payable).toBe(4)
+    expect(registerTotals(days, { ...ctx, trackedFrom: null })).toMatchObject({ absent: 0, half: 0, payable: 7 })
   })
 })

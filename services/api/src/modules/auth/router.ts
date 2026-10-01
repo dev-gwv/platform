@@ -295,6 +295,28 @@ export const authRouter = new Hono<AppEnv>()
     // the confirmation from inside (session.email_verified). The password is
     // the proof of who they are; the email link proves the mailbox.
 
+    // Someone whose every studio has removed them or turned their sign-in off
+    // used to be signed in to nothing and dropped back here without a word.
+    // Say why. (A login with no studio at all -- a sign-up that has not named
+    // its studio yet -- is let through to finish setup, as before.)
+    const gone = await attempt(c, 'auth.login.access', () =>
+      withService(c.env, async (sql) => {
+        const [r] = await sql<{ active: number; studio: string | null }[]>`
+          select (select count(*)::int from list_login_profiles(${row.id})) as active,
+                 (select c.name
+                    from users u
+                    join auth.users p on p.id = u.user_id
+                    join companies c on c.id = u.company_id
+                   where p.id = ${row.id} or p.identity_id = ${row.id}
+                   order by u.deleted_at desc nulls first
+                   limit 1) as studio`
+        return r ?? null
+      }),
+    )
+    if (gone && gone.active === 0 && gone.studio) {
+      fail(403, `Your sign-in for ${gone.studio} has been turned off. Ask ${gone.studio} to turn it back on.`)
+    }
+
     return c.json(await signIn(c, row.id))
   })
 
@@ -718,7 +740,10 @@ export const authRouter = new Hono<AppEnv>()
         plan_expiry: a.planExpiry,
         permissions: serializeAccess(a.access),
         studios,
-        email_verified: await emailVerifiedOf(c, a.userId),
+        // Only the studio owner is ever asked to confirm an email. A team
+        // member's email is a username the owner chose -- often a made-up one
+        // -- and nothing on the team side waits on a mailbox.
+        email_verified: a.isOwner ? await emailVerifiedOf(c, a.userId) : true,
         ...(await setupStateOf(c, a.userId)),
       }),
     )

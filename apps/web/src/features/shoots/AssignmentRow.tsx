@@ -11,6 +11,7 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useSetSlotData } from '@/features/allocation/api'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { AlsoBookedLine, dayOfSlot } from './PersonDay'
 import { STAGE_LABEL, STAGE_TONE, dataRowTone, optedOut, slotDay, slotStage, whenLabel } from '@/features/data/stage'
 
 /**
@@ -31,6 +32,7 @@ export function AssignmentRow({
   record,
   canEdit,
   onRemove,
+  daySlots,
 }: {
   projectId: string
   shoot: ShootListItem
@@ -38,6 +40,8 @@ export function AssignmentRow({
   record: DataRecord | undefined
   canEdit: boolean
   onRemove: () => void
+  /** Everyone's bookings, so the row can say what else this person has that day. */
+  daySlots?: readonly TeamSlot[] | undefined
 }) {
   const [editing, setEditing] = useState(false)
   const [optingOut, setOptingOut] = useState(false)
@@ -81,6 +85,16 @@ export function AssignmentRow({
           <CalendarDays className="size-3.5 shrink-0" aria-hidden />
           {whenLabel(slot)}
         </p>
+        {canEdit && daySlots && (
+          <AlsoBookedLine
+            userId={slot.user_id}
+            name={slot.user_name ?? 'Someone'}
+            day={dayOfSlot(slot)}
+            slots={daySlots}
+            ignoreSlotId={slot.id}
+            className="mt-1"
+          />
+        )}
       </div>
 
       <div className="flex min-w-[10rem] flex-col items-start gap-0.5">

@@ -19,6 +19,7 @@ import { textParam, uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { requireStudioWork } from '../../lib/scope'
 import { newRawToken, sha256Hex } from '../../lib/auth-token'
 
 /**
@@ -50,7 +51,7 @@ function portalRuleBroken(code: string): never | undefined {
 export const clientPortalRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
-  .get('/projects/:id', requireAction('projects', 'view'), async (c) => {
+  .get('/projects/:id', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const id = uuidParam(c)
     const data = await attempt(c, 'client_portal.status', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {

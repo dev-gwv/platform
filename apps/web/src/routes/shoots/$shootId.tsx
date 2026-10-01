@@ -24,7 +24,7 @@ const list = shootListItem.array()
  */
 export function ShootDetailPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/shoots/my">
       <ShootDetail />
     </AuthedPage>
   )

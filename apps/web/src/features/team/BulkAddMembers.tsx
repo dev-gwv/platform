@@ -215,7 +215,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Bulk add team</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            One row per person. Leave email blank for anyone who won&apos;t sign in — they can still be booked on shoots.
+            One row per person. Leave email blank for anyone who won&apos;t sign in — they can still be booked on shoots. Any email works — it is just their username.
           </p>
         </div>
         <Button variant="ghost" onClick={onCancel} disabled={running}>

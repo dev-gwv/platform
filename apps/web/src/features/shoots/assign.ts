@@ -1,4 +1,4 @@
-import type { ShootListItem, TeamMember, TeamSlot } from '@ipc/contracts'
+import type { LeaveRequest, ShootListItem, TeamMember, TeamSlot } from '@ipc/contracts'
 
 /**
  * The rules behind assigning crew to a shoot, kept out of the dialogs so they
@@ -6,8 +6,8 @@ import type { ShootListItem, TeamMember, TeamSlot } from '@ipc/contracts'
  * given time, who fits a role, and what to pre-fill as their payout.
  *
  * A booking is a window (start → end). A person is busy when any of their
- * live bookings -- on this shoot or any other -- overlaps it, optionally with
- * a travel/rest buffer either side.
+ * live bookings -- on this shoot or any other -- overlaps it. Travel between
+ * two bookings is the planner's judgement: the screens show the hours.
  */
 
 export interface RequirementFill {
@@ -96,110 +96,111 @@ export function fieldsOfSlot(slot: Pick<TeamSlot, 'start_at' | 'end_at'>) {
   }
 }
 
-/** Do two windows clash, allowing `bufferMin` of travel or rest between them? */
-export function overlaps(a: TimeWindow, b: TimeWindow, bufferMin = 0): boolean {
-  const buf = Math.max(0, bufferMin) * 60_000
-  const aS = Date.parse(a.start)
-  const aE = Date.parse(a.end)
-  const bS = Date.parse(b.start)
-  const bE = Date.parse(b.end)
-  return !(aS >= bE + buf || aE + buf <= bS)
+/** Do two windows overlap? Back to back is not a clash. */
+export function overlaps(a: TimeWindow, b: TimeWindow): boolean {
+  return Date.parse(a.start) < Date.parse(b.end) && Date.parse(b.start) < Date.parse(a.end)
 }
 
 /**
- * The gap between two windows in minutes: how much time is free between
- * them, negative when they overlap. Zero means back to back.
+ * The live booking that makes this person unavailable for the window, if any:
+ * a true overlap only. How long they need to get from one place to the next
+ * is the planner's call, not a setting (the owner found a "gap" control
+ * confusing), so the screen shows the other booking's hours and lets them
+ * judge. `ignoreSlotId` leaves out the booking being changed.
  */
-export function gapBetween(a: TimeWindow, b: TimeWindow): number {
-  const aS = Date.parse(a.start)
-  const aE = Date.parse(a.end)
-  const bS = Date.parse(b.start)
-  const bE = Date.parse(b.end)
-  if (aS >= bE) return (aS - bE) / 60_000
-  if (bS >= aE) return (bS - aE) / 60_000
-  // Overlapping: how deep, as a negative number of minutes.
-  return (Math.max(aS, bS) - Math.min(aE, bE)) / 60_000
-}
-
-/**
- * The booking nearest to this window among the person's live ones -- the one
- * that decides whether they can take it. `gapMin` is the free time between
- * the two, negative when they overlap. Only bookings closer than `bufferMin`
- * count; back to back with no buffer is not a clash at all.
- * `ignoreSlotId` leaves out the booking being changed, so moving a person's
- * own slot is never reported as clashing with itself.
- */
-export function nearestClash(
-  userId: string,
-  window: TimeWindow,
-  slots: readonly TeamSlot[],
-  { bufferMin = 0, ignoreSlotId }: { bufferMin?: number; ignoreSlotId?: string | undefined } = {},
-): { slot: TeamSlot; gapMin: number } | null {
-  let best: { slot: TeamSlot; gapMin: number } | null = null
-  for (const s of slots) {
-    if (s.user_id !== userId || !isLive(s) || s.id === ignoreSlotId) continue
-    const theirs = { start: s.start_at, end: s.end_at }
-    if (!overlaps(window, theirs, bufferMin)) continue
-    const gapMin = gapBetween(window, theirs)
-    if (!best || gapMin < best.gapMin) best = { slot: s, gapMin }
-  }
-  return best
-}
-
-/** The booking that makes this person unavailable for the window, if any. */
 export function clashFor(
   userId: string,
   window: TimeWindow,
   slots: readonly TeamSlot[],
-  opts: { bufferMin?: number; ignoreSlotId?: string | undefined } = {},
+  { ignoreSlotId }: { ignoreSlotId?: string | undefined } = {},
 ): TeamSlot | null {
-  return nearestClash(userId, window, slots, opts)?.slot ?? null
-}
-
-/** When this person is free again after a booking: its end plus the gap. */
-export function freeFrom(slot: Pick<TeamSlot, 'end_at'>, bufferMin = 0): string {
-  return new Date(Date.parse(slot.end_at) + Math.max(0, bufferMin) * 60_000).toISOString()
+  return (
+    slots.find(
+      (s) => s.user_id === userId && isLive(s) && s.id !== ignoreSlotId && overlaps(window, { start: s.start_at, end: s.end_at }),
+    ) ?? null
+  )
 }
 
 /** The calendar day an instant falls on, where the viewer is. */
 export const localDay = (iso: string) => localDate(new Date(iso))
 
-/** A day's worth of hours anyone can be booked: on shooting days nobody sleeps. */
-export const DAY_CAPACITY_HOURS = 24
-
-export interface DayLoad {
-  /** Hours already booked on that day, across every project. */
-  hours: number
-  /** Those bookings, earliest first. */
-  slots: TeamSlot[]
-  /** Of the 24, what is still free. */
-  left: number
+/** Midnight to midnight of a local day, as instants. */
+function dayBounds(day: string): { from: number; to: number } {
+  const from = new Date(`${day}T00:00:00`).getTime()
+  const next = new Date(`${day}T00:00:00`)
+  next.setDate(next.getDate() + 1)
+  return { from, to: next.getTime() }
 }
 
 /**
- * How full someone's day already is: every live booking that touches the
- * day (one that runs past midnight counts on both days, only the part on
- * this day), so "19 h left" is honest about a 5 h wedding already on it.
+ * Someone's live bookings that touch a local day, on any project, earliest
+ * first. A booking that runs past midnight belongs to both days.
  */
-export function dayLoad(
+export function bookingsOn(
   userId: string,
   day: string,
   slots: readonly TeamSlot[],
   { ignoreSlotId }: { ignoreSlotId?: string | undefined } = {},
-): DayLoad {
-  const dayStart = new Date(`${day}T00:00:00`).getTime()
-  const dayEnd = dayStart + 24 * 3_600_000
-  const mine = slots
+): TeamSlot[] {
+  const { from, to } = dayBounds(day)
+  return slots
     .filter((s) => s.user_id === userId && isLive(s) && s.id !== ignoreSlotId)
-    .filter((s) => Date.parse(s.start_at) < dayEnd && Date.parse(s.end_at) > dayStart)
+    .filter((s) => Date.parse(s.start_at) < to && Date.parse(s.end_at) > from)
     .sort((a, b) => a.start_at.localeCompare(b.start_at))
-  const hours = mine.reduce((n, s) => {
-    const from = Math.max(Date.parse(s.start_at), dayStart)
-    const to = Math.min(Date.parse(s.end_at), dayEnd)
-    return n + Math.max(0, to - from) / 3_600_000
-  }, 0)
-  const rounded = Math.round(hours * 2) / 2
-  return { hours: rounded, slots: mine, left: Math.max(0, DAY_CAPACITY_HOURS - rounded) }
+}
+
+/** Hours booked on a local day, counting only the part of each booking on it. */
+export function bookedHours(bookings: readonly Pick<TeamSlot, 'start_at' | 'end_at'>[], day: string): number {
+  const { from, to } = dayBounds(day)
+  const ms = bookings.reduce((n, s) => n + Math.max(0, Math.min(Date.parse(s.end_at), to) - Math.max(Date.parse(s.start_at), from)), 0)
+  return Math.round((ms / 3_600_000) * 2) / 2
+}
+
+export interface FreeGap {
+  /** Null: from the start of the day. */
+  from: string | null
+  /** Null: to the end of the day. */
+  to: string | null
+}
+
+/** The stretches of a local day with nothing booked, between the bookings given. */
+export function freeGaps(bookings: readonly Pick<TeamSlot, 'start_at' | 'end_at'>[], day: string): FreeGap[] {
+  const { from, to } = dayBounds(day)
+  const spans = bookings
+    .map((s) => ({ s: Math.max(Date.parse(s.start_at), from), e: Math.min(Date.parse(s.end_at), to) }))
+    .filter((x) => x.e > x.s)
+    .sort((a, b) => a.s - b.s)
+  if (spans.length === 0) return [{ from: null, to: null }]
+  const gaps: FreeGap[] = []
+  let cursor = from
+  for (const sp of spans) {
+    if (sp.s > cursor) gaps.push({ from: cursor === from ? null : new Date(cursor).toISOString(), to: new Date(sp.s).toISOString() })
+    cursor = Math.max(cursor, sp.e)
+  }
+  if (cursor < to) gaps.push({ from: new Date(cursor).toISOString(), to: null })
+  return gaps
+}
+
+/** "Free before 3 PM, 6–7 PM, after 9 PM" -- or "Free all day", or "No free time that day". */
+export function freeText(gaps: readonly FreeGap[], timeZone?: string): string {
+  if (gaps.length === 0) return 'No free time that day'
+  if (gaps.length === 1 && gaps[0]!.from === null && gaps[0]!.to === null) return 'Free all day'
+  const t = (iso: string) => timeLabel(iso, timeZone)
+  const parts = gaps.map((g) =>
+    g.from === null ? `before ${t(g.to!)}` : g.to === null ? `after ${t(g.from)}` : clockRange(g.from, g.to, timeZone),
+  )
+  return `Free ${parts.join(', ')}`
+}
+
+/** Approved leave on a day: a whole day, half a day, or none. */
+export function leaveOn(
+  userId: string,
+  day: string,
+  leaves: readonly Pick<LeaveRequest, 'user_id' | 'start_date' | 'end_date' | 'half_day' | 'status'>[],
+): 'full' | 'half' | null {
+  const hit = leaves.find((l) => l.user_id === userId && l.status === 'approved' && l.start_date <= day && l.end_date >= day)
+  if (!hit) return null
+  return hit.half_day ? 'half' : 'full'
 }
 
 /**
@@ -219,23 +220,23 @@ export function roleMatches(member: Pick<TeamMember, 'role_names'>, requirement:
 export type Availability =
   | { state: 'free' }
   | { state: 'on_role' } // already holds a seat of this requirement on this shoot
-  /** Free, but with less than the travel/rest gap before or after another booking. Still bookable. */
-  | { state: 'tight'; slot: TeamSlot; gapMin: number }
   | { state: 'busy'; slot: TeamSlot; onThisShoot: boolean }
 
 export interface Candidate {
   member: TeamMember
   match: boolean
   availability: Availability
+  /** Approved leave on the day being booked. Still pickable: the planner decides. */
+  leave: 'full' | 'half' | null
 }
 
-/** Whether a pick with this availability can go ahead (the database refuses only true overlaps). */
-export const canPick = (a: Availability) => a.state === 'free' || a.state === 'tight'
+/** Whether a pick with this availability can go ahead (the database refuses an overlap). */
+export const canPick = (a: Availability) => a.state === 'free'
 
 /**
  * Everyone, sorted for picking someone for `requirement` at `window`: free
- * people whose job role fits first, then other free people, then the ones
- * with only a tight gap, then those who cannot take it -- with the reason,
+ * people whose job role fits first, then other free people, then free people
+ * on leave that day, then those who cannot take it -- with the reason,
  * rather than silently leaving them out, so "why is Rahul not in the list?"
  * answers itself.
  */
@@ -245,36 +246,35 @@ export function candidatesFor({
   window,
   shootId,
   slots,
-  bufferMin = 0,
   ignoreSlotId,
+  leaves = [],
 }: {
   members: readonly TeamMember[]
   requirement: string
   window: TimeWindow | null
   shootId: string
   slots: readonly TeamSlot[]
-  bufferMin?: number
   ignoreSlotId?: string | undefined
+  leaves?: readonly LeaveRequest[]
 }): Candidate[] {
   const onRole = new Set(
     slots
       .filter((s) => isLive(s) && s.shoot_id === shootId && key(s.service_name) === key(requirement) && s.id !== ignoreSlotId)
       .map((s) => s.user_id),
   )
+  const day = window ? localDay(window.start) : null
   const rank = (c: Candidate) => {
-    const fit = c.match ? 0 : 1
-    if (c.availability.state === 'free') return fit
-    if (c.availability.state === 'tight') return 2 + fit
-    return 4
+    if (c.availability.state !== 'free') return 4
+    return (c.leave ? 2 : 0) + (c.match ? 0 : 1)
   }
   return members
     .map((member): Candidate => {
       const match = roleMatches(member, requirement)
-      if (onRole.has(member.user_id)) return { member, match, availability: { state: 'on_role' } }
-      const hit = window ? nearestClash(member.user_id, window, slots, { bufferMin, ignoreSlotId }) : null
-      if (!hit) return { member, match, availability: { state: 'free' } }
-      if (hit.gapMin >= 0) return { member, match, availability: { state: 'tight', slot: hit.slot, gapMin: hit.gapMin } }
-      return { member, match, availability: { state: 'busy', slot: hit.slot, onThisShoot: hit.slot.shoot_id === shootId } }
+      const leave = day ? leaveOn(member.user_id, day, leaves) : null
+      if (onRole.has(member.user_id)) return { member, match, leave, availability: { state: 'on_role' } }
+      const hit = window ? clashFor(member.user_id, window, slots, { ignoreSlotId }) : null
+      if (!hit) return { member, match, leave, availability: { state: 'free' } }
+      return { member, match, leave, availability: { state: 'busy', slot: hit, onThisShoot: hit.shoot_id === shootId } }
     })
     .sort((a, b) => rank(a) - rank(b) || a.member.name.localeCompare(b.member.name))
 }
@@ -294,15 +294,19 @@ export function timeLabel(iso: string, timeZone?: string): string {
   return m === '00' ? `${h} ${p}` : `${h}:${m} ${p}`
 }
 
-/** "4–9 PM · 5 h", or "11 AM–3 PM · 4 h" when the halves of the day differ. */
-export function rangeLabel(window: TimeWindow, timeZone?: string): string {
-  const a = timeLabel(window.start, timeZone)
-  const b = timeLabel(window.end, timeZone)
-  const hours = Math.round(((Date.parse(window.end) - Date.parse(window.start)) / 3_600_000) * 2) / 2
+/** "3–6 PM", or "11 AM–3 PM" when the halves of the day differ. */
+export function clockRange(start: string, end: string, timeZone?: string): string {
+  const a = timeLabel(start, timeZone)
+  const b = timeLabel(end, timeZone)
   const half = (s: string) => s.slice(-2)
-  const left = half(a) === half(b) ? a.slice(0, -3) : a
+  return `${half(a) === half(b) ? a.slice(0, -3) : a}–${b}`
+}
+
+/** "4–9 PM · 5 h". */
+export function rangeLabel(window: TimeWindow, timeZone?: string): string {
+  const hours = Math.round(((Date.parse(window.end) - Date.parse(window.start)) / 3_600_000) * 2) / 2
   const h = Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
-  return `${left}–${b} · ${h} h`
+  return `${clockRange(window.start, window.end, timeZone)} · ${h} h`
 }
 
 /** What a booking is for, in the fewest words: the shoot, else "blocked". */
@@ -312,46 +316,71 @@ export function slotName(slot: Pick<TeamSlot, 'shoot_name' | 'shoot_id' | 'servi
   return slot.service_name ?? 'another shoot'
 }
 
+/** "Engagement (Sharma Wedding)", "Engagement", or "Blocked time". */
+export function slotWhat(slot: Pick<TeamSlot, 'shoot_name' | 'shoot_id' | 'service_name' | 'project_name'>): string {
+  if (!slot.shoot_id) return slot.service_name ? `Blocked · ${slot.service_name}` : 'Blocked time'
+  const what = slot.shoot_name ?? slot.service_name ?? 'Another shoot'
+  return slot.project_name ? `${what} (${slot.project_name})` : what
+}
+
+/** "7–9 PM · Sangeet (Mehta Wedding)". */
+export const bookingText = (s: TeamSlot, timeZone?: string) => `${clockRange(s.start_at, s.end_at, timeZone)} · ${slotWhat(s)}`
+
+/** "7–9 PM · Sangeet (Mehta Wedding), 10 PM–1 AM · Reception +1 more", or null when there is nothing else. */
+function bookingList(others: readonly TeamSlot[], timeZone?: string): string | null {
+  if (others.length === 0) return null
+  const shown = others.slice(0, 2).map((s) => bookingText(s, timeZone)).join(', ')
+  return others.length > 2 ? `${shown} +${others.length - 2} more` : shown
+}
+
+/** Under a booked person: "Also booked 7–9 PM · Sangeet (Mehta Wedding)", or null. */
+export function alsoBookedText(others: readonly TeamSlot[], timeZone?: string): string | null {
+  const list = bookingList(others, timeZone)
+  return list ? `Also booked ${list}` : null
+}
+
 export interface AvailabilityLine {
   tone: 'green' | 'amber' | 'muted'
   text: string
 }
 
 /**
- * One line under a name that says whether they can take this window, in the
- * studio's words. Free people also hear what else is on their day and how
- * many of the 24 hours are left, so the planner sees the whole day at once.
+ * One line under a name, in the studio's words: whether they can take this
+ * time, and what else they have that day on any project -- so the planner
+ * sees "booked at the Sharma wedding 3–6 PM" and judges the travel.
+ * `others` are their other bookings that day (`bookingsOn`).
  */
 export function availabilityLine(
-  c: Pick<Candidate, 'availability'>,
-  load: DayLoad,
-  windowHours: number,
-  bufferMin: number,
+  c: Pick<Candidate, 'availability'> & { leave?: 'full' | 'half' | null },
+  others: readonly TeamSlot[],
   timeZone?: string,
 ): AvailabilityLine {
   const a = c.availability
-  const t = (iso: string) => timeLabel(iso, timeZone)
-  const span = (s: Pick<TeamSlot, 'start_at' | 'end_at'>) => `${t(s.start_at)}–${t(s.end_at)}`
-  const gapText = bufferMin >= 60 ? `${Number.isInteger(bufferMin / 60) ? bufferMin / 60 : (bufferMin / 60).toFixed(1)} h` : `${bufferMin} min`
   if (a.state === 'on_role') return { tone: 'muted', text: 'Already on this role' }
   if (a.state === 'busy') {
     if (a.onThisShoot) return { tone: 'muted', text: `Already on this shoot as ${a.slot.service_name ?? 'another role'}` }
-    return { tone: 'muted', text: `Busy ${span(a.slot)}, ${slotName(a.slot)} · free from ${t(freeFrom(a.slot, bufferMin))}` }
+    return { tone: 'muted', text: `Busy ${bookingText(a.slot, timeZone)}` }
   }
-  if (a.state === 'tight') {
-    return {
-      tone: 'amber',
-      text: `Tight · only ${Math.round(a.gapMin)} min from ${slotName(a.slot)} (${span(a.slot)}), needs ${gapText}`,
-    }
-  }
-  if (load.left < windowHours) {
-    return { tone: 'amber', text: `Only ${load.left} h left today · ${load.slots.map((s) => `${span(s)} ${slotName(s)}`).join(', ')}` }
-  }
-  if (load.slots.length === 0) return { tone: 'green', text: 'Free all day' }
-  return {
-    tone: 'green',
-    text: `Free · also ${load.slots.map((s) => `${span(s)}, ${slotName(s)}`).join('; ')} · ${load.left} h left`,
-  }
+  if (c.leave === 'full') return { tone: 'amber', text: 'On leave that day' }
+  if (c.leave === 'half') return { tone: 'amber', text: 'Half-day leave that day' }
+  const list = bookingList(others, timeZone)
+  if (!list) return { tone: 'green', text: 'Free all day' }
+  return { tone: 'green', text: `Free at this time · also booked ${list}` }
+}
+
+/**
+ * Someone's whole day, for the card that opens when you hover over (or tap)
+ * their name anywhere a person is booked: what they are on and when, how
+ * many hours that is, and when they are free.
+ */
+export function personDay(
+  userId: string,
+  day: string,
+  slots: readonly TeamSlot[],
+  timeZone?: string,
+): { bookings: TeamSlot[]; hours: number; free: string } {
+  const bookings = bookingsOn(userId, day, slots)
+  return { bookings, hours: bookedHours(bookings, day), free: freeText(freeGaps(bookings, day), timeZone) }
 }
 
 /**

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { uuid, isoDate, isoDateTime } from './shared/primitives'
 
-export const attendanceStatus = z.enum(['present', 'late', 'absent'])
+export const attendanceStatus = z.enum(['present', 'late', 'half_day', 'absent'])
 
 export const attendanceRecord = z.object({
   id: uuid,
@@ -18,6 +18,9 @@ export const attendanceRecord = z.object({
   source: z.string().nullable().default(null),
   /** Nobody checked out: the nightly sweep closed the day. */
   closed_by_system: z.boolean().default(false),
+  /** How sure the phone was of where it was, in metres (0224). */
+  accuracy_m: z.number().int().nullable().default(null),
+  selfie_file_id: uuid.nullable().default(null),
 })
 export type AttendanceRecord = z.infer<typeof attendanceRecord>
 
@@ -26,7 +29,21 @@ export const checkInRequest = z.object({
   lng: z.number().min(-180).max(180),
   /** The app marked this on open, not a tap. */
   auto: z.boolean().optional(),
+  /** The phone's own estimate of how far off the fix may be. */
+  accuracy_m: z.number().min(0).max(100000).optional(),
+  /** A selfie just uploaded through /files, when the studio asks for one. */
+  selfie_file_id: uuid.optional(),
 })
+
+/** What a check-in recorded, so the app can say it plainly. */
+export const checkInResponse = z.object({
+  id: uuid,
+  status: attendanceStatus,
+  late_minutes: z.number().int(),
+  place_name: z.string().nullable(),
+  distance_m: z.number().int().nullable(),
+})
+export type CheckInResponse = z.infer<typeof checkInResponse>
 
 export const checkOutRequest = z.object({
   lat: z.number().min(-90).max(90).optional(),
@@ -45,10 +62,27 @@ export const myAttendanceToday = z.object({
   place_name: z.string().nullable(),
   /** 'person' | 'position' | 'studio' | 'freelancer'. */
   rule_from: z.string(),
+  /**
+   * The studio tracks attendance at all (0223): a location, a place or a rule.
+   * Until it does, nobody is marked, prompted for location, or swept absent.
+   */
+  configured: z.boolean().default(true),
+  /** Attendance is switched on for the studio (0224). Off: nothing to do. */
+  enabled: z.boolean().default(false),
+  selfie_required: z.boolean().default(false),
+  /** "10:00": the studio's (or their rule's) start of day, and its grace. */
+  day_start: z.string().nullable().default(null),
+  grace_min: z.number().int().default(15),
+  day_end: z.string().nullable().default(null),
   /** The studio has at least one active place: without one there is no fence. */
   fenced: z.boolean(),
   day_off: z.string().nullable(),
   on_leave: z.boolean(),
+  /** Booked on a shoot today: "I've reached" at the venue is the day's mark. */
+  shoot_today: z
+    .object({ slot_id: uuid, name: z.string(), start_at: isoDateTime, end_at: isoDateTime, arrived_at: isoDateTime.nullable() })
+    .nullable()
+    .default(null),
 })
 export type MyAttendanceToday = z.infer<typeof myAttendanceToday>
 
@@ -261,6 +295,91 @@ export const attendancePolicy = z.object({
   weekly_off: z.number().int().min(0).max(6).array(),
 })
 export type AttendancePolicy = z.infer<typeof attendancePolicy>
+
+const clock = z.string().regex(/^\d{2}:\d{2}$/, 'expected HH:MM')
+
+/** Everything the owner sets about attendance (0224). Off until switched on. */
+export const attendanceSettings = attendancePolicy.extend({
+  enabled: z.boolean(),
+  enabled_at: isoDateTime.nullable(),
+  day_start: clock.nullable(),
+  grace_min: z.number().int().min(0).max(240),
+  day_end: clock.nullable(),
+  half_day_hours: z.number().min(1).max(12).nullable(),
+  selfie_required: z.boolean(),
+  /** 0 = lateness is never deducted; 3 = every three late marks cost half a day. */
+  late_marks_per_half_day: z.number().int().min(0).max(10),
+})
+export type AttendanceSettings = z.infer<typeof attendanceSettings>
+
+/**
+ * PATCH /hr/policy. Only weekly_off: an admin or manager may change it. Any
+ * other field is the owner's, and the whole set is saved together.
+ */
+export const updateAttendanceSettings = attendanceSettings
+  .omit({ enabled_at: true })
+  .partial()
+export type UpdateAttendanceSettings = z.infer<typeof updateAttendanceSettings>
+
+/** One person on the Today board. Only people the studio tracks. */
+export const todayBoardRow = z.object({
+  user_id: uuid,
+  name: z.string(),
+  avatar_url: z.string().nullable().default(null),
+  status: attendanceStatus.nullable(),
+  check_in_at: isoDateTime.nullable(),
+  check_out_at: isoDateTime.nullable(),
+  late_minutes: z.number().int().default(0),
+  place_name: z.string().nullable(),
+  distance_m: z.number().int().nullable(),
+  accuracy_m: z.number().int().nullable(),
+  selfie_file_id: uuid.nullable(),
+  source: z.string().nullable(),
+  closed_by_system: z.boolean().default(false),
+  /** 'full' or 'half' approved leave that day. */
+  leave: z.enum(['full', 'half']).nullable(),
+  shoot: z
+    .object({ name: z.string(), start_at: isoDateTime, end_at: isoDateTime, arrived_at: isoDateTime.nullable() })
+    .nullable(),
+  /** This person's own start of day and grace ("10:00"). */
+  expected: z.string().nullable(),
+  grace: z.number().int(),
+})
+export type TodayBoardRow = z.infer<typeof todayBoardRow>
+
+export const todayBoard = z.object({
+  date: isoDate,
+  enabled: z.boolean(),
+  day_off: z.string().nullable(),
+  rows: todayBoardRow.array(),
+})
+export type TodayBoard = z.infer<typeof todayBoard>
+
+/** One person's day in the month register, before it becomes a code. */
+export const registerCell = z.object({
+  day: isoDate,
+  status: attendanceStatus.nullable(),
+  source: z.string().nullable(),
+  day_off: z.string().nullable(),
+  leave: z.enum(['full', 'half']).nullable(),
+  leave_unpaid: z.boolean(),
+  shoot: z.boolean(),
+})
+export type RegisterCell = z.infer<typeof registerCell>
+
+export const monthRegister = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  /** The first day the studio tracked; days before it carry no mark. */
+  tracked_from: isoDate.nullable(),
+  today: isoDate,
+  late_marks_per_half_day: z.number().int(),
+  people: z.array(z.object({ user_id: uuid, name: z.string(), cells: registerCell.array() })),
+})
+export type MonthRegister = z.infer<typeof monthRegister>
+
+/** A Google Maps link (or plain "lat, lng") turned into a pin. */
+export const resolveLinkRequest = z.object({ url: z.string().trim().min(3).max(2000) })
+export const resolvedPin = z.object({ lat: z.number(), lng: z.number() })
 
 export const attendanceCorrection = z.object({
   id: uuid,

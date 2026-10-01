@@ -42,7 +42,7 @@ function stateOf(d: TermsDocument): State {
 
 export function ProjectDocumentsPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <ProjectDocuments />
     </AuthedPage>
   )

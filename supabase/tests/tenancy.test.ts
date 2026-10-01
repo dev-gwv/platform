@@ -1040,6 +1040,11 @@ describe('HR — geo-fenced attendance + payout ledger (Phase 12)', () => {
       `insert into company_location (company_id, lat, lng, radius_m)
        values (get_current_company_id(), ${STUDIO.lat}, ${STUDIO.lng}, 150);`,
     )
+    // 0224: attendance is off until a studio turns it on.
+    await db.exec(
+      `insert into attendance_policy (company_id, enabled, enabled_at) values (get_current_company_id(), true, '2020-01-01')
+       on conflict (company_id) do update set enabled = true, enabled_at = '2020-01-01';`,
+    )
     await db.exec(`insert into auth.users (id,email) values ('${emp}','emp@s.test');`)
     await db.exec(
       `insert into users (user_id, company_id, role, name, email)
@@ -2020,6 +2025,11 @@ describe('attendance check-out and fence (0030)', () => {
     await db.exec(`insert into auth.users (id, email) values ('${owner}', 'owner@hr.test');`)
     await asUser(db, owner)
     await db.query(`select register_company_and_admin('HR Studio','Owner');`)
+    // 0224: attendance is off until a studio turns it on.
+    await db.exec(
+      `insert into attendance_policy (company_id, enabled, enabled_at) values (get_current_company_id(), true, '2020-01-01')
+       on conflict (company_id) do update set enabled = true, enabled_at = '2020-01-01';`,
+    )
   })
 
   it('refuses to check out of a day that was never checked into', async () => {
@@ -2075,7 +2085,7 @@ describe('attendance check-out and fence (0030)', () => {
   it('a fence can be turned off without deleting it, and back on again', async () => {
     // The fence is currently at Delhi (28.6139, 77.209); Mumbai (19.076, 72.8777) is outside it.
     await db.query(`select set_company_location(28.6139, 77.209, 300, 'Asia/Kolkata', false);`)
-    const id = (await db.query<{ id: string }>(`select check_in(19.076, 72.8777) as id;`)).rows[0]!.id
+    const id = (await db.query<{ id: string }>(`select id from check_in(19.076, 72.8777);`)).rows[0]!.id
     expect(id).toBeTruthy()
     await db.exec(`delete from attendance where id = '${id}';`) // undo, so the next test starts clean
 

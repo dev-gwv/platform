@@ -85,6 +85,13 @@ beforeAll(async () => {
       ('${LEFT}',    '${COMPANY_A}', 'employee',    'Departed','x@s.test',  'inactive');
     -- Everyone here joined long ago; someone added today is not absent yesterday.
     update users set created_at = '2020-01-01';
+    -- Both studios track attendance (0223: a studio with no location, place
+    -- or rule is not tracking anyone, and is never swept).
+    insert into company_location (company_id, lat, lng) values
+      ('${COMPANY_A}', 19.076, 72.8777), ('${COMPANY_B}', 28.6139, 77.209);
+    -- 0224: attendance is off until a studio turns it on; these studios have.
+    insert into attendance_policy (company_id, enabled, enabled_at) values ('${COMPANY_A}', true, '2020-01-01'), ('${COMPANY_B}', true, '2020-01-01')
+      on conflict (company_id) do update set enabled = true, enabled_at = '2020-01-01';
   `)
 })
 
@@ -141,6 +148,39 @@ describe('mark_absent_backstop', () => {
       `select status from attendance where user_id = '${STAFF_A}' and a_date = ${TODAY};`,
     )
     expect(r.rows[0]!.status).toBe('late')
+  })
+
+  it('skips a day someone was booked on a shoot (0223)', async () => {
+    await db.exec(`delete from attendance;`)
+    // A shoot on the swept day, 3-6 PM where the studio is.
+    await db.exec(`
+      with c as (insert into clients (company_id, name) values ('${COMPANY_A}', 'Sharma') returning id)
+      insert into projects (company_id, client_id, name) select '${COMPANY_A}', c.id, 'Sharma Wedding' from c;
+      insert into shoots (company_id, project_id, name, shoot_date)
+        select '${COMPANY_A}', p.id, 'Engagement', ${SWEPT} from projects p where p.name = 'Sharma Wedding';
+      insert into team_assignment_slots (company_id, user_id, shoot_id, service_name, start_at, end_at)
+        select '${COMPANY_A}', '${STAFF_A}', s.id, 'Photographer',
+               ((${SWEPT} + time '15:00')::timestamp at time zone 'Asia/Kolkata'),
+               ((${SWEPT} + time '18:00')::timestamp at time zone 'Asia/Kolkata')
+          from shoots s where s.name = 'Engagement';`)
+    // Studio B's staff is still swept; Studio A's, on a shoot, is not.
+    expect(await sweep()).toBe(1)
+    const r = await db.query<{ n: string }>(`select count(*)::text as n from attendance where user_id = '${STAFF_A}';`)
+    expect(Number(r.rows[0]!.n)).toBe(0)
+  })
+
+  it('never sweeps a studio that has not turned attendance on, or before the day it did (0224)', async () => {
+    await db.exec(`delete from attendance; delete from team_assignment_slots; update attendance_policy set enabled = false where company_id = '${COMPANY_B}';`)
+    await sweep()
+    const count = async (co: string) =>
+      Number((await db.query<{ n: string }>(`select count(*)::text as n from attendance where company_id = '${co}';`)).rows[0]!.n)
+    expect(await count(COMPANY_B)).toBe(0)
+    expect(await count(COMPANY_A)).toBe(1)
+    // Turned on today: the day that has just ended was before it.
+    await db.exec(`delete from attendance; update attendance_policy set enabled = true, enabled_at = now() + interval '1 day' where company_id = '${COMPANY_A}';`)
+    await sweep()
+    expect(await count(COMPANY_A)).toBe(0)
+    await db.exec(`update attendance_policy set enabled = true, enabled_at = '2020-01-01';`)
   })
 
   it('is not callable by a signed-in studio user', async () => {

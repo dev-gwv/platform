@@ -181,6 +181,21 @@ export const addMemberResponse = z.object({
 })
 export type AddMemberResponse = z.infer<typeof addMemberResponse>
 
+/**
+ * The owner sets a member's sign-in: a password, and optionally the email
+ * they sign in with. It gives a no-login member a login, fixes a typo'd
+ * email, and unlocks someone with a made-up email that cannot receive a
+ * reset link. Any email works -- it is only their username.
+ */
+export const setMemberSignInRequest = z.object({
+  email: z.string().trim().toLowerCase().email().optional(),
+  password: z.string().min(6).max(72),
+})
+export type SetMemberSignInRequest = z.infer<typeof setMemberSignInRequest>
+
+export const setMemberSignInResponse = z.object({ email: z.string() })
+export type SetMemberSignInResponse = z.infer<typeof setMemberSignInResponse>
+
 /** Paginated directory response — returned when page/page_size are requested. Array shape is kept for callers without them. */
 export const directoryPage = z.object({
   items: directoryMember.array(),

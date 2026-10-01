@@ -8,7 +8,6 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { Avatar } from '@/shared/ui/avatar'
-import { Segmented } from '@/shared/ui/segmented'
 import { DurationField } from '@/shared/ui/duration-field'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
@@ -17,9 +16,10 @@ import { useBookSlots, useMembers, useReleaseSlot, useSetSlotCost, useSlots, use
 import { useUpdateShoot } from './api'
 import {
   availabilityLine,
+  bookingsOn,
   canPick,
   candidatesFor,
-  dayLoad,
+  clockRange,
   defaultWindowFields,
   isLive,
   localDay,
@@ -39,9 +39,10 @@ import {
   type SeatPick,
   type TimeWindow,
 } from './assign'
-import { GAP_OPTIONS, useBookingGap } from './booking-gap'
 import { ShootWhenFields, whenToPatch, type WhenFields } from './ShootWhenFields'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
+import { AlsoBookedLine, PersonDayLine } from './PersonDay'
+import { useLeave } from '@/features/hr/leave-api'
 import { RoleTile } from '@/shared/ui/icon-tile'
 import { AssignedNote } from '@/features/team/AssignedNote'
 
@@ -56,9 +57,12 @@ import { AssignedNote } from '@/features/team/AssignedNote'
  * defaults, and picking for one role or five is the same motion: tap the seat,
  * tap a name, then "Book".
  *
- * The rules underneath are unchanged (see ./assign): only people free at that
- * time are offered, role fits first; a person cannot hold two roles at once;
- * a freelancer's saved rate fills the payout.
+ * The rules underneath live in ./assign: only people free at that time are
+ * offered, role fits first; a person cannot hold two roles at once; a
+ * freelancer's saved rate fills the payout. Each name says, in plain words,
+ * what else that person has that day ("Free at this time · also booked 7–9 PM
+ * · Sangeet (Mehta Wedding)"), and hovering it shows their whole day -- the
+ * travel between two bookings is the planner's judgement, not a setting.
  */
 export function AssignTeamDialog({
   shoot,
@@ -103,6 +107,7 @@ function shootLine(shoot: ShootListItem): string {
   if (shoot.shoot_date) {
     parts.push(new Date(`${shoot.shoot_date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }))
   }
+  if (shoot.start_at && shoot.end_at) parts.push(clockRange(shoot.start_at, shoot.end_at))
   if (shoot.location) parts.push(shoot.location)
   return parts.join(' · ')
 }
@@ -111,9 +116,6 @@ function shootLine(shoot: ShootListItem): string {
 function failureText(error: string | null): string {
   return error === 'double_booked' ? 'Booked elsewhere at that time' : error === 'no_time' ? 'Set the hours first' : 'Could not be booked'
 }
-
-const dayLabel = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 
 /** A pick's own hours, or the shoot's, for the chip. */
 function pickOverride(p: SeatPick): { start?: string; hours?: number } {
@@ -139,7 +141,7 @@ function AssignBoard({
   const release = useReleaseSlot()
   const updateShoot = useUpdateShoot()
   const confirm = useConfirm()
-  const [gap, setGap] = useBookingGap()
+  const leaves = useLeave('team', 'approved').data ?? []
 
   const onShoot = useMemo(() => slots.filter((s) => s.shoot_id === shoot.id && isLive(s)), [slots, shoot.id])
   const fill = useMemo(() => requirementFill(shoot, onShoot), [shoot, onShoot])
@@ -169,13 +171,16 @@ function AssignBoard({
   const [bookedOnce, setBookedOnce] = useState(false)
 
   // A half-picked crew survives a refresh or a closed tab until it is booked.
-  // The gap is a studio preference, not part of the draft.
   const draft = useFormDraft(
     `assign-team:${shoot.id}`,
     { when, picks },
     (v) => {
       const w = v.when as Partial<WhenFields> | undefined
-      if (w && typeof w === 'object') setWhen({ date: w.date ?? start.date, time: w.time ?? start.time, hours: typeof w.hours === 'number' ? w.hours : start.hours })
+      // The shoot's own hours win: a saved draft's hours count only while the
+      // shoot has none (they were being typed in here).
+      if (missingTime && w && typeof w === 'object') {
+        setWhen({ date: w.date ?? start.date, time: w.time ?? start.time, hours: typeof w.hours === 'number' ? w.hours : start.hours })
+      }
       setPicks(normalizePicks(v.picks))
     },
     { isBlank: (v) => Object.values(v.picks ?? {}).every((p) => p.length === 0) },
@@ -316,68 +321,32 @@ function AssignBoard({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* When the day runs, always in view: the shoot's own hours by
-          default, changed here for this booking, or -- when nobody has set
-          them yet -- asked for first and saved onto the shoot. */}
-      <div
-        className={cn(
-          'rounded-lg border px-3 py-2',
-          missingTime ? 'border-warning/60 bg-warning/10' : 'border-border bg-muted/30',
-        )}
-      >
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <Clock className={cn('size-4 shrink-0', missingTime ? 'text-warning' : 'text-muted-foreground')} aria-hidden />
-          {missingTime && !showTime ? (
-            <span className="font-medium">Set the start time and duration first</span>
-          ) : slotWindow ? (
-            <span className="font-medium">
-              {dayLabel(when.date)} · {rangeLabel(slotWindow)}
-            </span>
-          ) : (
-            <span className="font-medium">{dayLabel(when.date)} · hours not set</span>
-          )}
-          {!missingTime && (
-            <button
-              type="button"
-              aria-expanded={showTime}
-              aria-controls="assign-when"
-              className="text-xs text-primary underline-offset-2 hover:underline"
-              onClick={() => {
-                if (showTime) setWhen(start)
-                setShowTime((v) => !v)
-              }}
-            >
-              {showTime ? 'Use the shoot’s hours' : 'Change'}
-            </button>
-          )}
-          {missingTime && !showTime && (
-            <Button size="sm" className="ipc-nudge" onClick={() => setShowTime(true)}>
-              Set hours
-            </Button>
-          )}
-          <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Gap</span>
-            <Segmented
-              label="Travel or rest gap between two bookings"
-              value={String(gap)}
-              onChange={(v) => setGap(Number(v))}
-              options={GAP_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-            />
+      {/* Only when the shoot has no hours yet: people are booked by the
+          clock, so the time is asked for once and saved onto the shoot. The
+          shoot's hours are in the line under the title otherwise. */}
+      {missingTime && (
+        <div className="rounded-lg border border-warning/60 bg-warning/10 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+            <Clock className="size-4 shrink-0 text-warning" aria-hidden />
+            <span className="font-medium">No time set for this shoot yet.</span>
+            {!showTime && (
+              <Button size="sm" className="ipc-nudge ml-auto" onClick={() => setShowTime(true)}>
+                Set the time
+              </Button>
+            )}
           </div>
-        </div>
-        {showTime && (
-          <div id="assign-when" className="mt-3 flex flex-col gap-2">
-            <ShootWhenFields value={when} onChange={setWhen} idPrefix="assign" compact />
-            {missingTime && (
+          {showTime && (
+            <div id="assign-when" className="mt-3 flex flex-col gap-2">
+              <ShootWhenFields value={when} onChange={setWhen} idPrefix="assign" compact />
               <div className="flex justify-end">
                 <Button size="sm" disabled={!slotWindow || updateShoot.isPending} onClick={saveToShoot}>
                   {updateShoot.isPending ? <Loader2 className="animate-spin" /> : <Check />} Save to shoot
                 </Button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <Progress {...progressWithPicks(withPicks(fill, picks))} />
 
@@ -390,7 +359,6 @@ function AssignBoard({
             picked={picks[r.name] ?? []}
             base={base}
             slots={slots}
-            gap={gap}
             left={left.get(r.name) ?? 0}
             failed={failed}
             byId={byId}
@@ -414,12 +382,10 @@ function AssignBoard({
                       : slotWindow,
                     shootId: shoot.id,
                     slots,
-                    bufferMin: gap,
                     ignoreSlotId: picker.replacing?.id,
+                    leaves,
                   })}
                   day={picker.replacing ? localDay(picker.replacing.start_at) : day}
-                  windowHours={when.hours ?? 0}
-                  gap={gap}
                   slots={slots}
                   ignoreSlotId={picker.replacing?.id}
                   // One person holds one role per sitting, so they are not offered twice.
@@ -596,7 +562,6 @@ function RoleRow({
   picked,
   base,
   slots,
-  gap,
   left,
   failed,
   byId,
@@ -616,7 +581,6 @@ function RoleRow({
   picked: SeatPick[]
   base: BaseWindow
   slots: TeamSlot[]
-  gap: number
   left: number
   failed: Record<string, string>
   byId: Map<string, TeamMember>
@@ -681,6 +645,9 @@ function RoleRow({
                     <MoreHorizontal className="size-4" />
                   </button>
                 </div>
+                <div className="pl-9">
+                  <AlsoBookedLine userId={s.user_id} name={s.user_name ?? 'Someone'} day={localDay(s.start_at)} slots={slots} ignoreSlotId={s.id} />
+                </div>
                 {/* Inline, not a floating menu: a popover portalled out of the
                     dialog cannot be clicked while the dialog is open. */}
                 {menu && (
@@ -728,11 +695,6 @@ function RoleRow({
             const why = failed[`${role.name}|${p.id}`]
             const w = windowFor(p, base)
             const own = !!(p.start || p.hours)
-            // The warning a tight pick carried stays on the chip, so it is not lost once picked.
-            const cand = w
-              ? candidatesFor({ members: m ? [m] : [], requirement: role.name, window: w, shootId: '', slots, bufferMin: gap })[0]
-              : undefined
-            const line = cand && m && cand.availability.state === 'tight' ? availabilityLine(cand, dayLoad(p.id, base.date, slots), p.hours ?? base.hours ?? 0, gap) : null
             return (
               <li key={p.id} className="flex flex-col gap-0.5">
                 <div
@@ -770,7 +732,11 @@ function RoleRow({
                     <X className="size-3.5" />
                   </button>
                 </div>
-                {line && <p className="pl-2 text-xs text-warning">{line.text}</p>}
+                {w && (
+                  <div className="pl-9">
+                    <AlsoBookedLine userId={p.id} name={m?.name ?? 'Someone'} day={localDay(w.start)} slots={slots} />
+                  </div>
+                )}
                 {why && <p className="pl-2 text-xs text-destructive">{why}. Take them off or pick someone else.</p>}
                 {hoursFor === p.id && (
                   <HoursEditor
@@ -811,22 +777,14 @@ function RoleRow({
   )
 }
 
-const LINE_TONE = {
-  green: 'text-success',
-  amber: 'text-warning',
-  muted: 'text-muted-foreground',
-} as const
-
 /**
  * Who can take this seat: free people, role fits first, each with one line
- * about their day -- free all day, what else they have on and the hours
- * left of 24, or a tight gap; the busy ones in one folded line.
+ * about their day -- free all day, or free with what else they have on and
+ * when; on leave; the busy ones in one folded line.
  */
 function PersonPicker({
   candidates,
   day,
-  windowHours,
-  gap,
   slots,
   ignoreSlotId,
   hidden,
@@ -838,8 +796,6 @@ function PersonPicker({
 }: {
   candidates: Candidate[]
   day: string
-  windowHours: number
-  gap: number
   slots: TeamSlot[]
   ignoreSlotId?: string | undefined
   hidden: Set<string>
@@ -859,7 +815,9 @@ function PersonPicker({
     (c.member.phone ?? '').includes(query)
   const free = candidates.filter((c) => canPick(c.availability) && !hidden.has(c.member.user_id) && matches(c))
   const unavailable = candidates.filter((c) => !canPick(c.availability) && matches(c))
-  const lineFor = (c: Candidate) => availabilityLine(c, dayLoad(c.member.user_id, day, slots, { ignoreSlotId }), windowHours, gap)
+  const othersOf = (c: Candidate) => bookingsOn(c.member.user_id, day, slots, { ignoreSlotId })
+  const lineFor = (c: Candidate) => availabilityLine(c, othersOf(c))
+  const dayCard = (c: Candidate) => ({ name: c.member.name, userId: c.member.user_id, day, slots, leave: c.leave })
 
   return (
     <div className="mt-2 rounded-lg border border-border bg-card">
@@ -890,14 +848,14 @@ function PersonPicker({
           {free.map((c) => {
             const line = lineFor(c)
             return (
-              <li key={c.member.user_id}>
+              <li key={c.member.user_id} className="rounded-md hover:bg-muted">
                 <button
                   type="button"
                   role="option"
                   aria-selected={false}
                   disabled={busy}
                   onClick={() => onPick(c.member)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2 pt-1.5 text-left text-sm disabled:opacity-50"
                 >
                   <Avatar name={c.member.name} size="sm" />
                   <span className="min-w-0 flex-1">
@@ -905,12 +863,16 @@ function PersonPicker({
                     {c.member.role_names.length > 0 && (
                       <span className="block truncate text-xs text-muted-foreground">{c.member.role_names.join(', ')}</span>
                     )}
-                    <span className={cn('block text-xs', LINE_TONE[line.tone])}>{line.text}</span>
                   </span>
                   {c.match && (
                     <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">Fits</span>
                   )}
                 </button>
+                {/* Beside the pick button, not inside it: tapping the line opens
+                    their day; tapping the name picks them. */}
+                <div className="pb-1.5 pl-10 pr-2">
+                  <PersonDayLine line={line} {...dayCard(c)} />
+                </div>
               </li>
             )
           })}
@@ -940,11 +902,11 @@ function PersonPicker({
           {unavailable.map((c) => {
             const line = lineFor(c)
             return (
-              <li key={c.member.user_id} className="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
+              <li key={c.member.user_id} className="flex items-start gap-2 px-2 py-1 text-sm text-muted-foreground">
                 <Avatar name={c.member.name} size="sm" />
-                <span className="min-w-0 flex-1">
+                <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
                   <span className="block truncate">{c.member.name}</span>
-                  <span className={cn('block text-xs', LINE_TONE[line.tone])}>{line.text}</span>
+                  <PersonDayLine line={line} {...dayCard(c)} />
                 </span>
               </li>
             )

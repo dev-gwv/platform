@@ -114,7 +114,7 @@ export function InvoiceEditor({
   onCancel: () => void
 }) {
   const form = useInvoiceForm(initial)
-  const { values, set, patchLine, setGstEnabled, totals } = form
+  const { values, set, patchLine, setGstEnabled, totals, paymentOn } = form
   const initialJson = useMemo(() => JSON.stringify(initial), [])
   const draft = useFormDraft(draftKey, values, form.replace, { isBlank: (v) => JSON.stringify(v) === initialJson })
   const sentAlready = isEdit && !!editStatus && editStatus !== 'draft'
@@ -305,7 +305,7 @@ export function InvoiceEditor({
     const problems = form.problems()
     if (gstNumberError) problems.unshift(gstNumberError)
     if (gst && !values.place_of_supply) problems.unshift('Choose the place of supply for this tax invoice.')
-    if (status === 'draft' && values.payment.on) problems.unshift('A draft cannot take a payment. Use “Save and send” to record it.')
+    if (status === 'draft' && paymentOn) problems.unshift('A draft cannot take a payment. Use “Save and send” to record it.')
     if (problems.length) {
       setError(problems[0] ?? 'This invoice is not ready yet.')
       return
@@ -740,14 +740,16 @@ export function InvoiceEditor({
               ))}
             </ul>
             <p className="mt-3 text-sm">
-              Invoice <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span> · {formatINR(appliedTotal(values.applied) + (values.payment.on ? toAmount(values.payment.amount) : 0))} received ·{' '}
-              <span className="font-semibold tabular-nums">{formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (values.payment.on ? toAmount(values.payment.amount) : 0)))}</span> to collect.
+              Invoice <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span> · {formatINR(appliedTotal(values.applied) + (paymentOn ? toAmount(values.payment.amount) : 0))} received ·{' '}
+              <span className="font-semibold tabular-nums">{formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (paymentOn ? toAmount(values.payment.amount) : 0)))}</span> to collect.
             </p>
           </section>
         )}
 
         {/* Payment now */}
-        {access.hasAction('billing', 'edit') && (
+        {/* One way to say what came in: while the project's advance is being
+            applied, this box does not appear (the owner asked for one option). */}
+        {access.hasAction('billing', 'edit') && (isEdit || values.applied.length === 0) && (
           <section className={cn('mt-6 rounded-xl border p-4 sm:p-5', values.payment.on ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-border')}>
             <label className="flex cursor-pointer items-center gap-3">
               <input
@@ -761,7 +763,7 @@ export function InvoiceEditor({
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <IndianRupee className="size-4 text-emerald-600" />{' '}
-                  {isEdit ? 'Record an advance or token amount received' : values.applied.length > 0 ? 'I have received another payment, not recorded yet' : 'I have received payment (full, advance or token amount)'}
+                  {isEdit ? 'Record an advance or token amount received' : 'I have received payment (full, advance or token amount)'}
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' Once money is recorded, the lines are locked.' : ''}
@@ -809,7 +811,7 @@ export function InvoiceEditor({
             <Button type="submit" disabled={busy}>
               {busy
                 ? 'Saving…'
-                : values.payment.on || (!sentAlready && appliedTotal(values.applied) > 0)
+                : paymentOn || (!sentAlready && appliedTotal(values.applied) > 0)
                   ? 'Save and record payment'
                   : sentAlready
                     ? 'Save changes'
@@ -830,9 +832,9 @@ export function InvoiceEditor({
                 <p className="text-xs text-muted-foreground">
                   {values.lines.filter((l) => l.description.trim()).length} item(s)
                   {appliedTotal(values.applied) > 0 ? ` · ${formatINR(appliedTotal(values.applied))} already received` : ''}
-                  {values.payment.on && toAmount(values.payment.amount) > 0 ? ` · ${formatINR(toAmount(values.payment.amount))} received now` : ''}
-                  {appliedTotal(values.applied) > 0 || (values.payment.on && toAmount(values.payment.amount) > 0)
-                    ? ` · ${formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (values.payment.on ? toAmount(values.payment.amount) : 0)))} to collect`
+                  {paymentOn && toAmount(values.payment.amount) > 0 ? ` · ${formatINR(toAmount(values.payment.amount))} received now` : ''}
+                  {appliedTotal(values.applied) > 0 || (paymentOn && toAmount(values.payment.amount) > 0)
+                    ? ` · ${formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (paymentOn ? toAmount(values.payment.amount) : 0)))} to collect`
                     : ''}
                 </p>
               </>

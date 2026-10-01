@@ -35,6 +35,7 @@ export function lateBy(row: AttendanceDayRow): string {
 export const STATUS_LABEL: Record<DisplayStatus, string> = {
   present: 'Present',
   late: 'Late',
+  half_day: 'Half day',
   absent: 'Absent',
   not_checked_out: 'Not checked out',
   on_leave: 'On leave',
@@ -44,6 +45,7 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
 export const STATUS_TONE: Record<DisplayStatus, 'success' | 'warning' | 'danger' | 'info'> = {
   present: 'success',
   late: 'warning',
+  half_day: 'warning',
   absent: 'danger',
   not_checked_out: 'info',
   on_leave: 'info',

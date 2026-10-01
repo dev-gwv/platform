@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accessFromSet, resolveAccess, serializeAccess } from './resolve'
+import { accessFromSet, resolveAccess, seesStudioWork, serializeAccess } from './resolve'
 
 describe('resolveAccess — three-question resolution', () => {
   it('Q1: owner sees and does everything, sensitive included', () => {
@@ -75,5 +75,18 @@ describe('serializeAccess round-trips through accessFromSet', () => {
     const client = accessFromSet(serializeAccess(server), false)
     expect(client.hasAction('projects', 'view')).toBe(true)
     expect(client.hasAction('projects', 'edit')).toBe(false)
+  })
+})
+
+describe('seesStudioWork', () => {
+  it('opens the studio to the owner, managers and money people, and keeps staff to their own work', () => {
+    expect(seesStudioWork(resolveAccess({ role: 'super_admin', isOwner: true }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ role: 'admin', isOwner: false }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ role: 'manager', isOwner: false }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false }))).toBe(false)
+    expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'photographer' }))).toBe(false)
+    expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'finance_manager' }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'project_manager' }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'crm_executive' }))).toBe(false)
   })
 })

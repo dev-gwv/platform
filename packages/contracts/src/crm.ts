@@ -1801,3 +1801,15 @@ export type DeclineQuoteRequest = z.infer<typeof declineQuoteRequest>
 
 export const okResponse = z.object({ ok: z.boolean() })
 export type OkResponse = z.infer<typeof okResponse>
+
+/** A CRM follow-up given to the signed-in person (GET /me/follow-ups). */
+export const myFollowUp = z.object({
+  id: z.string().uuid(),
+  lead_id: z.string().uuid(),
+  lead_name: z.string().nullable(),
+  lead_phone: z.string().nullable(),
+  subject: z.string().nullable(),
+  due_at: isoDateTime,
+  priority: z.string().nullable(),
+})
+export type MyFollowUp = z.infer<typeof myFollowUp>

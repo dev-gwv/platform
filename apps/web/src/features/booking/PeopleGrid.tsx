@@ -5,8 +5,9 @@ import { Avatar } from '@/shared/ui/avatar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import type { RowMenuItem } from '@/shared/ui/row-menu'
 import { cn } from '@/shared/ui/cn'
-import { hoursLabel } from '@/features/shoots/assign'
-import { monthDays, monthGrid, todayLocal, type PersonMonth } from './booking-model'
+import { clockRange, hoursLabel } from '@/features/shoots/assign'
+import { PersonDayCard } from '@/features/shoots/PersonDay'
+import { hasClash, monthDays, monthGrid, todayLocal, type PersonMonth } from './booking-model'
 
 /**
  * The month for everyone at once: a row per person, a column per day, a
@@ -56,7 +57,7 @@ export function PeopleGrid({
 
   return (
     <div ref={scroller} className="overflow-x-auto rounded-2xl border border-border bg-card">
-      <table className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: `max(100%, calc(14rem + ${days.length} * 3.25rem))` }}>
+      <table className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: `max(100%, calc(14rem + ${days.length} * 4.5rem))` }}>
         <thead>
           <tr>
             <th scope="col" className="sticky left-0 z-20 border-b border-r border-border bg-card px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
@@ -134,7 +135,7 @@ function PersonRow({ row, days, today, menuFor }: { row: PersonMonth; days: stri
         const list = row.byDay.get(d) ?? []
         return (
           <td key={d} className={cn('border-b border-border p-0.5 align-top', d === today && 'bg-primary/5')}>
-            {list.length > 0 && <DayCell day={d} person={row.member.name} list={list} menuFor={menuFor} />}
+            {list.length > 0 && <DayCell day={d} person={row.member.name} userId={row.member.user_id} list={list} menuFor={menuFor} />}
           </td>
         )
       })}
@@ -142,37 +143,53 @@ function PersonRow({ row, days, today, menuFor }: { row: PersonMonth; days: stri
   )
 }
 
-function DayCell({ day, person, list, menuFor }: { day: string; person: string; list: TeamSlot[]; menuFor: (s: TeamSlot) => RowMenuItem[] }) {
+function DayCell({
+  day,
+  person,
+  userId,
+  list,
+  menuFor,
+}: {
+  day: string
+  person: string
+  userId: string
+  list: TeamSlot[]
+  menuFor: (s: TeamSlot) => RowMenuItem[]
+}) {
   const [open, setOpen] = useState(false)
   const booked = list.filter((s) => s.status === 'booked')
+  // Red only when two bookings really overlap; two shoots on one day are fine.
+  const clash = hasClash(booked)
   const label = new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`${person}, ${label}: ${list.map((s) => s.shoot_name ?? 'booked').join(', ')}`}
+          aria-label={`${person}, ${label}: ${list.map((s) => `${clockRange(s.start_at, s.end_at)} ${s.shoot_name ?? 'booked'}`).join(', ')}`}
           className={cn(
             'flex h-full min-h-9 w-full flex-col gap-0.5 rounded-md px-1 py-1 text-left text-[10px] font-semibold leading-tight transition-colors',
-            booked.length > 1
+            clash
               ? 'bg-tone-rose-soft text-tone-rose ring-1 ring-tone-rose/40'
-              : booked.length === 1
+              : booked.length > 0
                 ? 'bg-tone-green-soft text-tone-green hover:ring-1 hover:ring-tone-green/40'
                 : 'bg-muted text-muted-foreground line-through',
           )}
         >
           {list.slice(0, 2).map((s) => (
             <span key={s.id} className="block truncate">
-              {s.shoot_name ?? s.service_name ?? 'Booked'}
+              <span className="tabular-nums">{clockRange(s.start_at, s.end_at)}</span>{' '}
+              <span className="font-medium opacity-80">{s.shoot_name ?? s.service_name ?? 'Booked'}</span>
             </span>
           ))}
           {list.length > 2 && <span className="block">+{list.length - 2}</span>}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-2">
-        <p className="px-1 pb-1 text-xs font-semibold text-muted-foreground">
-          {person} · {label}
-        </p>
+        <div className="px-1 pb-2">
+          <PersonDayCard name={person} userId={userId} day={day} slots={booked} />
+          {clash && <p className="mt-1 text-xs font-semibold text-tone-rose">Booked twice at the same time.</p>}
+        </div>
         <ul className="flex flex-col gap-2">
           {list.map((s) => (
             <li key={s.id} className="rounded-lg border border-border p-2">

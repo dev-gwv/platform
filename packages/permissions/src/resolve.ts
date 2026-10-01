@@ -116,3 +116,15 @@ export function accessFromSet(permissions: Iterable<string>, isOwner: boolean) {
     effective: set,
   }
 }
+
+/**
+ * Does this person see the studio's work -- every project, its money and its
+ * client -- or only their own (the shoots they are booked on, the edits and
+ * tasks given to them)? Running projects, or handling billing or money, opens
+ * the studio's work; everyone else sees their own. Judged by what they can do,
+ * not their title, so a Finance Manager on an employee seat still sees the
+ * projects whose money they handle. The owner always does.
+ */
+export function seesStudioWork(access: Pick<ResolvedAccess, 'hasModule' | 'hasAction'>): boolean {
+  return access.hasAction('projects', 'edit') || access.hasModule('billing') || access.hasModule('money')
+}

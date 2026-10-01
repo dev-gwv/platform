@@ -3,8 +3,14 @@ import { toast } from 'sonner'
 import {
   attendancePlace,
   attendanceRule,
+  attendanceSettings,
+  checkInResponse,
+  monthRegister,
   myAttendanceToday,
+  resolvedPin,
+  todayBoard,
   z,
+  type UpdateAttendanceSettings,
   type AttendancePlaceInput,
   type AttendanceRuleInput,
 } from '@ipc/contracts'
@@ -36,9 +42,61 @@ function useInvalidateAttendance() {
 export function useCheckIn() {
   const invalidate = useInvalidateAttendance()
   return useMutation({
-    mutationFn: (v: { lat: number; lng: number; auto?: boolean }) =>
-      callApi('/hr/check-in', { method: 'POST', body: v, responseSchema: idOnly }),
+    mutationFn: (v: { lat: number; lng: number; auto?: boolean; accuracy_m?: number; selfie_file_id?: string }) =>
+      callApi('/hr/check-in', { method: 'POST', body: v, responseSchema: checkInResponse }),
     onSuccess: invalidate,
+  })
+}
+
+// ── attendance v2 (0224) ────────────────────────────────────────
+/** The owner's attendance settings: the switch, the hours, the selfie. */
+export function useAttendanceSettings() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['hr', 'settings'],
+    queryFn: () => callApi('/hr/policy', { responseSchema: attendanceSettings }),
+    enabled: !!session,
+    staleTime: 60_000,
+  })
+}
+
+export function useSaveAttendanceSettings() {
+  const invalidate = useInvalidateAttendance()
+  return useMutation({
+    mutationFn: (v: UpdateAttendanceSettings) =>
+      callApi('/hr/policy', { method: 'PATCH', body: v, responseSchema: attendanceSettings }),
+    onSuccess: invalidate,
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** Everyone the studio tracks, today (or on `date`). */
+export function useTodayBoard(date?: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['hr', 'today', date ?? 'today'],
+    queryFn: () => callApi(`/hr/today${date ? `?date=${date}` : ''}`, { responseSchema: todayBoard }),
+    enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+}
+
+/** One code per person per day for a month ("2026-10"); `mine` for one's own. */
+export function useMonthRegister(month: string, mine = false) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['hr', 'register', month, mine],
+    queryFn: () => callApi(`/hr/register?month=${month}${mine ? '&user=me' : ''}`, { responseSchema: monthRegister }),
+    enabled: !!session,
+    staleTime: 60_000,
+  })
+}
+
+/** A Google Maps link (or "lat, lng") into a pin. */
+export function useResolveLink() {
+  return useMutation({
+    mutationFn: (url: string) => callApi('/hr/places/resolve-link', { method: 'POST', body: { url }, responseSchema: resolvedPin }),
   })
 }
 

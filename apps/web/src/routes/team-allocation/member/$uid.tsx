@@ -24,7 +24,7 @@ import { useSlotActions } from '@/features/booking/useSlotActions'
  */
 export function AllocationMemberPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <MemberSchedule />
     </AuthedPage>
   )

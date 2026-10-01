@@ -54,6 +54,9 @@ beforeAll(async () => {
   await db.exec(`
     insert into auth.users (id, email) values ('${OWNER}', 'o@s.test'), ('${PHOTO}', 'p@s.test'), ('${EDITOR}', 'e@s.test'), ('${FREE}', 'f@s.test');
     insert into companies (id, name, owner_user_id) values ('${COMPANY}', 'Asha Studio', '${OWNER}');
+    -- 0224: attendance is off until a studio turns it on; these studios have.
+    insert into attendance_policy (company_id, enabled, enabled_at) values ('${COMPANY}', true, '2020-01-01')
+      on conflict (company_id) do update set enabled = true, enabled_at = '2020-01-01';
     insert into users (user_id, company_id, role, name, email, status, engagement_type) values
       ('${OWNER}', '${COMPANY}', 'super_admin', 'Asha', 'o@s.test', 'active', 'in_house'),
       ('${PHOTO}', '${COMPANY}', 'employee', 'Ravi', 'p@s.test', 'active', 'in_house'),

@@ -47,7 +47,7 @@ const due = (p: ProjectListItem) => Math.max(0, p.total_cost - p.received)
 
 export function ProjectsListPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <ProjectsList />
     </AuthedPage>
   )

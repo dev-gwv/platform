@@ -8,6 +8,7 @@ import { textParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { requireStudioWork } from '../../lib/scope'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail, sendTermsAgreedEmail } from '../../lib/email'
 import { currentStudioBrand } from '../../lib/studio-brand'
@@ -239,7 +240,7 @@ export const termsRouter = new Hono<AppEnv>()
   // The dashboard: every project's paperwork, one row each, newest document
   // first per project. `distinct on` picks that latest row without a second
   // query per project.
-  .get('/documents', requireAction('projects', 'view'), async (c) => {
+  .get('/documents', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const rows = await attempt(c, 'terms.documents', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`select * from list_project_terms_documents()`),
     )
@@ -261,7 +262,7 @@ export const termsRouter = new Hono<AppEnv>()
    * are in the payload and the viewer says so. What a studio most needs to
    * re-read is usually the one whose link has lapsed.
    */
-  .get('/documents/:id/payload', requireAction('projects', 'view'), async (c) => {
+  .get('/documents/:id/payload', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const id = c.req.param('id')
     if (!id || !z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
     const rows = await attempt(c, 'terms.document_payload', () =>
@@ -287,7 +288,7 @@ export const termsRouter = new Hono<AppEnv>()
   })
 
   /** Every version of one project's terms, newest first. */
-  .get('/projects/:projectId/documents', requireAction('projects', 'view'), async (c) => {
+  .get('/projects/:projectId/documents', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const projectId = c.req.param('projectId') ?? ''
     if (!z.string().uuid().safeParse(projectId).success) fail(422, 'Invalid project id.')
     const rows = await attempt(c, 'terms.project_documents', () =>
@@ -439,7 +440,7 @@ export const termsRouter = new Hono<AppEnv>()
     return c.json({ id: row.id }, 201)
   })
 
-  .get('/email-log', requireAction('projects', 'view'), async (c) => {
+  .get('/email-log', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const rows = await attempt(c, 'terms.email_log.list', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
         select id, document_id, to_email as "to", subject, body, status, sent_at from terms_email_logs order by sent_at desc limit 200`),
@@ -502,7 +503,7 @@ export const termsRouter = new Hono<AppEnv>()
   // ── drafts ──────────────────────────────────────────────────
   // Same table as a real document, minus the access token: nothing has been
   // sent, so there is nothing for a client to open.
-  .get('/draft', requireAction('projects', 'view'), async (c) => {
+  .get('/draft', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const projectId = c.req.query('project_id') ?? ''
     if (!/^[0-9a-f-]{36}$/i.test(projectId)) fail(422, 'A project is required.')
     const row = await attempt(c, 'terms.draft_get', () =>
@@ -681,7 +682,7 @@ export const termsRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
-  .get('/documents/:id/email-logs', requireAction('projects', 'view'), async (c) => {
+  .get('/documents/:id/email-logs', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const id = textParam(c, 'id', 400)
     const rows = await attempt(c, 'terms.email_logs', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
