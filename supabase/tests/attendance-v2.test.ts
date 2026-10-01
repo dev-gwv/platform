@@ -188,6 +188,21 @@ describe('a shoot day', () => {
     expect(await q(`select source from attendance where user_id = '${RAVI}'`)).toEqual([{ source: 'shoot' }])
   })
 
+  it('is late from the booking’s real start, even across midnight (0225)', async () => {
+    // Started 23 h ago: by the clock face that is an hour from now, which is
+    // how 0224 read a shoot begun before midnight and reached after it.
+    const [{ id: slot }] = await q<{ id: string }>(
+      `insert into team_assignment_slots (company_id, user_id, shoot_id, service_name, start_at, end_at, status, created_by)
+       values ('${COMPANY}', '${RAVI}', '${SHOOT}', 'Candid', now() - interval '23 hours', now() + interval '1 hour', 'booked', '${OWNER}') returning id`,
+    )
+    await as(RAVI, `select mark_arrived('${slot}')`)
+    const [a] = await q<{ status: string; late: number }>(
+      `select status, late_minutes as late from attendance where user_id = '${RAVI}'`,
+    )
+    expect(a!.status).toBe('late')
+    expect(a!.late).toBeGreaterThanOrEqual(23 * 60)
+  })
+
   it('records nothing while attendance is off', async () => {
     await policy(`enabled = false`)
     const slot = await book(MEERA)
