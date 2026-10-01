@@ -44,7 +44,9 @@ export function readPosition(fresh = false): Promise<GeolocationPosition> {
 /** Whether today still needs a mark for this person. */
 export function needsMark(me: MyAttendanceToday | undefined): boolean {
   if (!me) return false
-  if (me.mode === 'off' || me.day_off || me.on_leave) return false
+  // A studio that has not set attendance up tracks nobody (0223): no mark,
+  // and no location prompt either.
+  if (!me.configured || me.mode === 'off' || me.day_off || me.on_leave) return false
   return !me.today?.check_in_at
 }
 

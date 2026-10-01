@@ -719,18 +719,35 @@ if (listed) {
   const twiceC = await api('/team/members', { token: c.token, method: 'POST', body: member('Other12345!') })
   check('multi: the same email twice in one studio is still refused (409)', twiceC.status === 409, twiceC.json)
 
-  const inD = await api('/team/members', { token: d.token, method: 'POST', body: member('Ignored12345!') })
+  // 0223: studio B cannot take over a login that belongs to studio A's
+  // person by typing its email -- the same person joins B through an invite,
+  // with their own password.
+  const typedD = await api('/team/members', { token: d.token, method: 'POST', body: member('Ignored12345!') })
   check(
-    'multi: studio B adds the same email -- linked to the existing login, not refused',
-    inD.status === 201 && inD.json.linked_existing_login === true && inD.json.user_id !== inC.json.user_id,
-    inD.json,
+    'multi: studio B adding an email that signs in elsewhere is refused (409), never linked',
+    typedD.status === 409 && /another studio/i.test(JSON.stringify(typedD.json)),
+    typedD.json,
   )
 
-  // D's typed password was not used: it is the freelancer's own that works.
-  const wrong = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Ignored12345!' } })
-  check("multi: the password studio B typed does not sign in", wrong.status === 401, wrong.json)
-  const login = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Freelance12345!' } })
-  check('multi: the freelancer signs in with their own password', login.status === 200, login.json)
+  const invD = await api('/team/invitations', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Shared Freelancer', email: shared, role: 'admin' },
+  })
+  const invDToken = /[?&]token=([^&]+)/.exec(invD.json.invite_link ?? '')?.[1] ?? ''
+  const joinD = await api('/auth/accept-invite', { method: 'POST', body: { token: invDToken, password: 'Freelance12345!' } })
+  const joinedD = await api('/auth/session', { token: joinD.json.access_token })
+  const inD = { json: { user_id: joinedD.json.user_id } }
+  check(
+    'multi: through an invite, studio B gets them on their existing login',
+    joinD.status === 200 && joinedD.json.user_id !== inC.json.user_id && (joinedD.json.studios ?? []).length === 2,
+    joinedD.json,
+  )
+
+  // Accepting signed them in, with their own password: that is the sign-in
+  // the rest of this block uses (the credential endpoints share one per-IP
+  // limit across the whole file).
+  const login = joinD
 
   const s1 = await api('/auth/session', { token: login.json.access_token })
   const studios = s1.json.studios ?? []
@@ -843,6 +860,38 @@ if (listed) {
   )
   const newLogin = await api('/auth/login', { method: 'POST', body: { email: shared, password: 'Changed12345!' } })
   check('multi: the new password works', newLogin.status === 200, newLogin.json)
+
+  // 0223: a no-login person's email in one studio is not a door into it.
+  // Studio A keeps someone in its directory with no login; studio B types the
+  // same email, first with a login (refused), then without (kept apart).
+  const quiet = `rls-quiet-${rand()}@example.com`
+  const dirC = await api('/team/members', {
+    token: c.token,
+    method: 'POST',
+    body: { name: 'Directory Only', phone: randPhone(), email: quiet, create_login: false },
+  })
+  const grabD = await api('/team/members', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Not Them', phone: randPhone(), email: quiet, password: 'Grab12345!', create_login: true },
+  })
+  check(
+    "multi: a login on another studio's no-login email is refused (409)",
+    dirC.status === 201 && grabD.status === 409,
+    { dirC: dirC.status, grabD: grabD.status },
+  )
+  const grabLogin = await api('/auth/login', { method: 'POST', body: { email: quiet, password: 'Grab12345!' } })
+  check('multi: and nobody can sign in to it with the typed password', grabLogin.status === 401, grabLogin.json)
+  const dirD = await api('/team/members', {
+    token: d.token,
+    method: 'POST',
+    body: { name: 'Their Own', phone: randPhone(), email: quiet, create_login: false },
+  })
+  check(
+    'multi: a no-login add with that email is its own person, not linked',
+    dirD.status === 201 && dirD.json.user_id !== dirC.json.user_id && dirD.json.linked_existing_login === false,
+    dirD.json,
+  )
 }
 
 // ── Assign team: bulk booking, payout set with the booking ─────────

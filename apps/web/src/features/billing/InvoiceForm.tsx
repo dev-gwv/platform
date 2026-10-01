@@ -170,6 +170,13 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
    * Returned as messages rather than a boolean so the form can say why instead
    * of greying out the button and leaving the person to guess.
    */
+  /**
+   * A payment typed in with the invoice. Not while the project's advance is
+   * being applied: then that box is not shown at all (the owner: one option,
+   * not two), and a draft restored with it ticked must not post it unseen.
+   */
+  const paymentOn = values.payment.on && values.applied.length === 0
+
   function problems(): string[] {
     const out: string[] = []
     if (!values.client_id) out.push('Choose a client for this invoice.')
@@ -185,7 +192,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
     if (typed.length > 0 && totals.total <= 0) out.push('The invoice total must be more than ₹0.')
     if (typed.some((l) => l.hsn_sac && !/^\d{4,8}$/.test(l.hsn_sac.trim()))) out.push('An HSN/SAC code is 4 to 8 digits.')
     const applied = appliedTotal(values.applied)
-    if (values.payment.on) {
+    if (paymentOn) {
       const amt = toAmount(values.payment.amount)
       if (amt <= 0) out.push('Enter the payment amount received, or untick “Payment received”.')
       else if (amt + applied > totals.total) out.push('The money received is more than the invoice total.')
@@ -215,7 +222,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
       payment_terms: values.payment_terms.trim() || undefined,
       attachment_file_ids: values.attachments.map((a) => a.id),
       ...(values.applied.some((a) => a.on) ? { attach_payment_ids: values.applied.filter((a) => a.on).map((a) => a.id) } : {}),
-      ...(values.payment.on && toAmount(values.payment.amount) > 0
+      ...(paymentOn && toAmount(values.payment.amount) > 0
         ? {
             payment: {
               amount: toAmount(values.payment.amount),
@@ -240,7 +247,7 @@ export function useInvoiceForm(initial: InvoiceFormValues) {
     setValues(next)
   }
 
-  return { values, set, patchLine, setGstEnabled, totals, problems, toRequest, reset, replace }
+  return { values, set, patchLine, setGstEnabled, totals, paymentOn, problems, toRequest, reset, replace }
 }
 
 /** A searchable dropdown over the client list -- matches by name, phone or email. */

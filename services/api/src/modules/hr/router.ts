@@ -284,8 +284,9 @@ export const hrRouter = new Hono<AppEnv>()
                  p.name as place_name, a.check_in_distance_m, a.source, a.closed_by_system
             from attendance a left join attendance_places p on p.id = a.check_in_place_id
            where a.user_id = ${auth.userId} and a.a_date = (now() at time zone ${tz})::date`
-        const [ctx] = await sql<{ fenced: boolean; day_off: string | null; on_leave: boolean }[]>`
-          select exists (select 1 from attendance_places where company_id = get_current_company_id() and is_active) as fenced,
+        const [ctx] = await sql<{ configured: boolean; fenced: boolean; day_off: string | null; on_leave: boolean }[]>`
+          select attendance_configured(get_current_company_id()) as configured,
+                 exists (select 1 from attendance_places where company_id = get_current_company_id() and is_active) as fenced,
                  day_off(get_current_company_id(), (now() at time zone ${tz})::date) as day_off,
                  on_leave(${auth.userId}, (now() at time zone ${tz})::date) as on_leave`
         return { rule, today: today ?? null, ctx }
@@ -298,6 +299,7 @@ export const hrRouter = new Hono<AppEnv>()
         mode: out.rule.mode,
         place_name: out.rule.place_name,
         rule_from: out.rule.rule_from,
+        configured: out.ctx.configured,
         fenced: out.ctx.fenced,
         day_off: out.ctx.day_off,
         on_leave: out.ctx.on_leave,

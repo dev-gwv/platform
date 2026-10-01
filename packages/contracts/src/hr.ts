@@ -45,6 +45,11 @@ export const myAttendanceToday = z.object({
   place_name: z.string().nullable(),
   /** 'person' | 'position' | 'studio' | 'freelancer'. */
   rule_from: z.string(),
+  /**
+   * The studio tracks attendance at all (0223): a location, a place or a rule.
+   * Until it does, nobody is marked, prompted for location, or swept absent.
+   */
+  configured: z.boolean().default(true),
   /** The studio has at least one active place: without one there is no fence. */
   fenced: z.boolean(),
   day_off: z.string().nullable(),

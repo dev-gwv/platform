@@ -23,7 +23,7 @@ export function TodayAttendanceCard() {
   const markNow = useMarkNow()
   const checkOut = useCheckOut()
   const d = me.data
-  if (!d || d.mode === 'off') return null
+  if (!d || !d.configured || d.mode === 'off') return null
   const t = d.today
 
   const doCheckOut = () =>

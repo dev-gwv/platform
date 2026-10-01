@@ -763,18 +763,43 @@ export const teamRouter = new Hono<AppEnv>()
                limit 1`
             if (onTeam) return 'on_team' as const
           }
-          const [existing] = email
-            ? await sql<{ id: string; encrypted_password: string | null; email_verified: boolean }[]>`
-                select id, encrypted_password, email_verified from auth.users
-                 where lower(email) = ${email} and identity_id is null`
+          const [found] = email
+            ? await sql<{ id: string; encrypted_password: string | null; email_verified: boolean; elsewhere: boolean; here: boolean }[]>`
+                select au.id, au.encrypted_password, au.email_verified,
+                       exists (select 1 from users u join auth.users p on p.id = u.user_id
+                                where (p.id = au.id or p.identity_id = au.id) and u.company_id <> ${companyId}) as elsewhere,
+                       exists (select 1 from users u join auth.users p on p.id = u.user_id
+                                where (p.id = au.id or p.identity_id = au.id) and u.company_id = ${companyId}) as here
+                  from auth.users au
+                 where lower(au.email) = ${email} and au.identity_id is null`
             : []
+          // 0223: an email that belongs to someone else -- another studio's
+          // person, or a login with no studio at all -- is never taken over
+          // from here. Linking it handed that identity the password typed
+          // here, and with it the other studio's own profile (list_login_profiles
+          // lists an identity's own row whatever its login switch says). The
+          // same person on two teams joins through an invite instead, with
+          // their own password. Only someone removed from THIS studio is
+          // picked up again.
+          const foreign = !!found && (found.elsewhere || !found.here)
+          if (foreign && create_login) return 'taken' as const
+          const existing = foreign ? undefined : found
           // A row that has never signed in (someone's offline directory entry)
           // is not a login yet: the password chosen here becomes its password.
           const isLogin = !!existing && (!!existing.encrypted_password || existing.email_verified)
 
           let id: string
           let linked = false
-          if (!existing) {
+          if (foreign) {
+            // A directory-only person whose email is someone else's: their own
+            // identity, with no email on it, so it can never be signed in to.
+            // The email stays on the studio's record for contact.
+            const created = await sql<{ id: string }[]>`
+              insert into auth.users (email, encrypted_password, email_verified, email_verified_at)
+              values (null, null, false, null)
+              returning id`
+            id = created[0]!.id
+          } else if (!existing) {
             const created = await sql<{ id: string }[]>`
               insert into auth.users (email, encrypted_password, email_verified, email_verified_at)
               values (
@@ -840,6 +865,12 @@ export const teamRouter = new Hono<AppEnv>()
       { onCode: duplicateCode },
     )
     if (added === 'on_team') fail(409, 'Someone with that email is already on your team.')
+    if (added === 'taken') {
+      fail(
+        409,
+        'This email already signs in to Studio AutoPilot for another studio. Same person? Send them an invite — they join with their own password. Someone else? Use another email — any email works, it is just their username.',
+      )
+    }
     if (added === 'duplicate') fail(409, 'Someone with that email is already on your team.')
     if (!added) fail(400, 'We could not add this member.')
     const { id: userId, linked } = added

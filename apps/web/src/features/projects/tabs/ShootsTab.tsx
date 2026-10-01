@@ -289,6 +289,7 @@ export function ShootsTab({
               canEdit={canEdit}
               dateIsPlaceholder={placeholderDates.has(s.id) && s.shoot_date === todayISO()}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
+              allSlots={slots.data ?? []}
               records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
             />
           ))}
@@ -303,6 +304,7 @@ function ShootPlanner({
   shoot,
   canEdit,
   slots,
+  allSlots,
   records,
   dateIsPlaceholder = false,
   focus = false,
@@ -311,6 +313,8 @@ function ShootPlanner({
   shoot: ShootListItem
   canEdit: boolean
   slots: TeamSlot[]
+  /** Every booking in the studio, for "also booked elsewhere that day". */
+  allSlots: TeamSlot[]
   records: DataRecord[]
   dateIsPlaceholder?: boolean
   focus?: boolean
@@ -668,6 +672,7 @@ function ShootPlanner({
                           record={recordForSlot(sl, records)}
                           canEdit={canEdit}
                           onRemove={() => void removeHolder(sl)}
+                          daySlots={allSlots}
                         />
                       ))}
                     </ul>
