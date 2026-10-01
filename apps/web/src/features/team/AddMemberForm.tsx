@@ -152,7 +152,7 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
             />
             {form.create_login && (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Email" required error={errors.email}>
+                <Field label="Email" required error={errors.email} hint="Any email works — it is just their username.">
                   <Input
                     type="email"
                     value={form.email}

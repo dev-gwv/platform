@@ -50,7 +50,7 @@ const todayIST = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slic
 
 export function ProjectTrackingPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <ProjectTracking />
     </AuthedPage>
   )

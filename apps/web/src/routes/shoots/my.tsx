@@ -9,7 +9,6 @@ import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { humanize } from '@/shared/ui/format'
 import { useSlots } from '@/features/allocation/api'
 import { Button } from '@/shared/ui/button'
@@ -78,11 +77,6 @@ function MyShoots() {
   return (
     <>
       <PageHeader title="My shoots" description="Where you are booked, and when to be there." />
-      <HowToUse
-        title="Your bookings"
-        description="Each card is a shoot you hold a slot on. The times are your slot, not the whole day."
-        steps={['Confirm each booking, or say why you can’t make it.', 'On the day, tap I’ve reached.', 'Hand over your cards after the shoot.']}
-      />
 
       {owed > 0 && (
         <p className="mt-4 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">

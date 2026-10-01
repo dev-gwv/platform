@@ -194,7 +194,7 @@ function PersonColumn({ column, canSeeTasks, children }: { column: Column; canSe
       <div className="flex max-h-[32rem] min-h-24 flex-col gap-2 overflow-y-auto px-2 pb-2">{children}</div>
       {person && canSeeTasks && person.open_tasks > 0 && (
         <Link
-          to="/team-work-preview"
+          to="/team/work-preview"
           search={{ user: person.user_id }}
           className="flex items-center gap-1.5 border-t border-border px-3 py-2 text-xs font-medium text-primary hover:underline"
         >

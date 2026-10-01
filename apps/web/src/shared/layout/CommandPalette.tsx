@@ -11,6 +11,7 @@ import { useClients } from '@/features/clients/api'
 import { useProjects } from '@/features/projects/api'
 import { useDirectory } from '@/features/team/api'
 import { useLeadSearch } from '@/features/crm/api'
+import { seesStudioWork } from '@ipc/permissions'
 
 interface Command {
   id: string
@@ -142,8 +143,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       id: `project:${p.id}`,
       label: p.name,
       ...(p.client_name ? { hint: p.client_name } : {}),
-      to: '/projects/$id',
-      params: { id: p.id },
+      // Staff open their own view of a project, not the studio's page.
+      ...(seesStudioWork(access)
+        ? { to: '/projects/$id', params: { id: p.id } }
+        : { to: '/my-work/project/$projectId', params: { projectId: p.id } }),
       group: 'Projects',
     }))
 

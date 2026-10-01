@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/auth'
 import { fail } from '../../middleware/errors'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
+import { studioWork } from '../../lib/scope'
 
 const activityItem = z.object({
   id: z.string().uuid(),
@@ -42,7 +43,8 @@ export const activityRouter = new Hono<AppEnv>()
     }
     if (rawEntityType && rawEntityType.length > 40) fail(422, 'Invalid entity_type.')
     const entityType = rawEntityType
-    const userId = rawUserId
+    // Staff see their own trail, not the studio's.
+    const userId = studioWork(c) ? rawUserId : c.get('auth').userId
     const auth = c.get('auth')
 
     const rows = await attempt(c, 'activity.list', () =>

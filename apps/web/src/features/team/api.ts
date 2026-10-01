@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import {
   addMemberRequest,
   addMemberResponse,
+  setMemberSignInRequest,
+  setMemberSignInResponse,
   assignRolesRequest,
   createInvitationRequest,
   updateInvitationRequest,
@@ -19,6 +21,7 @@ import {
   upsertEmployeeRoleRequest,
   z,
   type AddMemberRequest,
+  type SetMemberSignInRequest,
   type AssignRolesRequest,
   type CreateInvitationRequest,
   type GenerateMonthlySalariesRequest,
@@ -317,6 +320,17 @@ export function useSendReset() {
       callApi(`/team/members/${userId}/reset-password`, { method: 'POST', responseSchema: ok }),
     onError: (e: Error) => toast.error(e.message),
   })
+}
+
+/** The owner or an admin sets a member's email and password themselves. */
+export function useSetSignIn() {
+  return useTeamMutation((input: { userId: string; body: SetMemberSignInRequest }) =>
+    callApi(`/team/members/${input.userId}/sign-in`, {
+      method: 'POST',
+      body: setMemberSignInRequest.parse(input.body),
+      responseSchema: setMemberSignInResponse,
+    }),
+  )
 }
 
 export function useCreateRole() {

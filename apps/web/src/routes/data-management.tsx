@@ -37,7 +37,7 @@ type DmTab = 'records' | 'locations'
 
 export function DataManagementPage({ initialTab }: { initialTab?: DmTab } = {}) {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/dashboard">
       <DataPage initialTab={initialTab} />
     </AuthedPage>
   )

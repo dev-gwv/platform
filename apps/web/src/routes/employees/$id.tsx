@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { ArrowLeft, CalendarDays, Check, FileText, KeyRound, Lock, Mail, MapPin, Phone, Power } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +19,8 @@ import { cn } from '@/shared/ui/cn'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useDirectory, useMemberOverview, useSendReset, useUpdateMember } from '@/features/team/api'
 import { EditMemberDialog } from '@/features/team/EditMemberDialog'
+import { SignInDetailsDialog } from '@/features/team/SignInDetailsDialog'
+import { useTeamPowers } from '@/features/team/powers'
 import { openIdDocument, useIdDocuments } from '@/features/profile/api'
 import { usePayrollPowers, usePayslips } from '@/features/payroll/api'
 import { DeliverableTile } from '@/shared/ui/icon-tile'
@@ -113,8 +115,11 @@ function Header({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
   const row = (directory.data ?? []).find((d) => d.user_id === m.user_id)
   const update = useUpdateMember()
   const reset = useSendReset()
+  const powers = useTeamPowers()
+  const [signIn, setSignIn] = useState(false)
   const active = m.status === 'active'
   const canEdit = o.can.edit && !m.is_owner
+  const canSignIn = canEdit && powers.canSetSignIn && !isSelf
 
   return (
     <Card>
@@ -130,7 +135,15 @@ function Header({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
               </Button>
             )}
             {canEdit && row && <EditMemberDialog member={row} />}
-            {canEdit && m.login_enabled && m.email && (
+            {canSignIn && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setSignIn(true)}>
+                  <KeyRound className="size-4" /> {m.login_enabled ? 'Sign-in details' : 'Give a login'}
+                </Button>
+                <SignInDetailsDialog member={m} open={signIn} onOpenChange={setSignIn} />
+              </>
+            )}
+            {canEdit && !canSignIn && m.login_enabled && m.email && (
               <Button
                 variant="outline"
                 size="sm"

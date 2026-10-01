@@ -6,6 +6,8 @@ import {
   payTo,
   addMemberRequest,
   addMemberResponse,
+  setMemberSignInRequest,
+  setMemberSignInResponse,
   assignRolesRequest,
   createInvitationRequest,
   updateInvitationRequest,
@@ -1017,6 +1019,94 @@ export const teamRouter = new Hono<AppEnv>()
     await sendPasswordResetEmail(c.env, member.email, `${c.env.APP_URL}/reset-password?token=${raw}`)
     await audit(c, { action: 'member.reset_password_sent', entityType: 'user', entityId: targetId })
     return c.json({ ok: true })
+  })
+
+  // The owner (or an admin) sets a member's sign-in themselves: a password,
+  // and the email they sign in with if it changes. This is how a no-login
+  // member gets a login later, how a typo'd email is fixed, and how someone
+  // with a made-up email -- which cannot receive a reset link -- gets back in.
+  // Any email works; it is only a username. The password is never stored or
+  // logged in the clear, and every session the person had is signed out.
+  //
+  // A login that also belongs to another studio is refused: that password
+  // opens the other studio too, so only the person can change it.
+  .post('/members/:id/sign-in', teamGate('edit'), rateLimit({ windowMs: 60_000, limit: 5 }), async (c) => {
+    const auth = c.get('auth')
+    if (!auth.isOwner && auth.role !== 'admin' && auth.role !== 'super_admin') {
+      fail(403, 'Only the owner or an admin can set someone else\'s sign-in.')
+    }
+    const targetId = uuidParam(c)
+    if (targetId === auth.userId) fail(409, 'Change your own password from My profile.')
+    await guardTarget(c, targetId, 'Change your own password from My profile.')
+    const parsed = setMemberSignInRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Use a real-looking email and a password of at least 6 characters.')
+    const pwHash = await hashPassword(parsed.data.password)
+    const companyId = auth.companyId
+
+    const done = await attempt(
+      c,
+      'team.sign_in_set',
+      () =>
+        withService(c.env, async (sql) => {
+          const [m] = await sql<
+            { name: string; email: string | null; identity: string; login_email: string | null; shared: boolean; is_owner: boolean }[]
+          >`
+            select u.name, u.email, ia.id as identity, ia.email as login_email,
+                   exists (select 1 from users o join auth.users p on p.id = o.user_id
+                            where (p.id = ia.id or p.identity_id = ia.id)
+                              and o.company_id <> u.company_id and o.deleted_at is null) as shared,
+                   (co.owner_user_id = u.user_id) as is_owner
+              from users u
+              join companies co on co.id = u.company_id
+              join auth.users ia on ia.id = auth_identity_of(u.user_id)
+             where u.user_id = ${targetId} and u.company_id = ${companyId} and u.deleted_at is null`
+          if (!m) return 'missing' as const
+          if (m.is_owner) return 'owner' as const
+          if (m.shared) return { shared: m.name }
+          const email = parsed.data.email ?? m.login_email?.toLowerCase() ?? m.email?.toLowerCase() ?? null
+          if (!email) return 'no_email' as const
+          await sql`select pg_advisory_xact_lock(hashtext(${`member:${companyId}:${email}`}))`
+          const [taken] = await sql<{ one: number }[]>`
+            select 1 as one from auth.users where lower(email) = ${email} and id <> ${m.identity} limit 1`
+          if (taken) return 'taken' as const
+          const [onTeam] = await sql<{ one: number }[]>`
+            select 1 as one from users
+             where company_id = ${companyId} and lower(email) = ${email}
+               and user_id <> ${targetId} and deleted_at is null
+             limit 1`
+          if (onTeam) return 'on_team' as const
+          await sql`
+            update auth.users
+               set email = ${email}, encrypted_password = ${pwHash}, password_changed_at = now(),
+                   email_verified = true, email_verified_at = coalesce(email_verified_at, now())
+             where id = ${m.identity}`
+          await sql`update users set email = ${email}, login_enabled = true where user_id = ${targetId}`
+          // Bumps password_version and revokes every refresh family: whoever
+          // was signed in as them is signed out.
+          await sql`select revoke_all_sessions(${m.identity})`
+          return { email, name: m.name, changedEmail: (m.login_email ?? m.email ?? '').toLowerCase() !== email }
+        }),
+      { onCode: duplicateCode },
+    )
+    if (done === 'missing') fail(404, 'We could not find that team member.')
+    if (done === 'owner') fail(403, 'Only the owner can change the owner\'s sign-in.')
+    if (done === 'no_email') fail(422, 'Give them an email to sign in with. Any email works — it is just their username.')
+    if (done === 'taken' || done === 'duplicate') {
+      fail(409, 'That email already signs in to Studio AutoPilot for someone else. Use another email — any email works.')
+    }
+    if (done === 'on_team') fail(409, 'Someone else on your team already uses that email.')
+    if (!done) fail(400, 'We could not set the sign-in. Please try again.')
+    if ('shared' in done) {
+      fail(409, `${done.shared} also signs in to another studio, so only ${done.shared} can change this password — from My profile, or with Forgot password.`)
+    }
+    // Never the password, not even its length.
+    await audit(c, {
+      action: 'member.sign_in_set',
+      entityType: 'user',
+      entityId: targetId,
+      after: { email: done.email, email_changed: done.changedEmail },
+    })
+    return c.json(setMemberSignInResponse.parse({ email: done.email }))
   })
 
   // ── Invitations ─────────────────────────────────────────────

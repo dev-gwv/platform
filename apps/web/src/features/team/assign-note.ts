@@ -55,7 +55,7 @@ export function loginMessage({
 }): string {
   const first = name.split(' ')[0] || name
   const how = email
-    ? `Log in at ${loginUrl} with ${email}. If you do not know your password, tap "Forgot password" there.`
+    ? `Log in at ${loginUrl} with ${email} and the password we gave you. You can change it from My profile.`
     : `Log in at ${loginUrl}. Ask us for your login details if you do not have them.`
   return `Hi ${first}, your shoots and editing work for ${studio} are on Studio AutoPilot. ${how} Everything assigned to you is under "My work".`
 }

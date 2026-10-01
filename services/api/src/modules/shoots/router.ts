@@ -22,6 +22,7 @@ import type { TransactionSql } from 'postgres'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { studioWork } from '../../lib/scope'
 
 const list = shootListItem.array()
 const services = serviceOption.array()
@@ -120,7 +121,8 @@ export const shootsRouter = new Hono<AppEnv>()
 
   .get('/', requireAction('projects', 'view'), async (c) => {
     const project = uuidQuery(c, 'project_id')
-    const assignee = uuidQuery(c, 'assignee')
+    // Staff see the shoots they are booked on, never the studio's calendar.
+    const assignee = studioWork(c) ? uuidQuery(c, 'assignee') : c.get('auth').userId
     const rows = await attempt(c, 'shoots.list', () =>
       withUser(
         c.env,

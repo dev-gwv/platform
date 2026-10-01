@@ -11,7 +11,7 @@ import { hubFor } from './hubs'
 export function HubTabs() {
   const { pathname } = useLocation()
   const access = useAccess()
-  const hub = hubFor(pathname)
+  const hub = hubFor(pathname, (m) => access.hasModule(m))
   if (!hub) return null
   const tabs = hub.filter((t) => access.hasModule(t.module))
   if (tabs.length < 2) return null

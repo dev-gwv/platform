@@ -3,10 +3,13 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ModuleKey } from '@ipc/permissions'
 import { NAV, filterNav, navDestinations, type NavGroup, type NavLeaf } from './nav'
-import { hubFor, TEAM_PAY } from './hubs'
+import { hubFor, MY_TIME, TEAM_PAY, TEAM_TIME } from './hubs'
 
-const access = (mods: ModuleKey[]) =>
-  ({ hasModule: (m: ModuleKey) => mods.includes(m) }) as unknown as Parameters<typeof filterNav>[2]
+const access = (mods: ModuleKey[], writes: string[] = ['projects.edit']) =>
+  ({
+    hasModule: (m: ModuleKey) => mods.includes(m),
+    hasAction: (m: ModuleKey, a: string) => (a === 'view' ? mods.includes(m) : writes.includes(`${m}.${a}`)),
+  }) as unknown as Parameters<typeof filterNav>[2]
 
 const ALL: ModuleKey[] = [
   'team_directory',
@@ -46,6 +49,33 @@ describe('the Team menu', () => {
     expect(hubFor('/team-payouts/')).toBe(TEAM_PAY)
     expect(hubFor('/employees/abc')).toBeNull()
     expect(hubFor('/settings/roles')).toBeNull()
+  })
+})
+
+describe('the staff menu', () => {
+  const labels = (entries: ReturnType<typeof filterNav>) =>
+    entries.flatMap((e) => (e.kind === 'leaf' ? [e.label] : e.children.map((c) => c.label)))
+
+  it('is their own day and their own work, never the studio\'s', () => {
+    const staff = labels(filterNav(NAV, 'employee', access(['dashboard', 'projects', 'personal_expenses'], []), false))
+    expect(staff.slice(0, 6)).toEqual(['Home', 'My Work', 'My Tasks', 'My Shoots', 'Attendance & leave', 'My performance'])
+    for (const hidden of ['Dashboard', 'All Projects', 'Production Board', 'Team Booking', 'Data & Backup', 'Project Tracking', 'Activity'])
+      expect(staff).not.toContain(hidden)
+  })
+
+  it('keeps the studio\'s work for those who run projects', () => {
+    const admin = labels(filterNav(NAV, 'admin', access(['dashboard', 'projects']), false))
+    expect(admin).toContain('Dashboard')
+    expect(admin).toContain('All Projects')
+    expect(admin).toContain('Team Booking')
+    expect(admin).not.toContain('Home')
+  })
+
+  it('puts a person\'s attendance and leave under one tab row', () => {
+    const staffCan = (m: ModuleKey) => m === 'dashboard'
+    expect(hubFor('/leave', staffCan)).toBe(MY_TIME)
+    expect(hubFor('/attendance/my', staffCan)).toBe(MY_TIME)
+    expect(hubFor('/leave', (m) => m === 'attendance' || m === 'dashboard')).toBe(TEAM_TIME)
   })
 })
 

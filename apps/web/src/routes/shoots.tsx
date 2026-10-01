@@ -50,7 +50,7 @@ function useShoots() {
 
 export function ShootsPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/shoots/my">
       <Shoots />
     </AuthedPage>
   )

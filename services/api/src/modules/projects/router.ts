@@ -44,6 +44,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { requireStudioWork, studioWork, worksOn } from '../../lib/scope'
 
 /** postgres.js writes `undefined` as a column; leave those out instead. */
 function withoutUndefined<T extends Record<string, unknown>>(o: T): Partial<T> {
@@ -80,6 +81,11 @@ export const projectsRouter = new Hono<AppEnv>()
   .get('/', requireAction('projects', 'view'), async (c) => {
     const url = new URL(c.req.url)
     const hasPaging = url.searchParams.has('page') || url.searchParams.has('page_size') || url.searchParams.has('search') || url.searchParams.has('status') || url.searchParams.has('sort')
+    // Staff get the projects they work on, without money or the client's phone.
+    const mine = !studioWork(c)
+    const me = c.get('auth').userId
+    const hide = <T extends Record<string, unknown>>(r: T): T =>
+      mine ? { ...r, package_cost: 0, total_cost: 0, received: 0, client_phone: null } : r
     if (!hasPaging) {
       const rows = await attempt(c, 'projects.list', () =>
         withUser(
@@ -99,11 +105,12 @@ export const projectsRouter = new Hono<AppEnv>()
                  coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < current_date), 0) as tasks_overdue
           from projects p
           left join clients cl on cl.id = p.client_id
+          where ${mine ? worksOn(sql, me) : sql`true`}
           order by p.created_at desc`,
         ),
       )
       if (!rows) fail(400, 'We could not load your projects.')
-      return c.json(projectListItem.array().parse(rows))
+      return c.json(projectListItem.array().parse(rows.map(hide)))
     }
     // Paginated + filtered list (Lovable parity): page/page_size + search/status + sort.
     const page = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1)
@@ -137,12 +144,13 @@ export const projectsRouter = new Hono<AppEnv>()
             from projects p
             left join clients cl on cl.id = p.client_id
            where ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}
+             and ${mine ? worksOn(sql, me) : sql`true`}
            group by p.status`
         const inFilter = countRows.filter((r) => !status || status === 'all' || r.status === status)
         const total = inFilter.reduce((n, r) => n + r.n, 0)
         const value = inFilter.reduce((n, r) => n + Number(r.value), 0)
         const received = inFilter.reduce((n, r) => n + Number(r.received), 0)
-        const summary = { value, received, due: Math.max(0, value - received) }
+        const summary = mine ? { value: 0, received: 0, due: 0 } : { value, received, due: Math.max(0, value - received) }
         const statusCounts = Object.fromEntries(countRows.map((r) => [r.status, r.n]))
         // orderBy is an allow-listed fragment (see switch above), never user input.
         const rows = await sql`
@@ -155,13 +163,14 @@ export const projectsRouter = new Hono<AppEnv>()
           left join clients cl on cl.id = p.client_id
           where ${status && status !== 'all' ? sql`p.status = ${status}` : sql`true`}
             and ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}
+            and ${mine ? worksOn(sql, me) : sql`true`}
           order by ${sql.unsafe(orderBy)}
           limit ${pageSize} offset ${offset}`
         return { total, rows, summary, statusCounts }
       }),
     )
     if (!result) fail(400, 'We could not load your projects.')
-    return c.json(projectListPage.parse({ items: result.rows, total: result.total, page, page_size: pageSize, summary: result.summary, status_counts: result.statusCounts }))
+    return c.json(projectListPage.parse({ items: result.rows.map(hide), total: result.total, page, page_size: pageSize, summary: result.summary, status_counts: result.statusCounts }))
   })
 
   // Tracking: one aggregate row per project, counted here and judged by
@@ -169,7 +178,7 @@ export const projectsRouter = new Hono<AppEnv>()
   // anything else read one answer. "Today" is the studio's day (India).
   //
   // `/tracking` must be declared before `/:id`, or Hono matches it as an id.
-  .get('/tracking', requireAction('projects', 'view'), async (c) => {
+  .get('/tracking', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const seesMoney = c.get('auth').access.hasModule('billing')
     const rows = await attempt(c, 'projects.tracking', () =>
       withUser(
@@ -298,7 +307,7 @@ export const projectsRouter = new Hono<AppEnv>()
 
   // One project opened up: what is late or waiting, on whom, the shoots and
   // their crew and data, and (for Billing) the money.
-  .get('/tracking/:id', requireAction('projects', 'view'), async (c) => {
+  .get('/tracking/:id', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const id = uuidParam(c)
     const seesMoney = c.get('auth').access.hasModule('billing')
     const result = await attempt(c, 'projects.tracking.one', () =>
@@ -567,7 +576,7 @@ export const projectsRouter = new Hono<AppEnv>()
    * was delivered in the last fortnight; the counts cover all open work even
    * when the list is capped.
    */
-  .get('/board', requireAction('projects', 'view'), async (c) => {
+  .get('/board', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const data = await attempt(c, 'projects.board', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const stages = await sql`
@@ -982,9 +991,13 @@ export const projectsRouter = new Hono<AppEnv>()
    */
   .get('/deliverables/:did/notes', async (c) => {
     const did = uuidParam(c, 'did')
+    // Staff read the notes on their own edits only.
+    const me = c.get('auth').userId
+    const anyOne = studioWork(c)
     const rows = await attempt(c, 'projects.deliverable_notes', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const found = await sql`select 1 from deliverables where id = ${did}`
+      withUser(c.env, me, async (sql) => {
+        const found = await sql`
+          select 1 from deliverables where id = ${did} and ${anyOne ? sql`true` : sql`assignee_id = ${me}`}`
         if (!found.length) return null
         return sql`
           select n.id, n.deliverable_id, n.kind, n.body, n.file_id, n.duration_seconds,
@@ -1054,7 +1067,7 @@ export const projectsRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
-  .get('/:id', requireAction('projects', 'view'), async (c) => {
+  .get('/:id', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const id = uuidParam(c)
     const row = await attempt(c, 'projects.get', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
@@ -1247,7 +1260,7 @@ export const projectsRouter = new Hono<AppEnv>()
    * the terms (the latest agreed version, else the latest sent), and -- for
    * those who can see Billing -- the invoices raised for it.
    */
-  .get('/:id/billing', requireAction('projects', 'view'), async (c) => {
+  .get('/:id/billing', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const projectId = uuidParam(c)
     const canSeeBilling = c.get('auth').access.hasModule('billing')
     const data = await attempt(c, 'projects.billing', () =>

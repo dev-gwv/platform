@@ -281,6 +281,11 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ok: true }
   if (method === 'POST' && /^\/team\/members\/[^/]+\/reset-password$/.test(path))
     return { ok: true }
+  if (method === 'GET' && path === '/me/follow-ups')
+    return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
+  if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
+  if (method === 'POST' && /^\/team\/members\/[^/]+\/sign-in$/.test(path))
+    return { email: (body as { email?: string } | undefined)?.email ?? 'member@example.com' }
   if (method === 'POST' && path === '/auth/reset-password')
     return {
       access_token: 'mock-token',

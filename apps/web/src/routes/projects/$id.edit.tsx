@@ -24,7 +24,7 @@ const CLS_TEXTAREA =
 
 export function ProjectEditPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/my-work">
       <ProjectEdit />
     </AuthedPage>
   )

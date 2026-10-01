@@ -25,6 +25,7 @@ import { uuidParam, uuidQuery } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { studioWork } from '../../lib/scope'
 
 const list = dataRecord.array()
 const locationList = storageLocation.array()
@@ -82,13 +83,17 @@ export const dataRouter = new Hono<AppEnv>()
     const shoot = uuidQuery(c, 'shoot_id')
     const project = uuidQuery(c, 'project_id')
     const slot = uuidQuery(c, 'slot_id')
+    // Staff see the cards they shot, not the studio's whole data book.
+    const mine = !studioWork(c)
+    const me = c.get('auth').userId
     const rows = await attempt(c, 'data.list', () =>
       withUser(c.env, c.get('auth').userId, (sql) =>
         selectRecords(
           sql,
           sql`${shoot ? sql`d.shoot_id = ${shoot}` : sql`true`}
             and ${project ? sql`d.project_id = ${project}` : sql`true`}
-            and ${slot ? sql`d.slot_id = ${slot}` : sql`true`}`,
+            and ${slot ? sql`d.slot_id = ${slot}` : sql`true`}
+            and ${mine ? sql`d.user_id = ${me}` : sql`true`}`,
         ),
       ),
     )

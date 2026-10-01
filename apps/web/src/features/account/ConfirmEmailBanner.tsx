@@ -11,6 +11,7 @@ const HIDE_KEY = 'ipc:confirm-email-hidden'
  * The owner is let in straight after sign-up; confirming the email is asked
  * for here instead, one quiet line with a Resend. Closing it hides it for
  * this browser session only -- it returns until the email is confirmed.
+ * Never shown to the team: their email is a username the owner chose.
  */
 export function ConfirmEmailBanner() {
   const { session } = useAuth()
@@ -24,7 +25,8 @@ export function ConfirmEmailBanner() {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  if (!session || session.email_verified || hidden) return null
+  // The owner only: a team member's email is a username, never checked.
+  if (!session || !session.is_owner || session.email_verified || hidden) return null
 
   async function resend() {
     if (!session?.email) return

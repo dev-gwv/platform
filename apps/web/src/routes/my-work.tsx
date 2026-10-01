@@ -5,6 +5,7 @@ import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink
 import { WORK_STATUS_LABEL, shootListItem, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { useAccess } from '@/shared/auth/useAccess'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -76,6 +77,8 @@ function MyWork() {
   const { data: projects } = useProjects()
   const reminders = useWorkReminderSettings()
   const move = useUpdateMyTaskStatus()
+  // Sending to the client is the reviewer's call; the API refuses anyone else.
+  const canDeliver = useAccess().hasAction('team_work_preview', 'edit')
 
   const [sort, setSort] = useState<SortKey>('due_asc')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -233,7 +236,7 @@ function MyWork() {
                     </a>
                   )}
                   <span className="ml-auto flex flex-wrap gap-2">
-                    {submission?.status === 'approved' && submission.submission_link && (
+                    {canDeliver && submission?.status === 'approved' && submission.submission_link && (
                       <Button size="sm" variant="outline" onClick={() => setSending(submission)}>
                         <Send /> Send to client
                       </Button>
@@ -380,6 +383,8 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
 
 function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmission[]; onSend: (s: WorkSubmission) => void }) {
   const revoke = useRevokeDelivery()
+  // Sending to the client is the reviewer's call; the API refuses anyone else.
+  const canDeliver = useAccess().hasAction('team_work_preview', 'edit')
   const confirm = useConfirm()
 
   // Revoking is not undoable — the token is expired, not paused — and the
@@ -424,7 +429,7 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
               {s.status === 'submitted' && (
                 <SubmitDialog submission={s} trigger={<Button size="sm" variant="ghost"><Pencil /></Button>} />
               )}
-              {s.status === 'approved' && s.submission_link && (
+              {canDeliver && s.status === 'approved' && s.submission_link && (
                 <Button size="sm" variant="outline" onClick={() => onSend(s)}>
                   <Send /> {s.client_sent_at ? 'Send again' : 'Send'}
                 </Button>
@@ -432,7 +437,7 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
               {/* The send dialog promises the link can be pulled back. This is
                   the control that keeps the promise — the wrong cut of a film
                   sitting on a link the client still has is the case it is for. */}
-              {s.client_sent_at && !s.revoked_at && (
+              {canDeliver && s.client_sent_at && !s.revoked_at && (
                 <Button
                   size="sm"
                   variant="ghost"

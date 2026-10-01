@@ -26,6 +26,11 @@ export function useTeamPowers() {
     /** Pay fields: the owner, or whoever edits salaries. */
     canPay: isOwner || access.hasAction('team_salaries', 'edit'),
     /**
+     * Set someone's email and password for them (Sign-in details): the owner
+     * or an admin -- a password opens everything that person can see.
+     */
+    canSetSignIn: canEdit && (isOwner || session?.role === 'admin' || session?.role === 'super_admin'),
+    /**
      * Anyone who may add people may add a job role while doing it -- no
      * closed field. Renaming and deleting roles stays the owner's.
      */

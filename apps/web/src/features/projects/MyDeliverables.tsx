@@ -55,7 +55,8 @@ export function MyDeliverables() {
   const { data } = useMyDeliverables()
   const { session } = useAuth()
   const canOpenProjects = useAccess().hasModule('projects')
-  const [openId, setOpenId] = useState<string | null>(null)
+  // ?d=<id> opens one straight away -- where a notification about it lands.
+  const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('d'))
   const [openAction, setOpenAction] = useState<'voice' | null>(null)
   if (!data?.length) return null
   const me = { id: session?.user_id ?? null, name: session?.display_name ?? null }

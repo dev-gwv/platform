@@ -28,7 +28,7 @@ import { useProjects } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
 import { useInvoices } from '@/features/billing/api'
-import { EmployeeDashboard } from '@/features/dashboard/EmployeeDashboard'
+import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
@@ -36,16 +36,16 @@ import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { seesStudioWork } from '@ipc/permissions'
 
 export function DashboardPage() {
   return <DashboardInner />
 }
 
-const EMPLOYEE_ROLES = new Set(['employee'])
-
 /**
- * Lovable parity: employees get their own day view (my tasks/shoots/
- * attendance/schedule), everyone else gets the studio command center.
+ * Staff -- anyone who does not see the studio's work (seesStudioWork) -- get
+ * their own day (StaffHome); everyone else gets the studio command center,
+ * with their own day in one line above it when they have one.
  *
  * The two bodies are separate components rather than two branches of one,
  * because the command center opens with nine hooks. Branching inside a single
@@ -55,15 +55,15 @@ const EMPLOYEE_ROLES = new Set(['employee'])
  */
 function DashboardInner() {
   const { session } = useAuth()
-  if (session?.role && EMPLOYEE_ROLES.has(session.role)) {
+  const access = useAccess()
+  // Whoever does not see the studio's work gets their own day instead.
+  if (session && !seesStudioWork(access)) {
+    const first = (session.display_name ?? '').split(' ')[0]
     return (
       <>
-        <PageHeader
-          title={`Welcome, ${session.display_name ?? ''}`}
-          description="Your tasks, shoots and attendance at a glance."
-        />
+        <PageHeader title={first ? `Hi, ${first}` : 'Home'} />
         <div className="mt-4">
-          <EmployeeDashboard />
+          <StaffHome />
         </div>
       </>
     )
@@ -168,6 +168,7 @@ function StudioCommandCenter() {
       ) : (
       <>
       <ProfileBanner />
+      <YourDayStrip />
 
       {/* Three numbers, the way a project page opens: what is running, what
           needs a hand, what is still to come in. Everything else is one

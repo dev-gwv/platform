@@ -118,7 +118,7 @@ async function copyText(text: string): Promise<boolean> {
 
 export function ProjectQuotationPage() {
   return (
-    <AuthedPage module="projects">
+    <AuthedPage module="projects" studioWork="/my-work">
       <ProjectQuotation />
     </AuthedPage>
   )
