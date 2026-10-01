@@ -16,14 +16,18 @@ import { AssignedNote } from '@/features/team/AssignedNote'
 import {
   clashFor,
   defaultWindowFields,
+  freeFrom,
   isLive,
   overlaps,
   payBasisLabel,
   requirementFill,
   suggestedPayout,
+  timeLabel,
   windowOf,
   type TimeWindow,
 } from './assign'
+import { readGap } from './booking-gap'
+import { DurationField } from '@/shared/ui/duration-field'
 
 const list = shootListItem.array()
 
@@ -48,7 +52,7 @@ interface Cand {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+const fmtTime = (iso: string) => timeLabel(iso)
 const fmtDay = (d: string) =>
   new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -92,7 +96,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const [memberId, setMemberId] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
   const [role, setRole] = useState('')
-  const [bufferMin, setBufferMin] = useState(60)
+  const [bufferMin, setBufferMin] = useState(() => readGap(session?.company_id))
   const [defaultHours, setDefaultHours] = useState(4)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [rows, setRows] = useState<Record<string, Row>>({})
@@ -126,7 +130,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
 
   const rowOf = (s: ShootListItem): Row => {
     const d = defaultWindowFields(s)
-    return rows[s.id] ?? { time: d.time, hours: s.start_at ? d.hours : defaultHours, cost: '', costStatus: 'tentative' }
+    return rows[s.id] ?? { time: d.time, hours: d.hours ?? defaultHours, cost: '', costStatus: 'tentative' }
   }
 
   const cands: Cand[] = useMemo(() => {
@@ -341,16 +345,9 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="bulk-dur" className="text-[11px] text-muted-foreground">
-                    Default hours
+                    Default hours (for shoots without their own)
                   </Label>
-                  <Input
-                    id="bulk-dur"
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={defaultHours}
-                    onChange={(e) => setDefaultHours(Number(e.target.value) || 4)}
-                  />
+                  <DurationField id="bulk-dur" value={defaultHours} onChange={(h) => setDefaultHours(h ?? 4)} compact />
                 </div>
               </div>
             </div>
@@ -517,7 +514,7 @@ function CandRow({
           ? 'border-warning/30 bg-warning/[0.04]'
           : 'border-border bg-muted/40'
   const locked = state === 'full' || state === 'already'
-  const suggested = c.clash ? fmtTime(new Date(Date.parse(c.clash.end_at) + bufferMin * 60_000).toISOString()) : null
+  const suggested = c.clash ? fmtTime(freeFrom(c.clash, bufferMin)) : null
   return (
     <li className={cn('rounded-md border p-3', tone)}>
       <div className="flex items-start gap-3">
@@ -582,13 +579,12 @@ function CandRow({
             <div>
               <Label className="text-[10px] uppercase text-muted-foreground">Hours</Label>
               <Input
-                type="number"
-                min={0.5}
-                step={0.5}
+                inputMode="decimal"
                 className="h-8"
-                value={row.hours}
+                value={row.hours || ''}
                 disabled={locked}
-                onChange={(e) => onRow({ hours: Number(e.target.value) || 0 })}
+                placeholder="e.g. 5"
+                onChange={(e) => onRow({ hours: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 })}
               />
             </div>
             <div>

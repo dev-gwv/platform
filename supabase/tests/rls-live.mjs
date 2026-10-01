@@ -465,6 +465,52 @@ check(
   { status: invAfter.json.status, amount_paid: invAfter.json.amount_paid },
 )
 
+// The journey's invoice: the whole project, with the wizard's advance applied
+// to it rather than recorded twice. The same ledger rows, now linked.
+{
+  const advClient = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Advance Co', phone: randPhone() } })
+  const advProject = await api('/projects', {
+    token: aToken,
+    method: 'POST',
+    body: { name: 'Advance project', client_id: advClient.json.id, package_cost: 100000, payments: [{ amount: 50000, paid_on: '2026-05-01', mode: 'UPI', status: 'paid' }] },
+  })
+  const before = await api(`/projects/${advProject.json.id}`, { token: aToken })
+  const advance = (before.json.payments ?? [])[0]
+  check('advance: the wizard records one advance on the project', before.status === 200 && advance?.amount === 50000 && advance?.invoice_id === null, { status: before.status, payments: before.json.payments })
+  const inv = await api('/billing/invoices', {
+    token: aToken,
+    method: 'POST',
+    body: {
+      client_id: advClient.json.id,
+      project_id: advProject.json.id,
+      place_of_supply: '27',
+      intra_state: true,
+      discount: 0,
+      discount_type: 'flat',
+      status: 'draft',
+      attach_payment_ids: [advance?.id],
+      lines: [{ description: 'Advance project — Package', quantity: 1, rate: 100000, gst_rate: 0 }],
+    },
+  })
+  const detail = await api(`/billing/invoices/${inv.json.id}`, { token: aToken })
+  check(
+    'advance: the invoice counts the advance as paid and reads the balance (never a draft)',
+    inv.status === 201 && detail.json.status === 'partial' && Number(detail.json.amount_paid) === 50000 && Number(detail.json.balance_due) === 50000,
+    { status: inv.status, inv: detail.json.status, paid: detail.json.amount_paid, due: detail.json.balance_due },
+  )
+  const after = await api(`/projects/${advProject.json.id}`, { token: aToken })
+  const received = (after.json.payments ?? []).filter((x) => x.status !== 'pending').reduce((n, x) => n + Number(x.amount), 0)
+  check('advance: the project received total does not move, and the payment now names its invoice', received === 50000 && (after.json.payments ?? [])[0]?.invoice_id === inv.json.id, { received, payments: after.json.payments })
+  // Another project's payment, or one already on an invoice, is never taken.
+  const inv2 = await api('/billing/invoices', {
+    token: aToken,
+    method: 'POST',
+    body: { client_id: ledgerClient.json.id, project_id: ledgerProject.json.id, place_of_supply: '27', intra_state: true, discount: 0, discount_type: 'flat', status: 'sent', attach_payment_ids: [advance?.id], lines: [{ description: 'x', quantity: 1, rate: 100, gst_rate: 0 }] },
+  })
+  const d2 = await api(`/billing/invoices/${inv2.json.id}`, { token: aToken })
+  check("advance: another project's payment is never attached", inv2.status === 201 && Number(d2.json.amount_paid) === 0, { status: inv2.status, paid: d2.json.amount_paid })
+}
+
 // The half that was broken: this money has to reach the project.
 const fin = await api('/financials/projects', { token: aToken })
 const projRow = (Array.isArray(fin.json) ? fin.json : []).find(

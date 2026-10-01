@@ -35,6 +35,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { useClients } from '@/features/clients/api'
 import { useProject } from '@/features/projects/api'
 import { useClientProjectOptions } from './client-projects'
+import { appliedTotal, chargeableDeliverables, projectInvoiceLines } from './project-lines'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import {
   BankAccountPicker,
@@ -251,11 +252,9 @@ export function InvoiceEditor({
     const keep = values.lines.filter((l) => l.description.trim() || toAmount(l.rate))
     if (kind === 'package') {
       if (p.package_cost <= 0) return setImportNote('This project has no package cost set yet.')
-      set('lines', [...keep, { ...base, description: `${p.name} — Package`, rate: String(p.package_cost) }])
+      set('lines', [...keep, { ...base, ...projectInvoiceLines({ ...p, deliverables: [] })[0]! }])
     } else if (kind === 'deliverables') {
-      const extra = p.deliverables.filter(
-        (d) => d.visibility_scope === 'client' && d.show_on_quotation && d.status !== 'cancelled' && d.is_additional_charge && d.additional_charge_amount > 0,
-      )
+      const extra = chargeableDeliverables(p)
       if (extra.length === 0) return setImportNote('This project has no billable deliverables.')
       set('lines', [...keep, ...extra.map((d) => ({ ...base, description: d.title, rate: String(d.additional_charge_amount) }))])
     } else {
@@ -714,6 +713,39 @@ export function InvoiceEditor({
           </div>
         </section>
 
+        {/* The project's advance, already in hand: ticked, it counts against
+            this invoice so the balance is right the moment it is made. */}
+        {!isEdit && values.applied.length > 0 && (
+          <section className="mt-6 rounded-xl border border-success/40 bg-success/[0.06] p-4 sm:p-5">
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <IndianRupee className="size-4 text-success" /> Already received for this project
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {values.applied.map((a) => (
+                <li key={a.id}>
+                  <label className="flex cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={a.on}
+                      onChange={(e) => set('applied', values.applied.map((x) => (x.id === a.id ? { ...x, on: e.target.checked } : x)))}
+                    />
+                    <span className="font-medium tabular-nums">{formatINR(a.amount)}</span>
+                    <span className="text-muted-foreground">
+                      {new Date(`${a.paid_on}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {a.mode ? ` · ${a.mode}` : ''}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm">
+              Invoice <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span> · {formatINR(appliedTotal(values.applied) + (values.payment.on ? toAmount(values.payment.amount) : 0))} received ·{' '}
+              <span className="font-semibold tabular-nums">{formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (values.payment.on ? toAmount(values.payment.amount) : 0)))}</span> to collect.
+            </p>
+          </section>
+        )}
+
         {/* Payment now */}
         {access.hasAction('billing', 'edit') && (
           <section className={cn('mt-6 rounded-xl border p-4 sm:p-5', values.payment.on ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-border')}>
@@ -728,7 +760,8 @@ export function InvoiceEditor({
               />
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <IndianRupee className="size-4 text-emerald-600" /> {isEdit ? 'Record an advance or token amount received' : 'I have received payment (full, advance or token amount)'}
+                  <IndianRupee className="size-4 text-emerald-600" />{' '}
+                  {isEdit ? 'Record an advance or token amount received' : values.applied.length > 0 ? 'I have received another payment, not recorded yet' : 'I have received payment (full, advance or token amount)'}
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' Once money is recorded, the lines are locked.' : ''}
@@ -776,7 +809,7 @@ export function InvoiceEditor({
             <Button type="submit" disabled={busy}>
               {busy
                 ? 'Saving…'
-                : values.payment.on
+                : values.payment.on || (!sentAlready && appliedTotal(values.applied) > 0)
                   ? 'Save and record payment'
                   : sentAlready
                     ? 'Save changes'
@@ -796,7 +829,11 @@ export function InvoiceEditor({
                 <p className="text-sm font-semibold">Total amount: {formatINR(totals.total)}</p>
                 <p className="text-xs text-muted-foreground">
                   {values.lines.filter((l) => l.description.trim()).length} item(s)
+                  {appliedTotal(values.applied) > 0 ? ` · ${formatINR(appliedTotal(values.applied))} already received` : ''}
                   {values.payment.on && toAmount(values.payment.amount) > 0 ? ` · ${formatINR(toAmount(values.payment.amount))} received now` : ''}
+                  {appliedTotal(values.applied) > 0 || (values.payment.on && toAmount(values.payment.amount) > 0)
+                    ? ` · ${formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (values.payment.on ? toAmount(values.payment.amount) : 0)))} to collect`
+                    : ''}
                 </p>
               </>
             )}

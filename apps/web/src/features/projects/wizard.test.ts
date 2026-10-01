@@ -33,6 +33,7 @@ import {
   quickDeliverables,
   rememberDeliverables,
   shootStartAt,
+  shootEndAt,
   nextStep,
   prevStep,
   recallDueDays,
@@ -85,9 +86,9 @@ describe('stepErrors', () => {
     expect(stepErrors(named({ deliverables: [newDeliverable()] })).deliverables).toBe(
       'Every deliverable needs a title.',
     )
-    expect(stepErrors(named({ payments: [newPayment()] })).billing).toBe(
-      'Every payment needs an amount.',
-    )
+    // A blank advance is no advance; a typed one that is not money is a problem.
+    expect(stepErrors(named({ payments: [newPayment()] })).billing).toBeUndefined()
+    expect(stepErrors(named({ payments: [{ ...newPayment(), amount: 'abc' }] })).billing).toBe('The advance needs an amount.')
   })
 
   it('will not let a chargeable deliverable ship without a price', () => {
@@ -102,7 +103,7 @@ describe('stepErrors', () => {
 
   it('refuses to record more money than the project is worth', () => {
     const over = named({ package_cost: '50000', payments: [{ ...newPayment(), amount: '60000' }] })
-    expect(stepErrors(over).billing).toBe('The payments add up to more than the project total.')
+    expect(stepErrors(over).billing).toBe('The advance is more than the project total.')
     // With no price set yet there is nothing to exceed — that is step 4's job.
     expect(stepErrors(named({ payments: [{ ...newPayment(), amount: '60000' }] })).billing).toBeUndefined()
   })
@@ -153,7 +154,7 @@ describe('draftTotals', () => {
         { ...newPayment(), amount: '20000', status: 'pending' as const },
       ],
     })
-    expect(stepErrors(over).billing).toBe('The payments add up to more than the project total.')
+    expect(stepErrors(over).billing).toBe('The advance is more than the project total.')
   })
 
   it('follows the domain rule: internal and unquoted extras never add to price', () => {
@@ -385,13 +386,16 @@ describe('the shoot card', () => {
   const shoot = (over: Partial<ShootDraft> = {}): ShootDraft => ({ ...newShoot(), ...over })
 
   it('names what a shoot is still missing', () => {
-    expect(shootIssues(shoot())).toEqual(['Title & date needed', 'Time needed', 'No requirements'])
-    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Title & date needed', 'Time needed', 'No requirements'])
+    expect(shootIssues(shoot())).toEqual(['Title & date needed', 'Start time needed', 'No requirements'])
+    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Title & date needed', 'Start time needed', 'No requirements'])
     expect(
       shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20' })),
-    ).toEqual(['Time needed', 'No requirements'])
+    ).toEqual(['Start time needed', 'No requirements'])
     expect(
       shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30' })),
+    ).toEqual(['Duration needed', 'No requirements'])
+    expect(
+      shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30', hours: '4' })),
     ).toEqual(['No requirements'])
     expect(
       shootIssues(
@@ -399,6 +403,7 @@ describe('the shoot card', () => {
           name: 'Haldi',
           shoot_date: '2026-11-20',
           start_time: '17:30',
+          hours: '4',
           requirements: [{ name: 'Photographer', quantity: '2' }],
         }),
       ),
@@ -407,7 +412,7 @@ describe('the shoot card', () => {
 
   // A row the studio started typing and left blank is not a requirement.
   it('does not count an empty requirement row', () => {
-    const s = shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30', requirements: [{ name: '  ', quantity: '1' }] })
+    const s = shoot({ name: 'Haldi', shoot_date: '2026-11-20', start_time: '17:30', hours: '3', requirements: [{ name: '  ', quantity: '1' }] })
     expect(shootIssues(s)).toEqual(['No requirements'])
   })
 
@@ -505,6 +510,14 @@ describe('shootStartAt', () => {
   it('sends nothing when either half is missing', () => {
     expect(shootStartAt({ ...newShoot(), shoot_date: '2026-11-22' })).toBeNull()
     expect(shootStartAt({ ...newShoot(), start_time: '09:30' })).toBeNull()
+  })
+
+  it('ends the function its hours after it starts', () => {
+    const s = { ...newShoot(), shoot_date: '2026-11-22', start_time: '09:30', hours: '5' }
+    expect(Date.parse(shootEndAt(s)!) - Date.parse(shootStartAt(s)!)).toBe(5 * 3_600_000)
+    expect(shootEndAt({ ...s, hours: '' })).toBeNull()
+    expect(shootEndAt({ ...s, hours: '2.5' })).toBe(new Date(Date.parse(shootStartAt(s)!) + 2.5 * 3_600_000).toISOString())
+    expect(shootEndAt({ ...s, start_time: '' })).toBeNull()
   })
 })
 
@@ -667,6 +680,7 @@ describe('guided flow', () => {
     name: 'Wedding Day',
     shoot_date: '2026-09-11',
     start_time: '15:12',
+    hours: '5',
     location: 'Jaipur',
     requirements: [
       { name: 'Candid Photographer', quantity: '2' },
@@ -714,9 +728,9 @@ describe('guided flow', () => {
 
   it('folds a shoot into one readable line', () => {
     expect(peopleCount(ready().requirements)).toBe(3)
-    expect(shootSummary(ready())).toMatch(/^Fri 11 Sept? · 3:12 PM · Jaipur · 3 people$/)
+    expect(shootSummary(ready())).toMatch(/^Fri 11 Sept? · 3:12 PM · 5 h · Jaipur · 3 people$/)
     // Postgres hands times back with seconds; the summary does not care.
-    expect(shootSummary(ready({ start_time: '09:00:00', location: '' }))).toMatch(/^Fri 11 Sept? · 9:00 AM · 3 people$/)
+    expect(shootSummary(ready({ start_time: '09:00:00', hours: '2.5', location: '' }))).toMatch(/^Fri 11 Sept? · 9:00 AM · 2.5 h · 3 people$/)
     expect(shootSummary(ready({ requirements: [{ name: 'Drone', quantity: '1' }] }))).toMatch(/1 person$/)
     expect(shootSummary(newShoot())).toBe('')
   })

@@ -45,6 +45,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { cn } from '@/shared/ui/cn'
 import { Input, Label, Select } from '@/shared/ui/input'
+import { DurationField } from '@/shared/ui/duration-field'
 import { formatINR } from '@/shared/ui/format'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Stepper } from '@/shared/ui/stepper'
@@ -113,6 +114,7 @@ import {
   rememberDueDays,
   removeShootAt,
   saveDraft,
+  shootHoursOf,
   shootIssues,
   stepErrors,
   stepIndex,
@@ -122,6 +124,7 @@ import {
   withDeliverables,
   withShoots,
   type DeliverableDraft,
+  type PaymentDraft,
   type ProjectDraft,
   type ShootDraft,
   type ShootRequirementDraft,
@@ -536,53 +539,6 @@ function useDismiss(root: RefObject<HTMLElement | null>, open: boolean, close: (
   }, [open, root])
 }
 
-/** A repeated block of rows — shoots, deliverables, payments all share it. */
-function RowList({
-  items,
-  empty,
-  addLabel,
-  onAdd,
-  addVariant = 'outline',
-  addFirst = false,
-  children,
-}: {
-  items: unknown[]
-  empty: string
-  addLabel: string
-  onAdd: () => void
-  addVariant?: 'outline' | 'default'
-  /** While the list is empty, lead with the button instead of the empty note. */
-  addFirst?: boolean
-  children: ReactNode
-}) {
-  const button = (
-    <div>
-      <Button variant={addVariant} onClick={onAdd}>
-        <Plus /> {addLabel}
-      </Button>
-    </div>
-  )
-  if (addFirst && items.length === 0) {
-    return (
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border p-4">
-        {button}
-        <span className="text-sm text-muted-foreground">{empty}</span>
-      </div>
-    )
-  }
-  return (
-    <div className="flex flex-col gap-3">
-      {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-          {empty}
-        </p>
-      ) : (
-        children
-      )}
-      {button}
-    </div>
-  )
-}
 
 type Patch = (p: Partial<ProjectDraft>) => void
 
@@ -1004,6 +960,7 @@ function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
         {
           ...newShoot(),
           name: preset.name,
+          hours: preset.payload.duration_hours ? String(preset.payload.duration_hours) : '',
           requirements: preset.payload.requirements.map((r) => ({
             name: r.name,
             quantity: String(r.quantity),
@@ -1415,6 +1372,7 @@ function ShootCard({
               .filter((r) => r.name.trim())
               .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
             internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
+            duration_hours: shootHoursOf(shoot) || null,
           }}
         />
         {open && (
@@ -1429,8 +1387,9 @@ function ShootCard({
 
       {open && (
         <div className="px-4 pb-4">
-          {/* Venue before Time: the card folds once the last required field
-              is set, so the optional one sits ahead of it. */}
+          {/* The optional fields (venue, map link) sit ahead of the required
+              ones: the card folds the moment the last required field --
+              the duration -- is set, so nothing optional may come after it. */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Shoot title" required>
               <Input
@@ -1456,7 +1415,19 @@ function ShootCard({
                 placeholder="e.g. Jaipur"
               />
             </Field>
-            <Field label="Time" icon={Clock}>
+            {/* Whatever the client sent — a Maps link, a short link, or the
+                venue's name from WhatsApp. It is stored as given. */}
+            <Field label="Map link" icon={MapPin}>
+              <Input
+                value={shoot.map_link}
+                onChange={(e) => onChange({ map_link: e.target.value })}
+                placeholder="Paste the map link"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Start time" icon={Clock}>
               <Input
                 type="time"
                 value={shoot.start_time}
@@ -1464,17 +1435,14 @@ function ShootCard({
                 aria-invalid={!shoot.start_time}
               />
             </Field>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="lg:col-span-3">
-              {/* Whatever the client sent — a Maps link, a short link, or the
-                  venue's name from WhatsApp. It is stored as given. */}
-              <Field label="Map link" icon={MapPin}>
-                <Input
-                  value={shoot.map_link}
-                  onChange={(e) => onChange({ map_link: e.target.value })}
-                  placeholder="Paste the map link"
+            <div className="sm:col-span-2">
+              {/* The owner: "Duration (अवधि) — 1 hour to 12 hours, and a custom
+                  one", so the day's crew hours can be planned from it. */}
+              <Field label="Duration (अवधि)" icon={Clock}>
+                <DurationField
+                  value={shootHoursOf(shoot) || null}
+                  onChange={(h) => onChange({ hours: h == null ? '' : String(h) })}
+                  aria-invalid={!shootHoursOf(shoot)}
                 />
               </Field>
             </div>
@@ -2176,8 +2144,7 @@ function BillingStep({
   patch: Patch
   totals: ReturnType<typeof draftTotals>
 }) {
-  const set = (i: number, p: Partial<ProjectDraft['payments'][number]>) =>
-    patch({ payments: draft.payments.map((x, idx) => (idx === i ? { ...x, ...p } : x)) })
+  const patchPayment = (p: PaymentDraft) => patch({ payments: [p] })
 
   return (
     <div className="flex flex-col gap-4">
@@ -2207,76 +2174,63 @@ function BillingStep({
         <p className="mb-3 text-xs text-muted-foreground">
           Has the client already paid something? Add it here so the balance is right from day one.
         </p>
-        <RowList
-          items={draft.payments}
-          empty="Nothing received yet."
-          addLabel="Add advance payment from client"
-          addVariant="default"
-          addFirst
-          onAdd={() => patch({ payments: [...draft.payments, newPayment()] })}
-        >
-          {draft.payments.map((p, i) => (
-            <div key={i} className="rounded-lg border border-border p-4">
+        {/* One advance per project -- the owner: "advance payment collection
+            happens only once" -- so one card, no add button, no delete. */}
+        {(() => {
+          const p = draft.payments[0] ?? newPayment()
+          const set = (patch: Partial<PaymentDraft>) => patchPayment({ ...p, ...patch })
+          const filled = money(p.amount) > 0
+          return (
+            <div className={cn('rounded-lg border p-4 transition-colors', filled ? 'border-success/40 bg-success/[0.04]' : 'border-border')}>
               <div className="mb-3 flex items-center gap-2">
-                <Wallet className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Payment {i + 1}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto"
-                  onClick={() => patch({ payments: draft.payments.filter((_, idx) => idx !== i) })}
-                >
-                  <Trash2 />
-                  <span className="sr-only">Remove payment {i + 1}</span>
-                </Button>
+                <Wallet className={cn('size-4', filled ? 'text-success' : 'text-muted-foreground')} />
+                <span className="text-sm font-medium">Advance received</span>
+                <span className="text-xs text-muted-foreground">(optional)</span>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field label="Amount (₹)" required>
+                <Field label="Amount (₹)">
                   <Input
                     inputMode="numeric"
                     value={p.amount}
-                    onChange={(e) => set(i, { amount: e.target.value })}
+                    onChange={(e) => set({ amount: e.target.value })}
                     placeholder="50000"
+                    className={cn(!filled && 'border-warning/60 bg-warning/10')}
                   />
                 </Field>
                 <Field label="Received on">
-                  <Input type="date" value={p.paid_on} onChange={(e) => set(i, { paid_on: e.target.value })} />
+                  <Input type="date" value={p.paid_on} onChange={(e) => set({ paid_on: e.target.value })} />
                 </Field>
-                <PaymentModePicker value={p.mode} onChange={(v) => set(i, { mode: v })} />
+                <PaymentModePicker value={p.mode} onChange={(v) => set({ mode: v })} />
                 <Field label="Reference">
-                  <Input
-                    value={p.reference}
-                    onChange={(e) => set(i, { reference: e.target.value })}
-                    placeholder="UTR / cheque no."
-                  />
+                  <Input value={p.reference} onChange={(e) => set({ reference: e.target.value })} placeholder="UTR / cheque no." />
                 </Field>
                 <Field label="Status">
-                  <Select value={p.status} onChange={(e) => set(i, { status: e.target.value as 'paid' | 'pending' })}>
+                  <Select value={p.status} onChange={(e) => set({ status: e.target.value as 'paid' | 'pending' })}>
                     <option value="paid">Paid</option>
                     <option value="pending">Pending</option>
                   </Select>
                 </Field>
                 <Field label="Description">
-                  <Input value={p.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="Advance / instalment…" />
+                  <Input value={p.description} onChange={(e) => set({ description: e.target.value })} placeholder="Advance / booking amount" />
                 </Field>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={p.is_gst} onChange={(e) => set(i, { is_gst: e.target.checked })} />
+                  <input type="checkbox" checked={p.is_gst} onChange={(e) => set({ is_gst: e.target.checked })} />
                   GST receipt
                 </label>
                 {p.is_gst && (
                   <Field label="GST number">
-                    <Input value={p.gst_number} onChange={(e) => set(i, { gst_number: e.target.value })} placeholder="GSTIN" />
+                    <Input value={p.gst_number} onChange={(e) => set({ gst_number: e.target.value })} placeholder="GSTIN" />
                   </Field>
                 )}
               </div>
               <div className="mt-3">
                 <Field label="Notes">
-                  <Input value={p.notes} onChange={(e) => set(i, { notes: e.target.value })} placeholder="Optional note" />
+                  <Input value={p.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Optional note" />
                 </Field>
               </div>
             </div>
-          ))}
-        </RowList>
+          )
+        })()}
       </div>
     </div>
   )
@@ -2347,7 +2301,7 @@ function ReviewStep({
           onEdit={() => onJump('billing')}
         />
         <ReviewTile
-          label="Payments"
+          label="Advance"
           value={`Received ${formatINR(totals.received)}${totals.promised ? ` · Promised ${formatINR(totals.promised)}` : ''} · Still to collect ${formatINR(totals.balance)}`}
           problem={errors.billing}
           onEdit={() => onJump('billing')}

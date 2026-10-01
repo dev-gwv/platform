@@ -17,7 +17,7 @@ import {
 import { presetFor } from '@/shared/theme/presets'
 import { fontOr } from '@/shared/theme/fonts'
 import { useChangePassword } from '@/features/settings/api'
-import { callApi, uploadFile } from '@/shared/api/client'
+import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -28,6 +28,7 @@ import { ErrorState } from '@/shared/ui/states'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
+import { PhotoUpload } from '@/shared/ui/photo-upload'
 
 import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -273,14 +274,28 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
                 placeholder="9876543210"
               />
             </Field>
-            <Field label="Photo URL" hint="Shown wherever your name appears — a link, not an upload.">
-              <Input
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://…"
-              />
-            </Field>
           </div>
+          {/* Uploaded, not linked, and saved the moment it lands (the owner:
+              "the profile picture should be uploaded, under 1 MB"). */}
+          <Field label="Your photo" hint="Shown wherever your name appears.">
+            <PhotoUpload
+              src={avatarUrl || null}
+              name={name}
+              onUploaded={async (url) => {
+                setAvatarUrl(url)
+                await saveProfile.mutateAsync({ avatar_url: url })
+                await qc.invalidateQueries({ queryKey: ['settings'] })
+                await refresh()
+                toast.success('Photo saved')
+              }}
+              onRemove={async () => {
+                setAvatarUrl('')
+                await saveProfile.mutateAsync({ avatar_url: null })
+                await qc.invalidateQueries({ queryKey: ['settings'] })
+                await refresh()
+              }}
+            />
+          </Field>
 
           <div className="flex items-center justify-end gap-2">
             {saved && (
@@ -421,7 +436,6 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
   })
 
   const [form, setForm] = useState<UpdateCompanyRequest>({})
-  const [uploadingLogo, setUploadingLogo] = useState(false)
   useEffect(() => {
     if (!data) return
     setForm(brandForm(data))
@@ -489,14 +503,29 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
               placeholder="ipcstudios.in"
             />
           </Field>
-          <Field label="Logo URL" hint="Shown on invoices and quotes.">
-            <Input
-              value={form.avatar_url ?? ''}
-              onChange={(e) => set({ avatar_url: e.target.value })}
-              disabled={readOnly}
-              placeholder="https://…/logo.png"
-            />
-          </Field>
+          <div className="sm:col-span-2">
+            {/* Uploaded, not linked, and saved the moment it lands: a client
+                opening an emailed quotation has no session, so it is public. */}
+            <Field label="Studio logo" hint="On quotations, invoices and every document the client sees.">
+              <PhotoUpload
+                shape="square"
+                src={form.avatar_url || data?.avatar_url || null}
+                disabled={readOnly}
+                onUploaded={(url) => {
+                  set({ avatar_url: url })
+                  save.mutate({ avatar_url: url })
+                }}
+                onRemove={
+                  readOnly
+                    ? undefined
+                    : () => {
+                        set({ avatar_url: '' })
+                        save.mutate({ avatar_url: '' })
+                      }
+                }
+              />
+            </Field>
+          </div>
           <Field label="Invoice logo URL" hint="Separate logo for invoices — falls back to the logo above.">
             <Input
               value={(form as unknown as Record<string, unknown>)['invoice_logo_url'] as string ?? ''}
@@ -505,45 +534,6 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
               placeholder="https://…/invoice-logo.png"
             />
           </Field>
-          {!readOnly && (
-            <div className="sm:col-span-2">
-              <Field
-                label="Upload logo"
-                hint="PNG, JPG, WEBP or SVG. Max 5 MB. Stored on the server and filled into the Logo URL above."
-              >
-                <Input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  disabled={uploadingLogo}
-                  onChange={(e) => {
-                    const input = e.currentTarget
-                    const f = input.files?.[0]
-                    if (!f) return
-                    if (f.size > 5 * 1024 * 1024) {
-                      toast.error('That file is larger than 5 MB.')
-                      input.value = ''
-                      return
-                    }
-                    setUploadingLogo(true)
-                    // Public: a client opening an emailed quotation has no session,
-                    // so the logo has to load without one.
-                    uploadFile(f, { isPublic: true })
-                      .then((stored) => {
-                        set({ avatar_url: stored.url })
-                        toast.success('Logo uploaded — remember to save.')
-                      })
-                      .catch((err: unknown) =>
-                        toast.error(err instanceof Error ? err.message : 'We could not upload that file.'),
-                      )
-                      .finally(() => {
-                        setUploadingLogo(false)
-                        input.value = ''
-                      })
-                  }}
-                />
-              </Field>
-            </div>
-          )}
           <Field label="City">
             <Input
               value={form.city ?? ''}

@@ -69,7 +69,7 @@ function nextFor(key: JourneyKey, i: JourneyInput): JourneyNext {
     case 'quotation':
       return { key, action: 'Send the quotation', hint: 'Check the prices and share the link with the client.' }
     case 'invoice':
-      return { key, action: 'Create the invoice', hint: 'Bill the booking amount from the payment plan.' }
+      return { key, action: 'Create the invoice', hint: 'Bill the whole project; the advance already received is applied.' }
     case 'team':
       if (i.shoots === 0) return { key, action: 'Add a shoot', hint: 'Add the days you will shoot, then book the team.' }
       if (i.seatsNeeded === 0) return { key, action: 'Book the team', hint: 'Say who each day needs, then pick the people.' }

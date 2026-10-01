@@ -2,6 +2,8 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { computeInvoice, type GstSlab } from '@ipc/domain'
+import { formatINR } from '@/shared/ui/format'
 import { useCreateInvoice } from './api'
 import { emptyInvoiceForm, type InvoiceFormValues } from './InvoiceForm'
 import { InvoiceEditor } from './InvoiceEditor'
@@ -65,7 +67,19 @@ export function NewInvoiceDialog({
         onSubmit={async (req) => {
           const made = await create.mutateAsync(req)
           if (next?.auto) {
-            toast.success(`${made.invoice_number} saved. Now book the team for the shoots.`)
+            // "₹50,000 received, ₹50,000 to collect": the advance applied plus
+            // anything recorded now, against the invoice's own total.
+            const applied = (initial?.applied ?? []).filter((a) => req.attach_payment_ids?.includes(a.id)).reduce((n, a) => n + a.amount, 0)
+            const received = applied + (req.payment?.amount ?? 0)
+            const total = computeInvoice(
+              req.lines.map((l) => ({ ...l, gst_rate: l.gst_rate as GstSlab })),
+              { intraState: req.intra_state, discount: req.discount, discountType: req.discount_type === 'none' ? 'flat' : req.discount_type },
+            ).total
+            toast.success(
+              received > 0
+                ? `${made.invoice_number} saved. ${formatINR(received)} received, ${formatINR(Math.max(0, total - received))} to collect. Now book the team.`
+                : `${made.invoice_number} saved. Now book the team for the shoots.`,
+            )
             onClose()
             next.onClick()
             return

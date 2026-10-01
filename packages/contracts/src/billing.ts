@@ -81,12 +81,18 @@ export const createInvoiceRequest = z.object({
       reference: z.string().max(120).optional(),
     })
     .optional(),
+  /**
+   * Payments the project already received (the advance from the wizard), to
+   * count against this invoice rather than be recorded a second time. Only
+   * the project's own paid, unlinked payments are taken; the rest are ignored.
+   */
+  attach_payment_ids: z.array(uuid).max(50).optional(),
   lines: z.array(invoiceLineInput).min(1),
 })
 export type CreateInvoiceRequest = z.infer<typeof createInvoiceRequest>
 
 /** Same shape as creation minus the number override, which only ever applies once, at creation. */
-export const updateInvoiceRequest = createInvoiceRequest.omit({ invoice_number: true, payment: true })
+export const updateInvoiceRequest = createInvoiceRequest.omit({ invoice_number: true, payment: true, attach_payment_ids: true })
 export type UpdateInvoiceRequest = z.infer<typeof updateInvoiceRequest>
 
 export const recordPaymentRequest = z.object({

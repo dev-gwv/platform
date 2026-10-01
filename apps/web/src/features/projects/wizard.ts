@@ -50,6 +50,12 @@ export interface ShootDraft {
   shoot_date: string
   /** "HH:MM" as the browser time input gives it; blank when the day is loose. */
   start_time: string
+  /**
+   * How long the function runs, in hours, as text ("5", "2.5"); blank until
+   * picked. The owner wants every day to say how long it is, so the crew's
+   * hours can be planned from it; `end_at` is start + this.
+   */
+  hours: string
   /** City / Venue as it should print — the map link is a separate field. */
   location: string
   map_link: string
@@ -132,6 +138,7 @@ export const newShoot = (): ShootDraft => ({
   name: '',
   shoot_date: '',
   start_time: '',
+  hours: '',
   location: '',
   map_link: '',
   status: 'planned',
@@ -357,9 +364,10 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
   }
 
   const totals = draftTotals(draft)
-  if (draft.payments.some((p) => money(p.amount) <= 0)) errors.billing = 'Every payment needs an amount.'
+  // A blank advance is simply no advance (it is never sent); a typed one must be money.
+  if (draft.payments.some((p) => p.amount.trim() !== '' && money(p.amount) <= 0)) errors.billing = 'The advance needs an amount.'
   else if (totals.received + totals.promised > totals.total && totals.total > 0) {
-    errors.billing = 'The payments add up to more than the project total.'
+    errors.billing = 'The advance is more than the project total.'
   }
 
   return errors
@@ -475,6 +483,7 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
     .filter(({ s }) => s.name.trim())
     .map(({ s, draftIndex }) => {
       const startAt = shootStartAt(s)
+      const endAt = shootEndAt(s)
       return {
         draftIndex,
         project_id: projectId,
@@ -482,6 +491,7 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
         status: s.status,
         ...(s.shoot_date ? { shoot_date: s.shoot_date } : {}),
         ...(startAt ? { start_at: startAt } : {}),
+        ...(endAt ? { end_at: endAt } : {}),
         ...(s.location.trim() ? { location: s.location.trim() } : {}),
         ...(s.map_link.trim() ? { map_link: s.map_link.trim() } : {}),
         requirements: s.requirements
@@ -501,9 +511,12 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
 export function shootIssues(shoot: ShootDraft): string[] {
   const issues: string[] = []
   if (!shoot.name.trim() || !shoot.shoot_date) issues.push('Title & date needed')
-  // The crew needs a call time as much as a date; a shoot without one is not
-  // ready to book people onto, even if nothing stops the project saving.
-  if (!shoot.start_time) issues.push('Time needed')
+  // The crew needs a call time and a length as much as a date; a shoot
+  // without them is not ready to book people onto (the assign dialog would
+  // have to guess how long the day is), even if nothing stops the project
+  // saving.
+  if (!shoot.start_time) issues.push('Start time needed')
+  else if (!(shootHoursOf(shoot) > 0)) issues.push('Duration needed')
   if (shoot.requirements.filter((r) => r.name.trim()).length === 0) issues.push('No requirements')
   return issues
 }
@@ -541,14 +554,16 @@ function shortDate(iso: string): string {
 }
 
 /**
- * A folded shoot card in one line: "Fri 11 Sept · 3:12 PM · Jaipur · 4 people".
+ * A folded shoot card in one line: "Fri 11 Sept · 3:12 PM · 5 h · Jaipur · 4 people".
  * Whatever is not filled in yet is simply left out.
  */
 export function shootSummary(shoot: ShootDraft): string {
   const people = peopleCount(shoot.requirements)
+  const hours = shootHoursOf(shoot)
   return [
     shoot.shoot_date ? shortDate(shoot.shoot_date) : '',
     niceTime(shoot.start_time),
+    hours ? `${Number.isInteger(hours) ? hours : hours.toFixed(1)} h` : '',
     shoot.location.trim(),
     people ? `${people} ${people === 1 ? 'person' : 'people'}` : '',
   ]
@@ -711,6 +726,20 @@ export function shootStartAt(shoot: ShootDraft): string | null {
   if (!shoot.shoot_date || !shoot.start_time) return null
   const at = new Date(`${shoot.shoot_date}T${shoot.start_time}`)
   return Number.isNaN(at.getTime()) ? null : at.toISOString()
+}
+
+/** The hours typed, as a number; 0 when blank or nonsense. */
+export const shootHoursOf = (shoot: Pick<ShootDraft, 'hours'>): number => {
+  const n = Number(shoot.hours)
+  return Number.isFinite(n) && n > 0 && n <= 24 ? n : 0
+}
+
+/** When the function ends: its start plus its hours. Null without either. */
+export function shootEndAt(shoot: ShootDraft): string | null {
+  const start = shootStartAt(shoot)
+  const hours = shootHoursOf(shoot)
+  if (!start || !hours) return null
+  return new Date(Date.parse(start) + hours * 3_600_000).toISOString()
 }
 
 /**
@@ -995,7 +1024,8 @@ export function loadDraft(): StoredDraft | null {
         ...draft,
         shoots: draft.shoots.map((s) => ({ ...newShoot(), ...s })),
         deliverables: draft.deliverables.map((d) => ({ ...newDeliverable(), ...d })),
-        payments: (draft.payments ?? []).map((p) => ({ ...newPayment(), ...p })),
+        // One advance per project now: an older draft with several keeps its first.
+        payments: (draft.payments ?? []).slice(0, 1).map((p) => ({ ...newPayment(), ...p })),
       },
       savedAt: parsed.savedAt,
     }

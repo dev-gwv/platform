@@ -10,7 +10,7 @@ export const companyProfile = z.object({
   country: z.string().nullable(),
   website: z.string().nullable(),
   invoice_gst_number: z.string().nullable(),
-  /** Shown on the invoice/quote header; a plain URL, not an upload. */
+  /** Shown on the invoice/quote header: the uploaded logo's public URL (under 1 MB), or a link. */
   avatar_url: z.string().nullable(),
   invoice_number_prefix: z.string(),
   invoice_next_number: z.number().int(),

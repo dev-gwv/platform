@@ -183,15 +183,21 @@ export const publicFilesRouter = new Hono<AppEnv>().get('/files/:id', async (c) 
   return serve(rows[0]!, true)
 })
 
-export function serve(row: { name: string; mime: string; bytes: Buffer }, immutable = false): Response {
+/**
+ * `sessionless` is the file a client or a browser <img> opens with no token:
+ * cached for a year (ids are random and content never changes under one) and
+ * allowed across origins, because the app's own pages live on another origin
+ * than the API and the baseline resource policy would otherwise hide the
+ * studio's logo on every quotation.
+ */
+export function serve(row: { name: string; mime: string; bytes: Buffer }, sessionless = false): Response {
   const body = row.bytes instanceof Uint8Array ? row.bytes : Buffer.from(row.bytes)
   return new Response(new Uint8Array(body), {
     headers: {
       'Content-Type': row.mime,
       'Content-Length': String(body.length),
-      // Ids are random and content never changes under one, so a long cache is
-      // safe and keeps a logo off the database on every document view.
-      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'private, max-age=300',
+      'Cache-Control': sessionless ? 'public, max-age=31536000, immutable' : 'private, max-age=300',
+      'Cross-Origin-Resource-Policy': sessionless ? 'cross-origin' : 'same-origin',
       'Content-Disposition': `inline; filename="${row.name.replace(/"/g, '')}"`,
       // An uploaded SVG is script-capable; served from the API origin it must
       // not be able to run anything.

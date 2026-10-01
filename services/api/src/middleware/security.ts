@@ -14,13 +14,25 @@ const HEADERS: ReadonlyArray<[string, string]> = [
 ]
 
 /**
+ * Headers a handler may loosen on purpose. The app and the API are two
+ * origins (app. and api.studioautopilot.in), so a public file the app shows
+ * in an <img> -- the studio's logo on a quotation -- is blocked by the
+ * baseline `same-origin` resource policy; `serve()` in files/router.ts sets
+ * `cross-origin` on those, and that must survive this middleware.
+ */
+const HANDLER_MAY_SET = new Set(['Cross-Origin-Resource-Policy'])
+
+/**
  * Baseline security response headers on every response — including ones a
  * handler builds itself as a raw Response, which `c.header()` before `next()`
  * would not reach. Set after the handler so nothing can drop them.
  */
 export async function securityHeaders(c: Context<AppEnv>, next: Next) {
   await next()
-  for (const [name, value] of HEADERS) c.res.headers.set(name, value)
+  for (const [name, value] of HEADERS) {
+    if (HANDLER_MAY_SET.has(name) && c.res.headers.has(name)) continue
+    c.res.headers.set(name, value)
+  }
 }
 
 /**
