@@ -20,7 +20,7 @@ import { TrialChip } from '@/features/billing/TrialChip'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
-import { SetupGuideBar } from '@/features/onboarding/setup-flow'
+import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HubTabs } from './HubTabs'
@@ -82,6 +82,7 @@ function Brand({ compact }: { compact?: boolean }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const { session, signOut } = useAuth()
+  useResumeSetup()
   const access = useAccess()
   const { scheme, toggleScheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)

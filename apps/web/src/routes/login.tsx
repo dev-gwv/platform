@@ -167,10 +167,12 @@ export function LoginPage() {
   /**
    * Where to go after signing in: an explicit ?redirect= first; else, while
    * the studio is still being set up, its current setup step; else the
-   * dashboard.
+   * dashboard. A brand-new account never follows ?redirect=: it is left over
+   * from whoever signed out on this screen (signing out on Leads leaves
+   * ?redirect=/leads), and a new studio starts at step 1 of setup.
    */
-  function goNext(s: SessionState | null = null) {
-    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+  function goNext(s: SessionState | null = null, fresh = false) {
+    if (!fresh && redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
       window.location.assign(redirect)
       return
     }
@@ -215,7 +217,7 @@ export function LoginPage() {
         // Straight in: the confirmation email is asked for inside the app.
         if (made.session) {
           rememberSession(made.session)
-          goNext(await refresh())
+          goNext(await refresh(), true)
           return
         }
         setPendingEmail(email) // an older API: show the "check your inbox" screen
