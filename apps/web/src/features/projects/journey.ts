@@ -11,7 +11,7 @@
 export type JourneyKey = 'quotation' | 'invoice' | 'team' | 'deliver'
 
 export interface JourneyInput {
-  /** A quotation link was made, or the client accepted one. */
+  /** A quotation link was made, or the client accepted one. An invoice also counts. */
   quotationSent: boolean
   /** Null when this person cannot see billing: the step is left out, not shown as undone. */
   invoiced: boolean | null
@@ -48,7 +48,9 @@ export function journey(input: JourneyInput): { steps: JourneyStep[]; next: Jour
   const teamDone = input.shoots > 0 && input.seatsNeeded > 0 && input.seatsFilled >= input.seatsNeeded
   const deliverDone = input.deliverables > 0 && input.delivered >= input.deliverables
   const done: Record<JourneyKey, boolean> = {
-    quotation: input.quotationSent,
+    // "Quotation is good, next": billing it is the studio saying yes to it,
+    // so an invoice ticks the quotation whether or not a link went out.
+    quotation: input.quotationSent || input.invoiced === true,
     invoice: input.invoiced === true,
     team: teamDone,
     deliver: deliverDone,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, CheckCircle2, Plus } from 'lucide-react'
 import { companySetupResult } from '@ipc/contracts'
@@ -206,30 +206,3 @@ export function AddMorePrompt({
   )
 }
 
-/**
- * The end of setup, shown on the project wizard's "created" dialog when the
- * project was the last setup step. Closes setup on first show.
- */
-export function SetupFinished() {
-  const closeSetup = useCloseSetup()
-  const once = useRef(false)
-  useEffect(() => {
-    if (once.current) return
-    once.current = true
-    void closeSetup('done')
-  }, [closeSetup])
-  return (
-    <div className="flex flex-col items-center gap-3 py-2 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-success/15 text-success">
-        <CheckCircle2 className="size-6" aria-hidden />
-      </span>
-      <p className="text-lg font-semibold">Your studio is set up.</p>
-      <p className="text-sm text-muted-foreground">Everything you do from here is tracked for you.</p>
-      <Button asChild className="w-full">
-        <Link to="/dashboard">
-          Go to dashboard <ArrowRight />
-        </Link>
-      </Button>
-    </div>
-  )
-}

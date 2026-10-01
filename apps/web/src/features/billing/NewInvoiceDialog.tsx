@@ -46,8 +46,12 @@ export function NewInvoiceDialog({
   onClose: () => void
   /** Go to the new invoice once it is made. */
   openAfter?: boolean
-  /** The step after the invoice, offered on the "saved" message (e.g. "Book the team"). */
-  next?: { label: string; onClick: () => void } | undefined
+  /**
+   * The step after the invoice (e.g. "Book the team"): offered on the "saved"
+   * message, or -- with `auto`, when the project's journey opened this --
+   * taken at once, so saving the invoice lands on the shoots.
+   */
+  next?: { label: string; onClick: () => void; auto?: boolean } | undefined
 }) {
   const create = useCreateInvoice()
   const navigate = useNavigate()
@@ -60,6 +64,12 @@ export function NewInvoiceDialog({
         onCancel={onClose}
         onSubmit={async (req) => {
           const made = await create.mutateAsync(req)
+          if (next?.auto) {
+            toast.success(`${made.invoice_number} saved. Now book the team for the shoots.`)
+            onClose()
+            next.onClick()
+            return
+          }
           toast.success(
             req.status === 'draft'
               ? `${made.invoice_number} saved as a draft. Send it when you are ready.`

@@ -258,10 +258,13 @@ export function BillingTab({
   // part of the plan is next), already filled in -- client, project, subject,
   // one line at the right amount. The studio checks it and presses Save.
   const plan = billing.data?.plan ?? null
+  // Opened by the journey: saving it goes straight on to booking the team.
+  const [fromJourney, setFromJourney] = useState(false)
   useEffect(() => {
     if (!invoiceNext || billing.isLoading) return
     onInvoiceNextDone?.()
     if (!canBill || !canInvoice) return
+    setFromJourney(true)
     const next = nextInvoiceFromPlan({
       projectName: project.name,
       total: plan?.total_cost ?? project.total_cost,
@@ -370,8 +373,11 @@ export function BillingTab({
         <NewInvoiceDialog
           initial={invoicing}
           openAfter={false}
-          onClose={() => setInvoicing(null)}
-          next={onBookTeam ? { label: 'Book the team', onClick: onBookTeam } : undefined}
+          onClose={() => {
+            setInvoicing(null)
+            setFromJourney(false)
+          }}
+          next={onBookTeam ? { label: 'Book the team', onClick: onBookTeam, auto: fromJourney } : undefined}
         />
       )}
     </div>

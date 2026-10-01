@@ -23,11 +23,18 @@ describe('the project journey', () => {
     })
   })
 
-  it('names the first thing missing, in order, even when a later step is done', () => {
-    // An invoice raised before any quotation link: the quotation is still next.
+  it('counts the quotation done once it is invoiced, link or no link', () => {
+    // "Quotation is good, next step": the invoice is the studio accepting it.
     const j = journey({ ...fresh, invoiced: true })
+    expect(j.next?.key).toBe('team')
+    expect(j.steps.map((s) => s.done)).toEqual([true, true, false, false])
+  })
+
+  it('names the first thing missing, in order, even when a later step is done', () => {
+    // People booked before anything was quoted or billed: the quotation is still next.
+    const j = journey({ ...fresh, seatsFilled: 8 })
     expect(j.next?.key).toBe('quotation')
-    expect(j.steps.map((s) => s.done)).toEqual([false, true, false, false])
+    expect(j.steps.map((s) => s.done)).toEqual([false, false, true, false])
   })
 
   it('asks for a shoot, or for the roles, before asking to book people', () => {

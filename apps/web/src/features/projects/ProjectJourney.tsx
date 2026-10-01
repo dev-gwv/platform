@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight, Check, Send } from 'lucide-react'
 import { shootListItem, type ProjectDetail } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -23,12 +23,21 @@ export function ProjectJourney({
   project,
   onGo,
   onSkipToTeam,
+  here,
+  onSend,
   className,
 }: {
   project: ProjectDetail
   onGo: (key: JourneyKey) => void
   /** Offered while the invoice is next: some studios book the team first. */
   onSkipToTeam?: (() => void) | undefined
+  /**
+   * The page this bar sits on. On the quotation page, while the quotation is
+   * the next step, the bar asks "happy with it?" and moves straight on to the
+   * invoice -- sending the link is on offer, not in the way.
+   */
+  here?: JourneyKey | undefined
+  onSend?: (() => void) | undefined
   className?: string
 }) {
   const access = useAccess()
@@ -64,6 +73,9 @@ export function ProjectJourney({
     delivered: work.filter((d) => d.status === 'completed').length,
   })
   if (!next) return null
+  const onThisPage = here !== undefined && next.key === here
+  // On the quotation, "next" is the invoice: the step after the one in view.
+  const after = onThisPage && here === 'quotation' ? steps.find((s) => s.key === 'invoice') : undefined
 
   return (
     <div
@@ -89,7 +101,28 @@ export function ProjectJourney({
           </li>
         ))}
       </ol>
-      <p className="min-w-0 flex-1 text-xs text-muted-foreground">{next.hint}</p>
+      <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+        {onThisPage ? 'Happy with the quotation? Create the invoice next.' : next.hint}
+      </p>
+      {onThisPage ? (
+        <div className="flex items-center gap-2">
+          {onSend && (
+            <Button size="sm" variant="outline" onClick={onSend}>
+              <Send /> Send to client
+            </Button>
+          )}
+          {after ? (
+            <Button size="sm" className="ipc-nudge" onClick={() => onGo('invoice')}>
+              Create the invoice <ArrowRight />
+            </Button>
+          ) : (
+            // No billing for this person: the team is the step after.
+            <Button size="sm" className="ipc-nudge" onClick={() => onGo('team')}>
+              Book the team <ArrowRight />
+            </Button>
+          )}
+        </div>
+      ) : (
       <div className="flex items-center gap-2">
         {next.key === 'invoice' && onSkipToTeam && (
           <button type="button" onClick={onSkipToTeam} className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline">
@@ -100,6 +133,7 @@ export function ProjectJourney({
           {next.action} <ArrowRight />
         </Button>
       </div>
+      )}
     </div>
   )
 }
