@@ -1,0 +1,7 @@
+-- 0226: step 2 of the owner's next phase.
+--   * platform_assign_plan(): give a studio a plan from the catalogue
+--     (companies.plan + plan_expiry from plans.duration_days, a subscription
+--     row and a billing event). The old "assign" set a column that does not
+--     exist and swallowed the error.
+--   * expense_tax_rates: a studio's own tax names and rates for expenses.
+--   * Razorpay recovery: payments Razorpay captured that never credited a plan.
