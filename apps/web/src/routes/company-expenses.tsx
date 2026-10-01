@@ -27,6 +27,7 @@ import { useActiveLookups } from '@/features/settings/api'
 import { MoneyTile } from '@/features/billing/MoneyTile'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
 import { CategoryManager } from '@/features/expenses/CategoryManager'
+import { cleanItems, itemsFrom } from '@/features/expenses/items'
 import { ReceiptsPanel } from '@/features/expenses/ReceiptsPanel'
 import { shortDate } from '@/features/billing/status'
 
@@ -431,6 +432,20 @@ function Expenses() {
                 <Row k="GST" v={`${humanize(detail.gst_treatment)}${detail.gst_rate ? ` · ${detail.gst_rate}%` : ''}${detail.tax_amount ? ` · ${formatINR(detail.tax_amount)} tax` : ''}${detail.reverse_charge ? ' · reverse charge' : ''}`} />
                 {detail.invoice_number && <Row k="Vendor invoice" v={detail.invoice_number} />}
               </dl>
+              {(() => {
+                const lines = cleanItems(itemsFrom(detail.itemize_json))
+                return lines.length > 0 ? (
+                  <ul className="flex flex-col divide-y divide-border rounded-md border border-border text-sm">
+                    {lines.map((l, i) => (
+                      <li key={i} className="flex items-center gap-2 px-3 py-1.5">
+                        <span className="min-w-0 flex-1 truncate">{l.title || 'Item'}</span>
+                        {l.qty != null && <span className="text-xs text-muted-foreground">× {l.qty}</span>}
+                        <span className="tabular-nums">{formatINR(l.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null
+              })()}
               <ReceiptsPanel expenseId={detail.id} canEdit={canEdit} />
               <div className="flex justify-end gap-2">
                 {canEdit && detail.paid_by_user_id && detail.reimbursement_status === 'pending' && (

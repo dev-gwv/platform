@@ -89,6 +89,7 @@ import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
 import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
 import { LookupsPage } from '@/routes/settings/lookups'
+import { VendorsPage } from '@/routes/settings/vendors'
 import { ReferralsPage } from '@/routes/referrals'
 import { ProjectTemplatesPage } from '@/routes/project-templates'
 import { TeamPayoutsPage } from '@/routes/team-payouts'
@@ -302,6 +303,7 @@ const routeTree = rootRoute.addChildren([
   route('/settings/task-bundles', TaskBundlesPage),
   route('/settings/attendance-location', AttendanceLocationPage),
   route('/settings/lookups', LookupsPage),
+  route('/settings/vendors', VendorsPage),
   route('/settings/advanced', AdvancedSettingsPage),
   route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),
   // Old-app addresses with no page of their own now (see ./legacy-links).

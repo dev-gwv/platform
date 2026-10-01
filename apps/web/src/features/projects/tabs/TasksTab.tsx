@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { CalendarDays, Plus, Trash2, UserPlus } from 'lucide-react'
+import { CalendarDays, ListPlus, Plus, Trash2, UserPlus } from 'lucide-react'
 import type { TaskListItem } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -11,7 +11,7 @@ import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
-import { useCreateTask, useDeleteTask, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
+import { useCreateTask, useDeleteTask, useGenerateTasks, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { todayISO } from '@/features/tasks/board'
 import { RemindMe } from '@/features/reminders/RemindMe'
 
@@ -53,6 +53,9 @@ export function TasksTab({
   return (
     <div className="mt-4 flex flex-col gap-3">
       {canEdit && <AddTaskRow projectId={projectId} />}
+      {canEdit && access.hasAction('tasks', 'create') && (
+        <UnlinkedDeliverables projectId={projectId} deliverables={deliverables} tasks={data ?? []} />
+      )}
 
       {all.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -238,5 +241,39 @@ function TaskRow({ t, canEdit, deliverableTitle }: { t: TaskListItem; canEdit: b
         />
       )}
     </li>
+  )
+}
+
+/**
+ * "4 deliverables have no task yet" with one button that makes them. Any task
+ * already pointing at a deliverable -- even a cancelled one -- counts, the
+ * same rule the server uses, so the number never promises more than it makes.
+ */
+function UnlinkedDeliverables({
+  projectId,
+  deliverables,
+  tasks,
+}: {
+  projectId: string
+  deliverables: readonly { id: string; title: string }[]
+  tasks: readonly TaskListItem[]
+}) {
+  const generate = useGenerateTasks()
+  const linked = new Set(tasks.map((t) => t.deliverable_id).filter(Boolean))
+  const missing = deliverables.filter((d) => !linked.has(d.id))
+  if (missing.length === 0) return null
+  const names = missing.slice(0, 3).map((d) => d.title).join(', ') + (missing.length > 3 ? ` +${missing.length - 3} more` : '')
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
+      <span className="min-w-0 flex-1">
+        <span className="font-medium">
+          {missing.length} {missing.length === 1 ? 'deliverable has' : 'deliverables have'} no task yet
+        </span>
+        <span className="text-muted-foreground"> · {names}</span>
+      </span>
+      <Button size="sm" disabled={generate.isPending} onClick={() => generate.mutate(projectId)}>
+        <ListPlus /> {generate.isPending ? 'Making…' : missing.length === 1 ? 'Make its task' : `Make ${missing.length} tasks`}
+      </Button>
+    </div>
   )
 }

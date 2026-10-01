@@ -103,7 +103,7 @@ export const createExpenseRequest = z.object({
   tax_name: z.string().trim().max(80).nullish(),
   tax_amount: money.nullish(),
   reverse_charge: z.boolean().nullish(),
-  itemize_json: z.array(z.record(z.string(), z.unknown())).nullish(),
+  itemize_json: z.array(expenseItemLine).max(100).nullish(),
   paid_by_user_id: uuid.nullable().optional(),
   reimbursement_status: z.enum(['none', 'pending', 'reimbursed']).optional(),
 })
@@ -124,7 +124,7 @@ export const updateExpenseRequest = z.object({
   tax_name: z.string().trim().max(80).nullable().optional(),
   tax_amount: money.nullable().optional(),
   reverse_charge: z.boolean().optional(),
-  itemize_json: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+  itemize_json: z.array(expenseItemLine).max(100).nullable().optional(),
   paid_by_user_id: uuid.nullable().optional(),
   reimbursement_status: z.enum(['none', 'pending', 'reimbursed']).optional(),
 })

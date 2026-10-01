@@ -30,6 +30,8 @@ describe('the settings rail', () => {
         '/settings/advanced',
         // The old app's Studio Access, for platform admins only (0218).
         '/platform/studios',
+        // The people and shops the studio pays (parties).
+        '/settings/vendors',
       ].sort(),
     )
   })

@@ -228,3 +228,14 @@ export function useCreateDataPerson() {
     onError: (e: Error) => toast.error(e.message),
   })
 }
+
+/** Rename a helper, fix their phone, or archive / bring them back (is_active). */
+export function useUpdateDataPerson() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<UpsertDataPersonRequest> & { id: string }) =>
+      callApi(`/data/people/${id}`, { method: 'PATCH', body, responseSchema: dataPerson }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['data', 'people'] }),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}

@@ -17,6 +17,7 @@ import {
   Receipt,
   ServerCog,
   ShieldCheck,
+  Store,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
@@ -94,6 +95,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     label: 'Money',
     items: [
       { to: '/settings/invoicing', label: 'Invoicing', icon: Receipt, module: 'billing' },
+      { to: '/settings/vendors', label: 'Vendors', icon: Store, module: 'company_expenses' },
       {
         to: '/settings/subscription',
         label: 'Plan & billing',

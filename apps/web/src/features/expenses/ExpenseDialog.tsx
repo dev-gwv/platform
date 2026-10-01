@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
-import { Plus } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import type { CreateExpenseRequest, Expense } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
@@ -13,6 +13,8 @@ import { useDirectory } from '@/features/team/api'
 import { PartyPicker } from '@/features/parties/PartyPicker'
 import { ExpenseCategoryPicker } from './CategoryManager'
 import { ReceiptsPanel } from './ReceiptsPanel'
+import { blankItem, cleanItems, itemsFrom, itemsTotal, type ItemDraft } from './items'
+import { formatINR } from '@/shared/ui/format'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const GST_RATES = [0, 5, 12, 18, 28]
@@ -63,6 +65,7 @@ export function AddExpenseDialog({
   const [invoiceNumber, setInvoiceNumber] = useState(expense?.invoice_number ?? '')
   const [taxAmount, setTaxAmount] = useState(expense?.tax_amount ? String(expense.tax_amount) : '')
   const [reverse, setReverse] = useState(expense?.reverse_charge ?? false)
+  const [items, setItems] = useState<ItemDraft[]>(() => itemsFrom(expense?.itemize_json))
   const [error, setError] = useState<string | null>(null)
   const projectMode = !!presetProjectId && !isEdit
   const [showTax, setShowTax] = useState(!!(expense && (expense.gst_treatment !== 'non_gst' || expense.invoice_number || expense.tax_amount)))
@@ -70,7 +73,7 @@ export function AddExpenseDialog({
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `expense:${expense?.id ?? `new${presetProjectId ? `:${presetProjectId}` : ''}`}` : null,
-    { category, description, amount, expenseDate, projectId, partyId, paidBy, gstTreatment, gstRate, amountIs, invoiceNumber, taxAmount, reverse },
+    { category, description, amount, expenseDate, projectId, partyId, paidBy, gstTreatment, gstRate, amountIs, invoiceNumber, taxAmount, reverse, items },
     (v) => {
       setCategory(v.category)
       setDescription(v.description)
@@ -85,13 +88,18 @@ export function AddExpenseDialog({
       setInvoiceNumber(v.invoiceNumber)
       setTaxAmount(v.taxAmount)
       setReverse(v.reverse)
+      setItems(v.items ?? [])
       if (v.gstTreatment !== 'non_gst' || v.invoiceNumber || v.taxAmount) setShowTax(true)
     },
   )
   const payers = (people ?? []).map((m) => ({ id: m.user_id, name: m.name }))
   if (session && !payers.some((p) => p.id === session.user_id)) payers.unshift({ id: session.user_id, name: session.display_name || 'Me' })
 
-  const value = Number(amount) || 0
+  // With lines, the amount is what they add up to -- one number, never two
+  // that disagree.
+  const itemized = cleanItems(items).length > 0
+  const value = itemized ? itemsTotal(items) : Number(amount) || 0
+  const setItem = (i: number, k: keyof ItemDraft, v: string) => setItems((rows) => rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
   const taxGuess = gstTreatment === 'gst_applicable' && value > 0 ? (amountIs === 'excluding_tax' ? (value * gstRate) / 100 : value - value / (1 + gstRate / 100)) : 0
 
   function reset() {
@@ -109,6 +117,7 @@ export function AddExpenseDialog({
     setTaxAmount('')
     setReverse(false)
     setShowTax(false)
+    setItems([])
   }
 
   async function onSubmit(e: FormEvent) {
@@ -132,6 +141,7 @@ export function AddExpenseDialog({
         reverse_charge: reverse,
         paid_by_user_id: paidBy || null,
         is_fixed_overhead: false,
+        itemize_json: cleanItems(items),
       }
       if (isEdit) {
         await update.mutateAsync({ id: expense.id, patch: { ...shared, category: category.trim() || null, description: description.trim() || null } })
@@ -171,7 +181,17 @@ export function AddExpenseDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="exp-amount">Amount ₹</Label>
-              <Input id="exp-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus required />
+              <Input
+                id="exp-amount"
+                inputMode="decimal"
+                value={itemized ? String(value) : amount}
+                onChange={(e) => setAmount(e.target.value)}
+                readOnly={itemized}
+                title={itemized ? 'The items below add up to this' : undefined}
+                className={cn(itemized && 'bg-muted')}
+                autoFocus
+                required
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="exp-date">Date</Label>
@@ -224,6 +244,34 @@ export function AddExpenseDialog({
           </div>
 
           <PartyPicker value={partyId} onChange={setPartyId} />
+
+          {items.length === 0 ? (
+            <button type="button" onClick={() => setItems([blankItem(), blankItem()])} className="self-start text-xs font-medium text-primary hover:underline">
+              + Break it into items
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p className="text-sm font-medium">
+                Items{' '}
+                <span className="font-normal text-muted-foreground">
+                  · {cleanItems(items).length} {cleanItems(items).length === 1 ? 'line' : 'lines'} · {formatINR(value)}
+                </span>
+              </p>
+              {items.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input value={r.title} onChange={(e) => setItem(i, 'title', e.target.value)} placeholder="Album 12×36" aria-label={`Item ${i + 1}`} maxLength={200} className="min-w-0 flex-1" />
+                  <Input value={r.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} placeholder="Qty" aria-label={`Item ${i + 1} quantity`} inputMode="decimal" className="w-16" />
+                  <Input value={r.amount} onChange={(e) => setItem(i, 'amount', e.target.value)} placeholder="₹" aria-label={`Item ${i + 1} amount`} inputMode="decimal" className="w-24" />
+                  <Button type="button" size="icon" variant="ghost" title="Remove this line" onClick={() => setItems((rows) => rows.filter((_, j) => j !== i))}>
+                    <X />
+                  </Button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setItems((rows) => [...rows, blankItem()])} className="self-start text-xs font-medium text-primary hover:underline">
+                + Add item
+              </button>
+            </div>
+          )}
 
           {!showTax ? (
             <button type="button" onClick={() => setShowTax(true)} className="self-start text-xs font-medium text-primary hover:underline">
