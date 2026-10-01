@@ -5,7 +5,7 @@ import type { AppEnv, Env } from '../context'
 /**
  * Refresh-token cookie mode (AUTH_COOKIE=1).
  *
- * The refresh token is the 30-day credential. In localStorage any script that
+ * The refresh token is the long-lived credential (90 days from its last use). In localStorage any script that
  * runs on the page can read it; as an HttpOnly cookie scoped to /auth on the
  * API origin, no script can. Access tokens stay in the response body — they
  * live 30 minutes and are what the SPA attaches to every call.
@@ -14,7 +14,8 @@ import type { AppEnv, Env } from '../context'
  * with body tokens; the client handles both shapes.
  */
 export const REFRESH_COOKIE = 'ipc_refresh'
-const MAX_AGE_S = 30 * 24 * 60 * 60
+// 90 days, renewed on every rotation (0221): it ends after 90 idle days, not 90 of use.
+const MAX_AGE_S = 90 * 24 * 60 * 60
 
 export const cookieMode = (env: Pick<Env, 'AUTH_COOKIE'>): boolean => (env.AUTH_COOKIE ?? '') === '1'
 

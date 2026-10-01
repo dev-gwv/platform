@@ -73,3 +73,43 @@ describe('requests that never answer', () => {
     expect(hasStoredSession()).toBe(true)
   })
 })
+
+describe('two tabs refreshing at once (0221)', () => {
+  const pair = (a: string, r: string) =>
+    new Response(JSON.stringify({ access_token: a, refresh_token: r, token_type: 'bearer', expires_in: 1800 }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+  it('the tab that loses waits for the winner, then carries on signed in', async () => {
+    localStorage.setItem('ipc_refresh_token', 'old')
+    const seen: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { refresh_token?: string }
+        seen.push(body.refresh_token ?? '')
+        if (body.refresh_token === 'old') {
+          // The other tab won this race and stores its new token a moment later.
+          setTimeout(() => localStorage.setItem('ipc_refresh_token', 'winner'), 200)
+          return new Response('{}', { status: 409 })
+        }
+        return pair('access-2', 'next')
+      }),
+    )
+    const { rotateTokens } = await import('./client')
+    const done = rotateTokens()
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(await done).toBe(true)
+    expect(seen).toEqual(['old', 'winner'])
+    expect(localStorage.getItem('ipc_refresh_token')).toBe('next')
+  })
+
+  it('a refused session (401) still signs out', async () => {
+    localStorage.setItem('ipc_refresh_token', 'gone')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })))
+    const { rotateTokens } = await import('./client')
+    expect(await rotateTokens()).toBe(false)
+    expect(localStorage.getItem('ipc_refresh_token')).toBeNull()
+  })
+})
