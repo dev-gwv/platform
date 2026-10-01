@@ -6,7 +6,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
-import { checkpointsFor, isSetupAudience, nextStep, SETUP_TOTAL, stepForPath, type JourneyStepKey } from './journey'
+import { checkpointsFor, isSetupAudience, nextStep, SETUP_TOTAL, setupLanding, stepForPath, type JourneyStepKey } from './journey'
 import { SetupCheckpoints } from './SetupCheckpoints'
 
 /**
@@ -44,6 +44,33 @@ export function useCloseSetup() {
       // again next time, where it can be closed again.
     }
   }
+}
+
+/** Pages a refresh never pulls away from: help, and the platform admin's own screens. */
+const RESUME_EXEMPT = ['/help', '/platform']
+
+let resumeChecked = false
+
+/**
+ * Once per load of the app (opening it, or pressing refresh): an owner whose
+ * studio is still being set up is taken back to the step they are on. The
+ * owner signed up, landed somewhere else, refreshed, and was never brought
+ * back to the steps; setup was only offered at the moment of sign-in. Moving
+ * around after that is free -- this runs once, not on every page.
+ */
+export function useResumeSetup() {
+  const { session } = useAuth()
+  const { pathname, search } = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (resumeChecked || !session) return
+    resumeChecked = true
+    const landing = setupLanding(session)
+    if (!landing) return
+    if (pathname === landing.to && (search as Record<string, unknown>).from === 'setup') return
+    if (RESUME_EXEMPT.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return
+    void navigate({ to: landing.to, search: landing.search as never, replace: true })
+  }, [session, pathname, search, navigate])
 }
 
 /**
