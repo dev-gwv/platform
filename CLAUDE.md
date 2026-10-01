@@ -109,6 +109,7 @@ These come from the owner reviewing the live app. Apply them to anything you tou
 - **The data dialog is short and remembers.** Copied by · Received on, then one line per copy (disk + status; folder/link on "+ Folder or link"); type, size, cards, label and notes under "More details". A new record starts from the studio's last copier and main/backup disks (`data-defaults:<company>` in the browser, ids only).
 - **After Book, Done is the next thing.** In Assign team, once someone is booked and nothing is left to book, Done turns solid with the `ipc-nudge` and Book goes quiet.
 - **Nobody is signed out unless they sign out.** A session slides: every refresh pushes it 90 days on (0221), so it ends only on Sign out, a password change, removal from the studio, or 90 days without opening the app. A lost refresh reply is not theft, and a tab that loses a refresh race gets 409 and picks up the winner's token -- never clear the session on anything but a 401/403 from `/auth/refresh`.
+- **A new account starts at step 1 of setup: Add your team.** Sign-up never follows a left-over `?redirect=` (signing out on Leads leaves `?redirect=/leads` on the sign-in page; a new studio followed it and skipped setup). The first page says **Add your team** in bold with two choices, **One by one** ("Start here") and **All at once**; the three steps show once, in the setup bar, not again in the welcome card.
 - **When the owner gives a standing instruction, write it here** in this list, so the next session follows it without being told again.
 
 ## Who is working on what

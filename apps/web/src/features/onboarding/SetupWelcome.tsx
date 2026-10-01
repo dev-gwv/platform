@@ -1,6 +1,4 @@
 import { Card, CardContent } from '@/shared/ui/card'
-import { checkpointsFor } from './journey'
-import { SetupCheckpoints } from './SetupCheckpoints'
 
 /** "Welcome, Asha" — the first name, or nothing when there is none to take. */
 export function firstName(displayName: string | null | undefined): string {
@@ -9,8 +7,9 @@ export function firstName(displayName: string | null | undefined): string {
 
 /**
  * The welcome a brand-new studio sees once, at the top of step 1, before it
- * has anyone on its team. Three checkpoints and one line about what to do
- * now. No button: the two ways to add people sit right under it.
+ * has anyone on its team. One line about what comes next; the three steps
+ * are already in the setup bar above, so they are not repeated here. No
+ * button: the two ways to add people sit right under it.
  */
 export function SetupWelcome({ name }: { name: string | null | undefined }) {
   const first = firstName(name)
@@ -21,10 +20,8 @@ export function SetupWelcome({ name }: { name: string | null | undefined }) {
           Welcome to Studio AutoPilot{first ? `, ${first}` : ''}.
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Three quick steps and your studio runs on autopilot.
+          Three quick steps: your team, your first client, your first project. Start with your team below.
         </p>
-        <SetupCheckpoints steps={checkpointsFor(1)} className="mt-3" />
-        <p className="mt-3 text-sm">Start with your team. It takes about a minute.</p>
       </CardContent>
     </Card>
   )
