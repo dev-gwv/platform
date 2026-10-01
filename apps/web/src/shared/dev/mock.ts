@@ -457,6 +457,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
+  if (method === 'POST' && path === '/tasks/generate') return { created: 2 }
   if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?')))
     return atStage(boardTasks, 'full')
   if (method === 'GET' && path === '/tasks/bundles') return atStage(bundlesFx, 'partial')
@@ -767,7 +768,31 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/data/mine') return []
-  if (method === 'GET' && path === '/data/people') return []
+  if (method === 'GET' && (path === '/parties' || path.startsWith('/parties?'))) {
+    const q = new URLSearchParams(path.split('?')[1] ?? '')
+    const all = [
+      { id: uid(0x7b1), name: 'Canvera Albums', kind: 'vendor', phone: '9820000001', email: null, gstin: '27ABCDE1234F1Z5', address: null, state: 'Maharashtra', is_active: true },
+      { id: uid(0x7b2), name: 'Aman (drone)', kind: 'freelancer', phone: null, email: null, gstin: null, address: null, state: null, is_active: true },
+      { id: uid(0x7b3), name: 'Old Print Shop', kind: 'vendor', phone: null, email: null, gstin: null, address: null, state: null, is_active: false },
+    ]
+    return all.filter(
+      (p) =>
+        (!q.get('kind') || p.kind === q.get('kind')) &&
+        (!q.get('search') || p.name.toLowerCase().includes((q.get('search') ?? '').toLowerCase())) &&
+        (!q.get('active') || String(p.is_active) === q.get('active')),
+    )
+  }
+  if (method === 'POST' && path === '/parties') return { id: uid(0x7b4), kind: 'vendor', is_active: true, ...(body as object) }
+  if (method === 'PATCH' && path.startsWith('/parties/')) return { id: path.split('/').pop(), name: 'Canvera Albums', kind: 'vendor', ...(body as object) }
+  if (method === 'GET' && path === '/data/people')
+    return [
+      { id: uid(0x7a1), name: 'Sunil (DIT)', role: 'Freelance DIT', phone: '9810000000', is_active: true },
+      { id: uid(0x7a2), name: 'Kabir', role: null, phone: null, is_active: false },
+    ]
+  if (method === 'POST' && path === '/data/people')
+    return { id: uid(0x7a3), name: (body as { name: string }).name, role: null, phone: null, is_active: true }
+  if (method === 'PATCH' && path.startsWith('/data/people/'))
+    return { id: path.split('/').pop(), name: 'Sunil (DIT)', role: null, phone: null, is_active: true, ...(body as object) }
   if (method === 'POST' && path === '/data/bulk') {
     const b = body as { slot_ids?: string[]; record_ids?: string[] } | undefined
     return { updated: (b?.slot_ids?.length ?? 0) + (b?.record_ids?.length ?? 0), created: 0, skipped: 0 }
@@ -847,6 +872,16 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return expensesFx
   if (method === 'POST' && path === '/financials/expenses') return expensesFx[0]
   if (method === 'GET' && path === '/financials/projects') return projectFin
+  if (method === 'GET' && path.startsWith('/financials/monthly-profit-summary'))
+    return {
+      month: '2026-09-01', basis: 'cash', alloc: 'equal', cash_received: 0, booked_revenue: 0, salary_cost: 0, office_fixed: 0,
+      variable_cost: 0, fixed_total: 0, total_cost: 0, net_cash: 0, net_booked: 0, warnings: [], projects: [],
+      salary_buckets: [
+        { bucket: 'salaried', total: 85000 },
+        { bucket: 'contractor', total: 42000 },
+        { bucket: 'intern', total: 8000 },
+      ],
+    }
   if (method === 'GET' && path.startsWith('/financials/pnl')) return pnlFx(path)
   if (method === 'GET' && path.startsWith('/financials/profitability')) return profitabilityReportFx
   if (method === 'GET' && path.startsWith('/activity')) return activityLogFx
@@ -3271,6 +3306,17 @@ const crmStatsFx = {
   conversion_rate: 0.25,
   byStatus: { new: 1, contacted: 1, proposal_sent: 1, converted: 1 },
   bySource: { facebook: 2, enquiry: 2 },
+  pipeline_value: 485000,
+  quality_breakdown: { hot: 1, warm: 1, cold: 0, unset: 1 },
+  follow_up_health: { overdue: 1, due_today: 1, due_tomorrow: 0, upcoming_7d: 2, no_follow_up: 1 },
+  activity_trend: [
+    { day: '2026-08-04', count: 3 },
+    { day: '2026-08-12', count: 5 },
+    { day: '2026-08-20', count: 2 },
+  ],
+  won_lost_trend: [{ day: '2026-08-18', won: 1, lost: 0 }],
+  proposal_count: 1,
+  proposal_value: 180000,
 }
 
 const crmTeamStatsFx = [

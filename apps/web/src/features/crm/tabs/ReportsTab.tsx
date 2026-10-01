@@ -12,6 +12,7 @@ import { useCrmStats, useForecast } from '../api'
 import { STAGES } from '../leads'
 import { useAccess } from '@/shared/auth/useAccess'
 import { exportLeadsCsv } from './shared'
+import { LeadPulse } from './LeadPulse'
 
 /** The channels a lead can arrive through — the same list the CRM filters on. */
 const SOURCES = [
@@ -100,6 +101,7 @@ export function ReportsTab({ leads, range: pageRange }: { leads: readonly CrmLea
             <StatCard label="Lost" value={data.lost} />
             <StatCard label="Conversion" value={`${Math.round(data.conversion_rate * 100)}%`} />
           </div>
+          <LeadPulse data={data} />
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardContent className="p-4">

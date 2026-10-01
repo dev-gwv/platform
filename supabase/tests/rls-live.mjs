@@ -3308,5 +3308,72 @@ if (listed) {
   await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: false } })
 }
 
+// ── Step 1 screens: the API behind them, end to end ──────────────────────
+{
+  // Make tasks for the deliverables that have none.
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Gen Co ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: `Gen project ${rand()}`, client_id: client.json.id } })
+  const pid = project.json.id
+  await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Album' } })
+  await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Teaser' } })
+  const before = await api(`/tasks?project_id=${pid}`, { token: aToken })
+  const linkedBefore = (Array.isArray(before.json) ? before.json : before.json.items ?? []).filter((t) => t.deliverable_id).length
+  const gen = await api('/tasks/generate', { token: aToken, method: 'POST', body: { project_id: pid } })
+  const again = await api('/tasks/generate', { token: aToken, method: 'POST', body: { project_id: pid } })
+  check(
+    'step 1: "Make tasks" makes one per deliverable without a task, and nothing twice',
+    gen.status === 201 && gen.json.created === 2 - linkedBefore && again.status === 201 && again.json.created === 0,
+    { gen: gen.json, again: again.json, linkedBefore },
+  )
+
+  // Data helpers: rename and archive.
+  const helper = await api('/data/people', { token: aToken, method: 'POST', body: { name: `Helper ${rand()}` } })
+  const renamed = await api(`/data/people/${helper.json.id}`, { token: aToken, method: 'PATCH', body: { name: `${helper.json.name} DIT`, phone: '9810000000' } })
+  const archived = await api(`/data/people/${helper.json.id}`, { token: aToken, method: 'PATCH', body: { is_active: false } })
+  const people = await api('/data/people', { token: aToken })
+  const row = people.json.find((p) => p.id === helper.json.id)
+  check(
+    'step 1: a data helper can be renamed and archived, and stays listed as archived',
+    renamed.status === 200 && archived.status === 200 && row?.is_active === false && row?.phone === '9810000000',
+    { renamed: renamed.status, archived: archived.status, row },
+  )
+
+  // Vendors: full details, archived ones filtered.
+  const vendor = await api('/parties', { token: aToken, method: 'POST', body: { name: `Albums ${rand()}`, kind: 'vendor', gstin: '27ABCDE1234F1Z5', phone: '9820000001', state: 'Maharashtra' } })
+  await api(`/parties/${vendor.json.id}`, { token: aToken, method: 'PATCH', body: { is_active: false } })
+  const active = await api('/parties?active=true', { token: aToken })
+  const gone = await api('/parties?active=false', { token: aToken })
+  check(
+    'step 1: a vendor keeps GSTIN and phone, and leaves the active list when archived',
+    vendor.status === 201 && vendor.json.gstin === '27ABCDE1234F1Z5' && !active.json.some((p) => p.id === vendor.json.id) && gone.json.some((p) => p.id === vendor.json.id),
+    { vendor: vendor.json },
+  )
+
+  // Item lines round-trip; a line without a title or amount shape is refused.
+  const exp = await api('/financials/expenses', {
+    token: aToken,
+    method: 'POST',
+    body: { amount: 9250, itemize_json: [{ title: 'Album 12x36', amount: 9000, qty: 2 }, { title: 'Courier', amount: 250 }] },
+  })
+  const bad = await api('/financials/expenses', { token: aToken, method: 'POST', body: { amount: 10, itemize_json: [{ amount: 'ten' }] } })
+  const cleared = await api(`/financials/expenses/${exp.json.id}`, { token: aToken, method: 'PATCH', body: { itemize_json: [] } })
+  check(
+    'step 1: expense item lines are saved, malformed ones refused, and they can be cleared',
+    exp.status === 201 && exp.json.itemize_json?.length === 2 && bad.status === 422 && cleared.status === 200 && (cleared.json.itemize_json ?? []).length === 0,
+    { exp: exp.status, lines: exp.json.itemize_json, bad: bad.status, cleared: cleared.status },
+  )
+
+  // The reports the new cards read.
+  const stats = await api('/crm/stats', { token: aToken })
+  const month = new Date().toISOString().slice(0, 7)
+  const summary = await api(`/financials/monthly-profit-summary?month=${month}-01`, { token: aToken })
+  check(
+    'step 1: lead reports carry follow-up health and trends; the month summary carries the team-cost split',
+    stats.status === 200 && typeof stats.json.follow_up_health?.overdue === 'number' && Array.isArray(stats.json.activity_trend) &&
+      summary.status === 200 && Array.isArray(summary.json.salary_buckets),
+    { stats: stats.status, summary: summary.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  monthlyProfitSummary,
   expense,
   expenseAttachment,
   expenseSummary,
@@ -256,6 +257,18 @@ export function useProfitAndLoss(q: PnlQuery, enabled = true) {
     enabled: enabled && !!session && access.hasModule('financials'),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
+  })
+}
+
+/** One month's team cost by how people are paid (salaried, freelance, interns…). */
+export function useMonthlyProfitSummary(month: string) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['financials', 'monthly-summary', month.slice(0, 7)],
+    queryFn: () => callApi(`/financials/monthly-profit-summary?month=${month.slice(0, 7)}-01`, { responseSchema: monthlyProfitSummary }),
+    enabled: !!session && access.hasModule('financials'),
+    staleTime: 60_000,
   })
 }
 

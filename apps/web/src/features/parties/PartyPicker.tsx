@@ -97,7 +97,8 @@ export function PartyPicker({ value, onChange }: { value: string; onChange: (id:
           }}
         >
           <option value="">Optional</option>
-          {(parties ?? []).map((p) => (
+          {/* Archived vendors leave the list, unless this expense already names one. */}
+          {(parties ?? []).filter((p) => p.is_active !== false || p.id === value).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>

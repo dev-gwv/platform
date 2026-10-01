@@ -190,6 +190,19 @@ export function useCreateTask() {
   )
 }
 
+/** One task per deliverable on the project that has none yet (POST /tasks/generate). */
+export function useGenerateTasks() {
+  return useTaskMutation(
+    (projectId: string) =>
+      callApi('/tasks/generate', {
+        method: 'POST',
+        body: { project_id: projectId, assignees: [] },
+        responseSchema: z.object({ created: z.number().int() }),
+      }),
+    (out) => (out.created ? `${out.created} ${out.created === 1 ? 'task' : 'tasks'} made` : 'Every deliverable already has a task'),
+  )
+}
+
 export function useSetTaskStatus() {
   return useTaskMutation(
     ({ id, status }: { id: string; status: TaskStatus }) =>

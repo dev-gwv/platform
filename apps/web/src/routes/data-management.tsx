@@ -23,6 +23,7 @@ import {
 } from '@/features/data/api'
 import { DataBoardView } from '@/features/data/DataBoardView'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { HelpersTab } from '@/features/data/HelpersTab'
 import { DATA_TYPES } from '@/features/data/stage'
 import { LocationKindSelect, kindFields, kindLabelOf, kindValueOf } from '@/features/data/LocationKindSelect'
 import { LookupSelect } from '@/features/settings/LookupSelect'
@@ -33,7 +34,7 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 
 const shootsList = shootListItem.array()
 
-type DmTab = 'records' | 'locations'
+type DmTab = 'records' | 'locations' | 'helpers'
 
 export function DataManagementPage({ initialTab }: { initialTab?: DmTab } = {}) {
   return (
@@ -89,7 +90,7 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
         }
       />
       <div className="inline-flex w-fit rounded-lg border border-border bg-card p-0.5 text-xs" role="tablist" aria-label="Data views">
-        {(['records', 'locations'] as DmTab[]).map((t) => (
+        {(['records', 'locations', 'helpers'] as DmTab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -98,7 +99,7 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
             onClick={() => setTab(t)}
             className={t === tab ? 'rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground' : 'rounded-md px-3 py-1.5 font-medium text-muted-foreground hover:text-foreground'}
           >
-            {t === 'records' ? 'Board' : 'Locations'}
+            {t === 'records' ? 'Board' : t === 'locations' ? 'Locations' : 'Helpers'}
           </button>
         ))}
       </div>
@@ -115,6 +116,8 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
 
       {tab === 'locations' ? (
         <LocationsTab />
+      ) : tab === 'helpers' ? (
+        <HelpersTab />
       ) : board.isLoading ? (
         <SkeletonList rows={5} columns={5} />
       ) : board.isError ? (

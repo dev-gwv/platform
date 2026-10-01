@@ -17,6 +17,8 @@ import { useGstSummary, useProfitAndLoss } from '@/features/financials/api'
 import { OverheadsCard } from '@/features/financials/Overheads'
 import { NeedsAttention } from '@/features/financials/NeedsAttention'
 import { PERIOD_LABEL, periodFor, rangeLabel, type PeriodKey } from '@/features/financials/period'
+import { allocateOverhead } from '@ipc/domain'
+import { TeamCostCard } from '@/features/financials/TeamCostCard'
 
 export function FinancialsPage() {
   return (
@@ -180,6 +182,7 @@ function ProfitAndLossPage() {
             <WhereItGoes data={data} />
             <OverheadsCard />
           </div>
+          {(preset === 'this_month' || preset === 'last_month') && <TeamCostCard month={period.from} />}
           <Projects data={data} />
         </div>
       )}
@@ -393,6 +396,26 @@ type SortKey = 'profit' | 'income' | 'margin' | 'to_collect'
 /** Every project with money in the period: its own little P&L. */
 function Projects({ data }: { data: ProfitAndLoss }) {
   const [sort, setSort] = useState<SortKey>('profit')
+  /*
+   * Salaries, rent, other payouts and studio costs belong to no one project,
+   * so a project's own profit flatters it. Sharing them out answers "did this
+   * wedding really pay for itself?" -- by income (a project that brought in
+   * 30% carries 30%) or equally. Off by default: the statement above is the
+   * truth; this is one way of reading it.
+   */
+  const [share, setShare] = useState<'off' | 'income' | 'equal'>('off')
+  const l = data.lines
+  const pool = Math.max(0, l.team_payouts + l.salaries + l.overheads + l.studio_expenses)
+  const carriers = data.projects.filter((p) => (share === 'income' ? p.income > 0 : true))
+  const shares =
+    share === 'off'
+      ? {}
+      : allocateOverhead(
+          pool,
+          carriers.map((p) => ({ id: p.project_id, revenue: p.income, shootDays: 0 })),
+          share === 'income' ? 'revenue_weighted' : 'equal',
+        )
+  const after = (p: ProfitAndLoss['projects'][number]) => p.profit - (shares[p.project_id] ?? 0)
   const rows = [...data.projects].sort((a, b) => {
     const v = (x: typeof a) => (sort === 'margin' ? (x.margin ?? -Infinity) : x[sort])
     return v(b) - v(a)
@@ -406,7 +429,40 @@ function Projects({ data }: { data: ProfitAndLoss }) {
   return (
     <Card id="pnl-projects" className="scroll-mt-4">
       <CardContent className="p-4">
-        <p className="text-sm font-semibold">By project</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold">By project</p>
+          {rows.length > 0 && pool > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Share studio costs">
+              <span className="text-muted-foreground">Studio costs:</span>
+              {(
+                [
+                  ['off', 'Not shared'],
+                  ['income', 'Share by income'],
+                  ['equal', 'Share equally'],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={share === k}
+                  onClick={() => setShare(k)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 font-medium',
+                    share === k ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {share !== 'off' && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatINR(pool)} of salaries, other payouts, fixed overheads and studio expenses,{' '}
+            {share === 'income' ? 'shared by income: a project that brought in 30% of the money carries 30%.' : `shared equally across ${carriers.length} projects.`}
+          </p>
+        )}
         {rows.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No project had money in or out in this period.</p>
         ) : (
@@ -419,6 +475,8 @@ function Projects({ data }: { data: ProfitAndLoss }) {
                   <th className="py-2 pr-3 text-right font-semibold">Team</th>
                   <th className="py-2 pr-3 text-right font-semibold">Expenses</th>
                   <th className="py-2 pr-3 text-right">{head('profit', 'Profit')}</th>
+                  {share !== 'off' && <th className="py-2 pr-3 text-right font-semibold">Studio costs</th>}
+                  {share !== 'off' && <th className="py-2 pr-3 text-right font-semibold">After studio costs</th>}
                   <th className="py-2 pr-3 text-right">{head('margin', 'Margin')}</th>
                   <th className="py-2 text-right">{head('to_collect', 'Still to collect')}</th>
                 </tr>
@@ -436,6 +494,12 @@ function Projects({ data }: { data: ProfitAndLoss }) {
                     <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.team ? `−${formatINR(p.team)}` : '—'}</td>
                     <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.expenses ? `−${formatINR(p.expenses)}` : '—'}</td>
                     <td className={cn('py-2 pr-3 text-right font-semibold tabular-nums', p.profit < 0 ? 'text-destructive' : 'text-tone-green')}>{signed(p.profit)}</td>
+                    {share !== 'off' && (
+                      <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{shares[p.project_id] ? `−${formatINR(shares[p.project_id]!)}` : '—'}</td>
+                    )}
+                    {share !== 'off' && (
+                      <td className={cn('py-2 pr-3 text-right font-semibold tabular-nums', after(p) < 0 ? 'text-destructive' : 'text-tone-green')}>{signed(after(p))}</td>
+                    )}
                     <td className="py-2 pr-3 text-right tabular-nums">{p.margin == null ? '—' : `${Math.round(p.margin)}%`}</td>
                     <td className={cn('py-2 text-right tabular-nums', p.to_collect > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>{p.to_collect ? formatINR(p.to_collect) : '—'}</td>
                   </tr>
