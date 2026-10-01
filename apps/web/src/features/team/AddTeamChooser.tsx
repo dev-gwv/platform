@@ -16,10 +16,28 @@ export type AddMode = 'choose' | 'single' | 'bulk'
 export function AddTeamChooser({
   onPick,
   onCancel,
+  setup = false,
 }: {
   onPick: (mode: Exclude<AddMode, 'choose'>) => void
   onCancel: () => void
+  /**
+   * Setup's first step: one button, straight into the bulk list. The owner
+   * wanted no choice to make here -- "just one option: Add your team" -- and
+   * the list takes one person as well as twenty.
+   */
+  setup?: boolean
 }) {
+  if (setup) {
+    return (
+      <div className="mx-auto w-full max-w-2xl text-center">
+        <h2 className="text-2xl font-bold tracking-tight">Add your team</h2>
+        <p className="mt-1 text-sm text-muted-foreground">The people who shoot and edit with you.</p>
+        <Button size="lg" className="mt-5" data-setup-nudge="" onClick={() => onPick('bulk')}>
+          <Users /> Add your team
+        </Button>
+      </div>
+    )
+  }
   return (
     <div className="mx-auto w-full max-w-2xl">
       <h2 className="text-2xl font-bold tracking-tight">Add your team</h2>
