@@ -1584,29 +1584,38 @@ describe('refresh tokens (0024)', () => {
     expect(second.user_id).toBe(uid)
   })
 
-  it('the successor inherits the original expiry — refreshing cannot extend a session forever', async () => {
+  it('using the app keeps the session alive: each rotation pushes expiry 90 days out (0221)', async () => {
     const raw = await issue()
     await db.exec(
       `update refresh_tokens set expires_at = now() + interval '3 days'
         where consumed_at is null and revoked_at is null and user_id = '${uid}';`,
     )
-    const before = await db.query<{ exp: string }>(
-      `select expires_at as exp from refresh_tokens
-        where token_hash = encode(sha256(convert_to('${raw}', 'UTF8')), 'hex');`,
-    )
     const r = await rotate(raw)
-    const after = await db.query<{ exp: string }>(
-      `select expires_at as exp from refresh_tokens
+    const after = await db.query<{ days: number }>(
+      `select extract(day from expires_at - now())::int as days from refresh_tokens
         where token_hash = encode(sha256(convert_to('${r.token}', 'UTF8')), 'hex');`,
     )
-    // Compared to the predecessor's exact timestamp, not to a window: minting a
-    // fresh `now() + 30 days` would still land inside any day-granularity bound.
-    expect(after.rows[0]!.exp).toEqual(before.rows[0]!.exp)
+    expect(after.rows[0]!.days).toBeGreaterThanOrEqual(89)
   })
 
-  it('stale reuse revokes the whole family', async () => {
+  it('a lost reply is not theft: the unused successor is withdrawn and a new one issued (0221)', async () => {
+    const raw = await issue()
+    const lost = await rotate(raw) // the browser never got this one
+    await db.exec(
+      `update refresh_tokens set consumed_at = now() - interval '5 minutes' where consumed_at is not null;`,
+    )
+    const again = await rotate(raw)
+    expect(again.user_id).toBe(uid)
+    expect(again.token).not.toBe(lost.token)
+    // The token that never arrived is dead; the new one works.
+    expect((await rotate(lost.token!)).user_id).toBeNull()
+    expect((await rotate(again.token!)).user_id).toBe(uid)
+  })
+
+  it('stale reuse after the successor was used still revokes the whole family', async () => {
     const raw = await issue()
     const r = await rotate(raw)
+    const r2 = await rotate(r.token!) // the successor WAS used: two holders
     // Age the consumption past the race grace window.
     await db.exec(
       `update refresh_tokens set consumed_at = now() - interval '5 minutes' where consumed_at is not null;`,
@@ -1614,8 +1623,8 @@ describe('refresh tokens (0024)', () => {
     const replay = await rotate(raw)
     expect(replay.user_id).toBeNull()
 
-    // The successor handed out earlier is dead too — that is the point.
-    const after = await rotate(r.token!)
+    // The newest token handed out is dead too — that is the point.
+    const after = await rotate(r2.token!)
     expect(after.user_id).toBeNull()
   })
 
@@ -1624,6 +1633,9 @@ describe('refresh tokens (0024)', () => {
     const r = await rotate(raw)
     const replay = await rotate(raw) // still inside the grace window
     expect(replay.user_id).toBeNull()
+    // ...and the API is told it was a race, not the end of the session (0221).
+    const st = await db.query<{ s: string }>(`select refresh_token_state('${raw}') as s;`)
+    expect(st.rows[0]!.s).toBe('raced')
     // The winner's token survives.
     expect((await rotate(r.token!)).user_id).toBe(uid)
   })

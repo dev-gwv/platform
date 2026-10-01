@@ -32,7 +32,7 @@ describe('refresh cookie mode', () => {
     expect(cookie).toContain('HttpOnly')
     expect(cookie).toContain('Path=/auth')
     expect(cookie).toContain('SameSite=Lax')
-    expect(cookie).toContain('Max-Age=2592000')
+    expect(cookie).toContain('Max-Age=7776000')
 
     const back = await app.request('/auth/refresh', { method: 'POST', headers: { Cookie: 'ipc_refresh=raw-refresh-token' } }, env)
     expect(await back.json()).toEqual({ cookie: 'raw-refresh-token' })

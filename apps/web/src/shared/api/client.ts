@@ -37,7 +37,7 @@ const UNAUTHENTICATED_PATHS = new Set([
  * refresh token is single-use, so a burst of parallel refreshes would spend
  * each other's tokens and look like theft to the server.
  */
-let rotating: Promise<boolean> | null = null
+let rotating: Promise<boolean | 'raced'> | null = null
 
 /**
  * How long a request may go unanswered. Without a limit, a server that takes
@@ -79,7 +79,7 @@ export function setAuthLostHandler(fn: (() => void) | null): void {
  * mode there is nothing stored and the browser sends the HttpOnly cookie. With
  * neither (never signed in here) there is nothing to try.
  */
-export async function rotateTokens(): Promise<boolean> {
+export async function rotateTokens(retry = true): Promise<boolean> {
   const before = getRefreshToken()
   if (!before && !hasCookieSession()) return false
 
@@ -93,11 +93,16 @@ export async function rotateTokens(): Promise<boolean> {
         // A refresh that never answers must not hold every caller forever.
         signal: deadline(REFRESH_TIMEOUT_MS),
       })
+      if (res.status === 409) {
+        // Another tab spent this token a moment ago (0221): the session is
+        // fine. Wait for that tab's new token, then rotate with it.
+        return 'raced' as const
+      }
       if (!res.ok) {
         // Only an auth refusal means the session is over. A 429 from the shared
-        // per-IP limit, a 5xx mid-deploy, or the 60s grace-window 401 that the
-        // LOSER of a two-tab race gets are all survivable — clearing here would
-        // also wipe the winning tab's freshly stored pair.
+        // per-IP limit or a 5xx mid-deploy is survivable. (The loser of a
+        // two-tab race used to get a 401 here too and signed every tab out;
+        // since 0221 that is a 409, handled above.)
         if (res.status === 401 || res.status === 403) {
           if (getRefreshToken() === before) clearToken()
           markCookieSession(false)
@@ -121,7 +126,17 @@ export async function rotateTokens(): Promise<boolean> {
   })()
 
   const ok = await rotating
-  if (ok) return true
+  if (ok === true) return true
+  if (ok === 'raced' && retry) {
+    // Body mode: the winner writes its new token to localStorage (shared by
+    // every tab). Cookie mode: the browser already holds the new cookie.
+    for (let i = 0; i < 20; i++) {
+      const now = getRefreshToken()
+      if (before ? now && now !== before : i >= 2) break
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    return rotateTokens(false)
+  }
   // Another tab may have rotated while we waited; only a token that is actually
   // present counts — a cleared store is a failure, not someone else's success.
   const after = getRefreshToken()

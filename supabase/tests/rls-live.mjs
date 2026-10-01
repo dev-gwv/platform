@@ -263,7 +263,9 @@ const refreshedCall = await api('/clients', { token: rotated.json.access_token }
 check('refresh: the new access token works', refreshedCall.status === 200)
 
 const spent = await api('/auth/refresh', { method: 'POST', body: { refresh_token: a.refresh } })
-check('refresh: the spent token is refused (401)', spent.status === 401)
+// Inside the 60s grace window a spent token means another tab just rotated:
+// 409, so that tab waits for the new token instead of signing out (0221).
+check('refresh: a just-spent token is refused as a race (409)', spent.status === 409)
 
 // That replay landed inside the 60s grace window, where a spent token means
 // "two tabs raced", not theft — so the successor must still work. Revocation on

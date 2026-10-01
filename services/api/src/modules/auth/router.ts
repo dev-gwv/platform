@@ -625,13 +625,20 @@ export const authRouter = new Hono<AppEnv>()
       withService(c.env, async (sql) => {
         const [r] = await sql<{ user_id: string | null; token: string | null }[]>`
           select * from rotate_refresh_token(${presented})`
-        if (!r?.user_id || !r.token) return 'refused' as const
+        if (!r?.user_id || !r.token) {
+          // Another tab spent this token a moment ago: the session is fine.
+          const [st] = await sql<{ s: string }[]>`select refresh_token_state(${presented}) as s`
+          return st?.s === 'raced' ? ('raced' as const) : ('refused' as const)
+        }
         return { uid: r.user_id, refresh: r.token, pwv: await passwordVersion(sql, r.user_id) }
       }),
     )
     // An outage must not read as "session over" — the client would drop
     // perfectly good tokens on a blip.
     if (!rotated) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    // 409, not 401: the browser waits for the other tab's fresh token
+    // instead of signing every tab out (0221).
+    if (rotated === 'raced') fail(409, 'Your session was just refreshed in another tab.')
     if (rotated === 'refused') {
       if (cookieMode(c.env)) clearRefreshCookie(c)
       fail(401, 'Your session has expired. Please sign in again.')
