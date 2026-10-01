@@ -3226,5 +3226,87 @@ if (listed) {
   check('staff login: a removed person is told their sign-in is turned off (403)', gone.status === 403 && /turned off/.test(JSON.stringify(gone.json)), { status: gone.status, json: gone.json })
 }
 
+// ── Attendance v2 (0224): off until the owner turns it on, then done properly ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const mk = async (name) => {
+    const email = `att-${rand()}@madeup.test`
+    const added = await api('/team/members', { token: aToken, method: 'POST', body: { name, phone: randPhone(), email, password: 'Att-pass-123', create_login: true } })
+    const login = await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Att-pass-123' } })
+    return { id: added.json.user_id, token: login.json.access_token }
+  }
+  const ravi = await mk('Ravi Att')
+  const meera = await mk('Meera Att')
+  const STUDIO = { lat: 19.076, lng: 72.8777 }
+
+  // Make sure it starts off (an earlier block may have set a location).
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: false } })
+  const off = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: STUDIO })
+  check('attendance v2: nobody checks in while it is off', off.status === 422 && /not switched on/.test(off.json.error ?? ''), off)
+  const meOff = await api('/hr/attendance/me', { token: ravi.token })
+  check('attendance v2: the app is told it is off', meOff.status === 200 && meOff.json.enabled === false, meOff.json)
+
+  const staffSet = await api('/hr/policy', { token: ravi.token, method: 'PATCH', body: { enabled: true } })
+  check('attendance v2: only the owner turns it on (403)', staffSet.status === 403, { status: staffSet.status })
+  const on = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: true, day_start: '00:00', grace_min: 0, day_end: '23:30', half_day_hours: 4 } })
+  check('attendance v2: the owner turns it on with working hours', on.status === 200 && on.json.enabled === true && on.json.day_start === '00:00' && on.json.half_day_hours === 4, on.json)
+  const bad = await api('/hr/policy', { token: aToken, method: 'PATCH', body: { day_start: '19:00', day_end: '10:00' } })
+  check('attendance v2: a day that ends before it starts is refused (422)', bad.status === 422, bad)
+  const pinned = await api('/hr/location', {
+    token: aToken,
+    method: 'PATCH',
+    body: { ...STUDIO, radius_m: 150, timezone: 'Asia/Kolkata', is_active: true, expected_checkin_time: '00:00', late_grace_minutes: 0, missed_cutoff_time: null },
+  })
+  check('attendance v2: the owner pins the studio', pinned.status === 200, pinned)
+
+  const rough = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { ...STUDIO, accuracy_m: 2000 } })
+  check('attendance v2: a rough fix is refused, saying how rough', rough.status === 422 && /too rough right now \(±2\.0 km\)/.test(rough.json.error ?? ''), rough.json)
+  const far = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { lat: 28.6, lng: 77.2, accuracy_m: 10 } })
+  check('attendance v2: outside the circle is refused with the distance', far.status === 422 && /from Studio \(allowed 150 m\)/.test(far.json.error ?? ''), far.json)
+  const inside = await api('/hr/check-in', { token: ravi.token, method: 'POST', body: { ...STUDIO, accuracy_m: 12 } })
+  check('attendance v2: inside, checked in -- and late against a 00:00 start', inside.status === 201 && inside.json.status === 'late' && inside.json.place_name === 'Studio', inside.json)
+  await api('/hr/check-out', { token: ravi.token, method: 'POST', body: STUDIO })
+  const after = await api('/hr/attendance/me', { token: ravi.token })
+  check('attendance v2: out within the half-day hours is a half day', after.json.today?.status === 'half_day' && after.json.today?.accuracy_m === 12, after.json.today)
+
+  // A selfie, when asked for.
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { selfie_required: true } })
+  const noSelfie = await api('/hr/check-in', { token: meera.token, method: 'POST', body: STUDIO })
+  check('attendance v2: with a selfie asked for, none is refused', noSelfie.status === 422 && /selfie/.test(noSelfie.json.error ?? ''), noSelfie.json)
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), (ch) => ch.charCodeAt(0))
+  const form = new FormData()
+  form.append('file', new Blob([png], { type: 'image/png' }), 'selfie.png')
+  const up = await fetch(`${API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${meera.token}` }, body: form })
+  const upJson = await up.json().catch(() => ({}))
+  const withSelfie = await api('/hr/check-in', { token: meera.token, method: 'POST', body: { ...STUDIO, selfie_file_id: upJson.id } })
+  check('attendance v2: with her own fresh selfie she is in', up.ok && withSelfie.status === 201, { up: up.status, json: withSelfie.json })
+  const ownerSees = await api(`/files/${upJson.id}`, { token: aToken })
+  const otherSees = await api(`/files/${upJson.id}`, { token: ravi.token })
+  check('attendance v2: the owner can open the selfie, a teammate cannot', ownerSees.status === 200 && otherSees.status !== 200, { owner: ownerSees.status, other: otherSees.status })
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { selfie_required: false } })
+
+  // The owner's screens.
+  const today = await api('/hr/today', { token: aToken })
+  const names = (today.json.rows ?? []).map((r) => r.name)
+  check('attendance v2: the Today board lists who is tracked, with today’s marks', today.status === 200 && today.json.enabled === true && names.includes('Ravi Att') && names.includes('Meera Att'), { status: today.status, names })
+  const todayStaff = await api('/hr/today', { token: ravi.token })
+  check('attendance v2: staff cannot open the Today board (403)', todayStaff.status === 403, { status: todayStaff.status })
+  const month = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 7)
+  const reg = await api(`/hr/register?month=${month}`, { token: aToken })
+  const regStaff = await api(`/hr/register?month=${month}`, { token: ravi.token })
+  const regMine = await api(`/hr/register?month=${month}&user=me`, { token: ravi.token })
+  check(
+    'attendance v2: the month register is the owner’s; a person sees only their own',
+    reg.status === 200 && reg.json.people.length >= 2 && regStaff.status === 403 && regMine.status === 200 && regMine.json.people.length === 1,
+    { owner: reg.status, staff: regStaff.status, mine: regMine.status },
+  )
+  const plain = await api('/hr/places/resolve-link', { token: aToken, method: 'POST', body: { url: 'https://www.google.com/maps/place/x/@19.07,72.87,17z/data=!3d19.0760!4d72.8777' } })
+  const nopin = await api('/hr/places/resolve-link', { token: aToken, method: 'POST', body: { url: 'Bandra West, Mumbai' } })
+  check('attendance v2: a Maps link becomes a pin; a link with none says so', plain.status === 200 && plain.json.lat === 19.076 && nopin.status === 422 && /no pin/.test(nopin.json.error ?? ''), { plain: plain.json, nopin: nopin.json })
+  const cron = await fetch(`${API}/cron/messages`, { method: 'POST', headers: { 'x-cron-secret': process.env.CRON_SECRET ?? 'ci-cron' } })
+  check('attendance v2: the five-minute cron runs the reminders', cron.status === 200, { status: cron.status })
+  await api('/hr/policy', { token: aToken, method: 'PATCH', body: { enabled: false } })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

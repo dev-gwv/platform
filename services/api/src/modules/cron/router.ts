@@ -202,9 +202,11 @@ export const cronRouter = new Hono<AppEnv>()
              )`
           return rows[0]?.n ?? 0
         }
-        // Shifts nobody closed first (0206), then the days nobody came.
+        // Shifts nobody closed first (0206), then the days nobody came, then
+        // selfies past their 60 days (0224).
         await sql`select auto_checkout_sweep()`
         const rows = await sql<{ n: number }[]>`select mark_absent_backstop() as n`
+        await sql`select purge_attendance_selfies(60)`
         return rows[0]?.n ?? 0
       }),
     ))
@@ -246,7 +248,13 @@ export const cronRouter = new Hono<AppEnv>()
       { schedule: { type: 'interval', value: 5, unit: 'minute' }, checkinMargin: 10, maxRuntime: 10, timezone: 'Etc/UTC' },
     )
     if (!result) throw new Error('cron.messages failed')
-    log.info({ path: c.req.path, ...result }, 'cron messages ran')
+    // The attendance nudges ride the same five-minute tick (0224): "You
+    // haven't checked in yet", "Don't forget to check out", the owner's "3 not
+    // in yet". Once a day each; a failure here never fails the sending.
+    const nudged = await attempt(c, 'cron.attendance_reminders', () =>
+      withService(c.env, async (sql) => (await sql<{ r: unknown }[]>`select run_attendance_reminders() as r`)[0]?.r ?? null),
+    )
+    log.info({ path: c.req.path, ...result, attendance_reminders: nudged }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 

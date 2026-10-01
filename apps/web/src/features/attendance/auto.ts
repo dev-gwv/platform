@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { MyAttendanceToday } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAttendanceMe, useCheckIn } from './api'
+import { lateText } from './board'
 
 /**
  * The app marks attendance by itself (0206). On open, when the tab comes
@@ -44,10 +45,25 @@ export function readPosition(fresh = false): Promise<GeolocationPosition> {
 /** Whether today still needs a mark for this person. */
 export function needsMark(me: MyAttendanceToday | undefined): boolean {
   if (!me) return false
-  // A studio that has not set attendance up tracks nobody (0223): no mark,
-  // and no location prompt either.
-  if (!me.configured || me.mode === 'off' || me.day_off || me.on_leave) return false
+  // Attendance off (0224): no mark, and no location prompt either.
+  if (!me.enabled || me.mode === 'off' || me.day_off || me.on_leave) return false
   return !me.today?.check_in_at
+}
+
+/**
+ * Whether the app may mark it by itself. Not when a selfie is asked for (a
+ * person takes that), and not on a shoot day (I've reached at the venue is
+ * the mark).
+ */
+export function canAutoMark(me: MyAttendanceToday | undefined): boolean {
+  return needsMark(me) && !me!.selfie_required && !me!.shoot_today
+}
+
+/** "Marked late · 10:22 AM (22 min)" -- the server's verdict, said plainly. */
+export function verdictText(r: { status: string; late_minutes: number }, at = new Date()): string {
+  const time = at.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+  if (r.status === 'late') return `Marked late · ${time} (${lateText(r.late_minutes)})`
+  return `Marked present · ${time}`
 }
 
 /** The last automatic attempt, shared with the Today card. */
@@ -61,7 +77,7 @@ export function useMarkNow() {
   const qc = useQueryClient()
   const checkIn = useCheckIn()
   const set = (s: AutoState) => qc.setQueryData(KEY, s)
-  return async (auto: boolean): Promise<void> => {
+  return async (auto: boolean, selfieFileId?: string): Promise<void> => {
     const at = new Date().toISOString()
     set({ kind: 'checking' })
     let pos: GeolocationPosition
@@ -73,9 +89,15 @@ export function useMarkNow() {
       return
     }
     try {
-      await checkIn.mutateAsync({ lat: pos.coords.latitude, lng: pos.coords.longitude, auto })
+      const r = await checkIn.mutateAsync({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        auto,
+        ...(Number.isFinite(pos.coords.accuracy) ? { accuracy_m: Math.round(pos.coords.accuracy) } : {}),
+        ...(selfieFileId ? { selfie_file_id: selfieFileId } : {}),
+      })
       set({ kind: 'marked', at })
-      toast.success(`Marked present · ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`)
+      toast.success(verdictText(r))
     } catch (e) {
       const message = (e as Error).message || 'We could not mark you.'
       set(message.startsWith("You're") ? { kind: 'outside', message, at } : { kind: 'failed', message, at })
@@ -92,7 +114,7 @@ export function AutoAttendance() {
   const markNow = useMarkNow()
   const state = useAutoState()
   const busy = useRef(false)
-  const due = tracked && needsMark(me.data)
+  const due = tracked && canAutoMark(me.data)
 
   useEffect(() => {
     if (!due) return

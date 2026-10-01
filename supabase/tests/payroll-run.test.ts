@@ -68,7 +68,7 @@ beforeAll(async () => {
       ('${PRIYA}', '${COMPANY}', 'employee', 'Priya', 'p@p.test', '2020-01-01', 30000, 'in_house', null),
       ('${AMAN}', '${COMPANY}', 'employee', 'Aman', 'a@p.test', '2020-01-01', 20000, 'freelancer', null),
       ('${NEHA}', '${COMPANY}', 'employee', 'Neha', 'n@p.test', '2020-01-01', null, null, 10000);
-    insert into attendance_policy (company_id, weekly_off) values ('${COMPANY}', '{0}');
+    insert into attendance_policy (company_id, weekly_off, enabled, enabled_at) values ('${COMPANY}', '{0}', true, '2020-01-01');
     insert into company_holidays (company_id, holiday_date, name) values ('${COMPANY}', '2026-09-14', 'Studio day');
     -- Priya: 2 days + a half day unpaid leave, one absence, one late, and a
     -- sick day that the sweep had marked absent (leave wins: not absent).
@@ -238,7 +238,7 @@ describe('pro-rata: joining and leaving during the month (0187)', () => {
         ('${FULL}', '${CO3}', 'employee', 'Full', 'f@p3.test', '2020-01-01', 25000.5, 'in_house', 'active', null, null, null);
       insert into member_profiles (user_id, company_id, joined_on) values
         ('${RAVI}', '${CO3}', '2026-09-12'), ('${ANU}', '${CO3}', '2026-10-03'), ('${FULL}', '${CO3}', '2019-06-01');
-      insert into attendance_policy (company_id, weekly_off) values ('${CO3}', '{0}');
+      insert into attendance_policy (company_id, weekly_off, enabled, enabled_at) values ('${CO3}', '{0}', true, '2020-01-01');
       insert into company_holidays (company_id, holiday_date, name) values ('${CO3}', '2026-09-14', 'Studio day');
       -- Ravi: an absence before he joined (not his), one after; unpaid leave 10-12 Sep (only the 12th is his).
       insert into attendance (company_id, user_id, a_date, status, late_minutes) values

@@ -89,6 +89,9 @@ beforeAll(async () => {
     -- or rule is not tracking anyone, and is never swept).
     insert into company_location (company_id, lat, lng) values
       ('${COMPANY_A}', 19.076, 72.8777), ('${COMPANY_B}', 28.6139, 77.209);
+    -- 0224: attendance is off until a studio turns it on; these studios have.
+    insert into attendance_policy (company_id, enabled, enabled_at) values ('${COMPANY_A}', true, '2020-01-01'), ('${COMPANY_B}', true, '2020-01-01')
+      on conflict (company_id) do update set enabled = true, enabled_at = '2020-01-01';
   `)
 })
 
@@ -166,13 +169,18 @@ describe('mark_absent_backstop', () => {
     expect(Number(r.rows[0]!.n)).toBe(0)
   })
 
-  it('never sweeps a studio that has not set attendance up (0223)', async () => {
-    await db.exec(`delete from attendance; delete from company_location where company_id = '${COMPANY_B}';`)
+  it('never sweeps a studio that has not turned attendance on, or before the day it did (0224)', async () => {
+    await db.exec(`delete from attendance; delete from team_assignment_slots; update attendance_policy set enabled = false where company_id = '${COMPANY_B}';`)
     await sweep()
-    const r = await db.query<{ n: string }>(`select count(*)::text as n from attendance where company_id = '${COMPANY_B}';`)
-    expect(Number(r.rows[0]!.n)).toBe(0)
-    expect((await db.query<{ ok: boolean }>(`select attendance_configured('${COMPANY_B}') as ok;`)).rows[0]!.ok).toBe(false)
-    expect((await db.query<{ ok: boolean }>(`select attendance_configured('${COMPANY_A}') as ok;`)).rows[0]!.ok).toBe(true)
+    const count = async (co: string) =>
+      Number((await db.query<{ n: string }>(`select count(*)::text as n from attendance where company_id = '${co}';`)).rows[0]!.n)
+    expect(await count(COMPANY_B)).toBe(0)
+    expect(await count(COMPANY_A)).toBe(1)
+    // Turned on today: the day that has just ended was before it.
+    await db.exec(`delete from attendance; update attendance_policy set enabled = true, enabled_at = now() + interval '1 day' where company_id = '${COMPANY_A}';`)
+    await sweep()
+    expect(await count(COMPANY_A)).toBe(0)
+    await db.exec(`update attendance_policy set enabled = true, enabled_at = '2020-01-01';`)
   })
 
   it('is not callable by a signed-in studio user', async () => {

@@ -7,8 +7,10 @@
  * deduction is typed, and the DB test checks both sides agree.
  *
  *   working days  = days in the month − weekly off days − holidays
- *   deduction     = round(base ÷ working days × (unpaid leave days + absent days))
- *                   never more than the base
+ *   deduction     = round(base ÷ working days × days not paid for)
+ *                   never more than the base, where days not paid for =
+ *                   unpaid leave + absent days + ½ per half day (0224)
+ *                   + ½ per N late marks when the studio sets N
  *   net pay       = base − deduction + additions − other deductions, never below 0
  *
  * Someone who joins or leaves part-way through the month (0187) is paid for
@@ -24,7 +26,9 @@
  * A month with no working days pays by calendar days instead. Everyone else
  * (joined before the month, not left) is paid exactly as before.
  *
- * Lateness is shown, never deducted.
+ * Lateness is shown, and deducted only when the studio says so ("3 late
+ * marks = half a day"). Only days the studio was tracking count (0224):
+ * nothing before attendance went on, and never a day spent on a shoot.
  */
 
 /** "YYYY-MM-DD" for a calendar day, without time zones getting involved. */

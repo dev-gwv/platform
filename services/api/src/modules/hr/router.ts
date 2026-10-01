@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import {
   attendanceDayRow,
   attendancePlace,
@@ -18,11 +18,17 @@ import {
   decideRequest,
   companyHoliday,
   createHolidayRequest,
-  attendancePolicy,
+  attendanceSettings,
+  updateAttendanceSettings,
+  checkInResponse,
+  todayBoard,
+  monthRegister,
+  resolveLinkRequest,
+  resolvedPin,
   attendanceCorrection,
   createCorrectionRequest,
 } from '@ipc/contracts'
-import { matchesRoster, summariseRoster } from '@ipc/domain'
+import { coordsFromText, isMapsHost, matchesRoster, summariseRoster } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireModule } from '../../middleware/permissions'
@@ -52,6 +58,30 @@ function explain(code: string, err: unknown): undefined {
 
 /** The RPCs signal their own refusals as P0001 with a leading keyword. */
 const rpcReason = (err: unknown): string => String((err as { message?: string })?.message ?? '')
+
+/** The studio's attendance settings as the app reads them; defaults when none are saved. */
+async function readSettings(c: Context<AppEnv>) {
+  const rows = await attempt(c, 'hr.policy.get', () =>
+    withUser(c.env, c.get('auth').userId, (sql) => sql`
+      select weekly_off, enabled, enabled_at, to_char(day_start, 'HH24:MI') as day_start, grace_min,
+             to_char(day_end, 'HH24:MI') as day_end, half_day_hours::float8 as half_day_hours,
+             selfie_required, late_marks_per_half_day
+        from attendance_policy where company_id = ${c.get('auth').companyId}`),
+  )
+  if (!rows) return null
+  const r = rows[0]
+  return attendanceSettings.parse({
+    weekly_off: ((r?.weekly_off as number[] | undefined) ?? []).map(Number),
+    enabled: r?.enabled ?? false,
+    enabled_at: r?.enabled_at ?? null,
+    day_start: r?.day_start ?? null,
+    grace_min: r?.grace_min ?? 15,
+    day_end: r?.day_end ?? null,
+    half_day_hours: r?.half_day_hours ?? null,
+    selfie_required: r?.selfie_required ?? false,
+    late_marks_per_half_day: r?.late_marks_per_half_day ?? 0,
+  })
+}
 
 export const hrRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -168,27 +198,53 @@ export const hrRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  // Everything the owner sets about attendance (0224). Anyone in the studio
+  // may read it -- the app needs the hours -- but only the owner changes it,
+  // except the weekly off-days, which admins and managers keep as before.
   .get('/policy', async (c) => {
-    const rows = await attempt(c, 'hr.policy.get', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql<{ weekly_off: number[] }[]>`
-        select weekly_off from attendance_policy where company_id = ${c.get('auth').companyId}`),
-    )
-    if (!rows) fail(400, 'We could not load the weekly off-days.')
-    return c.json(attendancePolicy.parse({ weekly_off: (rows[0]?.weekly_off ?? []).map(Number) }))
+    const out = await readSettings(c)
+    if (!out) fail(400, 'We could not load the attendance settings.')
+    return c.json(out)
   })
 
   .patch('/policy', async (c) => {
-    const parsed = attendancePolicy.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Pick days of the week.')
-    const row = await attempt(c, 'hr.policy.set', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        const [r] = await sql<{ days: number[] }[]>`select set_weekly_off(${parsed.data.weekly_off}::smallint[]) as days`
-        return r ?? null
+    const parsed = updateAttendanceSettings.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the attendance settings.')
+    const v = parsed.data
+    const auth = c.get('auth')
+    const onlyWeeklyOff = Object.keys(v).every((k) => k === 'weekly_off')
+    if (!onlyWeeklyOff && !auth.isOwner) fail(403, 'Only the studio owner can change attendance settings.')
+    const ok = await attempt(c, 'hr.policy.set', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        if (v.weekly_off) await sql`select set_weekly_off(${v.weekly_off}::smallint[])`
+        if (onlyWeeklyOff) return true
+        const [cur] = await sql`
+          select enabled, to_char(day_start, 'HH24:MI') as day_start, grace_min, to_char(day_end, 'HH24:MI') as day_end,
+                 half_day_hours::float8 as half_day_hours, selfie_required, late_marks_per_half_day
+            from attendance_policy where company_id = get_current_company_id()`
+        const pick = <K extends keyof typeof v>(k: K, fallback: unknown) => (v[k] !== undefined ? v[k] : fallback)
+        await sql`
+          select set_attendance_policy(
+            ${pick('enabled', cur?.enabled ?? false) as boolean},
+            ${pick('day_start', cur?.day_start ?? null) as string | null}::time,
+            ${pick('grace_min', cur?.grace_min ?? 15) as number},
+            ${pick('day_end', cur?.day_end ?? null) as string | null}::time,
+            ${pick('half_day_hours', cur?.half_day_hours ?? null) as number | null},
+            ${pick('selfie_required', cur?.selfie_required ?? false) as boolean},
+            ${pick('late_marks_per_half_day', cur?.late_marks_per_half_day ?? 0) as number})`
+        return true
       }),
-    { onCode: explain })
-    if (!row) fail(400, 'We could not save the weekly off-days.')
-    await audit(c, { action: 'attendance.weekly_off', entityType: 'company', entityId: c.get('auth').companyId, after: parsed.data })
-    return c.json(attendancePolicy.parse({ weekly_off: row.days.map(Number) }))
+    {
+      onCode: (code, err) => {
+        if (code === 'P0001' && rpcReason(err).includes('bad_hours')) fail(422, 'The day has to end after it starts.')
+        return explain(code, err)
+      },
+    })
+    if (!ok) fail(400, 'We could not save the attendance settings.')
+    await audit(c, { action: onlyWeeklyOff ? 'attendance.weekly_off' : 'attendance.settings', entityType: 'company', entityId: auth.companyId, after: v })
+    const out = await readSettings(c)
+    if (!out) fail(400, 'We could not load the attendance settings.')
+    return c.json(out)
   })
 
   // ── "I forgot to check in" ───────────────────────────────────
@@ -281,15 +337,29 @@ export const hrRouter = new Hono<AppEnv>()
         const tz = rule?.tz ?? 'Asia/Kolkata'
         const [today] = await sql`
           select a.id, a.a_date, a.check_in_at, a.check_out_at, a.status, a.late_minutes,
-                 p.name as place_name, a.check_in_distance_m, a.source, a.closed_by_system
+                 p.name as place_name, a.check_in_distance_m, a.source, a.closed_by_system, a.accuracy_m, a.selfie_file_id
             from attendance a left join attendance_places p on p.id = a.check_in_place_id
            where a.user_id = ${auth.userId} and a.a_date = (now() at time zone ${tz})::date`
-        const [ctx] = await sql<{ configured: boolean; fenced: boolean; day_off: string | null; on_leave: boolean }[]>`
-          select attendance_configured(get_current_company_id()) as configured,
+        const [ctx] = await sql<{
+          enabled: boolean; fenced: boolean; day_off: string | null; on_leave: boolean
+          selfie_required: boolean | null; day_start: string | null; grace: number | null; day_end: string | null
+        }[]>`
+          select attendance_enabled(get_current_company_id(), (now() at time zone ${tz})::date) as enabled,
                  exists (select 1 from attendance_places where company_id = get_current_company_id() and is_active) as fenced,
                  day_off(get_current_company_id(), (now() at time zone ${tz})::date) as day_off,
-                 on_leave(${auth.userId}, (now() at time zone ${tz})::date) as on_leave`
-        return { rule, today: today ?? null, ctx }
+                 on_leave(${auth.userId}, (now() at time zone ${tz})::date) as on_leave,
+                 (select selfie_required from attendance_policy where company_id = get_current_company_id()) as selfie_required,
+                 (select to_char(r.expected, 'HH24:MI') from attendance_rule_for(${auth.userId}) r) as day_start,
+                 (select r.grace from attendance_rule_for(${auth.userId}) r) as grace,
+                 (select to_char(day_end, 'HH24:MI') from attendance_policy where company_id = get_current_company_id()) as day_end`
+        const [shoot] = await sql`
+          select t.id as slot_id, coalesce(sh.name, t.service_name, 'Shoot') as name, t.start_at, t.end_at, t.arrived_at
+            from team_assignment_slots t left join shoots sh on sh.id = t.shoot_id
+           where t.user_id = ${auth.userId} and t.status = 'booked' and t.shoot_id is not null
+             and t.start_at < (((now() at time zone ${tz})::date + 1)::timestamp at time zone ${tz})
+             and t.end_at > (((now() at time zone ${tz})::date)::timestamp at time zone ${tz})
+           order by t.start_at limit 1`
+        return { rule, today: today ?? null, ctx, shoot: shoot ?? null }
       }),
     )
     if (!out?.rule || !out.ctx) fail(400, 'We could not load your attendance.')
@@ -299,10 +369,17 @@ export const hrRouter = new Hono<AppEnv>()
         mode: out.rule.mode,
         place_name: out.rule.place_name,
         rule_from: out.rule.rule_from,
-        configured: out.ctx.configured,
+        // "Configured" now means switched on (0224): off, nothing to mark.
+        configured: out.ctx.enabled,
+        enabled: out.ctx.enabled,
+        selfie_required: out.ctx.selfie_required ?? false,
+        day_start: out.ctx.day_start,
+        grace_min: out.ctx.grace ?? 15,
+        day_end: out.ctx.day_end,
         fenced: out.ctx.fenced,
         day_off: out.ctx.day_off,
         on_leave: out.ctx.on_leave,
+        shoot_today: out.shoot,
       }),
     )
   })
@@ -629,30 +706,179 @@ export const hrRouter = new Hono<AppEnv>()
   .post('/check-in', async (c) => {
     const parsed = checkInRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Location is required to check in.')
-    const id = await attempt(
+    const v = parsed.data
+    const row = await attempt(
       c,
       'hr.check_in',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          const rows = await sql<{ id: string }[]>`
-            select check_in(p_lat => ${parsed.data.lat}, p_lng => ${parsed.data.lng}, p_auto => ${parsed.data.auto ?? false}) as id`
-          return rows[0]?.id ?? null
+          const rows = await sql`
+            select * from check_in(p_lat => ${v.lat}, p_lng => ${v.lng}, p_auto => ${v.auto ?? false},
+                                   p_accuracy => ${v.accuracy_m ?? null}, p_selfie => ${v.selfie_file_id ?? null})`
+          return rows[0] ?? null
         }),
       {
         onCode: (code, err) => {
           if (code !== 'P0001') return undefined
           const why = rpcReason(err)
-          if (why.includes('outside_fence')) return { outside: why.replace(/^.*outside_fence:\s*/, '').trim() }
-          if (why.includes('not_tracked')) return 'not_tracked' as const
+          const after = (k: string) => why.replace(new RegExp(`^.*${k}:\\s*`), '').trim()
+          if (why.includes('not_enabled')) fail(422, 'Attendance is not switched on for your studio.')
+          if (why.includes('not_tracked')) fail(422, 'Attendance is not tracked for you.')
+          if (why.includes('too_rough')) {
+            fail(422, `Your phone's location is too rough right now (±${after('too_rough')}). Turn on GPS or step outside, then try again.`)
+          }
+          if (why.includes('selfie_needed')) fail(422, 'Take a selfie to check in.')
+          if (why.includes('bad_selfie')) fail(422, 'That selfie could not be used. Take it again.')
+          if (why.includes('outside_fence')) fail(422, `You're ${after('outside_fence')}. You'll be marked once you're inside.`)
           return undefined
         },
       },
     )
-    if (id === 'not_tracked') fail(422, 'Attendance is not tracked for you.')
-    if (id && typeof id === 'object') fail(422, `You're ${id.outside}. You'll be marked once you're inside.`)
-    if (!id) fail(400, 'We could not record your check-in.')
-    await audit(c, { action: 'attendance.check_in', entityType: 'attendance', entityId: id })
-    return c.json(idOnly.parse({ id }), 201)
+    if (!row) fail(400, 'We could not record your check-in.')
+    const out = checkInResponse.parse(row)
+    await audit(c, { action: 'attendance.check_in', entityType: 'attendance', entityId: out.id })
+    return c.json(out, 201)
+  })
+
+  // ── The owner's Today board (0224): everyone the studio tracks, today ──
+  .get('/today', requireModule('attendance'), async (c) => {
+    const auth = c.get('auth')
+    if (!auth.isOwner && auth.role !== 'admin' && auth.role !== 'manager') fail(403, 'You do not have access to this.')
+    const date = c.req.query('date') ?? null
+    if (date !== null && !DATE.test(date)) fail(422, 'Invalid date.')
+    const out = await attempt(c, 'hr.today', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [d] = await sql<{ day: string; enabled: boolean; day_off: string | null; tz: string }[]>`
+          select coalesce(${date}::date, (now() at time zone attendance_tz(get_current_company_id()))::date)::text as day,
+                 attendance_enabled(get_current_company_id(), coalesce(${date}::date, (now() at time zone attendance_tz(get_current_company_id()))::date)) as enabled,
+                 day_off(get_current_company_id(), coalesce(${date}::date, (now() at time zone attendance_tz(get_current_company_id()))::date)) as day_off,
+                 attendance_tz(get_current_company_id()) as tz`
+        const day = d!.day
+        const tz = d!.tz
+        const rows = await sql`
+          select u.user_id, u.name, u.avatar_url,
+                 a.status, a.check_in_at, a.check_out_at, coalesce(a.late_minutes, 0) as late_minutes,
+                 p.name as place_name, a.check_in_distance_m as distance_m, a.accuracy_m, a.selfie_file_id,
+                 a.source, coalesce(a.closed_by_system, false) as closed_by_system,
+                 (select case when lr.half_day then 'half' else 'full' end from leave_requests lr
+                   where lr.user_id = u.user_id and lr.status = 'approved' and ${day}::date between lr.start_date and lr.end_date
+                   limit 1) as leave,
+                 (select jsonb_build_object('name', coalesce(sh.name, t.service_name, 'Shoot'), 'start_at', t.start_at,
+                                            'end_at', t.end_at, 'arrived_at', t.arrived_at)
+                    from team_assignment_slots t left join shoots sh on sh.id = t.shoot_id
+                   where t.user_id = u.user_id and t.status = 'booked' and t.shoot_id is not null
+                     and t.start_at < ((${day}::date + 1)::timestamp at time zone ${tz})
+                     and t.end_at > (${day}::date::timestamp at time zone ${tz})
+                   order by t.start_at limit 1) as shoot,
+                 to_char(r.expected, 'HH24:MI') as expected, coalesce(r.grace, 15) as grace
+            from users u
+            cross join lateral attendance_rule_for(u.user_id) r
+            left join attendance a on a.user_id = u.user_id and a.a_date = ${day}::date
+            left join attendance_places p on p.id = a.check_in_place_id
+           where u.deleted_at is null and u.status = 'active' and u.role <> 'super_admin'
+             and r.mode <> 'off'
+           order by u.name`
+        return { day, enabled: d!.enabled, day_off: d!.day_off, rows }
+      }),
+    )
+    if (!out) fail(400, 'We could not load today.')
+    return c.json(
+      todayBoard.parse({
+        date: out.day,
+        enabled: out.enabled,
+        day_off: out.day_off,
+        rows: out.rows.map((r) => ({ ...r, shoot: r.shoot ?? null })),
+      }),
+    )
+  })
+
+  // ── The month register (0224): one code per person per day ────────────
+  // Managers see everyone the studio tracks; anyone else (?user=me), only
+  // themselves.
+  .get('/register', async (c) => {
+    const auth = c.get('auth')
+    const month = c.req.query('month') ?? ''
+    if (!/^\d{4}-\d{2}$/.test(month)) fail(422, 'Pick a month (YYYY-MM).')
+    const mine = c.req.query('user') === 'me'
+    const manager = auth.isOwner || auth.role === 'admin' || auth.role === 'manager'
+    if (!mine && !(manager && auth.access.hasModule('attendance'))) fail(403, 'You do not have access to this.')
+    const first = `${month}-01`
+    const out = await attempt(c, 'hr.register', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [ctx] = await sql<{ tz: string; today: string; tracked_from: string | null; marks: number }[]>`
+          select attendance_tz(get_current_company_id()) as tz,
+                 ((now() at time zone attendance_tz(get_current_company_id()))::date)::text as today,
+                 (select case when p.enabled and p.enabled_at is not null
+                              then ((p.enabled_at at time zone attendance_tz(get_current_company_id()))::date)::text end
+                    from attendance_policy p where p.company_id = get_current_company_id()) as tracked_from,
+                 coalesce((select late_marks_per_half_day from attendance_policy where company_id = get_current_company_id()), 0) as marks`
+        const rows = await sql<{
+          user_id: string; name: string; day: string; status: string | null; source: string | null
+          day_off: string | null; leave: 'full' | 'half' | null; leave_unpaid: boolean | null; shoot: boolean
+        }[]>`
+          select u.user_id, u.name, g.d::date::text as day, a.status, a.source,
+                 day_off(u.company_id, g.d::date) as day_off,
+                 lv.leave, lv.unpaid as leave_unpaid,
+                 booked_on_shoot(u.user_id, g.d::date, ${ctx!.tz}) as shoot
+            from users u
+            cross join lateral attendance_rule_for(u.user_id) r
+            cross join generate_series(${first}::date, (${first}::date + interval '1 month - 1 day')::date, interval '1 day') g(d)
+            left join attendance a on a.user_id = u.user_id and a.a_date = g.d::date
+            left join lateral (
+              select case when lr.half_day then 'half' else 'full' end as leave, lr.kind = 'unpaid' as unpaid
+                from leave_requests lr
+               where lr.user_id = u.user_id and lr.status = 'approved' and g.d::date between lr.start_date and lr.end_date
+               limit 1) lv on true
+           where u.deleted_at is null and u.status = 'active' and u.role <> 'super_admin'
+             and r.mode <> 'off'
+             and ${mine ? sql`u.user_id = ${auth.userId}` : sql`true`}
+           order by u.name, g.d`
+        return { ctx: ctx!, rows }
+      }),
+    )
+    if (!out) fail(400, 'We could not load the register.')
+    const people = new Map<string, { user_id: string; name: string; cells: unknown[] }>()
+    for (const r of out.rows) {
+      const p = people.get(r.user_id) ?? { user_id: r.user_id, name: r.name, cells: [] }
+      p.cells.push({ day: r.day, status: r.status, source: r.source, day_off: r.day_off, leave: r.leave, leave_unpaid: !!r.leave_unpaid, shoot: r.shoot })
+      people.set(r.user_id, p)
+    }
+    return c.json(
+      monthRegister.parse({
+        month,
+        tracked_from: out.ctx.tracked_from,
+        today: out.ctx.today,
+        late_marks_per_half_day: out.ctx.marks,
+        people: [...people.values()],
+      }),
+    )
+  })
+
+  // A Google Maps link (or "lat, lng") into a pin. Short links are followed
+  // here -- Google's hosts only, at most five hops, three seconds each --
+  // because they carry no coordinates until they are opened.
+  .post('/places/resolve-link', async (c) => {
+    if (!c.get('auth').isOwner) fail(403, 'Only the studio owner can change places.')
+    const parsed = resolveLinkRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Paste a Google Maps link.')
+    const NO_PIN = 'That link has no pin. Open it, press and hold the exact spot, and share that link.'
+    let text = parsed.data.url
+    for (let hop = 0; hop <= 5; hop++) {
+      const pin = coordsFromText(text)
+      if (pin) return c.json(resolvedPin.parse(pin))
+      let url: URL
+      try {
+        url = new URL(text)
+      } catch {
+        fail(422, NO_PIN)
+      }
+      if (url.protocol !== 'https:' || !isMapsHost(url.hostname) || hop === 5) fail(422, NO_PIN)
+      const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(3000) }).catch(() => null)
+      const next = res?.headers.get('location')
+      if (!next) fail(422, NO_PIN)
+      text = new URL(next, url).toString()
+    }
+    fail(422, NO_PIN)
   })
 
   // ── Attendance Streak ────────────────────────────────────────

@@ -1021,8 +1021,39 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path.startsWith('/hr/holidays')) return holidaysFx
   if (method === 'POST' && path === '/hr/holidays') return { id: uid(0xca), ...(body as Record<string, unknown>) }
   if (method === 'DELETE' && path.startsWith('/hr/holidays/')) return {}
-  if (method === 'GET' && path === '/hr/policy') return { weekly_off: [0] }
-  if (method === 'PATCH' && path === '/hr/policy') return body
+  if (method === 'GET' && path === '/hr/policy')
+    return {
+      weekly_off: [0], enabled: true, enabled_at: '2026-09-01T04:30:00Z', day_start: '10:00', grace_min: 15,
+      day_end: '19:00', half_day_hours: 4, selfie_required: false, late_marks_per_half_day: 0,
+    }
+  if (method === 'PATCH' && path === '/hr/policy') return mockResponse('/hr/policy', 'GET')
+  if (method === 'GET' && path.startsWith('/hr/today')) {
+    const at = (h: number, m = 0) => new Date(new Date().setHours(h, m, 0, 0)).toISOString()
+    const base = { avatar_url: null, check_out_at: null, place_name: null, distance_m: null, accuracy_m: null, selfie_file_id: null,
+      source: null, closed_by_system: false, leave: null, shoot: null, expected: '10:00', grace: 15, late_minutes: 0 }
+    return {
+      date: new Date().toISOString().slice(0, 10), enabled: true, day_off: null,
+      rows: [
+        { ...base, user_id: uid(0xa1), name: 'Rahul Sharma', status: 'present', check_in_at: at(9, 52), place_name: 'Studio', distance_m: 18, accuracy_m: 12, source: 'auto_login' },
+        { ...base, user_id: uid(0xa2), name: 'Sneha Iyer', status: 'late', check_in_at: at(10, 37), late_minutes: 37, place_name: 'Studio', distance_m: 40, accuracy_m: 20 },
+        { ...base, user_id: uid(0xa3), name: 'Arjun Mehta', status: null, check_in_at: null },
+        { ...base, user_id: uid(0xa4), name: 'Vikram Rao', status: null, check_in_at: null, shoot: { name: 'Haldi', start_at: at(15), end_at: at(18), arrived_at: null } },
+      ],
+    }
+  }
+  if (method === 'GET' && path.startsWith('/hr/register')) {
+    const month = new URL(`http://x${path}`).searchParams.get('month') ?? new Date().toISOString().slice(0, 7)
+    const [y, m] = month.split('-').map(Number) as [number, number]
+    const days = new Date(y, m, 0).getDate()
+    const cells = Array.from({ length: days }, (_, i) => {
+      const day = `${month}-${String(i + 1).padStart(2, '0')}`
+      const dow = new Date(`${day}T12:00:00`).getDay()
+      return { day, status: dow === 0 ? null : i % 9 === 4 ? 'late' : i % 13 === 6 ? 'absent' : 'present', source: null,
+        day_off: dow === 0 ? 'Weekly off' : null, leave: null, leave_unpaid: false, shoot: i % 11 === 3 }
+    })
+    return { month, tracked_from: `${month}-01`, today: new Date().toISOString().slice(0, 10), late_marks_per_half_day: 0,
+      people: [{ user_id: uid(0xa1), name: 'Rahul Sharma', cells }, { user_id: uid(0xa2), name: 'Sneha Iyer', cells }] }
+  }
   if (method === 'POST' && path === '/hr/check-out') return { id: uid(0xc1) }
   if (method === 'POST' && path === '/hr/check-in') return { id: uid(0xc0) }
   if (method === 'GET' && (path === '/notifications' || path.startsWith('/notifications?')))
