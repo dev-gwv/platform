@@ -125,7 +125,7 @@ function TeamPage() {
       <div className="pt-2">
         {adding === 'choose' && fromSetup && nobodyYet && <SetupWelcome name={session?.display_name} />}
         {adding === 'choose' ? (
-          <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} />
+          <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} setup={fromSetup} />
         ) : adding === 'bulk' ? (
           <BulkAddMembers onDone={onBulkAdded} onCancel={() => setAdding('choose')} />
         ) : (
