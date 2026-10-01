@@ -1616,9 +1616,15 @@ describe('refresh tokens (0024)', () => {
     const raw = await issue()
     const r = await rotate(raw)
     const r2 = await rotate(r.token!) // the successor WAS used: two holders
-    // Age the consumption past the race grace window.
+    // Age the consumption past the race grace window, and mint the first two
+    // tokens in the same instant, as a fast machine does: the clock must not
+    // be what tells a lost reply from reuse (0222).
     await db.exec(
-      `update refresh_tokens set consumed_at = now() - interval '5 minutes' where consumed_at is not null;`,
+      `update refresh_tokens set consumed_at = now() - interval '5 minutes' where consumed_at is not null;
+       update refresh_tokens set created_at = (
+         select created_at from refresh_tokens
+          where token_hash = encode(sha256(convert_to('${r.token}', 'UTF8')), 'hex'))
+        where token_hash = encode(sha256(convert_to('${raw}', 'UTF8')), 'hex');`,
     )
     const replay = await rotate(raw)
     expect(replay.user_id).toBeNull()
