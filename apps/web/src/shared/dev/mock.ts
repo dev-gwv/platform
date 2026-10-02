@@ -439,6 +439,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   }
   // The studio's named stages.
   if (method === 'GET' && path === '/projects/stages') return deliverableStagesFx
+  if (method === 'GET' && /^\/projects\/[^/]+\/client-activity$/.test(path))
+    return { views: [{ kind: 'quotation', subject_id: uid(0x7e1), last_viewed_at: new Date(Date.now() - 3600e3).toISOString(), views: 2 }], accepted_at: null, accepted_by: null, declined_at: null }
   if (method === 'POST' && path === '/projects/stages') {
     const b = (body ?? {}) as { label?: string; stage?: string; color?: string; team_allowed?: boolean }
     return { id: uid(0x5c0 + Math.floor(Math.random() * 50)), code: (b.label ?? 'stage').toLowerCase().replace(/\W+/g, '_'), label: b.label ?? 'Stage', stage: b.stage ?? 'in_progress', color: b.color ?? 'slate', team_allowed: b.team_allowed ?? true, sort_order: 50 }

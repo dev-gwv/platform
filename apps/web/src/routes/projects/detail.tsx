@@ -49,6 +49,7 @@ import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ClientPortalDialog } from '@/features/client-portal/ClientPortalDialog'
 import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
+import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
@@ -376,6 +377,7 @@ function ProjectDetail() {
         <div className="mt-4 flex flex-col gap-4">
           {seesMoney && <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />}
           <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
+          <ClientActivityCard projectId={id} />
           <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
         </div>
       )}

@@ -775,3 +775,17 @@ export const projectCostSheet = z.object({
   profit: money,
 })
 export type ProjectCostSheet = z.infer<typeof projectCostSheet>
+
+/** What the client did with the project's documents (0235), for the Overview. */
+export const clientActivity = z.object({
+  views: z.array(z.object({
+    kind: z.enum(['quotation', 'invoice', 'terms']),
+    subject_id: z.string(),
+    last_viewed_at: z.coerce.string(),
+    views: z.number().int(),
+  })),
+  accepted_at: z.coerce.string().nullable(),
+  accepted_by: z.string().nullable(),
+  declined_at: z.coerce.string().nullable(),
+})
+export type ClientActivity = z.infer<typeof clientActivity>

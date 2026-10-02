@@ -20,6 +20,7 @@ import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { textParam, uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
+import { noteClientView } from '../../lib/client-view'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
@@ -275,6 +276,7 @@ export const publicDocumentsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]) fail(404, 'This link is invalid or has expired.')
+    await noteClientView(c, 'quotation', token)
     return c.json(publicQuotation.parse(rows[0]))
   })
 
@@ -322,6 +324,7 @@ export const publicDocumentsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]?.doc) fail(404, 'This link is invalid or has expired.')
+    await noteClientView(c, 'invoice', token)
     return c.json(publicInvoice.parse(rows[0].doc))
   })
 

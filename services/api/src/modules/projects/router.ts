@@ -36,8 +36,10 @@ import {
   quotationTermsPreset,
   saveQuotationTermsPresetRequest,
   z,
+  clientActivity,
 } from '@ipc/contracts'
 import { projectHealth, type ProjectCounters } from '@ipc/domain'
+import { fillProjectDueDates } from '../../lib/due-fill'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -579,6 +581,9 @@ export const projectsRouter = new Hono<AppEnv>()
             p_client_id => ${body.client_id ?? null}::uuid,
             p_start_date => ${body.start_date ?? null}::date
           ) as create_project_from_template`
+        // The template's deliverables arrive undated; date them as the wizard would.
+        const created = result[0]?.create_project_from_template
+        if (created) await fillProjectDueDates(sql, created)
         return result
       }),
       { onCode: (code) => (code === '23514' ? fail(422, 'Pick a client for this project.') : undefined) },
@@ -1432,6 +1437,30 @@ export const projectsRouter = new Hono<AppEnv>()
    * is left of the project value. Crew costs are for people who plan crew
    * (projects: edit); expenses only for those who can see the studio's.
    */
+  // What the client did with the documents (0235): the last few opens, and an
+  // acceptance. For the Overview; never money.
+  .get('/:id/client-activity', requireAction('projects', 'view'), requireStudioWork, async (c) => {
+    const projectId = uuidParam(c)
+    const data = await attempt(c, 'projects.client_activity', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const views = await sql<{ kind: string; subject_id: string; last_viewed_at: string; views: number }[]>`
+          select kind, subject_id, last_viewed_at, views from client_activity(${projectId})`
+        const [q] = await sql<{ accepted_at: string | null; accepted_by_name: string | null; declined_at: string | null }[]>`
+          select q.accepted_at, q.accepted_by_name, q.declined_at
+            from project_quotations q where q.project_id = ${projectId}
+           order by coalesce(q.accepted_at, q.declined_at) desc nulls last, q.created_at desc limit 1`
+        return {
+          views: views.map((v) => ({ ...v, views: Number(v.views) })),
+          accepted_at: q?.accepted_at ?? null,
+          accepted_by: q?.accepted_by_name ?? null,
+          declined_at: q?.declined_at ?? null,
+        }
+      }),
+    )
+    if (!data) fail(400, 'We could not read what the client did.')
+    return c.json(clientActivity.parse(data))
+  })
+
   .get('/:id/costs', requireAction('projects', 'edit'), requireMoney, async (c) => {
     const projectId = uuidParam(c)
     const seeExpenses = c.get('auth').access.hasModule('company_expenses')
