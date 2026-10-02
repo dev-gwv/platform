@@ -258,7 +258,7 @@ export const crmRouter = new Hono<AppEnv>()
     // add_lead() dedupes on the normalised number and returns the row that
     // already exists, so ask first — otherwise the client cannot tell a new
     // lead from one it just re-opened.
-    const norm = normalizePhone(v.phone)
+    const norm = v.phone ? normalizePhone(v.phone) : null
     const row = await attempt(c, 'crm.lead_create', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const [known] = norm
@@ -266,7 +266,7 @@ export const crmRouter = new Hono<AppEnv>()
           : []
         const [created] = await sql<{ id: string }[]>`
           select add_lead(
-            ${v.name ?? null}, ${v.phone}, ${v.email ?? null},
+            ${v.name ?? null}, ${v.phone ?? null}, ${v.email ?? null},
             ${v.source}, ${v.notes ?? null}, ${v.assigned_to ?? null}
           ) as id`
         const id = created?.id
@@ -305,7 +305,7 @@ export const crmRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not add this lead.')
     const body = createLeadResponse.parse(row)
     if (body.created) {
-      await audit(c, { action: 'lead.create', entityType: 'crm_lead', entityId: body.lead.id, after: { phone: v.phone, source: v.source } })
+      await audit(c, { action: 'lead.create', entityType: 'crm_lead', entityId: body.lead.id, after: { phone: v.phone ?? null, source: v.source } })
     }
     return c.json(body, body.created ? 201 : 200)
   })
@@ -931,6 +931,14 @@ export const crmRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the project details.')
     const leadId = uuidParam(c)
     const v = parsed.data
+    // A lead can start with just a name, but a client needs a number: say so
+    // plainly rather than failing inside the conversion.
+    if (!v.client_id) {
+      const known = await attempt(c, 'crm.convert_phone', () =>
+        withUser(c.env, c.get('auth').userId, (sql) => sql<{ phone: string | null }[]>`select phone from crm_leads where id = ${leadId}`),
+      )
+      if (known?.[0] && !known[0].phone?.trim() && !v.client?.phone) fail(422, 'Add a phone number to this lead before booking it.')
+    }
     const row = await attempt(
       c,
       'crm.convert',

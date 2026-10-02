@@ -315,7 +315,8 @@ export type CreateLeadResponse = z.infer<typeof createLeadResponse>
 
 export const createLeadRequest = z.object({
   name: z.string().trim().max(160).optional(),
-  phone: z.string().trim().min(6).max(30),
+  /** Optional: an enquiry can start with just a name; booking it still asks for a number. */
+  phone: z.string().trim().min(6).max(30).optional(),
   email: z.string().trim().max(200).optional(),
   source: leadSource.default('manual'),
   notes: z.string().max(2000).optional(),
@@ -342,7 +343,7 @@ export const createLeadRequest = z.object({
   functions: z.array(leadFunctionInput).max(12).optional(),
   /** Labels to put on the lead as it is added. */
   tag_ids: z.array(uuid).max(20).optional(),
-})
+}).refine((v) => !!v.phone || !!v.name?.trim(), { message: 'Add a name or a phone number.', path: ['phone'] })
 export type CreateLeadRequest = z.infer<typeof createLeadRequest>
 
 /** One member of the round-robin rota new leads are handed to. */

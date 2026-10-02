@@ -3656,6 +3656,21 @@ if (listed) {
   )
 }
 
+// ── A lead can start with just a name; booking it still asks for a number ──
+{
+  const named = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: `Name Only ${rand()}` } })
+  const neither = await api('/crm/leads', { token: aToken, method: 'POST', body: { notes: 'nothing to go on' } })
+  const book = await api(`/crm/leads/${named.json.lead?.id}/convert`, { token: aToken, method: 'POST', body: { project: { name: 'Name only wedding' } } })
+  const fixed = await api(`/crm/leads/${named.json.lead?.id}`, { token: aToken, method: 'PATCH', body: { phone: randPhone() } })
+  const bookNow = await api(`/crm/leads/${named.json.lead?.id}/convert`, { token: aToken, method: 'POST', body: { project: { name: 'Name only wedding' } } })
+  check(
+    'leads: a name alone is enough to add one; neither name nor number is 422; booking without a number is 422 until one is added',
+    named.status === 201 && named.json.lead?.phone === null && neither.status === 422 &&
+      book.status === 422 && /phone number/.test(book.json.error ?? '') && fixed.status < 300 && bookNow.status === 201,
+    { named: named.status, phone: named.json.lead?.phone, neither: neither.status, book: book.status, err: book.json.error, fixed: fixed.status, bookNow: bookNow.status },
+  )
+}
+
 // ── Leave balances (0228): days a year, what is left, approve as unpaid ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

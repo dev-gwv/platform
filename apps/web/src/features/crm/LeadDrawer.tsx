@@ -229,6 +229,19 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                     <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
                   )}
                 </button>
+              ) : canEdit ? (
+                // A lead can start with just a name; the number is the next thing to get.
+                <input
+                  aria-label="Add their number"
+                  placeholder="Add their number"
+                  inputMode="tel"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v.length >= 6) patch({ phone: v })
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                  className="h-7 w-44 rounded-md border border-dashed border-warning/70 bg-warning/10 px-2 text-sm text-foreground placeholder:font-medium placeholder:text-warning focus:outline-none focus:ring-2 focus:ring-ring"
+                />
               ) : (
                 <span>No phone number</span>
               )}
