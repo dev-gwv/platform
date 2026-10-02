@@ -1,19 +1,20 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { StatCard } from '@/shared/ui/stat-card'
 import { Button } from '@/shared/ui/button'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Input, Label } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Select } from '@/shared/ui/select'
-import { ApiError, callApi } from '@/shared/api/client'
-import { useAuth } from '@/shared/auth/AuthProvider'
-import { useAccess } from '@/shared/auth/useAccess'
-import { shootListItem } from '@ipc/contracts'
+import { ErrorState } from '@/shared/ui/states'
+import { cn } from '@/shared/ui/cn'
+import { todayInIndia } from '@/shared/ui/days-left'
+import { ApiError } from '@/shared/api/client'
 import {
   useTeamPayouts,
   useCreateTeamPayout,
@@ -23,13 +24,14 @@ import {
   usePayoutSettlements,
   useCreatePayoutSettlement,
 } from '@/features/team-payouts/api'
-import { useSlots } from '@/features/allocation/api'
+import { useCrewPayouts } from '@/features/team-payouts/pay'
+import { CREW_VIEWS, crewRowLine, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
 import { useDirectory } from '@/features/team/api'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { formatINR, humanize } from '@/shared/ui/format'
-import { type CreateTeamPayoutRequest, type PayoutEntryType, type TeamPayout, type TeamSlot } from '@ipc/contracts'
-import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Users, Wallet } from 'lucide-react'
+import { type CreateTeamPayoutRequest, type CrewPayoutRow, type PayoutEntryType, type TeamPayout } from '@ipc/contracts'
+import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Wallet, CalendarClock, Filter } from 'lucide-react'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 const emptyForm = (): CreateTeamPayoutRequest => ({
@@ -293,247 +295,190 @@ function TeamPayoutsContent() {
   )
 }
 
-const COST_STATUS_TONE = { not_decided: 'neutral', tentative: 'warning', final: 'success' } as const
-const SETTLEMENT_TONE = { unpaid: 'danger', partially_paid: 'warning', paid: 'success' } as const
+const dayLabel = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
-type SettlementFilter = 'all' | 'unpaid' | 'partially_paid' | 'paid'
-type CostFilter = 'all' | 'final' | 'tentative' | 'not_added'
-type RangeFilter = 'all' | 'this_month' | 'custom'
-
-function settlementOf(due: number, paid: number): 'unpaid' | 'partially_paid' | 'paid' {
-  if (paid <= 0) return 'unpaid'
-  if (paid + 0.001 >= due) return 'paid'
-  return 'partially_paid'
+type SettlementEntry = {
+  id: string
+  slot_id: string
+  entry_type: string
+  amount_paid: number
+  paid_date: string
+  payment_mode: string | null
+  payment_reference: string | null
+  notes: string | null
 }
 
-/** Grouped by member: what a shoot-day booking is worth, and what's actually been paid toward it. */
+/**
+ * Crew money by when the shoot is: Owed now (shoots already done, minus what
+ * has been paid), Upcoming (promised, not owed yet) and All. The headline is
+ * the same sum the dashboard's "Who you owe" shows (GET /team-payouts/shoots
+ * and /owed read one query).
+ */
 function ShootPayoutsTracker() {
-  const { data: slots, isLoading } = useSlots()
-  const { session } = useAuth()
-  const access = useAccess()
-  const [settlement, setSettlement] = useState<SettlementFilter>('all')
-  const [cost, setCost] = useState<CostFilter>('all')
-  const [range, setRange] = useState<RangeFilter>('all')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const q = useCrewPayouts()
+  const [viewParam, setViewParam] = useUrlParam('view', 'owed')
+  const view = crewViewOf(viewParam)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [project, setProject] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
 
-  const shoots = useQuery({
-    queryKey: ['shoots'],
-    queryFn: () => callApi('/shoots', { responseSchema: shootListItem.array() }),
-    enabled: !!session && access.hasModule('projects'),
-    staleTime: 30_000,
-  })
-  const shootById = useMemo(() => new Map((shoots.data ?? []).map((s) => [s.id, s])), [shoots.data])
-
-  const bookable = useMemo(
-    () => (slots ?? []).filter((s) => s.status !== 'cancelled'),
-    [slots],
-  )
-  const slotIds = useMemo(() => bookable.map((s) => s.id), [bookable])
+  const rows = useMemo(() => q.data?.rows ?? [], [q.data])
+  const today = q.data?.today ?? todayInIndia()
+  const slotIds = useMemo(() => rows.map((r) => r.slot_id), [rows])
   const { data: settlements } = usePayoutSettlements(slotIds)
-  const paidBySlot = useMemo(
-    () => new Map((settlements?.aggregates ?? []).map((a) => [a.slot_id, a])),
-    [settlements],
+  const entries: readonly SettlementEntry[] = settlements?.entries ?? []
+
+  const shown = useMemo(
+    () => crewRowsFor(rows, view, today, { project, q: search, from, to }),
+    [rows, view, today, project, search, from, to],
   )
-
-  const { fromDate, toDate } = useMemo(() => {
-    if (range === 'this_month') {
-      const n = new Date()
-      const pad = (v: number) => String(v).padStart(2, '0')
-      return {
-        fromDate: `${n.getFullYear()}-${pad(n.getMonth() + 1)}-01`,
-        toDate: `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate())}`,
-      }
-    }
-    return { fromDate: from || null, toDate: to || null }
-  }, [range, from, to])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return bookable.filter((s) => {
-      const due = s.final_cost ?? s.estimated_cost ?? 0
-      const paid = paidBySlot.get(s.id)?.paid_total ?? 0
-      const uncosted = s.cost_status === 'not_decided' && due <= 0
-      if (cost === 'final' && s.cost_status !== 'final') return false
-      if (cost === 'tentative' && s.cost_status !== 'tentative') return false
-      if (cost === 'not_added' && !uncosted) return false
-      if (settlement !== 'all' && settlementOf(due, paid) !== settlement) return false
-      if (fromDate && s.start_at.slice(0, 10) < fromDate) return false
-      if (toDate && s.start_at.slice(0, 10) > toDate) return false
-      if (q && !(s.user_name ?? '').toLowerCase().includes(q)) return false
-      if (project && (s.shoot_id ? shootById.get(s.shoot_id)?.project_id : null) !== project) return false
-      return true
-    })
-  }, [bookable, paidBySlot, cost, settlement, fromDate, toDate, search, project, shootById])
+  const owedCount = useMemo(() => crewRowsFor(rows, 'owed', today).length, [rows, today])
   const projects = useMemo(() => {
     const m = new Map<string, string>()
-    for (const sh of shoots.data ?? []) if (sh.project_id) m.set(sh.project_id, sh.project_name ?? 'Project')
+    for (const r of rows) if (r.project_id) m.set(r.project_id, r.project_name ?? 'Project')
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [shoots.data])
+  }, [rows])
+  const filtering = !!(project || search.trim() || from || to)
 
   function exportCsv() {
-    const rows = filtered.map((s) => {
-      const sh = s.shoot_id ? shootById.get(s.shoot_id) : undefined
-      const due = s.final_cost ?? s.estimated_cost ?? 0
-      const paid = paidBySlot.get(s.id)?.paid_total ?? 0
-      return [s.user_name ?? '', sh?.project_name ?? '', sh?.name ?? '', s.start_at.slice(0, 10), s.service_name ?? '', due, paid, Math.max(0, due - paid), settlementOf(due, paid)]
-    })
+    const lines = shown.map((r) => [
+      r.user_name ?? '',
+      r.project_name ?? '',
+      r.shoot_name ?? '',
+      r.shoot_date,
+      r.role ?? '',
+      r.amount,
+      r.paid,
+      Math.max(0, r.amount - r.paid),
+      crewRowLine(r, today),
+    ])
     downloadCsv(
-      `shoot-payouts-${new Date().toISOString().slice(0, 10)}.csv`,
-      toCsv(['Person', 'Project', 'Shoot', 'Date', 'Role', 'Payout', 'Paid', 'Owed', 'Status'], rows),
+      `shoot-payouts-${view}-${today}.csv`,
+      toCsv(['Person', 'Project', 'Shoot', 'Date', 'Role', 'Payout', 'Paid', 'Left', 'Status'], lines),
     )
   }
 
-  const summary = useMemo(() => {
-    const due = filtered.reduce((n, s) => n + (s.final_cost ?? s.estimated_cost ?? 0), 0)
-    const paid = filtered.reduce((n, s) => n + (paidBySlot.get(s.id)?.paid_total ?? 0), 0)
-    const partial = filtered.filter((s) =>
-      settlementOf(s.final_cost ?? s.estimated_cost ?? 0, paidBySlot.get(s.id)?.paid_total ?? 0) === 'partially_paid',
-    ).length
-    return {
-      due,
-      paid,
-      pending: Math.max(0, due - paid),
-      partial,
-      members: new Set(filtered.map((s) => s.user_id)).size,
-    }
-  }, [filtered, paidBySlot])
-
-  if (isLoading) return <div className="py-12 text-center text-muted-foreground">Loading…</div>
-  if (bookable.length === 0) {
+  if (q.isLoading) return <div className="py-12 text-center text-muted-foreground">Loading…</div>
+  if (q.isError || !q.data) return <ErrorState onRetry={() => void q.refetch()} />
+  if (rows.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
-        No bookings yet. Book crew in Team Allocation to see payouts here.
+        No bookings yet. Book crew on a shoot to see payouts here.
       </div>
     )
   }
 
-  const byMember = new Map<string, TeamSlot[]>()
-  for (const s of filtered) {
-    const list = byMember.get(s.user_id) ?? []
-    list.push(s)
-    byMember.set(s.user_id, list)
+  const byMember = new Map<string, CrewPayoutRow[]>()
+  for (const r of shown) {
+    const list = byMember.get(r.user_id) ?? []
+    list.push(r)
+    byMember.set(r.user_id, list)
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Total due" value={formatINR(summary.due)} icon={IndianRupee} />
-        <StatCard label="Paid" value={formatINR(summary.paid)} icon={CheckCircle} />
-        <StatCard label="Pending" value={formatINR(summary.pending)} icon={Clock} />
-        <StatCard label="Partially paid" value={String(summary.partial)} icon={Wallet} />
-        <StatCard label="Members" value={String(summary.members)} icon={Users} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Owed now"
+          value={formatINR(q.data.owed_now)}
+          icon={Clock}
+          hint="Shoots already done, minus what you've paid."
+        />
+        <StatCard
+          label="Paid"
+          value={formatINR(q.data.paid)}
+          icon={CheckCircle}
+          hint={q.data.paid_ahead > 0 ? `${formatINR(q.data.paid_ahead)} of it in advance` : undefined}
+        />
+        <StatCard
+          label="Upcoming"
+          value={formatINR(q.data.upcoming)}
+          icon={CalendarClock}
+          hint="Promised for future shoots. Not owed yet."
+        />
       </div>
 
-      <Card>
-        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="flex flex-col gap-1.5">
-            <Label>Settlement</Label>
-            <Select value={settlement} onChange={(e) => setSettlement(e.target.value as SettlementFilter)}>
-              <option value="all">All</option>
-              <option value="unpaid">Unpaid</option>
-              <option value="partially_paid">Partially paid</option>
-              <option value="paid">Paid</option>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Project</Label>
-            <Select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
-              <option value="">All projects</option>
-              {projects.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Cost status</Label>
-            <Select value={cost} onChange={(e) => setCost(e.target.value as CostFilter)}>
-              <option value="all">All</option>
-              <option value="final">Final</option>
-              <option value="tentative">Tentative</option>
-              <option value="not_added">Not added</option>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Date range</Label>
-            <Select value={range} onChange={(e) => setRange(e.target.value as RangeFilter)}>
-              <option value="all">All time</option>
-              <option value="this_month">This month</option>
-              <option value="custom">Custom</option>
-            </Select>
-          </div>
-          {range === 'custom' ? (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <Label>From</Label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>To</Label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col gap-1.5 lg:col-span-2">
-              <Label>Member</Label>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…" />
-            </div>
-          )}
-          {range === 'custom' && (
-            <div className="flex flex-col gap-1.5 lg:col-span-6">
-              <Label>Member</Label>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Two numbers on this screen look like they should agree with the
-          project's cost and they do not. Saying so here is cheaper than the
-          support conversation that follows when nobody does. */}
-      <p className="text-xs text-muted-foreground">
-        The settlement ledger tracks cash actually paid to team members. Project cost and profit still use
-        the assignment payout amount, and are not affected by what has been settled here.
-      </p>
-
-      {filtered.length > 0 && (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="mr-1 h-4 w-4" /> Download CSV
+      <div className="flex flex-wrap items-center gap-2">
+        <SectionTabs
+          variant="chips"
+          label="Which payouts"
+          tabs={CREW_VIEWS.map((v) => ({ value: v.key, label: v.label, ...(v.key === 'owed' ? { count: owedCount } : {}) }))}
+          value={view}
+          onChange={(v) => setViewParam(v)}
+        />
+        <div className="ml-auto flex gap-2">
+          <Button variant={filtersOpen || filtering ? 'default' : 'outline'} size="sm" onClick={() => setFiltersOpen((o) => !o)}>
+            <Filter className="mr-1 h-4 w-4" /> Filter
           </Button>
+          {shown.length > 0 && (
+            <Button variant="outline" size="sm" onClick={exportCsv}>
+              <Download className="mr-1 h-4 w-4" /> CSV
+            </Button>
+          )}
         </div>
+      </div>
+
+      {filtersOpen && (
+        <Card>
+          <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col gap-1.5">
+              <Label>Person</Label>
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Project</Label>
+              <Select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
+                <option value="">All projects</option>
+                {projects.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Shoots from</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Shoots to</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {filtered.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          Nothing matches these filters.
-        </div>
+      {shown.length === 0 ? (
+        view === 'owed' && !filtering ? (
+          <div className="flex items-center gap-2 rounded-lg border border-success/40 bg-success/5 p-4 text-sm">
+            <CheckCircle className="size-5 text-success" aria-hidden /> All crew paid for shoots already done.
+          </div>
+        ) : (
+          <div className="py-12 text-center text-muted-foreground">
+            {filtering ? 'Nothing matches these filters.' : 'No shoots coming up.'}
+          </div>
+        )
       ) : (
         <div className="space-y-4">
-          {[...byMember.entries()].map(([userId, memberSlots]) => {
-            const memberTotal = memberSlots.reduce((n, s) => n + (s.final_cost ?? s.estimated_cost ?? 0), 0)
-            const memberPaid = memberSlots.reduce((n, s) => n + (paidBySlot.get(s.id)?.paid_total ?? 0), 0)
+          {[...byMember.entries()].map(([userId, list]) => {
+            const left = list.reduce((n, r) => n + Math.max(0, r.amount - r.paid), 0)
             return (
               <div key={userId} className="space-y-2">
-                <div className="flex items-baseline justify-between">
-                  <h3 className="font-semibold">{memberSlots[0]!.user_name ?? 'Member'}</h3>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="font-semibold">{list[0]!.user_name ?? 'Member'}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {formatINR(memberPaid)} of {formatINR(memberTotal)} paid
+                    {left > 0
+                      ? `${formatINR(left)} ${view === 'upcoming' ? 'after the shoots' : view === 'owed' ? 'owed' : 'left'}`
+                      : 'All paid'}
+                    {' · '}
+                    {list.length} {list.length === 1 ? 'shoot' : 'shoots'}
                   </p>
                 </div>
-                {memberSlots.map((s) => (
-                  <SlotPayoutRow
-                    key={s.id}
-                    slot={s}
-                    shootName={s.shoot_id ? (shootById.get(s.shoot_id)?.name ?? null) : null}
-                    projectName={s.shoot_id ? (shootById.get(s.shoot_id)?.project_name ?? null) : null}
-                    agg={paidBySlot.get(s.id)}
-                    entries={settlements?.entries ?? []}
-                  />
+                {list.map((r) => (
+                  <CrewPayoutLine key={r.slot_id} row={r} today={today} entries={entries} />
                 ))}
               </div>
             )
@@ -544,56 +489,36 @@ function ShootPayoutsTracker() {
   )
 }
 
-function SlotPayoutRow({
-  slot,
-  shootName,
-  projectName,
-  agg,
-  entries,
-}: {
-  slot: TeamSlot
-  shootName: string | null
-  projectName: string | null
-  agg: { paid_total: number } | undefined
-  entries: readonly { id: string; slot_id: string; entry_type: string; amount_paid: number; paid_date: string; payment_mode: string | null; payment_reference: string | null; notes: string | null }[]
-}) {
+function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: string; entries: readonly SettlementEntry[] }) {
   const [historyOpen, setHistoryOpen] = useState(false)
-  const due = slot.final_cost ?? slot.estimated_cost ?? 0
-  const paid = agg?.paid_total ?? 0
-  const pending = Math.max(0, due - paid)
-  const uncosted = slot.cost_status === 'not_decided' && due <= 0
-  const settlementStatus = uncosted ? 'unpaid' : settlementOf(due, paid)
-  const mine = entries.filter((e) => e.slot_id === slot.id)
+  const left = Math.max(0, row.amount - row.paid)
+  const mine = entries.filter((e) => e.slot_id === row.slot_id)
+  const past = row.shoot_date < today
+  const settled = row.amount > 0 && left <= 0.001
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
+    <div className={cn('flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3', settled && 'bg-success/[0.06]')}>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{slot.service_name ?? 'Booking'}</span>
-          {uncosted ? (
-            <StatusBadge>No cost yet</StatusBadge>
-          ) : (
-            <StatusBadge tone={COST_STATUS_TONE[slot.cost_status]}>{slot.cost_status.replace('_', ' ')}</StatusBadge>
-          )}
-          <StatusBadge tone={SETTLEMENT_TONE[settlementStatus]}>{settlementStatus.replace('_', ' ')}</StatusBadge>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {projectName ?? 'No project'} · {shootName ?? 'No shoot'}
-        </p>
+        <p className="font-medium">{[row.project_name, row.shoot_name].filter(Boolean).join(' · ') || 'A shoot'}</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {new Date(slot.start_at).toLocaleDateString()} · {uncosted ? 'uncosted' : `${formatINR(due)} due, ${formatINR(paid)} paid`}
+          {[dayLabel(row.shoot_date), row.role].filter(Boolean).join(' · ')}
+          {row.stands && row.amount > 0 && row.cost_status !== 'final' && ' · amount may change'}
         </p>
-        {slot.cost_notes && <p className="mt-1 text-xs text-muted-foreground">{slot.cost_notes}</p>}
       </div>
+      <p className={cn('text-sm tabular-nums', past && left > 0.001 ? 'font-semibold text-warning' : 'text-muted-foreground')}>
+        {crewRowLine(row, today)}
+      </p>
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" className="h-8 w-8" title="History" onClick={() => setHistoryOpen(true)} disabled={mine.length === 0}>
           <History className="h-4 w-4" />
         </Button>
-        {!uncosted && pending > 0.001 && <MarkPaidDialog slot={slot} pending={pending} />}
+        {row.stands && row.amount > 0 && left > 0.001 && (
+          <MarkPaidDialog slotId={row.slot_id} userId={row.user_id} pending={left} solid={past} />
+        )}
       </div>
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent title="Settlement history" description={slot.service_name ?? undefined}>
+        <DialogContent title="Payment history" description={[row.user_name, row.shoot_name].filter(Boolean).join(' · ') || undefined}>
           <div className="flex flex-col gap-2">
             {mine.map((e) => (
               <div key={e.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
@@ -617,12 +542,18 @@ function SlotPayoutRow({
   )
 }
 
+const ENTRY_TYPES: readonly { value: PayoutEntryType; label: string; title: string }[] = [
+  { value: 'payment', label: 'Payment', title: 'Money paid to them' },
+  { value: 'reversal', label: 'Reversal', title: 'Correct an overpayment' },
+  { value: 'adjustment', label: 'Adjustment', title: 'Any other correction' },
+]
+
 /** Amount defaults to the outstanding balance, but stays editable -- a partial payment is the norm, not an edge case. */
-function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) {
+function MarkPaidDialog({ slotId, userId, pending, solid }: { slotId: string; userId: string; pending: number; solid?: boolean }) {
   const create = useCreatePayoutSettlement()
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState(String(pending))
-  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10))
+  const [paidOn, setPaidOn] = useState(() => todayInIndia())
   const [mode, setMode] = useState('')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
@@ -630,7 +561,7 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
   const [error, setError] = useState<string | null>(null)
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
-    open ? `payout-settlement:${slot.id}` : null,
+    open ? `payout-settlement:${slotId}` : null,
     { amount, paidOn, mode, reference, notes, entryType },
     (v) => {
       setAmount(v.amount)
@@ -649,7 +580,7 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
     if (!(value > 0)) return
     try {
       await create.mutateAsync({
-        slot_id: slot.id,
+        slot_id: slotId,
         amount_paid: value,
         paid_date: paidOn,
         payment_mode: mode || undefined,
@@ -667,13 +598,13 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
-          <Wallet className="mr-1 h-4 w-4" /> Mark paid
+        <Button size="sm" variant={solid ? 'default' : 'outline'}>
+          <Wallet className="mr-1 h-4 w-4" /> Pay
         </Button>
       </DialogTrigger>
       <DialogContent title="Record a settlement" description={`Outstanding: ${formatINR(pending)}`}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          {open && <PayToCard userId={slot.user_id} />}
+          {open && <PayToCard userId={userId} />}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Amount (₹)</Label>
@@ -686,11 +617,24 @@ function MarkPaidDialog({ slot, pending }: { slot: TeamSlot; pending: number }) 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Type</Label>
-            <Select value={entryType} onChange={(e) => setEntryType(e.target.value as PayoutEntryType)}>
-              <option value="payment">Payment</option>
-              <option value="reversal">Reversal (correct an overpayment)</option>
-              <option value="adjustment">Adjustment</option>
-            </Select>
+            <div role="radiogroup" aria-label="Type" className="flex flex-wrap gap-2">
+              {ENTRY_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={entryType === t.value}
+                  title={t.title}
+                  onClick={() => setEntryType(t.value)}
+                  className={cn(
+                    'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                    entryType === t.value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background hover:bg-muted',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
           <PaymentModePicker value={mode} onChange={setMode} />
           <div className="flex flex-col gap-1.5">

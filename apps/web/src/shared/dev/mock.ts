@@ -312,8 +312,19 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       payments: [],
       owed: 6000,
       paid: 0,
+      owed_now: 0,
+      upcoming: 6000,
+      paid_ahead: 0,
       has_pay_details: false,
     }
+  if (method === 'GET' && (path === '/team-payouts/shoots' || path === '/team-payouts/owed')) {
+    const rows = [
+      { slot_id: uid(0x7e1), user_id: uid(0x7e2), user_name: 'Rahul Verma', role: 'Candid Photographer', shoot_id: uid(0x7e3), shoot_name: 'Haldi', project_id: uid(0x7e4), project_name: 'Mehta Wedding', shoot_date: '2026-09-20', amount: 6000, cost_status: 'final', paid: 2000, last_paid_date: '2026-09-22', stands: true },
+      { slot_id: uid(0x7e5), user_id: uid(0x7e2), user_name: 'Rahul Verma', role: 'Candid Photographer', shoot_id: uid(0x7e6), shoot_name: 'Wedding', project_id: uid(0x7e4), project_name: 'Mehta Wedding', shoot_date: '2026-11-12', amount: 6000, cost_status: 'tentative', paid: 1000, last_paid_date: '2026-09-22', stands: true },
+    ]
+    const summary = { today: '2026-10-02', owed_now: 4000, upcoming: 5000, paid: 3000, paid_ahead: 1000, people: [{ user_id: uid(0x7e2), user_name: 'Rahul Verma', owed: 4000, bookings: 1 }] }
+    return path.endsWith('/owed') ? summary : { ...summary, rows }
+  }
   if (method === 'GET' && /^\/team-payouts\/project\/[^/]+$/.test(path))
     return [{ slot_id: uid(0x7e1), user_id: uid(0x7e2), user_name: 'Rahul Verma', engagement_type: 'freelancer', role: 'Candid Photographer', shoot_id: uid(0x7e3), shoot_name: 'Wedding', shoot_date: '2026-11-12', amount: 6000, cost_status: 'final', paid: 0, last_paid_date: null, data_in: true }]
   if (method === 'GET' && /^\/team-payouts\/slot\/[^/]+$/.test(path))

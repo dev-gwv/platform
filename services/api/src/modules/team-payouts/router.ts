@@ -9,6 +9,8 @@ import {
   projectPayoutRow,
   slotPayStatus,
   paySlotRequest,
+  crewPayouts,
+  crewOwed,
   z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -16,7 +18,8 @@ import { requireAuth } from '../../middleware/auth'
 import { requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
+import { crewOwedFrom, crewPayoutRows } from '../../lib/payout-rows'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { rpcJson } from '../../lib/rpc'
@@ -247,6 +250,32 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not save the payout.')
     await audit(c, { action: 'payout.pay', entityType: 'team_assignment_slot', entityId: slotId, after: d })
     return c.json(slotPayStatus.parse(row))
+  })
+
+  /**
+   * Every booking's money, placed on its shoot's day: Team payouts' Owed now
+   * / Upcoming / All. Read as the service for the caller's studio (see
+   * lib/payout-rows.ts); ?user_id= narrows to one person's statement.
+   */
+  .get('/shoots', async (c) => {
+    const auth = c.get('auth')
+    const userId = c.req.query('user_id')
+    if (userId && !/^[0-9a-f-]{36}$/i.test(userId)) fail(422, 'That person was not found.')
+    const rows = await attempt(c, 'team-payouts.shoots', () =>
+      withService(c.env, (sql) => crewPayoutRows(sql, auth.companyId, { userId: userId ?? null })),
+    )
+    if (!rows) fail(400, 'We could not load the payouts.')
+    return c.json(crewPayouts.parse({ ...crewOwedFrom(rows), rows }))
+  })
+
+  /** What the studio owes its crew for shoots already done: the dashboard's "Who you owe". */
+  .get('/owed', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'team-payouts.owed', () =>
+      withService(c.env, (sql) => crewPayoutRows(sql, auth.companyId)),
+    )
+    if (!rows) fail(400, 'We could not load what is owed.')
+    return c.json(crewOwed.parse(crewOwedFrom(rows)))
   })
 
   .get('/settlements', async (c) => {

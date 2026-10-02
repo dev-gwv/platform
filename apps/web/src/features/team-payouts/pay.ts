@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { myPayouts, projectPayoutRow, slotPayStatus, type PaySlotRequest } from '@ipc/contracts'
+import { crewOwed, crewPayouts, myPayouts, projectPayoutRow, slotPayStatus, type PaySlotRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -68,6 +68,31 @@ export function useMyPayouts() {
     queryKey: ['payouts', 'mine'],
     queryFn: () => callApi('/me/payouts', { responseSchema: myPayouts }),
     enabled: !!session,
+    staleTime: 30_000,
+  })
+}
+
+/** Every booking's money for Team payouts (Owed now / Upcoming / All); one person's with userId. */
+export function useCrewPayouts(userId?: string | null) {
+  const { session } = useAuth()
+  const can = useCanPay()
+  return useQuery({
+    queryKey: ['payouts', 'crew', userId ?? 'all'],
+    queryFn: () =>
+      callApi(`/team-payouts/shoots${userId ? `?user_id=${userId}` : ''}`, { responseSchema: crewPayouts }),
+    enabled: !!session && can,
+    staleTime: 15_000,
+  })
+}
+
+/** What the studio owes its crew for shoots already done (dashboard). */
+export function useCrewOwed(enabled = true) {
+  const { session } = useAuth()
+  const can = useCanPay()
+  return useQuery({
+    queryKey: ['payouts', 'owed'],
+    queryFn: () => callApi('/team-payouts/owed', { responseSchema: crewOwed }),
+    enabled: !!session && can && enabled,
     staleTime: 30_000,
   })
 }
