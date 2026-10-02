@@ -1,0 +1,4 @@
+-- 0228: leave balances. A studio sets how many days of each kind a person
+-- gets a year (casual, sick, paid); everyone sees "8 of 12 casual left",
+-- and whoever approves sees the balance before they say yes -- with
+-- "Approve as unpaid" when the days have run out.
