@@ -15,7 +15,6 @@ import {
   projectDetail,
   projectBilling,
   projectCostSheet,
-  type PlanInstalment,
   projectListItem,
   projectListPage,
   projectTrackingRow,
@@ -49,6 +48,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { todayInIndia } from '../../lib/dates'
+import { planInstalmentsFrom } from '../../lib/plan'
 import { requireMoney, requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
 
 /** postgres.js writes `undefined` as a column; leave those out instead. */
@@ -1600,23 +1600,6 @@ export const projectsRouter = new Hono<AppEnv>()
 async function invoiceFitsProject(sql: TransactionSql, invoiceId: string, projectId: string): Promise<boolean> {
   const rows = await sql`select 1 from invoices where id = ${invoiceId} and (project_id = ${projectId} or project_id is null)`
   return rows.length > 0
-}
-
-/** The terms' payment rows, read defensively: they were typed in by people, over several versions. */
-function planInstalmentsFrom(raw: unknown): PlanInstalment[] {
-  if (!Array.isArray(raw)) return []
-  const out: PlanInstalment[] = []
-  for (const r of raw as Record<string, unknown>[]) {
-    const value = Number(r?.value)
-    if (!Number.isFinite(value) || value <= 0) continue
-    out.push({
-      label: typeof r.label === 'string' && r.label.trim() ? r.label.trim() : `Instalment ${out.length + 1}`,
-      mode: r.mode === 'amount' ? 'amount' : 'percent',
-      value,
-      due_trigger: typeof r.due_trigger === 'string' && r.due_trigger.trim() ? r.due_trigger.trim() : null,
-    })
-  }
-  return out
 }
 
 /** A date column as YYYY-MM-DD, whether the driver handed back a Date or a string. */

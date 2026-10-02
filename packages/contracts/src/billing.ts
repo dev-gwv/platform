@@ -518,3 +518,33 @@ export const upsertInvoiceItemPresetRequest = z.object({
   kind: z.enum(['service', 'goods']).default('service'),
 })
 export type UpsertInvoiceItemPresetRequest = z.infer<typeof upsertInvoiceItemPresetRequest>
+
+/**
+ * Payments received's four tiles: money still to come in placed on dates
+ * (Overdue · Due in 30 days · Later), and what came in over the period.
+ * Each rupee is counted once (allocateDue in packages/domain).
+ */
+export const dueLine = z.object({
+  project_id: z.string().uuid().nullable(),
+  project_name: z.string().nullable(),
+  client_name: z.string().nullable(),
+  kind: z.enum(['invoice', 'promise', 'plan', 'rest']),
+  label: z.string(),
+  amount: z.number(),
+  due_on: z.string().nullable(),
+  bucket: z.enum(['overdue', 'soon', 'later']),
+  invoice_id: z.string().uuid().optional(),
+  payment_id: z.string().uuid().optional(),
+})
+export type DueLineRow = z.infer<typeof dueLine>
+
+const dueTile = z.object({ amount: z.number(), count: z.number().int() })
+export const billingDue = z.object({
+  today: z.string(),
+  overdue: dueTile,
+  soon: dueTile,
+  later: dueTile,
+  received: dueTile,
+  lines: z.array(dueLine),
+})
+export type BillingDue = z.infer<typeof billingDue>

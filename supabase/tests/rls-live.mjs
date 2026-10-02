@@ -3630,6 +3630,47 @@ if (listed) {
   )
 }
 
+// ── Payments received tiles: Overdue · Due in 30 days · Later, each rupee once ──
+{
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Due Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Due project ${rand()}`, client_id: client.json.id, package_cost: 100000 } })).json.id
+  const soon = new Date(Date.now() + 10 * 86400e3).toISOString().slice(0, 10)
+  const paid = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 30000, status: 'paid', mode: 'UPI' } })
+  const promise = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 10000, status: 'pending', paid_on: soon, mode: 'UPI' } })
+  const due = await api('/billing/due?from=2000-01-01&to=2099-12-31', { token: aToken })
+  const mine = (due.json.lines ?? []).filter((l) => l.project_id === pid)
+  const sum = (b) => (due.json.lines ?? []).filter((l) => l.bucket === b).reduce((n, l) => n + l.amount, 0)
+  const se = `due-${rand()}@madeup.test`
+  await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Due Staff', phone: randPhone(), email: se, password: 'Due-pass-1234', create_login: true } })
+  const st = (await api('/auth/login', { ip: `203.0.113.${1 + Math.floor(Math.random() * 250)}`, method: 'POST', body: { email: se, password: 'Due-pass-1234' } })).json.access_token
+  const staff = await api('/billing/due', { token: st })
+  check(
+    'payments received: a project’s 70,000 still to come is counted once -- the promise in 30 days, the rest Later; tiles add up; staff 403',
+    paid.status < 300 && promise.status < 300 && due.status === 200 &&
+      mine.reduce((n, l) => n + l.amount, 0) === 70000 &&
+      mine.some((l) => l.kind === 'promise' && l.amount === 10000 && l.bucket === 'soon') &&
+      mine.some((l) => l.kind === 'rest' && l.amount === 60000 && l.bucket === 'later') &&
+      Math.abs(sum('overdue') - due.json.overdue.amount) < 1 && Math.abs(sum('soon') - due.json.soon.amount) < 1 && Math.abs(sum('later') - due.json.later.amount) < 1 &&
+      due.json.received.amount >= 30000 && staff.status === 403,
+    { paid: paid.status, promise: promise.status, due: due.status, mine, staff: staff.status },
+  )
+}
+
+// ── A lead can start with just a name; booking it still asks for a number ──
+{
+  const named = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: `Name Only ${rand()}` } })
+  const neither = await api('/crm/leads', { token: aToken, method: 'POST', body: { notes: 'nothing to go on' } })
+  const book = await api(`/crm/leads/${named.json.lead?.id}/convert`, { token: aToken, method: 'POST', body: { project: { name: 'Name only wedding' } } })
+  const fixed = await api(`/crm/leads/${named.json.lead?.id}`, { token: aToken, method: 'PATCH', body: { phone: randPhone() } })
+  const bookNow = await api(`/crm/leads/${named.json.lead?.id}/convert`, { token: aToken, method: 'POST', body: { project: { name: 'Name only wedding' } } })
+  check(
+    'leads: a name alone is enough to add one; neither name nor number is 422; booking without a number is 422 until one is added',
+    named.status === 201 && named.json.lead?.phone === null && neither.status === 422 &&
+      book.status === 422 && /phone number/.test(book.json.error ?? '') && fixed.status < 300 && bookNow.status === 201,
+    { named: named.status, phone: named.json.lead?.phone, neither: neither.status, book: book.status, err: book.json.error, fixed: fixed.status, bookNow: bookNow.status },
+  )
+}
+
 // ── Leave balances (0228): days a year, what is left, approve as unpaid ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

@@ -23,10 +23,11 @@ import { conflictItems, figures, monthDays, shiftMonth, staffing, todayLocal } f
 import { ShootCard } from '@/features/booking/ShootCard'
 import { PeopleGrid } from '@/features/booking/PeopleGrid'
 import { ConflictsView } from '@/features/booking/ConflictsView'
+import { CalendarView } from '@/features/booking/CalendarView'
 import { BlockTimeDialog } from '@/features/booking/BlockTimeDialog'
 import { useSlotActions } from '@/features/booking/useSlotActions'
 
-type View = 'shoots' | 'people' | 'conflicts'
+type View = 'shoots' | 'calendar' | 'people' | 'conflicts'
 
 export function TeamAllocationPage({ initialTab }: { initialTab?: 'calendar' | 'conflicts' } = {}) {
   return (
@@ -52,7 +53,7 @@ function TeamBooking({ initialView }: { initialView: View }) {
   const [monthParam, setMonth] = useUrlParam('month', todayLocal().slice(0, 7))
   const [focus, setFocus] = useUrlParam('focus')
   const [q, setQ] = useUrlParam('q')
-  const view: View = viewParam === 'people' || viewParam === 'conflicts' ? viewParam : 'shoots'
+  const view: View = viewParam === 'people' || viewParam === 'conflicts' || viewParam === 'calendar' ? viewParam : 'shoots'
   const month = /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : todayLocal().slice(0, 7)
   const days = monthDays(month)
   const from = days[0]!
@@ -176,6 +177,7 @@ function TeamBooking({ initialView }: { initialView: View }) {
           onChange={setView}
           tabs={[
             { value: 'shoots', label: 'Shoots', count: inMonth.length },
+            { value: 'calendar', label: 'Calendar' },
             { value: 'people', label: 'People' },
             { value: 'conflicts', label: 'Conflicts', count: conflicts.length },
           ]}
@@ -212,6 +214,8 @@ function TeamBooking({ initialView }: { initialView: View }) {
           <SkeletonCards count={3} />
         ) : failed ? (
           <ErrorState message="We could not load the bookings." onRetry={() => { void shoots.refetch(); void slots.refetch() }} />
+        ) : view === 'calendar' ? (
+          <CalendarView month={month} shoots={shown} slots={monthSlots} onOpen={(s) => setAssign({ shoot: s })} />
         ) : view === 'people' ? (
           <PeopleGrid month={month} members={members.data ?? []} slots={monthSlots} q={q} menuFor={actions.menuFor} />
         ) : view === 'conflicts' ? (

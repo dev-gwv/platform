@@ -137,7 +137,7 @@ export function AddLeadDialog({
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     const body = {
-      phone: phone.trim(),
+      ...(phone.trim() ? { phone: phone.trim() } : {}),
       source,
       ...(name.trim() ? { name: name.trim() } : {}),
       ...(email.trim() ? { email: email.trim() } : {}),
@@ -186,7 +186,7 @@ export function AddLeadDialog({
       </DialogTrigger>
       <DialogContent
         title="Add a lead"
-        description="A number is enough to start. If we already have it, you'll be taken to that lead instead."
+        description="A number or a name is enough to start. If we already have the number, you'll be taken to that lead instead."
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {/*
@@ -200,7 +200,7 @@ export function AddLeadDialog({
             */}
           <div className="flex flex-col gap-1.5">
             <Label>
-              Phone <span className="text-destructive">*</span>
+              Phone
             </Label>
             <Input
               value={phone}

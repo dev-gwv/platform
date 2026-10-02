@@ -9,7 +9,7 @@ import type { QueryClient } from '@tanstack/react-query'
  * the old balance until a reload.
  */
 export function invalidateMoney(qc: QueryClient) {
-  for (const queryKey of [['invoices'], ['received-payments'], ['billing', 'overview'], ['projects'], ['financials'], ['dashboard']]) {
+  for (const queryKey of [['invoices'], ['received-payments'], ['billing', 'overview'], ['billing', 'due'], ['projects'], ['financials'], ['dashboard']]) {
     void qc.invalidateQueries({ queryKey })
   }
 }

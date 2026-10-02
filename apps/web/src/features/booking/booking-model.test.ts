@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamSlot } from '@ipc/contracts'
-import { bookingMessage, conflictItems, daysOf, figures, hasClash, monthDays, monthGrid, roleCards, shiftMonth, staffing } from './booking-model'
+import { bookingMessage, calendarWeeks, dayFill, conflictItems, daysOf, figures, hasClash, monthDays, monthGrid, roleCards, shiftMonth, staffing } from './booking-model'
 import { icsForSlot } from './share'
 
 const SHOOT = '00000000-0000-4000-8000-0000000000a1'
@@ -169,5 +169,22 @@ describe('hasClash', () => {
     expect(hasClash([b('2026-10-01T03:30:00Z', '2026-10-01T06:30:00Z'), b('2026-10-01T06:30:00Z', '2026-10-01T08:30:00Z')])).toBe(false)
     expect(hasClash([b('2026-10-01T03:30:00Z', '2026-10-01T06:30:00Z'), b('2026-10-01T06:00:00Z', '2026-10-01T08:30:00Z')])).toBe(true)
     expect(hasClash([])).toBe(false)
+  })
+})
+
+describe('calendarWeeks', () => {
+  it('lays a month out Monday first, padded with nulls', () => {
+    const w = calendarWeeks('2026-10')
+    expect(w[0]).toEqual([null, null, null, '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'])
+    expect(w.every((row) => row.length === 7)).toBe(true)
+    expect(w.flat().filter(Boolean)).toHaveLength(31)
+  })
+})
+
+describe('dayFill', () => {
+  const shoot = (id: string, quantity: number) => ({ id, requirements: [{ service_id: '00000000-0000-4000-8000-000000000000', name: 'Candid', quantity }] })
+  it('is green only when every shoot that day is fully staffed, else counts open seats', () => {
+    expect(dayFill([shoot('a', 2)], [])).toEqual({ open: 2, full: false })
+    expect(dayFill([], [])).toEqual({ open: 0, full: false })
   })
 })
