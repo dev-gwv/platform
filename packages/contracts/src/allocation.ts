@@ -152,6 +152,9 @@ export const teamMember = z.object({
    */
   payout_type: z.string().nullable().default(null),
   freelancer_rate: money.nullable().default(null),
+  /** Usual wedding-day and half-day rates (0233), for the same pre-fill. */
+  rate_wedding_day: money.nullable().default(null),
+  rate_half_day: money.nullable().default(null),
   /** False for a directory-only member: they have no login to see work on. */
   login_enabled: z.boolean().default(true),
   /** When they last had the app open (0117 heartbeats); null = never. */

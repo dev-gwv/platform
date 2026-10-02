@@ -89,6 +89,9 @@ export const directoryMember = z.object({
   salary: z.number().nullable(),
   /** Per-shoot/day rate for freelancers — separate from the monthly salary above. */
   freelancer_rate: money.nullable().default(null),
+  /** Usual rates beside the day rate (0233): a wedding day, and a half day (5 h or less). */
+  rate_wedding_day: money.nullable().default(null),
+  rate_half_day: money.nullable().default(null),
   address: z.string().nullable(),
   /** Freelance-friendly: salaried, or paid per shoot/day/project. */
   payout_type: z.enum(['salary', 'per_shoot', 'per_day', 'per_project', 'custom']).nullable(),
@@ -212,6 +215,8 @@ export const updateMemberRequest = z.object({
   engagement_type: engagementType.optional(),
   salary: money.nullable().optional(),
   freelancer_rate: money.nullable().optional(),
+  rate_wedding_day: money.nullable().optional(),
+  rate_half_day: money.nullable().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
   alternate_phone: z.string().trim().max(20).nullable().optional(),
   address: z.string().trim().max(300).nullable().optional(),

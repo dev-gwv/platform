@@ -74,7 +74,7 @@ export const WORKS_AS_LABEL: Record<'in_house' | 'freelancer', string> = {
 }
 
 const PAY_KEYS = [
-  'salary', 'freelancer_rate', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
+  'salary', 'freelancer_rate', 'rate_wedding_day', 'rate_half_day', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
   'pay_effective_from', 'pay_effective_to', 'compensation_notes', 'payment_type',
 ] as const
 

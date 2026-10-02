@@ -188,12 +188,16 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
     setMemberId(id)
     setPicked(new Set())
     const m = (members.data ?? []).find((x) => x.user_id === id)
-    const rate = m ? suggestedPayout(m) : null
-    // Their saved rate pre-fills every row; each can still be changed.
+    // Their usual rate pre-fills every row -- the wedding rate on a wedding,
+    // the half-day rate on a short function; each can still be changed.
     setRows(() => {
-      if (rate == null) return {}
+      if (!m) return {}
       const next: Record<string, Row> = {}
-      for (const s of inRange) next[s.id] = { ...rowOf(s), cost: String(rate) }
+      for (const s of inRange) {
+        const hours = s.start_at && s.end_at ? (Date.parse(s.end_at) - Date.parse(s.start_at)) / 3_600_000 : null
+        const rate = suggestedPayout(m, { shootName: s.name, hours })
+        if (rate != null) next[s.id] = { ...rowOf(s), cost: String(rate) }
+      }
       return next
     })
   }

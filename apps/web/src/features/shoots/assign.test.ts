@@ -27,6 +27,9 @@ import {
   withPicks,
   shootProgress,
   suggestedPayout,
+  suggestedRate,
+  sameCrewPlan,
+  copyResultLine,
   windowOf,
 } from './assign'
 
@@ -43,6 +46,8 @@ const member = (id: string, name: string, over: Partial<TeamMember> = {}): TeamM
   email: null,
   payout_type: null,
   freelancer_rate: null,
+  rate_wedding_day: null,
+  rate_half_day: null,
   login_enabled: true,
   last_seen_at: null,
   ...over,
@@ -348,5 +353,80 @@ describe('withPicks / progressWithPicks', () => {
   it('never counts past what a role needs', () => {
     const counts = withPicks(fill, { Candid: [{ id: 'a', payout: '' }, { id: 'b', payout: '' }] })
     expect(counts[1]).toMatchObject({ booked: 1, picked: 1, filled: 2 })
+  })
+})
+
+describe('suggestedRate', () => {
+  const m = { freelancer_rate: 8000, rate_wedding_day: 10000, rate_half_day: 4500, payout_type: 'per_shoot', engagement_type: 'freelancer' }
+  it('a wedding function takes the wedding rate', () => {
+    expect(suggestedRate(m, { shootName: 'Wedding', hours: 8 })).toEqual({ amount: 10000, why: 'their wedding rate' })
+    expect(suggestedRate(m, { shootName: 'Pheras', hours: 8 })?.amount).toBe(10000)
+  })
+  it('5 hours or less is a half day, whatever the function', () => {
+    expect(suggestedRate(m, { shootName: 'Wedding', hours: 4 })).toEqual({ amount: 4500, why: 'their half-day rate' })
+    expect(suggestedRate(m, { shootName: 'Haldi', hours: 5 })?.amount).toBe(4500)
+  })
+  it('anything else, or no hours yet, is the day rate', () => {
+    expect(suggestedRate(m, { shootName: 'Haldi', hours: 6 })).toEqual({ amount: 8000, why: 'their day rate' })
+    expect(suggestedRate(m, { shootName: 'Sangeet' })?.amount).toBe(8000)
+    expect(suggestedRate(m)?.amount).toBe(8000)
+  })
+  it('falls back to the day rate when a usual rate is not set; salaried is never pre-filled', () => {
+    expect(suggestedRate({ ...m, rate_wedding_day: null }, { shootName: 'Wedding', hours: 8 })?.amount).toBe(8000)
+    expect(suggestedRate({ ...m, payout_type: 'salary' }, { shootName: 'Wedding' })).toBeNull()
+    expect(suggestedRate({ ...m, freelancer_rate: null, rate_wedding_day: null, rate_half_day: null })).toBeNull()
+  })
+})
+
+describe('sameCrewPlan', () => {
+  const T = (id: string, name: string, day: string, req: { name: string; quantity: number }[], hours = true) => ({
+    id,
+    name,
+    start_at: hours ? `${day}T10:00:00.000Z` : null,
+    end_at: hours ? `${day}T16:00:00.000Z` : null,
+    requirements: req.map((r) => ({ service_id: '00000000-0000-4000-8000-000000000000', ...r })),
+  })
+  const crew = [
+    { user_id: 'u1', name: 'Rahul', role: 'Candid' },
+    { user_id: 'u2', name: 'Neha', role: 'Cinematic' },
+  ]
+
+  it('books the same people in the same roles at each day’s hours', () => {
+    const plan = sameCrewPlan({ crew, targets: [T('m', 'Mehendi', '2026-11-10', [{ name: 'Candid', quantity: 1 }, { name: 'Cinematic', quantity: 1 }])], slots: [] })
+    expect(plan.book.map((b) => [b.user_id, b.service_name, b.start_at])).toEqual([
+      ['u1', 'Candid', '2026-11-10T10:00:00.000Z'],
+      ['u2', 'Cinematic', '2026-11-10T10:00:00.000Z'],
+    ])
+    expect(plan.skipped).toEqual([])
+  })
+
+  it('skips busy people, full or unneeded roles, leave, and days with no hours', () => {
+    const targets = [
+      T('w', 'Wedding', '2026-11-12', [{ name: 'Candid', quantity: 1 }]),
+      T('r', 'Reception', '2026-11-13', [{ name: 'Candid', quantity: 1 }, { name: 'Cinematic', quantity: 1 }]),
+      T('x', 'Sangeet', '2026-11-11', [{ name: 'Candid', quantity: 1 }], false),
+    ]
+    const slots = [
+      slot({ id: 's1', user_id: 'u1', shoot_id: 'other', start_at: '2026-11-12T12:00:00.000Z', end_at: '2026-11-12T14:00:00.000Z', status: 'booked' }),
+      slot({ id: 's2', user_id: 'u9', shoot_id: 'r', service_name: 'Candid', start_at: '2026-11-13T10:00:00.000Z', end_at: '2026-11-13T16:00:00.000Z', status: 'booked' }),
+    ]
+    const leaves = [{ user_id: 'u2', start_date: '2026-11-13', end_date: '2026-11-13', half_day: false, status: 'approved' as const }]
+    const plan = sameCrewPlan({ crew, targets, slots, leaves })
+    expect(plan.book).toEqual([])
+    expect(plan.skipped.map((s) => `${s.name}@${s.shoot_name}:${s.why}`)).toEqual([
+      'Rahul@Wedding:busy',
+      'Neha@Wedding:not_needed',
+      'Rahul@Reception:full',
+      'Neha@Reception:leave',
+      'Rahul@Sangeet:no_time',
+      'Neha@Sangeet:no_time',
+    ])
+  })
+
+  it('says what was booked and who was skipped', () => {
+    expect(copyResultLine(2, [])).toBe('Booked 2 on the other days.')
+    expect(copyResultLine(1, [{ user_id: 'u', name: 'Neha', shoot_name: 'Wedding', why: 'busy' }])).toBe(
+      'Booked 1 on the other days. Skipped Neha on Wedding (busy then).',
+    )
   })
 })

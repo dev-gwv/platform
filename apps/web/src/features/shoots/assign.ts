@@ -383,14 +383,39 @@ export function personDay(
   return { bookings, hours: bookedHours(bookings, day), free: freeText(freeGaps(bookings, day), timeZone) }
 }
 
+type RateMember = Pick<TeamMember, 'freelancer_rate' | 'payout_type' | 'engagement_type'> &
+  Partial<Pick<TeamMember, 'rate_wedding_day' | 'rate_half_day'>>
+
+/** What the booking is, for choosing which of a person's usual rates applies. */
+export interface RateContext {
+  /** The function's name: "Wedding", "Pheras", "Haldi". */
+  shootName?: string | null | undefined
+  /** How long they are booked for; 5 hours or less is a half day. */
+  hours?: number | null | undefined
+}
+
+const WEDDING = /\b(wedding|shaadi|shadi|vivah|pheras?|nikah|anand karaj)\b/i
+
 /**
- * The payout to pre-fill for a booking: a freelancer's saved rate. Salaried
- * people are paid monthly, so nothing is pre-filled for them.
+ * Which usual rate a booking pays, and why: a half day (5 h or less) takes the
+ * half-day rate, a wedding function the wedding rate, anything else -- or a
+ * shoot with no hours yet -- the day rate. Salaried people are paid monthly,
+ * so nothing is pre-filled for them.
  */
-export function suggestedPayout(member: Pick<TeamMember, 'freelancer_rate' | 'payout_type' | 'engagement_type'>): number | null {
+export function suggestedRate(member: RateMember, ctx: RateContext = {}): { amount: number; why: string } | null {
   if (member.payout_type === 'salary') return null
-  if (member.freelancer_rate != null && member.freelancer_rate > 0) return member.freelancer_rate
+  const ok = (v: number | null | undefined): v is number => v != null && v > 0
+  if (ctx.hours != null && ctx.hours <= 5 && ok(member.rate_half_day)) return { amount: member.rate_half_day, why: 'their half-day rate' }
+  if (ctx.shootName && WEDDING.test(ctx.shootName) && ok(member.rate_wedding_day)) {
+    return { amount: member.rate_wedding_day, why: 'their wedding rate' }
+  }
+  if (ok(member.freelancer_rate)) return { amount: member.freelancer_rate, why: 'their day rate' }
   return null
+}
+
+/** The payout to pre-fill for a booking (see suggestedRate). */
+export function suggestedPayout(member: RateMember, ctx: RateContext = {}): number | null {
+  return suggestedRate(member, ctx)?.amount ?? null
 }
 
 /** What their pay basis says, for the hint under the picker. */
@@ -426,6 +451,8 @@ export function hoursLabel(slot: Pick<TeamSlot, 'start_at' | 'end_at'>, timeZone
 export interface SeatPick {
   id: string
   payout: string
+  /** Which usual rate filled the payout ("their wedding rate"); dropped once it is edited. */
+  why?: string
   start?: string
   hours?: number
 }
@@ -508,4 +535,79 @@ export function progressWithPicks(counts: readonly RoleCount[]) {
   const booked = counts.reduce((n, r) => n + r.booked, 0)
   const picked = counts.reduce((n, r) => n + r.picked, 0)
   return { required, booked, picked, filled: booked + picked }
+}
+
+/** One person on this shoot to copy to the project's other days. */
+export interface CrewToCopy {
+  user_id: string
+  name: string
+  role: string
+}
+
+export type CopySkip = 'already' | 'busy' | 'leave' | 'full' | 'not_needed' | 'no_time'
+
+export const COPY_SKIP_TEXT: Record<CopySkip, string> = {
+  already: 'already on it',
+  busy: 'busy then',
+  leave: 'on leave',
+  full: 'role already filled',
+  not_needed: 'that day does not need the role',
+  no_time: 'no time set for that day',
+}
+
+export interface CopyPlan {
+  book: { user_id: string; shoot_id: string; service_name: string; start_at: string; end_at: string; shoot_name: string }[]
+  skipped: { user_id: string; name: string; shoot_name: string; why: CopySkip }[]
+}
+
+/**
+ * "Book the same people for Mehendi and Wedding?": the bookings that would
+ * copy this shoot's crew onto the project's other days, in the same roles at
+ * each day's own hours. A person is skipped on a day where they are already
+ * on it, booked elsewhere at that time, on a full day's leave, or where the
+ * role is already filled or not needed; a day with no hours is skipped whole.
+ */
+export function sameCrewPlan({
+  crew,
+  targets,
+  slots,
+  leaves = [],
+}: {
+  crew: readonly CrewToCopy[]
+  targets: readonly Pick<ShootListItem, 'id' | 'name' | 'start_at' | 'end_at' | 'requirements'>[]
+  slots: readonly TeamSlot[]
+  leaves?: readonly Pick<LeaveRequest, 'user_id' | 'start_date' | 'end_date' | 'half_day' | 'status'>[]
+}): CopyPlan {
+  const plan: CopyPlan = { book: [], skipped: [] }
+  for (const t of targets) {
+    const here = slots.filter((s) => s.shoot_id === t.id && isLive(s))
+    const fill = new Map(requirementFill(t, here).map((f) => [key(f.name), f.open]))
+    for (const c of crew) {
+      const skip = (why: CopySkip) => plan.skipped.push({ user_id: c.user_id, name: c.name, shoot_name: t.name, why })
+      if (!t.start_at || !t.end_at) {
+        skip('no_time')
+        continue
+      }
+      const w = { start: t.start_at, end: t.end_at }
+      if (here.some((s) => s.user_id === c.user_id)) skip('already')
+      else if (!fill.has(key(c.role))) skip('not_needed')
+      else if ((fill.get(key(c.role)) ?? 0) <= 0) skip('full')
+      else if (leaveOn(c.user_id, localDay(t.start_at), leaves) === 'full') skip('leave')
+      else if (clashFor(c.user_id, w, slots)) skip('busy')
+      else {
+        fill.set(key(c.role), (fill.get(key(c.role)) ?? 0) - 1)
+        plan.book.push({ user_id: c.user_id, shoot_id: t.id, service_name: c.role, start_at: w.start, end_at: w.end, shoot_name: t.name })
+      }
+    }
+  }
+  return plan
+}
+
+/** "Booked 4 · skipped Neha on Wedding (busy then)". */
+export function copyResultLine(booked: number, skipped: CopyPlan['skipped']): string {
+  const head = `Booked ${booked} on the other days`
+  if (skipped.length === 0) return `${head}.`
+  const shown = skipped.slice(0, 3).map((s) => `${s.name} on ${s.shoot_name} (${COPY_SKIP_TEXT[s.why]})`)
+  const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : ''
+  return `${head}. Skipped ${shown.join(', ')}${more}.`
 }

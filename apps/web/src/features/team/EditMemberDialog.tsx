@@ -21,6 +21,8 @@ function compFrom(member: DirectoryMember): CompensationDraft {
     payment_status: member.payment_status,
     salary: member.salary != null ? String(member.salary) : '',
     freelancer_rate: member.freelancer_rate != null ? String(member.freelancer_rate) : '',
+    rate_wedding_day: member.rate_wedding_day != null ? String(member.rate_wedding_day) : '',
+    rate_half_day: member.rate_half_day != null ? String(member.rate_half_day) : '',
     has_login_access: member.login_enabled,
     payout_type: member.payout_type ?? '',
     commission_pct: member.commission_pct != null ? String(member.commission_pct) : '',
@@ -112,6 +114,8 @@ export function EditMemberDialog({ member }: { member: DirectoryMember }) {
       const pay = {
         salary: comp.salary.trim() === '' ? null : Number(comp.salary),
         freelancer_rate: comp.freelancer_rate.trim() === '' ? null : Number(comp.freelancer_rate),
+        rate_wedding_day: !comp.rate_wedding_day?.trim() ? null : Number(comp.rate_wedding_day),
+        rate_half_day: !comp.rate_half_day?.trim() ? null : Number(comp.rate_half_day),
         payout_type: comp.payout_type ? (comp.payout_type as NonNullable<typeof member.payout_type>) : null,
         commission_pct: comp.commission_pct.trim() === '' ? null : Number(comp.commission_pct),
         commission_basis: comp.commission_basis

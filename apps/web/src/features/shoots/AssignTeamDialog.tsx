@@ -30,7 +30,7 @@ import {
   seatsLeft,
   progressWithPicks,
   withPicks,
-  suggestedPayout,
+  suggestedRate,
   windowFor,
   windowOf,
   type BaseWindow,
@@ -45,6 +45,7 @@ import { AlsoBookedLine, PersonDayLine } from './PersonDay'
 import { useLeave } from '@/features/hr/leave-api'
 import { RoleTile } from '@/shared/ui/icon-tile'
 import { AssignedNote } from '@/features/team/AssignedNote'
+import { CopyTeamBar } from './CopyTeamBar'
 
 /**
  * "Assign team" for one shoot: the roles it needs, who is in each, and an
@@ -199,8 +200,9 @@ function AssignBoard({
   const ordered = [...fill].sort((a, b) => Number(a.open === 0) - Number(b.open === 0))
 
   function pick(role: string, member: TeamMember) {
-    const rate = suggestedPayout(member)
-    const next = { ...picks, [role]: [...(picks[role] ?? []), { id: member.user_id, payout: rate != null ? String(rate) : '' }] }
+    const rate = suggestedRate(member, { shootName: shoot.name, hours: when.hours })
+    const seat: SeatPick = rate ? { id: member.user_id, payout: String(rate.amount), why: rate.why } : { id: member.user_id, payout: '' }
+    const next = { ...picks, [role]: [...(picks[role] ?? []), seat] }
     setPicks(next)
     // Close the list once the role has all the people it needs.
     if ((seatsLeft(fill, next).get(role) ?? 0) === 0) setPicker(null)
@@ -220,6 +222,8 @@ function AssignBoard({
       [role]: (p[role] ?? []).map((x): SeatPick => {
         if (x.id !== id) return x
         const next: SeatPick = { id: x.id, payout: patch.payout ?? x.payout }
+        // A typed payout is the studio's own number, not a usual rate any more.
+        if (x.why && patch.payout === undefined) next.why = x.why
         const start = 'start' in patch ? patch.start : x.start
         const hours = 'hours' in patch ? patch.hours : x.hours
         if (start) next.start = start
@@ -403,6 +407,8 @@ function AssignBoard({
       </ul>
 
       {justBooked.length > 0 && <AssignedNote members={justBooked} onClose={() => setJustBooked([])} />}
+
+      {total === 0 && <CopyTeamBar shoot={shoot} slots={slots} members={members} leaves={leaves} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         {/* After a booking with nothing left to book, Done is the one next
@@ -732,6 +738,11 @@ function RoleRow({
                     <X className="size-3.5" />
                   </button>
                 </div>
+                {p.why && p.payout && (
+                  <p className="pl-9 text-xs text-muted-foreground">
+                    Pay {formatINR(Number(p.payout))} ({p.why})
+                  </p>
+                )}
                 {w && (
                   <div className="pl-9">
                     <AlsoBookedLine userId={p.id} name={m?.name ?? 'Someone'} day={localDay(w.start)} slots={slots} />
