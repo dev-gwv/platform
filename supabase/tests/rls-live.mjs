@@ -2022,7 +2022,9 @@ if (listed) {
 
   // Profit & Loss (0167): the project's 50,000 received shows as income for
   // today, in its own row; the other studio's statement does not include it.
-  const today = new Date().toISOString().slice(0, 10)
+  // Today is India's: the API dates a payment there, and from 6:30 pm UTC the
+  // UTC date is still yesterday.
+  const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10)
   const pnl = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: aToken })
   const row = (pnl.json.projects ?? []).find((x) => x.project_id === pid)
   check(
