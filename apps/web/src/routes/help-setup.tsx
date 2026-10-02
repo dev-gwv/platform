@@ -71,7 +71,7 @@ export function HelpSetupPage() {
                 width={1280}
                 height={720}
               >
-                <source src={`/help/${s.key}.webm`} type="video/webm" />
+                <source src={`/help/${s.key}.mp4`} type="video/mp4" />
               </video>
               <Button asChild className="mt-4">
                 <Link to={s.action.to} search={s.action.search as never}>

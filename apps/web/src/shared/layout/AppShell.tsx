@@ -24,6 +24,7 @@ import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
+import { HelpButton } from '@/features/help/HelpPanel'
 import { HubTabs } from './HubTabs'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
 
@@ -349,6 +350,7 @@ function Sidebar({
         )}
       </nav>
       <div className={cn('shrink-0 px-3 pb-3', collapsed && 'px-2')}>
+        <HelpButton collapsed={collapsed} />
         <PlanCard collapsed={collapsed} />
       </div>
       {/* On a phone the bar has room only for the bulb; the menu says it in full. */}

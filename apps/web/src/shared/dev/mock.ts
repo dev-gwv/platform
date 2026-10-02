@@ -213,6 +213,16 @@ const profileFx = {
   avatar_url: null,
 }
 
+/** Help (0236): what the panel and /help show. */
+const helpFx = {
+  support_whatsapp: '919876543210' as string | null,
+  support_email: 'help@studioautopilot.in' as string | null,
+  faqs: [
+    { id: '00000000-0000-4000-8000-0000000004e0', question: 'Can Studio AutoPilot see my clients and prices?', answer: 'No. Your clients, prices and payments belong to your studio alone.', sort_order: 10 },
+  ] as { id: string; question: string; answer: string; sort_order: number }[],
+  videos: [] as { page_key: string; title: string; url: string }[],
+}
+
 const themeState = { preset_key: 'ipc_classic', font_key: null as string | null, color_scheme: 'light' }
 
 /** A month's payroll, approved, one person already paid; plus shoot payouts owed. */
@@ -780,6 +790,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ...profileFx }
   }
   if (method === 'GET' && path === '/settings/company') return companyFx
+  if (method === 'GET' && (path === '/public/help' || path === '/platform/help')) return helpFx
+  if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
+  if (method === 'POST' && path === '/platform/help/faqs') {
+    const faq = { id: uid(0x4e1 + helpFx.faqs.length), sort_order: helpFx.faqs.length * 10 + 10, ...(body as { question: string; answer: string }) }
+    helpFx.faqs.push(faq)
+    return faq
+  }
+  if (path.startsWith('/platform/help/')) return {}
   if (method === 'GET' && path === '/settings/getting-started')
     return { started_at: new Date().toISOString(), setup_closed: true, logo: true, package: false, enquiry: true, booking: false, quotation: false }
   if (method === 'PATCH' && path === '/settings/company') return companyFx

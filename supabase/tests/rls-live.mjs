@@ -3712,6 +3712,26 @@ if (listed) {
   )
 }
 
+// ── Help (0236): anyone can read it, only a platform admin changes it ──
+{
+  const open = await api('/public/help')
+  check(
+    'help: signed out, /public/help answers with the questions studios ask',
+    open.status === 200 && Array.isArray(open.json.faqs) && open.json.faqs.length > 0 && Array.isArray(open.json.videos) &&
+      'support_whatsapp' in open.json,
+    { status: open.status, faqs: open.json.faqs?.length },
+  )
+  const read = await api('/platform/help', { token: aToken })
+  const write = await api('/platform/help/contacts', { token: aToken, method: 'PUT', body: { support_whatsapp: '919999999999', support_email: null } })
+  const faq = await api('/platform/help/faqs', { token: aToken, method: 'POST', body: { question: 'Is this mine?', answer: 'No.' } })
+  const anon = await api('/platform/help/faqs', { method: 'POST', body: { question: 'Is this mine?', answer: 'No.' } })
+  check(
+    'help: a studio owner cannot read or change the Help console (403), signed out is 401',
+    read.status === 403 && write.status === 403 && faq.status === 403 && anon.status === 401,
+    { read: read.status, write: write.status, faq: faq.status, anon: anon.status },
+  )
+}
+
 // ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
