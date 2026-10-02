@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Mail, MessageCircle, Receipt, Printer, CalendarCheck, TrendingUp, Hourglass, CheckCircle2, Clock } from 'lucide-react'
+import { AlertTriangle, Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Mail, MessageCircle, Receipt, Printer, CalendarCheck, Hourglass, CheckCircle2, Clock } from 'lucide-react'
 import type { ReceivedPayment } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -18,7 +18,9 @@ import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { MoneyTile } from '@/features/billing/MoneyTile'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
+import { useBillingDue, useReceivedPayment, useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
+import { DuePanel } from '@/features/billing/DuePanel'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { useClients } from '@/features/clients/api'
 import { useActiveLookups } from '@/features/settings/api'
 import { useProjects } from '@/features/projects/api'
@@ -56,6 +58,13 @@ function PaymentsSection() {
   const period = usePeriod()
   const from = period.from
   const to = period.to
+  // Overdue · Due in 30 days · Later open what is behind them; Received is the list below.
+  const due = useBillingDue({ from, to })
+  const [dueParam, setDueParam] = useUrlParam('due')
+  const dueView = (['overdue', 'soon', 'later'].includes(dueParam) ? dueParam : '') as '' | 'overdue' | 'soon' | 'later'
+  const setDueView = (v: '' | 'overdue' | 'soon' | 'later') => setDueParam(v)
+  const [markId, setMarkId] = useState<string | null>(null)
+  const marking = useReceivedPayment(markId)
   const [mode, setMode] = useUrlParam('mode')
   const [sortBy, setSortBy] = useState('date_received')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -94,7 +103,6 @@ function PaymentsSection() {
   }
   const { data, isLoading, isError, refetch, isFetching } = useReceivedPayments(filters)
   const items = data?.items ?? []
-  const summary = data?.summary
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAYMENT_PAGE_SIZE))
 
@@ -144,20 +152,54 @@ function PaymentsSection() {
         </div>
       </div>
 
-      {summary && (
-        <div className="mb-4 grid grid-cols-3 gap-3">
-          <MoneyTile icon={CalendarCheck} tone="green" value={formatINR(summary.received_this_month)} label="Received this month" />
-          <MoneyTile icon={TrendingUp} tone="blue" value={formatINR(summary.received_this_fy)} label="This financial year" />
+      {due.data && (
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MoneyTile
+            icon={AlertTriangle}
+            tone="rose"
+            value={formatINR(due.data.overdue.amount)}
+            label="Overdue"
+            hint={due.data.overdue.count > 0 ? `${due.data.overdue.count} ${due.data.overdue.count === 1 ? 'payment' : 'payments'} late` : 'Nothing late'}
+            onClick={() => setDueView(dueView === 'overdue' ? '' : 'overdue')}
+            active={dueView === 'overdue'}
+          />
           <MoneyTile
             icon={Hourglass}
             tone="amber"
-            value={formatINR(summary.promised_amount)}
-            label="Promised, not yet in"
-            hint={`${summary.promised_count} promised`}
-            onClick={() => { setStatus(status === 'pending' ? 'all' : 'pending'); setPage(1) }}
-            active={status === 'pending'}
+            value={formatINR(due.data.soon.amount)}
+            label="Due in 30 days"
+            hint={`${due.data.soon.count} to collect`}
+            onClick={() => setDueView(dueView === 'soon' ? '' : 'soon')}
+            active={dueView === 'soon'}
+          />
+          <MoneyTile
+            icon={Clock}
+            tone="blue"
+            value={formatINR(due.data.later.amount)}
+            label="Later"
+            hint="Further out, or no date yet"
+            onClick={() => setDueView(dueView === 'later' ? '' : 'later')}
+            active={dueView === 'later'}
+          />
+          <MoneyTile
+            icon={CalendarCheck}
+            tone="green"
+            value={formatINR(due.data.received.amount)}
+            label={`Received · ${period.label}`}
+            hint={`${due.data.received.count} ${due.data.received.count === 1 ? 'payment' : 'payments'}`}
+            onClick={() => setDueView('')}
+            active={!dueView}
           />
         </div>
+      )}
+
+      {due.data && dueView && (
+        <DuePanel
+          title={dueView === 'overdue' ? 'Overdue' : dueView === 'soon' ? 'Due in the next 30 days' : 'Later'}
+          lines={due.data.lines.filter((l) => l.bucket === dueView)}
+          today={due.data.today}
+          onMarkReceived={(id) => setMarkId(id)}
+        />
       )}
 
       <div className="mb-4 flex flex-col gap-3">
@@ -305,6 +347,13 @@ function PaymentsSection() {
 
       <ReceivedPaymentDialog open={addOpen} onOpenChange={setAddOpen} initial={null} />
       <ReceivedPaymentDialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)} initial={editTarget} />
+      {markId && marking.data && (
+        <ReceivedPaymentDialog
+          open
+          onOpenChange={(v) => !v && setMarkId(null)}
+          initial={{ ...marking.data, status: 'paid', date_received: todayInIndia() }}
+        />
+      )}
       <DeleteReceivedPaymentDialog payment={deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)} />
       <SendReceiptDialog open={!!emailTarget} onOpenChange={(v) => !v && setEmailTarget(null)} payment={emailTarget} />
     </>

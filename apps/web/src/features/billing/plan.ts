@@ -1,4 +1,8 @@
 import type { PlanInstalment } from '@ipc/contracts'
+import { instalmentAmounts, planDueDate } from '@ipc/domain'
+
+// Shared with the API's Payments received (packages/domain/src/payment-plan.ts).
+export { instalmentAmounts, planDueDate }
 
 /**
  * The payment plan the client agreed to, set against what has happened.
@@ -29,18 +33,6 @@ export interface PlanRow {
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
-
-/** Rupees for each part. Percentages that add up to 100 always sum to the total exactly. */
-export function instalmentAmounts(instalments: readonly PlanInstalment[], total: number): number[] {
-  const amounts = instalments.map((i) => (i.mode === 'amount' ? i.value : round((total * i.value) / 100)))
-  const allPercent = instalments.length > 0 && instalments.every((i) => i.mode === 'percent')
-  const pct = instalments.reduce((n, i) => n + (i.mode === 'percent' ? i.value : 0), 0)
-  if (allPercent && Math.abs(pct - 100) < 0.001 && amounts.length > 0) {
-    const others = amounts.slice(0, -1).reduce((n, a) => n + a, 0)
-    amounts[amounts.length - 1] = round(total - others)
-  }
-  return amounts
-}
 
 export function planStatus({
   instalments,
@@ -86,31 +78,3 @@ export const PLAN_STATE_LABEL: Record<PlanState, string> = {
   upcoming: 'Later',
 }
 
-/**
- * When a plan part falls due, worked out from the project's shoots: "Before
- * the wedding" is 7 days before the shoot named Wedding, "On the haldi" or
- * "Wedding day" is that day, "On booking" is the day the client agreed.
- * Anything it cannot place ("On delivery", a typed note) has no date. The
- * shoot is matched by its name appearing in the words, longest name first,
- * so "Pre-wedding" is not taken for "Wedding".
- */
-export function planDueDate(
-  trigger: string | null | undefined,
-  ctx: { shoots: readonly { name: string; shoot_date: string | null }[]; agreedOn?: string | null | undefined },
-): { date: string; why: string } | null {
-  const t = (trigger ?? '').trim().toLowerCase()
-  if (!t) return null
-  if (/\b(booking|advance|confirm|sign)/.test(t)) return ctx.agreedOn ? { date: ctx.agreedOn.slice(0, 10), why: 'on booking' } : null
-  const dated = ctx.shoots
-    .filter((s): s is { name: string; shoot_date: string } => !!s.shoot_date && !!s.name.trim())
-    .sort((a, b) => b.name.length - a.name.length)
-  const shoot = dated.find((s) => new RegExp(`(^|[^a-z-])${s.name.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z-]|$)`).test(t))
-  if (!shoot) return null
-  if (/\bbefore\b/.test(t)) {
-    const d = new Date(`${shoot.shoot_date}T00:00:00Z`)
-    d.setUTCDate(d.getUTCDate() - 7)
-    return { date: d.toISOString().slice(0, 10), why: `7 days before ${shoot.name}` }
-  }
-  if (/\bafter\b/.test(t)) return null
-  return { date: shoot.shoot_date, why: `on ${shoot.name}` }
-}

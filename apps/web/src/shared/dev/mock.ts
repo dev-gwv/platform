@@ -317,6 +317,18 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       paid_ahead: 0,
       has_pay_details: false,
     }
+  if (method === 'GET' && path === '/billing/due')
+    return {
+      today: '2026-10-02',
+      overdue: { amount: 50000, count: 1 },
+      soon: { amount: 0, count: 0 },
+      later: { amount: 125000, count: 1 },
+      received: { amount: 75000, count: 1 },
+      lines: [
+        { project_id: uid(0x7e4), project_name: 'Mehta Wedding', client_name: 'Mehta family', kind: 'promise', label: 'Promised payment', amount: 50000, due_on: '2026-09-28', bucket: 'overdue', payment_id: uid(0x7e9) },
+        { project_id: uid(0x7e4), project_name: 'Mehta Wedding', client_name: 'Mehta family', kind: 'rest', label: 'Rest of the project value', amount: 125000, due_on: null, bucket: 'later' },
+      ],
+    }
   if (method === 'GET' && (path === '/team-payouts/shoots' || path === '/team-payouts/owed')) {
     const rows = [
       { slot_id: uid(0x7e1), user_id: uid(0x7e2), user_name: 'Rahul Verma', role: 'Candid Photographer', shoot_id: uid(0x7e3), shoot_name: 'Haldi', project_id: uid(0x7e4), project_name: 'Mehta Wedding', shoot_date: '2026-09-20', amount: 6000, cost_status: 'final', paid: 2000, last_paid_date: '2026-09-22', stands: true },

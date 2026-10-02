@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
 import {
+  billingDue,
   billingOverview,
   gstState,
   invoiceBankAccount,
@@ -543,5 +544,17 @@ export function useDeleteInvoiceItem() {
       void qc.invalidateQueries({ queryKey: ['billing', 'items'] })
     },
     onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** Payments received's tiles: what is still to come in on dates, and the period's money in. */
+export function useBillingDue(range: { from: string; to: string }) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['billing', 'due', range.from, range.to],
+    queryFn: () => callApi(`/billing/due?from=${range.from}&to=${range.to}`, { responseSchema: billingDue }),
+    enabled: !!session && access.hasModule('billing'),
+    staleTime: 15_000,
   })
 }
