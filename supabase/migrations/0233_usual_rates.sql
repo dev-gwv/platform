@@ -1,0 +1,3 @@
+-- 0233: a person's usual rates beside their full-day rate (freelancer_rate,
+-- 0101): a wedding day and a half day. Assign team fills the payout from
+-- them ("Pay ₹10,000 (their wedding rate)"). Claimed; body follows.
