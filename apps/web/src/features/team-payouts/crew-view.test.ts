@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrewPayoutRow } from '@ipc/contracts'
-import { crewRowLine, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
+import { crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
 
 const today = '2026-10-02'
 const row = (o: Partial<CrewPayoutRow>): CrewPayoutRow => ({
@@ -80,5 +80,25 @@ describe('myPayoutsLine', () => {
     expect(inr(myPayoutsLine({ owed_now: 0, upcoming: 0, paid: 5000, paid_ahead: 2000 }))).toBe(
       'You have been paid for every shoot so far · ₹5,000 paid, ₹2,000 of it in advance.',
     )
+  })
+})
+
+describe('crewRowNote', () => {
+  it('says "amount may change" only while money is still to go', () => {
+    expect(crewRowNote(row({ cost_status: 'tentative' }))).toBe(' · amount may change')
+    expect(crewRowNote(row({ cost_status: 'tentative', paid: 10000 }))).toBe('')
+    expect(crewRowNote(row({ cost_status: 'final' }))).toBe('')
+  })
+})
+
+describe('crewPersonLine', () => {
+  const money = (n: number) => `Rs ${n}`
+  it('never calls money for a future shoot "left" or "owed"', () => {
+    const line = crewPersonLine([row({ shoot_date: '2026-09-20', paid: 10000 }), row({ shoot_date: '2026-11-21', amount: 12000 })], today, money)
+    expect(line).toBe('Rs 12000 after the shoot · 2 shoots')
+  })
+  it('splits what is owed from what comes later', () => {
+    expect(crewPersonLine([row({}), row({ shoot_date: '2026-11-21', amount: 12000 })], today, money)).toBe('Rs 10000 owed · Rs 12000 after the shoot · 2 shoots')
+    expect(crewPersonLine([row({ paid: 10000 })], today, money)).toBe('All paid · 1 shoot')
   })
 })

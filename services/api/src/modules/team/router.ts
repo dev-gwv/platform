@@ -545,7 +545,8 @@ export const teamRouter = new Hono<AppEnv>()
     }
     const rows = await attempt(c, 'team.member_pay_to', () =>
       withService(c.env, (sql) => sql`
-        select u.name, mp.upi_id, mp.bank_account_name, mp.bank_account_number, mp.bank_ifsc
+        select u.name, mp.upi_id, mp.bank_account_name, mp.bank_account_number, mp.bank_ifsc,
+               coalesce(u.login_enabled, true) as login_enabled
           from users u
           left join member_profiles mp on mp.user_id = u.user_id
          where u.user_id = ${id} and u.company_id = ${auth.companyId} and u.deleted_at is null`),

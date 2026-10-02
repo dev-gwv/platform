@@ -387,7 +387,8 @@ describe('the shoot card', () => {
 
   it('names what a shoot is still missing', () => {
     expect(shootIssues(shoot())).toEqual(['Title & date needed', 'Start time needed', 'No requirements'])
-    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Title & date needed', 'Start time needed', 'No requirements'])
+    expect(shootIssues(shoot({ name: 'Haldi' }))).toEqual(['Date needed', 'Start time needed', 'No requirements'])
+    expect(shootIssues(shoot({ shoot_date: '2026-11-20' }))[0]).toBe('Title needed')
     expect(
       shootIssues(shoot({ name: 'Haldi', shoot_date: '2026-11-20' })),
     ).toEqual(['Start time needed', 'No requirements'])

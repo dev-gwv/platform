@@ -30,7 +30,9 @@ export type PaymentTarget =
   | { kind: 'project'; projectId: string; invoices?: OpenInvoice[] | undefined; invoiceId?: string | undefined }
   | { kind: 'invoice'; invoiceId: string; invoiceNumber: string }
 
-const MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
+/** How money comes in -- the chips on every payment dialog. */
+export const PAYMENT_MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
+const MODES = PAYMENT_MODES
 
 /**
  * The one payment form. Record or change a payment: how much, when, how,

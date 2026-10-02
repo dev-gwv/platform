@@ -77,7 +77,7 @@ function MyPayouts() {
                     <div className="text-right">
                       <p className="text-sm font-semibold tabular-nums">{b.amount > 0 ? inr(b.amount) : 'Not set yet'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {state === 'part' ? `${inr(b.paid)} paid` : b.amount > 0 && !b.is_final ? 'may change' : ' '}
+                        {state === 'part' ? `${inr(b.paid)} paid` : state !== 'paid' && b.amount > 0 && !b.is_final ? 'may change' : ' '}
                       </p>
                     </div>
                     <span

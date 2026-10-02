@@ -86,3 +86,52 @@ export const QUICK_TIMES: readonly string[] = [
 ]
 
 export const MINUTE_STEPS: readonly number[] = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+
+/** "4:00 pm" for an instant, read on India's clock (no leading zero, lower-case). */
+export function clockOfInstant(iso: string | null | undefined, timeZone = 'Asia/Kolkata'): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('hour')}:${get('minute')} ${get('dayPeriod').toLowerCase()}`
+}
+
+/**
+ * A shoot's hours the way the cards say them: "4:00 pm–9:00 pm · 5 h", just
+ * "4:00 pm" when no end is known, or null when there is no start.
+ */
+export function timeRangeLine(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+  timeZone = 'Asia/Kolkata',
+): string | null {
+  const start = clockOfInstant(startIso, timeZone)
+  if (!start) return null
+  const end = clockOfInstant(endIso, timeZone)
+  const ms = startIso && endIso ? Date.parse(endIso) - Date.parse(startIso) : 0
+  if (!end || !(ms > 0)) return start
+  const hours = Math.round((ms / 3_600_000) * 2) / 2
+  return `${start}–${end} · ${Number.isInteger(hours) ? hours : hours.toFixed(1)} h`
+}
+
+/** "Sat, 12 Dec" for a yyyy-mm-dd day, as Assign team writes it. */
+export function shortDayLabel(date: string | null | undefined): string | null {
+  if (!date) return null
+  const d = new Date(`${date.slice(0, 10)}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
+/**
+ * A schedule time as it was stored on a quotation: new links carry the whole
+ * line ("6:00 pm–12:00 am · 6 h"), older ones a bare "18:00" -- read that as
+ * "6:00 pm" rather than a 24-hour clock.
+ */
+export function scheduleTimeText(v: string | null | undefined): string {
+  if (!v) return ''
+  const c = parseTime(v)
+  if (!c) return v
+  const { hour12, minute, period } = to12h(c)
+  return `${hour12}:${pad(minute)} ${period.toLowerCase()}`
+}

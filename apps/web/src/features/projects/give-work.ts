@@ -35,6 +35,18 @@ export function orderPeople(
   )
 }
 
+/**
+ * Where "Me" sits in the list: among the editors when the person is one,
+ * otherwise straight after them -- the editors always come first.
+ */
+export function placeMe<T extends Pick<TeamMember, 'role_names'>>(ordered: readonly T[], me: T | null | undefined): T[] {
+  if (!me) return [...ordered]
+  if (isEditorRole(me.role_names)) return [me, ...ordered]
+  const firstOther = ordered.findIndex((p) => !isEditorRole(p.role_names))
+  const at = firstOther === -1 ? ordered.length : firstOther
+  return [...ordered.slice(0, at), me, ...ordered.slice(at)]
+}
+
 /** Days the work needs when the studio has not said: by what it is. */
 export function defaultWorkDays(title: string): number {
   const t = title.toLowerCase()

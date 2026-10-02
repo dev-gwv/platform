@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { scheduleTimeText } from '@/shared/ui/time-format'
 import { EyeOff, Pencil } from 'lucide-react'
 import { parseQuotationTerms } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -415,7 +416,7 @@ function DeliverablesBlock({
 }
 
 function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocShoot[]; showServices: boolean; onEdit?: (() => void) | undefined }) {
-  const when = (s: QuotationDocShoot) => `${formatQuotationDate(s.date)}${s.time ? ` · ${s.time.slice(0, 5)}` : ''}`
+  const when = (s: QuotationDocShoot) => `${formatQuotationDate(s.date)}${s.time ? ` · ${scheduleTimeText(s.time)}` : ''}`
   return (
     <section className="q-section paper-block mt-6">
       <BlockTitle title="Event schedule" onEdit={onEdit} />

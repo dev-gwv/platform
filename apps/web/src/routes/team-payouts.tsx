@@ -25,7 +25,7 @@ import {
   useCreatePayoutSettlement,
 } from '@/features/team-payouts/api'
 import { useCrewPayouts } from '@/features/team-payouts/pay'
-import { CREW_VIEWS, crewRowLine, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
+import { CREW_VIEWS, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
 import { useDirectory } from '@/features/team/api'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
@@ -466,17 +466,12 @@ function ShootPayoutsTracker() {
       ) : (
         <div className="space-y-4">
           {[...byMember.entries()].map(([userId, list]) => {
-            const left = list.reduce((n, r) => n + Math.max(0, r.amount - r.paid), 0)
             return (
               <div key={userId} className="space-y-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="font-semibold">{list[0]!.user_name ?? 'Member'}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {left > 0
-                      ? `${inr(left)} ${view === 'upcoming' ? 'after the shoots' : view === 'owed' ? 'owed' : 'left'}`
-                      : 'All paid'}
-                    {' · '}
-                    {list.length} {list.length === 1 ? 'shoot' : 'shoots'}
+                    {crewPersonLine(list, today, inr)}
                   </p>
                 </div>
                 {list.map((r) => (
@@ -505,7 +500,7 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
         <p className="font-medium">{[row.project_name, row.shoot_name].filter(Boolean).join(' · ') || 'A shoot'}</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {[dayLabel(row.shoot_date), row.role].filter(Boolean).join(' · ')}
-          {row.stands && row.amount > 0 && row.cost_status !== 'final' && ' · amount may change'}
+          {crewRowNote(row)}
         </p>
       </div>
       <p className={cn('text-sm tabular-nums', past && left > 0.001 ? 'font-semibold text-warning' : 'text-muted-foreground')}>

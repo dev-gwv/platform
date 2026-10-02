@@ -435,6 +435,8 @@ export const createReceivedPaymentRequest = z
     gst_number: z.string().trim().max(20).nullish(),
     date_received: isoDate.optional(),
     file_url: z.string().trim().max(1000).nullish(),
+    /** UPI, Cash, Bank transfer… -- how the money came. */
+    mode: z.string().trim().max(40).nullish(),
   })
   .superRefine((v, ctx) => {
     // Money has to belong to something, or it can never be reconciled. The
@@ -468,6 +470,7 @@ export const updateReceivedPaymentRequest = z.object({
   gst_number: z.string().trim().max(20).nullish(),
   date_received: isoDate.optional(),
   file_url: z.string().trim().max(1000).nullish(),
+  mode: z.string().trim().max(40).nullish(),
 })
 export type UpdateReceivedPaymentRequest = z.infer<typeof updateReceivedPaymentRequest>
 

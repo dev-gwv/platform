@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { brandingGaps } from '@/features/projects/branding'
+import { timeRangeLine } from '@/shared/ui/time-format'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -71,14 +73,6 @@ import type { JourneyKey } from '@/features/projects/journey'
 
 const TERMS_LIMIT = 5000
 
-/** "18:30" from a shoot's start, in the studio's own time zone. */
-function clockTime(iso: string | null): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
 /** The shoots as the client reads them: dated ones in order, dropped ones left out. */
 function toSchedule(shoots: ShootListItem[]): QuotationDocShoot[] {
   return shoots
@@ -87,7 +81,8 @@ function toSchedule(shoots: ShootListItem[]): QuotationDocShoot[] {
     .map((s) => ({
       title: s.name,
       date: s.shoot_date,
-      time: clockTime(s.start_at),
+      // "6:00 pm–12:00 am · 6 h", as the shoot cards say it.
+      time: timeRangeLine(s.start_at, s.end_at),
       city: s.location,
       services: s.requirements.map((r) => ({ name: r.name, quantity: r.quantity })),
     }))
@@ -232,22 +227,8 @@ function ProjectQuotation() {
     terms: project.quotation_terms?.trim() ? project.quotation_terms : studioTerms,
   }
 
-  /**
-   * What the client will notice is absent. Named in the studio's words rather
-   * than as column names — "GST number", not invoice_gst_number.
-   */
-  const c = company
-  const missingBranding = c
-    ? ([
-        [!c.invoice_logo_url && !c.avatar_url, 'logo'],
-        [!c.invoice_gst_number, 'GST number'],
-        [!c.invoice_address, 'address'],
-        [!c.invoice_phone, 'phone'],
-        [!c.invoice_email, 'email'],
-      ] as const)
-        .filter(([missing]) => missing)
-        .map(([, label]) => label)
-    : []
+  /** How to reach the studio, if the paper does not say it. A missing logo alone is no banner. */
+  const missingBranding = brandingGaps(company)
 
   async function togglePref(key: QuotationPrefKey, value: boolean) {
     const before = prefs
@@ -553,14 +534,14 @@ function ProjectQuotation() {
         </div>
       )}
 
-      {/* A quotation with no logo, GST number or address goes out looking like
-          a draft. The studio cannot see that from here — they are reading their
-          own document and their eye fills in what is missing. */}
+      {/* A quotation with no address, phone or email leaves the client no way
+          to reach the studio. The studio cannot see that from here — they are
+          reading their own document and their eye fills in what is missing. */}
       {missingBranding.length > 0 && (
         <div className="no-print mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs">
           <AlertTriangle className="size-4 shrink-0 text-warning" aria-hidden />
           <span className="min-w-0 flex-1">
-            Complete your studio branding to make quotations look professional. Missing:{' '}
+            Add your studio's contact details so the client can reach you. Missing:{' '}
             {missingBranding.join(', ')}.
           </span>
           <Button variant="outline" size="sm" className="h-7" asChild>

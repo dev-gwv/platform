@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TodayBoardRow } from '@ipc/contracts'
-import { boardSentence, groupOf, lateText, overdue } from './board'
+import { boardSentence, enabledSinceText, groupOf, lateText, overdue } from './board'
 
 const row = (over: Partial<TodayBoardRow>): TodayBoardRow => ({
   user_id: '00000000-0000-4000-8000-000000000001',
@@ -59,5 +59,12 @@ describe('the Today board', () => {
     expect(lateText(22)).toBe('22 min late')
     expect(lateText(65)).toBe('1h 5m late')
     expect(lateText(120)).toBe('2h late')
+  })
+})
+
+describe('enabledSinceText', () => {
+  it('reads the switch-on moment as India\'s date', () => {
+    // 3 Oct, 1:10 am in India is still 2 Oct in UTC.
+    expect(enabledSinceText('2026-10-02T19:40:00Z')).toMatch(/^3 Oct 2026$/)
   })
 })

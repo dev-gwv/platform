@@ -85,3 +85,12 @@ export const dayClock = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number) as [number, number]
   return new Date(2000, 0, 1, h, m).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
 }
+
+/**
+ * "3 Oct 2026" for the moment attendance went on, as India's date. The stamp
+ * is a UTC instant; read in the browser's own zone, a switch made before
+ * 5:30 am IST showed as the day before.
+ */
+export function enabledSinceText(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
+}

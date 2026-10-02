@@ -45,6 +45,13 @@ export function parseTyped(text: string, now = new Date()): string | null {
 }
 
 /** "Wed, 24 Sept 2026" -- how a person says it, without the locale's stray commas. */
+/**
+ * Enter in the picker's typing box sets the typed value -- and only that. The
+ * box sits in a portal inside whatever form opened it, so the key must stop
+ * there or it submits that form too.
+ */
+export const typedEnterSets = (key: string): boolean => key === 'Enter'
+
 export function niceDate(iso: string): string {
   const d = fromIso(iso)
   if (!d) return iso
@@ -214,25 +221,29 @@ export function DateField({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-auto p-3"
+          // Never taller than the room it has: in a dialog near the top of a
+          // 720px screen the calendar used to open with its typing row cut off.
+          className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-3"
           onInteractOutside={(e) => {
             // The month / year dropdowns open a list portalled to the body;
             // a tap there is inside the calendar as far as the person knows.
             if ((e.target as HTMLElement | null)?.closest?.('[role="listbox"]')) e.preventDefault()
           }}
         >
-          <form
-            className="mb-2 flex items-center gap-1.5"
-            onSubmit={(e) => {
-              e.preventDefault()
-              applyTyped()
-            }}
-          >
+          {/* Not a <form>: inside a dialog's form, a nested submit bubbles
+              through the portal and saves the dialog without this value. */}
+          <div className="mb-2 flex items-center gap-1.5">
             <input
               value={typed}
               onChange={(e) => {
                 setTyped(e.target.value)
                 setTypedBad(false)
+              }}
+              onKeyDown={(e) => {
+                if (!typedEnterSets(e.key)) return
+                e.preventDefault()
+                e.stopPropagation()
+                applyTyped()
               }}
               inputMode="numeric"
               placeholder="Type dd/mm/yyyy"
@@ -241,11 +252,11 @@ export function DateField({
               className="h-8 w-full rounded-full border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
             />
             {typed && (
-              <button type="submit" className="h-8 shrink-0 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
+              <button type="button" onClick={applyTyped} className="h-8 shrink-0 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
                 Set
               </button>
             )}
-          </form>
+          </div>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {quick.map((q) => (
               <button

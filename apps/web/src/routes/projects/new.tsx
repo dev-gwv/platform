@@ -1308,7 +1308,7 @@ function ShootCard({
           ? 'border-primary/50 bg-card ring-2 ring-primary/15'
           : ready
             ? 'border-success/40 bg-success/[0.04] hover:border-success/60'
-            : 'border-destructive/25 bg-destructive/5 hover:border-destructive/40',
+            : 'border-border bg-card hover:border-primary/30',
       )}
     >
       <div className="flex items-center gap-1 pr-2">
@@ -1345,7 +1345,7 @@ function ShootCard({
               </StatusBadge>
               <span className="hidden min-w-0 flex-wrap gap-1.5 sm:flex">
               {issues.map((issue) => (
-                <StatusBadge key={issue} tone={issue === 'Title & date needed' ? 'danger' : 'warning'}>
+                <StatusBadge key={issue} tone="warning">
                   <AlertCircle className="mr-1 size-3" aria-hidden />
                   {issue}
                 </StatusBadge>

@@ -6,12 +6,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMembers } from '@/features/allocation/api'
-import { orderPeople, workloadText } from '@/features/projects/give-work'
+import { orderPeople, placeMe, workloadText } from '@/features/projects/give-work'
 
 /**
  * The people to give work to: editors first, then whoever has least on, each
  * with how much they already have ("2 in hand · 1 late"). A search box once
- * the team is big. "Me" sits at the top for the person doing it themselves.
+ * the team is big. "Me" sits after the editors (among them if they edit).
  */
 export function PersonList({
   selected,
@@ -36,7 +36,7 @@ export function PersonList({
     all.filter((m) => m.user_id !== me?.user_id && (!find || m.name.toLowerCase().includes(find.toLowerCase()))),
     loads,
   )
-  const shown = me && (!find || 'me'.includes(find.toLowerCase()) || me.name.toLowerCase().includes(find.toLowerCase())) ? [me, ...people] : people
+  const shown = placeMe(people, me && (!find || 'me'.includes(find.toLowerCase()) || me.name.toLowerCase().includes(find.toLowerCase())) ? me : null)
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>

@@ -54,6 +54,45 @@ export function crewRowLine(r: Pick<CrewPayoutRow, 'amount' | 'paid' | 'shoot_da
   return upcoming ? `${money(r.amount)} after the shoot` : `${money(r.amount)} owed`
 }
 
+/**
+ * " · amount may change" while a booked payout is not final and still has
+ * money to go. Once it is paid in full the amount is what was paid, so the
+ * line says nothing more.
+ */
+export function crewRowNote(r: Pick<CrewPayoutRow, 'amount' | 'paid' | 'stands' | 'cost_status'>): string {
+  if (!r.stands || r.amount <= 0 || r.cost_status === 'final' || lineBalance(r) <= 0.001) return ''
+  return ' · amount may change'
+}
+
+/**
+ * A person's header on Team payouts: "₹6,000 owed · ₹12,000 after the
+ * shoots · 3 shoots". Money for a shoot not yet done is never "owed" or
+ * "left" -- crew money is owed once the shoot day has passed.
+ */
+export function crewPersonLine(
+  list: readonly Pick<CrewPayoutRow, 'amount' | 'paid' | 'shoot_date'>[],
+  today: string,
+  money: (n: number) => string,
+): string {
+  let owed = 0
+  let ahead = 0
+  let aheadShoots = 0
+  for (const r of list) {
+    const bal = lineBalance(r)
+    if (crewBucketOf(r.shoot_date, today) === 'past') owed += bal
+    else if (bal > 0.001) {
+      ahead += bal
+      aheadShoots += 1
+    }
+  }
+  const parts: string[] = []
+  if (owed > 0.001) parts.push(`${money(owed)} owed`)
+  if (ahead > 0.001) parts.push(`${money(ahead)} after the ${aheadShoots === 1 ? 'shoot' : 'shoots'}`)
+  if (parts.length === 0) parts.push('All paid')
+  parts.push(`${list.length} ${list.length === 1 ? 'shoot' : 'shoots'}`)
+  return parts.join(' · ')
+}
+
 /** The dashboard's "Who you owe" sentence. */
 export function whoYouOweLine(o: Pick<CrewOwed, 'owed_now' | 'people'>): string {
   if (o.owed_now <= 0) return 'All crew paid for shoots already done'

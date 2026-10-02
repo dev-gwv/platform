@@ -79,7 +79,7 @@ export function PayoutsTab({ projectId }: { projectId: string }) {
                   <div className="min-w-[7rem] text-right">
                     <p className="text-sm font-semibold tabular-nums">{r.amount > 0 ? inr(r.amount) : '—'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {state === 'part' ? `${inr(r.paid)} paid` : r.cost_status !== 'final' && r.amount > 0 ? 'not final' : ' '}
+                      {state === 'part' ? `${inr(r.paid)} paid` : state !== 'paid' && r.cost_status !== 'final' && r.amount > 0 ? 'not final' : ' '}
                     </p>
                   </div>
                   <span

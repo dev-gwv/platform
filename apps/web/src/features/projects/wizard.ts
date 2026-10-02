@@ -510,7 +510,11 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
  */
 export function shootIssues(shoot: ShootDraft): string[] {
   const issues: string[] = []
-  if (!shoot.name.trim() || !shoot.shoot_date) issues.push('Title & date needed')
+  // Name only what is missing: a titled shoot with no date reads "Date needed".
+  const noTitle = !shoot.name.trim()
+  if (noTitle && !shoot.shoot_date) issues.push('Title & date needed')
+  else if (noTitle) issues.push('Title needed')
+  else if (!shoot.shoot_date) issues.push('Date needed')
   // The crew needs a call time and a length as much as a date; a shoot
   // without them is not ready to book people onto (the assign dialog would
   // have to guess how long the day is), even if nothing stops the project

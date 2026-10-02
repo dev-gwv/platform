@@ -60,6 +60,8 @@ import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 import { useINR } from '@/shared/money/MoneyMask'
+import { clockOfInstant, shortDayLabel } from '@/shared/ui/time-format'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 /** The crew roles a studio reaches for, when it has not named its own yet. */
 const FALLBACK_ROLES = [
@@ -72,7 +74,7 @@ const FALLBACK_ROLES = [
   'BTS Shooter',
 ] as const
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => todayInIndia()
 
 const list = shootListItem.array()
 
@@ -85,8 +87,8 @@ const TONE: Record<ShootStatus, 'neutral' | 'success' | 'danger'> = {
 }
 
 
-const timeOf = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null
+/** "4:00 pm" -- no leading zero, on India's clock. */
+const timeOf = (iso: string | null) => clockOfInstant(iso)
 
 /**
  * This project's shoots, as the desk a studio actually plans from: every day,
@@ -453,7 +455,7 @@ function ShootPlanner({
                     Date: today · tap to set the real day
                   </button>
                 ) : (
-                  <span>{shoot.shoot_date}</span>
+                  <span>{shortDayLabel(shoot.shoot_date) ?? shoot.shoot_date}</span>
                 ))}
               {/* The hours the day runs, or the one amber ask when nobody has
                   said yet: the team cannot be planned without them. */}

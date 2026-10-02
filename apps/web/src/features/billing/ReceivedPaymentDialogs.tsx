@@ -3,11 +3,12 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
-import { Input, Label } from '@/shared/ui/input'
+import { Input, Label, Select } from '@/shared/ui/input'
 import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { leftToPayLine } from './left-to-pay'
+import { PAYMENT_MODES } from './RecordPaymentDialog'
 import { useClients } from '@/features/clients/api'
 import { useClientProjectOptions } from './client-projects'
 import {
@@ -31,6 +32,7 @@ interface PaymentFormState {
   gst_number: string
   date_received: string
   file_url: string
+  mode: string
 }
 
 const emptyForm = (): PaymentFormState => ({
@@ -44,6 +46,7 @@ const emptyForm = (): PaymentFormState => ({
   gst_number: '',
   date_received: todayISO(),
   file_url: '',
+  mode: 'UPI',
 })
 
 function toForm(p: ReceivedPayment): PaymentFormState {
@@ -58,6 +61,7 @@ function toForm(p: ReceivedPayment): PaymentFormState {
     gst_number: p.gst_number ?? '',
     date_received: p.date_received ?? todayISO(),
     file_url: p.file_url ?? '',
+    mode: p.mode ?? '',
   }
 }
 
@@ -150,6 +154,8 @@ export function ReceivedPaymentDialog({
       gst_number: form.is_gst ? form.gst_number.trim() || null : null,
       ...(form.date_received ? { date_received: form.date_received } : {}),
       file_url: form.file_url.trim() || null,
+      // A draft saved before the mode chips has no mode at all.
+      mode: (form.mode || '').trim() || null,
     }
     try {
       if (isEdit && initial) {
@@ -171,13 +177,13 @@ export function ReceivedPaymentDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label>Client (optional)</Label>
-              <select
+              <Select
+                aria-label="Client"
                 value={form.client_id}
                 onChange={(e) => {
                   set('client_id', e.target.value)
                   set('project_id', '')
                 }}
-                className="h-9 rounded-md border border-input bg-card px-3 text-sm"
               >
                 <option value="">All clients</option>
                 {clients.map((c) => (
@@ -185,33 +191,25 @@ export function ReceivedPaymentDialog({
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
-              <select
-                value={form.project_id}
-                onChange={(e) => set('project_id', e.target.value)}
-                className="h-9 rounded-md border border-input bg-card px-3 text-sm"
-              >
+              <Select aria-label="Project" value={form.project_id} onChange={(e) => set('project_id', e.target.value)}>
                 <option value="">{form.client_id ? projectChoice.blank : 'Select project'}</option>
                 {projectChoice.options.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               {/* Naming the invoice is what settles it. Before 0145 the two
                   were separate ledgers, so a payment recorded here left the
                   invoice reading unpaid however much the client had sent. */}
               <Label>Against invoice</Label>
-              <select
-                value={form.invoice_id}
-                onChange={(e) => set('invoice_id', e.target.value)}
-                className="h-9 rounded-md border border-input bg-card px-3 text-sm"
-              >
+              <Select aria-label="Against invoice" value={form.invoice_id} onChange={(e) => set('invoice_id', e.target.value)}>
                 <option value="">Not against an invoice</option>
                 {openInvoices.map((i) => (
                   <option key={i.id} value={i.id}>
@@ -219,7 +217,7 @@ export function ReceivedPaymentDialog({
                     {Number(i.balance_due) > 0 ? ` · ${inr(Number(i.balance_due))} due` : ' · settled'}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="text-xs text-muted-foreground">
                 Pick one and the invoice settles itself from this payment.
               </p>
@@ -261,6 +259,25 @@ export function ReceivedPaymentDialog({
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>How</Label>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="How it was paid">
+              {[...PAYMENT_MODES, ...(form.mode && !PAYMENT_MODES.includes(form.mode) ? [form.mode] : [])].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={form.mode === m}
+                  onClick={() => set('mode', m)}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    form.mode === m ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

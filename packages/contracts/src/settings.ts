@@ -138,6 +138,8 @@ export const payTo = z.object({
   bank_account_name: z.string().nullable(),
   bank_account_number: z.string().nullable(),
   bank_ifsc: z.string().nullable(),
+  /** False for a member the studio added without a login: nobody reminds them, so the studio asks. */
+  login_enabled: z.boolean().default(true),
 })
 export type PayTo = z.infer<typeof payTo>
 

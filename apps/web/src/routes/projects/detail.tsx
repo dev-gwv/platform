@@ -333,7 +333,7 @@ function ProjectDetail() {
       </div>
 
       {seesMoney && (
-        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
+        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3')}>
           <Figure icon={IndianRupee} label="Project value" value={<Money value={data.total_cost} />} />
           <Figure icon={CircleCheck} label="Received" value={<Money value={received} />} tone="success" sub={collectedLine(money)} />
           <Figure
@@ -469,7 +469,9 @@ function Figure({
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
+      {/* Figures and their lines wrap rather than truncate: at 1280px with
+          the sidebar open "₹2,8…" and "Still to co…" said nothing. */}
+      <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3 sm:p-4">
         <span
           className={cn(
             'hidden size-10 shrink-0 sm:flex items-center justify-center rounded-lg',
@@ -484,12 +486,12 @@ function Figure({
         >
           <Icon className="size-5" aria-hidden />
         </span>
-        <div className="min-w-0">
-          <p className={cn('truncate text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-destructive')}>{value}</p>
-          <p className="truncate text-xs text-muted-foreground sm:text-sm">{label}</p>
-          {sub && <p className="truncate text-xs text-muted-foreground" title={sub}>{sub}</p>}
+        <div className="min-w-0 flex-1 basis-28">
+          <p className={cn('whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-destructive')}>{value}</p>
+          <p className="text-xs leading-snug text-muted-foreground sm:text-sm">{label}</p>
+          {sub && <p className="text-xs leading-snug text-muted-foreground">{sub}</p>}
         </div>
-        {action && <div className="shrink-0 sm:ml-auto sm:self-end">{action}</div>}
+        {action && <div className="shrink-0 self-end">{action}</div>}
       </CardContent>
     </Card>
   )
