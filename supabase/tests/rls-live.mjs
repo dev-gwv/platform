@@ -655,12 +655,23 @@ if (listed) {
   check('receipts: a promise has no number yet', d2.status === 200 && d2.json.receipt_number === null, { n: d2.json.receipt_number })
   await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
   const d3 = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { paid_on: '2026-05-09' } })
+  const moved = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  check('payments: changing the date on the project moves it in Billing too', moved.json.date_received === '2026-05-09', { date_received: moved.json.date_received })
   check('receipts: numbered the day it is received, after the one before', !!d3.json.receipt_number && d3.json.receipt_number > d1.json.receipt_number, { before: d1.json.receipt_number, after: d3.json.receipt_number })
   const link = await api('/documents/receipts', { token: aToken, method: 'POST', body: { payment_id: p1.json.id } })
   const rtoken = (link.json.link ?? '').split('token=')[1] ?? ''
   const pub = await api(`/public/receipt/${rtoken}`)
   check('receipts: the client\'s receipt carries the number', pub.status === 200 && pub.json.receipt_number === d1.json.receipt_number, { status: pub.status, n: pub.json.receipt_number })
   const list = await api(`/billing/payments?search=${encodeURIComponent(d1.json.receipt_number ?? '')}&page=1&page_size=5`, { token: aToken })
+  const promise2 = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 300, status: 'pending', paid_on: '2026-06-01' } })
+  const all = await api('/billing/payments?page=1&page_size=5', { token: aToken })
+  const filtered = await api('/billing/payments?status=paid&page=1&page_size=5', { token: aToken })
+  check(
+    'payments: the promised count is over the same payments as the promised amount, whatever the filter',
+    promise2.status === 201 && all.json.summary?.promised_count >= 1 && filtered.json.summary?.promised_count === all.json.summary?.promised_count && filtered.json.summary?.promised_amount === all.json.summary?.promised_amount,
+    { all: all.json.summary, filtered: filtered.json.summary },
+  )
   check('receipts: the list finds a payment by its number and shows the year\'s tiles', (list.json.items ?? []).some((x) => x.id === p1.json.id) && typeof list.json.summary?.received_this_fy === 'number', { found: list.json.items?.length, tiles: list.json.summary })
 
   const cleared = await api(`/billing/payments/${p1.json.id}/cleared`, { token: aToken, method: 'POST', body: { cleared: true } })
@@ -2051,6 +2062,8 @@ if (listed) {
     saved.status === 200 && again.status === 200 && read.json?.rendered_body === 'Half written, more' && read.json?.payment_terms?.length === 1,
     { saved: saved.status, again: again.status, read: read.json },
   )
+  const plan = await api(`/projects/${pid}/billing`, { token: aToken })
+  check('terms: a draft is not the payment plan', plan.status === 200 && plan.json.plan === null, { status: plan.status, plan: plan.json?.plan })
   const sent = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Final words' } })
   const gone = await api(`/terms/draft?project_id=${pid}`, { token: aToken })
   check('terms: sending clears the draft', sent.status === 201 && gone.json === null, { sent: sent.status, gone: gone.json })

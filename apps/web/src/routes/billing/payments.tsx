@@ -159,7 +159,7 @@ function PaymentsSection() {
             tone="amber"
             value={formatINR(summary.promised_amount)}
             label="Promised, not yet in"
-            hint={`${summary.pending_count} promised`}
+            hint={`${summary.promised_count} promised`}
             onClick={() => { setStatus(status === 'pending' ? 'all' : 'pending'); setPage(1) }}
             active={status === 'pending'}
           />
