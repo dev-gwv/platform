@@ -1,0 +1,3 @@
+-- 0237: Refer a studio. A studio's own referral code, the studios it brought
+-- in, and what each earns. Reward, discount and hold values are set by the
+-- platform admin later; nothing here pays out on its own.
