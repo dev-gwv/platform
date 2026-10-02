@@ -17,6 +17,7 @@ import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
+import { HideAmountsButton } from '@/shared/money/MoneyMask'
 import { TrialChip } from '@/features/billing/TrialChip'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
@@ -209,6 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <div className="flex items-center gap-1">
               <NotificationBell />
+              <HideAmountsButton />
               <Button variant="ghost" size="icon" onClick={toggleScheme} aria-label="Toggle theme">
                 {scheme === 'dark' ? <Sun /> : <Moon />}
               </Button>
