@@ -16,6 +16,10 @@ import {
   leaveRequest,
   createLeaveRequest,
   decideRequest,
+  decideLeaveRequest,
+  leaveAllowance,
+  leaveBalance,
+  saveLeaveAllowancesRequest,
   companyHoliday,
   createHolidayRequest,
   attendanceSettings,
@@ -97,7 +101,8 @@ export const hrRouter = new Hono<AppEnv>()
     const rows = await attempt(c, 'hr.leave.list', () =>
       withUser(c.env, auth.userId, (sql) => sql`
         select l.id, l.user_id, u.name as user_name, l.kind, l.start_date, l.end_date, l.half_day, l.reason,
-               l.status, d.name as decided_by_name, l.decided_at, l.decision_note, l.created_at
+               l.status, leave_days(l.company_id, l.start_date, l.end_date, l.half_day) as days,
+               d.name as decided_by_name, l.decided_at, l.decision_note, l.created_at
           from leave_requests l
           join users u on u.user_id = l.user_id
           left join users d on d.user_id = l.decided_by
@@ -127,13 +132,64 @@ export const hrRouter = new Hono<AppEnv>()
     return c.json(idOnly.parse(row), 201)
   })
 
+  // ── Leave balances (0228): days a year per kind, and what is left ──
+  .get('/leave/allowances', async (c) => {
+    const rows = await attempt(c, 'hr.leave.allowances', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select kind, days_per_year from leave_allowances
+         order by case kind when 'casual' then 1 when 'sick' then 2 else 3 end`),
+    )
+    if (!rows) fail(400, 'We could not load the leave allowances.')
+    return c.json(leaveAllowance.array().parse(rows))
+  })
+
+  // Set the days a year for each kind; null takes a kind off.
+  .put('/leave/allowances', async (c) => {
+    const parsed = saveLeaveAllowancesRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Days a year are between 0 and 365.')
+    const ok = await attempt(
+      c,
+      'hr.leave.allowances_save',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          for (const a of parsed.data.allowances) {
+            if (a.days_per_year === null) await sql`delete from leave_allowances where kind = ${a.kind}`
+            else
+              await sql`
+                insert into leave_allowances (kind, days_per_year) values (${a.kind}, ${a.days_per_year})
+                on conflict (company_id, kind) do update set days_per_year = excluded.days_per_year, updated_at = now()`
+          }
+          return true
+        }),
+      { onCode: (code) => (code === '42501' ? fail(403, 'Only an owner or a manager can set leave allowances.') : undefined) },
+    )
+    if (!ok) fail(400, 'We could not save the allowances.')
+    await audit(c, { action: 'leave.allowances', entityType: 'company', entityId: c.get('auth').companyId, after: parsed.data })
+    return c.body(null, 204)
+  })
+
+  // Everyone's balance for a manager; your own for anyone else.
+  .get('/leave/balances', async (c) => {
+    const year = c.req.query('year') ? Number(c.req.query('year')) : null
+    if (year !== null && !(Number.isInteger(year) && year >= 2000 && year <= 2100)) fail(422, 'Unknown year.')
+    const user = c.req.query('user_id') || null
+    if (user && !/^[0-9a-f-]{36}$/i.test(user)) fail(422, 'Unknown person.')
+    const rows = await attempt(c, 'hr.leave.balances', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select * from leave_balances(${year}::int, ${user}::uuid)`),
+    )
+    if (!rows) fail(400, 'We could not load the leave balances.')
+    return c.json(leaveBalance.array().parse(rows))
+  })
+
   .post('/leave/:id/decide', async (c) => {
-    const parsed = decideRequest.safeParse(await c.req.json().catch(() => ({})))
+    const parsed = decideLeaveRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Approve or decline, with a note.')
     const id = uuidParam(c)
     const ok = await attempt(c, 'hr.leave.decide', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        await sql`select decide_leave(p_id => ${id}, p_approve => ${parsed.data.approve}, p_note => ${parsed.data.note ?? null})`
+        await sql`select decide_leave(p_id => ${id}, p_approve => ${parsed.data.approve}, p_note => ${parsed.data.note ?? null},
+                                      p_as_unpaid => ${parsed.data.as_unpaid ?? false})`
         return true
       }),
     { onCode: explain })

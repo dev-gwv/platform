@@ -261,6 +261,8 @@ export const leaveRequest = z.object({
   half_day: z.boolean(),
   reason: z.string().nullable(),
   status: leaveStatus,
+  /** Working days it takes (a day off inside it is not counted; half a day is 0.5). */
+  days: z.coerce.number().optional(),
   decided_by_name: z.string().nullable().default(null),
   decided_at: isoDateTime.nullable(),
   decision_note: z.string().nullable(),
@@ -285,6 +287,34 @@ export const decideRequest = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 })
 export type DecideRequest = z.infer<typeof decideRequest>
+
+/** Deciding leave: approve as unpaid when the person's days have run out (0228). */
+export const decideLeaveRequest = decideRequest.extend({ as_unpaid: z.boolean().optional() })
+export type DecideLeaveRequest = z.infer<typeof decideLeaveRequest>
+
+/** The kinds of leave a studio can give an allowance for. */
+export const allowanceKind = z.enum(['casual', 'sick', 'paid'])
+export type AllowanceKind = z.infer<typeof allowanceKind>
+
+/** Days a year of one kind of leave (0228). */
+export const leaveAllowance = z.object({ kind: allowanceKind, days_per_year: z.coerce.number() })
+export type LeaveAllowance = z.infer<typeof leaveAllowance>
+export const saveLeaveAllowancesRequest = z.object({
+  allowances: z.array(z.object({ kind: allowanceKind, days_per_year: z.number().min(0).max(365).nullable() })).max(3),
+})
+export type SaveLeaveAllowancesRequest = z.infer<typeof saveLeaveAllowancesRequest>
+
+/** "8 of 12 casual left": one person's balance of one kind for the year. */
+export const leaveBalance = z.object({
+  user_id: uuid,
+  user_name: z.string().nullable(),
+  kind: allowanceKind,
+  allowance: z.coerce.number(),
+  used: z.coerce.number(),
+  pending: z.coerce.number(),
+  remaining: z.coerce.number(),
+})
+export type LeaveBalance = z.infer<typeof leaveBalance>
 
 export const companyHoliday = z.object({ id: uuid, holiday_date: isoDate, name: z.string() })
 export type CompanyHoliday = z.infer<typeof companyHoliday>

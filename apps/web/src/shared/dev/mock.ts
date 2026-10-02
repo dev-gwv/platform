@@ -284,6 +284,13 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
   if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/hr/leave/allowances') return [{ kind: 'casual', days_per_year: 12 }, { kind: 'sick', days_per_year: 6 }]
+  if (method === 'PUT' && path === '/hr/leave/allowances') return null
+  if (method === 'GET' && path.startsWith('/hr/leave/balances'))
+    return [
+      { user_id: uid(0x7f1), user_name: 'Priya Shah', kind: 'casual', allowance: 12, used: 3, pending: 2, remaining: 9 },
+      { user_id: uid(0x7f1), user_name: 'Priya Shah', kind: 'sick', allowance: 6, used: 0.5, pending: 0, remaining: 5.5 },
+    ]
   if (method === 'GET' && path === '/me/payouts')
     return {
       bookings: [{ slot_id: uid(0x7e1), role: 'Candid Photographer', shoot_name: 'Wedding', project_name: 'Mehta Wedding', shoot_date: '2026-11-12', amount: 6000, is_final: true, paid: 0 }],

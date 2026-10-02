@@ -25,10 +25,15 @@ import {
   useDecideLeave,
   useHolidays,
   useLeave,
+  useLeaveAllowances,
+  useLeaveBalances,
   usePolicy,
+  useSaveLeaveAllowances,
   useRemoveHoliday,
   useSetWeeklyOff,
 } from '@/features/hr/leave-api'
+import { approvalCheck, balanceLine, days as dayCount } from '@/features/hr/leave-balance'
+import type { AllowanceKind } from '@ipc/contracts'
 
 export function LeavePage() {
   return (
@@ -38,7 +43,7 @@ export function LeavePage() {
   )
 }
 
-type Tab = 'mine' | 'approvals' | 'holidays'
+type Tab = 'mine' | 'approvals' | 'balances' | 'holidays'
 
 const KIND_LABEL: Record<LeaveKind, string> = {
   casual: 'Casual',
@@ -73,7 +78,12 @@ function Leave() {
 
   const tabs: { value: Tab; label: string; count?: number }[] = [
     { value: 'mine', label: 'My leave' },
-    ...(canDecide ? [{ value: 'approvals' as Tab, label: 'To approve', count: waiting }] : []),
+    ...(canDecide
+      ? [
+          { value: 'approvals' as Tab, label: 'To approve', count: waiting },
+          { value: 'balances' as Tab, label: 'Balances' },
+        ]
+      : []),
     { value: 'holidays', label: 'Holidays' },
   ]
   const current = (tabs.some((t) => t.value === tab) ? tab : 'mine') as Tab
@@ -84,6 +94,7 @@ function Leave() {
       <FilterTabs<Tab> tabs={tabs} value={current} onChange={setTab} className="w-fit" />
       {current === 'mine' && <MyLeave />}
       {current === 'approvals' && canDecide && <Approvals />}
+      {current === 'balances' && canDecide && <Balances />}
       {current === 'holidays' && <Holidays canEdit={canDecide} />}
     </section>
   )
@@ -92,6 +103,7 @@ function Leave() {
 // ── mine ─────────────────────────────────────────────────────────
 function MyLeave() {
   const leave = useLeave('mine')
+  const balances = useLeaveBalances()
   const fixes = useCorrections('mine')
   const cancel = useCancelLeave()
   const confirm = useConfirm()
@@ -109,6 +121,22 @@ function MyLeave() {
               <CalendarOff /> Ask for leave
             </Button>
           </div>
+          {(balances.data ?? []).length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {(balances.data ?? []).map((b) => (
+                <span
+                  key={b.kind}
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-xs font-medium',
+                    b.remaining <= 0 ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success',
+                  )}
+                >
+                  {balanceLine(b)}
+                  {b.pending > 0 ? ` · ${dayCount(b.pending)} waiting` : ''}
+                </span>
+              ))}
+            </div>
+          )}
           {leave.isLoading ? (
             <SkeletonList rows={3} columns={2} />
           ) : !(leave.data ?? []).length ? (
@@ -188,6 +216,7 @@ function MyLeave() {
 
 function AskLeaveDialog({ onClose }: { onClose: () => void }) {
   const ask = useAskLeave()
+  const balances = useLeaveBalances()
   const today = todayIST()
   const [kind, setKind] = useState<LeaveKind>('casual')
   const [from, setFrom] = useState(today)
@@ -233,6 +262,10 @@ function AskLeaveDialog({ onClose }: { onClose: () => void }) {
                 </option>
               ))}
             </Select>
+            {(() => {
+              const b = balances.data?.find((x) => x.kind === kind)
+              return b ? <p className={cn('text-xs', b.remaining <= 0 ? 'text-warning' : 'text-muted-foreground')}>{balanceLine(b)}</p> : null
+            })()}
           </div>
           <label className={cn('flex items-center gap-2 self-end pb-2 text-sm', !oneDay && 'opacity-50')}>
             <input type="checkbox" checked={half && oneDay} disabled={!oneDay} onChange={(e) => setHalf(e.target.checked)} /> Half day
@@ -334,6 +367,7 @@ function FixDayDialog({ onClose }: { onClose: () => void }) {
 // ── approvals ────────────────────────────────────────────────────
 function Approvals() {
   const leave = useLeave('team', 'pending')
+  const balances = useLeaveBalances()
   const fixes = useCorrections('team', 'pending')
   const decideLeave = useDecideLeave()
   const decideFix = useDecideCorrection()
@@ -354,17 +388,25 @@ function Approvals() {
           <CardContent className="p-4">
             <h2 className="font-semibold">Leave to approve</h2>
             <ul className="mt-2 divide-y divide-border">
-              {(leave.data ?? []).map((l) => (
-                <Row
-                  key={l.id}
-                  who={l.user_name}
-                  what={`${span(l)} · ${KIND_LABEL[l.kind]}`}
-                  why={l.reason}
-                  busy={decideLeave.isPending}
-                  onApprove={() => decideLeave.mutate({ id: l.id, approve: true, note: null })}
-                  onDecline={() => setDeclining({ kind: 'leave', id: l.id, label: `${l.user_name ?? 'Leave'} · ${span(l)}` })}
-                />
-              ))}
+              {(leave.data ?? []).map((l) => {
+                const check = approvalCheck(balances.data, l.user_id, l.kind, l.days)
+                return (
+                  <Row
+                    key={l.id}
+                    who={l.user_name}
+                    what={`${span(l)} · ${KIND_LABEL[l.kind]}`}
+                    why={l.reason}
+                    balance={check?.text ?? null}
+                    over={check?.over ?? 0}
+                    busy={decideLeave.isPending}
+                    onApprove={() => decideLeave.mutate({ id: l.id, approve: true, note: null })}
+                    onApproveUnpaid={
+                      (check?.over ?? 0) > 0 ? () => decideLeave.mutate({ id: l.id, approve: true, note: null, as_unpaid: true }) : undefined
+                    }
+                    onDecline={() => setDeclining({ kind: 'leave', id: l.id, label: `${l.user_name ?? 'Leave'} · ${span(l)}` })}
+                  />
+                )
+              })}
             </ul>
           </CardContent>
         </Card>
@@ -407,15 +449,24 @@ function Row({
   who,
   what,
   why,
+  balance = null,
+  over = 0,
   busy,
   onApprove,
+  onApproveUnpaid,
   onDecline,
 }: {
   who: string | null
   what: string
   why: string | null
+  /** "Has 3 days casual left · this is 2 days" -- leave only. */
+  balance?: string | null
+  /** Days past what is left of the allowance. */
+  over?: number
   busy: boolean
   onApprove: () => void
+  /** Offered when the request goes past what is left. */
+  onApproveUnpaid?: (() => void) | undefined
   onDecline: () => void
 }) {
   return (
@@ -426,8 +477,14 @@ function Row({
           {what}
           {why ? ` · ${why}` : ''}
         </p>
+        {balance && <p className={cn('text-xs', over > 0 ? 'font-medium text-warning' : 'text-success')}>{balance}</p>}
       </div>
-      <Button size="sm" onClick={onApprove} disabled={busy}>
+      {onApproveUnpaid && (
+        <Button size="sm" onClick={onApproveUnpaid} disabled={busy} title="The days still covered stay as they are; the extra days are unpaid leave">
+          <Check /> Approve, {dayCount(over)} {over === 1 ? 'day' : 'days'} unpaid
+        </Button>
+      )}
+      <Button size="sm" variant={over > 0 ? 'outline' : 'default'} onClick={onApprove} disabled={busy}>
         <Check /> Approve
       </Button>
       <Button size="sm" variant="outline" onClick={onDecline} disabled={busy}>
@@ -567,6 +624,111 @@ function Holidays({ canEdit }: { canEdit: boolean }) {
               )
             })}
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ── balances ─────────────────────────────────────────────────────
+const ALLOWANCE_KINDS: { kind: AllowanceKind; label: string }[] = [
+  { kind: 'casual', label: 'Casual' },
+  { kind: 'sick', label: 'Sick' },
+  { kind: 'paid', label: 'Paid' },
+]
+
+/**
+ * How many days of each kind a person gets a year, and where everyone
+ * stands -- "Priya: 9 of 12 casual left". A kind left empty has no
+ * allowance; unpaid leave never does.
+ */
+function Balances() {
+  const allowances = useLeaveAllowances()
+  const balances = useLeaveBalances()
+  const save = useSaveLeaveAllowances()
+  const [draft, setDraft] = useState<Record<AllowanceKind, string> | null>(null)
+  const current = draft ?? {
+    casual: String(allowances.data?.find((a) => a.kind === 'casual')?.days_per_year ?? ''),
+    sick: String(allowances.data?.find((a) => a.kind === 'sick')?.days_per_year ?? ''),
+    paid: String(allowances.data?.find((a) => a.kind === 'paid')?.days_per_year ?? ''),
+  }
+  const people = new Map<string, { name: string; rows: NonNullable<typeof balances.data> }>()
+  for (const b of balances.data ?? []) {
+    const p = people.get(b.user_id) ?? { name: b.user_name ?? 'Team member', rows: [] }
+    p.rows.push(b)
+    people.set(b.user_id, p)
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4">
+          <h2 className="font-semibold">Leave each person gets a year</h2>
+          {ALLOWANCE_KINDS.map(({ kind, label }) => (
+            <div key={kind} className="flex items-center gap-2">
+              <Label htmlFor={`al-${kind}`} className="w-16">
+                {label}
+              </Label>
+              <Input
+                id={`al-${kind}`}
+                inputMode="decimal"
+                className={cn('h-9 w-24', current[kind] === '' && 'border-dashed border-warning/60')}
+                value={current[kind]}
+                placeholder="—"
+                onChange={(e) => setDraft({ ...current, [kind]: e.target.value })}
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
+          ))}
+          <Button
+            size="sm"
+            className="self-start"
+            disabled={!draft || save.isPending}
+            onClick={() =>
+              save.mutate(
+                {
+                  allowances: ALLOWANCE_KINDS.map(({ kind }) => ({
+                    kind,
+                    days_per_year: current[kind].trim() === '' ? null : Math.max(0, Math.min(365, Number(current[kind]) || 0)),
+                  })),
+                },
+                { onSuccess: () => setDraft(null) },
+              )
+            }
+          >
+            Save
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardContent className="p-4">
+          <h2 className="font-semibold">Where everyone stands this year</h2>
+          {balances.isLoading ? (
+            <SkeletonList rows={3} columns={3} />
+          ) : people.size === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">Set the days a year on the left, and each person’s balance shows here.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-border">
+              {[...people.entries()].map(([id, p]) => (
+                <li key={id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+                  <span className="min-w-[8rem] flex-1 font-medium">{p.name}</span>
+                  {p.rows.map((b) => (
+                    <span
+                      key={b.kind}
+                      className={cn(
+                        'rounded-full px-2.5 py-1 text-xs font-medium',
+                        b.remaining <= 0 ? 'bg-warning/15 text-warning' : 'bg-muted text-foreground',
+                      )}
+                    >
+                      {balanceLine(b)}
+                      {b.pending > 0 ? ` · ${dayCount(b.pending)} waiting` : ''}
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
