@@ -1,0 +1,10 @@
+-- 0229: giving work to an editor and hearing back.
+--
+--   * deliverables.assigned_by: who gave the work to its editor, set whenever
+--     the editor changes.
+--   * deliverable_handed_in(): when an editor hands in work on a deliverable,
+--     whoever gave it to them (else the studio's owners and admins) is told.
+--   * notifications_deliverable_link(): a deliverable alert that opens
+--     "/my-work" opens the item itself ("/my-work?d=<id>").
+--   * alert_email_due() also emails deliverable assigned / due / changes
+--     requested / handed in.
