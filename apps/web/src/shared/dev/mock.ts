@@ -790,6 +790,18 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ...profileFx }
   }
   if (method === 'GET' && path === '/settings/company') return companyFx
+  if (method === 'GET' && path === '/studio-referrals')
+    return {
+      code: 'A1B2C3D4',
+      link: 'https://studioautopilot.in/?studio_ref=A1B2C3D4',
+      terms: { reward: null, discount_pct: null, hold_days: null },
+      referrals: [
+        { id: uid(0x5f1), studio_name: 'Bina Films', signed_up_at: '2026-09-20T10:00:00Z', paid_at: '2026-09-28T10:00:00Z', reward_amount: null, rewarded_at: null, void_reason: null },
+        { id: uid(0x5f2), studio_name: 'Chitra Clicks', signed_up_at: '2026-09-30T10:00:00Z', paid_at: null, reward_amount: null, rewarded_at: null, void_reason: null },
+      ],
+    }
+  if (method === 'GET' && path === '/platform/studio-referrals') return { terms: { reward: null, discount_pct: null, hold_days: null }, referrals: [] }
+  if (path.startsWith('/platform/studio-referrals')) return {}
   if (method === 'GET' && (path === '/public/help' || path === '/platform/help')) return helpFx
   if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
   if (method === 'POST' && path === '/platform/help/faqs') {

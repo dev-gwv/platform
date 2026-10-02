@@ -156,7 +156,7 @@ export const authRouter = new Hono<AppEnv>()
   .post('/register', async (c) => {
     const parsed = registerRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the form and try again.')
-    const { email, password, company_name, admin_name, phone } = parsed.data
+    const { email, password, company_name, admin_name, phone, studio_ref } = parsed.data
 
     const pwHash = await hashPassword(password)
 
@@ -188,7 +188,10 @@ export const authRouter = new Hono<AppEnv>()
             values (${email}, ${pwHash})
             returning id`
           await sql`select set_config('request.jwt.claim.sub', ${u!.id}, true)`
-          await sql`select register_company_and_admin(${company_name}, ${admin_name}, ${phone ?? null})`
+          const [co] = await sql<{ company_id: string }[]>`
+            select company_id from register_company_and_admin(${company_name}, ${admin_name}, ${phone ?? null})`
+          // Who sent them (0237). Never fails sign-up: a wrong code is ignored.
+          if (studio_ref && co) await sql`select claim_studio_referral(${co.company_id}, ${studio_ref})`
           const [t] = await sql<{ token: string }[]>`select issue_email_verification(${u!.id}) as token`
           return t!.token
         }),

@@ -14,6 +14,8 @@ export const registerRequest = z.object({
   email,
   password: z.string().min(8).max(200),
   phone: phone,
+  /** The code of the studio that referred this one (?studio_ref=), if any. A bad code is ignored. */
+  studio_ref: z.string().trim().max(20).optional(),
 })
 export type RegisterRequest = z.infer<typeof registerRequest>
 

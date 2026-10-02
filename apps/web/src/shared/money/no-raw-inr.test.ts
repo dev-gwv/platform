@@ -29,6 +29,10 @@ const ALLOWED = new Set([
   'features/projects/QuotationDocument.tsx',
   'features/terms/TermsComposer.tsx',
   'features/crm/QuoteViewer.tsx',
+  'features/crm/QuotePaper.tsx',
+  'routes/projects/$id.quotation.tsx',
+  'features/projects/tabs/BillingTab.tsx',
+  'routes/billing/payments.tsx',
   'features/crm/QuoteBuilder.tsx',
   // Public pages and the document pages themselves.
   'routes/quote-accept.tsx',
@@ -46,8 +50,7 @@ const allowed = (rel: string) =>
   ALLOWED.has(rel) || rel.startsWith('routes/platform/') || /\.test\.tsx?$/.test(rel)
 
 describe('hide amounts', () => {
-  // TODO: un-skip after sweeps A and B merge.
-  it.skip('no studio screen formats rupees with a raw formatINR', () => {
+  it('no studio screen formats rupees with a raw formatINR', () => {
     const walk = (dir: string): string[] =>
       readdirSync(dir).flatMap((f) => {
         const p = join(dir, f)

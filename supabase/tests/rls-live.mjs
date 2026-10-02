@@ -3752,6 +3752,36 @@ if (listed) {
   )
 }
 
+// ── Refer a studio (0237): a studio that signs up with a code is listed for the one that sent it ──
+{
+  const mine = await api('/studio-referrals', { token: aToken })
+  const name = `Referred ${rand()}`
+  const ip = `198.51.100.${1 + Math.floor(Math.random() * 250)}`
+  const reg = await api('/auth/register', {
+    ip,
+    method: 'POST',
+    body: { company_name: name, admin_name: 'Bina', email: `ref-${rand()}@madeup.test`, phone: randPhone(), password: 'Testpass12345!', studio_ref: mine.json.code },
+  })
+  const bad = await api('/auth/register', {
+    ip,
+    method: 'POST',
+    body: { company_name: `Bad ref ${rand()}`, admin_name: 'Chitra', email: `ref-${rand()}@madeup.test`, phone: randPhone(), password: 'Testpass12345!', studio_ref: 'NOPE0000' },
+  })
+  const after = await api('/studio-referrals', { token: aToken })
+  check(
+    'refer a studio: the owner has a link, and a studio that signs up with the code shows on their list (a wrong code still signs up)',
+    mine.status === 200 && /\?studio_ref=[A-Z0-9]{8}$/.test(mine.json.link) && reg.status === 200 && bad.status === 200 &&
+      after.json.referrals?.some((r) => r.studio_name === name && r.paid_at === null),
+    { mine: mine.status, reg: reg.status, bad: bad.status, list: after.json.referrals?.length },
+  )
+  const console_ = await api('/platform/studio-referrals', { token: aToken })
+  const terms = await api('/platform/studio-referrals/terms', { token: aToken, method: 'PUT', body: { reward: 1, discount_pct: null, hold_days: null } })
+  check('refer a studio: a studio owner cannot open the platform console or set the terms (403)', console_.status === 403 && terms.status === 403, {
+    console: console_.status,
+    terms: terms.status,
+  })
+}
+
 // ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

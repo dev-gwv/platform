@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import {
+  Gift,
   Bell,
   Building2,
   Briefcase,
@@ -102,6 +103,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         icon: CreditCard,
         module: 'settings_subscription',
       },
+      { to: '/settings/refer-a-studio', label: 'Refer a studio', icon: Gift, module: 'settings_subscription' },
     ],
   },
   {
