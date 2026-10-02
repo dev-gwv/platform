@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PROJECT_GROUPS, PROJECT_TABS, groupOf, viewsOf, visibleViews } from './ProjectTabs'
 
 const everything = { module: () => true, action: () => true }
-const staff = { module: (m: string) => m !== 'company_expenses' && m !== 'tasks', action: () => false }
+const staff = { module: (m: string) => !['company_expenses', 'tasks', 'team_payouts'].includes(m), action: () => false }
 
 describe('project tabs', () => {
   it('is eight groups across the top, every view under exactly one of them', () => {
@@ -18,6 +18,7 @@ describe('project tabs', () => {
     expect(groupOf('expenses')).toBe('finance')
     expect(groupOf('costs')).toBe('finance')
     expect(groupOf('billing')).toBe('finance')
+    expect(groupOf('payouts')).toBe('finance')
     expect(groupOf('tasks')).toBe('production')
     expect(groupOf('completed_work')).toBe('production')
     expect(groupOf('deliverables')).toBe('production')

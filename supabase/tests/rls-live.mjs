@@ -3481,5 +3481,47 @@ if (listed) {
   )
 }
 
+// ── Payouts: pay as the cards come in, the project's payouts, a freelancer's own ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `fl-${rand()}@madeup.test`
+  const added = await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Free Lancer', phone: randPhone(), email, password: 'Fl-pass-1234', create_login: true, engagement_type: 'freelancer' } })
+  const fl = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Fl-pass-1234' } })).json.access_token
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Pay Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Pay project ${rand()}`, client_id: client.json.id } })).json.id
+  const day = '2027-02-10'
+  const shoot = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Wedding', shoot_date: day } })).json.id
+  const booked = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: added.json.user_id, shoot_id: shoot, service_name: 'Candid Photographer', start_at: `${day}T10:00:00.000Z`, end_at: `${day}T16:00:00.000Z`, estimated_cost: 6000, cost_status: 'tentative' },
+  })
+  const slotId = booked.json.id ?? booked.json.slot_id
+  const status = await api(`/team-payouts/slot/${slotId}`, { token: aToken })
+  // The cards come in: the payout is raised to 6,500 and 4,000 is paid on the spot.
+  const paid = await api(`/team-payouts/slot/${slotId}/pay`, { token: aToken, method: 'POST', body: { amount: 6500, paid_now: 4000, payment_mode: 'UPI' } })
+  const over = await api(`/team-payouts/slot/${slotId}/pay`, { token: aToken, method: 'POST', body: { paid_now: 5000 } })
+  const rows = await api(`/team-payouts/project/${pid}`, { token: aToken })
+  const row = (rows.json ?? []).find((r) => r.slot_id === slotId)
+  check(
+    'payouts: the amount and a part payment are saved together; paying past it is 409; the project lists it',
+    status.status === 200 && status.json.amount === 6000 && paid.status === 200 && paid.json.amount === 6500 && paid.json.paid === 4000 &&
+      paid.json.cost_status === 'final' && over.status === 409 && row?.paid === 4000 && row?.amount === 6500,
+    { status: status.json, paid: paid.json, over: over.status, row },
+  )
+
+  const mine = await api('/me/payouts', { token: fl })
+  const ownerSees = await api('/me/payouts', { token: aToken })
+  const flProject = await api(`/team-payouts/project/${pid}`, { token: fl })
+  const flPay = await api(`/team-payouts/slot/${slotId}/pay`, { token: fl, method: 'POST', body: { paid_now: 100 } })
+  check(
+    'payouts: a freelancer sees their own shoot, 2,500 still to come, the 4,000 payment; not the studio’s payouts, and cannot pay',
+    mine.status === 200 && mine.json.bookings.length === 1 && mine.json.owed === 2500 && mine.json.paid === 4000 &&
+      mine.json.payments[0]?.amount === 4000 && mine.json.has_pay_details === false &&
+      !(ownerSees.json.bookings ?? []).some((b) => b.slot_id === slotId) && flProject.status === 403 && flPay.status === 403,
+    { mine: mine.json, flProject: flProject.status, flPay: flPay.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

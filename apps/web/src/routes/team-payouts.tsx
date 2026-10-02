@@ -29,7 +29,8 @@ import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { type CreateTeamPayoutRequest, type PayoutEntryType, type TeamPayout, type TeamSlot } from '@ipc/contracts'
-import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, History, ListChecks, Users, Wallet } from 'lucide-react'
+import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Users, Wallet } from 'lucide-react'
+import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 const emptyForm = (): CreateTeamPayoutRequest => ({
   user_id: '',
@@ -42,7 +43,7 @@ const emptyForm = (): CreateTeamPayoutRequest => ({
 })
 
 function TeamPayoutsContent() {
-  const [tab, setTab] = useState<'manual' | 'shoots'>('manual')
+  const [tab, setTab] = useState<'manual' | 'shoots'>('shoots')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateTeamPayoutRequest>(emptyForm())
@@ -127,17 +128,17 @@ function TeamPayoutsContent() {
       <div className="flex gap-2 border-b border-border">
         <button
           type="button"
-          onClick={() => setTab('manual')}
-          className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === 'manual' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'}`}
-        >
-          Manual payouts
-        </button>
-        <button
-          type="button"
           onClick={() => setTab('shoots')}
           className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === 'shoots' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'}`}
         >
-          From shoots
+          Shoot payouts
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('manual')}
+          className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === 'manual' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'}`}
+        >
+          Other payouts
         </button>
       </div>
 
@@ -316,6 +317,7 @@ function ShootPayoutsTracker() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
+  const [project, setProject] = useState('')
 
   const shoots = useQuery({
     queryKey: ['shoots'],
@@ -361,9 +363,28 @@ function ShootPayoutsTracker() {
       if (fromDate && s.start_at.slice(0, 10) < fromDate) return false
       if (toDate && s.start_at.slice(0, 10) > toDate) return false
       if (q && !(s.user_name ?? '').toLowerCase().includes(q)) return false
+      if (project && (s.shoot_id ? shootById.get(s.shoot_id)?.project_id : null) !== project) return false
       return true
     })
-  }, [bookable, paidBySlot, cost, settlement, fromDate, toDate, search])
+  }, [bookable, paidBySlot, cost, settlement, fromDate, toDate, search, project, shootById])
+  const projects = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const sh of shoots.data ?? []) if (sh.project_id) m.set(sh.project_id, sh.project_name ?? 'Project')
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [shoots.data])
+
+  function exportCsv() {
+    const rows = filtered.map((s) => {
+      const sh = s.shoot_id ? shootById.get(s.shoot_id) : undefined
+      const due = s.final_cost ?? s.estimated_cost ?? 0
+      const paid = paidBySlot.get(s.id)?.paid_total ?? 0
+      return [s.user_name ?? '', sh?.project_name ?? '', sh?.name ?? '', s.start_at.slice(0, 10), s.service_name ?? '', due, paid, Math.max(0, due - paid), settlementOf(due, paid)]
+    })
+    downloadCsv(
+      `shoot-payouts-${new Date().toISOString().slice(0, 10)}.csv`,
+      toCsv(['Person', 'Project', 'Shoot', 'Date', 'Role', 'Payout', 'Paid', 'Owed', 'Status'], rows),
+    )
+  }
 
   const summary = useMemo(() => {
     const due = filtered.reduce((n, s) => n + (s.final_cost ?? s.estimated_cost ?? 0), 0)
@@ -407,7 +428,7 @@ function ShootPayoutsTracker() {
       </div>
 
       <Card>
-        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
           <div className="flex flex-col gap-1.5">
             <Label>Settlement</Label>
             <Select value={settlement} onChange={(e) => setSettlement(e.target.value as SettlementFilter)}>
@@ -415,6 +436,17 @@ function ShootPayoutsTracker() {
               <option value="unpaid">Unpaid</option>
               <option value="partially_paid">Partially paid</option>
               <option value="paid">Paid</option>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Project</Label>
+            <Select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
+              <option value="">All projects</option>
+              {projects.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -452,7 +484,7 @@ function ShootPayoutsTracker() {
             </div>
           )}
           {range === 'custom' && (
-            <div className="flex flex-col gap-1.5 lg:col-span-5">
+            <div className="flex flex-col gap-1.5 lg:col-span-6">
               <Label>Member</Label>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…" />
             </div>
@@ -467,6 +499,14 @@ function ShootPayoutsTracker() {
         The settlement ledger tracks cash actually paid to team members. Project cost and profit still use
         the assignment payout amount, and are not affected by what has been settled here.
       </p>
+
+      {filtered.length > 0 && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="mr-1 h-4 w-4" /> Download CSV
+          </Button>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">

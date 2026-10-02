@@ -54,6 +54,7 @@ import { CallQueuePage } from '@/routes/follow-ups/queue'
 import { SendNowPage } from '@/routes/follow-ups/send'
 import { AttendancePage, MyAttendancePage } from '@/routes/attendance'
 import { MyPerformancePage, TeamPerformancePage } from '@/routes/performance'
+import { MyPayoutsPage } from '@/routes/my-payouts'
 import { NotificationsPage } from '@/routes/notifications'
 import { EmployeesPage } from '@/routes/employees'
 import { TeamSalariesPage } from '@/routes/team-salaries'
@@ -237,6 +238,7 @@ const routeTree = rootRoute.addChildren([
   route('/team/work-preview', TeamWorkPreviewPage),
   route('/team/performance', TeamPerformancePage),
   route('/performance/me', MyPerformancePage),
+  route('/payouts/my', MyPayoutsPage),
   route('/clients', ClientsListPage),
 
   route('/shoots', ShootsPage),

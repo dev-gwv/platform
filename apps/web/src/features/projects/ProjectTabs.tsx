@@ -1,4 +1,5 @@
 import {
+  Banknote,
   Calculator,
   Camera,
   CheckSquare,
@@ -38,6 +39,8 @@ export const PROJECT_TABS = [
   { value: 'expenses', label: 'Expenses', icon: Receipt },
   // Every cost of the project -- team payouts and expenses -- against its value.
   { value: 'costs', label: 'Cost sheet', icon: Calculator },
+  // What each person booked on it is owed, what has gone out, and Pay.
+  { value: 'payouts', label: 'Payouts', icon: Banknote },
   // As in the old app: this project's data and its referrals, each also a
   // page of its own in the sidebar (Data & Backup, Referrals).
   { value: 'data', label: 'Data', icon: Database },
@@ -57,7 +60,7 @@ export const PROJECT_GROUPS = [
   { value: 'shoots', label: 'Shoots', icon: Camera, views: ['shoots'] },
   { value: 'production', label: 'Post-production', icon: Package, views: ['deliverables', 'completed_work', 'tasks'] },
   { value: 'terms', label: 'Terms', icon: FileSignature, views: ['terms'] },
-  { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs'] },
+  { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs', 'payouts'] },
   { value: 'data', label: 'Data', icon: Database, views: ['data'] },
   { value: 'referrals', label: 'Referrals', icon: Gift, views: ['referrals'] },
 ] as const satisfies ReadonlyArray<{ value: string; label: string; icon: LucideIcon; views: readonly ProjectTab[] }>
@@ -84,6 +87,7 @@ export function visibleViews(
       (v !== 'completed_work' || can.module('team_work_preview')) &&
       (v !== 'data' || can.action('projects', 'edit')) &&
       (v !== 'costs' || can.action('projects', 'edit')) &&
+      (v !== 'payouts' || can.module('team_payouts')) &&
       (v !== 'referrals' || can.module('referrals')),
   )
 }

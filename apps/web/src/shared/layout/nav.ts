@@ -107,6 +107,7 @@ export const NAV: NavEntry[] = [
   leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Attendance & leave', '/attendance/my', MapPin, { roles: ['employee'], hub: MY_TIME }),
+  leaf('My payouts', '/payouts/my', Banknote, { roles: ['employee'] }),
   leaf('My performance', '/performance/me', Gauge, { roles: ['employee'] }),
 
   {

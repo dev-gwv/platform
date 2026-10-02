@@ -20,6 +20,8 @@ import {
 import { LookupSelect } from '@/features/settings/LookupSelect'
 import { LocationKindSelect, kindFields } from './LocationKindSelect'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
+import { useCanPay, usePaySlot, useSlotPayStatus } from '@/features/team-payouts/pay'
+import { PayoutLine, payoutRequest, startPayout, type PayoutDraft } from '@/features/team-payouts/PayoutLine'
 
 const OTHER = '__other'
 const NEW = '__new'
@@ -85,7 +87,15 @@ export function DataRecordDialog({
   const addPerson = useCreateDataPerson()
   const create = useCreateDataRecord()
   const update = useUpdateDataRecord()
-  const busy = create.isPending || update.isPending || addPerson.isPending
+  // Paying the person as their cards come in (owners and managers only).
+  const canPay = useCanPay()
+  const payStatus = useSlotPayStatus(slot.id, canPay)
+  const paySlot = usePaySlot()
+  const [payout, setPayout] = useState<PayoutDraft | null>(null)
+  useEffect(() => {
+    if (payStatus.data && payout === null) setPayout(startPayout(payStatus.data))
+  }, [payStatus.data, payout])
+  const busy = create.isPending || update.isPending || addPerson.isPending || paySlot.isPending
 
   const [type, setType] = useState(record?.data_type ?? defaultDataType(slot.service_name))
   const [received, setReceived] = useState(record?.date_received ?? slotDay(slot))
@@ -221,6 +231,11 @@ export function DataRecordDialog({
           team_member_name: slot.user_name ?? undefined,
           requirement_name: slot.service_name ?? undefined,
         })
+      const pay = payStatus.data && payout ? payoutRequest(payout, payStatus.data, new Date().toISOString().slice(0, 10)) : null
+      if (pay) {
+        await paySlot.mutateAsync({ slotId: slot.id, body: pay })
+        if (pay.paid_now > 0) toast.success(`Paid ${who} ₹${pay.paid_now.toLocaleString('en-IN')}`)
+      }
       writeRemembered(session?.company_id, {
         copiedBy: helper ? `p:${helper.id}` : fields.copied_by_uid ?? '',
         primary: fields.primary_location_id ?? '',
@@ -325,6 +340,10 @@ export function DataRecordDialog({
               statuses={['pending', 'copied', 'verified', 'issue', 'not_required']}
             />
           </div>
+
+          {canPay && payStatus.data && payout && (
+            <PayoutLine name={who} status={payStatus.data} value={payout} onChange={setPayout} />
+          )}
 
           <button
             type="button"

@@ -39,6 +39,7 @@ import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { CompletedWorkTab } from '@/features/projects/tabs/CompletedWorkTab'
 import { TermsTab } from '@/features/projects/tabs/TermsTab'
 import { CostsTab } from '@/features/projects/tabs/CostsTab'
+import { PayoutsTab } from '@/features/projects/tabs/PayoutsTab'
 import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
@@ -379,6 +380,7 @@ function ProjectDetail() {
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
       {tab === 'costs' && <CostsTab projectId={id} onBookTeam={() => go('team')} />}
+      {tab === 'payouts' && <PayoutsTab projectId={id} />}
       {tab === 'data' && <DataTab projectId={id} />}
       {tab === 'referrals' && (
         <ReferralsTab

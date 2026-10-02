@@ -58,7 +58,7 @@ describe('the staff menu', () => {
 
   it('is their own day and their own work, never the studio\'s', () => {
     const staff = labels(filterNav(NAV, 'employee', access(['dashboard', 'projects', 'personal_expenses'], []), false))
-    expect(staff.slice(0, 6)).toEqual(['Home', 'My Work', 'My Tasks', 'My Shoots', 'Attendance & leave', 'My performance'])
+    expect(staff.slice(0, 7)).toEqual(['Home', 'My Work', 'My Tasks', 'My Shoots', 'Attendance & leave', 'My payouts', 'My performance'])
     for (const hidden of ['Dashboard', 'All Projects', 'Production Board', 'Team Booking', 'Data & Backup', 'Project Tracking', 'Activity'])
       expect(staff).not.toContain(hidden)
   })
