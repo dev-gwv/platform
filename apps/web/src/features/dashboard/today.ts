@@ -1,4 +1,5 @@
 import type { MyDeliverable, MyFollowUp, TaskListItem, TeamSlot } from '@ipc/contracts'
+import { daysLeftText, daysUntil } from '@/shared/ui/days-left'
 import { clockRange, localDate, localDay, slotWhat, timeLabel } from '@/features/shoots/assign'
 
 /**
@@ -113,7 +114,7 @@ export function myDay(input: DayInput): { today: TodayItem[]; next: TodayItem[] 
     } else if (t.due_date === today) {
       todayList.push({ kind: 'task', id: t.id, title, note: 'Due today', late: false, sort: '2', task: t })
     } else if (t.due_date <= until) {
-      nextList.push({ kind: 'task', id: t.id, title, note: `Due ${dayText(t.due_date)}`, late: false, sort: `${t.due_date}T23`, task: t })
+      nextList.push({ kind: 'task', id: t.id, title, note: `${daysLeftText(daysUntil(t.due_date, today))} · ${dayText(t.due_date)}`, late: false, sort: `${t.due_date}T23`, task: t })
     }
   }
 
@@ -133,7 +134,7 @@ export function myDay(input: DayInput): { today: TodayItem[]; next: TodayItem[] 
     } else if (!d.started_at && d.start_by && d.start_by <= until) {
       nextList.push({ ...base, note: `Start ${dayText(d.start_by)}`, late: false, sort: `${d.start_by}T22` })
     } else if (d.estimated_date && d.estimated_date <= until) {
-      nextList.push({ ...base, note: `Due ${dayText(d.estimated_date)}`, late: false, sort: `${d.estimated_date}T23` })
+      nextList.push({ ...base, note: `${daysLeftText(daysUntil(d.estimated_date, today))} · ${dayText(d.estimated_date)}`, late: false, sort: `${d.estimated_date}T23` })
     }
   }
 

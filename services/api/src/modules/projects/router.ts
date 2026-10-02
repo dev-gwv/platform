@@ -6,6 +6,7 @@ import {
   updateDeliverableRequest,
   setDeliverableStageRequest,
   myDeliverable,
+  deliverableWorkload,
   deliverableNote,
   createDeliverableNoteRequest,
   deliverableSet,
@@ -41,12 +42,13 @@ import { projectHealth, type ProjectCounters } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
+import { selectMyDeliverables } from '../../lib/my-work'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
-import { requireStudioWork, studioWork, worksOn } from '../../lib/scope'
+import { requireMoney, requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
 
 /** postgres.js writes `undefined` as a column; leave those out instead. */
 function withoutUndefined<T extends Record<string, unknown>>(o: T): Partial<T> {
@@ -94,8 +96,13 @@ export const projectsRouter = new Hono<AppEnv>()
     // Staff get the projects they work on, without money or the client's phone.
     const mine = !studioWork(c)
     const me = c.get('auth').userId
+    const noMoney = !seesMoney(c)
     const hide = <T extends Record<string, unknown>>(r: T): T =>
-      mine ? { ...r, package_cost: 0, total_cost: 0, received: 0, client_phone: null } : r
+      mine
+        ? { ...r, package_cost: 0, total_cost: 0, received: 0, client_phone: null }
+        : noMoney
+          ? { ...r, package_cost: 0, total_cost: 0, received: 0 }
+          : r
     if (!hasPaging) {
       const rows = await attempt(c, 'projects.list', () =>
         withUser(
@@ -160,7 +167,7 @@ export const projectsRouter = new Hono<AppEnv>()
         const total = inFilter.reduce((n, r) => n + r.n, 0)
         const value = inFilter.reduce((n, r) => n + Number(r.value), 0)
         const received = inFilter.reduce((n, r) => n + Number(r.received), 0)
-        const summary = mine ? { value: 0, received: 0, due: 0 } : { value, received, due: Math.max(0, value - received) }
+        const summary = mine || noMoney ? { value: 0, received: 0, due: 0 } : { value, received, due: Math.max(0, value - received) }
         const statusCounts = Object.fromEntries(countRows.map((r) => [r.status, r.n]))
         // orderBy is an allow-listed fragment (see switch above), never user input.
         const rows = await sql`
@@ -974,28 +981,37 @@ export const projectsRouter = new Hono<AppEnv>()
    * see their own work. Each says whether it was sent back, what the reviewer
    * said and the last version handed in (0180), so a revision is one tap.
    */
+  // How much each person already has, for "Who will edit it?": open edits,
+  // how many are late, due this week, and the next due date.
+  .get('/deliverables/workload', requireAction('projects', 'edit'), async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'projects.deliverables_workload', () =>
+      withUser(c.env, auth.userId, (sql) => sql`
+        with t as (select (now() at time zone 'Asia/Kolkata')::date as today)
+        select d.assignee_id as user_id,
+               count(*)::int as open,
+               count(*) filter (where d.estimated_date < t.today)::int as late,
+               count(*) filter (where d.estimated_date between t.today and t.today + 6)::int as due_week,
+               min(d.estimated_date) filter (where d.estimated_date >= t.today) as next_due
+          from deliverables d, t
+         where d.company_id = ${auth.companyId}
+           and d.assignee_id is not null
+           and d.status not in ('completed', 'cancelled')
+         group by d.assignee_id`),
+    )
+    if (!rows) fail(400, 'We could not load who is busy.')
+    return c.json(deliverableWorkload.array().parse(rows))
+  })
+
   .get('/deliverables/mine', async (c) => {
     const auth = c.get('auth')
+    // ?done=14 also brings what was delivered in the last 14 days.
+    const done = Math.max(0, Math.min(Number(c.req.query('done') ?? 0) || 0, 60))
+    // A service read, scoped here to the caller's own edits in their studio:
+    // row security would hide the shooters' data records, and whether the
+    // data is in -- and where -- is the point.
     const rows = await attempt(c, 'projects.deliverables_mine', () =>
-      withUser(c.env, auth.userId, (sql) => sql`
-        select d.id, d.project_id, p.name as project_name, cl.name as client_name,
-               d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
-               d.delivery_link, d.visibility_scope, d.custom_status_code,
-               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
-               (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count,
-               -- The studio's own work days for this name, when it has set them (0179).
-               company_start_by(${auth.companyId}::uuid, d.estimated_date, d.title, d.delivery_days_after_start) as start_by,
-               company_work_days(${auth.companyId}::uuid, d.title, d.delivery_days_after_start) as work_days,
-               d.started_at,
-               coalesce(rv.changes_requested, false) as changes_requested, rv.review_note, rv.last_version
-        from deliverables d
-        join projects p on p.id = d.project_id
-        left join clients cl on cl.id = p.client_id
-        left join shoots s on s.id = d.shoot_id
-        left join lateral deliverable_revision_state(d.id) rv on true
-        where d.assignee_id = ${auth.userId} and d.status not in ('completed', 'cancelled')
-        order by d.estimated_date nulls last, d.created_at
-        limit 200`),
+      withService(c.env, (sql) => selectMyDeliverables(sql, { companyId: auth.companyId, userId: auth.userId, done })),
     )
     if (!rows) fail(400, 'We could not load your deliverables.')
     return c.json(myDeliverable.array().parse(rows))
@@ -1219,7 +1235,18 @@ export const projectsRouter = new Hono<AppEnv>()
       }),
     )
     if (!row) fail(404, 'That project was not found.')
-    return c.json(projectDetail.parse(row))
+    const detail = projectDetail.parse(row)
+    // Running a project is not seeing its money: without billing or money
+    // access the figures go out as nothing.
+    if (seesMoney(c)) return c.json(detail)
+    return c.json({
+      ...detail,
+      package_cost: 0,
+      additional_deliverables_cost: 0,
+      total_cost: 0,
+      payments: [],
+      deliverables: detail.deliverables.map((d) => ({ ...d, additional_charge_amount: 0 })),
+    })
   })
 
   .patch('/:id', requireAction('projects', 'edit'), async (c) => {
@@ -1358,7 +1385,7 @@ export const projectsRouter = new Hono<AppEnv>()
    * the terms (the latest agreed version, else the latest sent), and -- for
    * those who can see Billing -- the invoices raised for it.
    */
-  .get('/:id/billing', requireAction('projects', 'view'), requireStudioWork, async (c) => {
+  .get('/:id/billing', requireAction('projects', 'view'), requireStudioWork, requireMoney, async (c) => {
     const projectId = uuidParam(c)
     const canSeeBilling = c.get('auth').access.hasModule('billing')
     const data = await attempt(c, 'projects.billing', () =>
@@ -1402,7 +1429,7 @@ export const projectsRouter = new Hono<AppEnv>()
    * is left of the project value. Crew costs are for people who plan crew
    * (projects: edit); expenses only for those who can see the studio's.
    */
-  .get('/:id/costs', requireAction('projects', 'edit'), async (c) => {
+  .get('/:id/costs', requireAction('projects', 'edit'), requireMoney, async (c) => {
     const projectId = uuidParam(c)
     const seeExpenses = c.get('auth').access.hasModule('company_expenses')
     const data = await attempt(c, 'projects.costs', () =>

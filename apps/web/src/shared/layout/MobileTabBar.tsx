@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { Camera, Home, Inbox, MapPin, Menu, PhoneCall } from 'lucide-react'
+import { Camera, ClipboardList, Home, Inbox, MapPin, Menu, PhoneCall } from 'lucide-react'
 import { seesStudioWork } from '@ipc/permissions'
 import { useAccess } from '../auth/useAccess'
 import { cn } from '../ui/cn'
@@ -11,10 +11,12 @@ import { cn } from '../ui/cn'
 export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
   const { pathname } = useLocation()
   const access = useAccess()
-  // Staff: their day, their shoots and their attendance.
+  // Staff: their day, their work, their shoots and their attendance.
   const studio = seesStudioWork(access)
   const tabs = [
     { to: '/dashboard', label: 'Home', icon: Home, show: true },
+    // An editor's day is their edits: My work sits under the thumb too.
+    { to: '/my-work', label: 'My work', icon: ClipboardList, show: !studio },
     { to: '/follow-ups/queue', label: 'Calls', icon: PhoneCall, show: access.hasModule('crm') },
     { to: '/follow-ups', label: 'Leads', icon: Inbox, show: access.hasModule('crm') },
     { to: '/shoots', label: 'Shoots', icon: Camera, show: studio && access.hasModule('projects') },

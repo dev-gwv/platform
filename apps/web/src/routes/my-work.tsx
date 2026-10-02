@@ -317,7 +317,7 @@ function MyWork() {
         ) : failed ? (
           <ErrorState onRetry={() => { void tasksQ.refetch(); void subsQ.refetch() }} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No work assigned yet" description="Tasks assigned to you will show up here." action={<SubmitDialog />} />
+          <EmptyState title="No tasks yet" description="Tasks given to you show up here; your edits are above." />
         ) : (
           <div className="flex flex-col gap-4">
             <Group title="Overdue" icon={AlertCircle} items={groups.overdue} />

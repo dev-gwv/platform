@@ -100,7 +100,7 @@ describe('sent back by a reviewer', () => {
     await sendBack(v1.id, 'Shorter intro, please')
     expect(await where(did)).toMatchObject({ status: 'in_progress', custom_status_code: 'changes_requested' })
     expect(await told(did)).toEqual([
-      { title: 'Changes requested: Wedding Film', body: 'Sharma Wedding · Shorter intro, please', deep_link: '/my-work' },
+      { title: 'Changes requested: Wedding Film', body: 'Sharma Wedding · Shorter intro, please', deep_link: `/my-work?d=${did}` },
     ])
     // The words stay in the timeline -- without a second "left a note" alert.
     expect(await q(`select body from deliverable_notes where deliverable_id = '${did}' and kind = 'text'`)).toEqual([
@@ -123,7 +123,7 @@ describe('sent back by a reviewer', () => {
     const v1 = await handIn(did, 'https://drive.test/invite-v1')
     await sendBack(v1.id, null)
     expect(await told(did)).toEqual([
-      { title: 'Changes requested: Invitation video', body: 'Sharma Wedding · Open My Work to see what to change.', deep_link: '/my-work' },
+      { title: 'Changes requested: Invitation video', body: 'Sharma Wedding · Open My Work to see what to change.', deep_link: `/my-work?d=${did}` },
     ])
     expect(await state(did)).toEqual({ changes_requested: true, review_note: null, last_version: 1 })
   })
@@ -189,7 +189,7 @@ describe('moved to Changes requested by hand', () => {
     await moveTo(did, 'in_progress', 'changes_requested')
     await db.exec(`insert into deliverable_notes (deliverable_id, kind, body) values ('${did}', 'text', 'Music is too loud')`)
     expect(await told(did)).toEqual([
-      { title: 'Changes requested: Teaser', body: 'Sharma Wedding · Open My Work to see what to change.', deep_link: '/my-work' },
+      { title: 'Changes requested: Teaser', body: 'Sharma Wedding · Open My Work to see what to change.', deep_link: `/my-work?d=${did}` },
     ])
     expect(await state(did)).toEqual({ changes_requested: true, review_note: 'Music is too loud', last_version: 1 })
 

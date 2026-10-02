@@ -25,7 +25,6 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
-import { useMembers } from '@/features/allocation/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { STAGE_LABEL, dueLabel, fromLabel, isLate, previousStage, relativeDue, stageOf } from './deliverable-stage'
@@ -34,6 +33,7 @@ import { useDeliverableStages } from './stages-api'
 import { deliverableKind, type DeliverableKind } from './deliverable-kind'
 import { DELIVERABLE_ICON } from '@/shared/ui/icon-tile'
 import { STAGE_STYLE, StageStepper } from './StageStepper'
+import { GiveWorkDialog } from './GiveWorkDialog'
 
 export const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
 
@@ -72,6 +72,8 @@ export function NextStageButton({
   link,
   canEdit = true,
   size = 'sm',
+  assigneeId,
+  onNeedEditor,
 }: {
   id: string
   status: string
@@ -79,6 +81,9 @@ export function NextStageButton({
   link: string | null | undefined
   canEdit?: boolean
   size?: 'sm' | 'default'
+  /** Who is on it; with `onNeedEditor`, Start editing with nobody on it asks who. */
+  assigneeId?: string | null | undefined
+  onNeedEditor?: () => void
 }) {
   const move = useSetDeliverableStage()
   const stages = useDeliverableStages()
@@ -132,7 +137,7 @@ export function NextStageButton({
           className="h-8 sm:w-56"
         />
         <Button type="submit" size="sm" disabled={move.isPending}>
-          {next.label}
+          {actionLabel(next)}
         </Button>
         <Button type="button" size="icon" variant="ghost" className="size-8" onClick={() => setAsking(false)} aria-label="Cancel">
           <X />
@@ -148,7 +153,9 @@ export function NextStageButton({
       disabled={move.isPending}
       onClick={(e) => {
         e.stopPropagation()
-        if (wantsLinkAt(next)) setAsking(true)
+        // Starting the edit with nobody on it: ask who edits it first.
+        if (onNeedEditor && !assigneeId && next.status === 'in_progress' && stageOf(status) === 'pending') onNeedEditor()
+        else if (wantsLinkAt(next)) setAsking(true)
         else go()
       }}
     >
@@ -300,6 +307,8 @@ export function DeliverableCard({
   onOpen,
   onEdit,
   onDelete,
+  selected,
+  onToggleSelect,
 }: {
   d: Deliverable
   canEdit: boolean
@@ -309,6 +318,9 @@ export function DeliverableCard({
   onOpen: (action?: 'voice') => void
   onEdit: () => void
   onDelete: () => void
+  /** Ticked for the bulk bar; the box shows only when this is given. */
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const move = useSetDeliverableStage()
   const stages = useDeliverableStages()
@@ -321,6 +333,12 @@ export function DeliverableCard({
   const [briefFor, setBriefFor] = useState<string | null>(null)
   // ...and, for a studio's first few assignments, that they see it on their own login.
   const [noteFor, setNoteFor] = useState<TeamMember | null>(null)
+  // "Who will edit it?", from Start editing or the editor chip.
+  const [giving, setGiving] = useState(false)
+  const given = (m: TeamMember) => {
+    setBriefFor(m.name)
+    setNoteFor(m)
+  }
   useEffect(() => {
     if (!briefFor) return
     const t = window.setTimeout(() => setBriefFor(null), 10_000)
@@ -358,6 +376,16 @@ export function DeliverableCard({
         className="flex cursor-pointer flex-col gap-3 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-row sm:items-center sm:p-4"
       >
         <div className="flex min-w-0 flex-1 items-start gap-3">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Tick ${d.title}`}
+              className="mt-3 size-4 shrink-0 cursor-pointer accent-primary"
+            />
+          )}
           <KindTile title={d.title} status={d.status} />
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -387,13 +415,7 @@ export function DeliverableCard({
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5" onClick={keepControlClicks}>
               {canEdit && !dropped && stage !== 'completed' ? (
-                <EditorPicker
-                  d={d}
-                  onAssigned={(m) => {
-                    setBriefFor(m.name)
-                    setNoteFor(m)
-                  }}
-                />
+                <EditorChip d={d} onOpen={() => setGiving(true)} />
               ) : (
                 <EditorName name={d.assignee_name} />
               )}
@@ -459,11 +481,21 @@ export function DeliverableCard({
                 <span className="hidden sm:inline">Voice note</span>
               </button>
             )}
-            {canEdit && !dropped && <NextStageButton id={d.id} status={d.status} code={d.custom_status_code} link={d.delivery_link} />}
+            {canEdit && !dropped && (
+              <NextStageButton
+                id={d.id}
+                status={d.status}
+                code={d.custom_status_code}
+                link={d.delivery_link}
+                assigneeId={d.assignee_id}
+                onNeedEditor={() => setGiving(true)}
+              />
+            )}
             {canEdit && <RowMenu label={`More for ${d.title}`} items={items} />}
           </div>
         )}
       </div>
+      {giving && <GiveWorkDialog deliverables={[d]} onClose={() => setGiving(false)} onGiven={given} />}
     </li>
   )
 }
@@ -491,89 +523,40 @@ export function EditorName({ name }: { name: string | null | undefined }) {
 }
 
 /**
- * Who is editing it, changed right on the card: a list of faces, editors
- * (anyone whose job role says edit) first, with a search once the team is
- * big. Empty reads "Assign editor" in the accent colour, so the gap is the
- * thing you see. `onAssigned` hears who was picked -- the card offers a voice
- * brief to them straight away.
+ * Who is editing it, as a chip you can see is a control: their face and name,
+ * or an amber dashed "Assign editor" while nobody is on it. It opens "Who will
+ * edit it?" -- the same dialog Start editing opens.
  */
-export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (member: TeamMember) => void }) {
-  const { data: members } = useMembers()
-  const update = useUpdateDeliverable(d.project_id)
-  const [open, setOpen] = useState(false)
-  const [find, setFind] = useState('')
-  const isEditor = (roles: readonly string[]) => roles.some((r) => /edit|retouch|design|colou?r/i.test(r))
-  const people = [...(members ?? [])]
-    .filter((m) => !find || m.name.toLowerCase().includes(find.toLowerCase()))
-    .sort((a, b) => Number(isEditor(b.role_names)) - Number(isEditor(a.role_names)) || a.name.localeCompare(b.name))
-
-  function pick(member: TeamMember | null) {
-    setOpen(false)
-    setFind('')
-    const userId = member?.user_id ?? null
-    if (userId === (d.assignee_id ?? null)) return
-    update.mutate(
-      { deliverableId: d.id, patch: { assignee_id: userId } },
-      { onSuccess: () => member && onAssigned?.(member) },
-    )
-  }
-
+export function EditorChip({ d, onOpen }: { d: Deliverable; onOpen: () => void }) {
+  const needs = !d.assignee_name && (stageOf(d.status) === 'pending' || stageOf(d.status) === 'in_progress')
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Editor for ${d.title}`}
-          disabled={update.isPending}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-xs font-medium transition-colors hover:bg-muted',
-            d.assignee_name ? 'text-foreground/80' : 'pl-1.5 text-primary',
-          )}
-        >
-          {d.assignee_name ? <Avatar name={d.assignee_name} size="sm" /> : <UserPlus className="size-3.5" aria-hidden />}
-          {d.assignee_name ?? 'Assign editor'}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-1.5" onClick={(e) => e.stopPropagation()}>
-        {(members?.length ?? 0) > 8 && (
-          <input
-            autoFocus
-            value={find}
-            onChange={(e) => setFind(e.target.value)}
-            placeholder="Find someone"
-            aria-label="Find someone"
-            className="mb-1 h-8 w-full rounded-full border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        )}
-        <div className="max-h-72 overflow-y-auto">
-          {people.map((m) => (
-            <button
-              key={m.user_id}
-              type="button"
-              onClick={() => pick(m)}
-              className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted', m.user_id === d.assignee_id && 'bg-muted')}
-            >
-              <Avatar name={m.name} size="sm" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{m.name}</span>
-                {m.role_names.length > 0 && <span className="block truncate text-[11px] text-muted-foreground">{m.role_names.join(', ')}</span>}
-              </span>
-              {m.user_id === d.assignee_id && <Check className="size-4 text-primary" aria-hidden />}
-            </button>
-          ))}
-          {people.length === 0 && <p className="px-2 py-2 text-sm text-muted-foreground">No one by that name.</p>}
-        </div>
-        {d.assignee_id && (
-          <button
-            type="button"
-            onClick={() => pick(null)}
-            className="mt-1 w-full rounded-lg border-t border-border px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-muted"
-          >
-            Remove the editor
-          </button>
-        )}
-      </PopoverContent>
-    </Popover>
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Editor for ${d.title}`}
+      className={cn(
+        'inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-xs font-medium transition-colors',
+        d.assignee_name
+          ? 'border-border bg-card text-foreground/85 hover:bg-muted'
+          : needs
+            ? 'border-dashed border-warning/70 bg-warning/10 text-warning hover:bg-warning/15'
+            : 'border-border bg-card text-primary hover:bg-muted',
+      )}
+    >
+      {d.assignee_name ? <Avatar name={d.assignee_name} size="sm" /> : <UserPlus className="size-3.5" aria-hidden />}
+      {d.assignee_name ?? 'Assign editor'}
+    </button>
+  )
+}
+
+/** The editor chip with its own "Who will edit it?" -- for the drawer. */
+export function EditorPicker({ d, onAssigned }: { d: Deliverable; onAssigned?: (member: TeamMember) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <EditorChip d={d} onOpen={() => setOpen(true)} />
+      {open && <GiveWorkDialog deliverables={[d]} onClose={() => setOpen(false)} {...(onAssigned ? { onGiven: onAssigned } : {})} />}
+    </>
   )
 }
 
@@ -599,15 +582,29 @@ export function DueEditor({ d }: { d: Deliverable }) {
     )
   }
   if (!d.estimated_date && stageOf(d.status) !== 'completed') {
+    // Work with an editor and no date is the gap to fill: amber until set.
+    const needs = !!d.assignee_id || stageOf(d.status) === 'in_progress'
     return (
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors',
+          needs ? 'border-dashed border-warning/70 bg-warning/10 text-warning hover:bg-warning/15' : 'border-border bg-card text-primary hover:bg-muted',
+        )}
+      >
         <CalendarDays className="size-3.5" aria-hidden /> Add due date
       </button>
     )
   }
   if (stageOf(d.status) === 'completed') return <DueChip d={d} />
   return (
-    <button type="button" onClick={() => setOpen(true)} className="rounded hover:underline" aria-label={`Change due date for ${d.title}`}>
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="inline-flex h-7 items-center rounded-full border border-border bg-card px-2.5 hover:bg-muted"
+      aria-label={`Change due date for ${d.title}`}
+    >
       <DueChip d={d} />
     </button>
   )

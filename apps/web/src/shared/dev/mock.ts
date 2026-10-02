@@ -291,6 +291,21 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       { user_id: uid(0x7f1), user_name: 'Priya Shah', kind: 'casual', allowance: 12, used: 3, pending: 2, remaining: 9 },
       { user_id: uid(0x7f1), user_name: 'Priya Shah', kind: 'sick', allowance: 6, used: 0.5, pending: 0, remaining: 5.5 },
     ]
+  if (method === 'GET' && path === '/me/due')
+    return [
+      { kind: 'edit', id: uid(0x7d9), title: 'Wedding Teaser', project_id: uid(0x7d8), project_name: 'Mehta Wedding', due: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10), days: 2, who: null, mine: true },
+    ]
+  if (method === 'GET' && /^\/me\/projects\/[^/]+$/.test(path))
+    return {
+      id: path.split('/')[3], name: 'Mehta Wedding', client_name: 'Mehta', first_date: '2026-10-21', last_date: '2026-10-22',
+      shoots: [{
+        id: uid(0x7da), name: 'Haldi', shoot_date: '2026-10-21', start_at: null, end_at: null, location: 'Udaipur', map_link: null, status: 'scheduled',
+        crew: [{ user_id: uid(0x7f1), name: 'Priya Shah', role: 'Candid Photographer', me: false }],
+        data: [{ id: uid(0x7db), label: 'Camera A', whose: 'Priya Shah', main: 'WD Red 03', folder_path: '/2026/Mehta/Haldi', cloud_link: null, backup: null, backup_folder_path: null, backup_cloud_link: null, stage: 'copied', copied_by: 'Ravi', date_received: '2026-10-22', handed_to_editor_at: null, card_count: 2, size_gb: 128, notes: null }],
+      }],
+      deliverables: [], tasks: [], submissions: [],
+    }
+  if (method === 'GET' && path === '/projects/deliverables/workload') return []
   if (method === 'GET' && path === '/me/payouts')
     return {
       bookings: [{ slot_id: uid(0x7e1), role: 'Candid Photographer', shoot_name: 'Wedding', project_name: 'Mehta Wedding', shoot_date: '2026-11-12', amount: 6000, is_final: true, paid: 0 }],
@@ -471,7 +486,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       },
     }
   }
-  if (method === 'GET' && path === '/projects/deliverables/mine')
+  if (method === 'GET' && path.startsWith('/projects/deliverables/mine'))
     return projectDetail.deliverables
       .filter((d) => d.assignee_id === uid(1) && !['completed', 'cancelled'].includes(d.status))
       .map((d) => ({

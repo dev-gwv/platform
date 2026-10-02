@@ -16,6 +16,7 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
+import { DueChip } from './DueChip'
 import { TrialChip } from '@/features/billing/TrialChip'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
@@ -197,6 +198,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </kbd>
             </button>
 
+            <DueChip />
             <TrialChip />
             <SuggestFeatureButton />
 
