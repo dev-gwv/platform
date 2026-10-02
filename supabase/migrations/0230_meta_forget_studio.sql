@@ -1,0 +1,3 @@
+-- 0230: "Disconnect Facebook" -- a studio forgets its whole Facebook
+-- connection: every page token and every page it saw. Leads already
+-- imported, the import log and the lead source stay.
