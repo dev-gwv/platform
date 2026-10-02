@@ -115,6 +115,7 @@ export function useCreatePayoutSettlement() {
     onSuccess: () => {
       toast.success('Settlement recorded')
       void qc.invalidateQueries({ queryKey: ['team-payouts', 'settlements'] })
+      void qc.invalidateQueries({ queryKey: ['payouts'] })
     },
   })
 }

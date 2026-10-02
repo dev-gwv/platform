@@ -30,6 +30,7 @@ import { useMembers } from '@/features/allocation/api'
 import { useInvoices } from '@/features/billing/api'
 import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
+import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
@@ -214,6 +215,7 @@ function StudioCommandCenter() {
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
         {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
         <div className="flex flex-col gap-4">
+          <WhoYouOwe />
           {access.hasModule('projects') && <UpcomingShoots shoots={shoots.data ?? []} />}
           <MyTasksCard hideWhenEmpty />
         </div>

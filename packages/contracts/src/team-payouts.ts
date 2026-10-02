@@ -194,8 +194,60 @@ export const myPayouts = z.object({
   payments: z.array(myPayoutPayment),
   owed: z.number(),
   paid: z.number(),
+  /** Of what is owed: for shoots already done (India's date)... */
+  owed_now: z.number().default(0),
+  /** ...and for shoots still to come. */
+  upcoming: z.number().default(0),
+  /** Paid before the shoot happened. */
+  paid_ahead: z.number().default(0),
   /** UPI or a bank account is on file, so the studio can pay. */
   has_pay_details: z.boolean(),
 })
 export type MyPayouts = z.infer<typeof myPayouts>
 export type MyPayoutBooking = z.infer<typeof myPayoutBooking>
+
+/**
+ * Every booking's money for the studio's Team payouts page, each placed on
+ * its shoot's day in India. A booking that no longer stands (released,
+ * cancelled, or its shoot cancelled) shows only when money went out on it,
+ * and is then worth exactly what was paid.
+ */
+export const crewPayoutRow = z.object({
+  slot_id: uuid,
+  user_id: uuid,
+  user_name: z.string().nullable(),
+  role: z.string().nullable(),
+  shoot_id: uuid.nullable(),
+  shoot_name: z.string().nullable(),
+  project_id: uuid.nullable(),
+  project_name: z.string().nullable(),
+  shoot_date: isoDate,
+  amount: z.number(),
+  cost_status: z.string(),
+  paid: z.number(),
+  last_paid_date: isoDate.nullable(),
+  /** False for a released or cancelled booking kept only for its payments. */
+  stands: z.boolean(),
+})
+export type CrewPayoutRow = z.infer<typeof crewPayoutRow>
+
+export const crewOwedPerson = z.object({
+  user_id: uuid,
+  user_name: z.string().nullable(),
+  owed: z.number(),
+  bookings: z.number().int(),
+})
+
+export const crewOwed = z.object({
+  /** India's today: a shoot before it is owed, one on or after it is upcoming. */
+  today: isoDate,
+  owed_now: z.number(),
+  upcoming: z.number(),
+  paid: z.number(),
+  paid_ahead: z.number(),
+  people: z.array(crewOwedPerson),
+})
+export type CrewOwed = z.infer<typeof crewOwed>
+
+export const crewPayouts = crewOwed.extend({ rows: z.array(crewPayoutRow) })
+export type CrewPayouts = z.infer<typeof crewPayouts>

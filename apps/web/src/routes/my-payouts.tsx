@@ -8,6 +8,8 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { PAY_STATE_LABEL, payState, useMyPayouts } from '@/features/team-payouts/pay'
+import { myPayoutsLine } from '@/features/team-payouts/crew-view'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 export function MyPayoutsPage() {
   return (
@@ -27,6 +29,7 @@ const day = (iso: string | null) =>
  */
 function MyPayouts() {
   const q = useMyPayouts()
+  const today = todayInIndia()
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="My payouts" />
@@ -38,19 +41,14 @@ function MyPayouts() {
         <EmptyState title="No shoots yet" description="When the studio books you on a shoot, what it pays shows here." />
       ) : (
         <>
-          <Card className={q.data.owed > 0 ? 'border-warning/40' : 'border-success/40 bg-success/5'}>
+          <Card className={q.data.owed_now > 0 ? 'border-warning/40' : q.data.upcoming > 0 ? '' : 'border-success/40 bg-success/5'}>
             <CardContent className="flex flex-wrap items-center gap-3 p-4">
-              {q.data.owed > 0 ? <Clock className="size-5 text-warning" aria-hidden /> : <CheckCircle2 className="size-5 text-success" aria-hidden />}
-              <p className="min-w-0 flex-1 text-sm">
-                {q.data.owed > 0 ? (
-                  <>
-                    <span className="font-semibold">{formatINR(q.data.owed)}</span> still to come to you
-                  </>
-                ) : (
-                  'You have been paid for every shoot so far'
-                )}
-                {q.data.paid > 0 && <> · {formatINR(q.data.paid)} paid</>}.
-              </p>
+              {q.data.owed_now > 0 || q.data.upcoming > 0 ? (
+                <Clock className={q.data.owed_now > 0 ? 'size-5 text-warning' : 'size-5 text-muted-foreground'} aria-hidden />
+              ) : (
+                <CheckCircle2 className="size-5 text-success" aria-hidden />
+              )}
+              <p className="min-w-0 flex-1 text-sm">{myPayoutsLine(q.data)}</p>
             </CardContent>
           </Card>
 
@@ -67,6 +65,8 @@ function MyPayouts() {
             <CardContent className="flex flex-col divide-y divide-border p-0">
               {q.data.bookings.map((b) => {
                 const state = payState(b.amount, b.paid)
+                // Before the shoot nothing is late: money owed reads "After the shoot", money paid "Paid in advance".
+                const ahead = !b.shoot_date || b.shoot_date >= today
                 return (
                   <div key={b.slot_id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3', state === 'paid' && 'bg-success/[0.06]')}>
                     <div className="min-w-[10rem] flex-1">
@@ -83,11 +83,18 @@ function MyPayouts() {
                       className={cn(
                         'rounded-full px-2.5 py-0.5 text-xs font-medium',
                         state === 'paid' && 'bg-success/15 text-success',
-                        (state === 'due' || state === 'part') && 'bg-warning/15 text-warning',
+                        (state === 'due' || state === 'part') && !ahead && 'bg-warning/15 text-warning',
+                        (state === 'due' || state === 'part') && ahead && 'bg-muted text-muted-foreground',
                         state === 'no_amount' && 'bg-muted text-muted-foreground',
                       )}
                     >
-                      {state === 'no_amount' ? 'Waiting for amount' : PAY_STATE_LABEL[state]}
+                      {state === 'no_amount'
+                        ? 'Waiting for amount'
+                        : ahead && state === 'paid'
+                          ? 'Paid in advance'
+                          : ahead && state === 'due'
+                            ? 'After the shoot'
+                            : PAY_STATE_LABEL[state]}
                     </span>
                   </div>
                 )

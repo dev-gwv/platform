@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { MoneyStatement } from '@/features/team-payouts/MoneyStatement'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { ArrowLeft, CalendarDays, Check, FileText, KeyRound, Lock, Mail, MapPin, Phone, Power } from 'lucide-react'
 import { toast } from 'sonner'
@@ -580,6 +581,8 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
           </CardContent>
         </Card>
       )}
+
+      {!isSelf && <MoneyStatement userId={m.user_id} name={m.name ?? 'them'} />}
 
       <Payslips userId={m.user_id} isSelf={isSelf} />
 

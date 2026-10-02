@@ -3569,6 +3569,55 @@ if (listed) {
   )
 }
 
+// ── Crew money: Owed now · Upcoming, "Who you owe", a person's statement ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `cm-${rand()}@madeup.test`
+  const added = await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Crew Money', phone: randPhone(), email, password: 'Cm-pass-1234', create_login: true, engagement_type: 'freelancer' } })
+  const uid = added.json.user_id
+  const cm = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Cm-pass-1234' } })).json.access_token
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Crew Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Crew money ${rand()}`, client_id: client.json.id } })).json.id
+  const book = async (day, cost) => {
+    const shoot = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: `Shoot ${day}`, shoot_date: day } })).json.id
+    const b = await api('/allocation', {
+      token: aToken,
+      method: 'POST',
+      body: { user_id: uid, shoot_id: shoot, service_name: 'Candid Photographer', start_at: `${day}T06:00:00.000Z`, end_at: `${day}T12:00:00.000Z`, estimated_cost: cost, cost_status: 'final' },
+    })
+    return b.json.id ?? b.json.slot_id
+  }
+  // A shoot done last year (5,000, 1,000 paid) and one next year paid in full ahead (3,000).
+  const past = await book('2025-06-10', 5000)
+  const ahead = await book('2027-03-01', 3000)
+  await api(`/team-payouts/slot/${past}/pay`, { token: aToken, method: 'POST', body: { paid_now: 1000 } })
+  await api(`/team-payouts/slot/${ahead}/pay`, { token: aToken, method: 'POST', body: { paid_now: 3000 } })
+
+  const theirs = await api(`/team-payouts/shoots?user_id=${uid}`, { token: aToken })
+  const all = await api('/team-payouts/shoots', { token: aToken })
+  const owed = await api('/team-payouts/owed', { token: aToken })
+  const person = (owed.json.people ?? []).find((p) => p.user_id === uid)
+  check(
+    'crew money: a past shoot is owed less what was paid; money paid ahead is never taken off it; the dashboard sum equals the page headline',
+    theirs.status === 200 && theirs.json.rows.length === 2 && theirs.json.owed_now === 4000 && theirs.json.upcoming === 0 &&
+      theirs.json.paid === 4000 && theirs.json.paid_ahead === 3000 &&
+      theirs.json.rows.find((r) => r.slot_id === past)?.shoot_date === '2025-06-10' &&
+      owed.status === 200 && person?.owed === 4000 && person?.bookings === 1 &&
+      all.status === 200 && all.json.owed_now === owed.json.owed_now && all.json.paid === owed.json.paid,
+    { theirs: theirs.json && { owed_now: theirs.json.owed_now, upcoming: theirs.json.upcoming, paid: theirs.json.paid, ahead: theirs.json.paid_ahead, n: theirs.json.rows?.length }, owed: owed.status, person, all: all.json?.owed_now, dash: owed.json?.owed_now },
+  )
+
+  const mine = await api('/me/payouts', { token: cm })
+  const cmOwed = await api('/team-payouts/owed', { token: cm })
+  const cmRows = await api('/team-payouts/shoots', { token: cm })
+  check(
+    'crew money: the freelancer sees 4,000 due for shoots done and 3,000 paid in advance; the studio’s crew money is 403 to them',
+    mine.status === 200 && mine.json.owed_now === 4000 && mine.json.upcoming === 0 && mine.json.paid_ahead === 3000 &&
+      cmOwed.status === 403 && cmRows.status === 403,
+    { mine: mine.json && { owed_now: mine.json.owed_now, upcoming: mine.json.upcoming, ahead: mine.json.paid_ahead }, cmOwed: cmOwed.status, cmRows: cmRows.status },
+  )
+}
+
 // ── Leave balances (0228): days a year, what is left, approve as unpaid ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

@@ -5,6 +5,7 @@ import { Input, Label } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { usePaySlot } from './pay'
 
 /**
@@ -31,7 +32,7 @@ export function PayDialog({
   const [total, setTotal] = useState(amount > 0 ? String(amount) : '')
   const totalN = Number(total) || 0
   const [now, setNow] = useState(String(Math.max(0, amount - paid)))
-  const [paidOn, setPaidOn] = useState(() => new Date().toLocaleDateString('en-CA'))
+  const [paidOn, setPaidOn] = useState(() => todayInIndia())
   const [mode, setMode] = useState('')
   const [reference, setReference] = useState('')
   const nowN = Number(now) || 0

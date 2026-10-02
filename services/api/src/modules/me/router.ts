@@ -9,6 +9,8 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { selectMyDeliverables } from '../../lib/my-work'
 import { studioWork, worksOn } from '../../lib/scope'
+import { todayInIndia } from '../../lib/dates'
+import { summarizeCrewOwed } from '@ipc/domain'
 
 /**
  * A person's own things that live in other people's areas -- today, the CRM
@@ -131,7 +133,21 @@ export const meRouter = new Hono<AppEnv>()
     const round = (n: number) => Math.round(n * 100) / 100
     const owed = round(bookings.reduce((a, b) => a + Math.max(0, Number(b.amount) - Number(b.paid)), 0))
     const paid = round(bookings.reduce((a, b) => a + Number(b.paid), 0))
-    return c.json(myPayouts.parse({ ...data, owed, paid }))
+    // A booking with no shoot date yet is still to come.
+    const today = todayInIndia()
+    const split = summarizeCrewOwed(
+      (data.bookings as unknown as Array<{ amount: number; paid: number; shoot_date: string | null }>).map((b) => ({
+        user_id: auth.userId,
+        user_name: null,
+        shoot_date: b.shoot_date ?? '9999-12-31',
+        amount: Number(b.amount),
+        paid: Number(b.paid),
+      })),
+      today,
+    )
+    return c.json(
+      myPayouts.parse({ ...data, owed, paid, owed_now: split.owed_now, upcoming: split.upcoming, paid_ahead: split.paid_ahead }),
+    )
   })
 
   // What is coming due, for the chip in the top bar: the caller's own edits
