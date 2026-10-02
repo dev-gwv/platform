@@ -24,6 +24,7 @@ import { todayIso } from '@/features/projects/deliverable-stage'
 import { BoardCard, CardFace } from './BoardCard'
 import { laneOf, lanesFor, sortInLane, type Lane } from './board-model'
 import { useBoardMove } from './api'
+import { useDeliveryFlow } from '@/features/projects/stages-api'
 
 /** What to say in a lane with nothing in it. */
 function emptyLine(lane: Lane): string {
@@ -70,7 +71,9 @@ interface ViewProps {
  * for it on the way in.
  */
 export function StagesView({ items, stages, canEdit, me, selected, onToggle, onOpen }: ViewProps) {
-  const lanes = useMemo(() => lanesFor(stages), [stages])
+  const flow = useDeliveryFlow()
+  const inReview = useMemo(() => items.some((d) => d.status === 'review'), [items])
+  const lanes = useMemo(() => lanesFor(stages, flow, inReview), [stages, flow, inReview])
   const today = todayIso()
   const byLane = useMemo(() => {
     const m = new Map<string, BoardDeliverable[]>(lanes.map((l) => [l.key, []]))

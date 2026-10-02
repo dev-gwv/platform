@@ -142,3 +142,17 @@ describe('sortForList', () => {
     ])
   })
 })
+
+describe('Simple delivery (0234)', () => {
+  it('has no Review lanes', () => {
+    const lanes = lanesFor(DEFAULTS, 'simple')
+    expect(lanes.map((l) => l.status)).not.toContain('review')
+    expect(lanes.map((l) => l.label)).toEqual(['To do', 'Editing', 'Changes requested', 'Delivered'])
+  })
+
+  it('keeps one plain Review lane while work still sits there', () => {
+    const lanes = lanesFor(DEFAULTS, 'simple', true)
+    expect(lanes.filter((l) => l.status === 'review').map((l) => l.label)).toEqual(['Review'])
+    expect(laneOf({ status: 'review', custom_status_code: 'with_client' }, lanes)?.label).toBe('Review')
+  })
+})

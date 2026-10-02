@@ -2022,7 +2022,9 @@ if (listed) {
 
   // Profit & Loss (0167): the project's 50,000 received shows as income for
   // today, in its own row; the other studio's statement does not include it.
-  const today = new Date().toISOString().slice(0, 10)
+  // Today is India's: the API dates a payment there, and from 6:30 pm UTC the
+  // UTC date is still yesterday.
+  const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10)
   const pnl = await api(`/financials/pnl?from=${today}&to=${today}&basis=cash`, { token: aToken })
   const row = (pnl.json.projects ?? []).find((x) => x.project_id === pid)
   check(
@@ -3668,6 +3670,38 @@ if (listed) {
     named.status === 201 && named.json.lead?.phone === null && neither.status === 422 &&
       book.status === 422 && /phone number/.test(book.json.error ?? '') && fixed.status < 300 && bookNow.status === 201,
     { named: named.status, phone: named.json.lead?.phone, neither: neither.status, book: book.status, err: book.json.error, fixed: fixed.status, bookNow: bookNow.status },
+  )
+}
+
+// ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `sd-${rand()}@madeup.test`
+  const added = await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Simran Editor', phone: randPhone(), email, password: 'Sd-pass-1234', create_login: true } })
+  const sd = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Sd-pass-1234' } })).json.access_token
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Simple Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Simple project ${rand()}`, client_id: client.json.id } })).json.id
+  const mkD = async (title) => (await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title, assignee_id: added.json.user_id } })).json.id
+  const full = await mkD('Full film')
+  const skip = await api('/work/submissions', { token: sd, method: 'POST', body: { project_id: pid, deliverable_id: full, submission_link: 'https://drive.example.com/full-v1', review_required: false } })
+  const fullD = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === full)
+  const staffFlow = await api('/settings/company', { token: sd, method: 'PATCH', body: { delivery_flow: 'simple' } })
+  const toSimple = await api('/settings/company', { token: aToken, method: 'PATCH', body: { delivery_flow: 'simple' } })
+  const teaser = await mkD('Teaser')
+  const handed = await api('/work/submissions', { token: sd, method: 'POST', body: { project_id: pid, deliverable_id: teaser, submission_link: 'https://drive.example.com/teaser-v1' } })
+  const fix = await api(`/work/submissions/${handed.json.id}`, { token: sd, method: 'PATCH', body: { submission_link: 'https://drive.example.com/teaser-v2' } })
+  const teaserD = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === teaser)
+  const back = await api(`/work/submissions/${handed.json.id}/review`, { token: aToken, method: 'POST', body: { approve: false, review_notes: 'Colour is off' } })
+  const reopened = (await api(`/projects/${pid}`, { token: aToken })).json.deliverables.find((d) => d.id === teaser)
+  await api('/settings/company', { token: aToken, method: 'PATCH', body: { delivery_flow: 'full' } })
+  check(
+    'simple delivery: Full still reviews a hand-in that asks to skip it; only the owner switches; Simple delivers, the editor fixes the link, send back reopens Editing',
+    skip.status === 201 && fullD?.status === 'review' && staffFlow.status === 403 &&
+      toSimple.status === 200 && toSimple.json.delivery_flow === 'simple' &&
+      handed.status === 201 && fix.status === 204 && teaserD?.status === 'completed' &&
+      teaserD?.delivery_link === 'https://drive.example.com/teaser-v2' &&
+      back.status === 204 && reopened?.status === 'in_progress',
+    { skip: skip.status, full: fullD?.status, staffFlow: staffFlow.status, toSimple: toSimple.status, handed: handed.status, fix: fix.status, teaser: [teaserD?.status, teaserD?.custom_status_code, teaserD?.delivery_link], back: back.status, reopened: [reopened?.status, reopened?.custom_status_code] },
   )
 }
 

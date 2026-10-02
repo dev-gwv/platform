@@ -1,6 +1,6 @@
 import type { BoardDeliverable, DeliverableStage, StepKey } from '@ipc/contracts'
-import { STAGE_ORDER, stageOf, todayIso } from '@/features/projects/deliverable-stage'
-import { STEP_LABEL, STEP_TONE, stagesIn, toneOf, type StageTone } from '@/features/projects/stages'
+import { stageOf, todayIso } from '@/features/projects/deliverable-stage'
+import { STEP_LABEL, STEP_TONE, stagesIn, stepsFor, toneOf, type DeliveryFlow, type StageTone } from '@/features/projects/stages'
 
 /**
  * The production board's arithmetic, kept out of the components so it can be
@@ -24,11 +24,18 @@ export const laneKey = (status: string, code: string | null | undefined) => `${s
  * Editing, each named stage (Changes requested included -- work sent back is
  * work someone must pick up), then Delivered. Review with named stages is
  * walked through them, so a bare "Review" lane appears only when the studio
- * has none.
+ * has none. A Simple studio (0234) has no Review lanes -- unless work still
+ * sits there from before the switch, which keeps one plain Review lane so
+ * nothing drops off the board.
  */
-export function lanesFor(stages: readonly DeliverableStage[]): Lane[] {
+export function lanesFor(stages: readonly DeliverableStage[], flow: DeliveryFlow = 'full', inReview = false): Lane[] {
   const lanes: Lane[] = []
-  for (const step of STAGE_ORDER as readonly StepKey[]) {
+  const steps = flow === 'simple' && inReview ? stepsFor('full') : stepsFor(flow)
+  for (const step of steps) {
+    if (flow === 'simple' && step === 'review') {
+      lanes.push({ key: laneKey(step, null), status: step, code: null, label: STEP_LABEL[step], tone: STEP_TONE[step], team_allowed: true })
+      continue
+    }
     const named = stagesIn(stages, step)
     if (step !== 'review' || named.length === 0) {
       lanes.push({ key: laneKey(step, null), status: step, code: null, label: STEP_LABEL[step], tone: STEP_TONE[step], team_allowed: true })

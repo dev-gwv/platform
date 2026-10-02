@@ -426,7 +426,7 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
               )}
             </div>
             <div className="flex items-center gap-2">
-              {s.status === 'submitted' && (
+              {(s.status === 'submitted' || (s.status === 'approved' && s.review_required === false)) && (
                 <SubmitDialog submission={s} trigger={<Button size="sm" variant="ghost"><Pencil /></Button>} />
               )}
               {canDeliver && s.status === 'approved' && s.submission_link && (
