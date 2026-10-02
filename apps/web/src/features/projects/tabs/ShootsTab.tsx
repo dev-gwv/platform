@@ -30,7 +30,6 @@ import {
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
-import { formatINR } from '@/shared/ui/format'
 import { useTeamTermsSends } from '@/features/team-terms/api'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -60,6 +59,7 @@ import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
+import { useINR } from '@/shared/money/MoneyMask'
 
 /** The crew roles a studio reaches for, when it has not named its own yet. */
 const FALLBACK_ROLES = [
@@ -327,6 +327,7 @@ function ShootPlanner({
   focus?: boolean
   onFocused?: (() => void) | undefined
 }) {
+  const inr = useINR()
   // "Book the team" lands here: bring this day into view and mark it for a moment.
   const cardRef = useRef<HTMLDivElement>(null)
   const [marked, setMarked] = useState(false)
@@ -507,7 +508,7 @@ function ShootPlanner({
               {seesMoney && crew.total > 0 && (
                 <span className="flex items-center gap-1" title={crew.tentative ? 'Not final: some amounts are still estimates' : undefined}>
                   <IndianRupee className="size-3" />
-                  Crew {formatINR(crew.total)}
+                  Crew {inr(crew.total)}
                   {crew.tentative ? ' · not final' : ''}
                   {crew.unset > 0 ? ` · ${crew.unset} without an amount` : ''}
                 </span>

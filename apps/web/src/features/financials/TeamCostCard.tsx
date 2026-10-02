@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { TONE_BG, type ToneName } from '@/shared/ui/tones'
 import { useMonthlyProfitSummary } from './api'
+import { useINR } from '@/shared/money/MoneyMask'
 
 /** How a person is paid decides the bucket (the API reads it off their profile). */
 const BUCKETS: Array<{ key: string; label: string; tone: ToneName }> = [
@@ -19,6 +19,7 @@ const BUCKETS: Array<{ key: string; label: string; tone: ToneName }> = [
  * split owners ask about when deciding whether to hire or keep booking.
  */
 export function TeamCostCard({ month }: { month: string }) {
+  const inr = useINR()
   const q = useMonthlyProfitSummary(month)
   const raw = q.data?.salary_buckets ?? []
   const amount = new Map(raw.map((b) => [String(b['bucket'] ?? 'other'), Number(b['total'] ?? 0)]))
@@ -34,15 +35,15 @@ export function TeamCostCard({ month }: { month: string }) {
       <CardContent className="p-4">
         <p className="text-sm font-semibold">Team cost in {monthName}</p>
         <p className="mt-1 text-sm">
-          {formatINR(total)} paid out to the team; {Math.round((top.total / total) * 100)}% went to {top.label.toLowerCase()}.
+          {inr(total)} paid out to the team; {Math.round((top.total / total) * 100)}% went to {top.label.toLowerCase()}.
         </p>
-        <div className="mt-3 flex h-3 w-full gap-0.5 overflow-hidden rounded-full" role="img" aria-label={rows.map((r) => `${r.label} ${formatINR(r.total)}`).join(', ')}>
+        <div className="mt-3 flex h-3 w-full gap-0.5 overflow-hidden rounded-full" role="img" aria-label={rows.map((r) => `${r.label} ${inr(r.total)}`).join(', ')}>
           {rows.map((r) => (
             <div
               key={r.key}
               className={cn('h-full first:rounded-l-full last:rounded-r-full', TONE_BG[r.tone])}
               style={{ width: `${(r.total / total) * 100}%` }}
-              title={`${r.label}: ${formatINR(r.total)}`}
+              title={`${r.label}: ${inr(r.total)}`}
             />
           ))}
         </div>
@@ -51,7 +52,7 @@ export function TeamCostCard({ month }: { month: string }) {
             <li key={r.key} className="flex items-center gap-2">
               <span className={cn('size-2.5 shrink-0 rounded-sm', TONE_BG[r.tone])} aria-hidden />
               <span className="min-w-0 flex-1 truncate">{r.label}</span>
-              <span className="tabular-nums">{formatINR(r.total)}</span>
+              <span className="tabular-nums">{inr(r.total)}</span>
             </li>
           ))}
         </ul>

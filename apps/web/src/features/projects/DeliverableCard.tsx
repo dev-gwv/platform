@@ -22,7 +22,6 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -34,6 +33,7 @@ import { deliverableKind, type DeliverableKind } from './deliverable-kind'
 import { DELIVERABLE_ICON } from '@/shared/ui/icon-tile'
 import { STAGE_STYLE, StageStepper } from './StageStepper'
 import { GiveWorkDialog } from './GiveWorkDialog'
+import { useINR } from '@/shared/money/MoneyMask'
 
 export const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
 
@@ -324,6 +324,7 @@ export function DeliverableCard({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
+  const inr = useINR()
   const move = useSetDeliverableStage()
   const stages = useDeliverableStages()
   const stage = stageOf(d.status)
@@ -399,7 +400,7 @@ export function DeliverableCard({
               )}
               {d.is_additional_charge && d.additional_charge_amount > 0 && (
                 <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold', dropped ? 'bg-muted text-muted-foreground' : 'bg-tone-green-soft text-tone-green')}>
-                  {dropped ? `${formatINR(d.additional_charge_amount)} not charged` : `+${formatINR(d.additional_charge_amount)}`}
+                  {dropped ? `${inr(d.additional_charge_amount)} not charged` : `+${inr(d.additional_charge_amount)}`}
                 </span>
               )}
             </p>

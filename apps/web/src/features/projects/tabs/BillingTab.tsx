@@ -27,6 +27,7 @@ import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-
 import { IconTile } from '@/shared/ui/icon-tile'
 import { waLink } from '@ipc/domain'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
+import { useINR } from '@/shared/money/MoneyMask'
 
 type Payment = ProjectDetail['payments'][number]
 type BillingInvoice = NonNullable<ProjectBilling['invoices']>[number]
@@ -63,6 +64,7 @@ export function MoneyStory({
   project: ProjectDetail
   onRecord?: (() => void) | undefined
 }) {
+  const inr = useINR()
   const m = projectMoney(project)
   const who = firstName(project.client_name)
   const pct = (n: number) => `${m.total > 0 ? Math.min(100, (n / m.total) * 100) : 0}%`
@@ -83,14 +85,14 @@ export function MoneyStory({
             ) : m.due <= 0 ? (
               <>
                 <span className="font-semibold">{who}</span> has paid in full:{' '}
-                <span className="font-semibold text-tone-green">{formatINR(m.received)}</span>. Nothing left to collect.
+                <span className="font-semibold text-tone-green">{inr(m.received)}</span>. Nothing left to collect.
               </>
             ) : (
               <>
                 <span className="font-semibold">{who}</span> has paid{' '}
-                <span className="font-semibold text-tone-green">{formatINR(m.received)}</span> of{' '}
-                <span className="font-semibold">{formatINR(m.total)}</span>.{' '}
-                <span className="font-semibold text-tone-amber">{formatINR(m.due)}</span> left to collect.
+                <span className="font-semibold text-tone-green">{inr(m.received)}</span> of{' '}
+                <span className="font-semibold">{inr(m.total)}</span>.{' '}
+                <span className="font-semibold text-tone-amber">{inr(m.due)}</span> left to collect.
               </>
             )}
           </p>
@@ -124,12 +126,12 @@ export function MoneyStory({
           />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <Legend className="bg-tone-green" label={`Paid ${formatINR(m.received)}`} />
-          {m.promised > 0 && <Legend className="bg-tone-amber/60" label={`Promised ${formatINR(m.promised)}`} />}
-          {m.due > 0 && <Legend className="bg-muted-foreground/30" label={`To collect ${formatINR(m.due)}`} />}
+          <Legend className="bg-tone-green" label={`Paid ${inr(m.received)}`} />
+          {m.promised > 0 && <Legend className="bg-tone-amber/60" label={`Promised ${inr(m.promised)}`} />}
+          {m.due > 0 && <Legend className="bg-muted-foreground/30" label={`To collect ${inr(m.due)}`} />}
           <span>
-            Package {formatINR(project.package_cost)}
-            {project.additional_deliverables_cost > 0 ? ` + extras ${formatINR(project.additional_deliverables_cost)}` : ''}
+            Package {inr(project.package_cost)}
+            {project.additional_deliverables_cost > 0 ? ` + extras ${inr(project.additional_deliverables_cost)}` : ''}
           </span>
         </div>
       </CardContent>
@@ -161,6 +163,7 @@ function NeedsALook({
   canEdit: boolean
   onRecord: (invoiceId: string, amount: number) => void
 }) {
+  const inr = useINR()
   const attach = useUpdatePayment(project.id)
   if (checks.length === 0) return null
   return (
@@ -175,16 +178,16 @@ function NeedsALook({
               <span className="min-w-0 flex-1">
                 {c.kind === 'unlinked' ? (
                   <>
-                    {formatINR(c.amount)} received isn’t attached to <b>{c.invoiceNumber}</b>, so that invoice still shows it as unpaid.
+                    {inr(c.amount)} received isn’t attached to <b>{c.invoiceNumber}</b>, so that invoice still shows it as unpaid.
                   </>
                 ) : c.kind === 'over_invoiced' ? (
                   <>
-                    Invoices add up to <b>{formatINR(c.invoiced)}</b>, which is {formatINR(c.invoiced - c.agreed)} more than the project’s{' '}
-                    {formatINR(c.agreed)}.
+                    Invoices add up to <b>{inr(c.invoiced)}</b>, which is {inr(c.invoiced - c.agreed)} more than the project’s{' '}
+                    {inr(c.agreed)}.
                   </>
                 ) : (
                   <>
-                    <b>{c.invoiceNumber}</b> is {c.late}, with {formatINR(c.balance)} unpaid.
+                    <b>{c.invoiceNumber}</b> is {c.late}, with {inr(c.balance)} unpaid.
                   </>
                 )}
               </span>
@@ -391,6 +394,7 @@ function InvoiceItem({
   canEdit: boolean
   onRecord: () => void
 }) {
+  const inr = useINR()
   const due = dueText(inv)
   const late = isOverdue(inv)
   const paid = inv.balance_due <= 0 && inv.status !== 'draft' && inv.status !== 'cancelled'
@@ -404,12 +408,12 @@ function InvoiceItem({
           <Link to="/billing/invoices/$id" params={{ id: inv.id }} className="font-semibold text-primary hover:underline">
             {inv.invoice_number}
           </Link>
-          <span className="font-semibold tabular-nums"> · {formatINR(inv.total)}</span>
+          <span className="font-semibold tabular-nums"> · {inr(inv.total)}</span>
         </p>
         <p className="text-xs text-muted-foreground">
           {shortDate(inv.invoice_date)}
           {due ? ` · ${due}` : ''}
-          {open && inv.balance_due < inv.total ? ` · ${formatINR(inv.balance_due)} still due` : ''}
+          {open && inv.balance_due < inv.total ? ` · ${inr(inv.balance_due)} still due` : ''}
         </p>
       </div>
       <InvoiceBadge invoice={inv} />
@@ -448,6 +452,7 @@ function PlanCard({
   onInvoice: (description: string, amount: number) => void
   onOpenTerms?: (() => void) | undefined
 }) {
+  const inr = useINR()
   const { session } = useAuth()
   // Same key as the Shoots tab, so this shares its cache: each part's date is
   // worked out from the shoots ("Before the wedding" = 7 days before it).
@@ -513,13 +518,13 @@ function PlanCard({
                   {[
                     r.due_trigger,
                     r.state !== 'received' && dueOf(r.due_trigger) ? `due ${shortDate(dueOf(r.due_trigger)!.date)}` : null,
-                    r.state === 'part' ? `${formatINR(r.received)} in, ${formatINR(r.remaining)} to come` : null,
+                    r.state === 'part' ? `${inr(r.received)} in, ${inr(r.remaining)} to come` : null,
                   ]
                     .filter(Boolean)
                     .join(' · ') || '\u00a0'}
                 </p>
               </div>
-              <span className="text-sm font-semibold tabular-nums">{formatINR(r.amount)}</span>
+              <span className="text-sm font-semibold tabular-nums">{inr(r.amount)}</span>
               <StatusBadge tone={PLAN_TONE[r.state]}>{PLAN_STATE_LABEL[r.state]}</StatusBadge>
               {(r.state === 'due' || r.state === 'part' || r.state === 'invoiced') && (
                 <div className="flex w-full justify-end gap-1.5 sm:w-auto">
@@ -560,6 +565,7 @@ function PaymentItem({
   canBill: boolean
   onEdit: () => void
 }) {
+  const inr = useINR()
   const update = useUpdatePayment(project.id)
   const del = useDeletePayment(project.id)
   const confirm = useConfirm()
@@ -591,7 +597,7 @@ function PaymentItem({
       <div className="min-w-[10rem] flex-1">
         <p className="text-sm">
           <span className="text-muted-foreground">{paid ? 'Payment received ' : 'Payment promised '}</span>
-          <span className="font-semibold tabular-nums">{formatINR(p.amount)}</span>
+          <span className="font-semibold tabular-nums">{inr(p.amount)}</span>
         </p>
         <p className="text-xs text-muted-foreground">
           {details.join(' · ')}
@@ -622,7 +628,7 @@ function PaymentItem({
         ) : null}
         {canEdit && (
           <RowMenu
-            label={`More for payment of ${formatINR(p.amount)}`}
+            label={`More for payment of ${inr(p.amount)}`}
             items={[
               { label: 'Edit…', icon: <Pencil className="size-4" />, onSelect: onEdit },
               ...(paid && canShareReceipt
@@ -638,7 +644,7 @@ function PaymentItem({
                 label: 'Delete',
                 icon: <Trash2 className="size-4" />,
                 onSelect: async () => {
-                  if (await confirm({ title: `Delete the ${formatINR(p.amount)} payment?`, destructive: true, confirmLabel: 'Delete' })) del.mutate(p.id)
+                  if (await confirm({ title: `Delete the ${inr(p.amount)} payment?`, destructive: true, confirmLabel: 'Delete' })) del.mutate(p.id)
                 },
               },
             ]}
@@ -656,6 +662,7 @@ function PaymentItem({
  * the two never disagree.
  */
 function ProfitCard({ project }: { project: ProjectDetail }) {
+  const inr = useINR()
   const canSee = useAccess().hasModule('financials')
   const { data } = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: project.id }, canSee)
   if (!canSee) return null
@@ -668,12 +675,12 @@ function ProfitCard({ project }: { project: ProjectDetail }) {
           <IconTile icon={TrendingUp} tone="violet" size="sm" /> What this project makes
         </p>
         <dl className="grid grid-cols-2 gap-3 text-sm">
-          <Fig label="Project value" value={formatINR(f.income)} />
-          <Fig label="Crew cost" value={`− ${formatINR(f.team)}`} />
-          <Fig label="Expenses" value={`− ${formatINR(f.expenses)}`} />
+          <Fig label="Project value" value={inr(f.income)} />
+          <Fig label="Crew cost" value={`− ${inr(f.team)}`} />
+          <Fig label="Expenses" value={`− ${inr(f.expenses)}`} />
           <Fig
             label={`Profit${f.margin != null ? ` · ${Math.round(f.margin)}%` : ''}`}
-            value={formatINR(f.profit)}
+            value={inr(f.profit)}
             className={f.profit >= 0 ? 'text-tone-green' : 'text-destructive'}
           />
         </dl>

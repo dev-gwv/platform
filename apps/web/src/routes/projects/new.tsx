@@ -44,7 +44,6 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { cn } from '@/shared/ui/cn'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { DurationField } from '@/shared/ui/duration-field'
-import { formatINR } from '@/shared/ui/format'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Stepper } from '@/shared/ui/stepper'
 import { Switch } from '@/shared/ui/switch'
@@ -128,6 +127,7 @@ import {
   type ShootRequirementDraft,
   type WizardStep,
 } from '@/features/projects/wizard'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 const prettyDate = (iso: string) => dayFormat.format(new Date(`${iso}T00:00:00`))
@@ -472,11 +472,12 @@ const prettyTime = (iso: string) =>
   new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 
 function Money({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+  const inr = useINR()
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn('tabular-nums', strong ? 'text-base font-semibold text-primary' : 'font-medium')}>
-        {formatINR(value)}
+        {inr(value)}
       </p>
     </div>
   )
@@ -1939,6 +1940,7 @@ function DeliverableRow({
   onToggle: () => void
   onRemove: () => void
 }) {
+  const inr = useINR()
   const set = (p: Partial<DeliverableDraft>) =>
     patch({ deliverables: draft.deliverables.map((d, i) => (i === at ? { ...d, ...p } : d)) })
   const due = estimatedDateFor(draft, item)
@@ -1970,7 +1972,7 @@ function DeliverableRow({
           </span>
           {item.is_additional_charge && (
             <StatusBadge tone={amount > 0 ? 'info' : 'warning'} className="shrink-0">
-              {amount > 0 ? `Add-on ${formatINR(amount)}` : 'Add-on · amount needed'}
+              {amount > 0 ? `Add-on ${inr(amount)}` : 'Add-on · amount needed'}
             </StatusBadge>
           )}
           <ChevronDown
@@ -2075,6 +2077,7 @@ function BillingStep({
   patch: Patch
   totals: ReturnType<typeof draftTotals>
 }) {
+  const inr = useINR()
   const patchPayment = (p: PaymentDraft) => patch({ payments: [p] })
 
   return (
@@ -2091,11 +2094,11 @@ function BillingStep({
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Chargeable deliverables</span>
-            <span className="tabular-nums font-medium">{formatINR(totals.addOns)}</span>
+            <span className="tabular-nums font-medium">{inr(totals.addOns)}</span>
           </div>
           <div className="mt-2 flex justify-between border-t border-border pt-2">
             <span className="font-medium">Project total</span>
-            <span className="tabular-nums text-base font-semibold">{formatINR(totals.total)}</span>
+            <span className="tabular-nums text-base font-semibold">{inr(totals.total)}</span>
           </div>
         </div>
       </div>
@@ -2187,6 +2190,7 @@ function ReviewStep({
   errors: ReturnType<typeof stepErrors>
   onJump: (s: WizardStep) => void
 }) {
+  const inr = useINR()
   const { data: clients } = useClients()
   const client = Array.isArray(clients) ? clients.find((c) => c.id === draft.client_id) : undefined
   const clientName = client?.name ?? draft.new_client_name.trim()
@@ -2227,13 +2231,13 @@ function ReviewStep({
         />
         <ReviewTile
           label="Package / add-ons / total"
-          value={`${formatINR(totals.packageCost)} + ${formatINR(totals.addOns)} = ${formatINR(totals.total)}`}
+          value={`${inr(totals.packageCost)} + ${inr(totals.addOns)} = ${inr(totals.total)}`}
           accent
           onEdit={() => onJump('billing')}
         />
         <ReviewTile
           label="Advance"
-          value={`Received ${formatINR(totals.received)}${totals.promised ? ` · Promised ${formatINR(totals.promised)}` : ''} · Still to collect ${formatINR(totals.balance)}`}
+          value={`Received ${inr(totals.received)}${totals.promised ? ` · Promised ${inr(totals.promised)}` : ''} · Still to collect ${inr(totals.balance)}`}
           problem={errors.billing}
           onEdit={() => onJump('billing')}
         />

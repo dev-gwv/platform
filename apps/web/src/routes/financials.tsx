@@ -10,7 +10,6 @@ import { ShareChart } from '@/shared/ui/chart'
 import { SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useGstSummary, useProfitAndLoss } from '@/features/financials/api'
 import { OverheadsCard } from '@/features/financials/Overheads'
@@ -19,6 +18,8 @@ import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { allocateOverhead } from '@ipc/domain'
 import { TeamCostCard } from '@/features/financials/TeamCostCard'
+import { useINR } from '@/shared/money/MoneyMask'
+import { screenINR } from '@/shared/money/hide'
 
 export function FinancialsPage() {
   return (
@@ -29,7 +30,7 @@ export function FinancialsPage() {
 }
 
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—')
-const signed = (n: number) => (n < 0 ? `−${formatINR(Math.abs(n))}` : formatINR(n))
+const signed = (n: number) => (n < 0 ? `−${screenINR(Math.abs(n))}` : screenINR(n))
 
 /**
  * Profit & Loss: what came in, what it cost, what is left -- for a month, a
@@ -171,12 +172,13 @@ function ProfitAndLossPage() {
 
 /** Income, costs, and what is left, big enough to read across the room. */
 function Headline({ lines: l, label }: { lines: PnlLines; label: string }) {
+  const inr = useINR()
   const costs = l.income - l.net_profit
   const profit = l.net_profit >= 0
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      <Tile label={`Income · ${label}`} value={formatINR(l.income)} tone="text-tone-green" icon={<ArrowDownRight className="size-4" aria-hidden />} />
-      <Tile label="Costs" value={formatINR(costs)} tone="text-tone-rose" icon={<ArrowUpRight className="size-4" aria-hidden />} hint={l.income > 0 ? `${pct(costs, l.income)} of income` : undefined} />
+      <Tile label={`Income · ${label}`} value={inr(l.income)} tone="text-tone-green" icon={<ArrowDownRight className="size-4" aria-hidden />} />
+      <Tile label="Costs" value={inr(costs)} tone="text-tone-rose" icon={<ArrowUpRight className="size-4" aria-hidden />} hint={l.income > 0 ? `${pct(costs, l.income)} of income` : undefined} />
       <Tile
         label={profit ? 'Profit' : 'Loss'}
         value={signed(l.net_profit)}
@@ -205,6 +207,7 @@ function Tile({ label, value, tone, icon, hint, strong }: { label: string; value
 
 /** The statement, as an accountant lays it out; each line opens its list. */
 function Statement({ lines: l, className }: { lines: PnlLines; className?: string }) {
+  const inr = useINR()
   const row = (label: string, amount: number, to: string | null, hint?: string, search?: Record<string, string>) => (
     <li className="flex items-baseline gap-3 py-2 text-sm">
       <span className="min-w-0 flex-1">
@@ -218,7 +221,7 @@ function Statement({ lines: l, className }: { lines: PnlLines; className?: strin
         {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
       </span>
       <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{amount > 0 ? pct(amount, l.income) : ''}</span>
-      <span className="w-32 text-right tabular-nums">{amount > 0 ? `−${formatINR(amount)}` : formatINR(0)}</span>
+      <span className="w-32 text-right tabular-nums">{amount > 0 ? `−${inr(amount)}` : inr(0)}</span>
     </li>
   )
   const total = (label: string, amount: number, big = false) => (
@@ -238,10 +241,10 @@ function Statement({ lines: l, className }: { lines: PnlLines; className?: strin
               <Link to="/billing/payments" className="hover:text-primary hover:underline">
                 Income
               </Link>
-              {l.gst_collected > 0 && <span className="block text-xs font-normal text-muted-foreground">Includes {formatINR(l.gst_collected)} GST invoiced</span>}
+              {l.gst_collected > 0 && <span className="block text-xs font-normal text-muted-foreground">Includes {inr(l.gst_collected)} GST invoiced</span>}
             </span>
             <span className="w-14" />
-            <span className="w-32 text-right tabular-nums text-tone-green">{formatINR(l.income)}</span>
+            <span className="w-32 text-right tabular-nums text-tone-green">{inr(l.income)}</span>
           </li>
           <li className="pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cost of the work</li>
           {row('Team for shoots', l.team_crew, '/team-payouts', 'Crew booked on shoots')}
@@ -261,13 +264,14 @@ function Statement({ lines: l, className }: { lines: PnlLines; className?: strin
 
 /** Money still out there, and money still owed. */
 function Rail({ data }: { data: ProfitAndLoss }) {
+  const inr = useINR()
   const r = data.rail
   const item = (icon: ReactNode, label: string, value: number, hint: string, to: string, search?: Record<string, string>) => (
     <Link to={to} search={search} className="flex items-start gap-3 rounded-lg px-2 py-2.5 hover:bg-muted">
       <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm text-muted-foreground">{label}</span>
-        <span className="block text-lg font-semibold tabular-nums">{formatINR(value)}</span>
+        <span className="block text-lg font-semibold tabular-nums">{inr(value)}</span>
         <span className="block text-xs text-muted-foreground">{hint}</span>
       </span>
     </Link>
@@ -284,6 +288,7 @@ function Rail({ data }: { data: ProfitAndLoss }) {
 
 /** Twelve months: what came in beside what went out, and the month's result. */
 function Trend({ data }: { data: ProfitAndLoss }) {
+  const inr = useINR()
   const months = data.monthly
   const max = Math.max(1, ...months.map((m) => Math.max(m.income, m.income - m.net_profit)))
   return (
@@ -305,7 +310,7 @@ function Trend({ data }: { data: ProfitAndLoss }) {
             const costs = m.income - m.net_profit
             const label = new Date(`${m.month}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'short' })
             return (
-              <div key={m.month} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${label}: in ${formatINR(m.income)}, out ${formatINR(costs)}, ${m.net_profit >= 0 ? 'profit' : 'loss'} ${signed(m.net_profit)}`}>
+              <div key={m.month} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${label}: in ${inr(m.income)}, out ${inr(costs)}, ${m.net_profit >= 0 ? 'profit' : 'loss'} ${signed(m.net_profit)}`}>
                 <span className={cn('text-[10px] font-semibold tabular-nums', m.net_profit < 0 ? 'text-destructive' : 'text-tone-green', m.income === 0 && costs === 0 && 'invisible')}>
                   {m.net_profit >= 0 ? '+' : '−'}
                   {compact(Math.abs(m.net_profit))}
@@ -333,6 +338,7 @@ function compact(n: number): string {
 }
 
 function WhereItGoes({ data }: { data: ProfitAndLoss }) {
+  const inr = useINR()
   const l = data.lines
   const points = useMemo(
     () =>
@@ -348,7 +354,7 @@ function WhereItGoes({ data }: { data: ProfitAndLoss }) {
     <Card>
       <CardContent className="p-4">
         <p className="text-sm font-semibold">Where the money goes</p>
-        <ShareChart points={points} format={formatINR} className="mt-3" />
+        <ShareChart points={points} format={inr} className="mt-3" />
       </CardContent>
     </Card>
   )
@@ -358,6 +364,7 @@ type SortKey = 'profit' | 'income' | 'margin' | 'to_collect'
 
 /** Every project with money in the period: its own little P&L. */
 function Projects({ data }: { data: ProfitAndLoss }) {
+  const inr = useINR()
   const [sort, setSort] = useState<SortKey>('profit')
   /*
    * Salaries, rent, other payouts and studio costs belong to no one project,
@@ -422,7 +429,7 @@ function Projects({ data }: { data: ProfitAndLoss }) {
         </div>
         {share !== 'off' && (
           <p className="mt-1 text-xs text-muted-foreground">
-            {formatINR(pool)} of salaries, other payouts, fixed overheads and studio expenses,{' '}
+            {inr(pool)} of salaries, other payouts, fixed overheads and studio expenses,{' '}
             {share === 'income' ? 'shared by income: a project that brought in 30% of the money carries 30%.' : `shared equally across ${carriers.length} projects.`}
           </p>
         )}
@@ -453,18 +460,18 @@ function Projects({ data }: { data: ProfitAndLoss }) {
                       </Link>
                       {p.client_name && <span className="block text-xs text-muted-foreground">{p.client_name}</span>}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{formatINR(p.income)}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.team ? `−${formatINR(p.team)}` : '—'}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.expenses ? `−${formatINR(p.expenses)}` : '—'}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{inr(p.income)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.team ? `−${inr(p.team)}` : '—'}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{p.expenses ? `−${inr(p.expenses)}` : '—'}</td>
                     <td className={cn('py-2 pr-3 text-right font-semibold tabular-nums', p.profit < 0 ? 'text-destructive' : 'text-tone-green')}>{signed(p.profit)}</td>
                     {share !== 'off' && (
-                      <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{shares[p.project_id] ? `−${formatINR(shares[p.project_id]!)}` : '—'}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{shares[p.project_id] ? `−${inr(shares[p.project_id]!)}` : '—'}</td>
                     )}
                     {share !== 'off' && (
                       <td className={cn('py-2 pr-3 text-right font-semibold tabular-nums', after(p) < 0 ? 'text-destructive' : 'text-tone-green')}>{signed(after(p))}</td>
                     )}
                     <td className="py-2 pr-3 text-right tabular-nums">{p.margin == null ? '—' : `${Math.round(p.margin)}%`}</td>
-                    <td className={cn('py-2 text-right tabular-nums', p.to_collect > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>{p.to_collect ? formatINR(p.to_collect) : '—'}</td>
+                    <td className={cn('py-2 text-right tabular-nums', p.to_collect > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>{p.to_collect ? inr(p.to_collect) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

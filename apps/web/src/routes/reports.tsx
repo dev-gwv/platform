@@ -11,12 +11,12 @@ import { SkeletonCards, SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { downloadCsv } from '@/shared/ui/csv'
 import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { useDeliveryReport, useMoneyReport, useReportTabs, useSalesReport, useTeamReport } from '@/features/reports/api'
 import { deliveryCsv, moneyCsv, pctText, salesCsv, sourceLabel, teamCsv } from '@/features/reports/csv'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 
 const TABS: { key: ReportTab; label: string }[] = [
   { key: 'sales', label: 'Sales' },
@@ -211,7 +211,7 @@ function SalesTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
             <Tile label="Enquiries received" value={r.enquiries} />
             <Tile label="Turned into bookings" value={r.booked} hint={r.enquiries > 0 ? `${pctText(r.conversion_pct)} of enquiries` : undefined} />
             <Tile label="New projects" value={r.bookings} />
-            <Tile label="Booking value" value={formatINR(r.booking_value)} hint="Total of new projects" />
+            <Tile label="Booking value" value={<Money value={r.booking_value} />} hint="Total of new projects" />
           </Tiles>
           <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Where enquiries came from" footer={canLeads ? <MoreLink to="/follow-ups">Open leads</MoreLink> : undefined}>
@@ -246,6 +246,7 @@ function SalesTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
 // ── Money ─────────────────────────────────────────────────────────────
 
 function MoneyTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean }) {
+  const inr = useINR()
   const query = useMoneyReport(q, on)
   const canPnl = useAccess().hasModule('financials')
   return (
@@ -253,15 +254,15 @@ function MoneyTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
       {(r) => (
         <>
           <Tiles>
-            <Tile label="Billed" value={formatINR(r.billed)} hint={`${r.invoices} invoice${r.invoices === 1 ? '' : 's'} issued`} />
-            <Tile label="Received" value={formatINR(r.received)} tone="text-tone-green" hint="Payments that came in" />
+            <Tile label="Billed" value={<Money value={r.billed} />} hint={`${r.invoices} invoice${r.invoices === 1 ? '' : 's'} issued`} />
+            <Tile label="Received" value={<Money value={r.received} />} tone="text-tone-green" hint="Payments that came in" />
             <Tile
               label="Still to collect"
-              value={formatINR(r.to_collect)}
+              value={<Money value={r.to_collect} />}
               tone="text-tone-amber"
-              hint={r.overdue > 0 ? <span className="text-destructive">{formatINR(r.overdue)} overdue</span> : 'Nothing overdue'}
+              hint={r.overdue > 0 ? <span className="text-destructive">{inr(r.overdue)} overdue</span> : 'Nothing overdue'}
             />
-            <Tile label="Expenses" value={formatINR(r.expenses)} hint="Bills and purchases" />
+            <Tile label="Expenses" value={<Money value={r.expenses} />} hint="Bills and purchases" />
           </Tiles>
           <Section
             title="Who owes you"
@@ -275,8 +276,8 @@ function MoneyTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
                   <Row
                     key={o.client_id}
                     left={o.client_name}
-                    sub={o.overdue_days != null && o.overdue > 0 ? <span className="text-destructive">{formatINR(o.overdue)} overdue · {days(o.overdue_days)}</span> : 'Not overdue yet'}
-                    right={formatINR(o.outstanding)}
+                    sub={o.overdue_days != null && o.overdue > 0 ? <span className="text-destructive">{inr(o.overdue)} overdue · {days(o.overdue_days)}</span> : 'Not overdue yet'}
+                    right={inr(o.outstanding)}
                     {...(o.invoice_id
                       ? { to: '/billing/invoices/$id', params: { id: o.invoice_id } }
                       : o.project_id

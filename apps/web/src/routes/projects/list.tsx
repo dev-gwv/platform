@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Briefcase, CalendarDays, CircleCheck, Clock, Download, ExternalLink, FileText, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
@@ -16,11 +16,12 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { useIssueQuotation, useProjectsPage, useDeleteProject } from '@/features/projects/api'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 
 type Filter = ProjectStatus | 'all'
 type ProjectSort = 'recent' | 'oldest' | 'name' | 'pending_desc' | 'upcoming' | 'value_desc'
@@ -59,6 +60,7 @@ export function ProjectsListPage() {
  * filter matches, not just the page on screen.
  */
 function ProjectsList() {
+  const inr = useINR()
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<ProjectSort>('recent')
@@ -140,9 +142,9 @@ function ProjectsList() {
       <Card className="mt-4">
         <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
           <Figure icon={Briefcase} label={filtered ? 'Projects shown' : 'Projects'} value={String(total)} />
-          <Figure icon={Briefcase} label="Total value" value={formatINR(paged?.summary.value ?? 0)} />
-          <Figure icon={CircleCheck} label="Received" value={formatINR(paged?.summary.received ?? 0)} tone="success" />
-          <Figure icon={Clock} label="Still to collect" value={formatINR(paged?.summary.due ?? 0)} tone="warning" />
+          <Figure icon={Briefcase} label="Total value" value={<Money value={paged?.summary.value ?? 0} />} />
+          <Figure icon={CircleCheck} label="Received" value={<Money value={paged?.summary.received ?? 0} />} tone="success" />
+          <Figure icon={Clock} label="Still to collect" value={<Money value={paged?.summary.due ?? 0} />} tone="warning" />
         </CardContent>
       </Card>
 
@@ -245,9 +247,9 @@ function ProjectsList() {
                   <ProjectMenu project={p} />
                 </div>
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 text-sm">
-                  <span className="font-semibold">{formatINR(p.total_cost)}</span>
-                  <span className="text-success">{formatINR(p.received)} in</span>
-                  {due(p) > 0 && <span className="text-warning">{formatINR(due(p))} due</span>}
+                  <span className="font-semibold">{inr(p.total_cost)}</span>
+                  <span className="text-success">{inr(p.received)} in</span>
+                  {due(p) > 0 && <span className="text-warning">{inr(due(p))} due</span>}
                   {p.next_shoot_date && (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <CalendarDays className="size-3.5" aria-hidden /> {shortDay(p.next_shoot_date)}
@@ -287,12 +289,12 @@ function ProjectsList() {
                     <td className="px-4 py-2.5">
                       <StatusBadge tone={STATUS_TONE[p.status]}>{humanize(p.status)}</StatusBadge>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{formatINR(p.total_cost)}</td>
+                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{inr(p.total_cost)}</td>
                     <td className={cn('px-4 py-2.5 text-right tabular-nums', p.received > 0 ? 'text-success' : 'text-muted-foreground')}>
-                      {formatINR(p.received)}
+                      {inr(p.received)}
                     </td>
                     <td className={cn('px-4 py-2.5 text-right tabular-nums', due(p) > 0 ? 'font-medium text-warning' : 'text-muted-foreground')}>
-                      {formatINR(due(p))}
+                      {inr(due(p))}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <ProjectMenu project={p} />
@@ -370,7 +372,7 @@ function ProjectMenu({ project }: { project: ProjectListItem }) {
 }
 
 /** One figure in the summary bar. */
-function Figure({ icon: Icon, label, value, tone }: { icon: typeof Briefcase; label: string; value: string; tone?: 'success' | 'warning' }) {
+function Figure({ icon: Icon, label, value, tone }: { icon: typeof Briefcase; label: string; value: ReactNode; tone?: 'success' | 'warning' }) {
   return (
     <div className="flex items-center gap-2.5">
       <span

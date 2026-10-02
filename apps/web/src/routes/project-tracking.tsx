@@ -15,7 +15,6 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { Input, Select } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
 import { MetricCard } from '@/shared/ui/metric-card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
@@ -41,6 +40,7 @@ import {
   type TrackingTab,
 } from '@/features/projects/tracking'
 import { DeliverableTile, EventTile } from '@/shared/ui/icon-tile'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const list = projectTrackingRow.array()
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
@@ -234,6 +234,7 @@ function UrgentCard({ project: p }: { project: TrackedProject }) {
 }
 
 function ProjectRow({ project: p, open, onToggle }: { project: TrackedProject; open: boolean; onToggle: () => void }) {
+  const inr = useINR()
   const owed = p.tasks_total + p.deliverables_total
   const done = p.tasks_done + p.deliverables_done
   const pct = Math.round(p.health.completion * 100)
@@ -260,7 +261,7 @@ function ProjectRow({ project: p, open, onToggle }: { project: TrackedProject; o
                 </span>
               )}
               {p.next_due_date && <span>· Next delivery due {day(p.next_due_date)}</span>}
-              {due !== null && due > 0 && <span>· {formatINR(due)} to collect</span>}
+              {due !== null && due > 0 && <span>· {inr(due)} to collect</span>}
             </p>
           </div>
           <div className="w-44 shrink-0">
@@ -310,6 +311,7 @@ function ProjectRow({ project: p, open, onToggle }: { project: TrackedProject; o
 
 /** One project opened up: what is late or waiting, and on whom. */
 function Breakdown({ project: p }: { project: TrackedProject }) {
+  const inr = useINR()
   const { data, isLoading, isError } = useQuery({
     queryKey: ['projects', 'tracking', p.id],
     queryFn: () => callApi(`/projects/tracking/${p.id}`, { responseSchema: trackingBreakdown }),
@@ -398,14 +400,14 @@ function Breakdown({ project: p }: { project: TrackedProject }) {
       {data.money && (
         <Block title="Money" className="md:col-span-2">
           <p className="text-sm">
-            Package {formatINR(data.money.total_cost)} · received {formatINR(data.money.received)} ·{' '}
-            <b>{formatINR(data.money.balance)} to collect</b>
+            Package {inr(data.money.total_cost)} · received {inr(data.money.received)} ·{' '}
+            <b>{inr(data.money.balance)} to collect</b>
           </p>
           {data.money.invoices_overdue.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-sm text-destructive">
               {data.money.invoices_overdue.map((i) => (
                 <li key={i.id}>
-                  Invoice {i.invoice_number ?? ''} · {formatINR(i.balance_due)} overdue since {day(i.due_date)}
+                  Invoice {i.invoice_number ?? ''} · {inr(i.balance_due)} overdue since {day(i.due_date)}
                 </li>
               ))}
             </ul>

@@ -23,7 +23,6 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
-import { formatINR } from '@/shared/ui/format'
 import { useProjects } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
@@ -42,6 +41,7 @@ import { todayInIndia } from '@/shared/ui/days-left'
 import { greeting, todayLine } from '@/features/dashboard/greeting'
 import { attentionLine, collectLine, shootsWeekLine } from '@/features/dashboard/tiles'
 import { seesStudioWork } from '@ipc/permissions'
+import { useINR } from '@/shared/money/MoneyMask'
 
 export function DashboardPage() {
   return <DashboardInner />
@@ -77,6 +77,7 @@ function DashboardInner() {
 }
 
 function StudioCommandCenter() {
+  const inr = useINR()
   const { session } = useAuth()
   const access = useAccess()
 
@@ -205,7 +206,7 @@ function StudioCommandCenter() {
         {access.hasModule('billing') && (
           <Tile
             icon={Receipt}
-            value={formatINR(outstanding)}
+            value={inr(outstanding)}
             label="To collect"
             hint={collectLine(invoices.data?.items ?? [], today)}
             tone="warning"

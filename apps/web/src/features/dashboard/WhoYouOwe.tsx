@@ -2,9 +2,9 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
-import { formatINR } from '@/shared/ui/format'
 import { useCanPay, useCrewOwed } from '@/features/team-payouts/pay'
 import { whoYouOweLine } from '@/features/team-payouts/crew-view'
+import { useINR } from '@/shared/money/MoneyMask'
 
 /**
  * What the studio owes its crew for shoots already done, with the three it
@@ -12,6 +12,7 @@ import { whoYouOweLine } from '@/features/team-payouts/crew-view'
  * disagree. Money for shoots still to come is not owed yet and is not here.
  */
 export function WhoYouOwe() {
+  const inr = useINR()
   const can = useCanPay()
   const q = useCrewOwed(can)
   if (!can || !q.data) return null
@@ -45,7 +46,7 @@ export function WhoYouOwe() {
             <li key={p.user_id} className="flex items-center justify-between gap-2 py-1.5">
               <span className="truncate">{p.user_name ?? 'Someone'}</span>
               <span className="shrink-0 tabular-nums">
-                {formatINR(p.owed)}
+                {inr(p.owed)}
                 <span className="ml-1 text-xs text-muted-foreground">
                   · {p.bookings} {p.bookings === 1 ? 'shoot' : 'shoots'}
                 </span>
