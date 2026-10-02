@@ -3701,6 +3701,17 @@ if (listed) {
   )
 }
 
+// ── Getting started: each step is read from the studio's own data ──
+{
+  const gs = await api('/settings/getting-started', { token: aToken })
+  check(
+    'getting started: the studio with leads, bookings and quotations has those steps ticked',
+    gs.status === 200 && gs.json.enquiry === true && gs.json.booking === true && gs.json.quotation === true &&
+      typeof gs.json.started_at === 'string',
+    gs.json,
+  )
+}
+
 // ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

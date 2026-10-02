@@ -332,3 +332,19 @@ export const integrationStatusList = z.object({
   environment: z.string(),
 })
 export type IntegrationStatusList = z.infer<typeof integrationStatusList>
+
+/**
+ * Getting started (dashboard): what a new studio has done of its first five
+ * things, read from the data itself so a step can never go stale.
+ */
+export const gettingStarted = z.object({
+  /** When the studio was made, or set up -- the card shows for 60 days from here. */
+  started_at: z.coerce.string(),
+  setup_closed: z.boolean(),
+  logo: z.boolean(),
+  package: z.boolean(),
+  enquiry: z.boolean(),
+  booking: z.boolean(),
+  quotation: z.boolean(),
+})
+export type GettingStarted = z.infer<typeof gettingStarted>

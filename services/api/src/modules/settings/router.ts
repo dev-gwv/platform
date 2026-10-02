@@ -10,6 +10,7 @@ import {
   memberDocument,
   myProfile,
   updateCompanyRequest,
+  gettingStarted,
   updateMyProfileRequest,
   updateThemeRequest,
   integrationStatusList,
@@ -91,6 +92,28 @@ export const settingsRouter = new Hono<AppEnv>()
     )
     if (!row) fail(404, 'Company not found.')
     return c.json(companyProfile.parse(row))
+  })
+
+  // Getting started on the dashboard: each step read from the studio's own
+  // data, so it ticks itself the moment the thing is done.
+  .get('/getting-started', async (c) => {
+    const auth = c.get('auth')
+    const row = await attempt(c, 'settings.getting_started', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [r] = await sql`
+          select coalesce(co.setup_done_at, co.setup_skipped_at, co.created_at) as started_at,
+                 (co.setup_done_at is not null or co.setup_skipped_at is not null) as setup_closed,
+                 (coalesce(nullif(btrim(co.invoice_logo_url), ''), nullif(btrim(co.avatar_url), '')) is not null) as logo,
+                 exists (select 1 from project_templates t where t.company_id = co.id and not t.is_sample) as package,
+                 exists (select 1 from crm_leads l where l.company_id = co.id) as enquiry,
+                 exists (select 1 from projects p join shoots s on s.project_id = p.id where p.company_id = co.id) as booking,
+                 exists (select 1 from project_quotations q where q.company_id = co.id) as quotation
+            from companies co where co.id = ${auth.companyId}`
+        return r ?? null
+      }),
+    )
+    if (!row) fail(404, 'Company not found.')
+    return c.json(gettingStarted.parse(row))
   })
 
   .patch('/company', requireOwner(), async (c) => {

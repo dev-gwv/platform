@@ -31,6 +31,7 @@ import { useInvoices } from '@/features/billing/api'
 import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
+import { GettingStartedCard } from '@/features/dashboard/GettingStartedCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
@@ -178,6 +179,7 @@ function StudioCommandCenter() {
       <>
       <ProfileBanner />
       <YourDayStrip />
+      {session && isSetupAudience(session) && <GettingStartedCard />}
 
       {/* Three numbers, the way a project page opens: what is running, what
           needs a hand, what is still to come in. Everything else is one

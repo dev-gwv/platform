@@ -780,6 +780,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ...profileFx }
   }
   if (method === 'GET' && path === '/settings/company') return companyFx
+  if (method === 'GET' && path === '/settings/getting-started')
+    return { started_at: new Date().toISOString(), setup_closed: true, logo: true, package: false, enquiry: true, booking: false, quotation: false }
   if (method === 'PATCH' && path === '/settings/company') return companyFx
   if (method === 'GET' && path === '/settings/theme') return { ...themeState }
   if (method === 'PATCH' && path === '/settings/theme') {

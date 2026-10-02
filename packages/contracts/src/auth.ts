@@ -181,12 +181,12 @@ export const hintNote = z.object({
 })
 export type HintNote = z.infer<typeof hintNote>
 
-export const HINT_KEYS = ['assign_note'] as const
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
 /** The caller's own notes, keyed by hint. Unknown keys pass through untouched. */
-export const userHints = z.object({ assign_note: hintNote.optional() }).passthrough()
+export const userHints = z.object({ assign_note: hintNote.optional(), getting_started: hintNote.optional(), hide_amounts: hintNote.optional() }).passthrough()
 export type UserHints = z.infer<typeof userHints>
 
 export const setHintRequest = z.object({ value: hintNote.nullable() })
