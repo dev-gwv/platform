@@ -29,10 +29,11 @@ export function DueChip() {
         <button
           type="button"
           aria-label={late > 0 ? `${late} late` : `${items.length} due soon`}
-          className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', DUE_TONE_CLASS[tone])}
+          className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold', DUE_TONE_CLASS[tone])}
         >
           <AlarmClock className="size-3.5" aria-hidden />
-          <span className="hidden sm:inline">{late > 0 ? `${late} late` : `${items.length} due soon`}</span>
+          <span className="hidden sm:inline min-[1800px]:hidden">{late > 0 ? `${late} late` : `${items.length} due`}</span>
+          <span className="hidden min-[1800px]:inline">{late > 0 ? `${late} late` : `${items.length} due soon`}</span>
           <span className="sm:hidden">{late > 0 ? late : items.length}</span>
         </button>
       </PopoverTrigger>

@@ -182,18 +182,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* A shortcut nobody can see is a shortcut nobody uses, so the
                 trigger sits in the bar and names its own key.
 
-                Between lg and xl the pills are up and the bar is full, so the
-                field gives back its 16rem and rides as an icon until the
-                label fits again. */}
+                From lg the shortcut pills are up and the bar is shared with
+                the due, trial and suggest chips and the account, so below 1800px
+                every one of them rides in its compact form (icons, "3 due",
+                "23 days left") and the field gives back its 16rem. Nothing is
+                removed; at about 1250px the full forms ran the bar past the
+                right edge and pushed the account menu off screen. Never put
+                overflow-hidden on this bar: the account panel is not portalled. */}
             <button
               type="button"
               onClick={openCommandPalette}
               aria-label="Search"
-              className="flex items-center justify-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted sm:w-64 lg:w-9 lg:px-2 xl:w-64 xl:px-2.5"
+              className="flex shrink-0 items-center justify-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted sm:w-64 lg:w-9 lg:px-2 min-[1800px]:w-64 min-[1800px]:px-2.5"
             >
               <Search className="size-4 shrink-0" aria-hidden />
-              <span className="hidden flex-1 text-left sm:inline lg:hidden xl:inline">Search…</span>
-              <kbd className="hidden rounded border border-border px-1.5 text-[0.65rem] sm:inline xl:inline lg:hidden">
+              <span className="hidden flex-1 text-left sm:inline lg:hidden min-[1800px]:inline">Search…</span>
+              <kbd className="hidden rounded border border-border px-1.5 text-[0.65rem] sm:inline min-[1800px]:inline lg:hidden">
                 {paletteShortcutHint()}
               </kbd>
             </button>

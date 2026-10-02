@@ -1,5 +1,5 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useNavigate, useParams, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   CircleCheck,
@@ -139,13 +139,32 @@ function ProjectDetail() {
       return
     }
     setTabState(t)
-    const url = new URL(window.location.href)
-    if (t === 'overview') url.searchParams.delete('tab')
-    else url.searchParams.set('tab', t)
-    url.searchParams.delete('invoice')
-    url.searchParams.delete('focus')
-    window.history.replaceState(window.history.state, '', url)
+    // Through the router, so a later link to this page with another ?tab=
+    // is a change it notices (replaceState went round it, and the page kept
+    // its first tab until a reload).
+    void navigate({
+      to: '.',
+      search: (prev: Record<string, unknown>) => {
+        const out = { ...prev }
+        delete out.invoice
+        delete out.focus
+        if (t === 'overview') delete out.tab
+        else out.tab = t
+        return out
+      },
+      replace: true,
+    } as never)
   }
+  // A link to this same page with another ?tab= (a notification, the due
+  // chip, a journey button) opens that tab now, not after a reload.
+  const searchStr = useRouterState({ select: (st) => st.location.searchStr })
+  useEffect(() => {
+    const q = new URLSearchParams(searchStr)
+    const wanted = q.get('tab')
+    setTabState(PROJECT_TABS.some((t) => t.value === wanted && t.value !== 'quotation') ? (wanted as Tab) : 'overview')
+    if (q.get('invoice') === 'next') setInvoiceNext(true)
+    if (q.get('focus') === 'assign') setFocusAssign(true)
+  }, [searchStr])
   /** Where each step of the journey is done. */
   const go = (key: JourneyKey) => {
     if (key === 'quotation') return setTab('quotation')

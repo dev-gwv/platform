@@ -36,6 +36,9 @@ import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { todayInIndia } from '@/shared/ui/days-left'
+import { greeting, todayLine } from '@/features/dashboard/greeting'
+import { attentionLine, collectLine, shootsWeekLine } from '@/features/dashboard/tiles'
 import { seesStudioWork } from '@ipc/permissions'
 
 export function DashboardPage() {
@@ -95,7 +98,7 @@ function StudioCommandCenter() {
     enabled: !!session && access.hasModule('projects'),
     staleTime: 30_000,
   })
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayInIndia()
   const tracked = track(trackingRows.data ?? [], today)
   const totals = summary(tracked)
 
@@ -147,7 +150,12 @@ function StudioCommandCenter() {
   return (
     <>
       <PageHeader
-        title={`Welcome, ${session?.display_name ?? ''}`}
+        title={
+          <>
+            <span className="block text-xs font-semibold tracking-wider text-muted-foreground">{todayLine()}</span>
+            {greeting(session?.display_name)}
+          </>
+        }
         description={settingUp ? "Let's set up your studio." : 'Your studio at a glance.'}
         actions={
           !settingUp &&
@@ -174,17 +182,32 @@ function StudioCommandCenter() {
           needs a hand, what is still to come in. Everything else is one
           click away in the menu. */}
       <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <Tile icon={Activity} value={activeProjects} label="Active projects" tone="primary" to="/projects" />
+        <Tile
+          icon={Activity}
+          value={activeProjects}
+          label="Active projects"
+          hint={access.hasModule('projects') ? shootsWeekLine(shoots.data ?? [], today) : undefined}
+          tone="primary"
+          to="/projects"
+        />
         <Tile
           icon={AlertTriangle}
           value={totals.attention}
           label="Need attention"
+          hint={attentionLine(totals)}
           tone={totals.attention > 0 ? 'danger' : 'success'}
           to="/project-tracking"
           search={{ tab: 'attention' }}
         />
         {access.hasModule('billing') && (
-          <Tile icon={Receipt} value={formatINR(outstanding)} label="To collect" tone="warning" to="/billing/invoices" />
+          <Tile
+            icon={Receipt}
+            value={formatINR(outstanding)}
+            label="To collect"
+            hint={collectLine(invoices.data?.items ?? [], today)}
+            tone="warning"
+            to="/billing/invoices"
+          />
         )}
       </div>
 
@@ -213,7 +236,7 @@ function Tile({
   icon: typeof Activity
   value: number | string
   label: string
-  hint?: string
+  hint?: string | undefined
   tone: 'primary' | 'danger' | 'warning' | 'success'
   to?: string
   /** Opens the target on a tab, e.g. { tab: 'overdue' }. */
@@ -317,7 +340,7 @@ function NeedsAttention({ projects }: { projects: readonly TrackedProject[] }) {
 
 /** The next week of shoot days, so nobody finds out on the morning. */
 function UpcomingShoots({ shoots }: { shoots: readonly ShootListItem[] }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayInIndia()
   const horizon = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
   const soon = shoots
     .filter((s) => s.shoot_date && s.shoot_date >= today && s.shoot_date <= horizon)

@@ -5,6 +5,7 @@ import { subscriptionStatus } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
+import { planLine } from './plan-line'
 
 /**
  * The studio's plan, pinned at the foot of the sidebar: which plan, how long
@@ -28,12 +29,7 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
   const ended = left != null && left < 0
   const soon = left != null && left >= 0 && left <= 7
   const title = !s ? 'Your plan' : trial ? 'Free trial' : (s.plan_name ?? 'Your plan')
-  const line =
-    left == null
-      ? 'See plans'
-      : ended
-        ? 'Ended \u00b7 renew to keep going'
-        : `${left} day${left === 1 ? '' : 's'} left`
+  const line = planLine(left, s?.access_until)
   const cta = trial || ended || !s?.plan_name ? 'Upgrade' : 'Manage'
 
   if (collapsed) {
