@@ -14,7 +14,16 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { STAGE_ORDER } from '@/features/projects/deliverable-stage'
 import { STEP_LABEL, STEP_TONE, TONES, TONE_CLASSES, stagesIn, toneOf, type StageTone } from '@/features/projects/stages'
-import { useAddStage, useDeleteStage, useDeliverableStagesQuery, useUpdateStage } from '@/features/projects/stages-api'
+import {
+  useAddStage,
+  useDeleteStage,
+  useDeliverableStagesQuery,
+  useDeliveryFlow,
+  useSetDeliveryFlow,
+  useUpdateStage,
+} from '@/features/projects/stages-api'
+import { useAuth } from '@/shared/auth/AuthProvider'
+import type { DeliveryFlow } from '@/features/projects/stages'
 
 export function DeliveryStagesPage() {
   return (
@@ -53,13 +62,66 @@ function Stages() {
       ) : q.isError ? (
         <ErrorState onRetry={() => void q.refetch()} />
       ) : (
+        <>
+        <FlowCard />
         <div className="grid gap-4 lg:grid-cols-2">
           {(STAGE_ORDER as readonly StepKey[]).map((step) => (
             <StepCard key={step} step={step} stages={stagesIn(stages, step)} canEdit={canEdit} />
           ))}
         </div>
+        </>
       )}
     </>
+  )
+}
+
+const FLOWS: { key: DeliveryFlow; title: string; line: string }[] = [
+  { key: 'full', title: 'Check before it goes', line: 'A hand-in waits in Review until a manager approves it.' },
+  { key: 'simple', title: 'Handed in is delivered', line: 'No review step: the board reads To do · Editing · Delivered.' },
+]
+
+/**
+ * How finished work reaches Delivered (0234). Only the owner switches it;
+ * switching never removes a stage, and work already in review stays there.
+ */
+function FlowCard() {
+  const flow = useDeliveryFlow()
+  const set = useSetDeliveryFlow()
+  const isOwner = !!useAuth().session?.is_owner
+  return (
+    <div className="mb-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="How work is delivered">
+      {FLOWS.map((f) => {
+        const on = flow === f.key
+        return (
+          <button
+            key={f.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            disabled={!isOwner || set.isPending || on}
+            onClick={() => set.mutate(f.key)}
+            className={cn(
+              'flex items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+              on ? 'border-success bg-success/10' : 'border-border bg-card hover:border-primary/50',
+              !isOwner && !on && 'opacity-60',
+            )}
+          >
+            <span
+              className={cn(
+                'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                on ? 'border-success bg-success text-success-foreground' : 'border-input',
+              )}
+            >
+              {on ? <Check className="h-3 w-3" /> : null}
+            </span>
+            <span>
+              <span className="block text-sm font-semibold">{f.title}</span>
+              <span className="block text-xs text-muted-foreground">{f.line}</span>
+            </span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

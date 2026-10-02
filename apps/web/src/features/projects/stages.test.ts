@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DeliverableStage } from '@ipc/contracts'
-import { actionLabel, forwardPath, movedLabel, nextPoint, stageName, stageTone, toneOf, wantsLinkAt } from './stages'
+import { actionLabel, allPoints, forwardPath, movedLabel, nextPoint, stageName, stageTone, toneOf, wantsLinkAt } from './stages'
 
 const st = (code: string, label: string, stage: DeliverableStage['stage'], sort: number, color = 'slate', team = true): DeliverableStage => ({
   id: `00000000-0000-4000-8000-${String(sort).padStart(12, '0')}`,
@@ -86,5 +86,19 @@ describe('the one-tap road forward', () => {
     const custom = forwardPath([st('grading', 'Colour grading', 'in_progress', 5, 'violet')])
     expect(custom.map((p) => p.code ?? p.status)).toEqual(['pending', 'in_progress', 'grading', 'review', 'completed'])
     expect(actionLabel(custom[2]!)).toBe('Colour grading')
+  })
+})
+
+describe('Simple delivery (0234)', () => {
+  it('goes from Editing straight to Delivered', () => {
+    const next = nextPoint({ status: 'in_progress', custom_status_code: null }, DEFAULTS, 'simple')
+    expect(next && actionLabel(next)).toBe('Mark delivered')
+    expect(forwardPath(DEFAULTS, 'simple').map((p) => p.status)).not.toContain('review')
+  })
+
+  it('keeps walking work left in review, and offers no Review to move to', () => {
+    const next = nextPoint({ status: 'review', custom_status_code: 'with_client' }, DEFAULTS, 'simple')
+    expect(next?.status).toBe('review')
+    expect(allPoints(DEFAULTS, 'simple').map((g) => g.step)).toEqual(['pending', 'in_progress', 'completed'])
   })
 })

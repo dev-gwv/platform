@@ -29,6 +29,8 @@ export const companyProfile = z.object({
   /** Lovable parity: footer note on client documents + separate invoice logo. */
   document_footer_note: z.string().nullable().default(null),
   invoice_logo_url: z.string().nullable().default(null),
+  /** full: hand-ins go to review; simple: a hand-in is Delivered as it lands (0234). */
+  delivery_flow: z.enum(['full', 'simple']).default('full'),
 })
 export type CompanyProfile = z.infer<typeof companyProfile>
 
@@ -63,6 +65,7 @@ export const updateCompanyRequest = z.object({
   invoice_default_terms: z.string().trim().max(4000).nullish(),
   document_footer_note: z.string().trim().max(2000).nullish(),
   invoice_logo_url: z.string().trim().max(500).nullish(),
+  delivery_flow: z.enum(['full', 'simple']).optional(),
 })
 export type UpdateCompanyRequest = z.infer<typeof updateCompanyRequest>
 

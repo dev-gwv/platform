@@ -54,6 +54,19 @@ export function toneOf(color: string | null | undefined, fallback: StageTone = '
   return LEGACY_TONE[color] ?? fallback
 }
 
+/**
+ * How finished work reaches Delivered (0234). Full: a hand-in goes to review.
+ * Simple: a hand-in is Delivered as it lands, so there is no Review step to
+ * walk or move to -- the board reads To do · Editing · Delivered.
+ */
+export type DeliveryFlow = 'full' | 'simple'
+
+/** The steps a studio's work moves through. */
+export function stepsFor(flow: DeliveryFlow = 'full'): StepKey[] {
+  const all = STAGE_ORDER as readonly StepKey[]
+  return flow === 'simple' ? all.filter((s) => s !== 'review') : [...all]
+}
+
 type Placed = { status: string; custom_status_code?: string | null | undefined }
 
 /** A step's named stages, in the studio's order. */
@@ -101,9 +114,9 @@ const BACKWARD = new Set(['changes_requested'])
  * in order (skipping the ones that mean "sent back"), then Delivered. A step
  * with named stages is walked through them; one without is a single stop.
  */
-export function forwardPath(stages: readonly DeliverableStage[]): StagePoint[] {
+export function forwardPath(stages: readonly DeliverableStage[], flow: DeliveryFlow = 'full'): StagePoint[] {
   const path: StagePoint[] = []
-  for (const step of STAGE_ORDER as readonly StepKey[]) {
+  for (const step of stepsFor(flow)) {
     const named = stagesIn(stages, step).filter((s) => !BACKWARD.has(s.code))
     const plain: StagePoint = { status: step, code: null, label: STEP_LABEL[step], tone: STEP_TONE[step], team_allowed: true }
     // Editing is always a stop of its own: it is where the work happens.
@@ -117,10 +130,11 @@ export function forwardPath(stages: readonly DeliverableStage[]): StagePoint[] {
 }
 
 /** Where the one-tap button takes it next, or null once it is delivered or dropped. */
-export function nextPoint(d: Placed, stages: readonly DeliverableStage[]): StagePoint | null {
+export function nextPoint(d: Placed, stages: readonly DeliverableStage[], flow: DeliveryFlow = 'full'): StagePoint | null {
   const step = stageOf(d.status)
   if (step === 'cancelled' || step === 'completed') return null
-  const path = forwardPath(stages)
+  // Work left in review when a studio went Simple still moves on: to Delivered.
+  const path = forwardPath(stages, step === 'review' ? 'full' : flow)
   const code = d.custom_status_code ?? null
   let at = path.findIndex((p) => p.status === step && p.code === code)
   // On a stage that is not on the road (sent back, or since removed): carry
@@ -171,8 +185,8 @@ export function wantsLinkAt(p: Pick<StagePoint, 'status' | 'code'>): boolean {
 }
 
 /** Everywhere it can be moved to, grouped by step, for the "Move to" list. */
-export function allPoints(stages: readonly DeliverableStage[]): { step: StepKey; points: StagePoint[] }[] {
-  return (STAGE_ORDER as readonly StepKey[]).map((step) => ({
+export function allPoints(stages: readonly DeliverableStage[], flow: DeliveryFlow = 'full'): { step: StepKey; points: StagePoint[] }[] {
+  return stepsFor(flow).map((step) => ({
     step,
     points: [
       { status: step, code: null, label: STEP_LABEL[step], tone: STEP_TONE[step], team_allowed: true },

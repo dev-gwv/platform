@@ -29,7 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { STAGE_LABEL, dueLabel, fromLabel, isLate, previousStage, relativeDue, stageOf } from './deliverable-stage'
 import { TONE_CLASSES, actionLabel, allPoints, movedLabel, nextPoint, wantsLinkAt } from './stages'
-import { useDeliverableStages } from './stages-api'
+import { useDeliverableStages, useDeliveryFlow } from './stages-api'
 import { deliverableKind, type DeliverableKind } from './deliverable-kind'
 import { DELIVERABLE_ICON } from '@/shared/ui/icon-tile'
 import { STAGE_STYLE, StageStepper } from './StageStepper'
@@ -87,7 +87,8 @@ export function NextStageButton({
 }) {
   const move = useSetDeliverableStage()
   const stages = useDeliverableStages()
-  const next = nextPoint({ status, custom_status_code: code }, stages)
+  const flow = useDeliveryFlow()
+  const next = nextPoint({ status, custom_status_code: code }, stages, flow)
   const [asking, setAsking] = useState(false)
   const [url, setUrl] = useState(link ?? '')
   // A pasted link survives a refresh or a closed tab until the stage moves.
@@ -181,6 +182,7 @@ export function MoveToMenu({
 }) {
   const move = useSetDeliverableStage()
   const stages = useDeliverableStages()
+  const flow = useDeliveryFlow()
   const [open, setOpen] = useState(false)
   const current = stageOf(d.status)
   return (
@@ -196,7 +198,7 @@ export function MoveToMenu({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1.5" onClick={(e) => e.stopPropagation()}>
         <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Move to</p>
-        {allPoints(stages).map(({ step, points }) => (
+        {allPoints(stages, flow).map(({ step, points }) => (
           <div key={step} className="border-t border-border py-1 first:border-t-0">
             {points.map((p) => {
               const here = current === p.status && (d.custom_status_code ?? null) === p.code

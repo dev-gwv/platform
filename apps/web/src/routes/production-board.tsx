@@ -20,6 +20,7 @@ import { todayIso } from '@/features/projects/deliverable-stage'
 import { useProductionBoard } from '@/features/board/api'
 import { FOCI, applyFilters, focusCounts, lanesFor, type Focus } from '@/features/board/board-model'
 import { StagesView } from '@/features/board/StagesView'
+import { useDeliveryFlow } from '@/features/projects/stages-api'
 import { PeopleView } from '@/features/board/PeopleView'
 import { TaskBoard } from '@/features/board/TaskBoard'
 import { BulkBar } from '@/features/board/BulkBar'
@@ -70,7 +71,9 @@ function Board() {
   const items = data?.items ?? []
   const stages = data?.stages ?? []
   const people = data?.people ?? []
-  const lanes = useMemo(() => lanesFor(stages), [stages])
+  const flow = useDeliveryFlow()
+  const inReview = useMemo(() => items.some((d) => d.status === 'review'), [items])
+  const lanes = useMemo(() => lanesFor(stages, flow, inReview), [stages, flow, inReview])
 
   // The figures count what the other filters allow, not the figure's own
   // filter -- tapping "Late" must not turn the other three to zero.
@@ -111,8 +114,8 @@ function Board() {
       ) : (
         <>
           {view !== 'tasks' && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {FOCI.map((f) => (
+            <div className={cn('grid grid-cols-2 gap-3', flow === 'simple' && !inReview ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
+              {FOCI.filter((f) => f.key !== 'review' || flow !== 'simple' || inReview).map((f) => (
                 <button
                   key={f.key}
                   type="button"

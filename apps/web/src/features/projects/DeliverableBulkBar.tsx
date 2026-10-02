@@ -5,7 +5,9 @@ import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { useBulkDeliverables } from '@/features/board/api'
 import { GiveWorkDialog } from './GiveWorkDialog'
-import { STAGE_LABEL, STAGE_ORDER } from './deliverable-stage'
+import { STAGE_LABEL, type STAGE_ORDER } from './deliverable-stage'
+import { stepsFor } from './stages'
+import { useDeliveryFlow } from './stages-api'
 
 /**
  * Everything ticked on the Work tab, changed at once: give them to an editor
@@ -13,6 +15,7 @@ import { STAGE_LABEL, STAGE_ORDER } from './deliverable-stage'
  */
 export function DeliverableBulkBar({ picked, onDone }: { picked: readonly Deliverable[]; onDone: () => void }) {
   const bulk = useBulkDeliverables()
+  const flow = useDeliveryFlow()
   const [due, setDue] = useState('')
   const [giving, setGiving] = useState(false)
   const ids = picked.map((d) => d.id)
@@ -51,7 +54,7 @@ export function DeliverableBulkBar({ picked, onDone }: { picked: readonly Delive
         }}
       >
         <option value="">Move to…</option>
-        {STAGE_ORDER.map((s) => (
+        {stepsFor(flow).map((s) => (
           <option key={s} value={s}>
             {STAGE_LABEL[s]}
           </option>

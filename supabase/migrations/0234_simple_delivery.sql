@@ -154,3 +154,9 @@ begin
   return new;
 end;
 $$;
+
+-- It also follows a corrected link, not only a change of status.
+drop trigger if exists team_work_submissions_follow on team_work_submissions;
+create trigger team_work_submissions_follow
+  after insert or update of status, submission_link on team_work_submissions
+  for each row execute function team_work_submissions_follow();

@@ -56,6 +56,7 @@ const COMPANY_COLUMNS = [
   'invoice_default_terms',
   'document_footer_note',
   'invoice_logo_url',
+  'delivery_flow',
 ]
 
 /** The profile fields that live on users (every member can read them). */

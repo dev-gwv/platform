@@ -12,6 +12,7 @@ import { cn } from '@/shared/ui/cn'
 import { useMyTasks } from '@/features/tasks/api'
 import { useMyDeliverables } from '@/features/projects/api'
 import { revisionHint, submittedMessage } from '@/features/projects/revisions'
+import { useDeliveryFlow } from '@/features/projects/stages-api'
 
 function useSubmitWork() {
   const qc = useQueryClient()
@@ -85,6 +86,8 @@ export function SubmitWorkDialog({
   const { data: myTasks } = useMyTasks()
   const { data: myDeliverables } = useMyDeliverables()
   const [open, setOpen] = useState(false)
+  // A Simple studio delivers a hand-in as it lands (0234): no reviewer to wait on.
+  const simple = useDeliveryFlow() === 'simple'
   const [task, setTask] = useState(taskId ?? '')
   const [deliverable, setDeliverable] = useState(deliverableId ?? '')
   const [link, setLink] = useState(submission?.submission_link ?? '')
@@ -156,7 +159,8 @@ export function SubmitWorkDialog({
       }
       draft.clear()
       setOpen(false)
-      if (!isEdit && deliverable && reviewer) toast.success(`Sent to ${reviewer.split(' ')[0]} for review`)
+      if (!isEdit && deliverable && simple) toast.success('Handed in and delivered')
+      else if (!isEdit && deliverable && reviewer) toast.success(`Sent to ${reviewer.split(' ')[0]} for review`)
       if (!isEdit) {
         setTask(taskId ?? '')
         setDeliverable(deliverableId ?? '')
@@ -187,7 +191,9 @@ export function SubmitWorkDialog({
         description={
           revision
             ? revisionHint(revision.lastVersion)
-            : reviewer
+            : simple
+              ? 'Paste the link to the work. It is delivered as soon as you hand it in.'
+              : reviewer
               ? `Paste the link to the work. ${reviewer.split(' ')[0]} will look at it.`
               : 'Paste the link to the work for review.'
         }
@@ -215,7 +221,7 @@ export function SubmitWorkDialog({
               </Select>
               {deliverable && (
                 <p className="text-xs text-muted-foreground">
-                  It moves to Review, and {reviewer ? reviewer.split(' ')[0] : 'whoever gave it to you'} is told.
+                  It moves to {simple ? 'Delivered' : 'Review'}, and {reviewer ? reviewer.split(' ')[0] : 'whoever gave it to you'} is told.
                 </p>
               )}
             </div>
@@ -291,7 +297,7 @@ export function SubmitWorkDialog({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Send for review'}
+              {busy ? 'Saving…' : isEdit ? 'Save changes' : simple ? 'Hand in' : 'Send for review'}
             </Button>
           </div>
         </form>
