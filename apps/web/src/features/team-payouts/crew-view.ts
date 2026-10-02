@@ -1,6 +1,6 @@
 import { crewBucketOf, lineBalance } from '@ipc/domain'
 import type { CrewOwed, CrewPayoutRow } from '@ipc/contracts'
-import { formatINR } from '@/shared/ui/format'
+import { amountsHidden, screenINR } from '@/shared/money/hide'
 
 /** Team payouts' three views: what is owed now, what is promised, everything. */
 export type CrewView = 'owed' | 'upcoming' | 'all'
@@ -35,34 +35,38 @@ export function crewRowsFor(rows: readonly CrewPayoutRow[], view: CrewView, toda
   })
 }
 
-/** One row's money in words: "₹6,000 left of ₹10,000", "₹3,000 paid in advance", "Paid". */
-export function crewRowLine(r: Pick<CrewPayoutRow, 'amount' | 'paid' | 'shoot_date' | 'stands'>, today: string): string {
-  if (!r.stands) return `${formatINR(r.paid)} paid · booking released`
+/**
+ * One row's money in words: "₹6,000 left of ₹10,000", "₹3,000 paid in advance", "Paid".
+ * Masked while amounts are hidden; pass `hidden = false` for a CSV export.
+ */
+export function crewRowLine(r: Pick<CrewPayoutRow, 'amount' | 'paid' | 'shoot_date' | 'stands'>, today: string, hidden: boolean = amountsHidden()): string {
+  const money = (n: number) => screenINR(n, hidden)
+  if (!r.stands) return `${money(r.paid)} paid · booking released`
   if (r.amount <= 0) return 'No payout set'
   const left = lineBalance(r)
   const upcoming = crewBucketOf(r.shoot_date, today) === 'upcoming'
-  if (left <= 0.001) return upcoming ? `${formatINR(r.paid)} paid in advance` : 'Paid'
+  if (left <= 0.001) return upcoming ? `${money(r.paid)} paid in advance` : 'Paid'
   if (r.paid > 0) {
     return upcoming
-      ? `${formatINR(r.paid)} paid in advance · ${formatINR(left)} after the shoot`
-      : `${formatINR(left)} left of ${formatINR(r.amount)}`
+      ? `${money(r.paid)} paid in advance · ${money(left)} after the shoot`
+      : `${money(left)} left of ${money(r.amount)}`
   }
-  return upcoming ? `${formatINR(r.amount)} after the shoot` : `${formatINR(r.amount)} owed`
+  return upcoming ? `${money(r.amount)} after the shoot` : `${money(r.amount)} owed`
 }
 
 /** The dashboard's "Who you owe" sentence. */
 export function whoYouOweLine(o: Pick<CrewOwed, 'owed_now' | 'people'>): string {
   if (o.owed_now <= 0) return 'All crew paid for shoots already done'
   const n = o.people.length
-  return `${formatINR(o.owed_now)} to ${n} ${n === 1 ? 'person' : 'people'} for shoots already done`
+  return `${screenINR(o.owed_now)} to ${n} ${n === 1 ? 'person' : 'people'} for shoots already done`
 }
 
 /** My payouts' headline, in the person's words. */
 export function myPayoutsLine(m: { owed_now: number; upcoming: number; paid: number; paid_ahead: number }): string {
   const parts: string[] = []
-  if (m.owed_now > 0) parts.push(`${formatINR(m.owed_now)} due to you for shoots already done`)
-  if (m.upcoming > 0) parts.push(`${formatINR(m.upcoming)} for shoots coming up`)
+  if (m.owed_now > 0) parts.push(`${screenINR(m.owed_now)} due to you for shoots already done`)
+  if (m.upcoming > 0) parts.push(`${screenINR(m.upcoming)} for shoots coming up`)
   if (parts.length === 0) parts.push('You have been paid for every shoot so far')
-  if (m.paid > 0) parts.push(`${formatINR(m.paid)} paid${m.paid_ahead > 0 ? `, ${formatINR(m.paid_ahead)} of it in advance` : ''}`)
+  if (m.paid > 0) parts.push(`${screenINR(m.paid)} paid${m.paid_ahead > 0 ? `, ${screenINR(m.paid_ahead)} of it in advance` : ''}`)
   return `${parts.join(' · ')}.`
 }

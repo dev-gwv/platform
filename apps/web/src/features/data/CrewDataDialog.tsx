@@ -10,7 +10,7 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useStorageLocations } from './api'
 import { defaultLabel } from './stage'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useCanPay, usePaySlot, useProjectPayouts } from '@/features/team-payouts/pay'
 
 /**
@@ -31,6 +31,7 @@ export function CrewDataDialog({
   slots: readonly TeamSlot[]
   onClose: () => void
 }) {
+  const inr = useINR()
   const { session } = useAuth()
   const qc = useQueryClient()
   const locations = useStorageLocations()
@@ -143,7 +144,7 @@ export function CrewDataDialog({
                     <button
                       type="button"
                       aria-pressed={!!pay[s.id]}
-                      aria-label={`Paid ${s.user_name ?? 'them'} ${formatINR(owed(s.id))}`}
+                      aria-label={`Paid ${s.user_name ?? 'them'} ${inr(owed(s.id))}`}
                       onClick={() => setPay((p) => ({ ...p, [s.id]: !p[s.id] }))}
                       className={cn(
                         'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
@@ -151,7 +152,7 @@ export function CrewDataDialog({
                       )}
                     >
                       {pay[s.id] ? '✓ Paid ' : 'Pay '}
-                      {formatINR(owed(s.id))}
+                      {inr(owed(s.id))}
                     </button>
                   )}
                 </li>

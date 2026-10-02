@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useRewardSubmissions, useUpdateSubmissionStatus } from './api'
 
 const who = (s: ReferralSubmission) => s.referring_client_name ?? s.referrer_name ?? 'A client'
@@ -17,6 +17,7 @@ const whom = (s: ReferralSubmission) => s.referred_name ?? s.client_name
  * given, starting from the campaign's reward, so the total is real money.
  */
 export function RewardsBoard({ campaigns }: { campaigns: readonly ReferralCampaign[] }) {
+  const inr = useINR()
   const due = useRewardSubmissions('due')
   const given = useRewardSubmissions('given')
   const dueRows = due.data?.items ?? []
@@ -28,7 +29,7 @@ export function RewardsBoard({ campaigns }: { campaigns: readonly ReferralCampai
     <div className="flex flex-col gap-3">
       <p className="text-sm">
         {dueRows.length === 0 ? 'No rewards waiting.' : `${dueRows.length} ${dueRows.length === 1 ? 'reward is' : 'rewards are'} waiting to be given.`}{' '}
-        {givenRows.length > 0 && `${formatINR(givenTotal)} given to ${givenRows.length} ${givenRows.length === 1 ? 'client' : 'clients'} so far.`}
+        {givenRows.length > 0 && `${inr(givenTotal)} given to ${givenRows.length} ${givenRows.length === 1 ? 'client' : 'clients'} so far.`}
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         <Column title="To give" count={dueRows.length} tone="amber">
@@ -49,7 +50,7 @@ export function RewardsBoard({ campaigns }: { campaigns: readonly ReferralCampai
                   <span className="font-medium">{who(s)}</span>
                   <span className="text-muted-foreground"> · for {whom(s)}</span>
                 </span>
-                <span className="tabular-nums">{s.reward_amount ? formatINR(s.reward_amount) : '—'}</span>
+                <span className="tabular-nums">{s.reward_amount ? inr(s.reward_amount) : '—'}</span>
               </li>
             ))
           )}

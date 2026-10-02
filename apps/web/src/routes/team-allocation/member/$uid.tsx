@@ -9,7 +9,8 @@ import { MetricCard } from '@/shared/ui/metric-card'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useMembers, useSlots } from '@/features/allocation/api'
@@ -125,6 +126,7 @@ function List({
   menuFor: ReturnType<typeof useSlotActions>['menuFor']
   showIcs?: boolean
 }) {
+  const inr = useINR()
   return (
     <div>
       <h2 className="mb-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</h2>
@@ -161,7 +163,7 @@ function List({
                   </p>
                 </div>
                 {canPlan && pay != null && s.cost_status !== 'not_decided' && (
-                  <span className="text-sm tabular-nums text-muted-foreground">{formatINR(pay)}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">{inr(pay)}</span>
                 )}
                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', STATUS_TONE[s.status])}>{humanize(s.status)}</span>
                 {showIcs && (

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { computeInvoice, type GstSlab } from '@ipc/domain'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useCreateInvoice } from './api'
 import { emptyInvoiceForm, type InvoiceFormValues } from './InvoiceForm'
 import { InvoiceEditor } from './InvoiceEditor'
@@ -55,6 +55,7 @@ export function NewInvoiceDialog({
    */
   next?: { label: string; onClick: () => void; auto?: boolean } | undefined
 }) {
+  const inr = useINR()
   const create = useCreateInvoice()
   const navigate = useNavigate()
   return (
@@ -77,7 +78,7 @@ export function NewInvoiceDialog({
             ).total
             toast.success(
               received > 0
-                ? `${made.invoice_number} saved. ${formatINR(received)} received, ${formatINR(Math.max(0, total - received))} to collect. Now book the team.`
+                ? `${made.invoice_number} saved. ${inr(received)} received, ${inr(Math.max(0, total - received))} to collect. Now book the team.`
                 : `${made.invoice_number} saved. Now book the team for the shoots.`,
             )
             onClose()

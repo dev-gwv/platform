@@ -15,7 +15,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { formatINR } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { PayToCard } from '@/features/team/PayToCard'
 import {
   fetchPayrollExport,
@@ -58,6 +58,7 @@ const MODES = ['UPI', 'Bank transfer', 'Cash', 'Cheque'] as const
 const days = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 
 function Payroll() {
+  const inr = useINR()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -160,9 +161,9 @@ function Payroll() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <MetricCard label="Net pay" value={formatINR(totals.net)} tone="muted" hint={label} />
-              <MetricCard label="Paid" value={formatINR(totals.paid)} tone="success" />
-              <MetricCard label="Still to pay" value={formatINR(totals.pending)} tone={totals.pending > 0 ? 'warning' : 'muted'} />
+              <MetricCard label="Net pay" value={<Money value={totals.net} />} tone="muted" hint={label} />
+              <MetricCard label="Paid" value={<Money value={totals.paid} />} tone="success" />
+              <MetricCard label="Still to pay" value={<Money value={totals.pending} />} tone={totals.pending > 0 ? 'warning' : 'muted'} />
               <MetricCard label="People" value={String(totals.people)} tone="muted" />
             </div>
 
@@ -213,21 +214,21 @@ function Payroll() {
                               </p>
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {formatINR(l.prorated_base)}
+                              {inr(l.prorated_base)}
                               {l.prorated_base !== l.base_amount && (
-                                <p className="text-xs text-muted-foreground">of {formatINR(l.base_amount)}</p>
+                                <p className="text-xs text-muted-foreground">of {inr(l.base_amount)}</p>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums">{l.deduction > 0 ? `−${formatINR(l.deduction)}` : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{l.deduction > 0 ? `−${inr(l.deduction)}` : '—'}</td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {l.additions > 0 ? `+${formatINR(l.additions)}` : '—'}
+                              {l.additions > 0 ? `+${inr(l.additions)}` : '—'}
                               {l.additions_note && <p className="text-xs text-muted-foreground">{l.additions_note}</p>}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {l.other_deductions > 0 ? `−${formatINR(l.other_deductions)}` : '—'}
+                              {l.other_deductions > 0 ? `−${inr(l.other_deductions)}` : '—'}
                               {l.other_deductions_note && <p className="text-xs text-muted-foreground">{l.other_deductions_note}</p>}
                             </td>
-                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(l.net_pay)}</td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{inr(l.net_pay)}</td>
                             <td className="px-3 py-2">
                               <div className="flex items-center justify-end gap-1.5">
                                 {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
@@ -283,9 +284,9 @@ function Payroll() {
                     <span className="min-w-0 flex-1 font-medium">{f.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {f.shoots} {f.shoots === 1 ? 'shoot' : 'shoots'}
-                      {f.paid > 0 && ` · ${formatINR(f.paid)} paid`}
+                      {f.paid > 0 && ` · ${inr(f.paid)} paid`}
                     </span>
-                    <span className="font-semibold tabular-nums">{formatINR(f.due)}</span>
+                    <span className="font-semibold tabular-nums">{inr(f.due)}</span>
                   </li>
                 ))}
               </ul>
@@ -298,7 +299,7 @@ function Payroll() {
         <Dialog open onOpenChange={(o) => !o && setConfirmApprove(false)}>
           <DialogContent
             title={`Approve ${label}?`}
-            description={`${lines.length} ${lines.length === 1 ? 'person' : 'people'}, ${formatINR(totals.net)} in all. After this the numbers are locked and each person can see their payslip.`}
+            description={`${lines.length} ${lines.length === 1 ? 'person' : 'people'}, ${inr(totals.net)} in all. After this the numbers are locked and each person can see their payslip.`}
           >
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmApprove(false)}>
@@ -330,6 +331,7 @@ function Payroll() {
 
 /** A bonus or allowance, and an advance taken back, each with a note; net pay updates as you type. */
 function AdjustRow({ line, onDone }: { line: PayrollLine; onDone: () => void }) {
+  const inr = useINR()
   const update = useUpdatePayrollLine()
   const [add, setAdd] = useState(line.additions ? String(line.additions) : '')
   const [addNote, setAddNote] = useState(line.additions_note ?? '')
@@ -380,7 +382,7 @@ function AdjustRow({ line, onDone }: { line: PayrollLine; onDone: () => void }) 
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm">
-          Net pay <span className="font-semibold tabular-nums">{formatINR(net)}</span>
+          Net pay <span className="font-semibold tabular-nums">{inr(net)}</span>
           {missingNote && <span className="ml-2 text-xs text-destructive">Add a note for each amount.</span>}
         </p>
         <Button type="submit" size="sm" disabled={update.isPending || missingNote}>
@@ -404,6 +406,7 @@ function PayDialog({
   amount: number
   onClose: () => void
 }) {
+  const inr = useINR()
   const pay = useMarkPayrollPaid()
   const [mode, setMode] = useState<string>(MODES[0])
   const [reference, setReference] = useState('')
@@ -412,7 +415,7 @@ function PayDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title={line ? `Pay ${line.name}` : `Mark ${count} ${count === 1 ? 'person' : 'people'} paid`}
-        description={`${formatINR(amount)}${line ? '' : ' in all'}. Each person is told their payslip is ready.`}
+        description={`${inr(amount)}${line ? '' : ' in all'}. Each person is told their payslip is ready.`}
       >
         <div className="flex flex-col gap-3">
           {line && <PayToCard userId={line.user_id} />}
@@ -442,7 +445,7 @@ function PayDialog({
                 { runId, body: { ...(line ? { line_id: line.id } : {}), payment_mode: mode, reference: reference.trim() || null } },
                 {
                   onSuccess: (r) => {
-                    toast.success(`${r.paid_count} marked paid · ${formatINR(r.paid_total)}`)
+                    toast.success(`${r.paid_count} marked paid · ${inr(r.paid_total)}`)
                     onClose()
                   },
                 },

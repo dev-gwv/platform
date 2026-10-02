@@ -16,7 +16,8 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useExpensePage, useDeleteExpense, useExpenseSummary, useMarkReimbursed } from '@/features/financials/api'
 import { usePeriod } from '@/features/financials/use-period'
@@ -81,6 +82,7 @@ function exportCsv(rows: Expense[]) {
  * top, the period as the first filter, and the rest a click away.
  */
 function Expenses() {
+  const inr = useINR()
   const confirm = useConfirm()
   const isMobile = useIsMobile()
   const access = useAccess()
@@ -151,7 +153,7 @@ function Expenses() {
   async function onDelete(e: Expense) {
     const yes = await confirm({
       title: 'Delete this expense?',
-      description: `${e.category ?? 'Uncategorised'} · ${formatINR(e.amount)}. This cannot be undone.`,
+      description: `${e.category ?? 'Uncategorised'} · ${inr(e.amount)}. This cannot be undone.`,
       destructive: true,
       confirmLabel: 'Delete',
     })
@@ -168,7 +170,7 @@ function Expenses() {
 
   const menuFor = (e: Expense) => (
     <RowMenu
-      label={`More for ${e.category ?? 'this expense'} ${formatINR(e.amount)}`}
+      label={`More for ${e.category ?? 'this expense'} ${inr(e.amount)}`}
       items={[
         { label: 'View', icon: <Eye className="size-4" />, onSelect: () => setDetail(e) },
         ...(canEdit ? [{ label: 'Edit', icon: <Pencil className="size-4" />, onSelect: () => setEditing(e) }] : []),
@@ -210,12 +212,12 @@ function Expenses() {
 
       {summary && (
         <div className="mb-4 grid grid-cols-3 gap-3">
-          <MoneyTile icon={Receipt} tone="rose" value={formatINR(summary.this_month)} label="Spent this month" />
-          <MoneyTile icon={TrendingDown} tone="violet" value={formatINR(summary.this_fy)} label="This financial year" />
+          <MoneyTile icon={Receipt} tone="rose" value={<Money value={summary.this_month} />} label="Spent this month" />
+          <MoneyTile icon={TrendingDown} tone="violet" value={<Money value={summary.this_fy} />} label="This financial year" />
           <MoneyTile
             icon={HandCoins}
             tone="amber"
-            value={formatINR(summary.to_reimburse)}
+            value={inr(summary.to_reimburse)}
             label="To reimburse"
             hint={summary.to_reimburse > 0 ? 'Paid by the team, not yet paid back' : 'Nobody is owed'}
             onClick={() => change(() => setView(view === 'to_reimburse' ? 'all' : 'to_reimburse'))}
@@ -286,8 +288,8 @@ function Expenses() {
 
       {summary && (
         <p className="mb-3 text-sm text-muted-foreground">
-          {summary.count} expense{summary.count === 1 ? '' : 's'} · <b className="text-foreground">{formatINR(summary.total)}</b>
-          {summary.tax_total > 0 ? ` · GST ${formatINR(summary.tax_total)}` : ''}
+          {summary.count} expense{summary.count === 1 ? '' : 's'} · <b className="text-foreground">{inr(summary.total)}</b>
+          {summary.tax_total > 0 ? ` · GST ${inr(summary.tax_total)}` : ''}
           {view === 'to_reimburse' ? ' · waiting to be paid back' : ''}
           {isFetching ? ' · Refreshing…' : ''}
         </p>
@@ -321,7 +323,7 @@ function Expenses() {
                   fields={[
                     { label: 'Project', value: e.project_name ?? 'Studio' },
                     { label: 'Date', value: shortDate(e.expense_date) },
-                    { label: 'Amount', value: formatINR(cashOut(e)), strong: true },
+                    { label: 'Amount', value: inr(cashOut(e)), strong: true },
                   ]}
                   actions={menuFor(e)}
                 />
@@ -378,7 +380,7 @@ function Expenses() {
                       </td>
                       <td className="px-3 py-2">{paidChip(e) ?? <span className="text-xs text-muted-foreground">Studio</span>}</td>
                       <td className="px-3 py-2 text-right font-medium tabular-nums">
-                        {formatINR(cashOut(e))}
+                        {inr(cashOut(e))}
                         {e.gst_treatment !== 'non_gst' && <div className="text-xs font-normal text-muted-foreground">{humanize(e.gst_treatment)}</div>}
                       </td>
                       <td className="px-3 py-2 text-right">{menuFor(e)}</td>
@@ -408,7 +410,7 @@ function Expenses() {
       )}
 
       <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
-        <DialogContent title={detail?.category ?? 'Expense'} description={detail ? `${formatINR(cashOut(detail))} · ${shortDate(detail.expense_date)}` : undefined}>
+        <DialogContent title={detail?.category ?? 'Expense'} description={detail ? `${inr(cashOut(detail))} · ${shortDate(detail.expense_date)}` : undefined}>
           {detail && (
             <div className="flex flex-col gap-4">
               <dl className="grid gap-2 text-sm">
@@ -416,7 +418,7 @@ function Expenses() {
                 <Row k="Project" v={detail.project_id ? ((projects ?? []).find((p) => p.id === detail.project_id)?.name ?? 'Project') : 'Studio cost'} />
                 {detail.party_name && <Row k="Vendor" v={detail.party_name} />}
                 <Row k="Paid by" v={detail.paid_by_name ? `${detail.paid_by_name}${detail.reimbursement_status === 'pending' ? ' · to be paid back' : detail.reimbursement_status === 'reimbursed' ? ` · paid back${detail.reimbursed_at ? ` on ${shortDate(detail.reimbursed_at)}` : ''}` : ''}` : 'The studio'} />
-                <Row k="GST" v={`${humanize(detail.gst_treatment)}${detail.gst_rate ? ` · ${detail.gst_rate}%` : ''}${detail.tax_amount ? ` · ${formatINR(detail.tax_amount)} tax` : ''}${detail.reverse_charge ? ' · reverse charge' : ''}`} />
+                <Row k="GST" v={`${humanize(detail.gst_treatment)}${detail.gst_rate ? ` · ${detail.gst_rate}%` : ''}${detail.tax_amount ? ` · ${inr(detail.tax_amount)} tax` : ''}${detail.reverse_charge ? ' · reverse charge' : ''}`} />
                 {detail.invoice_number && <Row k="Vendor invoice" v={detail.invoice_number} />}
               </dl>
               {(() => {
@@ -427,7 +429,7 @@ function Expenses() {
                       <li key={i} className="flex items-center gap-2 px-3 py-1.5">
                         <span className="min-w-0 flex-1 truncate">{l.title || 'Item'}</span>
                         {l.qty != null && <span className="text-xs text-muted-foreground">× {l.qty}</span>}
-                        <span className="tabular-nums">{formatINR(l.amount)}</span>
+                        <span className="tabular-nums">{inr(l.amount)}</span>
                       </li>
                     ))}
                   </ul>

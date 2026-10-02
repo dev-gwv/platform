@@ -8,7 +8,8 @@ import type { DirectoryMember, EmployeeRole } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Avatar } from '@/shared/ui/avatar'
@@ -164,6 +165,7 @@ export function DirectoryTable({
   onDelete?: ((member: DirectoryMember) => void) | undefined
   onManageAccess?: ((member: DirectoryMember) => void) | undefined
 }) {
+  const inr = useINR()
   const isMobile = useIsMobile()
   const selectable = !!selected && !!onToggle && !!onToggleAll
   const allSelected = selectable && rows.length > 0 && rows.every((m) => selected.has(m.user_id))
@@ -201,7 +203,7 @@ export function DirectoryTable({
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusBadge tone={ROLE_TONE[m.role] ?? 'neutral'}>{humanize(m.role)}</StatusBadge>
               <StatusBadge>{engagementLabel(m.engagement_type)}</StatusBadge>
-              {showSalary && m.salary !== null && <StatusBadge>{formatINR(m.salary)}</StatusBadge>}
+              {showSalary && m.salary !== null && <StatusBadge>{inr(m.salary)}</StatusBadge>}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Joined {m.created_at.slice(0, 10)}</p>
             {canManage && (
@@ -302,7 +304,7 @@ export function DirectoryTable({
               </td>
               {showSalary && (
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {m.salary === null ? '—' : formatINR(m.salary)}
+                  {m.salary === null ? '—' : inr(m.salary)}
                 </td>
               )}
               <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">{m.created_at.slice(0, 10)}</td>

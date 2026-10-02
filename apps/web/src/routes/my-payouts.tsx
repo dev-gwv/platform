@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { PAY_STATE_LABEL, payState, useMyPayouts } from '@/features/team-payouts/pay'
 import { myPayoutsLine } from '@/features/team-payouts/crew-view'
 import { todayInIndia } from '@/shared/ui/days-left'
@@ -28,6 +28,7 @@ const day = (iso: string | null) =>
  * answered without a call.
  */
 function MyPayouts() {
+  const inr = useINR()
   const q = useMyPayouts()
   const today = todayInIndia()
   return (
@@ -74,9 +75,9 @@ function MyPayouts() {
                       <p className="text-xs text-muted-foreground">{[day(b.shoot_date), b.role].filter(Boolean).join(' · ')}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold tabular-nums">{b.amount > 0 ? formatINR(b.amount) : 'Not set yet'}</p>
+                      <p className="text-sm font-semibold tabular-nums">{b.amount > 0 ? inr(b.amount) : 'Not set yet'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {state === 'part' ? `${formatINR(b.paid)} paid` : b.amount > 0 && !b.is_final ? 'may change' : ' '}
+                        {state === 'part' ? `${inr(b.paid)} paid` : b.amount > 0 && !b.is_final ? 'may change' : ' '}
                       </p>
                     </div>
                     <span
@@ -116,7 +117,7 @@ function MyPayouts() {
                         {p.payment_reference ? ` · ${p.payment_reference}` : ''}
                       </span>
                       <span className={cn('font-semibold tabular-nums', p.amount < 0 && 'text-destructive')}>
-                        {p.amount < 0 ? `−${formatINR(-p.amount)} (corrected)` : formatINR(p.amount)}
+                        {p.amount < 0 ? `−${inr(-p.amount)} (corrected)` : inr(p.amount)}
                       </span>
                     </div>
                   ))}

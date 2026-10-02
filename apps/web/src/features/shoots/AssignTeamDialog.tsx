@@ -10,7 +10,7 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { Avatar } from '@/shared/ui/avatar'
 import { DurationField } from '@/shared/ui/duration-field'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useBookSlots, useMembers, useReleaseSlot, useSetSlotCost, useSlots, useUpdateSlot } from '@/features/allocation/api'
 import { useUpdateShoot } from './api'
@@ -601,6 +601,7 @@ function RoleRow({
   onRemove: (slot: TeamSlot) => void
   picker: ReactNode
 }) {
+  const inr = useINR()
   const full = role.open === 0
   const counted = Math.min(role.required, Math.min(role.assigned, role.required) + picked.length)
   const pending = !full && picked.length > 0
@@ -638,7 +639,7 @@ function RoleRow({
                   <Avatar name={s.user_name ?? '?'} size="sm" />
                   <span className="min-w-0 flex-1 truncate">
                     {s.user_name ?? 'Someone'}
-                    <span className="text-muted-foreground"> · {payout != null ? formatINR(payout) : 'no payout yet'}</span>
+                    <span className="text-muted-foreground"> · {payout != null ? inr(payout) : 'no payout yet'}</span>
                   </span>
                   <HoursChip window={w} own={false} name={s.user_name ?? 'this person'} />
                   <button
@@ -740,7 +741,7 @@ function RoleRow({
                 </div>
                 {p.why && p.payout && (
                   <p className="pl-9 text-xs text-muted-foreground">
-                    Pay {formatINR(Number(p.payout))} ({p.why})
+                    Pay {inr(Number(p.payout))} ({p.why})
                   </p>
                 )}
                 {w && (

@@ -14,7 +14,7 @@ import { PartyPicker } from '@/features/parties/PartyPicker'
 import { ExpenseCategoryPicker } from './CategoryManager'
 import { ReceiptsPanel } from './ReceiptsPanel'
 import { blankItem, cleanItems, itemsFrom, itemsTotal, type ItemDraft } from './items'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const GST_RATES = [0, 5, 12, 18, 28]
@@ -41,6 +41,7 @@ export function AddExpenseDialog({
   defaultOpen?: boolean
   onClosed?: () => void
 } = {}) {
+  const inr = useINR()
   const isEdit = !!expense
   const create = useCreateExpense()
   const update = useUpdateExpense()
@@ -262,7 +263,7 @@ export function AddExpenseDialog({
               <p className="text-sm font-medium">
                 Items{' '}
                 <span className="font-normal text-muted-foreground">
-                  · {cleanItems(items).length} {cleanItems(items).length === 1 ? 'line' : 'lines'} · {formatINR(value)}
+                  · {cleanItems(items).length} {cleanItems(items).length === 1 ? 'line' : 'lines'} · {inr(value)}
                 </span>
               </p>
               {items.map((r, i) => (

@@ -5,7 +5,7 @@ import type { InvoiceItemPreset, UpsertInvoiceItemPresetRequest } from '@ipc/con
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeleteInvoiceItem, useInvoiceItems, useSaveInvoiceItem } from './api'
@@ -20,6 +20,7 @@ const blank = (): UpsertInvoiceItemPresetRequest => ({ name: '', description: ''
  * from memory.
  */
 export function SavedItemsManager() {
+  const inr = useINR()
   const { data, isLoading } = useInvoiceItems()
   const save = useSaveInvoiceItem()
   const del = useDeleteInvoiceItem()
@@ -92,7 +93,7 @@ export function SavedItemsManager() {
                   </td>
                   <td className="px-3 py-2 tabular-nums">{p.hsn_sac ? `${p.kind === 'goods' ? 'HSN' : 'SAC'} ${p.hsn_sac}` : '—'}</td>
                   <td className="px-3 py-2">{p.gst_rate ? `${p.gst_rate}%` : 'Nil'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{p.rate ? formatINR(p.rate) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.rate ? inr(p.rate) : '—'}</td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-0.5">
                       <Button variant="ghost" size="icon" className="size-8" onClick={() => open(p)} aria-label={`Edit ${p.name}`}>

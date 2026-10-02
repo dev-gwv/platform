@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { leftToPayLine } from './left-to-pay'
@@ -71,6 +71,7 @@ export function ReceivedPaymentDialog({
   onOpenChange: (open: boolean) => void
   initial?: ReceivedPayment | null
 }) {
+  const inr = useINR()
   const isEdit = !!initial
   const create = useCreateReceivedPayment()
   const update = useUpdateReceivedPayment(initial?.id ?? '')
@@ -214,8 +215,8 @@ export function ReceivedPaymentDialog({
                 <option value="">Not against an invoice</option>
                 {openInvoices.map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.invoice_number} · {formatINR(i.total)}
-                    {Number(i.balance_due) > 0 ? ` · ${formatINR(Number(i.balance_due))} due` : ' · settled'}
+                    {i.invoice_number} · {inr(i.total)}
+                    {Number(i.balance_due) > 0 ? ` · ${inr(Number(i.balance_due))} due` : ' · settled'}
                   </option>
                 ))}
               </select>

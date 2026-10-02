@@ -6,7 +6,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useBillingOverview } from './api'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
 import { dueText, isOverdue, shortDate } from './status'
@@ -21,6 +21,7 @@ const SHOW = 5
  * that is fully paid up sees its list and not an empty box.
  */
 export function BillingStrip() {
+  const inr = useINR()
   const { data } = useBillingOverview()
   const access = useAccess()
   const canRecord = access.hasAction('billing', 'edit')
@@ -67,7 +68,7 @@ export function BillingStrip() {
                         <span className={cn(late && 'font-medium text-destructive')}> · {dueText(inv) ?? `Sent ${shortDate(inv.invoice_date)}`}</span>
                       </p>
                     </div>
-                    <span className="text-sm font-semibold tabular-nums">{formatINR(inv.balance_due)}</span>
+                    <span className="text-sm font-semibold tabular-nums">{inr(inv.balance_due)}</span>
                     <InvoiceBadge invoice={inv} />
                     <div className="flex gap-1">
                       <Button size="sm" variant="outline" onClick={() => void whatsappInvoice(inv, true)} title="Send a WhatsApp reminder with the invoice link">

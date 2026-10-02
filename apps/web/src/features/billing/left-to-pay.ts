@@ -1,4 +1,4 @@
-import { formatINR } from '@/shared/ui/format'
+import { screenINR } from '@/shared/money/hide'
 
 const dateWords = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -24,7 +24,7 @@ export function leftToPayLine({
   today: string
 }): string | null {
   if (editing || !received || !(due > 0) || !(amount > 0) || amount >= due) return null
-  const left = formatINR(Math.round((due - amount) * 100) / 100)
+  const left = screenINR(Math.round((due - amount) * 100) / 100)
   if (!dueOn) return `${left} is left to collect.`
   const day = dueOn.slice(0, 10)
   return day < today ? `${left} is left. It was due on ${dateWords(day)}.` : `${left} is left. It stays due on ${dateWords(day)}.`

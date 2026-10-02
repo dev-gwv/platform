@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useAddPayment, useUpdatePayment } from '@/features/projects/api'
 import { useRecordPayment } from './api'
 import { leftToPayLine } from './left-to-pay'
@@ -54,6 +54,7 @@ export function RecordPaymentDialog({
   dueOn?: string | null | undefined
   onClose: () => void
 }) {
+  const inr = useINR()
   const projectId = target.kind === 'project' ? target.projectId : ''
   const add = useAddPayment(projectId)
   const update = useUpdatePayment(projectId)
@@ -162,9 +163,9 @@ export function RecordPaymentDialog({
 
   const description_ =
     target.kind === 'invoice'
-      ? `Against ${target.invoiceNumber}${suggested > 0 ? ` · ${formatINR(suggested)} due` : ''}`
+      ? `Against ${target.invoiceNumber}${suggested > 0 ? ` · ${inr(suggested)} due` : ''}`
       : suggested > 0 && !editing
-        ? `${formatINR(suggested)} is still to collect.`
+        ? `${inr(suggested)} is still to collect.`
         : undefined
 
   return (
@@ -220,7 +221,7 @@ export function RecordPaymentDialog({
                 <option value="">No invoice -- just the project</option>
                 {invoices.map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.invoice_number} · {formatINR(i.balance_due)} due
+                    {i.invoice_number} · {inr(i.balance_due)} due
                   </option>
                 ))}
                 {invoiceId && !invoices.some((i) => i.id === invoiceId) && (
