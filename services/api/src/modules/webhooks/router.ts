@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { captureLeadRequest, fbConnectUrlResponse, fbDisconnectResponse, fbExchangeRequest, fbPage, fbPageConnectRequest, fbStatusResponse, fbTokenRequest } from '@ipc/contracts'
+import { captureLeadRequest, fbCheckResponse, fbConnectUrlResponse, fbDisconnectResponse, fbResetResponse, fbExchangeRequest, fbPage, fbPageConnectRequest, fbStatusResponse, fbTokenRequest } from '@ipc/contracts'
 import type { Context } from 'hono'
 import type { AppEnv } from '../../context'
 import { fail } from '../../middleware/errors'
@@ -13,6 +13,8 @@ import { log } from '../../lib/log'
 import { audit } from '../../lib/audit'
 import {
   MetaError,
+  checkPageToken,
+  isMetaAuthError,
   exchangeUserCode,
   fetchMetaLead,
   isMetaLeadgenPayload,
@@ -443,7 +445,7 @@ export const webhooksRouter = new Hono<AppEnv>()
  * so its leads post to /webhooks/meta. Tokens never go back to the browser.
  */
 /** What a studio grants so its lead-form leads reach us. */
-const META_LEAD_SCOPES = 'pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval'
+const META_LEAD_SCOPES = 'pages_show_list,pages_manage_metadata,pages_read_engagement,business_management,leads_retrieval'
 
 const metaMissing = (env: AppEnv['Bindings']): string[] => {
   const missing: string[] = []
@@ -465,9 +467,11 @@ export function metaConnectUrl(env: Pick<AppEnv['Bindings'], 'META_APP_ID' | 'AP
   const base =
     `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?client_id=${encodeURIComponent(env.META_APP_ID)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri(env as AppEnv['Bindings']))}`
+  // auth_type=rerequest: Facebook shows the permission dialog again, even to
+  // someone who connected before or declined a permission last time.
   return env.META_LOGIN_CONFIG_ID
-    ? `${base}&config_id=${encodeURIComponent(env.META_LOGIN_CONFIG_ID)}&response_type=code&override_default_response_type=true`
-    : `${base}&scope=${encodeURIComponent(META_LEAD_SCOPES)}`
+    ? `${base}&config_id=${encodeURIComponent(env.META_LOGIN_CONFIG_ID)}&response_type=code&override_default_response_type=true&auth_type=rerequest`
+    : `${base}&scope=${encodeURIComponent(META_LEAD_SCOPES)}&auth_type=rerequest`
 }
 
 /** Remember the pages a token can manage, with each page's own token sealed. */
@@ -497,12 +501,60 @@ async function savePages(
             set token_enc = excluded.token_enc, fb_user_id = excluded.fb_user_id,
                 connected_by = excluded.connected_by, connected_at = now()`
       }
+      // A new Facebook login lists only the pages picked in its dialog: pages
+      // from an earlier login that are not connected leave the list. A page
+      // already connected stays connected until it is disconnected.
+      if (via === 'oauth') {
+        const ids = found.pages.map((p) => p.id)
+        await sql`
+          delete from fb_page_tokens t
+           where t.company_id = ${auth.companyId} and not (t.page_id = any(${ids}::text[]))
+             and not exists (select 1 from fb_pages p where p.company_id = t.company_id and p.page_id = t.page_id and p.is_connected)`
+        await sql`
+          delete from fb_pages
+           where company_id = ${auth.companyId} and not is_connected and not (page_id = any(${ids}::text[]))`
+      }
       await pruneIdlePageTokens(sql, auth.companyId)
       return found.pages.length
     }),
   )
   if (n === null) fail(400, 'We could not save your pages.')
   return n
+}
+
+const META_EXPIRED = 'Your Facebook connection expired. Please reconnect.'
+
+/**
+ * Forget a studio's Facebook connection. Each subscribed page is told to stop
+ * posting leads first, with its own token, and a failure there (a revoked
+ * token) is ignored -- Facebook already dropped the app in that case. Then
+ * 0230's meta_forget_studio() removes every page token and page record.
+ * Tokens are never logged.
+ */
+async function forgetStudio(c: Context<AppEnv>, why: 'reset' | 'expired'): Promise<{ forgotten: number; unsubscribed: number }> {
+  const companyId = c.get('auth').companyId
+  const held = await attempt(c, 'meta.forget_read', () =>
+    withService(c.env, (sql) => sql<{ page_id: string; token_enc: string }[]>`
+      select t.page_id, t.token_enc from fb_page_tokens t
+        join fb_pages p on p.company_id = t.company_id and p.page_id = t.page_id
+       where t.company_id = ${companyId} and p.webhook_subscribed`),
+  )
+  let unsubscribed = 0
+  if (why === 'reset') {
+    for (const t of held ?? []) {
+      const token = await open(c.env, t.token_enc).catch(() => null)
+      if (token && (await unsubscribePage(token, t.page_id).then(() => true, () => false))) unsubscribed += 1
+    }
+  }
+  const forgotten = await attempt(c, 'meta.forget', () =>
+    withService(c.env, async (sql) => {
+      const [r] = await sql<{ n: number }[]>`select meta_forget_studio(${companyId}) as n`
+      return r?.n ?? 0
+    }),
+  )
+  if (forgotten === null) fail(400, 'We could not remove the Facebook connection. Please try again.')
+  await audit(c, { action: why === 'reset' ? 'meta.reset' : 'meta.expired', entityType: 'fb_page', after: { forgotten, unsubscribed } })
+  return { forgotten, unsubscribed }
 }
 
 export const metaRouter = new Hono<AppEnv>()
@@ -600,6 +652,12 @@ export const metaRouter = new Hono<AppEnv>()
     try {
       await subscribePage(token, page_id)
     } catch (e) {
+      // The app was removed in Facebook or the token revoked: nothing we hold
+      // works any more, so forget it all and ask for a fresh connection.
+      if (isMetaAuthError(e)) {
+        await forgetStudio(c, 'expired')
+        fail(409, META_EXPIRED)
+      }
       error = e instanceof MetaError ? e.message : 'We could not reach Facebook.'
     }
     const row = await attempt(c, 'meta.page_connect', () =>
@@ -648,6 +706,39 @@ export const metaRouter = new Hono<AppEnv>()
     }
     await audit(c, { action: 'meta.page_disconnect', entityType: 'fb_page', entityId: id, after: { unsubscribed } })
     return c.json(fbDisconnectResponse.parse({ ok: true, unsubscribed }))
+  })
+
+  // Are the page tokens we hold still good? Called when the card opens. Once
+  // Facebook says no (the app was removed, the token revoked or expired),
+  // everything is forgotten so the card offers "Connect with Facebook" again.
+  .post('/check', requireAction('crm', 'view'), async (c) => {
+    const companyId = c.get('auth').companyId
+    const held = await attempt(c, 'meta.check_tokens', () =>
+      withService(c.env, (sql) => sql<{ page_id: string; token_enc: string }[]>`
+        select page_id, token_enc from fb_page_tokens where company_id = ${companyId} order by connected_at desc limit 5`),
+    )
+    if (!held) fail(400, 'We could not check the Facebook connection.')
+    let expired = false
+    for (const t of held) {
+      const token = await open(c.env, t.token_enc).catch(() => null)
+      if (!token) continue
+      const state = await checkPageToken(token, t.page_id)
+      if (state === 'ok') break
+      if (state === 'expired') {
+        expired = true
+        break
+      }
+    }
+    if (expired) await forgetStudio(c, 'expired')
+    return c.json(fbCheckResponse.parse({ expired }))
+  })
+
+  // "Disconnect Facebook": every page off the leadgen webhook (best effort --
+  // a revoked token cannot), then every page and token forgotten. Leads
+  // already received, the import log and the lead source stay.
+  .post('/reset', requireAction('crm', 'edit'), async (c) => {
+    const out = await forgetStudio(c, 'reset')
+    return c.json(fbResetResponse.parse({ ok: true, ...out }))
   })
 
   // Manual token flow: a long-lived user token, for a studio without the

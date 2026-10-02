@@ -14,7 +14,30 @@ import { GRAPH } from './whatsapp'
  * with each page's own token, and keep those tokens sealed. GRAPH is shared
  * with WhatsApp so one stand-in server covers both in local runs.
  */
-export class MetaError extends Error {}
+export class MetaError extends Error {
+  constructor(
+    message: string,
+    /** Graph's error code (190 = the token is no longer valid). */
+    public code: number | null = null,
+    public type: string | null = null,
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * Did Facebook say our token is no good any more -- expired, revoked, or the
+ * app removed from the person's or the page's integrations? Code 190 (and
+ * its old 102), the permission codes 10 and 200-299, or the words Facebook
+ * uses when the app is no longer authorised. A network failure is not one:
+ * the connection may be fine, and nothing should be thrown away for it.
+ */
+export function isMetaAuthError(e: unknown): boolean {
+  if (!(e instanceof MetaError)) return false
+  const c = e.code
+  if (c === 190 || c === 102 || c === 10 || (c !== null && c >= 200 && c < 300)) return true
+  return /not authori[sz]ed|has not authori[sz]ed|session has been invalidated|session has expired|access token has expired|error validating access token/i.test(e.message)
+}
 
 async function graph<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${GRAPH}/${path}`, init)
@@ -26,8 +49,8 @@ async function graph<T>(path: string, init: RequestInit = {}): Promise<T> {
     json = {}
   }
   if (!res.ok) {
-    const e = (json as { error?: { message?: string; error_user_msg?: string } }).error
-    throw new MetaError(e?.error_user_msg || e?.message || `Facebook said no (${res.status})`)
+    const e = (json as { error?: { message?: string; error_user_msg?: string; code?: number; type?: string } }).error
+    throw new MetaError(e?.error_user_msg || e?.message || `Facebook said no (${res.status})`, e?.code ?? null, e?.type ?? null)
   }
   return json as T
 }
@@ -174,6 +197,22 @@ export async function readPages(userToken: string): Promise<{ fb_user_id: string
     path = after ? `me/accounts?fields=id,name,category,access_token&limit=100&after=${encodeURIComponent(after)}&access_token=${encodeURIComponent(userToken)}` : null
   }
   return { fb_user_id: me.id ?? null, pages }
+}
+
+/**
+ * Is this page token still good? Reads the page itself; Facebook answers
+ * 190 (or "not authorized") once the app was removed or the token revoked.
+ * 'unknown' when Facebook could not be reached: keep everything then.
+ */
+export async function checkPageToken(pageToken: string, pageId: string): Promise<'ok' | 'expired' | 'unknown'> {
+  try {
+    await graph(`${encodeURIComponent(pageId)}?fields=id&access_token=${encodeURIComponent(pageToken)}`, {
+      signal: AbortSignal.timeout(8000),
+    })
+    return 'ok'
+  } catch (e) {
+    return isMetaAuthError(e) ? 'expired' : 'unknown'
+  }
 }
 
 /** Ask Meta to post this page's new leads to the app's webhook. */

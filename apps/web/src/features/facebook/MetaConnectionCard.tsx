@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Facebook, Link2, Plug, Unplug } from 'lucide-react'
+import { AlertTriangle, Facebook, Link2, Plug, PowerOff, Unplug } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { FbPage } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -11,12 +12,16 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import {
+  META_EXPIRED,
+  isMetaExpired,
+  useCheckMetaConnection,
   useConnectPage,
   useDisconnectPage,
   useExchangeMetaCode,
   useMetaConnectUrl,
   useMetaPages,
   useMetaStatus,
+  useResetMeta,
   useVerifyMetaToken,
 } from './api'
 
@@ -38,6 +43,8 @@ export function MetaConnectionCard() {
   const disconnect = useDisconnectPage()
   const verify = useVerifyMetaToken()
   const exchange = useExchangeMetaCode()
+  const reset = useResetMeta()
+  const qc = useQueryClient()
   const confirm = useConfirm()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
@@ -77,6 +84,35 @@ export function MetaConnectionCard() {
   const list = pages.data ?? []
   const live = list.filter((p) => p.webhook_subscribed)
   const found = list.filter((p) => !p.webhook_subscribed && p.has_token)
+  // Facebook may have dropped us (the app removed, the token revoked): ask
+  // once when the card opens; the server forgets everything if so.
+  const check = useCheckMetaConnection(list.some((p) => p.has_token))
+  const [connectExpired, setConnectExpired] = useState(false)
+  const expired = (check.data?.expired || connectExpired) && list.length === 0
+
+  async function onReset() {
+    const yes = await confirm({
+      title: 'Disconnect Facebook?',
+      description: 'This removes the Facebook connection and all Pages from this studio. Leads already received are kept.',
+      confirmLabel: 'Disconnect Facebook',
+      destructive: true,
+    })
+    if (yes) reset.mutate()
+  }
+
+  function onConnect(p: FbPage) {
+    connect.mutate(
+      { page_id: p.page_id, page_name: p.page_name },
+      {
+        onError: (e) => {
+          if (!isMetaExpired(e)) return
+          setConnectExpired(true)
+          qc.setQueryData(['meta', 'pages'], [])
+          void qc.invalidateQueries({ queryKey: ['meta'] })
+        },
+      },
+    )
+  }
 
   async function onDisconnect(p: FbPage) {
     const yes = await confirm({
@@ -110,7 +146,13 @@ export function MetaConnectionCard() {
             <span>Facebook connections are not set up on this server yet. Ask Studio AutoPilot to finish the setup.</span>
           </p>
         )}
-        {status.data?.last_error && (
+        {expired && (
+          <p className="mt-3 flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+            <span>{META_EXPIRED}</span>
+          </p>
+        )}
+        {status.data?.last_error && list.length > 0 && (
           <p className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>{status.data.last_error}</span>
@@ -144,7 +186,7 @@ export function MetaConnectionCard() {
                 <ul className="mt-2 divide-y divide-border rounded-lg border border-primary/40 bg-primary/5">
                   {found.map((p) => (
                     <PageRow key={p.id} page={p}>
-                      <Button size="sm" disabled={connect.isPending} onClick={() => connect.mutate({ page_id: p.page_id, page_name: p.page_name })}>
+                      <Button size="sm" disabled={connect.isPending} onClick={() => onConnect(p)}>
                         <Plug /> Connect
                       </Button>
                     </PageRow>
@@ -156,15 +198,22 @@ export function MetaConnectionCard() {
             {canEdit && ready && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {oauthReady && (
-                  <Button asChild size="sm" variant={live.length > 0 || found.length > 0 ? 'outline' : 'default'}>
+                  <Button asChild size="sm" variant={live.length > 0 ? 'outline' : 'default'}>
                     <a href={connectUrl.data!.connect_url!} rel="noreferrer">
-                      <Facebook /> {live.length > 0 || found.length > 0 ? 'Add another page' : 'Connect with Facebook'}
+                      <Facebook /> {live.length > 0 ? 'Add another page' : 'Connect with Facebook'}
                     </a>
                   </Button>
                 )}
                 <Button size="sm" variant={oauthReady ? 'ghost' : 'default'} onClick={() => setShowToken((v) => !v)}>
                   <Link2 /> {showToken ? 'Hide' : oauthReady ? 'Paste a token instead' : 'Paste a token'}
                 </Button>
+                {/* Whenever we hold anything from Facebook -- a token or any
+                    page -- one button forgets it all, connected or not. */}
+                {list.length > 0 && (
+                  <Button size="sm" variant="ghost" className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={reset.isPending} onClick={() => void onReset()}>
+                    <PowerOff /> {reset.isPending ? 'Disconnecting…' : 'Disconnect Facebook'}
+                  </Button>
+                )}
               </div>
             )}
 
