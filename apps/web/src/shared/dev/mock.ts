@@ -284,6 +284,20 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
   if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/me/payouts')
+    return {
+      bookings: [{ slot_id: uid(0x7e1), role: 'Candid Photographer', shoot_name: 'Wedding', project_name: 'Mehta Wedding', shoot_date: '2026-11-12', amount: 6000, is_final: true, paid: 0 }],
+      payments: [],
+      owed: 6000,
+      paid: 0,
+      has_pay_details: false,
+    }
+  if (method === 'GET' && /^\/team-payouts\/project\/[^/]+$/.test(path))
+    return [{ slot_id: uid(0x7e1), user_id: uid(0x7e2), user_name: 'Rahul Verma', engagement_type: 'freelancer', role: 'Candid Photographer', shoot_id: uid(0x7e3), shoot_name: 'Wedding', shoot_date: '2026-11-12', amount: 6000, cost_status: 'final', paid: 0, last_paid_date: null, data_in: true }]
+  if (method === 'GET' && /^\/team-payouts\/slot\/[^/]+$/.test(path))
+    return { slot_id: path.split('/').pop(), user_name: 'Rahul Verma', amount: 6000, cost_status: 'tentative', paid: 0 }
+  if (method === 'POST' && /^\/team-payouts\/slot\/[^/]+\/pay$/.test(path))
+    return { slot_id: path.split('/')[3], user_name: 'Rahul Verma', amount: 6000, cost_status: 'final', paid: (body as { paid_now?: number } | undefined)?.paid_now ?? 0 }
   if (method === 'GET' && path === '/me/alert-emails') return { on: true, email: 'you@example.com' }
   if (method === 'PUT' && path === '/me/alert-emails') return { on: (body as { on?: boolean } | undefined)?.on ?? true }
   if (method === 'GET' && path === '/projects/quotation-terms')

@@ -121,3 +121,81 @@ export const createPayoutSettlementResponse = z.object({
   amount_due: money,
 })
 export type CreatePayoutSettlementResponse = z.infer<typeof createPayoutSettlementResponse>
+
+/**
+ * One booking's payout on a project's Finance → Payouts tab: who, which
+ * shoot, what they are owed, what has gone out, and whether their cards are
+ * in (the moment most studios pay a freelancer).
+ */
+export const projectPayoutRow = z.object({
+  slot_id: uuid,
+  user_id: uuid,
+  user_name: z.string().nullable(),
+  engagement_type: z.string().nullable(),
+  role: z.string().nullable(),
+  shoot_id: uuid,
+  shoot_name: z.string().nullable(),
+  shoot_date: isoDate.nullable(),
+  amount: z.number(),
+  cost_status: z.string(),
+  paid: z.number(),
+  last_paid_date: isoDate.nullable(),
+  data_in: z.boolean(),
+})
+export type ProjectPayoutRow = z.infer<typeof projectPayoutRow>
+
+/** Where one booking's payout stands, to start a "pay now" form from. */
+export const slotPayStatus = z.object({
+  slot_id: uuid,
+  user_name: z.string().nullable(),
+  amount: z.number(),
+  cost_status: z.string(),
+  paid: z.number(),
+})
+export type SlotPayStatus = z.infer<typeof slotPayStatus>
+
+/**
+ * Set what a booking pays and record what was handed over, in one go -- the
+ * data dialog's "payout" line. A changed amount becomes the final amount;
+ * paid_now 0 records nothing.
+ */
+export const paySlotRequest = z.object({
+  amount: money.optional(),
+  paid_now: money.default(0),
+  paid_date: isoDate.optional(),
+  payment_mode: z.string().trim().max(50).nullish(),
+  payment_reference: z.string().trim().max(100).nullish(),
+})
+export type PaySlotRequest = z.infer<typeof paySlotRequest>
+
+/** A person's own shoot money (My payouts): every booking and every payment. */
+export const myPayoutBooking = z.object({
+  slot_id: uuid,
+  role: z.string().nullable(),
+  shoot_name: z.string().nullable(),
+  project_name: z.string().nullable(),
+  shoot_date: isoDate.nullable(),
+  amount: z.number(),
+  is_final: z.boolean(),
+  paid: z.number(),
+})
+export const myPayoutPayment = z.object({
+  id: uuid,
+  slot_id: uuid,
+  shoot_name: z.string().nullable(),
+  amount: z.number(),
+  paid_date: isoDate,
+  payment_mode: z.string().nullable(),
+  payment_reference: z.string().nullable(),
+  entry_type: payoutEntryType,
+})
+export const myPayouts = z.object({
+  bookings: z.array(myPayoutBooking),
+  payments: z.array(myPayoutPayment),
+  owed: z.number(),
+  paid: z.number(),
+  /** UPI or a bank account is on file, so the studio can pay. */
+  has_pay_details: z.boolean(),
+})
+export type MyPayouts = z.infer<typeof myPayouts>
+export type MyPayoutBooking = z.infer<typeof myPayoutBooking>

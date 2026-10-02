@@ -6,6 +6,9 @@ import {
   createPayoutSettlementRequest,
   payoutSettlementList,
   createPayoutSettlementResponse,
+  projectPayoutRow,
+  slotPayStatus,
+  paySlotRequest,
   z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -143,6 +146,109 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
   // ── Shoot-derived tracker: a cash ledger against booked slots ────
   // Kept alongside the manual payouts above, not replacing them -- neither
   // reads nor writes team_assignment_slots' own cost fields.
+  /**
+   * Every booking on one project with what it pays and what has gone out --
+   * the project's Finance → Payouts tab. "data_in" says the person's cards
+   * have been copied, which is when most studios pay a freelancer.
+   */
+  .get('/project/:id', async (c) => {
+    const projectId = uuidParam(c)
+    const rows = await attempt(c, 'team-payouts.project', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select t.id as slot_id, t.user_id, u.name as user_name, u.engagement_type, t.service_name as role,
+               s.id as shoot_id, s.name as shoot_name, s.shoot_date::text as shoot_date,
+               coalesce(t.final_cost, t.estimated_cost, 0)::float8 as amount, t.cost_status,
+               coalesce(pay.paid, 0)::float8 as paid, pay.last_paid::text as last_paid_date,
+               exists (select 1 from shoot_data_records d where d.slot_id = t.id) as data_in
+          from team_assignment_slots t
+          join shoots s on s.id = t.shoot_id
+          left join users u on u.user_id = t.user_id and u.company_id = t.company_id
+          left join lateral (
+            select sum(ss.amount_paid) as paid, max(ss.paid_date) as last_paid
+              from team_slot_settlements ss where ss.slot_id = t.id
+          ) pay on true
+         where s.project_id = ${projectId} and t.status not in ('cancelled', 'released')
+         order by s.shoot_date nulls last, s.name, u.name`),
+    )
+    if (!rows) fail(400, 'We could not load the payouts.')
+    return c.json(projectPayoutRow.array().parse(rows))
+  })
+
+  // Where one booking's payout stands: the starting point of a "pay now" form.
+  .get('/slot/:id', async (c) => {
+    const slotId = uuidParam(c)
+    const rows = await attempt(c, 'team-payouts.slot', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select t.id as slot_id, u.name as user_name,
+               coalesce(t.final_cost, t.estimated_cost, 0)::float8 as amount, t.cost_status,
+               coalesce((select sum(ss.amount_paid) from team_slot_settlements ss where ss.slot_id = t.id), 0)::float8 as paid
+          from team_assignment_slots t
+          left join users u on u.user_id = t.user_id and u.company_id = t.company_id
+         where t.id = ${slotId}`),
+    )
+    if (!rows) fail(400, 'We could not load the payout.')
+    if (!rows.length) fail(404, 'That booking was not found.')
+    return c.json(slotPayStatus.parse(rows[0]))
+  })
+
+  /**
+   * Set what a booking pays and record what was handed over, together -- so
+   * paying a freelancer as their cards are copied is one step. A changed
+   * amount is the final amount; a payment past it is refused (409).
+   */
+  .post('/slot/:id/pay', async (c) => {
+    const parsed = paySlotRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the amount.')
+    const d = parsed.data
+    const slotId = uuidParam(c)
+    const row = await attempt(
+      c,
+      'team-payouts.slot_pay',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const [cur] = await sql<{ amount: number }[]>`
+            select coalesce(final_cost, estimated_cost, 0)::float8 as amount from team_assignment_slots where id = ${slotId}`
+          if (!cur) return 'missing' as const
+          if (d.amount !== undefined && Math.abs(d.amount - cur.amount) > 0.001) {
+            await sql`select set_slot_cost(p_slot_id => ${slotId}, p_final_cost => ${d.amount}, p_cost_status => 'final')`
+          }
+          if (d.paid_now > 0) {
+            await sql`
+              select * from create_payout_settlement(
+                p_slot_id => ${slotId},
+                p_amount_paid => ${d.paid_now},
+                p_paid_date => ${d.paid_date ?? null},
+                p_payment_mode => ${d.payment_mode ?? null},
+                p_payment_reference => ${d.payment_reference ?? null},
+                p_notes => ${null},
+                p_entry_type => 'payment',
+                p_reverses_settlement_id => ${null}
+              )`
+          }
+          const [after] = await sql`
+            select t.id as slot_id, u.name as user_name,
+                   coalesce(t.final_cost, t.estimated_cost, 0)::float8 as amount, t.cost_status,
+                   coalesce((select sum(ss.amount_paid) from team_slot_settlements ss where ss.slot_id = t.id), 0)::float8 as paid
+              from team_assignment_slots t
+              left join users u on u.user_id = t.user_id and u.company_id = t.company_id
+             where t.id = ${slotId}`
+          return after ?? null
+        }),
+      {
+        onCode: (code, err) => {
+          const msg = String((err as { message?: string })?.message ?? '')
+          if (msg.includes('exceed amount due')) return fail(409, 'That is more than this booking pays. Change the amount first.')
+          if (code === '42501') return fail(403, 'Only an owner or a manager can record a payout.')
+          return undefined
+        },
+      },
+    )
+    if (row === 'missing') fail(404, 'That booking was not found.')
+    if (!row) fail(400, 'We could not save the payout.')
+    await audit(c, { action: 'payout.pay', entityType: 'team_assignment_slot', entityId: slotId, after: d })
+    return c.json(slotPayStatus.parse(row))
+  })
+
   .get('/settlements', async (c) => {
     const raw = c.req.query('slot_ids')
     const slotIds = raw ? raw.split(',').filter(Boolean) : null
