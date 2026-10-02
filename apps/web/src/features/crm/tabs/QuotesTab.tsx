@@ -9,7 +9,8 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatCard } from '@/shared/ui/stat-card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeleteQuote, useQuotes, useSendQuote, useSetQuoteOutcome } from '../api'
@@ -38,9 +39,9 @@ export function QuotesTab({ onOpen }: { onOpen: (leadId: string) => void }) {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Awaiting answer" value={open.length} />
-        <StatCard label="Out for acceptance" value={formatINR(sum(open))} />
+        <StatCard label="Out for acceptance" value={<Money value={sum(open)} />} />
         <StatCard label="Accepted" value={accepted.length} />
-        <StatCard label="Accepted value" value={formatINR(sum(accepted))} />
+        <StatCard label="Accepted value" value={<Money value={sum(accepted)} />} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Select value={status} onChange={(e) => setStatus(e.target.value as QuoteStatus | '')} className="w-40" aria-label="Status">
@@ -90,6 +91,7 @@ export function QuoteRow({
   onEdit?: (() => void) | undefined
   compact?: boolean
 }) {
+  const inr = useINR()
   const [viewing, setViewing] = useState<CrmQuote | null>(null)
   const send = useSendQuote()
   const outcome = useSetQuoteOutcome()
@@ -165,7 +167,7 @@ export function QuoteRow({
           {q.declined_at ? ` · declined${q.decline_reason ? `: ${q.decline_reason}` : ''}` : ''}
         </p>
       </div>
-      <span className="tabular-nums">{formatINR(q.total)}</span>
+      <span className="tabular-nums">{inr(q.total)}</span>
       <StatusBadge tone={QUOTE_TONE[q.status]}>{humanize(q.status)}</StatusBadge>
       {/*
         * Outside the canEdit gate on purpose: reading a quote is not editing

@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Select } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useImportCommit, useImportPreview } from '../api'
 import { WorkflowsSection } from './WorkflowsSection'
@@ -45,6 +45,7 @@ const importDateFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', mont
 const showDate = (iso: string) => importDateFormat.format(new Date(`${iso}T00:00:00`))
 
 export function CsvImport() {
+  const inr = useINR()
   const [csv, setCsv] = useState('')
   /**
    * What to do about a number already in the CRM.
@@ -197,7 +198,7 @@ export function CsvImport() {
                       <td className="px-2 py-1.5">
                         {[p.event_type, p.event_date ? showDate(p.event_date) : null].filter(Boolean).join(' · ') || '—'}
                       </td>
-                      <td className="px-2 py-1.5 tabular-nums">{p.deal_value === null ? '—' : formatINR(p.deal_value)}</td>
+                      <td className="px-2 py-1.5 tabular-nums">{p.deal_value === null ? '—' : inr(p.deal_value)}</td>
                       <td className="px-2 py-1.5">
                         {!p.valid ? (
                           <span className="text-destructive">{p.error}</span>

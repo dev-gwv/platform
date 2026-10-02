@@ -6,7 +6,8 @@ import { SkeletonTiles } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatCard } from '@/shared/ui/stat-card'
 import { ErrorState } from '@/shared/ui/states'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { Select } from '@/shared/ui/input'
 import { useCrmStats, useForecast } from '../api'
 import { STAGES } from '../leads'
@@ -169,15 +170,15 @@ function ForecastCard({ range }: { range: CrmStatsQuery }) {
             <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
               <div>
                 <dt className="text-xs text-muted-foreground">Weighted</dt>
-                <dd className="text-xl font-semibold tabular-nums">{formatINR(data.weighted)}</dd>
+                <dd className="text-xl font-semibold tabular-nums"><Money value={data.weighted} /></dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Won</dt>
-                <dd className="text-xl font-semibold tabular-nums text-success">{formatINR(data.won_value)}</dd>
+                <dd className="text-xl font-semibold tabular-nums text-success"><Money value={data.won_value} /></dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Open</dt>
-                <dd className="text-xl font-semibold tabular-nums">{formatINR(data.open_value)}</dd>
+                <dd className="text-xl font-semibold tabular-nums"><Money value={data.open_value} /></dd>
               </div>
             </dl>
             {data.by_stage.length > 0 && (
@@ -228,6 +229,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 }
 
 function Bars({ rows, money = false }: { rows: ReadonlyArray<readonly [string, number]>; money?: boolean }) {
+  const inr = useINR()
   const max = Math.max(1, ...rows.map(([, v]) => v))
   return (
     <div className="mt-3 flex flex-col gap-2">
@@ -237,7 +239,7 @@ function Bars({ rows, money = false }: { rows: ReadonlyArray<readonly [string, n
           <div className="h-2 flex-1 rounded-full bg-muted" role="img" aria-label={`${label}: ${value}`}>
             <div className="h-2 rounded-full bg-primary transition-[width]" style={{ width: `${Math.round((value / max) * 100)}%` }} />
           </div>
-          <span className={`${money ? 'w-20' : 'w-8'} text-right text-xs tabular-nums`}>{money ? formatINR(value) : value}</span>
+          <span className={`${money ? 'w-20' : 'w-8'} text-right text-xs tabular-nums`}>{money ? inr(value) : value}</span>
         </div>
       ))}
     </div>

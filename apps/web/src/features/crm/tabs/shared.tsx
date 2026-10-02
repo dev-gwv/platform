@@ -3,7 +3,7 @@ import { Archive, Flame } from 'lucide-react'
 import type { CrmLead, InboxColumn, LeadStatus, StageKind } from '@ipc/contracts'
 import { stageLabel } from '@ipc/domain'
 import { Card, CardContent } from '@/shared/ui/card'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState } from '@/shared/ui/states'
 import { Avatar } from '@/shared/ui/avatar'
@@ -163,6 +163,7 @@ export function LeadTable({
   columns?: readonly InboxColumn[]
   density?: 'comfortable' | 'compact'
 }) {
+  const inr = useINR()
   const isMobile = useIsMobile()
 
   if (leads.length === 0) {
@@ -198,7 +199,7 @@ export function LeadTable({
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">
               {l.phone ?? '—'}
-              {l.deal_value !== null ? ` · ${formatINR(l.deal_value)}` : ''}
+              {l.deal_value !== null ? ` · ${inr(l.deal_value)}` : ''}
             </p>
             {l.notes && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.notes}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -313,7 +314,7 @@ export function LeadTable({
       case 'value':
         return (
           <td key={key} className={`${pad} text-right tabular-nums text-muted-foreground`}>
-            {l.deal_value !== null ? formatINR(l.deal_value) : '—'}
+            {l.deal_value !== null ? inr(l.deal_value) : '—'}
           </td>
         )
       case 'close':

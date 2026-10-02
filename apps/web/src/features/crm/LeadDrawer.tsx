@@ -26,7 +26,7 @@ import { SheetContent } from '@/shared/ui/sheet'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -93,6 +93,7 @@ const LEAD_TABS = [
 type LeadTab = (typeof LEAD_TABS)[number]['key']
 
 export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => void }) {
+  const inr = useINR()
   const update = useUpdateLead('Lead updated')
   const send = useSendTemplate()
   const { data: members } = useMembers()
@@ -600,7 +601,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </div>
             {lead.sla_due_at && !['converted','lost'].includes(lead.status) && (
               <p className={`text-xs font-medium ${new Date(lead.sla_due_at).getTime() < Date.now() ? 'text-destructive' : 'text-muted-foreground'}`}>
-                SLA {new Date(lead.sla_due_at).getTime() < Date.now() ? 'breached' : 'due'} {when.format(new Date(lead.sla_due_at))} · {lead.probability ?? 10}% · ₹{lead.deal_value ?? 0}
+                SLA {new Date(lead.sla_due_at).getTime() < Date.now() ? 'breached' : 'due'} {when.format(new Date(lead.sla_due_at))} · {lead.probability ?? 10}% · {inr(lead.deal_value ?? 0)}
               </p>
             )}
             </div>
@@ -747,6 +748,7 @@ function WorkflowPanel({ lead }: { lead: CrmLead }) {
 
 /** Won it? Make it a project, with the client it belongs to. */
 function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }) {
+  const inr = useINR()
   const convert = useConvertLead()
   const navigate = useNavigate()
   const { data: clients } = useClients()
@@ -854,7 +856,7 @@ function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }
                 <option value="">No quote — package cost only</option>
                 {rows.map((q) => (
                   <option key={q.id} value={q.id}>
-                    {q.quote_number} · {q.status} · {formatINR(q.total)}
+                    {q.quote_number} · {q.status} · {inr(q.total)}
                   </option>
                 ))}
               </Select>
