@@ -6,6 +6,7 @@ import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { textParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
+import { noteClientView } from '../../lib/client-view'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { requireStudioWork } from '../../lib/scope'
@@ -703,6 +704,7 @@ export const publicTermsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]) await refuseLink(c, token)
+    await noteClientView(c, 'terms', token)
     const sig = await attempt(c, 'terms.public_signature', () =>
       withService(c.env, (sql) => sql<{ s: string | null }[]>`select terms_signature_for_token(${token}) as s`),
     )

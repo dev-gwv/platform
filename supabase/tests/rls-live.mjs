@@ -1855,7 +1855,7 @@ if (listed) {
   const tpl = await api('/projects/templates', {
     token: aToken,
     method: 'POST',
-    body: { name: `Wedding ${rand()}`, deliverables_json: [{ name: 'Album', quantity: 2 }], shoots_json: [{ name: 'Haldi' }], tasks_json: [{ title: 'Call client' }] },
+    body: { name: `Wedding ${rand()}`, deliverables_json: [{ name: 'Album', quantity: 2 }, { name: 'Teaser' }], shoots_json: [{ name: 'Haldi' }, { name: 'Wedding' }], tasks_json: [{ title: 'Call client' }] },
   })
   const noClient = await api(`/projects/templates/${tpl.json.id}/apply`, { token: aToken, method: 'POST', body: { name: 'From template' } })
   const applied = await api(`/projects/templates/${tpl.json.id}/apply`, {
@@ -1866,8 +1866,17 @@ if (listed) {
   const made = await api(`/projects/${applied.json.project_id}`, { token: aToken })
   check(
     'templates: applying trkOne makes the project with its deliverables',
-    noClient.status === 422 && applied.status === 201 && made.json.deliverables?.[0]?.title === 'Album ×2',
+    noClient.status === 422 && applied.status === 201 && made.json.deliverables?.some((d) => d.title === 'Album ×2'),
     { noClient: noClient.status, applied: applied.json, made: made.json.deliverables },
+  )
+  // Its deliverables are dated as the wizard would: a teaser 7 days after the
+  // wedding (the template's shoots start on the chosen day), anything else by
+  // the usual 30 days.
+  const dueOf = (t) => made.json.deliverables?.find((d) => d.title === t)?.estimated_date?.slice(0, 10)
+  check(
+    'templates: a project from a template gets its due dates, counted from the wedding day',
+    dueOf('Teaser') === '2026-12-08' && dueOf('Album ×2') === '2026-12-31',
+    { teaser: dueOf('Teaser'), album: dueOf('Album ×2') },
   )
 }
 
@@ -2616,6 +2625,25 @@ if (listed) {
     'quotation: a link sent without terms shows the project terms',
     bare.status === 201 && barePub.status === 200 && barePub.json.terms_text === 'Project clause',
     { bare: bare.status, terms: barePub.json.terms_text },
+  )
+
+  // What the client did (0235): the client's opens are counted, a refresh is
+  // not a second visit, the studio opening its own link is not counted, and
+  // staff cannot read it.
+  const mineLink = await api('/documents/quotations', { token: aToken, method: 'POST', body: { project_id: pid } })
+  await api(`/public/quotation/${tokenOf(mineLink.json.link ?? '')}`, { token: aToken })
+  const activity = await api(`/projects/${pid}/client-activity`, { token: aToken })
+  const firstQuote = activity.json.views?.find((v) => v.subject_id === issued.json.id)
+  const ownOpen = activity.json.views?.find((v) => v.subject_id === mineLink.json.id)
+  const staffEmail = `ca-${rand()}@madeup.test`
+  await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Curious Staff', phone: randPhone(), email: staffEmail, password: 'Ca-pass-1234', create_login: true } })
+  const staffTok = (await api('/auth/login', { ip: `203.0.113.${1 + Math.floor(Math.random() * 250)}`, method: 'POST', body: { email: staffEmail, password: 'Ca-pass-1234' } })).json.access_token
+  const staffRead = await api(`/projects/${pid}/client-activity`, { token: staffTok })
+  check(
+    'client activity: the client opening the quotation shows once per visit, the studio opening it does not, staff get 403',
+    activity.status === 200 && firstQuote?.views === 1 && !ownOpen && activity.json.accepted_by === 'Priya Sharma' &&
+      staffRead.status === 403,
+    { ids: [issued.json.id, mineLink.json.id], views: activity.json.views?.map((v) => [v.subject_id, v.views]), accepted: activity.json.accepted_by, staff: staffRead.status },
   )
 
   // The studio's own subject and note (no mail provider here, so it says so).

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from '@ipc/contracts'
 import {
+  clientActivity,
   projectCostSheet,
   projectBilling,
   createProjectRequest,
@@ -84,6 +85,17 @@ export function useProject(id: string) {
     queryKey: ['projects', id],
     queryFn: () => callApi(`/projects/${id}`, { responseSchema: projectDetail }),
     enabled: !!session && !!id,
+  })
+}
+
+/** What the client did with the project's documents (0235), for the Overview. */
+export function useClientActivity(id: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['projects', id, 'client-activity'],
+    queryFn: () => callApi(`/projects/${id}/client-activity`, { responseSchema: clientActivity }),
+    enabled: !!session && !!id,
+    staleTime: 60_000,
   })
 }
 
