@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { firstContactWords } from './first-contact'
 import { CalendarPlus, Check, ClipboardList, Download, Mail, MapPin, MessageCircle, Pencil, Phone, StickyNote, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ActivityType, CrmActivity, CrmLead, TimelineItem, UpdateActivityRequest } from '@ipc/contracts'
@@ -70,6 +71,7 @@ export function Timeline({ lead }: { lead: CrmLead }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [form, setForm] = useState<ActivityType | null>(null)
+  const firstContact = firstContactWords(lead.created_at, lead.last_contacted_at)
 
   const items = useMemo(() => {
     const all = (data?.pages ?? []).flatMap((p) => p.items)
@@ -82,6 +84,7 @@ export function Timeline({ lead }: { lead: CrmLead }) {
     <div className="rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Timeline</p>
+        {firstContact && <span className="text-xs text-muted-foreground">{firstContact}</span>}
         {canEdit && (
           <span className="ml-auto flex flex-wrap gap-1">
             {(['call', 'note', 'meeting', 'task', 'email'] as const).map((t) => {

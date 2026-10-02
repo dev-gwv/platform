@@ -15,7 +15,7 @@ import { GettingStarted } from '@/features/crm/GettingStarted'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
 import { inView, openingView, viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery } from '@/features/crm/views'
-import { EMPTY_QUERY, applyQuery, countsFor, isOpen, type LeadQuery } from '@/features/crm/leads'
+import { EMPTY_QUERY, applyQuery, countsFor, isOpen, isUncontacted, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
@@ -137,6 +137,7 @@ function Crm() {
   const everything = useLeads(showArchived || hasLeadLink)
   const { data: savedViews } = useSavedViews()
   const allOpen = useMemo(() => active.data ?? [], [active.data])
+  const notContacted = useMemo(() => allOpen.filter(isUncontacted).length, [allOpen])
   const allLeads = useMemo(() => everything.data ?? [], [everything.data])
 
   // One clock for the page, so a lead cannot be "due today" in the picker and
@@ -262,6 +263,16 @@ function Crm() {
           ]}
         />
         <ViewPicker leads={allOpen} now={now} value={current} onChange={setView} saved={saved} label={label} />
+        {/* Who nobody has rung yet, counted the moment a lead lands. */}
+        {notContacted > 0 && !(current.kind === 'builtin' && current.key === 'uncontacted') && (
+          <button
+            type="button"
+            onClick={() => setView({ kind: 'builtin', key: 'uncontacted' })}
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2.5 py-1 text-xs font-semibold text-tone-amber hover:border-tone-amber"
+          >
+            {notContacted} not contacted yet
+          </button>
+        )}
         <span className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input

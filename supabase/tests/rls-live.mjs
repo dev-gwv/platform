@@ -2984,6 +2984,13 @@ if (listed) {
     conv.status === 201 && shoots.map?.((x) => x.name).sort().join(',') === 'Haldi,Reception,Wedding',
     { status: conv.status, shoots: shoots.map?.((x) => [x.name, x.shoot_date]) },
   )
+  const leadsNow = await api('/crm/leads?include_archived=true', { token: aToken })
+  const booked = (Array.isArray(leadsNow.json) ? leadsNow.json : leadsNow.json.items ?? []).find((l) => l.id === lead?.id)
+  check(
+    'leads: a booked lead carries its project\'s name, for "Booked — project X"',
+    leadsNow.status === 200 && booked?.converted_project_id === conv.json.project_id && booked?.converted_project_name === 'Two Functions wedding',
+    { status: leadsNow.status, name: booked?.converted_project_name },
+  )
 
   const bList = await api('/crm/leads?include_archived=true', { token: reset.json.access_token })
   const leaked = (Array.isArray(bList.json) ? bList.json : bList.json?.items ?? []).some((l) => l.id === lead?.id)

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
   Trash2,
   ArchiveRestore,
   Building2,
+  CalendarClock,
   Check,
   Copy,
   Flame,
@@ -20,7 +21,7 @@ import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { CallButton } from '@/features/crm-calls/CallButton'
 import { LeadSequencePanel } from '@/features/crm-sequences/LeadSequencePanel'
-import { Dialog } from '@/shared/ui/dialog'
+import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { SheetContent } from '@/shared/ui/sheet'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -60,6 +61,8 @@ import { LeadEvents, toFunctions, type EventRow } from './LeadEvents'
 import { NoteComposer, NotesThread } from './drawer/NotesThread'
 import { FollowUpCard } from './drawer/FollowUpCard'
 import { TagPicker } from './TagPicker'
+import { convertDefaults } from './convert'
+import { followUpChip } from './follow-up-chip'
 
 const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
@@ -105,9 +108,15 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   const { data: contacts } = useContacts()
   const { data: settings } = useCrmSettings()
   const [losingTo, setLosingTo] = useState<string | null>(null)
+  const [booking, setBooking] = useState(false)
   const [askArchive, setAskArchive] = useState(false)
   const pipeline = (pipelines ?? []).find((p) => p.id === lead.pipeline_id) ?? (pipelines ?? []).find((p) => p.is_default)
   const stages = pipeline ? sortStages(pipeline.stages) : []
+  const lostStage = stages.find((s) => s.kind === 'lost')
+  // Both converts count: offering Book it again to a lead converted
+  // client-only is how one enquiry ends up as two clients.
+  const followUp = followUpChip(lead.follow_up_at, !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && !lead.is_archived)
+  const bookable = !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && !lead.is_archived
 
   function moveTo(stageId: string) {
     const stage = stages.find((s) => s.id === stageId)
@@ -227,6 +236,20 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </div>
           </div>
 
+          {/* The two ways a lead ends, first: booked, or lost with a reason. */}
+          {canEdit && bookable && (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => setBooking(true)}>
+                <FolderPlus /> Book it
+              </Button>
+              {lostStage && (
+                <Button size="sm" variant="outline" onClick={() => setLosingTo(lostStage.id)}>
+                  Lost
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* The four ways to reach them, and a note, always in the same place. */}
           <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-2 border-b border-border bg-card px-1 pb-3">
             <CallButton lead={lead} />
@@ -315,6 +338,20 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               disabled={!canEdit}
               onChange={(v) => v && v !== lead.source && patch({ source: v })}
             />
+            {followUp && (
+              <button
+                type="button"
+                onClick={() => setTab('overview')}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                  followUp.missing || followUp.late
+                    ? 'border-dashed border-tone-amber bg-tone-amber-soft text-tone-amber'
+                    : 'border-border bg-card text-foreground',
+                )}
+              >
+                <CalendarClock className="size-3" /> {followUp.text}
+              </button>
+            )}
             <ScoreBadge score={lead.score} hotScore={settings?.hot_score ?? 60} />
             {lead.last_contacted_at === null && <StatusBadge tone="warning">Never contacted</StatusBadge>}
             {lead.is_archived && (
@@ -331,11 +368,13 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               </StatusBadge>
             )}
             {lead.converted_project_id && (
-              <Button size="sm" variant="ghost" className="h-7" asChild>
-                <Link to="/projects/$id" params={{ id: lead.converted_project_id }}>
-                  Open project
-                </Link>
-              </Button>
+              <Link
+                to="/projects/$id"
+                params={{ id: lead.converted_project_id }}
+                className="inline-flex items-center gap-1 rounded-full border border-tone-green/40 bg-tone-green-soft px-2.5 py-0.5 text-xs font-semibold text-tone-green hover:border-tone-green"
+              >
+                <Check className="size-3" /> Booked — {lead.converted_project_name ?? 'open the project'}
+              </Link>
             )}
             {lead.converted_client_id && (
               <Button size="sm" variant="ghost" className="h-7" asChild>
@@ -474,9 +513,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 * Both converts count. Offering the panel again to a lead that was
                 * converted client-only is how one enquiry ends up as two clients.
                 */}
-              {canEdit && !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && (
-                <ConvertPanel lead={lead} onDone={onClose} />
-              )}
 
               <QuotesPanel lead={lead} canEdit={canEdit} />
             </div>
@@ -559,6 +595,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
 
           {tab === 'timeline' && <Timeline lead={lead} />}
 
+          {booking && <ConvertDialog lead={lead} onClose={() => setBooking(false)} />}
           <LostReasonDialog
             open={losingTo !== null}
             pending={move.isPending}
@@ -696,16 +733,17 @@ function WorkflowPanel({ lead }: { lead: CrmLead }) {
 }
 
 /** Won it? Make it a project, with the client it belongs to. */
-function ConvertPanel({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
+function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }) {
   const convert = useConvertLead()
+  const navigate = useNavigate()
   const { data: clients } = useClients()
   const clientList = Array.isArray(clients) ? clients : []
   const { data: quotes } = useQuotes(lead.id)
-  const [open, setOpen] = useState(false)
+  const defaults = convertDefaults(lead)
   const [clientId, setClientId] = useState('')
   const [quoteId, setQuoteId] = useState('')
-  const [name, setName] = useState(`${lead.name ?? 'New'} project`)
-  const [cost, setCost] = useState('')
+  const [name, setName] = useState(defaults.name)
+  const [cost, setCost] = useState(defaults.cost)
   const [error, setError] = useState<string | null>(null)
 
   // A client with this number is very likely the same person.
@@ -719,31 +757,22 @@ function ConvertPanel({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
   }, [match, clientId])
 
   // The accepted quote is what the client agreed to, so it is the default —
-  // once. `picked` latches so choosing "no quote" afterwards sticks.
+  // once. `picked` latches so choosing "no quote" afterwards sticks. The
+  // budget stays the price unless there was none.
   const picked = useRef(false)
   useEffect(() => {
     if (picked.current || !accepted) return
     picked.current = true
     setQuoteId(accepted.id)
-    setCost(String(accepted.total))
+    if (!defaults.cost) setCost(String(accepted.total))
     if (accepted.title) setName(accepted.title)
-  }, [accepted])
-
-  if (!open) {
-    return (
-      <div className="flex justify-end">
-        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          <FolderPlus /> Convert to project
-        </Button>
-      </div>
-    )
-  }
+  }, [accepted, defaults.cost])
 
   function submit() {
     setError(null)
     const amount = Number(cost || 0)
     if (!name.trim()) return setError('Name the project.')
-    if (Number.isNaN(amount) || amount < 0) return setError('Package cost must be a number.')
+    if (Number.isNaN(amount) || amount < 0) return setError('The booked price must be a number.')
     convert.mutate(
       {
         leadId: lead.id,
@@ -751,73 +780,85 @@ function ConvertPanel({ lead, onDone }: { lead: CrmLead; onDone: () => void }) {
         ...(quoteId ? { quote_id: quoteId } : {}),
         project: { name: name.trim(), package_cost: amount, status: 'active' },
       },
-      { onSuccess: () => onDone() },
+      {
+        onSuccess: (r) => {
+          onClose()
+          // Booked lands on the quotation, like every new project.
+          if (r.project_id) void navigate({ to: '/projects/$id/quotation', params: { id: r.project_id } })
+        },
+      },
     )
   }
 
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        <FolderPlus className="size-3.5" /> Convert to project
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Marks the lead won and creates the project. {match ? 'A client with this number already exists.' : 'A client is created from the lead unless you pick one.'}
-      </p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <Label htmlFor="conv-client">Client</Label>
-          <Select id="conv-client" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            <option value="">Create “{lead.name ?? lead.phone ?? 'New client'}”</option>
-            {clientList.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.phone ? ` · ${c.phone}` : ''}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="conv-name">Project name</Label>
-          <Input id="conv-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!error && !name.trim()} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="conv-cost">Package (₹)</Label>
-          <Input id="conv-cost" type="number" min={0} value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" />
-        </div>
-        {rows.length > 0 && (
+    <Dialog open onOpenChange={(o) => !o && !convert.isPending && onClose()}>
+      <DialogContent
+        title={`Book ${lead.name ?? 'this lead'}`}
+        description={match ? 'A client with this number already exists.' : 'A client is made from the lead unless you pick one.'}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1 sm:col-span-2">
-            <Label htmlFor="conv-quote">Build it from a quote</Label>
-            <Select
-              id="conv-quote"
-              value={quoteId}
-              onChange={(e) => {
-                setQuoteId(e.target.value)
-                const q = rows.find((x) => x.id === e.target.value)
-                if (q) setCost(String(q.total))
-              }}
-            >
-              <option value="">No quote — package cost only</option>
-              {rows.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.quote_number} · {q.status} · {formatINR(q.total)}
+            <Label htmlFor="conv-client">Client</Label>
+            <Select id="conv-client" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Create “{lead.name ?? lead.phone ?? 'New client'}”</option>
+              {clientList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.phone ? ` · ${c.phone}` : ''}
                 </option>
               ))}
             </Select>
-            <p className="text-xs text-muted-foreground">
-              The quote's lines become the project's deliverables and show on its quotation.
-            </p>
           </div>
-        )}
-      </div>
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-      <div className="mt-3 flex justify-end gap-2">
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
-        </Button>
-        <Button size="sm" disabled={convert.isPending} onClick={submit}>
-          {convert.isPending ? 'Creating…' : 'Create project'}
-        </Button>
-      </div>
-    </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="conv-name">Project name</Label>
+            <Input id="conv-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!error && !name.trim()} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="conv-cost">Package (₹)</Label>
+            <Input
+              id="conv-cost"
+              type="number"
+              min={0}
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              placeholder="0"
+              className={cn(!cost && 'border-dashed border-tone-amber bg-tone-amber-soft/40')}
+            />
+            <p className="text-xs text-muted-foreground">This is the booked price, not the quote.</p>
+          </div>
+          {rows.length > 0 && (
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <Label htmlFor="conv-quote">Build it from a quote</Label>
+              <Select
+                id="conv-quote"
+                value={quoteId}
+                onChange={(e) => {
+                  setQuoteId(e.target.value)
+                  const q = rows.find((x) => x.id === e.target.value)
+                  if (q) setCost(String(q.total))
+                }}
+              >
+                <option value="">No quote — package cost only</option>
+                {rows.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.quote_number} · {q.status} · {formatINR(q.total)}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">The quote's lines become the project's deliverables and show on its quotation.</p>
+            </div>
+          )}
+        </div>
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={convert.isPending}>
+            Cancel
+          </Button>
+          <Button disabled={convert.isPending} onClick={submit}>
+            {convert.isPending ? 'Booking…' : 'Book it'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
