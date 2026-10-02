@@ -6,7 +6,6 @@ import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
 import { ShareChart } from '@/shared/ui/chart'
 import { SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
@@ -16,7 +15,8 @@ import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useGstSummary, useProfitAndLoss } from '@/features/financials/api'
 import { OverheadsCard } from '@/features/financials/Overheads'
 import { NeedsAttention } from '@/features/financials/NeedsAttention'
-import { PERIOD_LABEL, periodFor, rangeLabel, type PeriodKey } from '@/features/financials/period'
+import { usePeriod } from '@/features/financials/use-period'
+import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { allocateOverhead } from '@ipc/domain'
 import { TeamCostCard } from '@/features/financials/TeamCostCard'
 
@@ -27,8 +27,6 @@ export function FinancialsPage() {
     </AuthedPage>
   )
 }
-
-const PRESETS = Object.keys(PERIOD_LABEL) as Exclude<PeriodKey, 'custom'>[]
 
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—')
 const signed = (n: number) => (n < 0 ? `−${formatINR(Math.abs(n))}` : formatINR(n))
@@ -43,13 +41,10 @@ const signed = (n: number) => (n < 0 ? `−${formatINR(Math.abs(n))}` : formatIN
  * the money goes, the fixed overheads, and every project's own profit.
  */
 function ProfitAndLossPage() {
-  const [preset, setPreset] = useState<PeriodKey>('this_month')
-  const [custom, setCustom] = useState(() => {
-    const p = periodFor('this_month')
-    return { from: p.from, to: p.to }
-  })
+  // The one period switch shared with Invoices, Payments, Expenses and Reports.
+  const period = usePeriod()
+  const preset = period.choice
   const [basis, setBasis] = useState<PnlBasis>('cash')
-  const period = preset === 'custom' ? { ...custom, label: rangeLabel(custom.from, custom.to) } : periodFor(preset)
   const q = useProfitAndLoss({ from: period.from, to: period.to, basis })
   const data = q.data
   const gst = useGstSummary(period.from, period.to)
@@ -115,23 +110,7 @@ function ProfitAndLossPage() {
       {/* ── Which period, read which way ───────────────────────── */}
       <Card>
         <CardContent className="flex flex-col gap-3 p-4">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Period">
-            {PRESETS.map((k) => (
-              <Pill key={k} on={preset === k} onClick={() => setPreset(k)}>
-                {PERIOD_LABEL[k]}
-              </Pill>
-            ))}
-            <Pill on={preset === 'custom'} onClick={() => setPreset('custom')}>
-              Custom
-            </Pill>
-            {preset === 'custom' && (
-              <span className="flex flex-wrap items-center gap-2">
-                <Input type="date" aria-label="From" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} className="h-8 w-48" />
-                <span className="text-sm text-muted-foreground">to</span>
-                <Input type="date" aria-label="To" value={custom.to} min={custom.from} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} className="h-8 w-48" />
-              </span>
-            )}
-          </div>
+          <PeriodSwitch p={period} />
           <div className="flex flex-wrap items-center gap-3">
             <div className="inline-flex rounded-full border border-border bg-muted p-0.5" role="radiogroup" aria-label="Basis">
               {(['cash', 'booked'] as const).map((b) => (
@@ -187,22 +166,6 @@ function ProfitAndLossPage() {
         </div>
       )}
     </>
-  )
-}
-
-function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-        on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
   )
 }
 

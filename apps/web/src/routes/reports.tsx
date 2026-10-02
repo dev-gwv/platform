@@ -7,25 +7,16 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
 import { SkeletonCards, SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { downloadCsv } from '@/shared/ui/csv'
-import { periodFor, rangeLabel, type PeriodKey } from '@/features/financials/period'
+import { usePeriod } from '@/features/financials/use-period'
+import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { useDeliveryReport, useMoneyReport, useReportTabs, useSalesReport, useTeamReport } from '@/features/reports/api'
 import { deliveryCsv, moneyCsv, pctText, salesCsv, sourceLabel, teamCsv } from '@/features/reports/csv'
-
-type Preset = 'this_month' | 'last_month' | 'this_quarter' | 'this_fy'
-
-const PRESETS: { key: Preset; label: string }[] = [
-  { key: 'this_month', label: 'This month' },
-  { key: 'last_month', label: 'Last month' },
-  { key: 'this_quarter', label: 'This quarter' },
-  { key: 'this_fy', label: 'This financial year' },
-]
 
 const TABS: { key: ReportTab; label: string }[] = [
   { key: 'sales', label: 'Sales' },
@@ -45,11 +36,8 @@ export function ReportsPage() {
   const { loading } = useAuth()
   const allowed = useReportTabs()
   const tabs = TABS.filter((t) => allowed[t.key])
-  const [preset, setPreset] = useState<PeriodKey>('this_month')
-  const [custom, setCustom] = useState(() => {
-    const p = periodFor('this_month')
-    return { from: p.from, to: p.to }
-  })
+  // The one period switch shared with the money pages.
+  const period = usePeriod()
   const [tab, setTab] = useState<ReportTab | null>(null)
 
   if (loading) return <SkeletonCards count={3} />
@@ -57,8 +45,6 @@ export function ReportsPage() {
     return <EmptyState title="Not available" description="You don’t have access to reports. Ask the studio owner if you think you should." />
   }
 
-  const period =
-    preset === 'custom' ? { from: custom.from, to: custom.to, label: rangeLabel(custom.from, custom.to) } : periodFor(preset as Preset)
   const q: ReportQuery = { from: period.from, to: period.to }
   const active = tab && allowed[tab] ? tab : tabs[0]!.key
 
@@ -68,23 +54,7 @@ export function ReportsPage() {
 
       <Card>
         <CardContent className="flex flex-col gap-2 p-4">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Period">
-            {PRESETS.map((p) => (
-              <Pill key={p.key} on={preset === p.key} onClick={() => setPreset(p.key)}>
-                {p.label}
-              </Pill>
-            ))}
-            <Pill on={preset === 'custom'} onClick={() => setPreset('custom')}>
-              Custom
-            </Pill>
-          </div>
-          {preset === 'custom' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input type="date" aria-label="From" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} className="h-9 w-full sm:w-44" />
-              <span className="text-sm text-muted-foreground">to</span>
-              <Input type="date" aria-label="To" value={custom.to} min={custom.from} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} className="h-9 w-full sm:w-44" />
-            </div>
-          )}
+          <PeriodSwitch p={period} />
           <p className="text-xs text-muted-foreground">Showing {period.label}</p>
         </CardContent>
       </Card>
@@ -123,22 +93,6 @@ export function ReportsPage() {
 }
 
 // ── Pieces ────────────────────────────────────────────────────────────
-
-function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-        on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
 
 function Tile({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string | undefined }) {
   return (
