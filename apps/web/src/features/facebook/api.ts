@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  fbCheckResponse,
   fbConnectUrlResponse,
   fbDisconnectResponse,
   fbImportsSummary,
   fbLeadImport,
   fbPage,
+  fbResetResponse,
   fbStatusResponse,
   z,
   type FbPageConnectRequest,
   type FbTestImportRequest,
 } from '@ipc/contracts'
-import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
+import { ApiError, callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
@@ -43,6 +45,55 @@ export const useMetaConnectUrl = () =>
 
 export const useMetaPages = () => useMetaQuery(['pages'], () => callApi('/meta/pages', { responseSchema: pages }))
 
+/** The words shown when Facebook stopped accepting our tokens. */
+export const META_EXPIRED = 'Your Facebook connection expired. Please reconnect.'
+
+/**
+ * Asks Facebook whether the page tokens we hold still work. When the app was
+ * removed in Facebook (or the token revoked), the server forgets the whole
+ * connection and says `expired`; the card then offers Connect with Facebook.
+ */
+export function useCheckMetaConnection(enabled: boolean) {
+  const qc = useQueryClient()
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['meta', 'check'],
+    queryFn: async () => {
+      const r = await callApi('/meta/check', { method: 'POST', responseSchema: fbCheckResponse, timeoutMs: SLOW_TIMEOUT_MS })
+      if (r.expired) forgetPagesHere(qc)
+      return r
+    },
+    enabled: !!session && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
+/** Drop the Page list this browser holds, then ask the server again. */
+function forgetPagesHere(qc: ReturnType<typeof useQueryClient>) {
+  qc.setQueryData(['meta', 'pages'], [])
+  void qc.invalidateQueries({ queryKey: ['meta', 'pages'] })
+  void qc.invalidateQueries({ queryKey: ['meta', 'status'] })
+}
+
+/**
+ * "Disconnect Facebook": every page off the webhook, every page and token
+ * forgotten. Leads already received stay.
+ */
+export const useResetMeta = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => callApi('/meta/reset', { method: 'POST', responseSchema: fbResetResponse, timeoutMs: SLOW_TIMEOUT_MS }),
+    onSuccess: () => {
+      toast.success('Facebook disconnected. Leads already received are kept.')
+      qc.removeQueries({ queryKey: ['meta', 'check'] })
+      forgetPagesHere(qc)
+      void qc.invalidateQueries({ queryKey: ['crm'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 function useMetaMutation<TInput, TOutput>(fn: (input: TInput) => Promise<TOutput>, success?: (out: TOutput) => string) {
   const qc = useQueryClient()
   return useMutation<TOutput, Error, TInput>({
@@ -62,6 +113,9 @@ export const useConnectPage = () =>
       callApi('/meta/pages/connect', { method: 'POST', body: input, responseSchema: fbPage }),
     (p) => `${p.page_name} connected`,
   )
+
+/** The server answers 409 when Facebook no longer accepts the page's token. */
+export const isMetaExpired = (e: unknown) => e instanceof ApiError && e.status === 409
 
 /**
  * Our side is off the moment this returns. When Facebook could not be told,

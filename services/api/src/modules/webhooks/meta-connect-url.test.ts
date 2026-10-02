@@ -13,8 +13,10 @@ describe('the Connect with Facebook link', () => {
     const url = new URL(metaConnectUrl(env)!)
     expect(url.pathname).toBe('/v24.0/dialog/oauth')
     expect(url.searchParams.get('redirect_uri')).toBe('https://studioautopilot.in/lead-sources')
-    expect(url.searchParams.get('scope')).toBe('pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval')
+    expect(url.searchParams.get('scope')).toBe('pages_show_list,pages_manage_metadata,pages_read_engagement,business_management,leads_retrieval')
     expect(url.searchParams.get('config_id')).toBeNull()
+    // The permission dialog shows again, even after a connection before.
+    expect(url.searchParams.get('auth_type')).toBe('rerequest')
   })
 
   it('uses the Login for Business configuration when one is set', () => {
@@ -22,5 +24,6 @@ describe('the Connect with Facebook link', () => {
     expect(url.searchParams.get('config_id')).toBe('999')
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('scope')).toBeNull()
+    expect(url.searchParams.get('auth_type')).toBe('rerequest')
   })
 })

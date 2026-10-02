@@ -62,6 +62,14 @@ export type FbPageConnectRequest = z.infer<typeof fbPageConnectRequest>
 export const fbDisconnectResponse = z.object({ ok: z.literal(true), unsubscribed: z.boolean() })
 export type FbDisconnectResponse = z.infer<typeof fbDisconnectResponse>
 
+/** POST /meta/check: true when Facebook no longer accepts our tokens and the connection was forgotten. */
+export const fbCheckResponse = z.object({ expired: z.boolean() })
+export type FbCheckResponse = z.infer<typeof fbCheckResponse>
+
+/** POST /meta/reset ("Disconnect Facebook"): how many pages were forgotten, how many Facebook confirmed unsubscribed. */
+export const fbResetResponse = z.object({ ok: z.literal(true), forgotten: z.number().int(), unsubscribed: z.number().int() })
+export type FbResetResponse = z.infer<typeof fbResetResponse>
+
 export const fbTokenRequest = z.object({
   /** Manual long-lived page/user token (used when OAuth is not configured). */
   token: z.string().trim().min(10).max(2000),
