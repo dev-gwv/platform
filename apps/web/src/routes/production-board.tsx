@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Search, X } from 'lucide-react'
-import type { BoardDeliverable, Deliverable } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
@@ -14,6 +13,8 @@ import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { asDeliverable } from '@/features/board/as-deliverable'
+import { ListView } from '@/features/board/ListView'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { todayIso } from '@/features/projects/deliverable-stage'
 import { useProductionBoard } from '@/features/board/api'
@@ -23,7 +24,7 @@ import { PeopleView } from '@/features/board/PeopleView'
 import { TaskBoard } from '@/features/board/TaskBoard'
 import { BulkBar } from '@/features/board/BulkBar'
 
-type View = 'stages' | 'people' | 'tasks'
+type View = 'stages' | 'list' | 'people' | 'tasks'
 
 export function ProductionBoardPage() {
   return (
@@ -31,18 +32,6 @@ export function ProductionBoardPage() {
       <Board />
     </AuthedPage>
   )
-}
-
-/** A board card in the shape the deliverable panel reads. */
-function asDeliverable(d: BoardDeliverable): Deliverable {
-  return {
-    ...d,
-    list_key: 'primary',
-    is_additional_charge: false,
-    additional_charge_amount: 0,
-    show_on_quotation: d.visibility_scope === 'client',
-    start_rule: 'whole_project',
-  }
 }
 
 const FOCUS_TONE: Record<Focus, 'danger' | 'warning' | 'accent' | 'muted'> = {
@@ -71,7 +60,7 @@ function Board() {
   const [person, setPerson] = useUrlParam('person')
   const [focusParam, setFocus] = useUrlParam('focus')
   const [q, setQ] = useUrlParam('q')
-  const view: View = viewParam === 'people' || (viewParam === 'tasks' && canSeeTasks) ? viewParam : 'stages'
+  const view: View = viewParam === 'people' || viewParam === 'list' || (viewParam === 'tasks' && canSeeTasks) ? viewParam : 'stages'
   const focus = FOCI.some((f) => f.key === focusParam) ? (focusParam as Focus) : null
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -156,6 +145,7 @@ function Board() {
               }}
               tabs={[
                 { value: 'stages', label: 'Stages' },
+                { value: 'list', label: 'List' },
                 { value: 'people', label: 'People' },
                 ...(canSeeTasks ? [{ value: 'tasks' as const, label: 'Tasks' }] : []),
               ]}
@@ -210,6 +200,8 @@ function Board() {
                   </Button>
                 }
               />
+            ) : view === 'list' ? (
+              <ListView items={shown} stages={stages} lanes={lanes} canEdit={canEdit} me={me} selected={selected} onToggle={toggle} onOpen={setOpenId} />
             ) : view === 'people' ? (
               <PeopleView
                 items={shown}

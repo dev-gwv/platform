@@ -69,7 +69,7 @@ const DENIED_TEAM = 'You do not have access to this action.'
 
 /** Pay fields: a delegate needs team_salaries edit to set any of them. */
 const PAY_KEYS = [
-  'salary', 'freelancer_rate', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
+  'salary', 'freelancer_rate', 'rate_wedding_day', 'rate_half_day', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
   'pay_effective_from', 'pay_effective_to', 'compensation_notes', 'payment_type', 'pay_components', 'payment_status',
 ] as const
 
@@ -186,6 +186,8 @@ export const teamRouter = new Hono<AppEnv>()
           select u.user_id, u.name, u.role, u.engagement_type, u.phone, u.email,
                  ${canPlan ? sql`u.payout_type` : sql`null::text`} as payout_type,
                  ${canPlan ? sql`u.freelancer_rate` : sql`null::numeric`} as freelancer_rate,
+                 ${canPlan ? sql`u.rate_wedding_day` : sql`null::numeric`} as rate_wedding_day,
+                 ${canPlan ? sql`u.rate_half_day` : sql`null::numeric`} as rate_half_day,
                  coalesce(u.login_enabled, true) as login_enabled,
                  -- Heartbeats are company-scoped by RLS; 0216 indexes this.
                  (select max(ue.occurred_at) from usage_events ue where ue.user_id = u.user_id) as last_seen_at,
@@ -273,7 +275,7 @@ export const teamRouter = new Hono<AppEnv>()
           select
             u.user_id, u.name, u.email, u.role, u.phone, u.alternate_phone, u.status,
             u.engagement_type, u.login_enabled, u.salary, u.address, u.created_at,
-            u.freelancer_rate,
+            u.freelancer_rate, u.rate_wedding_day, u.rate_half_day,
             u.payout_type, u.commission_pct, u.commission_basis, u.stipend_amount,
             u.pay_effective_from, u.pay_effective_to, u.compensation_notes,
             u.payment_type, u.pay_components, u.payment_status,
@@ -306,6 +308,9 @@ export const teamRouter = new Hono<AppEnv>()
       : list.map((m) => ({
           ...m,
           salary: null,
+          freelancer_rate: null,
+          rate_wedding_day: null,
+          rate_half_day: null,
           commission_pct: null,
           stipend_amount: null,
           compensation_notes: null,
@@ -924,7 +929,7 @@ export const teamRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not update this member.')
     if (!rows.length) fail(404, 'We could not find that team member.')
     // Pay is sensitive: record that it changed, not what it changed to.
-    const { salary, freelancer_rate, commission_pct, stipend_amount, compensation_notes, ...rest } = patch
+    const { salary, freelancer_rate, rate_wedding_day, rate_half_day, commission_pct, stipend_amount, compensation_notes, ...rest } = patch
     await audit(c, {
       action: 'member.update',
       entityType: 'user',
@@ -933,6 +938,8 @@ export const teamRouter = new Hono<AppEnv>()
         ...rest,
         ...(salary !== undefined ||
         freelancer_rate !== undefined ||
+        rate_wedding_day !== undefined ||
+        rate_half_day !== undefined ||
         commission_pct !== undefined ||
         stipend_amount !== undefined ||
         compensation_notes !== undefined ||

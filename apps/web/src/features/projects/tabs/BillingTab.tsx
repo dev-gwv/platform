@@ -1,3 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
+import { shootListItem } from '@ipc/contracts'
+import { callApi } from '@/shared/api/client'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, CalendarClock, Check, CheckCircle2, FileText, Hourglass, IndianRupee, Link2, MessageCircle, Pencil, Plus, Receipt, Trash2, TrendingUp } from 'lucide-react'
@@ -16,7 +20,7 @@ import { issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/featu
 import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/RecordPaymentDialog'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
 import type { InvoiceFormValues } from '@/features/billing/InvoiceForm'
-import { PLAN_STATE_LABEL, planStatus } from '@/features/billing/plan'
+import { PLAN_STATE_LABEL, planDueDate, planStatus } from '@/features/billing/plan'
 import { projectInvoiceLines, unappliedPayments } from '@/features/billing/project-lines'
 import { dueText, isOverdue, shortDate } from '@/features/billing/status'
 import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-money'
@@ -235,7 +239,7 @@ export function BillingTab({
   const access = useAccess()
   const canBill = access.hasModule('billing')
   const canInvoice = access.hasAction('billing', 'create')
-  const [editing, setEditing] = useState<{ payment?: Payment; invoiceId?: string; amount?: number } | null>(null)
+  const [editing, setEditing] = useState<{ payment?: Payment; invoiceId?: string; amount?: number; dueOn?: string | null } | null>(null)
   const [invoicing, setInvoicing] = useState<Partial<InvoiceFormValues> | null>(null)
   const billing = useProjectBilling(project.id)
   const m = projectMoney(project)
@@ -296,7 +300,7 @@ export function BillingTab({
         invoicedValue={live.reduce((n, i) => n + i.taxable, 0)}
         canEdit={canEdit}
         canInvoice={canInvoice}
-        onRecord={(amount) => setEditing({ amount })}
+        onRecord={(amount, dueOn) => setEditing({ amount, dueOn })}
         onInvoice={(description, amount) => invoiceFor({ description, amount })}
         onOpenTerms={onOpenTab ? () => onOpenTab('terms') : undefined}
       />
@@ -358,6 +362,7 @@ export function BillingTab({
           target={{ kind: 'project', projectId: project.id, invoices: canBill ? openInvoices : [], invoiceId: editing.invoiceId }}
           payment={editing.payment}
           suggested={editing.amount ?? m.due}
+          dueOn={editing.dueOn}
           onClose={() => setEditing(null)}
         />
       )}
@@ -439,10 +444,19 @@ function PlanCard({
   invoicedValue: number
   canEdit: boolean
   canInvoice: boolean
-  onRecord: (amount: number) => void
+  onRecord: (amount: number, dueOn: string | null) => void
   onInvoice: (description: string, amount: number) => void
   onOpenTerms?: (() => void) | undefined
 }) {
+  const { session } = useAuth()
+  // Same key as the Shoots tab, so this shares its cache: each part's date is
+  // worked out from the shoots ("Before the wedding" = 7 days before it).
+  const shoots = useQuery({
+    queryKey: ['shoots', 'project', project.id],
+    queryFn: () => callApi(`/shoots?project_id=${project.id}`, { responseSchema: shootListItem.array() }),
+    enabled: !!session && !!plan,
+    staleTime: 15_000,
+  })
   if (loading) return null
   if (!plan) {
     // No plan is not a problem to fill a card with: one quiet line.
@@ -463,6 +477,7 @@ function PlanCard({
   const m = projectMoney(project)
   const total = project.total_cost > 0 ? project.total_cost : (plan.total_cost ?? 0)
   const rows = planStatus({ instalments: plan.instalments, total, received: m.received, invoiced: invoicedValue })
+  const dueOf = (trigger: string | null) => planDueDate(trigger, { shoots: shoots.data ?? [], agreedOn: plan.agreed_at })
   return (
     <Card>
       <CardContent className="p-4">
@@ -495,7 +510,13 @@ function PlanCard({
               <div className="min-w-[9rem] flex-1">
                 <p className="text-sm font-semibold">{r.label}</p>
                 <p className="text-xs text-muted-foreground">
-                  {[r.due_trigger, r.state === 'part' ? `${formatINR(r.received)} in, ${formatINR(r.remaining)} to come` : null].filter(Boolean).join(' · ') || '\u00a0'}
+                  {[
+                    r.due_trigger,
+                    r.state !== 'received' && dueOf(r.due_trigger) ? `due ${shortDate(dueOf(r.due_trigger)!.date)}` : null,
+                    r.state === 'part' ? `${formatINR(r.received)} in, ${formatINR(r.remaining)} to come` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '\u00a0'}
                 </p>
               </div>
               <span className="text-sm font-semibold tabular-nums">{formatINR(r.amount)}</span>
@@ -508,7 +529,7 @@ function PlanCard({
                     </Button>
                   )}
                   {canEdit && (
-                    <Button size="sm" onClick={() => onRecord(r.remaining)}>
+                    <Button size="sm" onClick={() => onRecord(r.remaining, dueOf(r.due_trigger)?.date ?? null)}>
                       <IndianRupee /> Add payment from client
                     </Button>
                   )}

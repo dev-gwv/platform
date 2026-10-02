@@ -14,7 +14,8 @@ import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { formatINR } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
-import { PERIOD_LABEL, periodFor, type PeriodKey } from '@/features/financials/period'
+import { usePeriod } from '@/features/financials/use-period'
+import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { MoneyTile } from '@/features/billing/MoneyTile'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
@@ -37,8 +38,6 @@ export function PaymentsPage() {
 
 const PAYMENT_PAGE_SIZE = 25
 type PaymentStatusFilter = 'all' | 'paid' | 'pending' | 'gst'
-const PERIOD_KEYS = ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_fy', 'last_fy'] as const
-const PERIOD_PILLS = ['this_month', 'last_month', 'this_fy', 'last_fy', 'all', 'custom'] as const
 const MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
 
 const PAYMENT_TONE = { paid: 'success', pending: 'warning' } as const
@@ -52,14 +51,11 @@ function PaymentsSection() {
   const setStatus = (v: PaymentStatusFilter) => setStatusParam(v)
   const [clientId, setClientId] = useUrlParam('client')
   const [projectId, setProjectId] = useUrlParam('project')
-  // The period is the filter people reach for first: this month, last month,
-  // the financial year. Custom dates stay for the odd question.
-  const [periodKey, setPeriodKey] = useUrlParam('period', 'this_fy')
-  const [customFrom, setCustomFrom] = useUrlParam('from')
-  const [customTo, setCustomTo] = useUrlParam('to')
-  const period = periodKey === 'custom' || periodKey === 'all' ? null : periodFor((PERIOD_KEYS.includes(periodKey as never) ? periodKey : 'this_fy') as Exclude<PeriodKey, 'custom'>)
-  const from = periodKey === 'custom' ? customFrom : (period?.from ?? '')
-  const to = periodKey === 'custom' ? customTo : (period?.to ?? '')
+  // The period is the filter people reach for first; it is the one switch
+  // shared with Invoices, Expenses, Profit & Loss and Reports.
+  const period = usePeriod()
+  const from = period.from
+  const to = period.to
   const [mode, setMode] = useUrlParam('mode')
   const [sortBy, setSortBy] = useState('date_received')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -103,7 +99,7 @@ function PaymentsSection() {
   const totalPages = Math.max(1, Math.ceil(total / PAYMENT_PAGE_SIZE))
 
   const clientProjects = (projects ?? []).filter((p) => !clientId || p.client_id === clientId)
-  const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || periodKey !== 'this_fy' || !!mode
+  const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || period.choice !== 'this_month' || !!mode
 
   function resetFilters() {
     setSearchInput('')
@@ -111,9 +107,7 @@ function PaymentsSection() {
     setStatus('all')
     setClientId('')
     setProjectId('')
-    setPeriodKey('this_fy')
-    setCustomFrom('')
-    setCustomTo('')
+    period.set('this_month')
     setMode('')
     setPage(1)
   }
@@ -167,30 +161,7 @@ function PaymentsSection() {
       )}
 
       <div className="mb-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Period">
-          {PERIOD_PILLS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={periodKey === k}
-              onClick={() => { setPeriodKey(k); setPage(1) }}
-              className={cn(
-                'rounded-full border px-3 py-1 text-sm transition-colors',
-                periodKey === k ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {k === 'custom' ? 'Custom' : k === 'all' ? 'All time' : PERIOD_LABEL[k]}
-            </button>
-          ))}
-          {periodKey === 'custom' && (
-            <>
-              <Input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1) }} className="w-40" aria-label="From date" />
-              <Input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1) }} className="w-40" aria-label="To date" />
-            </>
-          )}
-          {period && <span className="text-xs text-muted-foreground">{period.label}</span>}
-        </div>
+        <PeriodSwitch p={period} onChange={() => setPage(1)} />
         <div className="flex flex-wrap items-center gap-2">
           <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search receipt no., client, project, reference…" className="w-full sm:w-64" aria-label="Search payments" />
           <Select value={status} onChange={(e) => { setStatus(e.target.value as PaymentStatusFilter); setPage(1) }} className="w-full sm:w-40" aria-label="Received or promised">

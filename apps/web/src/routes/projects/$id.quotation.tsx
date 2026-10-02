@@ -27,9 +27,11 @@ import {
   RotateCcw,
   Send,
   Star,
+  Eye,
 } from 'lucide-react'
 import { callApi } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
 import { Button } from '@/shared/ui/button'
@@ -155,6 +157,10 @@ function ProjectQuotation() {
   const [emailMessage, setEmailMessage] = useState('')
   // "Send to client" lives in one menu; the journey bar opens the same menu.
   const [sendOpen, setSendOpen] = useState(false)
+  // "See it as the client": the full paper the client's link shows, here --
+  // nothing is issued, opened or counted.
+  const [asParam, setAs] = useUrlParam('as')
+  const asClient = asParam === 'client'
 
   useEffect(() => {
     if (data && !loaded) {
@@ -472,6 +478,7 @@ function ProjectQuotation() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-56 p-1.5">
+                <MenuItem icon={<Eye />} label="See it as the client" onSelect={() => { setSendOpen(false); setAs('client') }} />
                 <MenuItem icon={<Mail />} label="Email" onSelect={() => { setSendOpen(false); openEmail() }} />
                 <MenuItem icon={<MessageCircle />} label="WhatsApp" disabled={issue.isPending} onSelect={() => { setSendOpen(false); void onWhatsApp() }} />
                 <MenuItem icon={<Link2 />} label={issue.isPending ? 'Preparing…' : 'Copy link'} disabled={issue.isPending} onSelect={() => { setSendOpen(false); void onShare() }} />
@@ -562,18 +569,35 @@ function ProjectQuotation() {
         </div>
       )}
 
+      {asClient && (
+        <div className="no-print mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm" role="status">
+          <Eye className="size-4 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">
+            This is what your client sees. Opening it here isn&apos;t counted as a client view.
+            {!project.show_quotation && ' It is hidden from them until you turn on "Client can see it".'}
+          </span>
+          <Button size="sm" variant="outline" className="h-7" onClick={() => setAs('')}>
+            Back to my view
+          </Button>
+        </div>
+      )}
+
       <div className="mt-3">
-        <QuotationDocument
-          data={doc}
-          prefs={prefs}
-          compact
-          onEditTerms={canEdit ? openTerms : undefined}
-          onEditFrom={
-            canEdit
-              ? (where) => void navigate({ to: '/projects/$id', params: { id }, search: { tab: where } as never })
-              : undefined
-          }
-        />
+        {asClient ? (
+          <QuotationDocument data={doc} prefs={prefs} />
+        ) : (
+          <QuotationDocument
+            data={doc}
+            prefs={prefs}
+            compact
+            onEditTerms={canEdit ? openTerms : undefined}
+            onEditFrom={
+              canEdit
+                ? (where) => void navigate({ to: '/projects/$id', params: { id }, search: { tab: where } as never })
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <Dialog open={termsOpen} onOpenChange={(o) => !update.isPending && setTermsOpen(o)}>

@@ -74,3 +74,45 @@ export function rangeLabel(from: string, to: string): string {
   const b = t.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
   return `${a} – ${b}`
 }
+
+/**
+ * What the money pages' period switch can hold: a preset, All time, or a
+ * custom range. One choice is shared by Invoices, Payments received,
+ * Expenses, Profit & Loss and Reports (`?period=`, remembered per studio).
+ */
+export type PeriodChoice = Exclude<PeriodKey, 'custom'> | 'all' | 'custom'
+
+export const PERIOD_CHOICES: readonly Exclude<PeriodChoice, 'custom'>[] = [
+  'this_month',
+  'last_month',
+  'this_quarter',
+  'last_quarter',
+  'this_fy',
+  'last_fy',
+  'all',
+]
+
+export function parsePeriodChoice(v: string | null | undefined): PeriodChoice | null {
+  if (!v) return null
+  if (v === 'all' || v === 'custom') return v
+  return v in PERIOD_LABEL ? (v as PeriodChoice) : null
+}
+
+export function choiceLabel(c: Exclude<PeriodChoice, 'custom'>): string {
+  return c === 'all' ? 'All time' : PERIOD_LABEL[c]
+}
+
+/** The dates a choice covers. All time is the widest range the books can hold. */
+export function resolvePeriod(
+  choice: PeriodChoice,
+  custom: { from: string; to: string },
+  today = new Date(),
+): { from: string; to: string; label: string } {
+  if (choice === 'all') return { from: '2000-01-01', to: '2099-12-31', label: 'All time' }
+  if (choice === 'custom') {
+    if (custom.from && custom.to) return { ...custom, label: rangeLabel(custom.from, custom.to) }
+    const p = periodFor('this_month', today)
+    return { from: custom.from || p.from, to: custom.to || p.to, label: 'Pick the dates' }
+  }
+  return periodFor(choice, today)
+}

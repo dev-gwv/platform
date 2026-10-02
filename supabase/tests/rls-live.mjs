@@ -1655,6 +1655,18 @@ if (listed) {
       tmSelf.status === 409 && tmOwnerReset.status === 403 && tmOtherStudio.status === 404,
     { edit: tmEdit.status, pay: tmEditPay.status, promote: tmPromote.status, owner: tmOwner.status, self: tmSelf.status, reset: tmOwnerReset.status, other: tmOtherStudio.status },
   )
+  // Usual rates (0233) are pay: a Team Manager without salary rights can neither set nor see them.
+  const tmRate = await api(`/team/members/${raviUid}`, { token: tmToken, method: 'PATCH', body: { rate_wedding_day: 12000 } })
+  const ownerRate = await api(`/team/members/${raviUid}`, { token: aToken, method: 'PATCH', body: { freelancer_rate: 8000, rate_wedding_day: 12000, rate_half_day: 4500 } })
+  const ownerDir = ((await api('/team/directory', { token: aToken })).json ?? []).find?.((m) => m.user_id === raviUid)
+  const tmDir = ((await api('/team/directory', { token: tmToken })).json ?? []).find?.((m) => m.user_id === raviUid)
+  const negRate = await api(`/team/members/${raviUid}`, { token: aToken, method: 'PATCH', body: { rate_half_day: -5 } })
+  check(
+    'usual rates: the owner sets a wedding-day and a half-day rate; a Team Manager can neither set nor see them; a negative is refused',
+    tmRate.status === 403 && ownerRate.status === 200 && ownerDir?.rate_wedding_day === 12000 && ownerDir?.rate_half_day === 4500 &&
+      tmDir && tmDir.rate_wedding_day === null && tmDir.freelancer_rate === null && negRate.status === 422,
+    { tmRate: tmRate.status, ownerRate: ownerRate.status, ownerDir: ownerDir && { w: ownerDir.rate_wedding_day, h: ownerDir.rate_half_day }, tmDir: tmDir && { w: tmDir.rate_wedding_day, f: tmDir.freelancer_rate }, neg: negRate.status },
+  )
   const tmInvite = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Neha Editor', email: `neha-${rand()}@example.com`, role: 'employee' } })
   const tmInviteAdmin = await api('/team/invitations', { token: tmToken, method: 'POST', body: { name: 'Big Boss', email: `boss-${rand()}@example.com`, role: 'admin' } })
   const tmInvites = await api('/team/invitations', { token: tmToken })

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { PayComponent, PaymentStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select } from '@/shared/ui/input'
+import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
 import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
@@ -45,6 +46,13 @@ export interface CompensationDraft {
   salary: string
   /** Per-shoot/day rate — only for the freelancer_rate component (split from salary). */
   freelancer_rate: string
+  /**
+   * Usual rates beside the day rate (0233): a wedding day, and a half day
+   * (5 h or less). Assign team fills a booking's payout from them. Shown only
+   * where the form carries them (editing a person).
+   */
+  rate_wedding_day?: string
+  rate_half_day?: string
   /** Whether this person gets dashboard login access (maps to create_login/login_enabled). */
   has_login_access: boolean
   payout_type: '' | 'salary' | 'per_shoot' | 'per_day' | 'per_project' | 'custom'
@@ -68,6 +76,8 @@ export function validateCompensation(
     | 'pay_components'
     | 'salary'
     | 'freelancer_rate'
+    | 'rate_wedding_day'
+    | 'rate_half_day'
     | 'commission_pct'
     | 'stipend_amount'
     | 'pay_effective_from'
@@ -80,6 +90,8 @@ export function validateCompensation(
   const amounts: Array<[string, string]> = [
     [v.salary, 'Monthly salary'],
     [v.freelancer_rate, 'Rate'],
+    [v.rate_wedding_day ?? '', 'Wedding day rate'],
+    [v.rate_half_day ?? '', 'Half day rate'],
     [v.stipend_amount, 'Stipend'],
   ]
   for (const [raw, label] of amounts) {
@@ -97,6 +109,13 @@ export function validateCompensation(
     return 'Effective to must be on or after effective from.'
   return null
 }
+
+const PAYOUT_TYPES: readonly { value: CompensationDraft['payout_type']; label: string }[] = [
+  { value: 'per_shoot', label: 'Per shoot' },
+  { value: 'per_day', label: 'Per day' },
+  { value: 'per_project', label: 'Per project' },
+  { value: 'custom', label: 'Custom' },
+]
 
 type Setter = <K extends keyof CompensationDraft>(key: K, value: CompensationDraft[K]) => void
 
@@ -261,14 +280,48 @@ export function CompensationFields({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Payout type</Label>
-            <Select value={value.payout_type} onChange={(e) => onChange('payout_type', e.target.value as CompensationDraft['payout_type'])}>
-              <option value="">Select…</option>
-              <option value="per_shoot">Per shoot</option>
-              <option value="per_day">Per day</option>
-              <option value="per_project">Per project</option>
-              <option value="custom">Custom</option>
-            </Select>
+            <div role="radiogroup" aria-label="Payout type" className="flex flex-wrap gap-1.5">
+              {PAYOUT_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={value.payout_type === t.value}
+                  onClick={() => onChange('payout_type', value.payout_type === t.value ? '' : t.value)}
+                  className={cn(
+                    'rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors',
+                    value.payout_type === t.value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-background hover:bg-muted',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
+          {value.rate_wedding_day !== undefined && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label>Wedding day rate (₹)</Label>
+                <Input
+                  inputMode="numeric"
+                  value={value.rate_wedding_day}
+                  onChange={(e) => onChange('rate_wedding_day', e.target.value)}
+                  placeholder="Same as the rate"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Half day rate (₹, 5 hours or less)</Label>
+                <Input
+                  inputMode="numeric"
+                  value={value.rate_half_day ?? ''}
+                  onChange={(e) => onChange('rate_half_day', e.target.value)}
+                  placeholder="Same as the rate"
+                />
+              </div>
+            </>
+          )}
         </div>
       )}
 

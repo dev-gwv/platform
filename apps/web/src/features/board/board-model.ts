@@ -153,3 +153,18 @@ export function sortInLane(items: readonly BoardDeliverable[], lane: Pick<Lane, 
   }
   return [...items].sort((a, b) => (a.estimated_date ?? '9999').localeCompare(b.estimated_date ?? '9999') || a.title.localeCompare(b.title))
 }
+
+/**
+ * The List view's order: late work first, then by due date (soonest first,
+ * undated last), then project and title -- the order someone works down.
+ */
+export function sortForList(items: readonly BoardDeliverable[], today = todayIso()): BoardDeliverable[] {
+  const late = (d: BoardDeliverable) => !!d.estimated_date && d.estimated_date < today && stageOf(d.status) !== 'completed'
+  return [...items].sort(
+    (a, b) =>
+      Number(late(b)) - Number(late(a)) ||
+      (a.estimated_date ?? '9999-12-31').localeCompare(b.estimated_date ?? '9999-12-31') ||
+      a.project_name.localeCompare(b.project_name) ||
+      a.title.localeCompare(b.title),
+  )
+}

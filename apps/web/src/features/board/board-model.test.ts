@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardDeliverable, DeliverableStage } from '@ipc/contracts'
-import { applyFilters, focusCounts, laneOf, lanesFor, personLoad, sortInLane } from './board-model'
+import { applyFilters, focusCounts, laneOf, lanesFor, personLoad, sortForList, sortInLane } from './board-model'
 
 const st = (code: string, label: string, stage: DeliverableStage['stage'], sort: number, color = 'slate', team = true): DeliverableStage => ({
   id: `00000000-0000-4000-8000-${String(sort).padStart(12, '0')}`,
@@ -118,5 +118,27 @@ describe('what a person is carrying', () => {
     const e = d({})
     const f = d({ estimated_date: '2026-09-01' })
     expect(sortInLane([c, e, f], { status: 'pending' })).toEqual([f, c, e])
+  })
+})
+
+describe('sortForList', () => {
+  it('puts late work first, then soonest due, undated last, then project and title', () => {
+    const today = '2026-10-02'
+    const items = [
+      d({ title: 'Undated', estimated_date: null }),
+      d({ title: 'Next week', estimated_date: '2026-10-09' }),
+      d({ title: 'Late B', estimated_date: '2026-09-30', project_name: 'B wedding' }),
+      d({ title: 'Late A', estimated_date: '2026-09-30', project_name: 'A wedding' }),
+      d({ title: 'Delivered, past date', estimated_date: '2026-09-01', status: 'completed' }),
+      d({ title: 'Tomorrow', estimated_date: '2026-10-03' }),
+    ]
+    expect(sortForList(items, today).map((x) => x.title)).toEqual([
+      'Late A',
+      'Late B',
+      'Delivered, past date',
+      'Tomorrow',
+      'Next week',
+      'Undated',
+    ])
   })
 })

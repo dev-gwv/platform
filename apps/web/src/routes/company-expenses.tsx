@@ -16,11 +16,11 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { cn } from '@/shared/ui/cn'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useExpensePage, useDeleteExpense, useExpenseSummary, useMarkReimbursed } from '@/features/financials/api'
-import { PERIOD_LABEL, periodFor, type PeriodKey } from '@/features/financials/period'
+import { usePeriod } from '@/features/financials/use-period'
+import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { useProjects } from '@/features/projects/api'
 import { useDirectory } from '@/features/team/api'
 import { useActiveLookups } from '@/features/settings/api'
@@ -32,7 +32,6 @@ import { ReceiptsPanel } from '@/features/expenses/ReceiptsPanel'
 import { shortDate } from '@/features/billing/status'
 
 const PAGE_SIZE = 25
-const PERIOD_PILLS = ['this_month', 'last_month', 'this_fy', 'last_fy', 'all', 'custom'] as const
 
 export function CompanyExpensesPage() {
   return (
@@ -94,12 +93,10 @@ function Expenses() {
   const del = useDeleteExpense()
   const reimburse = useMarkReimbursed()
 
-  const [periodKey, setPeriodKey] = useUrlParam('period', 'this_month')
-  const [customFrom, setCustomFrom] = useUrlParam('from')
-  const [customTo, setCustomTo] = useUrlParam('to')
-  const period = periodKey === 'custom' || periodKey === 'all' ? null : periodFor((PERIOD_PILLS.includes(periodKey as never) ? periodKey : 'this_month') as Exclude<PeriodKey, 'custom'>)
-  const dateFrom = periodKey === 'custom' ? customFrom : (period?.from ?? '')
-  const dateTo = periodKey === 'custom' ? customTo : (period?.to ?? '')
+  // The one period switch shared with Invoices, Payments, Profit & Loss and Reports.
+  const period = usePeriod()
+  const dateFrom = period.from
+  const dateTo = period.to
   const [search, setSearch] = useState('')
   const [category, setCategory] = useUrlParam('category')
   const [projectId, setProjectId] = useUrlParam('project')
@@ -132,7 +129,7 @@ function Expenses() {
   const total = pageData?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const activeCount = [search.trim(), category, projectId, paidBy, gst, missing].filter(Boolean).length + (periodKey !== 'this_month' ? 1 : 0)
+  const activeCount = [search.trim(), category, projectId, paidBy, gst, missing].filter(Boolean).length + (period.choice !== 'this_month' ? 1 : 0)
   const change = (fn: () => void) => {
     fn()
     setPage(1)
@@ -145,9 +142,7 @@ function Expenses() {
       setProjectId('')
       setPaidBy('')
       setGst('')
-      setPeriodKey('this_month')
-      setCustomFrom('')
-      setCustomTo('')
+      period.set('this_month')
       setView('all')
       setMissing('')
     })
@@ -231,30 +226,7 @@ function Expenses() {
 
       <div className="no-print mb-4 flex flex-col gap-3">
         {view !== 'to_reimburse' && (
-          <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Period">
-            {PERIOD_PILLS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={periodKey === k}
-                onClick={() => change(() => setPeriodKey(k))}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-sm transition-colors',
-                  periodKey === k ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {k === 'custom' ? 'Custom' : k === 'all' ? 'All time' : PERIOD_LABEL[k]}
-              </button>
-            ))}
-            {periodKey === 'custom' && (
-              <>
-                <Input type="date" value={customFrom} onChange={(e) => change(() => setCustomFrom(e.target.value))} className="w-40" aria-label="From date" />
-                <Input type="date" value={customTo} onChange={(e) => change(() => setCustomTo(e.target.value))} className="w-40" aria-label="To date" />
-              </>
-            )}
-            {period && <span className="text-xs text-muted-foreground">{period.label}</span>}
-          </div>
+          <PeriodSwitch p={period} onChange={() => change(() => undefined)} />
         )}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-60">
