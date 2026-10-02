@@ -3551,5 +3551,91 @@ if (listed) {
   await api('/hr/leave/allowances', { token: aToken, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: null }, { kind: 'sick', days_per_year: null }] } })
 }
 
+// ── Give work (0229): who is busy, what is due, a team member's project page, money for money access ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const mk = async (name, extra = {}) => {
+    const email = `gw-${rand()}@madeup.test`
+    const added = await api('/team/members', { token: aToken, method: 'POST', body: { name, phone: randPhone(), email, password: 'Gw-pass-1234', create_login: true, ...extra } })
+    const token = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Gw-pass-1234' } })).json.access_token
+    return { uid: added.json.user_id, token }
+  }
+  const ed = await mk('Neha Editor')
+  const shooter = await mk('Ravi Shooter', { engagement_type: 'freelancer' })
+  const pm = await mk('Pooja Manager')
+  await api(`/access/${pm.uid}`, { token: aToken, method: 'PUT', body: { profile_key: 'project_manager', overrides: [] } })
+
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Give Co ${rand()}`, phone: randPhone() } })
+  const pid = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Give project ${rand()}`, client_id: client.json.id, package_cost: 90000 } })).json.id
+  const other = (await api('/projects', { token: aToken, method: 'POST', body: { name: `Not hers ${rand()}`, client_id: client.json.id } })).json.id
+  const day = '2027-03-10'
+  const haldi = (await api('/shoots', { token: aToken, method: 'POST', body: { project_id: pid, name: 'Haldi', shoot_date: day } })).json.id
+  const booked = await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: shooter.uid, shoot_id: haldi, service_name: 'Candid Photographer', start_at: `${day}T10:00:00.000Z`, end_at: `${day}T16:00:00.000Z`, estimated_cost: 5000, cost_status: 'tentative' },
+  })
+  const slotId = booked.json.id ?? booked.json.slot_id
+  const diskName = `WD Red ${rand()}`
+  const loc = await api('/data/locations', { token: aToken, method: 'POST', body: { name: diskName, kind: 'drive' } })
+  const rec = await api('/data', {
+    token: aToken,
+    method: 'POST',
+    body: { shoot_id: haldi, project_id: pid, slot_id: slotId, data_label: 'Camera A', primary_location_id: loc.json.id, folder_path: '/2027/Give/Haldi', primary_status: 'copied', card_count: 2 },
+  })
+  const tomorrow = new Date(Date.now() + 330 * 60_000 + 86_400_000).toISOString().slice(0, 10)
+  const dl = await api(`/projects/${pid}/deliverables`, { token: aToken, method: 'POST', body: { title: 'Wedding Teaser', shoot_id: haldi } })
+  const gave = await api(`/projects/${pid}/deliverables/${dl.json.id}`, { token: aToken, method: 'PATCH', body: { assignee_id: ed.uid, estimated_date: tomorrow } })
+
+  const load = await api('/projects/deliverables/workload', { token: aToken })
+  const edLoad = (load.json ?? []).find((w) => w.user_id === ed.uid)
+  const due = await api('/me/due', { token: ed.token })
+  const dueRow = (due.json ?? []).find((i) => i.id === dl.json.id)
+  const staffLoad = await api('/projects/deliverables/workload', { token: ed.token })
+  check(
+    'give work: the owner sees how busy Neha is; Neha sees the edit due tomorrow in her top bar; staff cannot see the workload',
+    rec.status === 201 && gave.status === 204 && edLoad?.open === 1 && dueRow?.days === 1 && dueRow?.mine === true && staffLoad.status === 403,
+    { rec: rec.status, gave: gave.status, edLoad, dueRow, staffLoad: staffLoad.status },
+  )
+
+  const page = await api(`/me/projects/${pid}`, { token: ed.token })
+  const sh = (page.json?.shoots ?? []).find((x) => x.id === haldi)
+  const raw = JSON.stringify(page.json ?? {})
+  const notHers = await api(`/me/projects/${other}`, { token: ed.token })
+  const mine = (await api('/projects/deliverables/mine', { token: ed.token })).json.find((d) => d.id === dl.json.id)
+  check(
+    'team project page: Neha sees the Haldi crew and where its data is (disk name, folder), her edit with data ready; no money, no phone; not a project she is not on',
+    page.status === 200 && sh?.crew.some((c) => c.name === 'Ravi Shooter' && c.role === 'Candid Photographer') &&
+      sh?.data[0]?.main === diskName && sh?.data[0]?.folder_path === '/2027/Give/Haldi' &&
+      !raw.includes('5000') && !raw.includes(client.json.phone ?? 'no-phone') && !raw.includes('estimated_cost') &&
+      page.json.deliverables.some((d) => d.id === dl.json.id) && notHers.status === 404 &&
+      mine?.shoots?.[0]?.data_ready === true && (mine?.data_where ?? '').includes(diskName) && !!mine?.assigned_by_name,
+    { page: page.status, crew: sh?.crew, data: sh?.data?.[0], notHers: notHers.status, mine: mine && { shoots: mine.shoots, where: mine.data_where, by: mine.assigned_by_name } },
+  )
+
+  const handed = await api('/work/submissions', { token: ed.token, method: 'POST', body: { project_id: pid, deliverable_id: dl.json.id, submission_link: 'https://drive.example.com/teaser-v1' } })
+  const ownerNotes = await api('/notifications?type=deliverable_submitted', { token: aToken })
+  const edNotes = await api('/notifications?type=deliverable_assigned', { token: ed.token })
+  check(
+    'hand-in: the owner who gave the work hears "Neha Editor handed in Wedding Teaser"; her assignment alert opens the item',
+    handed.status === 201 &&
+      (ownerNotes.json ?? []).some((n) => n.entity_id === dl.json.id && n.title === 'Neha Editor handed in Wedding Teaser' && n.deep_link === `/projects/${pid}?tab=completed_work`) &&
+      (edNotes.json ?? []).some((n) => n.entity_id === dl.json.id && n.deep_link === `/my-work?d=${dl.json.id}`),
+    { handed: handed.status, owner: (ownerNotes.json ?? []).map((n) => n.title), ed: (edNotes.json ?? []).map((n) => n.deep_link) },
+  )
+
+  const pmProject = await api(`/projects/${pid}`, { token: pm.token })
+  const pmBilling = await api(`/projects/${pid}/billing`, { token: pm.token })
+  const pmCosts = await api(`/projects/${pid}/costs`, { token: pm.token })
+  const ownerProject = await api(`/projects/${pid}`, { token: aToken })
+  const pmList = (await api('/projects', { token: pm.token })).json.find((x) => x.id === pid)
+  check(
+    'money: a Project Manager runs the project but sees no money (value 0, billing and cost sheet 403); the owner sees it',
+    pmProject.status === 200 && pmProject.json.total_cost === 0 && pmProject.json.payments.length === 0 && pmBilling.status === 403 &&
+      pmCosts.status === 403 && pmList?.total_cost === 0 && ownerProject.json.total_cost > 0,
+    { pm: pmProject.status, pmTotal: pmProject.json?.total_cost, pmBilling: pmBilling.status, pmCosts: pmCosts.status, owner: ownerProject.json?.total_cost },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

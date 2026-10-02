@@ -152,13 +152,29 @@ export function useDeleteDeliverable(id: string) {
 }
 
 /** Deliverables the signed-in person is the editor on. */
-export function useMyDeliverables() {
+export function useMyDeliverables(opts: { done?: number } = {}) {
   const { session } = useAuth()
+  const done = opts.done ?? 0
   return useQuery({
-    queryKey: ['projects', 'my-deliverables'],
-    queryFn: () => callApi('/projects/deliverables/mine', { responseSchema: myDeliverable.array() }),
+    queryKey: ['projects', 'my-deliverables', done],
+    // ?done=14 also brings what was delivered in the last 14 days.
+    queryFn: () => callApi(`/projects/deliverables/mine${done ? `?done=${done}` : ''}`, { responseSchema: myDeliverable.array() }),
     enabled: !!session,
     staleTime: 30_000,
+  })
+}
+
+/** The editor says "I've started" -- which stops the start reminders. */
+export function useStartDeliverable() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/projects/deliverables/${id}/start`, { method: 'POST', responseSchema: z.unknown() }),
+    onSuccess: () => {
+      toast.success('Marked as started')
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+      void qc.invalidateQueries({ queryKey: ['me'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

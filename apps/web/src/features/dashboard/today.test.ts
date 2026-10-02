@@ -96,7 +96,7 @@ describe("a team member's day", () => {
     })
     expect(next).toHaveLength(2)
     expect(next[0]!.title).toMatch(/^Sun, 25 Oct · 10\sAM–2\sPM · Engagement/)
-    expect(next[1]!.note).toBe('Due Tue, 27 Oct')
+    expect(next[1]!.note).toBe('4 days left · Tue, 27 Oct')
   })
 
   it('says when to start an edit, and puts one sent back near the top', () => {
@@ -112,7 +112,7 @@ describe("a team member's day", () => {
       ],
     })
     expect(today.map((i) => i.note)).toEqual(['Start · 3 days late', 'Sent back for changes', 'Start today'])
-    expect(next.map((i) => i.note)).toEqual(['Start Mon, 26 Oct', 'Due Thu, 29 Oct'])
+    expect(next.map((i) => i.note)).toEqual(['Start Mon, 26 Oct', '6 days left · Thu, 29 Oct'])
   })
 
   it('marks a call late once its hour has gone, and asks for cards still owed', () => {

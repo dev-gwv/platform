@@ -45,7 +45,7 @@ import { requireAction } from '../../middleware/permissions'
 import { selectMyDeliverables } from '../../lib/my-work'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { requireMoney, requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
@@ -1007,8 +1007,11 @@ export const projectsRouter = new Hono<AppEnv>()
     const auth = c.get('auth')
     // ?done=14 also brings what was delivered in the last 14 days.
     const done = Math.max(0, Math.min(Number(c.req.query('done') ?? 0) || 0, 60))
+    // A service read, scoped here to the caller's own edits in their studio:
+    // row security would hide the shooters' data records, and whether the
+    // data is in -- and where -- is the point.
     const rows = await attempt(c, 'projects.deliverables_mine', () =>
-      withUser(c.env, auth.userId, (sql) => selectMyDeliverables(sql, { companyId: auth.companyId, userId: auth.userId, done })),
+      withService(c.env, (sql) => selectMyDeliverables(sql, { companyId: auth.companyId, userId: auth.userId, done })),
     )
     if (!rows) fail(400, 'We could not load your deliverables.')
     return c.json(myDeliverable.array().parse(rows))

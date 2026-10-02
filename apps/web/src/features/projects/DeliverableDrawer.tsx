@@ -159,7 +159,9 @@ function DrawerBody({
       {/* ── Brief, link, conversation ────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <Brief d={d} canEdit={canEdit} />
-        <DeliveryLink d={d} canEdit={canWrite} />
+        {/* The link is changed through the project (projects edit); an editor
+            hands in a new one with "Hand in work" instead. */}
+        <DeliveryLink d={d} canEdit={canEdit} />
         <Timeline d={d} me={me} canModerate={access.hasAction('projects', 'edit')} stages={stages} />
 
         {canEdit && (

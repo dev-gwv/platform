@@ -8,6 +8,7 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
+import { cn } from '@/shared/ui/cn'
 import { useMyTasks } from '@/features/tasks/api'
 import { useMyDeliverables } from '@/features/projects/api'
 import { revisionHint, submittedMessage } from '@/features/projects/revisions'
@@ -65,6 +66,7 @@ export function SubmitWorkDialog({
   projectId,
   deliverableId,
   revision,
+  reviewer,
 }: {
   submission?: WorkSubmission
   trigger?: ReactNode
@@ -74,6 +76,8 @@ export function SubmitWorkDialog({
   deliverableId?: string
   /** Handing in again what was sent back: the last version, and what to change. */
   revision?: { lastVersion: number | null; note: string | null }
+  /** Who gave the work out, and so who looks at it: "Priya will look at it." */
+  reviewer?: string | null | undefined
 } = {}) {
   const isEdit = !!submission
   const submit = useSubmitWork()
@@ -87,13 +91,20 @@ export function SubmitWorkDialog({
   const [workType, setWorkType] = useState(submission?.work_type ?? '')
   const [method, setMethod] = useState(submission?.method ?? '')
   const [storageRef, setStorageRef] = useState(submission?.storage_ref ?? submission?.location_note ?? '')
+  // Also on a hard disk: which disk and which folder, next to the link.
+  const [onDisk, setOnDisk] = useState(!!submission?.disk_name)
+  const [diskName, setDiskName] = useState(submission?.disk_name ?? '')
+  const [folder, setFolder] = useState(submission?.folder_path ?? '')
   const [notes, setNotes] = useState(submission?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `work-submission:${submission?.id ?? `new:${deliverableId ?? taskId ?? projectId ?? ''}`}` : null,
-    { task, deliverable, link, workType, method, storageRef, notes },
+    { task, deliverable, link, workType, method, storageRef, notes, onDisk, diskName, folder },
     (v) => {
+      setOnDisk(v.onDisk)
+      setDiskName(v.diskName)
+      setFolder(v.folder)
       setTask(v.task)
       setDeliverable(v.deliverable)
       setLink(v.link)
@@ -107,8 +118,16 @@ export function SubmitWorkDialog({
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!/^https?:\/\/\S+$/i.test(link.trim())) {
+      setError('Paste the full link, starting with https://')
+      return
+    }
+    const disk = onDisk ? [diskName.trim(), folder.trim()].filter(Boolean).join(' · ') : ''
     try {
       const extra = {
+        ...(onDisk && diskName.trim() ? { disk_name: diskName.trim() } : {}),
+        ...(onDisk && folder.trim() ? { folder_path: folder.trim() } : {}),
+        ...(disk && !storageRef.trim() ? { storage_ref: disk, location_note: disk } : {}),
         ...(workType.trim() ? { work_type: workType.trim() } : {}),
         ...(method.trim() ? { method: method.trim() } : {}),
         ...(storageRef.trim() ? { storage_ref: storageRef.trim(), location_note: storageRef.trim() } : {}),
@@ -137,6 +156,7 @@ export function SubmitWorkDialog({
       }
       draft.clear()
       setOpen(false)
+      if (!isEdit && deliverable && reviewer) toast.success(`Sent to ${reviewer.split(' ')[0]} for review`)
       if (!isEdit) {
         setTask(taskId ?? '')
         setDeliverable(deliverableId ?? '')
@@ -158,13 +178,19 @@ export function SubmitWorkDialog({
       <DialogTrigger asChild>
         {trigger ?? (
           <Button>
-            <Plus /> Submit work
+            <Plus /> Hand in work
           </Button>
         )}
       </DialogTrigger>
       <DialogContent
-        title={isEdit ? 'Edit submission' : revision ? 'Upload revision' : 'Submit work'}
-        description={revision ? revisionHint(revision.lastVersion) : 'Share a link or drive location for review.'}
+        title={isEdit ? 'Edit submission' : revision ? 'Upload revision' : 'Hand in work'}
+        description={
+          revision
+            ? revisionHint(revision.lastVersion)
+            : reviewer
+              ? `Paste the link to the work. ${reviewer.split(' ')[0]} will look at it.`
+              : 'Paste the link to the work for review.'
+        }
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {revision?.note && (
@@ -187,7 +213,11 @@ export function SubmitWorkDialog({
                     </option>
                   ))}
               </Select>
-              {deliverable && <p className="text-xs text-muted-foreground">It moves to Review, and your manager is told.</p>}
+              {deliverable && (
+                <p className="text-xs text-muted-foreground">
+                  It moves to Review, and {reviewer ? reviewer.split(' ')[0] : 'whoever gave it to you'} is told.
+                </p>
+              )}
             </div>
           )}
           {!isEdit && !revision && (
@@ -205,7 +235,15 @@ export function SubmitWorkDialog({
           )}
           <div className="flex flex-col gap-1.5">
             <Label>Link</Label>
-            <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/…" required autoFocus />
+            <Input
+              type="url"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://drive.google.com/…"
+              required
+              autoFocus
+              className={cn(!link.trim() && 'border-dashed border-warning/70 bg-warning/10')}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
@@ -217,10 +255,22 @@ export function SubmitWorkDialog({
               <Input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="e.g. Drive link" />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Storage / drive location</Label>
-            <Input value={storageRef} onChange={(e) => setStorageRef(e.target.value)} placeholder="e.g. Backup HDD 3, /Weddings/Sharma" />
-          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={onDisk} onChange={(e) => setOnDisk(e.target.checked)} className="size-4 accent-primary" />
+            Also on a hard disk
+          </label>
+          {onDisk && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="hand-disk">Which disk</Label>
+                <Input id="hand-disk" value={diskName} onChange={(e) => setDiskName(e.target.value)} placeholder="e.g. WD Red 4TB #03" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="hand-folder">Folder</Label>
+                <Input id="hand-folder" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="/2026/Sharma/Teaser" />
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label>Notes</Label>
             <Input
@@ -241,7 +291,7 @@ export function SubmitWorkDialog({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : revision ? 'Send for review' : 'Submit'}
+              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Send for review'}
             </Button>
           </div>
         </form>
