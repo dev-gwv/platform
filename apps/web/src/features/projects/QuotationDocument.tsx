@@ -136,45 +136,7 @@ export function QuotationDocument({
     >
       <div className="quotation-brand-stripe" aria-hidden />
 
-      {/* A div, not <header>: print hides every <header> as app chrome. */}
-      <div className="q-head paper-block flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
-        <div className="flex min-w-0 items-start gap-4">
-          {studio.logoUrl && (
-            <img
-              src={studio.logoUrl}
-              alt=""
-              className="q-logo size-14 shrink-0 rounded-md border border-border bg-white object-contain p-1"
-            />
-          )}
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Project Quotation
-            </p>
-            <h1 className="q-title mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{studio.name}</h1>
-            {studio.legalName && studio.legalName !== studio.name && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{studio.legalName}</p>
-            )}
-            <p className="mt-1 text-sm text-muted-foreground">Prepared for {client.name ?? 'client'}</p>
-          </div>
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Quotation No.</p>
-          <p className="font-mono text-sm font-semibold">{number}</p>
-          <p className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">Issued</p>
-          <p className="text-sm">{formatQuotationDate(data.issuedAt)}</p>
-          <div className="mt-3 space-y-0.5 text-[11px] text-muted-foreground">
-            {studio.gstin && (
-              <div>
-                GSTIN: <span className="text-foreground">{studio.gstin}</span>
-              </div>
-            )}
-            {studio.phone && <div>{studio.phone}</div>}
-            {studio.email && <div className="break-all">{studio.email}</div>}
-            {studio.website && <div className="break-all">{studio.website}</div>}
-            {studio.address && <div className="whitespace-pre-line">{studio.address}</div>}
-          </div>
-        </div>
-      </div>
+      <QuotationLetterhead studio={studio} label="Project Quotation" preparedFor={client.name} number={number} issuedAt={data.issuedAt} />
 
       {(prefs.showBillTo || prefs.showProject) && (
         <section className="q-cards paper-block grid gap-6 py-6 sm:grid-cols-2">
@@ -287,6 +249,75 @@ export function QuotationDocument({
         </div>
       </footer>
     </article>
+  )
+}
+
+/**
+ * The letterhead: logo, studio, who it is for, number, date and the studio's
+ * contacts. Shared by the project quotation and a lead's quote, so both
+ * papers read as the same studio's.
+ */
+export function QuotationLetterhead({
+  studio,
+  label,
+  preparedFor,
+  number,
+  issuedAt,
+  validUntil,
+}: {
+  studio: QuotationDocumentData['studio']
+  label: string
+  preparedFor: string | null | undefined
+  number: string
+  issuedAt: string | null | undefined
+  validUntil?: string | null | undefined
+}) {
+  // A div, not <header>: print hides every <header> as app chrome.
+  return (
+      <div className="q-head paper-block flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
+        <div className="flex min-w-0 items-start gap-4">
+          {studio.logoUrl && (
+            <img
+              src={studio.logoUrl}
+              alt=""
+              className="q-logo size-14 shrink-0 rounded-md border border-border bg-white object-contain p-1"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {label}
+            </p>
+            <h1 className="q-title mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{studio.name}</h1>
+            {studio.legalName && studio.legalName !== studio.name && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{studio.legalName}</p>
+            )}
+            <p className="mt-1 text-sm text-muted-foreground">Prepared for {preparedFor ?? 'client'}</p>
+          </div>
+        </div>
+        <div className="text-left sm:text-right">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Quotation No.</p>
+          <p className="font-mono text-sm font-semibold">{number}</p>
+          <p className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">Issued</p>
+          <p className="text-sm">{formatQuotationDate(issuedAt)}</p>
+          {validUntil && (
+            <>
+              <p className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">Valid till</p>
+              <p className="text-sm">{formatQuotationDate(validUntil)}</p>
+            </>
+          )}
+          <div className="mt-3 space-y-0.5 text-[11px] text-muted-foreground">
+            {studio.gstin && (
+              <div>
+                GSTIN: <span className="text-foreground">{studio.gstin}</span>
+              </div>
+            )}
+            {studio.phone && <div>{studio.phone}</div>}
+            {studio.email && <div className="break-all">{studio.email}</div>}
+            {studio.website && <div className="break-all">{studio.website}</div>}
+            {studio.address && <div className="whitespace-pre-line">{studio.address}</div>}
+          </div>
+        </div>
+      </div>
   )
 }
 
@@ -430,7 +461,7 @@ function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocSho
   )
 }
 
-function TotalsRow({
+export function TotalsRow({
   label,
   value,
   emphasis,

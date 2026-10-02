@@ -3732,6 +3732,26 @@ if (listed) {
   )
 }
 
+// ── A lead's quote on the studio's letterhead: the public link carries it ──
+{
+  await api('/settings/company', { token: aToken, method: 'PATCH', body: { invoice_phone: '022 4000 1234' } })
+  const lead = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: `Letterhead ${rand()}`, phone: randPhone() } })
+  const q = await api('/crm/quotes', {
+    token: aToken,
+    method: 'POST',
+    body: { lead_id: lead.json.lead?.id, title: 'Wedding cover', lines: [{ description: 'Candid photography', quantity: 1, rate: 85000, gst_rate: 18 }] },
+  })
+  const sent = await api(`/crm/quotes/${q.json.id}/send`, { token: aToken, method: 'POST', body: {} })
+  const tok = new URL(sent.json.url ?? '/', 'http://x').searchParams.get('token')
+  const pub = await api(`/public/quote/${encodeURIComponent(tok ?? '')}`)
+  check(
+    "lead quote: the client's link carries the studio's letterhead (name, phone, issued date)",
+    pub.status === 200 && typeof pub.json.letterhead?.name === 'string' && pub.json.letterhead?.phone === '022 4000 1234' &&
+      typeof pub.json.letterhead?.issued_at === 'string',
+    { q: q.status, sent: sent.status, pub: pub.status, head: pub.json.letterhead },
+  )
+}
+
 // ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

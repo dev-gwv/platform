@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { formatINR } from '@/shared/ui/format'
+import { QuotePaper, type QuotePaperData } from '@/features/crm/QuotePaper'
 
 /**
  * PUBLIC page — no auth. The client opens the link (?token=…), reads the
@@ -68,7 +69,7 @@ export function QuoteAcceptPage() {
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
       <PageBackdrop />
-      <Card className="relative z-10 w-full max-w-2xl">
+      <Card className="relative z-10 w-full max-w-3xl">
         <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -100,7 +101,9 @@ export function QuoteAcceptPage() {
               <CheckCircle2 className="size-10 text-success" />
               <p className="font-medium">Thank you — this quote is accepted.</p>
               <p className="text-sm text-muted-foreground">{quote.studio} will be in touch to confirm the dates.</p>
-              <Totals quote={quote} />
+              <div className="mt-2 w-full text-left">
+                <QuotePaper data={paperOf(quote)} />
+              </div>
             </div>
           ) : done === 'declined' || quote.status === 'declined' ? (
             <div className="flex flex-col items-center gap-2 py-4 text-center">
@@ -110,50 +113,12 @@ export function QuoteAcceptPage() {
             </div>
           ) : (
             <>
-              {quote.client_name && <p className="text-sm text-muted-foreground">Prepared for {quote.client_name}.</p>}
-              <div className="table-wrap rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Item</th>
-                      <th className="px-3 py-2 text-right font-medium">Qty</th>
-                      <th className="px-3 py-2 text-right font-medium">Rate</th>
-                      <th className="px-3 py-2 text-right font-medium">GST</th>
-                      <th className="px-3 py-2 text-right font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quote.items.map((i, idx) => (
-                      <tr key={idx} className="border-t border-border">
-                        <td className="px-3 py-2">{i.description}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{i.quantity}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatINR(i.rate)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{i.gst_rate}%</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatINR(i.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Totals quote={quote} />
-              {quote.notes && <p className="text-sm">{quote.notes}</p>}
-              {quote.terms && (
-                <div className="rounded-lg bg-muted/30 p-3 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground">Terms</p>
-                  <p className="mt-1 whitespace-pre-wrap">{quote.terms}</p>
-                </div>
-              )}
+              <QuotePaper data={paperOf(quote)} />
               {quote.place_of_supply && (
                 <p className="text-xs text-muted-foreground">
                   Priced for {quote.place_of_supply}, so tax is charged as {quote.intra_state ? 'CGST and SGST' : 'IGST'}.
                 </p>
               )}
-              {quote.valid_until && (
-                <p className="text-xs text-muted-foreground">
-                  Valid until {new Date(quote.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.
-                </p>
-              )}
-
               {closed ? (
                 <p className="text-sm text-destructive">{quote.expired ? 'This quote has expired. Ask the studio for a fresh one.' : 'This quote is no longer open.'}</p>
               ) : declining ? (
@@ -200,27 +165,34 @@ export function QuoteAcceptPage() {
   )
 }
 
-function Totals({ quote }: { quote: PublicQuote }) {
-  return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-      <div>
-        <dt className="text-xs text-muted-foreground">Subtotal</dt>
-        <dd className="tabular-nums">{formatINR(quote.subtotal)}</dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted-foreground">Discount</dt>
-        <dd className="tabular-nums">{formatINR(quote.discount)}</dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted-foreground">
-          GST{quote.place_of_supply ? ` · ${quote.intra_state ? 'CGST + SGST' : 'IGST'}` : ''}
-        </dt>
-        <dd className="tabular-nums">{formatINR(quote.tax)}</dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted-foreground">Total</dt>
-        <dd className="text-lg font-semibold tabular-nums">{formatINR(quote.total)}</dd>
-      </div>
-    </dl>
-  )
+/** The client's copy on the studio's letterhead; the studio's name alone if the letterhead could not be read. */
+function paperOf(q: PublicQuote): QuotePaperData {
+  const h = q.letterhead
+  return {
+    studio: {
+      name: h?.name ?? q.studio,
+      legalName: h?.legal_name,
+      logoUrl: h?.logo_url,
+      gstin: h?.gstin,
+      phone: h?.phone,
+      email: h?.email,
+      website: h?.website,
+      address: h?.address,
+      footerNote: h?.footer_note,
+    },
+    brandColor: h?.brand_color,
+    number: q.quote_number,
+    title: q.title,
+    preparedFor: q.client_name,
+    issuedAt: h?.issued_at,
+    validUntil: q.valid_until,
+    items: q.items,
+    subtotal: q.subtotal,
+    discount: q.discount,
+    tax: q.tax,
+    total: q.total,
+    intraState: q.intra_state,
+    notes: q.notes,
+    terms: q.terms,
+  }
 }
