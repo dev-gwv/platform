@@ -3523,5 +3523,33 @@ if (listed) {
   )
 }
 
+// ── Leave balances (0228): days a year, what is left, approve as unpaid ──
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `lv-${rand()}@madeup.test`
+  await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Leave Taker', phone: randPhone(), email, password: 'Lv-pass-1234', create_login: true } })
+  const lt = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Lv-pass-1234' } })).json.access_token
+  const set = await api('/hr/leave/allowances', { token: aToken, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: 2 }, { kind: 'sick', days_per_year: 6 }] } })
+  const staffSet = await api('/hr/leave/allowances', { token: lt, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: 99 }] } })
+  const year = new Date().getFullYear() + 1
+  const asked = await api('/hr/leave', { token: lt, method: 'POST', body: { kind: 'casual', start_date: `${year}-01-05`, end_date: `${year}-01-07`, half_day: false, reason: 'Wedding' } })
+  const pending = (await api('/hr/leave?scope=team&status=pending', { token: aToken })).json.find((l) => l.id === asked.json.id)
+  const mine = await api(`/hr/leave/balances?year=${year}`, { token: lt })
+  const casual = mine.json.find((b) => b.kind === 'casual')
+  const decided = await api(`/hr/leave/${asked.json.id}/decide`, { token: aToken, method: 'POST', body: { approve: true, note: 'Casual is used up', as_unpaid: true } })
+  const all = (await api('/hr/leave', { token: lt })).json
+  const after = all.find((l) => l.id === asked.json.id)
+  const extra = all.find((l) => l.kind === 'unpaid' && l.status === 'approved' && l.start_date > after?.end_date)
+  check(
+    'leave balances: the owner sets days a year, staff cannot; a 3-day ask on 2 days left keeps 2 casual and the extra day unpaid',
+    set.status === 204 && staffSet.status === 403 && asked.status === 201 && Number(pending?.days) === 3 &&
+      mine.json.every((b) => b.user_name === 'Leave Taker') && casual?.allowance === 2 && casual?.pending === 3 &&
+      decided.status === 204 && after?.kind === 'casual' && after?.status === 'approved' && Number(after?.days) === 2 &&
+      Number(extra?.days) === 1,
+    { set: set.status, staffSet: staffSet.status, pending, casual, decided: decided.status, after, extra },
+  )
+  await api('/hr/leave/allowances', { token: aToken, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: null }, { kind: 'sick', days_per_year: null }] } })
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

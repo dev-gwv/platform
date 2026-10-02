@@ -4,11 +4,15 @@ import {
   attendanceCorrection,
   attendancePolicy,
   companyHoliday,
+  leaveAllowance,
+  leaveBalance,
   leaveRequest,
   z,
   type CreateCorrectionRequest,
   type CreateLeaveRequest,
+  type DecideLeaveRequest,
   type DecideRequest,
+  type SaveLeaveAllowancesRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -85,7 +89,7 @@ export const useAskLeave = () =>
 
 export const useDecideLeave = () =>
   useHrMutation(
-    ({ id, ...body }: DecideRequest & { id: string }) =>
+    ({ id, ...body }: DecideLeaveRequest & { id: string }) =>
       callApi(`/hr/leave/${id}/decide`, { method: 'POST', body, responseSchema: none }),
     'Saved. They have been told.',
     [['hr', 'leave'], ['hr', 'attendance']],
@@ -129,3 +133,33 @@ export const useSetWeeklyOff = () =>
     'Weekly off-days saved',
     [['hr', 'policy']],
   )
+
+/** Days a year per kind of leave (0228). */
+export function useLeaveAllowances() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['hr', 'leave', 'allowances'],
+    queryFn: () => callApi('/hr/leave/allowances', { responseSchema: leaveAllowance.array() }),
+    enabled: !!session,
+    staleTime: 60_000,
+  })
+}
+
+export const useSaveLeaveAllowances = () =>
+  useHrMutation(
+    (body: SaveLeaveAllowancesRequest) => callApi('/hr/leave/allowances', { method: 'PUT', body, responseSchema: none }),
+    'Leave allowance saved',
+    [['hr', 'leave']],
+  )
+
+/** "8 of 12 casual left": yours, or everyone's for whoever decides. */
+export function useLeaveBalances(userId?: string | null) {
+  const { session } = useAuth()
+  const qs = userId ? `?user_id=${userId}` : ''
+  return useQuery({
+    queryKey: ['hr', 'leave', 'balances', userId ?? 'all'],
+    queryFn: () => callApi(`/hr/leave/balances${qs}`, { responseSchema: leaveBalance.array() }),
+    enabled: !!session,
+    staleTime: 30_000,
+  })
+}
