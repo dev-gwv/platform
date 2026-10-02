@@ -33,6 +33,7 @@ import {
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { MorningEmailCard } from '@/features/settings/MorningEmailCard'
+import { AlertEmailCard } from '@/features/account/AlertEmailCard'
 
 export function MyProfilePage() {
   return (
@@ -257,6 +258,7 @@ function MyProfileForm() {
 
       <IdProofSection needed={missing.has('id_document')} />
       <MorningEmailCard />
+      <AlertEmailCard />
       <SecurityCard />
 
       <div className="sticky bottom-3 flex justify-end">

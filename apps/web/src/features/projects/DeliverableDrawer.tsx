@@ -15,7 +15,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
-import { isLate, stageOf } from './deliverable-stage'
+import { fromLabel, isLate, stageOf } from './deliverable-stage'
 import { DueChip, DueEditor, EditorName, EditorPicker, KindTile, MoveToMenu, NextStageButton, activityWhat } from './DeliverableCard'
 import { StageStepper } from './StageStepper'
 import { TONE_CLASSES, stageName, stageTone } from './stages'
@@ -54,7 +54,7 @@ export function DeliverableDrawer({
   return (
     <Sheet open={!!d} onOpenChange={(open) => !open && onClose()}>
       {d && (
-        <SheetContent title={d.title} description={`${stageName(d, stages)} · ${d.shoot_name ?? 'Whole project'}`}>
+        <SheetContent title={d.title} description={`${stageName(d, stages)} · ${fromLabel(d)}`}>
           <PanelBoundary resetKey={d.id} label="this deliverable">
             <DrawerBody key={`${d.id}:${action ?? ''}`} d={d} canEdit={canEdit} action={action} onEdit={() => onEdit(d)} onDelete={() => onDelete(d)} />
           </PanelBoundary>
@@ -103,7 +103,7 @@ function DrawerBody({
             <h2 className="text-lg font-semibold leading-tight">{d.title}</h2>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {d.shoot_id ? <Camera className="size-3.5" aria-hidden /> : <FolderOpen className="size-3.5" aria-hidden />}
-              {d.shoot_name ?? 'Whole project'}
+              {fromLabel(d)}
               {d.visibility_scope === 'internal' && <span className="font-semibold text-tone-violet">· Team only</span>}
               {d.is_additional_charge && d.additional_charge_amount > 0 && (
                 <span className="font-semibold text-tone-green">· +{formatINR(d.additional_charge_amount)}</span>

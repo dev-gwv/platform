@@ -13,6 +13,7 @@ import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
 import { runMorningEmails } from '../../lib/morning-email'
 import { runAccessEmails } from '../../lib/access-email'
+import { runAlertEmails } from '../../lib/alert-email'
 import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
 
@@ -114,6 +115,8 @@ export const cronRouter = new Hono<AppEnv>()
         // Owners hear 7 days and 1 day before their trial or plan ends, and
         // once when it has ended (0211).
         const accessEmails = await runAccessEmails(c.env, dryRun)
+        // A team member's alerts still unread after 15 minutes go by email too (0227).
+        const alertEmails = await runAlertEmails(c.env, dryRun)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
@@ -130,6 +133,7 @@ export const cronRouter = new Hono<AppEnv>()
           invoice_overdue: invoicesOverdue[0]?.summary ?? {},
           morning_emails: morning,
           access_emails: accessEmails,
+          alert_emails: alertEmails,
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,

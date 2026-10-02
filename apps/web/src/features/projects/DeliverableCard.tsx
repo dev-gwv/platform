@@ -28,7 +28,7 @@ import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/project
 import { useMembers } from '@/features/allocation/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { RemindMe } from '@/features/reminders/RemindMe'
-import { STAGE_LABEL, dueLabel, isLate, previousStage, relativeDue, stageOf } from './deliverable-stage'
+import { STAGE_LABEL, dueLabel, fromLabel, isLate, previousStage, relativeDue, stageOf } from './deliverable-stage'
 import { TONE_CLASSES, actionLabel, allPoints, movedLabel, nextPoint, wantsLinkAt } from './stages'
 import { useDeliverableStages } from './stages-api'
 import { deliverableKind, type DeliverableKind } from './deliverable-kind'
@@ -373,6 +373,7 @@ export function DeliverableCard({
                 </span>
               )}
             </p>
+            {(d.shoot_names?.length ?? 0) > 1 && <p className="mt-0.5 text-xs text-muted-foreground">From {fromLabel(d)}</p>}
 
             <div className="mt-1.5" onClick={keepControlClicks}>
               {canEdit && !dropped ? (

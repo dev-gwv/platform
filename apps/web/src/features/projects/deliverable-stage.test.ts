@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Deliverable } from '@ipc/contracts'
 import {
+  fromLabel,
   deliverableCounts,
   dueLabel,
   groupByShoot,
@@ -89,5 +90,13 @@ describe('grouping', () => {
         '2026-10-10',
       ),
     ).toEqual({ total: 3, delivered: 1, late: 1 })
+  })
+})
+
+describe('fromLabel', () => {
+  it('names every shoot when there are several', () => {
+    expect(fromLabel({ shoot_name: 'Wedding', shoot_names: ['Haldi', 'Wedding'] })).toBe('Haldi + Wedding')
+    expect(fromLabel({ shoot_name: 'Wedding', shoot_names: ['Wedding'] })).toBe('Wedding')
+    expect(fromLabel({ shoot_name: null })).toBe('Whole project')
   })
 })

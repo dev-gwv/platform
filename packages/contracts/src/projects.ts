@@ -45,6 +45,12 @@ export const deliverableInput = z.object({
   internal_notes: z.string().max(2000).optional(),
   /** The one shoot it comes from; none means the whole project. */
   shoot_id: uuid.nullish(),
+  /**
+   * Several shoots it comes from ("Highlights from Haldi + Wedding"). When
+   * sent, it wins over shoot_id: the server keeps the list and points
+   * shoot_id at the last of them (0227).
+   */
+  shoot_ids: z.array(uuid).max(30).optional(),
   /** The editor or designer on it. */
   assignee_id: uuid.nullish(),
   status: deliverableStatus.optional(),
@@ -68,6 +74,8 @@ export const updateDeliverableRequest = z.object({
   status: deliverableStatus.optional(),
   custom_status_code: z.string().max(40).nullable().optional(),
   shoot_id: uuid.nullable().optional(),
+  /** See deliverableInput.shoot_ids. */
+  shoot_ids: z.array(uuid).max(30).optional(),
   assignee_id: uuid.nullable().optional(),
   delivery_link: deliveryLink.nullable().optional(),
 })
@@ -209,6 +217,9 @@ export const deliverable = z.object({
   shoot_id: uuid.nullish(),
   shoot_name: z.string().nullish(),
   shoot_date: isoDate.nullish(),
+  /** Every shoot it comes from, in date order; [shoot_id] when only one. */
+  shoot_ids: z.array(uuid).optional(),
+  shoot_names: z.array(z.string()).optional(),
   assignee_id: uuid.nullish(),
   assignee_name: z.string().nullish(),
   delivery_link: z.string().nullish(),
