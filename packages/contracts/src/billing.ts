@@ -408,6 +408,8 @@ export const receivedPaymentListSummary = z.object({
   received_this_month: money.default(0),
   received_this_fy: money.default(0),
   promised_amount: money.default(0),
+  /** How many payments make up promised_amount (same rows, unfiltered). */
+  promised_count: z.number().int().nonnegative().default(0),
 })
 export type ReceivedPaymentListSummary = z.infer<typeof receivedPaymentListSummary>
 

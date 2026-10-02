@@ -88,6 +88,7 @@ export function BillingStrip() {
             <RecordPaymentDialog
               target={{ kind: 'invoice', invoiceId: recording.id, invoiceNumber: recording.invoice_number }}
               suggested={recording.balance_due}
+              dueOn={recording.due_date}
               onClose={() => setRecording(null)}
             />
           )}

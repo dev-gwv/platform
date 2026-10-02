@@ -8,6 +8,8 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAddPayment, useUpdatePayment } from '@/features/projects/api'
 import { useRecordPayment } from './api'
+import { leftToPayLine } from './left-to-pay'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 type Payment = ProjectDetail['payments'][number]
 
@@ -16,6 +18,7 @@ export interface OpenInvoice {
   id: string
   invoice_number: string
   balance_due: number
+  due_date?: string | null | undefined
 }
 
 /**
@@ -41,11 +44,14 @@ export function RecordPaymentDialog({
   target,
   payment,
   suggested,
+  dueOn,
   onClose,
 }: {
   target: PaymentTarget
   payment?: Payment | undefined
   suggested: number
+  /** When the suggested amount falls due, for the "₹X is left" line. */
+  dueOn?: string | null | undefined
   onClose: () => void
 }) {
   const projectId = target.kind === 'project' ? target.projectId : ''
@@ -65,7 +71,7 @@ export function RecordPaymentDialog({
     const start = picked ? picked.balance_due : suggested
     return start > 0 ? String(start) : ''
   })
-  const [paidOn, setPaidOn] = useState(payment?.paid_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
+  const [paidOn, setPaidOn] = useState(payment?.paid_on.slice(0, 10) ?? todayInIndia())
   const [mode, setMode] = useState(payment?.mode ?? 'UPI')
   const [received, setReceived] = useState((payment?.status ?? 'paid') !== 'pending')
   const [more, setMore] = useState(!!(payment?.reference || payment?.description || payment?.is_gst))
@@ -94,6 +100,14 @@ export function RecordPaymentDialog({
   const busy = add.isPending || update.isPending || recordOnInvoice.isPending
   const value = Number(amount) || 0
   const needsReference = mode === 'UPI' || mode === 'Bank transfer'
+  const leftLine = leftToPayLine({
+    due: picked ? picked.balance_due : suggested,
+    amount: value,
+    received: target.kind === 'invoice' || received,
+    editing,
+    dueOn: picked ? picked.due_date : dueOn,
+    today: todayInIndia(),
+  })
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -190,6 +204,7 @@ export function RecordPaymentDialog({
               <Input id="pay-date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
             </div>
           </div>
+          {leftLine && <p className="-mt-1 text-xs text-muted-foreground">{leftLine}</p>}
           {onProject && (invoices.length > 0 || invoiceId) && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pay-invoice">Against invoice</Label>

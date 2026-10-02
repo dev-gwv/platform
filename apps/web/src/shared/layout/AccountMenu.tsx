@@ -77,7 +77,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
           open && 'bg-muted',
         )}
       >
-        <span className="hidden max-w-[10rem] truncate text-muted-foreground sm:inline">
+        <span className="hidden max-w-[10rem] truncate text-muted-foreground min-[1800px]:inline">
           {session.display_name}
         </span>
         <Avatar name={session.display_name} size="md" />

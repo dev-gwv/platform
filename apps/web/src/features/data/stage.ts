@@ -133,6 +133,37 @@ export function dataCounts(slots: readonly TeamSlot[], records: readonly DataRec
   return { needed, done }
 }
 
+/** Data is in hand once the shooter has given it over: received, copied or backed up. */
+const isHandedIn = (s: SlotStage) =>
+  s === 'received' || s === 'copied' || s === 'backed_up' || s === 'verified' || s === 'archived' || s === 'issue'
+
+/**
+ * One line for a shoot day: how many have handed their cards in, and how many
+ * of those are backed up -- "Data: 1 of 2 handed in · 1 backed up". Two
+ * counts on one card would disagree; one sentence says why they differ.
+ */
+export function dataHandIn(slots: readonly TeamSlot[], records: readonly DataRecord[]) {
+  let needed = 0
+  let handedIn = 0
+  let backedUp = 0
+  for (const s of slots) {
+    if (!isLive(s) || optedOut(s)) continue
+    const st = slotStage(s, recordForSlot(s, records))
+    if (st === 'not_required') continue
+    needed++
+    if (isHandedIn(st)) handedIn++
+    if (isDone(st)) backedUp++
+  }
+  return { needed, handedIn, backedUp }
+}
+
+export function dataHandInLine(t: { needed: number; handedIn: number; backedUp: number }): string | null {
+  if (t.needed === 0) return null
+  const head = `Data: ${t.handedIn} of ${t.needed} handed in`
+  if (t.handedIn === 0) return head
+  return t.backedUp >= t.handedIn ? `${head} · all backed up` : `${head} · ${t.backedUp} backed up`
+}
+
 /** "Fri 26 Sep · 12:55 am–4:55 am": the day first, because that is what gets missed. */
 export function whenLabel(slot: Pick<TeamSlot, 'start_at' | 'end_at'>, timeZone?: string): string {
   const day = new Date(slot.start_at).toLocaleDateString('en-IN', {

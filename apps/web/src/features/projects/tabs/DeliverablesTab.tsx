@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { FolderOpen, Plus } from 'lucide-react'
 import type { Deliverable } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -25,12 +26,6 @@ const dateFmt = (iso: string) =>
 /** ?d=<id> opens one deliverable's panel -- where a notification lands. */
 const wantedFromUrl = () => new URLSearchParams(window.location.search).get('d')
 
-function setUrlDeliverable(id: string | null) {
-  const url = new URL(window.location.href)
-  if (id) url.searchParams.set('d', id)
-  else url.searchParams.delete('d')
-  window.history.replaceState(window.history.state, '', url)
-}
 
 const matches = (d: Deliverable, f: PipelineFilter) =>
   !f || (f === 'late' ? isLate(d) : stageOf(d.status) === f)
@@ -77,7 +72,29 @@ export function DeliverablesTab({
   const groups = groupByShoot(deliverables, shoots)
   const open = deliverables.find((d) => d.id === openId) ?? null
 
-  useEffect(() => setUrlDeliverable(openId), [openId])
+  // The open panel is kept in the address through the router, and a link to
+  // this page with another ?d= (a notification, the due chip) opens it now
+  // rather than after a reload.
+  const navigate = useNavigate()
+  const searchStr = useRouterState({ select: (st) => st.location.searchStr })
+  const urlId = new URLSearchParams(searchStr).get('d')
+  useEffect(() => {
+    if (urlId) setOpenId(urlId)
+  }, [urlId])
+  useEffect(() => {
+    if ((urlId ?? null) === openId) return
+    void navigate({
+      to: '.',
+      search: (prev: Record<string, unknown>) => {
+        const out = { ...prev }
+        if (openId) out.d = openId
+        else delete out.d
+        return out
+      },
+      replace: true,
+    } as never)
+    // Only the panel opening or closing writes the address.
+  }, [openId])
 
   async function remove(d: Deliverable) {
     if (await confirm({ title: `Delete "${d.title}"?`, description: 'Its notes and voice notes go with it.', destructive: true, confirmLabel: 'Delete' })) {

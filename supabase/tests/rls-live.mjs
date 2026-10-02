@@ -655,12 +655,23 @@ if (listed) {
   check('receipts: a promise has no number yet', d2.status === 200 && d2.json.receipt_number === null, { n: d2.json.receipt_number })
   await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { status: 'paid' } })
   const d3 = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  await api(`/projects/${pid}/payments/${promised.json.id}`, { token: aToken, method: 'PATCH', body: { paid_on: '2026-05-09' } })
+  const moved = await api(`/billing/payments/${promised.json.id}`, { token: aToken })
+  check('payments: changing the date on the project moves it in Billing too', moved.json.date_received === '2026-05-09', { date_received: moved.json.date_received })
   check('receipts: numbered the day it is received, after the one before', !!d3.json.receipt_number && d3.json.receipt_number > d1.json.receipt_number, { before: d1.json.receipt_number, after: d3.json.receipt_number })
   const link = await api('/documents/receipts', { token: aToken, method: 'POST', body: { payment_id: p1.json.id } })
   const rtoken = (link.json.link ?? '').split('token=')[1] ?? ''
   const pub = await api(`/public/receipt/${rtoken}`)
   check('receipts: the client\'s receipt carries the number', pub.status === 200 && pub.json.receipt_number === d1.json.receipt_number, { status: pub.status, n: pub.json.receipt_number })
   const list = await api(`/billing/payments?search=${encodeURIComponent(d1.json.receipt_number ?? '')}&page=1&page_size=5`, { token: aToken })
+  const promise2 = await api(`/projects/${pid}/payments`, { token: aToken, method: 'POST', body: { amount: 300, status: 'pending', paid_on: '2026-06-01' } })
+  const all = await api('/billing/payments?page=1&page_size=5', { token: aToken })
+  const filtered = await api('/billing/payments?status=paid&page=1&page_size=5', { token: aToken })
+  check(
+    'payments: the promised count is over the same payments as the promised amount, whatever the filter',
+    promise2.status === 201 && all.json.summary?.promised_count >= 1 && filtered.json.summary?.promised_count === all.json.summary?.promised_count && filtered.json.summary?.promised_amount === all.json.summary?.promised_amount,
+    { all: all.json.summary, filtered: filtered.json.summary },
+  )
   check('receipts: the list finds a payment by its number and shows the year\'s tiles', (list.json.items ?? []).some((x) => x.id === p1.json.id) && typeof list.json.summary?.received_this_fy === 'number', { found: list.json.items?.length, tiles: list.json.summary })
 
   const cleared = await api(`/billing/payments/${p1.json.id}/cleared`, { token: aToken, method: 'POST', body: { cleared: true } })
@@ -2035,6 +2046,24 @@ if (listed) {
   )
 }
 
+// ── Every studio starts with a sample project template (0232) ───────────
+{
+  const tpl = await api('/projects/templates', { token: aToken })
+  const samples = (tpl.json.items ?? []).filter((t) => t.is_sample)
+  check(
+    'templates: a studio has its sample wedding template',
+    tpl.status === 200 && samples.length === 1 && samples[0].name === 'Sample — Wedding' && samples[0].shoots_json.length === 3,
+    { status: tpl.status, samples: samples.map((t) => t.name) },
+  )
+  const edited = await api(`/projects/templates/${samples[0]?.id}`, {
+    token: aToken, method: 'PATCH',
+    body: { name: 'Our wedding', deliverables_json: samples[0]?.deliverables_json ?? [], shoots_json: samples[0]?.shoots_json ?? [], tasks_json: [] },
+  })
+  const again = await api('/projects/templates', { token: aToken })
+  const mine = (again.json.items ?? []).find((t) => t.id === samples[0]?.id)
+  check('templates: editing the sample makes it the studio\'s own', edited.status === 200 && mine?.is_sample === false && mine?.name === 'Our wedding', { edited: edited.status, mine })
+}
+
 // ── Terms drafts: half-written terms are kept ───────────────────────────
 {
   const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Draft Co ${rand()}`, phone: randPhone() } })
@@ -2051,6 +2080,8 @@ if (listed) {
     saved.status === 200 && again.status === 200 && read.json?.rendered_body === 'Half written, more' && read.json?.payment_terms?.length === 1,
     { saved: saved.status, again: again.status, read: read.json },
   )
+  const plan = await api(`/projects/${pid}/billing`, { token: aToken })
+  check('terms: a draft is not the payment plan', plan.status === 200 && plan.json.plan === null, { status: plan.status, plan: plan.json?.plan })
   const sent = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Final words' } })
   const gone = await api(`/terms/draft?project_id=${pid}`, { token: aToken })
   check('terms: sending clears the draft', sent.status === 201 && gone.json === null, { sent: sent.status, gone: gone.json })
@@ -2556,6 +2587,14 @@ if (listed) {
     { accepted: accepted.status, after: { at: after.json.quotation_accepted_at, by: after.json.quotation_accepted_by } },
   )
 
+  const bell = await api('/notifications?type=quotation_accepted', { token: aToken })
+  const rang = (bell.json.items ?? bell.json ?? []).filter?.((n) => n.entity_id === pid) ?? []
+  check(
+    'quotation: the owner is told when the client accepts (0231)',
+    bell.status === 200 && rang.length === 1 && /accepted the quotation/.test(rang[0]?.title ?? ''),
+    { status: bell.status, n: rang.length, title: rang[0]?.title },
+  )
+
   // A link sent without terms or display options shows the project's own.
   const bare = await api('/documents/quotations', { token: aToken, method: 'POST', body: { project_id: pid } })
   const barePub = await api(`/public/quotation/${tokenOf(bare.json.link ?? '')}`)
@@ -2944,6 +2983,13 @@ if (listed) {
     'functions: converting turns each function into a shoot on the new project',
     conv.status === 201 && shoots.map?.((x) => x.name).sort().join(',') === 'Haldi,Reception,Wedding',
     { status: conv.status, shoots: shoots.map?.((x) => [x.name, x.shoot_date]) },
+  )
+  const leadsNow = await api('/crm/leads?include_archived=true', { token: aToken })
+  const booked = (Array.isArray(leadsNow.json) ? leadsNow.json : leadsNow.json.items ?? []).find((l) => l.id === lead?.id)
+  check(
+    'leads: a booked lead carries its project\'s name, for "Booked — project X"',
+    leadsNow.status === 200 && booked?.converted_project_id === conv.json.project_id && booked?.converted_project_name === 'Two Functions wedding',
+    { status: leadsNow.status, name: booked?.converted_project_name },
   )
 
   const bList = await api('/crm/leads?include_archived=true', { token: reset.json.access_token })

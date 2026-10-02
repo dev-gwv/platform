@@ -201,7 +201,14 @@ function ProjectTemplatesContent() {
           <Card key={template.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{template.name}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  {template.name}
+                  {template.is_sample && (
+                    <span className="rounded-full border border-tone-amber/50 bg-tone-amber-soft px-2 py-0.5 text-[11px] font-semibold text-tone-amber" title="Edit it to match your studio">
+                      Sample
+                    </span>
+                  )}
+                </CardTitle>
               </div>
             </CardHeader>
             <CardContent>

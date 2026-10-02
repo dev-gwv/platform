@@ -99,6 +99,8 @@ const selectLead = (sql: TransactionSql) => sql`
          l.quality, l.contacted_status, l.archive_reason,
          u.name as assignee_name,
          arch.name as archived_by_name,
+         -- The booked project's name, for "Booked — project X" on the lead.
+         (select p.name from projects p where p.id = l.converted_project_id) as converted_project_name,
          -- Which lead source (a vendor's QR, say) brought this lead in.
          (select ws.label from crm_webhook_sources ws where ws.source_key = l.source_key) as source_label,
          -- Is the studio free on this lead's date? Derived in one pass by

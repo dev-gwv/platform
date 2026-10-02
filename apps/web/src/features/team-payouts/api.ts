@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { toast } from 'sonner'
 import {
   teamPayoutList,
@@ -89,12 +90,20 @@ export function useDeleteTeamPayout() {
 export function usePayoutSettlements(slotIds: readonly string[]) {
   const { session } = useAuth()
   const access = useAccess()
-  const key = [...slotIds].sort().join(',')
+  // One read of the studio's settlements, narrowed here: a list of every slot
+  // id in the query string grew past what a URL can carry (thousands of
+  // bookings), and the server returns the whole studio when given none.
+  const wanted = useMemo(() => new Set(slotIds), [slotIds])
   return useQuery({
-    queryKey: ['team-payouts', 'settlements', key],
-    queryFn: () => callApi(`/team-payouts/settlements?slot_ids=${encodeURIComponent(key)}`, { responseSchema: payoutSettlementList }),
+    queryKey: ['team-payouts', 'settlements', 'all'],
+    queryFn: () => callApi('/team-payouts/settlements', { responseSchema: payoutSettlementList }),
     enabled: !!session && access.hasModule('team_payouts') && slotIds.length > 0,
     staleTime: 15_000,
+    select: (data) => ({
+      ...data,
+      entries: data.entries.filter((e) => wanted.has(e.slot_id)),
+      aggregates: data.aggregates.filter((a) => wanted.has(a.slot_id)),
+    }),
   })
 }
 

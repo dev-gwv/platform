@@ -138,6 +138,8 @@ export const crmLead = z.object({
   merged_into: uuid.nullable().default(null),
   /** The project this lead became, once converted. */
   converted_project_id: uuid.nullable().default(null),
+  /** The booked project's name, when the reader can see it. */
+  converted_project_name: z.string().nullable().default(null),
   /**
    * The client this lead became. Set by both converts — the one that also
    * makes a project, and the "won, project comes later" one, which is the

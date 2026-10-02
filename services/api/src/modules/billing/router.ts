@@ -781,10 +781,11 @@ export const billingRouter = new Hono<AppEnv>()
             left join clients cl on cl.id = coalesce(rp.client_id, p.client_id, i.client_id)
            where rp.company_id = ${c.get('auth').companyId}`
         // The tiles: over every payment, not the filtered set.
-        const [tiles] = await sql<{ this_month: number; this_fy: number; promised: number }[]>`
+        const [tiles] = await sql<{ this_month: number; this_fy: number; promised: number; promised_count: number }[]>`
           select coalesce(sum(amount) filter (where status = 'paid' and coalesce(date_received, paid_on) >= date_trunc('month', current_date)), 0)::float as this_month,
                  coalesce(sum(amount) filter (where status = 'paid' and fy_label(coalesce(date_received, paid_on)) = fy_label(current_date)), 0)::float as this_fy,
-                 coalesce(sum(amount) filter (where status = 'pending'), 0)::float as promised
+                 coalesce(sum(amount) filter (where status = 'pending'), 0)::float as promised,
+                 (count(*) filter (where status = 'pending'))::int as promised_count
             from received_payments where company_id = ${c.get('auth').companyId}`
         type R = {
           id: string; project_id: string | null; project_name: string | null;
@@ -862,7 +863,7 @@ export const billingRouter = new Hono<AppEnv>()
           reference: r.reference,
           created_at: new Date(r.created_at).toISOString(),
         }))
-        return { list, tiles: tiles ?? { this_month: 0, this_fy: 0, promised: 0 } }
+        return { list, tiles: tiles ?? { this_month: 0, this_fy: 0, promised: 0, promised_count: 0 } }
       }),
     )
     if (!rows) fail(400, 'We could not load payments.')
@@ -878,6 +879,7 @@ export const billingRouter = new Hono<AppEnv>()
       received_this_month: rows.tiles.this_month,
       received_this_fy: rows.tiles.this_fy,
       promised_amount: rows.tiles.promised,
+      promised_count: rows.tiles.promised_count,
     }
     const start = (q.page - 1) * q.page_size
     const pageItems = items.slice(start, start + q.page_size)

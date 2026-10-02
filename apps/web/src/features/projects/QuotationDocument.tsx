@@ -103,12 +103,18 @@ export function QuotationDocument({
   data,
   prefs,
   onEditTerms,
+  onEditFrom,
   compact = false,
 }: {
   data: QuotationDocumentData
   prefs: QuotationPrefs
   /** The studio's view: an Edit button on the terms, and a note when they are hidden. */
   onEditTerms?: (() => void) | undefined
+  /**
+   * The studio's view: the deliverables and the event schedule come from the
+   * project, so their Edit opens the project where they are changed.
+   */
+  onEditFrom?: ((where: 'deliverables' | 'shoots') => void) | undefined
   /**
    * The studio's own screen: tighter, so the whole quotation reads in one
    * view (the owner: "I want it compact... see all the things in one shot").
@@ -205,13 +211,18 @@ export function QuotationDocument({
           </section>
         ) : (
           <>
-            <DeliverablesBlock title="Deliverables" rows={data.deliverables} showEstimated={prefs.showDeliverablesEstimated} />
+            <DeliverablesBlock
+              title="Deliverables"
+              rows={data.deliverables}
+              showEstimated={prefs.showDeliverablesEstimated}
+              onEdit={onEditFrom ? () => onEditFrom('deliverables') : undefined}
+            />
             <DeliverablesBlock title="Additional services" rows={data.additional} showEstimated={prefs.showDeliverablesEstimated} />
           </>
         ))}
 
       {prefs.showEventSchedule && data.shoots.length > 0 && (
-        <ShootsBlock shoots={data.shoots} showServices={prefs.showShootServices} />
+        <ShootsBlock shoots={data.shoots} showServices={prefs.showShootServices} onEdit={onEditFrom ? () => onEditFrom('shoots') : undefined} />
       )}
 
       {prefs.showCostSummary && (
@@ -312,11 +323,21 @@ function AdditionalPill({ children }: { children: ReactNode }) {
  * A table on a wide screen and on paper; stacked cards on a phone, where
  * three columns would squeeze the titles to a word a line.
  */
-function DeliverablesBlock({ title, rows, showEstimated }: { title: string; rows: QuotationDocRow[]; showEstimated: boolean }) {
+function DeliverablesBlock({
+  title,
+  rows,
+  showEstimated,
+  onEdit,
+}: {
+  title: string
+  rows: QuotationDocRow[]
+  showEstimated: boolean
+  onEdit?: (() => void) | undefined
+}) {
   if (rows.length === 0) return null
   return (
     <section className="q-section paper-block mt-6">
-      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
+      <BlockTitle title={title} onEdit={onEdit} />
       <div className="quotation-table hidden overflow-x-auto rounded-lg border border-border sm:block">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -362,11 +383,11 @@ function DeliverablesBlock({ title, rows, showEstimated }: { title: string; rows
   )
 }
 
-function ShootsBlock({ shoots, showServices }: { shoots: QuotationDocShoot[]; showServices: boolean }) {
+function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocShoot[]; showServices: boolean; onEdit?: (() => void) | undefined }) {
   const when = (s: QuotationDocShoot) => `${formatQuotationDate(s.date)}${s.time ? ` · ${s.time.slice(0, 5)}` : ''}`
   return (
     <section className="q-section paper-block mt-6">
-      <h3 className="mb-3 text-sm font-semibold">Event schedule</h3>
+      <BlockTitle title="Event schedule" onEdit={onEdit} />
       <div className="quotation-table hidden overflow-x-auto rounded-lg border border-border sm:block">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -438,6 +459,29 @@ function TotalsRow({
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+/**
+ * A block's heading, with a screen-only Edit for the studio when what is
+ * listed comes from the project: it says where it changes, rather than being a
+ * dead end ("Edit a thing where it is seen"). Never on print or the client's link.
+ */
+function BlockTitle({ title, onEdit }: { title: string; onEdit?: (() => void) | undefined }) {
+  if (!onEdit) return <h3 className="mb-3 text-sm font-semibold">{title}</h3>
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="no-print h-7 px-2 text-xs"
+        onClick={onEdit}
+        title="This comes from the project. Change it there and this page updates."
+      >
+        <Pencil className="size-3.5" /> Edit
+      </Button>
     </div>
   )
 }

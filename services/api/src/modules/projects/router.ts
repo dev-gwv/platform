@@ -48,6 +48,7 @@ import { uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { todayInIndia } from '../../lib/dates'
 import { requireMoney, requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
 
 /** postgres.js writes `undefined` as a column; leave those out instead. */
@@ -478,10 +479,10 @@ export const projectsRouter = new Hono<AppEnv>()
   .get('/templates', requireAction('projects', 'view'), async (c) => {
     const rows = await attempt(c, 'projects.templates_list', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select id, company_id, name, description, deliverables_json, shoots_json, tasks_json, created_at
+        select id, company_id, name, description, deliverables_json, shoots_json, tasks_json, is_sample, created_at
           from project_templates
          where company_id = ${c.get('auth').companyId}
-         order by created_at desc`),
+         order by is_sample, created_at desc`),
     )
     if (!rows) fail(400, 'We could not load templates.')
     return c.json(projectTemplateList.parse({ items: rows }))
@@ -523,7 +524,9 @@ export const projectsRouter = new Hono<AppEnv>()
              set name = ${d.name}, description = ${d.description ?? null},
                  deliverables_json = ${sql.json(d.deliverables_json)},
                  shoots_json = ${sql.json(d.shoots_json)},
-                 tasks_json = ${sql.json(d.tasks_json)}
+                 tasks_json = ${sql.json(d.tasks_json)},
+                 -- Edited, it is the studio's own now (0232).
+                 is_sample = false
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),
@@ -1393,7 +1396,7 @@ export const projectsRouter = new Hono<AppEnv>()
         const docs = await sql<{ id: string; title: string | null; acknowledged_at: string | null; total_cost: number | null; payment_terms: unknown }[]>`
           select d.id, d.title, d.acknowledged_at, d.total_cost::float as total_cost, d.payment_terms
             from project_terms_documents d
-           where d.project_id = ${projectId} and d.revoked_at is null
+           where d.project_id = ${projectId} and d.revoked_at is null and not d.is_draft
              and jsonb_typeof(d.payment_terms) = 'array' and jsonb_array_length(d.payment_terms) > 0
            order by (d.acknowledged_at is not null) desc, d.created_at desc
            limit 1`
@@ -1491,6 +1494,7 @@ export const projectsRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the payment details.')
     const auth = c.get('auth')
     const projectId = uuidParam(c)
+    const paidOn = parsed.data.paid_on ?? todayInIndia()
     const row = await attempt(c, 'projects.payment_add', () =>
       withUser(c.env, auth.userId, async (sql) => {
         // Tie it to the project's client too, so Billing's client ledger and
@@ -1503,7 +1507,9 @@ export const projectsRouter = new Hono<AppEnv>()
             project_id: projectId,
             company_id: auth.companyId,
             amount: parsed.data.amount,
-            paid_on: parsed.data.paid_on ?? new Date().toISOString().slice(0, 10),
+            paid_on: paidOn,
+            // Billing reads coalesce(date_received, paid_on); keep the two together.
+            date_received: paidOn,
             mode: parsed.data.mode ?? null,
             reference: parsed.data.reference ?? null,
             notes: parsed.data.notes ?? parsed.data.description ?? null,
@@ -1532,8 +1538,11 @@ export const projectsRouter = new Hono<AppEnv>()
   .patch('/:id/payments/:pid', requireAction('projects', 'edit'), async (c) => {
     const parsed = updatePaymentRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the payment details.')
-    const patch = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined))
+    const patch: Record<string, unknown> = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined))
     if (Object.keys(patch).length === 0) fail(422, 'Nothing to change.')
+    // A row recorded from Billing carries date_received, which Billing reads
+    // first; moving only paid_on would leave the old date showing there.
+    if (patch.paid_on) patch.date_received = patch.paid_on
     const projectId = uuidParam(c)
     const pid = uuidParam(c, 'pid')
     const rows = await attempt(c, 'projects.payment_update', () =>

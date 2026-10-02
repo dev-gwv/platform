@@ -93,7 +93,7 @@ export function LostReasonDialog({
                 id="lost-other"
                 value={other}
                 onChange={(e) => setOther(e.target.value)}
-                placeholder="e.g. Chose a studio closer to the venue"
+                placeholder="e.g. Went with another studio, budget too low"
                 aria-invalid={!!error}
                 autoFocus={options.length === 0}
               />

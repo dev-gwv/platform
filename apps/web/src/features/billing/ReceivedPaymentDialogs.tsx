@@ -5,6 +5,9 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
+import { cn } from '@/shared/ui/cn'
+import { todayInIndia } from '@/shared/ui/days-left'
+import { leftToPayLine } from './left-to-pay'
 import { useClients } from '@/features/clients/api'
 import { useClientProjectOptions } from './client-projects'
 import {
@@ -15,7 +18,7 @@ import {
   useInvoices,
 } from './api'
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => todayInIndia()
 
 interface PaymentFormState {
   project_id: string
@@ -99,6 +102,18 @@ export function ReceivedPaymentDialog({
   const openInvoices = invoiceRows.filter(
     (i) => i.status !== 'cancelled' && (!clientName || i.client_name === clientName),
   )
+
+  const pickedInvoice = openInvoices.find((i) => i.id === form.invoice_id)
+  const leftLine = pickedInvoice
+    ? leftToPayLine({
+        due: Number(pickedInvoice.balance_due),
+        amount: Number(form.amount) || 0,
+        received: form.status === 'paid',
+        editing: isEdit,
+        dueOn: pickedInvoice.due_date,
+        today: todayInIndia(),
+      })
+    : null
 
   function set<K extends keyof PaymentFormState>(key: K, value: PaymentFormState[K]) {
     setForm((s) => ({ ...s, [key]: value }))
@@ -215,22 +230,41 @@ export function ReceivedPaymentDialog({
                 Amount (₹) <span className="text-destructive">*</span>
               </Label>
               <Input inputMode="decimal" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" />
+              {leftLine && <p className="text-xs text-muted-foreground">{leftLine}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <select
-                value={form.status}
-                onChange={(e) => set('status', e.target.value as 'paid' | 'pending')}
-                className="h-9 rounded-md border border-input bg-card px-3 text-sm"
-              >
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
-              </select>
+              <Label>Has it come in?</Label>
+              <div role="radiogroup" aria-label="Has it come in?" className="grid h-9 grid-cols-2 gap-1 rounded-md border border-input p-0.5">
+                {(
+                  [
+                    { v: 'paid', label: 'Received' },
+                    { v: 'pending', label: 'Promised' },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.status === o.v}
+                    onClick={() => set('status', o.v)}
+                    className={cn(
+                      'rounded px-2 text-sm font-medium transition-colors',
+                      form.status === o.v
+                        ? o.v === 'paid'
+                          ? 'bg-tone-green-soft text-tone-green'
+                          : 'bg-tone-amber-soft text-tone-amber'
+                        : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label>Date received</Label>
+              <Label>{form.status === 'pending' ? 'Expected on' : 'Date received'}</Label>
               <Input type="date" value={form.date_received} onChange={(e) => set('date_received', e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">

@@ -41,11 +41,11 @@ export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header
           className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-tone-amber/40 bg-tone-amber-soft px-3 text-xs font-semibold text-foreground transition-colors hover:border-tone-amber sm:px-4"
         >
           <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
-          <span className="hidden xl:inline">Suggest a feature</span>
-          <span className="hidden text-muted-foreground xl:inline" aria-hidden>
+          <span className="hidden min-[1800px]:inline">Suggest a feature</span>
+          <span className="hidden text-muted-foreground min-[1800px]:inline" aria-hidden>
             ·
           </span>
-          <span className="hidden font-medium leading-normal sm:inline">सुझाव दें</span>
+          <span className="hidden font-medium leading-normal sm:inline lg:hidden min-[1800px]:inline">सुझाव दें</span>
         </button>
       )}
       <SuggestFeatureDialog open={open} onOpenChange={setOpen} />

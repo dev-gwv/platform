@@ -225,6 +225,7 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
         <RecordPaymentDialog
           target={{ kind: 'invoice', invoiceId: data.id, invoiceNumber: data.invoice_number }}
           suggested={data.balance_due}
+          dueOn={data.due_date}
           onClose={() => setRecording(false)}
         />
       )}

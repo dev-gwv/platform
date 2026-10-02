@@ -23,6 +23,7 @@ const lead = (over: Partial<CrmLead> = {}): CrmLead =>
     is_archived: false,
     merged_into: null,
     converted_project_id: null,
+    converted_project_name: null,
     converted_client_id: null,
     deal_value: null,
     probability: null,
