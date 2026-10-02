@@ -29,7 +29,7 @@ describe('relativeDue', () => {
   it.each([
     [{ status: 'pending', estimated_date: '2026-09-24' }, 'Due today'],
     [{ status: 'pending', estimated_date: '2026-09-25' }, 'Due tomorrow'],
-    [{ status: 'in_progress', estimated_date: '2026-10-06' }, 'Due in 12 days'],
+    [{ status: 'in_progress', estimated_date: '2026-10-06' }, '12 days left'],
     [{ status: 'in_progress', estimated_date: '2026-09-21' }, '3 days late'],
     [{ status: 'review', estimated_date: '2026-09-23' }, '1 day late'],
     [{ status: 'completed', estimated_date: '2026-09-01', delivered_at: '2026-09-10T08:00:00Z' }, 'Delivered 10 Sept'],

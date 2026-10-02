@@ -33,6 +33,18 @@ describe('project tabs', () => {
     expect(viewsOf('production').filter((v) => seen.includes(v))).toEqual(['deliverables', 'completed_work'])
   })
 
+  it('calls the tasks view Task Management', () => {
+    expect(PROJECT_TABS.find((t) => t.value === 'tasks')?.label).toBe('Task Management')
+  })
+
+  it('keeps money from someone who runs projects without billing access', () => {
+    const manager = { module: (m: string) => !['billing', 'money', 'company_expenses', 'team_payouts'].includes(m), action: () => true }
+    const seen = visibleViews(manager)
+    expect(viewsOf('finance').filter((v) => seen.includes(v))).toEqual([])
+    expect(seen).toContain('deliverables')
+    expect(seen).toContain('data')
+  })
+
   it('shows everything to an owner', () => {
     expect(visibleViews(everything)).toEqual(PROJECT_TABS.map((t) => t.value))
   })

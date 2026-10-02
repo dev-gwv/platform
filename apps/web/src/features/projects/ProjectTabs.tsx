@@ -33,7 +33,7 @@ export const PROJECT_TABS = [
   { value: 'shoots', label: 'Shoots', icon: Camera },
   { value: 'deliverables', label: 'Work', icon: Package },
   { value: 'completed_work', label: 'Work to review', icon: FileCheck },
-  { value: 'tasks', label: 'Tasks', icon: CheckSquare },
+  { value: 'tasks', label: 'Task Management', icon: CheckSquare },
   { value: 'terms', label: 'Terms', icon: FileSignature },
   { value: 'billing', label: 'Billing', icon: Wallet },
   { value: 'expenses', label: 'Expenses', icon: Receipt },
@@ -84,6 +84,8 @@ export function visibleViews(
     (v) =>
       (v !== 'tasks' || can.module('tasks')) &&
       (v !== 'expenses' || can.module('company_expenses')) &&
+      // Money is for people with billing or money access, not everyone who runs projects.
+      ((v !== 'billing' && v !== 'costs') || can.module('billing') || can.module('money')) &&
       (v !== 'completed_work' || can.module('team_work_preview')) &&
       (v !== 'data' || can.action('projects', 'edit')) &&
       (v !== 'costs' || can.action('projects', 'edit')) &&
@@ -146,22 +148,28 @@ export function ProjectTabStrip({
 }
 
 /**
- * The quiet second row inside Post-production and Finance: Work · Work to
- * review · Tasks, or Billing · Expenses · Cost sheet. Nothing is drawn for a
+ * The second row inside Post-production and Finance: Work · Work to review ·
+ * Task Management, or Billing · Expenses · Cost sheet · Payouts. Nothing is drawn for a
  * group with a single view this person can see.
  */
 export function ProjectSubTabs({
   active,
   onSelect,
+  counts,
   className,
 }: {
   active: ProjectTab
   onSelect: (tab: ProjectTab) => void
+  /** Things waiting under a view ("Work to review 2"), shown in amber. */
+  counts?: Partial<Record<ProjectTab, number>>
   className?: string
 }) {
   const visible = useVisibleProjectTabs()
   const views = viewsOf(groupOf(active)).filter((v) => visible.includes(v))
   if (views.length < 2) return null
-  const tabs = views.map((v) => ({ value: v, label: PROJECT_TABS.find((t) => t.value === v)!.label }))
-  return <SectionTabs variant="underline" tabs={tabs} value={active} onChange={onSelect} label="Sections" {...(className ? { className } : {})} />
+  const tabs = views.map((v) => {
+    const t = PROJECT_TABS.find((x) => x.value === v)!
+    return { value: v, label: t.label, icon: t.icon, ...(counts?.[v] ? { count: counts[v] } : {}) }
+  })
+  return <SectionTabs variant="chips" tabs={tabs} value={active} onChange={onSelect} label="Sections" {...(className ? { className } : {})} />
 }

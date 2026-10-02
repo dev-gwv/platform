@@ -293,6 +293,17 @@ export const myDeliverable = z.object({
   review_note: z.string().nullable().default(null),
   /** The latest version handed in for it; a revision is the next one. */
   last_version: z.number().int().nullable().default(null),
+  /** The shoots it is made from, each with whether its data is in. */
+  shoots: z
+    .object({ id: uuid, name: z.string(), shoot_date: isoDate.nullable(), data_ready: z.boolean() })
+    .array()
+    .default([]),
+  /** Where the data is, said once: "WD Red 03 · /2026/Mehta/Haldi". */
+  data_where: z.string().nullable().default(null),
+  /** Who gave it to the editor, so a hand-in can say who will look at it. */
+  assigned_by_name: z.string().nullable().default(null),
+  /** Delivered or dropped: shown under "Done" for a while. */
+  done_at: isoDateTime.nullable().default(null),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 

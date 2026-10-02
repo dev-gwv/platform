@@ -19,6 +19,24 @@ export function studioWork(c: Context<AppEnv>): boolean {
   return auth.isOwner || seesStudioWork(auth.access)
 }
 
+/**
+ * Does this person see money: a project's value, what was received, its
+ * billing and costs? The owner, and whoever has billing or money access. A
+ * Project Manager runs projects ("No money") and does not.
+ */
+export function seesMoney(c: Context<AppEnv>): boolean {
+  const auth = c.get('auth')
+  return auth.isOwner || auth.access.hasModule('billing') || auth.access.hasModule('money')
+}
+
+export const NO_MONEY = 'The money on this project is for people with billing access.'
+
+/** Middleware: only for people who see money. */
+export async function requireMoney(c: Context<AppEnv>, next: () => Promise<void>) {
+  if (!seesMoney(c)) fail(403, NO_MONEY)
+  await next()
+}
+
 export const NOT_YOURS = 'This is the studio’s work. Your own shoots, edits and tasks are under My work.'
 
 /** Middleware: only for people who see the studio's work. */

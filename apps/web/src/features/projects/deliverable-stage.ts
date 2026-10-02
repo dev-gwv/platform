@@ -89,7 +89,7 @@ export function dueLabel(
 }
 
 /**
- * The due date as a person says it: "Due tomorrow", "Due in 12 days",
+ * The due date as a person says it: "Due tomorrow", "12 days left",
  * "3 days late", "Delivered 10 Sept". The card leads with this; the exact
  * date sits in its tooltip.
  */
@@ -104,7 +104,7 @@ export function relativeDue(
   if (diff === 0) return 'Due today'
   if (diff === 1) return 'Due tomorrow'
   if (diff < 0) return diff === -1 ? '1 day late' : `${-diff} days late`
-  return `Due in ${diff} days`
+  return `${diff} days left`
 }
 
 /** Days until due (negative when late), or null when there is no open date. */

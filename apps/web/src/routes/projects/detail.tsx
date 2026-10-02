@@ -50,6 +50,7 @@ import { DataTab } from '@/features/projects/tabs/DataTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
+import { useProjectWorkSubmissions } from '@/features/work/api'
 import type { JourneyKey } from '@/features/projects/journey'
 
 type Tab = Exclude<ProjectTab, 'quotation'>
@@ -108,6 +109,12 @@ function ProjectDetail() {
   const canReviewWork = access.hasAction('team_work_preview', 'edit')
   // Task status updates are gated on tasks:edit, not projects:edit.
   const canEditTasks = access.hasAction('tasks', 'edit')
+  // A project's value and payments are for billing or money access; running
+  // the project is not enough (a Project Manager is "no money").
+  const seesMoney = access.hasModule('billing') || access.hasModule('money')
+  // Hand-ins waiting for a decision, counted on the "Work to review" chip.
+  const handIns = useProjectWorkSubmissions(canReviewWork ? id : '')
+  const waiting = (handIns.data ?? []).filter((s) => s.status === 'submitted').length
   const update = useUpdateProject(id)
   const removeProject = useDeleteProject()
   const confirm = useConfirm()
@@ -294,40 +301,42 @@ function ProjectDetail() {
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
-        <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" />
-        <Figure
-          icon={Clock}
-          label={
-            money.promised > 0
-              ? `Still to collect · ${formatINR(money.promised)} promised`
-              : 'Still to collect'
-          }
-          value={formatINR(balance)}
-          tone={balance > 0 ? 'warning' : 'success'}
-          action={
-            canEdit && balance > 0 ? (
-              <button
-                type="button"
-                onClick={() => setTab('billing')}
-                className="text-xs font-semibold text-primary hover:underline"
-              >
-                + Add payment
-              </button>
-            ) : undefined
-          }
-        />
-      </div>
+      {seesMoney && (
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+          <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
+          <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" />
+          <Figure
+            icon={Clock}
+            label={
+              money.promised > 0
+                ? `Still to collect · ${formatINR(money.promised)} promised`
+                : 'Still to collect'
+            }
+            value={formatINR(balance)}
+            tone={balance > 0 ? 'warning' : 'success'}
+            action={
+              canEdit && balance > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setTab('billing')}
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  + Add payment
+                </button>
+              ) : undefined
+            }
+          />
+        </div>
+      )}
 
       {canEdit && <ProjectJourney project={data} className="mt-3" onGo={go} onSkipToTeam={() => go('team')} />}
 
       <ProjectTabStrip className="mt-4" active={tab} onSelect={setTab} />
-      <ProjectSubTabs className="mt-3" active={tab} onSelect={setTab} />
+      <ProjectSubTabs className="mt-3" active={tab} onSelect={setTab} counts={{ completed_work: waiting }} />
 
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
-          <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />
+          {seesMoney && <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />}
           <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
           <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
         </div>

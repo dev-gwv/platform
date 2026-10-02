@@ -7,6 +7,7 @@ import { useAddDeliverable, useDeleteDeliverable } from '@/features/projects/api
 import { DeliverableDialog } from '@/features/projects/DeliverableDialog'
 import { DeliverableCard } from '@/features/projects/DeliverableCard'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
+import { DeliverableBulkBar } from '@/features/projects/DeliverableBulkBar'
 import { DeliveryPipeline, type PipelineFilter } from '@/features/projects/DeliveryPipeline'
 import { STAGE_LABEL, groupByShoot, isLate, stageOf, type ShootRef } from '@/features/projects/deliverable-stage'
 import { EventTile } from '@/shared/ui/icon-tile'
@@ -60,6 +61,16 @@ export function DeliverablesTab({
   const [filter, setFilter] = useState<PipelineFilter>(null)
   const [openId, setOpenId] = useState<string | null>(wantedFromUrl)
   const [openAction, setOpenAction] = useState<'voice' | null>(null)
+  // Ticked for the bulk bar.
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
+  const toggle = (id: string) =>
+    setTicked((t) => {
+      const n = new Set(t)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const picked = deliverables.filter((d) => ticked.has(d.id))
   const del = useDeleteDeliverable(projectId)
   const add = useAddDeliverable(projectId)
   const confirm = useConfirm()
@@ -173,6 +184,7 @@ export function DeliverablesTab({
                     }}
                     onEdit={() => setDialog({ deliverable: d })}
                     onDelete={() => void remove(d)}
+                    {...(canEdit ? { selected: ticked.has(d.id), onToggleSelect: () => toggle(d.id) } : {})}
                   />
                 ))}
               </ul>
@@ -180,6 +192,8 @@ export function DeliverablesTab({
           </section>
         )
       })}
+
+      {picked.length > 0 && <DeliverableBulkBar picked={picked} onDone={() => setTicked(new Set())} />}
 
       <DeliverableDrawer
         deliverable={open}

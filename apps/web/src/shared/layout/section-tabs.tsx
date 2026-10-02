@@ -1,8 +1,13 @@
+import type { ComponentType } from 'react'
 import { cn } from '../ui/cn'
 
 export interface SectionTab<T extends string> {
   value: T
   label: string
+  /** Drawn before the label in the 'chips' variant. */
+  icon?: ComponentType<{ className?: string }>
+  /** A small amber count after the label (things waiting), 'chips' only. */
+  count?: number
 }
 
 /**
@@ -29,9 +34,44 @@ export function SectionTabs<T extends string>({
    * of the heading rather than as a control competing with it, which matters
    * on a page whose first job is to show a list.
    */
-  variant?: 'pill' | 'underline'
+  variant?: 'pill' | 'underline' | 'chips'
   label?: string
 }) {
+  if (variant === 'chips') {
+    // The row inside a tab group (Post-production, Finance): each one a
+    // bordered chip you can see is a control, the open one tinted in the
+    // studio's colour so it reads as part of the strip above it.
+    return (
+      <div role="tablist" aria-label={label} className={cn('flex flex-wrap gap-2', className)}>
+        {tabs.map((t) => {
+          const on = value === t.value
+          const Icon = t.icon
+          return (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => onChange(t.value)}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                on
+                  ? 'border-primary/50 bg-primary/10 font-semibold text-primary shadow-sm'
+                  : 'border-border bg-card text-foreground/75 hover:border-primary/30 hover:bg-primary/5 hover:text-foreground',
+              )}
+            >
+              {Icon && <Icon className="size-4" aria-hidden />}
+              {t.label}
+              {t.count ? (
+                <span className="ml-0.5 rounded-full bg-warning px-1.5 text-[11px] font-bold leading-5 text-white">{t.count}</span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   if (variant === 'underline') {
     return (
       <div

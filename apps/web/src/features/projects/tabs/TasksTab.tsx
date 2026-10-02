@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { CalendarDays, ListPlus, Plus, Trash2, UserPlus } from 'lucide-react'
+import { CalendarDays, ListPlus, Plus, Trash2 } from 'lucide-react'
 import type { TaskListItem } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -10,6 +10,7 @@ import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
+import { PersonChip } from '@/features/team/PersonPicker'
 import { useMembers } from '@/features/allocation/api'
 import { useCreateTask, useDeleteTask, useGenerateTasks, useProjectTasks, useUpdateTask, useUpdateTaskStatus } from '@/features/tasks/api'
 import { todayISO } from '@/features/tasks/board'
@@ -130,19 +131,12 @@ function AddTaskRow({ projectId }: { projectId: string }) {
         onChange={(e) => setTitle(e.target.value)}
         className="min-w-[14rem] flex-1"
       />
-      <select
-        aria-label="Who"
-        value={who}
-        onChange={(e) => setWho(e.target.value)}
-        className="h-9 rounded-md border border-input bg-card px-2 text-sm"
-      >
-        <option value="">Anyone</option>
-        {(members ?? []).map((m) => (
-          <option key={m.user_id} value={m.user_id}>
-            {m.name}
-          </option>
-        ))}
-      </select>
+      <PersonChip
+        value={who || null}
+        name={(members ?? []).find((m) => m.user_id === who)?.name ?? null}
+        onChange={(id) => setWho(id ?? '')}
+        label="Who does it"
+      />
       <Input aria-label="Due date" type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-40" />
       <Button type="submit" disabled={!title.trim() || create.isPending}>
         <Plus /> Add
@@ -178,25 +172,11 @@ function TaskRow({ t, canEdit, deliverableTitle }: { t: TaskListItem; canEdit: b
 
       {/* Who -- changed right here. */}
       {canEdit && !done ? (
-        <label className="inline-flex items-center gap-1 text-xs">
-          <UserPlus className={cn('size-3.5', t.assignee_ids.length ? 'text-muted-foreground' : 'text-primary')} aria-hidden />
-          <select
-            aria-label={`Who does ${t.title}`}
-            value={t.assignee_ids[0] ?? ''}
-            onChange={(e) => update.mutate({ id: t.id, patch: { assignees: e.target.value ? [e.target.value] : [] } })}
-            className={cn('cursor-pointer appearance-none bg-transparent font-medium hover:underline', t.assignee_ids.length ? 'text-muted-foreground' : 'text-primary')}
-          >
-            <option value="">Assign</option>
-            {t.assignee_ids[0] && !(members ?? []).some((m) => m.user_id === t.assignee_ids[0]) && (
-              <option value={t.assignee_ids[0]}>{t.assignee_names[0] ?? 'Assigned'}</option>
-            )}
-            {(members ?? []).map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <PersonChip
+          value={t.assignee_ids[0] ?? null}
+          name={t.assignee_names[0] ?? (members ?? []).find((m) => m.user_id === t.assignee_ids[0])?.name ?? null}
+          onChange={(id) => update.mutate({ id: t.id, patch: { assignees: id ? [id] : [] } })}
+        />
       ) : (
         t.assignee_names.length > 0 && <span className="text-xs text-muted-foreground">{t.assignee_names.join(', ')}</span>
       )}
