@@ -11,7 +11,12 @@ import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
 
 const ROLE: Record<string, string> = {
-  super_admin: 'Owner', admin: 'Admin', manager: 'Manager', employee: 'Team member', platform_admin: 'Platform admin', none: 'Member',
+  super_admin: 'Owner',
+  admin: 'Admin',
+  manager: 'Manager',
+  employee: 'Team member',
+  platform_admin: 'Platform admin',
+  none: 'Member',
 }
 
 /**
@@ -52,38 +57,58 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname })
   const here = tutorialFor(path, tutorials)
   const [playing, setPlaying] = useState<Tutorial | null>(null)
-  const studio = session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
+  const studio =
+    session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
   const message = supportMessage({
     studio,
     name: session?.display_name ?? '',
     role: ROLE[session?.role ?? 'none'] ?? 'Member',
-    plan: session?.plan_gate === 'active' ? 'Paid' : session?.plan_gate === 'grandfathered' ? 'Trial' : (session?.plan_gate ?? null),
+    plan:
+      session?.plan_gate === 'active'
+        ? 'Paid'
+        : session?.plan_gate === 'grandfathered'
+          ? 'Trial'
+          : (session?.plan_gate ?? null),
     page: path,
     at: new Date(),
   })
 
   return (
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
-      <div>
-        <p className="text-lg font-semibold">We're one message away</p>
-        <p className="text-sm text-muted-foreground">Tell us what you need. Your studio and this page are already in the message.</p>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {help?.support_whatsapp && (
-          <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
-            <a href={whatsappLink(help.support_whatsapp, message)} target="_blank" rel="noreferrer">
-              <MessageCircle /> WhatsApp us
-            </a>
-          </Button>
-        )}
-        {help?.support_email && (
-          <Button asChild variant="outline" className={cn(!help.support_whatsapp && 'sm:col-span-2')}>
-            <a href={mailLink(help.support_email, studio, message)}>
-              <Mail /> Email us
-            </a>
-          </Button>
-        )}
-      </div>
+      {(help?.support_whatsapp || help?.support_email) && (
+        <>
+          <div>
+            <p className="text-lg font-semibold">We're one message away</p>
+            <p className="text-sm text-muted-foreground">
+              Tell us what you need. Your studio and this page are already in the message.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {help?.support_whatsapp && (
+              <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
+                <a
+                  href={whatsappLink(help.support_whatsapp, message)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageCircle /> WhatsApp us
+                </a>
+              </Button>
+            )}
+            {help?.support_email && (
+              <Button
+                asChild
+                variant="outline"
+                className={cn(!help.support_whatsapp && 'sm:col-span-2')}
+              >
+                <a href={mailLink(help.support_email, studio, message)}>
+                  <Mail /> Email us
+                </a>
+              </Button>
+            )}
+          </div>
+        </>
+      )}
 
       {here && (
         <button
@@ -114,8 +139,12 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
           <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {help!.faqs.map((f) => (
               <details key={f.id} className="group px-3 py-2.5">
-                <summary className="cursor-pointer list-none text-sm font-medium marker:hidden group-open:text-primary">{f.question}</summary>
-                <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{f.answer}</p>
+                <summary className="cursor-pointer list-none text-sm font-medium marker:hidden group-open:text-primary">
+                  {f.question}
+                </summary>
+                <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">
+                  {f.answer}
+                </p>
               </details>
             ))}
           </div>

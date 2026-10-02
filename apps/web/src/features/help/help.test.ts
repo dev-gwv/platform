@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { lengthLabel, tutorialFor, tutorialsWith } from './tutorials'
+import { lengthLabel, TUTORIALS, tutorialFor, tutorialsWith } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
 
 describe('tutorials', () => {
-  const list = tutorialsWith()
+  const list = tutorialsWith([], TUTORIALS.map((t) => t.key))
   it('finds the tutorial for a page, and none for a page without one', () => {
     expect(tutorialFor('/follow-ups', list)?.key).toBe('leads')
     expect(tutorialFor('/projects/abc-123/quotation', list)?.key).toBe('quotation')

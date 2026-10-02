@@ -22,15 +22,15 @@ export interface Tutorial {
 
 export const TUTORIALS: readonly Tutorial[] = [
   { key: 'team', title: 'Add your team', blurb: 'The people who shoot and edit with you, in a minute.', seconds: 37, section: 'Get started', pages: ['/employees'] },
-  { key: 'client', title: 'Add your first client', blurb: 'Name and number is enough to start.', seconds: 30, section: 'Get started', pages: ['/clients'] },
-  { key: 'project', title: 'Create your first project', blurb: 'Events, deliverables and the price -- then the quotation is ready.', seconds: 55, section: 'Get started', pages: ['/projects/new'] },
-  { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 45, section: 'Clients & sales', pages: ['/follow-ups'] },
+  { key: 'client', title: 'Add your first client', blurb: 'Name and number is enough to start.', seconds: 31, section: 'Get started', pages: ['/clients'] },
+  { key: 'project', title: 'Create your first project', blurb: 'Events, deliverables and the price -- then the quotation is ready.', seconds: 53, section: 'Get started', pages: ['/projects/new'] },
+  { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 53, section: 'Clients & sales', pages: ['/follow-ups'] },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 40, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/] },
   { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 45, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'] },
-  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 40, section: 'Editing', pages: ['/production-board'] },
-  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 40, section: 'Money', pages: ['/billing/payments'] },
-  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 40, section: 'Money', pages: ['/team-payouts'] },
-  { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 40, section: 'Team', pages: ['/settings/attendance-location', '/attendance'] },
+  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 32, section: 'Editing', pages: ['/production-board'] },
+  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 38, section: 'Money', pages: ['/billing/payments'] },
+  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 34, section: 'Money', pages: ['/team-payouts'] },
+  { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 43, section: 'Team', pages: ['/settings/attendance-location', '/attendance'] },
 ]
 
 const matches = (page: string | RegExp, path: string) =>
@@ -70,4 +70,4 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance']
+export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'give-work', 'payments', 'payouts', 'attendance']
