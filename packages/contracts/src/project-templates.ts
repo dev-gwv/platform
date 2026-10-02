@@ -25,6 +25,8 @@ export const projectTemplate = z.object({
     priority: z.string().default('medium'),
     sort_order: z.number().int().default(0),
   })).default([]),
+  /** The one every studio starts with (0232); editing it makes it the studio's own. */
+  is_sample: z.boolean().default(false),
   created_at: isoDateTime,
 })
 export type ProjectTemplate = z.infer<typeof projectTemplate>

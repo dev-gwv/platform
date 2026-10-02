@@ -563,7 +563,17 @@ function ProjectQuotation() {
       )}
 
       <div className="mt-3">
-        <QuotationDocument data={doc} prefs={prefs} compact onEditTerms={canEdit ? openTerms : undefined} />
+        <QuotationDocument
+          data={doc}
+          prefs={prefs}
+          compact
+          onEditTerms={canEdit ? openTerms : undefined}
+          onEditFrom={
+            canEdit
+              ? (where) => void navigate({ to: '/projects/$id', params: { id }, search: { tab: where } as never })
+              : undefined
+          }
+        />
       </div>
 
       <Dialog open={termsOpen} onOpenChange={(o) => !update.isPending && setTermsOpen(o)}>

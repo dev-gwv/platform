@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DataRecord, TeamSlot } from '@ipc/contracts'
 import { dataRecord } from '@ipc/contracts'
-import { dataCounts, dataRowTone, defaultDataType, defaultLabel, deriveStage, recordForSlot, slotStage, whenLabel } from './stage'
+import { dataCounts, dataHandIn, dataHandInLine, dataRowTone, defaultDataType, defaultLabel, deriveStage, recordForSlot, slotStage, whenLabel } from './stage'
 
 const SHOOT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
@@ -128,5 +128,25 @@ describe('dataRowTone', () => {
     expect(dataRowTone('copied')).toBe('green')
     expect(dataRowTone('backed_up')).toBe('green')
     expect(dataRowTone('issue')).toBe('red')
+  })
+})
+
+describe('dataHandIn', () => {
+  it('counts cards handed in and backed up; with the shooter is not in, an issue is', () => {
+    const a = slot()
+    const b = slot({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000002', user_name: 'Anita' })
+    const c = slot({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000003', user_name: 'Ravi' })
+    const d = slot({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000005', user_name: 'Opt', data_not_required_reason: 'No camera' })
+    const recs = [
+      record({ slot_id: a.id, primary_status: 'copied', backup_status: 'copied', data_status: 'backed_up' }),
+      record({ id: 'dddddddd-dddd-4ddd-8ddd-000000000009', slot_id: b.id, data_status: 'with_shooter' }),
+      record({ id: 'dddddddd-dddd-4ddd-8ddd-000000000010', slot_id: c.id, issue_found: true, data_status: 'issue' }),
+    ]
+    const t = dataHandIn([a, b, c, d], recs)
+    expect(t).toEqual({ needed: 3, handedIn: 2, backedUp: 1 })
+    expect(dataHandInLine(t)).toBe('Data: 2 of 3 handed in · 1 backed up')
+    expect(dataHandInLine({ needed: 2, handedIn: 2, backedUp: 2 })).toBe('Data: 2 of 2 handed in · all backed up')
+    expect(dataHandInLine({ needed: 2, handedIn: 0, backedUp: 0 })).toBe('Data: 0 of 2 handed in')
+    expect(dataHandInLine({ needed: 0, handedIn: 0, backedUp: 0 })).toBeNull()
   })
 })

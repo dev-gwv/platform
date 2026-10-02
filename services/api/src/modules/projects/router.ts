@@ -479,10 +479,10 @@ export const projectsRouter = new Hono<AppEnv>()
   .get('/templates', requireAction('projects', 'view'), async (c) => {
     const rows = await attempt(c, 'projects.templates_list', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select id, company_id, name, description, deliverables_json, shoots_json, tasks_json, created_at
+        select id, company_id, name, description, deliverables_json, shoots_json, tasks_json, is_sample, created_at
           from project_templates
          where company_id = ${c.get('auth').companyId}
-         order by created_at desc`),
+         order by is_sample, created_at desc`),
     )
     if (!rows) fail(400, 'We could not load templates.')
     return c.json(projectTemplateList.parse({ items: rows }))
@@ -524,7 +524,9 @@ export const projectsRouter = new Hono<AppEnv>()
              set name = ${d.name}, description = ${d.description ?? null},
                  deliverables_json = ${sql.json(d.deliverables_json)},
                  shoots_json = ${sql.json(d.shoots_json)},
-                 tasks_json = ${sql.json(d.tasks_json)}
+                 tasks_json = ${sql.json(d.tasks_json)},
+                 -- Edited, it is the studio's own now (0232).
+                 is_sample = false
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),

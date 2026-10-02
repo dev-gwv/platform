@@ -2046,6 +2046,24 @@ if (listed) {
   )
 }
 
+// ── Every studio starts with a sample project template (0232) ───────────
+{
+  const tpl = await api('/projects/templates', { token: aToken })
+  const samples = (tpl.json.items ?? []).filter((t) => t.is_sample)
+  check(
+    'templates: a studio has its sample wedding template',
+    tpl.status === 200 && samples.length === 1 && samples[0].name === 'Sample — Wedding' && samples[0].shoots_json.length === 3,
+    { status: tpl.status, samples: samples.map((t) => t.name) },
+  )
+  const edited = await api(`/projects/templates/${samples[0]?.id}`, {
+    token: aToken, method: 'PATCH',
+    body: { name: 'Our wedding', deliverables_json: samples[0]?.deliverables_json ?? [], shoots_json: samples[0]?.shoots_json ?? [], tasks_json: [] },
+  })
+  const again = await api('/projects/templates', { token: aToken })
+  const mine = (again.json.items ?? []).find((t) => t.id === samples[0]?.id)
+  check('templates: editing the sample makes it the studio\'s own', edited.status === 200 && mine?.is_sample === false && mine?.name === 'Our wedding', { edited: edited.status, mine })
+}
+
 // ── Terms drafts: half-written terms are kept ───────────────────────────
 {
   const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Draft Co ${rand()}`, phone: randPhone() } })
@@ -2567,6 +2585,14 @@ if (listed) {
     'quotation: shown again, the client can accept and the studio sees who did',
     accepted.status === 200 && after.json.quotation_accepted_by === 'Priya Sharma' && !!after.json.quotation_accepted_at,
     { accepted: accepted.status, after: { at: after.json.quotation_accepted_at, by: after.json.quotation_accepted_by } },
+  )
+
+  const bell = await api('/notifications?type=quotation_accepted', { token: aToken })
+  const rang = (bell.json.items ?? bell.json ?? []).filter?.((n) => n.entity_id === pid) ?? []
+  check(
+    'quotation: the owner is told when the client accepts (0231)',
+    bell.status === 200 && rang.length === 1 && /accepted the quotation/.test(rang[0]?.title ?? ''),
+    { status: bell.status, n: rang.length, title: rang[0]?.title },
   )
 
   // A link sent without terms or display options shows the project's own.

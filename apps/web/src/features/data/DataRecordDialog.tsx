@@ -327,6 +327,7 @@ export function DataRecordDialog({
           <div className="divide-y divide-border rounded-lg border border-border">
             <CopyRow
               title="Main copy"
+              example="WD-001"
               icon={<HardDrive className="size-4" />}
               value={primary}
               onChange={setPrimary}
@@ -334,6 +335,7 @@ export function DataRecordDialog({
             />
             <CopyRow
               title="Backup copy"
+              example="SEA-002"
               icon={<ShieldCheck className="size-4" />}
               value={backup}
               onChange={setBackup}
@@ -447,12 +449,15 @@ const STATUS_TONE: Record<CustodyStatus, string> = {
  */
 function CopyRow({
   title,
+  example,
   icon,
   value,
   onChange,
   statuses,
 }: {
   title: string
+  /** A disk name to show how studios label theirs: "WD-001". */
+  example: string
   icon: ReactNode
   value: Copy
   onChange: (next: Copy) => void
@@ -470,7 +475,7 @@ function CopyRow({
         {skipped ? (
           <p className="text-sm text-muted-foreground">Not needed for this data.</p>
         ) : (
-          <LocationPicker value={value.location} onChange={(location) => onChange({ ...value, location })} label={`${title} location`} />
+          <LocationPicker value={value.location} onChange={(location) => onChange({ ...value, location })} label={`${title} location`} example={example} />
         )}
         <Select
           aria-label={`${title} status`}
@@ -515,7 +520,7 @@ function CopyRow({
 }
 
 /** Pick a saved disk/cloud, or name a new one on the spot. */
-function LocationPicker({ value, onChange, label }: { value: string; onChange: (id: string) => void; label: string }) {
+function LocationPicker({ value, onChange, label, example }: { value: string; onChange: (id: string) => void; label: string; example?: string }) {
   const locations = useStorageLocations()
   const create = useCreateStorageLocation()
   const [adding, setAdding] = useState(false)
@@ -527,7 +532,7 @@ function LocationPicker({ value, onChange, label }: { value: string; onChange: (
       <div className="flex flex-wrap items-center gap-1.5">
         <Input
           aria-label="New location name"
-          placeholder="Name, e.g. Studio HDD 4"
+          placeholder={`Name, e.g. ${example ?? 'Studio HDD 4'}`}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="min-w-[12rem] flex-1"

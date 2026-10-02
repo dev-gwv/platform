@@ -13,6 +13,7 @@ import {
   Send,
   Trash2,
   X,
+  TrendingUp,
 } from 'lucide-react'
 import { shootListItem, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -31,6 +32,8 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
+import { useProfitAndLoss } from '@/features/financials/api'
+import { collectedLine, marginOf, toCollectLine } from '@/features/projects/money-lines'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { useDeleteProject, useProject, useUpdateProject } from '@/features/projects/api'
 import { EntityReminders } from '@/features/reminders/EntityReminders'
@@ -112,6 +115,8 @@ function ProjectDetail() {
   // A project's value and payments are for billing or money access; running
   // the project is not enough (a Project Manager is "no money").
   const seesMoney = access.hasModule('billing') || access.hasModule('money')
+  const seesProfit = seesMoney && access.hasModule('financials')
+  const pnl = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: id }, seesProfit)
   // Hand-ins waiting for a decision, counted on the "Work to review" chip.
   const handIns = useProjectWorkSubmissions(canReviewWork ? id : '')
   const waiting = (handIns.data ?? []).filter((s) => s.status === 'submitted').length
@@ -199,6 +204,9 @@ function ProjectDetail() {
   const money = projectMoney(data)
   const received = money.received
   const balance = money.due
+  // The same booked profit as the Finance tab's card and Billing > Profit &
+  // Loss, so the page never shows two different margins.
+  const margin = seesProfit ? marginOf(pnl.data?.projects[0]) : null
   const StatusIcon = STATUS_ICON[data.status]
 
   async function onDelete() {
@@ -321,17 +329,14 @@ function ProjectDetail() {
       </div>
 
       {seesMoney && (
-        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
           <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
-          <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" />
+          <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" sub={collectedLine(money)} />
           <Figure
             icon={Clock}
-            label={
-              money.promised > 0
-                ? `Still to collect · ${formatINR(money.promised)} promised`
-                : 'Still to collect'
-            }
+            label="Still to collect"
             value={formatINR(balance)}
+            sub={toCollectLine(money)}
             tone={balance > 0 ? 'warning' : 'success'}
             action={
               canEdit && balance > 0 ? (
@@ -345,6 +350,20 @@ function ProjectDetail() {
               ) : undefined
             }
           />
+          {margin && (
+            <Figure
+              icon={TrendingUp}
+              label="Margin"
+              value={margin.value}
+              sub={margin.sub}
+              tone={margin.negative ? 'danger' : 'info'}
+              action={
+                <button type="button" onClick={() => setTab('billing')} className="text-xs font-semibold text-primary hover:underline">
+                  See how
+                </button>
+              }
+            />
+          )}
         </div>
       )}
 
@@ -431,13 +450,16 @@ function Figure({
   icon: Icon,
   label,
   value,
+  sub,
   tone,
   action,
 }: {
   icon: typeof Clock
   label: string
   value: string
-  tone?: 'success' | 'warning' | 'info'
+  /** One plain line under the label: "20% collected". */
+  sub?: string | undefined
+  tone?: 'success' | 'warning' | 'info' | 'danger'
   action?: ReactNode
 }) {
   return (
@@ -450,14 +472,17 @@ function Figure({
               ? 'bg-success/10 text-success'
               : tone === 'warning'
                 ? 'bg-warning/10 text-warning'
-                : 'bg-primary/10 text-primary',
+                : tone === 'danger'
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-primary/10 text-primary',
           )}
         >
           <Icon className="size-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold tabular-nums sm:text-xl">{value}</p>
+          <p className={cn('truncate text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-destructive')}>{value}</p>
           <p className="truncate text-xs text-muted-foreground sm:text-sm">{label}</p>
+          {sub && <p className="truncate text-xs text-muted-foreground" title={sub}>{sub}</p>}
         </div>
         {action && <div className="shrink-0 sm:ml-auto sm:self-end">{action}</div>}
       </CardContent>

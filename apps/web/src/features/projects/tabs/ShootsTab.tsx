@@ -14,6 +14,7 @@ import {
   UserPlus,
   Users,
   X,
+  IndianRupee,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -29,6 +30,7 @@ import {
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { formatINR } from '@/shared/ui/format'
 import { useTeamTermsSends } from '@/features/team-terms/api'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -47,7 +49,8 @@ import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/
 import { useReleaseSlot, useSlots } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { AssignmentRow } from '@/features/shoots/AssignmentRow'
-import { dataCounts, optedOut, recordForSlot } from '@/features/data/stage'
+import { dataCounts, dataHandIn, dataHandInLine, optedOut, recordForSlot } from '@/features/data/stage'
+import { crewTotal } from '@/features/shoots/crew-total'
 import { CrewDataDialog } from '@/features/data/CrewDataDialog'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootHours, shootProgress } from '@/features/shoots/assign'
@@ -350,6 +353,7 @@ function ShootPlanner({
   // Crew terms, for studios that use them: each person's latest send.
   const planAccess = useAccess()
   const usesTerms = canEdit && planAccess.hasModule('team_terms')
+  const seesMoney = planAccess.hasModule('billing') || planAccess.hasModule('money')
   const termSends = useTeamTermsSends(usesTerms && live.length > 0 ? shoot.id : null)
   const termsFor = (userId: string | null): TeamTermsSend | null | undefined => {
     if (!usesTerms || !termSends.data) return undefined
@@ -369,7 +373,8 @@ function ShootPlanner({
   }, [live])
 
   // "Data 2/3": bookings whose footage is copied and backed up, of those that owe it.
-  const dataTally = dataCounts(live, records)
+  const dataLine = dataHandInLine(dataHandIn(live, records))
+  const crew = crewTotal(live)
   /** Booked, needing data, nothing recorded yet. */
   const owing = live.filter((sl) => !optedOut(sl) && !recordForSlot(sl, records))
 
@@ -498,17 +503,32 @@ function ShootPlanner({
                 <Users className="size-3" />
                 {progress.assigned}/{progress.required} assigned
               </span>
-              {/* Cards only exist once the day has been shot. */}
-              {dayPassed && dataTally.needed > 0 && (
-                <span className="flex items-center gap-1">
-                  <Database className="size-3" /> Data {dataTally.done}/{dataTally.needed}
+              {/* What the day's crew costs, for whoever sees money. */}
+              {seesMoney && crew.total > 0 && (
+                <span className="flex items-center gap-1" title={crew.tentative ? 'Not final: some amounts are still estimates' : undefined}>
+                  <IndianRupee className="size-3" />
+                  Crew {formatINR(crew.total)}
+                  {crew.tentative ? ' · not final' : ''}
+                  {crew.unset > 0 ? ` · ${crew.unset} without an amount` : ''}
                 </span>
               )}
-              {canEdit && dayPassed && owing.length > 1 && (
-                <button type="button" onClick={() => setCrewData(true)} className="font-medium text-primary hover:underline">
-                  Record everyone’s cards
-                </button>
-              )}
+              {/* Cards only exist once the day has been shot. One line says
+                  how many are in and how many of those are backed up; a tap
+                  records the ones still out. */}
+              {dayPassed && dataLine &&
+                (canEdit && owing.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setCrewData(true)}
+                    className="flex items-center gap-1 rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
+                  >
+                    <Database className="size-3" /> {dataLine}
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Database className="size-3" /> {dataLine}
+                  </span>
+                ))}
             </div>
           </div>
           {canEdit && (
@@ -651,7 +671,7 @@ function ShootPlanner({
                               t.done >= t.needed ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning',
                             )}
                           >
-                            Data {t.done}/{t.needed}
+                            {t.done}/{t.needed} backed up
                           </span>
                         )
                       })()}
