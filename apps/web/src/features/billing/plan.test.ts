@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlanInstalment } from '@ipc/contracts'
-import { instalmentAmounts, planStatus } from './plan'
+import { instalmentAmounts, planStatus, planDueDate } from './plan'
 
 const pct = (label: string, value: number): PlanInstalment => ({ label, mode: 'percent', value, due_trigger: null })
 const MULBERRY = [pct('Advance', 30), pct('Before the wedding', 30), pct('On the day', 30), pct('On delivery', 10)]
@@ -43,5 +43,31 @@ describe('plan status', () => {
 
   it('is empty with no plan', () => {
     expect(planStatus({ instalments: [], total: 100_000, received: 0, invoiced: 0 })).toEqual([])
+  })
+})
+
+describe('planDueDate', () => {
+  const shoots = [
+    { name: 'Haldi', shoot_date: '2026-11-10' },
+    { name: 'Wedding', shoot_date: '2026-11-12' },
+    { name: 'Pre-wedding', shoot_date: '2026-10-20' },
+    { name: 'Reception', shoot_date: null },
+  ]
+  const at = (t: string | null) => planDueDate(t, { shoots, agreedOn: '2026-10-01T10:00:00Z' })
+  it('places a part before, or on, the shoot it names', () => {
+    expect(at('Before the wedding')).toEqual({ date: '2026-11-05', why: '7 days before Wedding' })
+    expect(at('On the haldi')).toEqual({ date: '2026-11-10', why: 'on Haldi' })
+    expect(at('Wedding day')?.date).toBe('2026-11-12')
+    expect(at('Before the pre-wedding shoot')?.date).toBe('2026-10-13')
+  })
+  it('puts the advance on the day the client agreed', () => {
+    expect(at('On booking')).toEqual({ date: '2026-10-01', why: 'on booking' })
+    expect(planDueDate('Advance', { shoots })).toBeNull()
+  })
+  it('leaves what it cannot place undated', () => {
+    expect(at('On delivery')).toBeNull()
+    expect(at('After the reception')).toBeNull()
+    expect(at('On the reception')).toBeNull()
+    expect(at(null)).toBeNull()
   })
 })
