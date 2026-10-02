@@ -256,3 +256,34 @@ export function bookingMessage(slot: TeamSlot): string {
     .filter(Boolean)
     .join('\n')
 }
+
+/** A month as Monday-first weeks; days outside the month are null. */
+export function calendarWeeks(month: string): (string | null)[][] {
+  const days = monthDays(month)
+  const [y, m] = month.split('-').map(Number) as [number, number]
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7
+  const cells: (string | null)[] = [...Array<null>(lead).fill(null), ...days]
+  while (cells.length % 7) cells.push(null)
+  const weeks: (string | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
+
+/**
+ * A calendar day in one word: plain while nothing is booked, green once every
+ * shoot that day has all its seats filled, and how many seats are still open
+ * otherwise.
+ */
+export function dayFill(
+  shoots: readonly Pick<ShootListItem, 'id' | 'requirements'>[],
+  slots: readonly TeamSlot[],
+): { open: number; full: boolean } {
+  let open = 0
+  let needed = 0
+  for (const s of shoots) {
+    const st = staffing(s, slots)
+    needed += st.needed
+    open += st.needed - st.filled
+  }
+  return { open, full: shoots.length > 0 && needed > 0 && open === 0 }
+}
