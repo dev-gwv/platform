@@ -18,6 +18,7 @@ import {
   useUpdateDataRecord,
 } from './api'
 import { LookupSelect } from '@/features/settings/LookupSelect'
+import { CardLabelsField } from './CardLabelsField'
 import { LocationKindSelect, kindFields } from './LocationKindSelect'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
 import { useCanPay, usePaySlot, useSlotPayStatus } from '@/features/team-payouts/pay'
@@ -110,6 +111,7 @@ export function DataRecordDialog({
   const [copiedByName, setCopiedByName] = useState(record && !record.copied_by_uid ? (record.copied_by_name ?? '') : '')
   const [size, setSize] = useState(record?.size_gb ? String(record.size_gb) : '')
   const [cards, setCards] = useState(record?.card_count ? String(record.card_count) : '')
+  const [cardNames, setCardNames] = useState<string[]>(record?.card_labels ?? [])
   const [label, setLabel] = useState(record?.data_label ?? defaultLabel(shoot, slot))
   const [notes, setNotes] = useState(record?.notes ?? '')
   const [primary, setPrimary] = useState<Copy>({
@@ -126,10 +128,10 @@ export function DataRecordDialog({
   })
 
   // What was typed survives a refresh or a closed tab until it is saved.
-  const initial = useState(() => ({ type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup }))[0]
+  const initial = useState(() => ({ type, received, copiedBy, copiedByName, size, cards, cardNames, label, notes, primary, backup }))[0]
   const draft = useFormDraft(
     `data-record:${record?.id ?? `new:${slot.id}`}`,
-    { type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup },
+    { type, received, copiedBy, copiedByName, size, cards, cardNames, label, notes, primary, backup },
     restore,
   )
   function restore(v: typeof initial) {
@@ -139,6 +141,7 @@ export function DataRecordDialog({
     setCopiedByName(v.copiedByName)
     setSize(v.size)
     setCards(v.cards)
+    setCardNames(v.cardNames ?? [])
     setLabel(v.label)
     setNotes(v.notes)
     setPrimary(v.primary)
@@ -148,7 +151,7 @@ export function DataRecordDialog({
   const who = slot.user_name ?? 'this booking'
   const locations = useStorageLocations()
   const [more, setMore] = useState(
-    () => !!(record?.size_gb || record?.card_count || record?.notes || (record?.data_type && record.data_type !== defaultDataType(slot.service_name))),
+    () => !!(record?.size_gb || record?.card_count || record?.card_labels?.length || record?.notes || (record?.data_type && record.data_type !== defaultDataType(slot.service_name))),
   )
 
   // A remembered disk or helper that has since been removed is not offered.
@@ -198,7 +201,8 @@ export function DataRecordDialog({
       data_label: label.trim() || defaultLabel(shoot, slot),
       date_received: received || null,
       size_gb: sizeN,
-      card_count: cardsN,
+      card_count: Math.max(cardsN, cardNames.length),
+      card_labels: cardNames,
       notes: notes.trim() || null,
       copied_by_uid: copiedBy && copiedBy !== OTHER && !copiedBy.startsWith('p:') ? copiedBy : null,
       copied_by_person_id: helper?.id ?? null,
@@ -387,15 +391,21 @@ export function DataRecordDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dr-cards" className="text-xs">
-                  Cards
+                  How many cards
                 </Label>
                 <Input
                   id="dr-cards"
                   inputMode="numeric"
                   placeholder="e.g. 3"
-                  value={cards}
+                  value={cardNames.length > Number(cards || 0) ? String(cardNames.length) : cards}
                   onChange={(e) => setCards(e.target.value.replace(/\D/g, ''))}
                 />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-4">
+                <Label htmlFor="dr-card-names" className="text-xs">
+                  Card names
+                </Label>
+                <CardLabelsField id="dr-card-names" value={cardNames} onChange={setCardNames} />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-4">
                 <Label htmlFor="dr-label" className="text-xs">

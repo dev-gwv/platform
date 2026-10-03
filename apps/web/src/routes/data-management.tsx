@@ -6,6 +6,7 @@ import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { SkeletonList } from '@/shared/ui/skeleton'
+import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -262,11 +263,13 @@ function LocationEditor({ id, onDone }: { id: string; onDone: () => void }) {
   const { data: locations } = useStorageLocations()
   const update = useUpdateStorageLocation()
   const loc = locations?.find((l) => l.id === id)
+  const [name, setName] = useState(loc?.name ?? '')
   const [capacity, setCapacity] = useState(loc?.capacity_gb != null ? String(loc.capacity_gb) : '')
   const [owner, setOwner] = useState(loc?.owner ?? '')
   const [notes, setNotes] = useState(loc?.notes ?? '')
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`storage-location:${id}`, { capacity, owner, notes }, (v) => {
+  const draft = useFormDraft(`storage-location:${id}`, { name, capacity, owner, notes }, (v) => {
+    setName(v.name ?? loc?.name ?? '')
     setCapacity(v.capacity)
     setOwner(v.owner)
     setNotes(v.notes)
@@ -277,6 +280,8 @@ function LocationEditor({ id, onDone }: { id: string; onDone: () => void }) {
     await update.mutateAsync({
       id,
       patch: {
+        // Renamed here: every record that points at it follows, since they keep its id.
+        ...(name.trim() && name.trim() !== loc?.name ? { name: name.trim() } : {}),
         capacity_gb: capacity.trim() ? Number(capacity) : null,
         owner: owner.trim() || null,
         notes: notes.trim() || null,
@@ -288,6 +293,10 @@ function LocationEditor({ id, onDone }: { id: string; onDone: () => void }) {
 
   return (
     <form onSubmit={(e) => void onSave(e)} className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/20 p-2">
+      <div className="flex flex-col gap-1">
+        <Label>Name</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} className={cn('w-40', !name.trim() && 'border-warning')} placeholder="e.g. WD-001" />
+      </div>
       <div className="flex flex-col gap-1">
         <Label>Capacity (GB)</Label>
         <Input inputMode="decimal" value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-28" placeholder="2000" />

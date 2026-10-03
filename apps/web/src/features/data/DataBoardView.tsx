@@ -27,6 +27,7 @@ import {
   type Focus,
   type Level,
 } from './board-model'
+import { cardsLine } from './cards'
 import { STAGE_LABEL, STAGE_TONE } from './stage'
 
 const LEVEL_RING: Record<Level, string> = {
@@ -78,7 +79,7 @@ export function DataBoardView({
     downloadCsv(
       `data-${new Date().toISOString().slice(0, 10)}.csv`,
       toCsv(
-        ['Shoot date', 'Shoot', 'Project', 'Client', 'Person', 'Role', 'Stage', 'Days since shoot', 'Cards', 'Size (GB)', 'Main copy', 'Main folder', 'Backup', 'Backup folder', 'Verified by', 'Next step'],
+        ['Shoot date', 'Shoot', 'Project', 'Client', 'Person', 'Role', 'Stage', 'Days since shoot', 'Cards', 'Card names', 'Size (GB)', 'Main copy', 'Main folder', 'Backup', 'Backup folder', 'Verified by', 'Next step'],
         shown.map((r) => [
           r.shoot_date,
           r.shoot_name,
@@ -89,6 +90,7 @@ export function DataBoardView({
           STAGE_LABEL[r.stage],
           r.age_days,
           r.record?.card_count ?? '',
+          r.record?.card_labels?.join(' ') ?? '',
           r.record?.size_gb ?? '',
           r.record?.primary_location_name,
           r.record?.folder_path,
@@ -272,6 +274,7 @@ function DataCard({ row, picked, onPick, onOpen }: { row: DataBoardRow; picked: 
           {r.backup_location_name && <span className="text-muted-foreground"> · Backup: {r.backup_location_name}</span>}
         </p>
       )}
+      {r && cardsLine(r.card_count, r.card_labels) && <p className="truncate text-xs text-muted-foreground">{cardsLine(r.card_count, r.card_labels)}</p>}
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge tone={STAGE_TONE[row.stage]}>{STAGE_LABEL[row.stage]}</StatusBadge>
         {r?.handed_to_editor_at && <StatusBadge tone="info">With editor</StatusBadge>}

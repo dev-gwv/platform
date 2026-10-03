@@ -67,6 +67,7 @@ export const myProjectData = z.object({
   date_received: isoDate.nullable(),
   handed_to_editor_at: isoDateTime.nullable(),
   card_count: z.number().int(),
+  card_labels: z.array(z.string()).default([]),
   size_gb: z.number(),
   notes: z.string().nullable(),
 })

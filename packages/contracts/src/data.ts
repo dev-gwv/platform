@@ -58,6 +58,12 @@ export const updateStorageLocationRequest = z.object({
 })
 export type UpdateStorageLocationRequest = z.infer<typeof updateStorageLocationRequest>
 
+/** Card names: trimmed, upper-case, each once, at most 40 of up to 20 characters. */
+export const cardLabels = z
+  .array(z.string().trim().min(1).max(20))
+  .max(40)
+  .transform((xs) => [...new Set(xs.map((x) => x.toUpperCase()))])
+
 export const dataRecord = z.object({
   id: uuid,
   data_label: z.string(),
@@ -72,6 +78,8 @@ export const dataRecord = z.object({
   backup_location_id: uuid.nullable(),
   backup_location_name: z.string().nullable(),
   card_count: z.number().int(),
+  /** The cards by name ("SD-04"), as the studio wrote them on the card. */
+  card_labels: z.array(z.string()).default([]),
   size_gb: z.number(),
   verified_at: isoDateTime.nullable(),
   created_at: isoDateTime,
@@ -116,6 +124,7 @@ export const createDataRecordRequest = z.object({
   data_label: z.string().trim().min(1).max(160),
   data_type: z.string().max(80).optional(),
   card_count: z.number().int().min(0).default(0),
+  card_labels: cardLabels.optional(),
   size_gb: z.number().min(0).default(0),
   primary_location_id: uuid.nullable().optional(),
   backup_location_id: uuid.nullable().optional(),
@@ -151,6 +160,7 @@ export const updateDataRecordRequest = z.object({
   data_label: z.string().trim().min(1).max(160).optional(),
   data_type: z.string().max(80).nullable().optional(),
   card_count: z.number().int().min(0).optional(),
+  card_labels: cardLabels.optional(),
   size_gb: z.number().min(0).optional(),
   primary_location_id: uuid.nullable().optional(),
   backup_location_id: uuid.nullable().optional(),
