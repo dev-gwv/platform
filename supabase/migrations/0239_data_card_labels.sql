@@ -1,0 +1,6 @@
+-- 0239: the memory cards on a data record, by name.
+--
+-- A record kept only a count (card_count). Studios label their cards
+-- ("SD-04", "CF-2") so a card that goes missing can be traced; the record now
+-- keeps those labels too. card_count stays the count everything already
+-- reads, and is kept at least as large as the list of labels.

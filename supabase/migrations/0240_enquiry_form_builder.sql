@@ -1,0 +1,6 @@
+-- 0240: the enquiry form a studio builds for itself.
+--
+-- 0195's forms were fixed vendor QR pages. A form now carries its own words
+-- (title, intro, thank-you), an accent colour, which fields it asks and which
+-- are required, and whether it is for a vendor's QR or the studio's own
+-- website (shown in an iframe the studio pastes into its site).
