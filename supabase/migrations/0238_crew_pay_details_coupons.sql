@@ -1,0 +1,2 @@
+-- 0238: the studio can enter a team member's UPI and bank details, and the
+-- unused coupons table is closed to studios.
