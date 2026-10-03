@@ -5,6 +5,7 @@ import {
   CircleCheck,
   Clock,
   FileText,
+  ClipboardList,
   Globe,
   IndianRupee,
   PauseCircle,
@@ -47,6 +48,7 @@ import { ExpensesTab } from '@/features/projects/tabs/ExpensesTab'
 import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ClientPortalDialog } from '@/features/client-portal/ClientPortalDialog'
+import { DetailsLinkDialog } from '@/features/wishes/DetailsLinkDialog'
 import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
@@ -132,6 +134,9 @@ function ProjectDetail() {
   // The client's private page lives behind More -> Share with client, not as
   // a card on the overview (the owner: "it is again creating chaos").
   const [sharing, setSharing] = useState(false)
+  // More -> Send details form: the client fills their own details (0244).
+  // The wizard's "Send them a form" lands here with ?details=1.
+  const [askingDetails, setAskingDetails] = useState(() => new URLSearchParams(window.location.search).get('details') === '1')
   // ?tab=deliverables opens straight onto a tab -- My Work links to it.
   const [tab, setTabState] = useState<Tab>(() => {
     const wanted = new URLSearchParams(window.location.search).get('tab')
@@ -306,6 +311,7 @@ function ProjectDetail() {
                 },
                 { label: 'Send quotation link', icon: <Send />, onSelect: () => setQuoting(true) },
                 { label: 'Share with client', icon: <Globe />, onSelect: () => setSharing(true) },
+                { label: 'Send details form', icon: <ClipboardList />, onSelect: () => setAskingDetails(true) },
                 {
                   label: 'Preview & edit quotation',
                   icon: <FileText />,
@@ -327,6 +333,15 @@ function ProjectDetail() {
                 clientName={data.client_name}
                 clientPhone={data.client_phone}
                 onClose={() => setSharing(false)}
+              />
+            )}
+            {askingDetails && (
+              <DetailsLinkDialog
+                projectId={id}
+                projectName={data.name}
+                clientName={data.client_name}
+                clientPhone={data.client_phone}
+                onClose={() => setAskingDetails(false)}
               />
             )}
           </div>
@@ -444,7 +459,7 @@ function ProjectDetail() {
           canEdit={access.hasAction('referrals', 'edit')}
         />
       )}
-      {tab === 'wishes' && <WishesTab projectId={id} canEdit={access.hasAction('clients', 'edit')} />}
+      {tab === 'wishes' && <WishesTab projectId={id} projectName={data.name} canEdit={access.hasAction('clients', 'edit')} />}
       {tab === 'tasks' && (
         <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
       )}

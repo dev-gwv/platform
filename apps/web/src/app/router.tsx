@@ -76,6 +76,7 @@ import { DeliveryPage } from '@/routes/delivery'
 import { ReferPage } from '@/routes/refer'
 import { LEGACY_AUTHED_PATHS, LEGACY_PUBLIC_PATHS, legacyTarget } from './legacy-links'
 import { EnquirePage, EnquiryViewPage } from '@/routes/enquire'
+import { ClientDetailsPage } from '@/routes/client-details'
 import { EnquiryFormDetailPage, EnquiryFormsPage } from '@/routes/enquiry-forms'
 import { ProjectDocumentsPage } from '@/routes/project-documents'
 import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
@@ -95,6 +96,7 @@ import { TaskBundlesPage } from '@/routes/settings/task-bundles'
 import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
 import { LookupsPage } from '@/routes/settings/lookups'
 import { VendorsPage } from '@/routes/settings/vendors'
+import { ClientFormPage } from '@/routes/settings/client-form'
 import { ReferAStudioPage } from '@/routes/settings/refer-a-studio'
 import { PlatformStudioReferralsPage } from '@/routes/platform/studio-referrals'
 import { ReferralsPage } from '@/routes/referrals'
@@ -207,6 +209,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/p/$token', ClientPortalPage),
   publicRoute('/p/$token/invoice/$invoiceId', ClientPortalInvoicePage),
   publicRoute('/p/$token/terms/$docId', ClientPortalTermsPage),
+  // The details form a client fills (0244).
+  publicRoute('/details/$token', ClientDetailsPage),
   // The vendor's policy pages (payment-gateway requirement).
   publicRoute('/terms-and-conditions', TermsPage),
   publicRoute('/privacy-policy', PrivacyPage),
@@ -315,6 +319,7 @@ const routeTree = rootRoute.addChildren([
   route('/settings/attendance-location', AttendanceLocationPage),
   route('/settings/lookups', LookupsPage),
   route('/settings/vendors', VendorsPage),
+  route('/settings/client-form', ClientFormPage),
   route('/settings/refer-a-studio', ReferAStudioPage),
   route('/settings/advanced', AdvancedSettingsPage),
   route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),

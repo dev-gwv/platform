@@ -116,3 +116,97 @@ export const upcomingWish = clientOccasion.extend({
   on: z.string(),
 })
 export type UpcomingWish = z.infer<typeof upcomingWish>
+
+// ── the details form a client fills (0244) ─────────────────────────
+/** A day and month, the year optional. */
+export const detailsDate = z.object({
+  day: z.number().int().min(1).max(31),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(1900).max(2100).nullable().optional(),
+})
+export type DetailsDate = z.infer<typeof detailsDate>
+
+/** One event of the function, as the client knows it. */
+export const detailsEvent = z.object({
+  name: z.string().trim().min(1).max(80),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  start_time: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
+  hours: z.number().min(0.5).max(24).nullable().optional(),
+  venue: z.string().trim().max(300).nullable().optional(),
+})
+export type DetailsEvent = z.infer<typeof detailsEvent>
+
+const optText = (max: number) => z.string().trim().max(max).optional()
+
+/** What the client sends from /details/:token. */
+export const clientDetailsRequest = z.object({
+  name: z.string().trim().min(1, 'Please add your name.').max(120),
+  partner_name: optText(120),
+  phone: optText(30),
+  partner_phone: optText(30),
+  email: z.union([emailSchema, z.literal('')]).optional(),
+  address: optText(500),
+  city: optText(120),
+  occasion: optText(60),
+  birthday: detailsDate.nullable().optional(),
+  partner_birthday: detailsDate.nullable().optional(),
+  wedding: detailsDate.nullable().optional(),
+  events: z.array(detailsEvent).max(12).default([]),
+})
+export type ClientDetailsRequest = z.infer<typeof clientDetailsRequest>
+
+/** What the form shows: the studio, and on a project's link what is known. */
+export const publicClientDetails = z.object({
+  kind: z.enum(['project', 'studio']),
+  studio: z.object({
+    name: z.string(),
+    logo_url: z.string().nullable(),
+    phone: z.string().nullable(),
+    brand_color: z.string().nullable(),
+  }),
+  project_name: z.string().nullable(),
+  submitted: z.boolean(),
+  prefill: z
+    .object({
+      name: z.string().nullable(),
+      phone: z.string().nullable(),
+      partner_phone: z.string().nullable(),
+      email: z.string().nullable(),
+      address: z.string().nullable(),
+      city: z.string().nullable(),
+      occasions: z.array(
+        z.object({ kind: z.enum(['birthday', 'anniversary']), person_name: z.string(), day: z.number(), month: z.number(), year: z.number().nullable() }),
+      ),
+      events: z.array(
+        z.object({
+          name: z.string(),
+          date: z.string().nullable(),
+          start_time: z.string().nullable(),
+          hours: z.coerce.number().nullable(),
+          venue: z.string().nullable(),
+        }),
+      ),
+    })
+    .nullable(),
+})
+export type PublicClientDetails = z.infer<typeof publicClientDetails>
+
+export const clientDetailsResult = z.object({
+  project_made: z.boolean(),
+  days_added: z.number(),
+  events_waiting: z.number(),
+  held: z.boolean(),
+})
+export type ClientDetailsResult = z.infer<typeof clientDetailsResult>
+
+/** A project's details link, and what came back from it. */
+export const projectDetailsStatus = z.object({
+  sent_at: isoDateTime.nullable(),
+  last_submitted_at: isoDateTime.nullable(),
+  /** Events the client sent that are not on the Shoots tab yet. */
+  waiting: z.array(detailsEvent),
+})
+export type ProjectDetailsStatus = z.infer<typeof projectDetailsStatus>
+
+export const detailsLinkIssued = z.object({ url: z.string() })
+export type DetailsLinkIssued = z.infer<typeof detailsLinkIssued>

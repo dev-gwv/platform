@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Cake, Copy, Heart, MessageCircle, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Cake, ClipboardList, Copy, Heart, MessageCircle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { buildWhatsAppUrl, type ClientOccasion } from '@ipc/contracts'
 import { daysUntil, nextOccurrence, sortBySoonest, whenWords, wishWords, yearsOn, ordinal } from '@ipc/domain'
@@ -14,6 +14,7 @@ import { cn } from '@/shared/ui/cn'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { useAddOccasion, useDeleteOccasion, useProjectWishes, useUpdateOccasion } from './api'
 import { OccasionForm, dayMonth, type OccasionDraft } from './OccasionForm'
+import { DetailsLinkDialog } from './DetailsLinkDialog'
 
 const first = (name: string) => name.trim().split(/\s+/)[0] ?? name
 
@@ -27,7 +28,7 @@ export function occasionTitle(o: Pick<ClientOccasion, 'kind' | 'person_name'>): 
  * each with a switch, and the next wish written out with Send on WhatsApp --
  * the studio's own WhatsApp, free on every plan.
  */
-export function WishesTab({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
+export function WishesTab({ projectId, projectName, canEdit }: { projectId: string; projectName: string; canEdit: boolean }) {
   const q = useProjectWishes(projectId)
   const add = useAddOccasion()
   const update = useUpdateOccasion()
@@ -35,6 +36,7 @@ export function WishesTab({ projectId, canEdit }: { projectId: string; canEdit: 
   const confirm = useConfirm()
   const [adding, setAdding] = useState<OccasionDraft['kind'] | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
   const today = todayInIndia()
 
   if (q.isLoading) return <SkeletonList className="mt-4" />
@@ -102,9 +104,24 @@ export function WishesTab({ projectId, canEdit }: { projectId: string; canEdit: 
           )}
 
           {list.length === 0 && !adding && (
-            <p className="rounded-lg border border-dashed border-tone-amber/60 bg-tone-amber-soft/40 px-3 py-3 text-sm text-tone-amber">
-              Add {first(client.name)}'s birthday and wedding date, and wish them every year.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-tone-amber/60 bg-tone-amber-soft/40 px-3 py-3">
+              <p className="text-sm text-tone-amber">Add {first(client.name)}'s birthday and wedding date, and wish them every year.</p>
+              {canEdit && (
+                <Button size="sm" onClick={() => setAsking(true)}>
+                  <ClipboardList className="size-4" /> Ask {first(client.name)} to fill them
+                </Button>
+              )}
+            </div>
+          )}
+          {asking && (
+            <DetailsLinkDialog
+              projectId={projectId}
+              projectName={projectName}
+              clientName={client.name}
+              clientPhone={client.phone}
+              studioName={studio}
+              onClose={() => setAsking(false)}
+            />
           )}
 
           <ul className="flex flex-col divide-y divide-border">

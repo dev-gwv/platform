@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   clientOccasion,
+  detailsLinkIssued,
+  projectDetailsStatus,
   projectWishes,
   upcomingWish,
   z,
@@ -63,5 +65,41 @@ export function useDeleteOccasion() {
   return useMutation({
     mutationFn: (id: string) => callApi(`/wishes/occasions/${id}`, { method: 'DELETE', responseSchema: z.unknown() }),
     onSuccess: () => void done(),
+  })
+}
+
+// ── the details form a client fills (0244) ─────────────────────────
+
+/** The project's details link and the client's events still to add. */
+export function useDetailsStatus(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['client-details', 'project', projectId],
+    queryFn: () => callApi(`/client-details/projects/${projectId}`, { responseSchema: projectDetailsStatus }),
+    enabled,
+  })
+}
+
+/** A fresh link for the project (the old one stops working). */
+export function useIssueDetailsLink(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => callApi(`/client-details/projects/${projectId}`, { method: 'POST', responseSchema: detailsLinkIssued }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client-details', 'project', projectId] }),
+  })
+}
+
+/** The studio's own form: one link and QR for anyone who has booked. */
+export function useStudioDetailsForm() {
+  return useQuery({
+    queryKey: ['client-details', 'studio'],
+    queryFn: () => callApi('/client-details/studio', { responseSchema: detailsLinkIssued }),
+  })
+}
+
+export function useNewStudioDetailsForm() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => callApi('/client-details/studio/new', { method: 'POST', responseSchema: detailsLinkIssued }),
+    onSuccess: (d) => qc.setQueryData(['client-details', 'studio'], d),
   })
 }

@@ -1260,6 +1260,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       ],
     }
   if (method === 'GET' && (/^\/wishes\/client\/[^/]+$/.test(path) || path.startsWith('/wishes/upcoming'))) return []
+  if (method === 'GET' && /^\/client-details\/projects\/[^/]+$/.test(path)) return { sent_at: null, last_submitted_at: null, waiting: [] }
+  if (method === 'POST' && /^\/client-details\/projects\/[^/]+$/.test(path)) return { url: 'http://localhost:5173/details/mock-token' }
+  if (path.startsWith('/client-details/studio')) return { url: 'http://localhost:5173/details/mockstudio01' }
   // A trial studio: every plan is a plain purchase (0242).
   if (method === 'GET' && path === '/subscription/quotes') return []
   // The tiered plans are switched off until the owner puts them live; the home page keeps its words.

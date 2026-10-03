@@ -34,6 +34,8 @@ describe('the settings rail', () => {
         '/settings/vendors',
         // Refer a studio (0237).
         '/settings/refer-a-studio',
+        // The details form a client fills, as a link and QR (0244).
+        '/settings/client-form',
       ].sort(),
     )
   })

@@ -11,6 +11,7 @@ import { authRouter } from './modules/auth/router'
 import { accessRouter } from './modules/access/router'
 import { clientsRouter } from './modules/clients/router'
 import { wishesRouter } from './modules/clients/wishes'
+import { clientDetailsRouter, publicClientDetailsRouter } from './modules/clients/details'
 import { projectsRouter } from './modules/projects/router'
 import { shootsRouter } from './modules/shoots/router'
 import { tasksRouter } from './modules/tasks/router'
@@ -133,6 +134,7 @@ const enquiryLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
 app.use('/public/portal/:token/feedback', rateLimit({ windowMs: 60_000, limit: 10 }))
 // A QR enquiry makes a lead and pings the studio: same low ceiling per address.
 app.use('/public/enquiry/:code', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
+app.use('/public/details/:token', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
 app.use('/webhooks/*', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/health', rateLimit({ windowMs: 60_000, limit: 60 }))
 // Crash reports are public by necessity; keep the abuse ceiling low and explicit.
@@ -147,6 +149,7 @@ app.route('/auth', authRouter)
 app.route('/access', accessRouter)
 app.route('/clients', clientsRouter)
 app.route('/wishes', wishesRouter)
+app.route('/client-details', clientDetailsRouter)
 app.route('/projects', projectsRouter)
 app.route('/shoots', shootsRouter)
 app.route('/tasks', tasksRouter)
@@ -200,6 +203,7 @@ app.route('/client-portal', clientPortalRouter)
 app.route('/enquiry-forms', enquiryFormsRouter)
 app.route('/public', publicEnquiryFormsRouter)
 app.route('/public', publicClientPortalRouter)
+app.route('/public', publicClientDetailsRouter)
 app.route('/public', publicOnboardingRouter)
 app.route('/messaging', messagingRouter)
 app.route('/reports', reportsRouter)
