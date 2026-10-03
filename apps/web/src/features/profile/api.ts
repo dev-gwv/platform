@@ -7,6 +7,7 @@ import {
   teamProfileGap,
   z,
   type IdDocumentKind,
+  type SetPayToRequest,
   type UpdateMyProfileRequest,
 } from '@ipc/contracts'
 import { callApi, fetchFileBlob, postForm } from '@/shared/api/client'
@@ -131,5 +132,23 @@ export function usePayTo(userId: string | null) {
     queryFn: () => callApi(`/team/members/${userId}/pay-to`, { responseSchema: payTo }),
     enabled: !!userId && allowed,
     staleTime: 60_000,
+  })
+}
+
+/** Whoever pays the team fills in or fixes a member's UPI / bank details. */
+export function useSetPayTo(userId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SetPayToRequest) =>
+      callApi(`/team/members/${userId}/pay-to`, {
+        method: 'PUT',
+        body,
+        responseSchema: z.object({ changed: z.array(z.string()), notified: z.boolean() }),
+      }),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: ['team', 'pay-to', userId] })
+      toast.success(r.notified ? 'Saved. They have been told their payment details changed.' : 'Saved.')
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }

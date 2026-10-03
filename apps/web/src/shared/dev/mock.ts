@@ -589,6 +589,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && (path === '/settings/profile/documents' || /^\/team\/members\/[^/]+\/documents$/.test(path)))
     return [{ id: uid(0xfa), kind: 'aadhaar', name: 'aadhaar-front.jpg', mime: 'image/jpeg', size_bytes: 412_000, created_at: '2026-09-20T06:00:00Z' }]
   if (method === 'DELETE' && path.startsWith('/settings/profile/documents/')) return {}
+  if (method === 'PUT' && /^\/team\/members\/[^/]+\/pay-to$/.test(path)) return { changed: ['upi_id'], notified: true }
   if (method === 'GET' && /^\/team\/members\/[^/]+\/pay-to$/.test(path))
     return { name: 'Rahul Sharma', upi_id: 'rahul@okhdfc', bank_account_name: null, bank_account_number: null, bank_ifsc: null }
   // ── Payroll (0185) ──

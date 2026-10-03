@@ -359,8 +359,10 @@ publicReferralsRouter.post('/referrals/submit', async (c) => {
   // + notify studio admins. Failures are swallowed — the referral itself won.
   try {
     await withService(c.env, async (sql) => {
-      const camp = await sql<{ company_id: string }[]>`
-        select company_id from referral_campaigns where id = ${campaignId}::uuid`
+      const camp = await sql<{ company_id: string; owner_user_id: string | null }[]>`
+        select rc.company_id, co.owner_user_id
+          from referral_campaigns rc join companies co on co.id = rc.company_id
+         where rc.id = ${campaignId}::uuid`
       const companyId = camp[0]?.company_id
       if (!companyId) return
       await sql`insert into crm_leads (company_id, name, phone, email, source, notes)
@@ -368,9 +370,16 @@ publicReferralsRouter.post('/referrals/submit', async (c) => {
                 ${d.client_email ?? null}, 'referral',
                 ${[`Event: ${d.event_type ?? '—'}`, `Date: ${d.event_date ?? '—'}`,
                    d.notes ?? null].filter(Boolean).join(' · ')})`
-      await sql`insert into notifications (company_id, kind, title, body)
-        values (${companyId}, 'referral', 'New referral received',
-                ${`${d.client_name} was referred${d.event_type ? ` (${d.event_type})` : ''}.`})`
+      // The owner hears of it. (This insert named columns the table never had,
+      // so the bell stayed silent for every referral until now.)
+      const owner = camp[0]?.owner_user_id
+      if (owner) {
+        await sql`insert into notifications (company_id, recipient_uid, type, title, body, entity_type, entity_id, dedupe_key)
+          values (${companyId}, ${owner}, 'referral', 'New referral received',
+                  ${`${d.client_name} was referred${d.event_type ? ` (${d.event_type})` : ''}.`},
+                  'referral_submission', ${submissionId}, ${'referral:' + submissionId})
+          on conflict do nothing`
+      }
     })
   } catch {
     // best-effort only

@@ -1714,6 +1714,24 @@ if (listed) {
     payOwner.status === 200 && payOwner.json.upi_id === 'priya@okhdfc' && payMgr.status === 403 && paySelfOther.status === 403,
     { owner: payOwner.status, mgr: payMgr.status, other: paySelfOther.status },
   )
+  // The studio fills in or fixes where pay goes; the member is told; others cannot.
+  const setOwner = await api(`/team/members/${edUid}/pay-to`, { token: aToken, method: 'PUT', body: { upi_id: 'priya@okaxis' } })
+  const afterSet = await api(`/team/members/${edUid}/pay-to`, { token: aToken })
+  const badUpi = await api(`/team/members/${edUid}/pay-to`, { token: aToken, method: 'PUT', body: { upi_id: 'not a upi' } })
+  const halfBank = await api(`/team/members/${edUid}/pay-to`, { token: aToken, method: 'PUT', body: { bank_ifsc: 'hdfc0001234' } })
+  const setMgr = await api(`/team/members/${edUid}/pay-to`, { token: tmToken, method: 'PUT', body: { upi_id: 'thief@okaxis' } })
+  const setSelfOwner = await api(`/team/members/${aOwnerUid}/pay-to`, { token: edToken, method: 'PUT', body: { upi_id: 'ed@okaxis' } })
+  const edBell = await api('/notifications?type=pay_details_changed', { token: edToken })
+  const told = (Array.isArray(edBell.json) ? edBell.json : edBell.json?.items ?? []).some((n) => n.type === 'pay_details_changed')
+  const afterIfsc = await api(`/team/members/${edUid}/pay-to`, { token: aToken })
+  check(
+    'pay-to: the owner can add or fix a member\'s UPI (checked like their own form) and the member is told; a manager without pay rights cannot',
+    setOwner.status === 200 && setOwner.json.notified === true && afterSet.json.upi_id === 'priya@okaxis' && badUpi.status === 422 &&
+      halfBank.status === 200 && afterIfsc.json.bank_ifsc === 'HDFC0001234' && setMgr.status === 403 && setSelfOwner.status === 403 && told,
+    { set: setOwner.status, upi: afterSet.json.upi_id, bad: badUpi.status, mgr: setMgr.status, self: setSelfOwner.status, told },
+  )
+  // Put it back: the payroll checks below read the member's own UPI.
+  await api(`/team/members/${edUid}/pay-to`, { token: aToken, method: 'PUT', body: { upi_id: 'priya@okhdfc', bank_ifsc: '' } })
   // ── Stored files: not everyone's by id any more (0183) ──
   const upAs = async (tok, name) => {
     const fd = new FormData()
