@@ -15,7 +15,7 @@ export function LeadLimitLine() {
       <span>
         {usage.data.used.leads} of {limit} leads this {usage.data.period} — enquiries still come in.
       </span>
-      <Link to="/subscription" className="font-semibold underline-offset-2 hover:underline">
+      <Link to="/settings/subscription" className="font-semibold underline-offset-2 hover:underline">
         Upgrade to add more by hand
       </Link>
     </p>

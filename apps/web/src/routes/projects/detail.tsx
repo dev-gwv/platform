@@ -52,6 +52,7 @@ import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
+import { WishesTab } from '@/features/wishes/WishesTab'
 import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
@@ -443,6 +444,7 @@ function ProjectDetail() {
           canEdit={access.hasAction('referrals', 'edit')}
         />
       )}
+      {tab === 'wishes' && <WishesTab projectId={id} canEdit={access.hasAction('clients', 'edit')} />}
       {tab === 'tasks' && (
         <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
       )}

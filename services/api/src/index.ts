@@ -10,6 +10,7 @@ import { healthRouter } from './modules/health/router'
 import { authRouter } from './modules/auth/router'
 import { accessRouter } from './modules/access/router'
 import { clientsRouter } from './modules/clients/router'
+import { wishesRouter } from './modules/clients/wishes'
 import { projectsRouter } from './modules/projects/router'
 import { shootsRouter } from './modules/shoots/router'
 import { tasksRouter } from './modules/tasks/router'
@@ -145,6 +146,7 @@ app.route('/health', healthRouter)
 app.route('/auth', authRouter)
 app.route('/access', accessRouter)
 app.route('/clients', clientsRouter)
+app.route('/wishes', wishesRouter)
 app.route('/projects', projectsRouter)
 app.route('/shoots', shootsRouter)
 app.route('/tasks', tasksRouter)
