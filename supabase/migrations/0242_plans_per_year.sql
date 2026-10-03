@@ -1,0 +1,5 @@
+-- 0242: plans matched to the market. Starter counts projects per financial
+-- year (1 April, India time) instead of per month: 75 a year, 5 team logins,
+-- no invoice or enquiry-form limit. Pro and Studio Max are unlimited; Studio
+-- Max includes white-label, the studio's own WhatsApp and automatic sequences.
+-- The plans stay switched off (is_active = false) until the owner puts them live.
