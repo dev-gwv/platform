@@ -7,7 +7,7 @@ const staff = { module: (m: string) => !['company_expenses', 'tasks', 'team_payo
 describe('project tabs', () => {
   it('is eight groups across the top, every view under exactly one of them', () => {
     expect(PROJECT_GROUPS.map((g) => g.label)).toEqual([
-      'Overview', 'Quotation', 'Shoots', 'Post-production', 'Terms', 'Finance', 'Data', 'Referrals',
+      'Overview', 'Quotation', 'Shoots', 'Post-production', 'Terms', 'Finance', 'Data', 'Wishes',
     ])
     const placed = PROJECT_GROUPS.flatMap((g) => [...g.views])
     expect([...placed].sort()).toEqual(PROJECT_TABS.map((t) => t.value).sort())
@@ -23,6 +23,8 @@ describe('project tabs', () => {
     expect(groupOf('completed_work')).toBe('production')
     expect(groupOf('deliverables')).toBe('production')
     expect(groupOf('shoots')).toBe('shoots')
+    expect(groupOf('referrals')).toBe('wishes')
+    expect(groupOf('wishes')).toBe('wishes')
   })
 
   it('opens a group on its first view, and on the first one this person may see', () => {

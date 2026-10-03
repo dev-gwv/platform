@@ -7,6 +7,9 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useCreateClient, useUpdateClient } from './api'
+import { ClientDates } from '@/features/wishes/ClientDates'
+import { useAddOccasion } from '@/features/wishes/api'
+import type { OccasionDraft } from '@/features/wishes/OccasionForm'
 
 interface Props {
   /** Present in edit mode; absent to create a new client. */
@@ -49,6 +52,9 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
   const [gstin, setGstin] = useState(client?.gstin ?? '')
   const [notes, setNotes] = useState(client?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
+  // A new client's birthdays and anniversary wait here and are saved with them (0243).
+  const [dates, setDates] = useState<OccasionDraft[]>([])
+  const addOccasion = useAddOccasion()
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     open ? `client:${client?.id ?? 'new'}` : null,
@@ -76,6 +82,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
     setRelation('')
     setGstin('')
     setNotes('')
+    setDates([])
   }
 
   async function onSubmit(e: FormEvent) {
@@ -113,6 +120,10 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
           ...(gstin.trim() ? { gstin: gstin.trim() } : {}),
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         })
+      }
+      // The dates are extras: a client saved without them is still saved.
+      if (created) {
+        for (const d of dates) await addOccasion.mutateAsync({ client_id: created.id, ...d }).catch(() => undefined)
       }
       draft.clear()
       setOpen(false)
@@ -195,6 +206,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
               <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
             </div>
           </div>
+          <ClientDates clientId={client?.id} pending={dates} onPending={setDates} />
           <div className="flex flex-col gap-1.5">
             <Label>Notes</Label>
             <textarea

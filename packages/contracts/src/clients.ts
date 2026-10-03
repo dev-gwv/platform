@@ -70,3 +70,49 @@ export const duplicateClientResponse = z.object({
   existing_client: client,
 })
 export type DuplicateClientResponse = z.infer<typeof duplicateClientResponse>
+
+/** A client's birthday or anniversary (0243). The year is optional. */
+export const clientOccasion = z.object({
+  id: uuid,
+  client_id: uuid,
+  project_id: uuid.nullable(),
+  kind: z.enum(['birthday', 'anniversary']),
+  person_name: z.string(),
+  month: z.number().int().min(1).max(12),
+  day: z.number().int().min(1).max(31),
+  year: z.number().int().nullable(),
+  wish: z.boolean(),
+  source: z.enum(['studio', 'client_form', 'wedding_day']),
+})
+export type ClientOccasion = z.infer<typeof clientOccasion>
+
+export const saveOccasionRequest = z.object({
+  client_id: uuid,
+  project_id: uuid.nullable().optional(),
+  kind: z.enum(['birthday', 'anniversary']),
+  person_name: z.string().trim().max(80).default(''),
+  month: z.number().int().min(1).max(12),
+  day: z.number().int().min(1).max(31),
+  year: z.number().int().min(1900).max(2100).nullable().optional(),
+  wish: z.boolean().optional(),
+})
+export type SaveOccasionRequest = z.infer<typeof saveOccasionRequest>
+
+export const updateOccasionRequest = saveOccasionRequest.omit({ client_id: true }).partial()
+export type UpdateOccasionRequest = z.infer<typeof updateOccasionRequest>
+
+/** Everything the project's Wishes tab needs. */
+export const projectWishes = z.object({
+  client: z.object({ id: uuid, name: z.string(), phone: z.string().nullable(), email: z.string().nullable() }),
+  studio_name: z.string(),
+  occasions: z.array(clientOccasion),
+})
+export type ProjectWishes = z.infer<typeof projectWishes>
+
+/** The studio's dates coming round soon, for the dashboard and Clients. */
+export const upcomingWish = clientOccasion.extend({
+  client_name: z.string(),
+  client_phone: z.string().nullable(),
+  on: z.string(),
+})
+export type UpcomingWish = z.infer<typeof upcomingWish>

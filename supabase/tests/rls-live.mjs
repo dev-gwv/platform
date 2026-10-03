@@ -2915,6 +2915,30 @@ if (listed) {
   check('plans: the home page lists no plan until they are switched on', pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 0, pubJson)
 }
 
+// ── 0243: a client's birthdays and anniversary ───────────────────
+{
+  const cl = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Wish Test Couple', phone: '9811122233' } })
+  const cid = cl.json?.id ?? cl.json?.existing_client?.id
+  const bday = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Priya', month: 3, day: 14 } })
+  const ann = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 12, day: 12, year: 2026 } })
+  const twice = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 1, day: 1 } })
+  const feb31 = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Rahul', month: 2, day: 31 } })
+  check(
+    'wishes: a client keeps a birthday and one anniversary; a second anniversary or 31 Feb is refused in words',
+    bday.status === 201 && ann.status === 201 && twice.status === 409 && feb31.status === 422,
+    { bday: bday.status, ann: ann.status, twice: twice.json, feb31: feb31.json },
+  )
+  const list = await api(`/wishes/client/${cid}`, { token: aToken })
+  const off = await api(`/wishes/occasions/${bday.json?.id}`, { token: aToken, method: 'PATCH', body: { wish: false } })
+  const upcoming = await api('/wishes/upcoming?days=366', { token: aToken })
+  check(
+    'wishes: the dates list, a wish switched off drops out of what is coming',
+    list.status === 200 && list.json.length === 2 && off.json?.wish === false &&
+      upcoming.status === 200 && !upcoming.json.some((u) => u.id === bday.json?.id) && upcoming.json.some((u) => u.id === ann.json?.id),
+    { list: list.json, upcoming: upcoming.json },
+  )
+}
+
 // ── 0198: overdue alerts and the morning email ───────────────────
 {
   const dry = await fetch(`${API}/cron/reminders?dry=1`, {

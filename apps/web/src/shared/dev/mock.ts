@@ -1249,6 +1249,17 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/subscription/plans') return plansFx
+  // Wishes (0243): one couple with their dates, nothing else yet.
+  if (method === 'GET' && /^\/wishes\/project\/[^/]+$/.test(path))
+    return {
+      client: { id: '00000000-0000-4000-8000-0000000000c1', name: 'Priya Sharma', phone: '+919876543210', email: null },
+      studio_name: 'Asha Studio',
+      occasions: [
+        { id: '00000000-0000-4000-8000-0000000000e1', client_id: '00000000-0000-4000-8000-0000000000c1', project_id: null, kind: 'birthday', person_name: 'Priya', month: 3, day: 14, year: null, wish: true, source: 'studio' },
+        { id: '00000000-0000-4000-8000-0000000000e2', client_id: '00000000-0000-4000-8000-0000000000c1', project_id: null, kind: 'anniversary', person_name: '', month: 12, day: 12, year: 2026, wish: true, source: 'wedding_day' },
+      ],
+    }
+  if (method === 'GET' && (/^\/wishes\/client\/[^/]+$/.test(path) || path.startsWith('/wishes/upcoming'))) return []
   // A trial studio: every plan is a plain purchase (0242).
   if (method === 'GET' && path === '/subscription/quotes') return []
   // The tiered plans are switched off until the owner puts them live; the home page keeps its words.
