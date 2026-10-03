@@ -18,10 +18,16 @@ import {
   useUpdateDataRecord,
 } from './api'
 import { LookupSelect } from '@/features/settings/LookupSelect'
+import { CardLabelsField } from './CardLabelsField'
 import { LocationKindSelect, kindFields } from './LocationKindSelect'
 import { DATA_TYPES, TRACK_LABEL, defaultDataType, defaultLabel, slotDay, whenLabel } from './stage'
 import { useCanPay, usePaySlot, useSlotPayStatus } from '@/features/team-payouts/pay'
-import { PayoutLine, payoutRequest, startPayout, type PayoutDraft } from '@/features/team-payouts/PayoutLine'
+import {
+  PayoutLine,
+  payoutRequest,
+  startPayout,
+  type PayoutDraft,
+} from '@/features/team-payouts/PayoutLine'
 
 const OTHER = '__other'
 const NEW = '__new'
@@ -104,12 +110,19 @@ export function DataRecordDialog({
   const [copiedBy, setCopiedBy] = useState(
     record
       ? (record.copied_by_uid ??
-          (record.copied_by_person_id ? `p:${record.copied_by_person_id}` : record.copied_by_name ? OTHER : ''))
+          (record.copied_by_person_id
+            ? `p:${record.copied_by_person_id}`
+            : record.copied_by_name
+              ? OTHER
+              : ''))
       : (remembered.copiedBy ?? session?.user_id ?? ''),
   )
-  const [copiedByName, setCopiedByName] = useState(record && !record.copied_by_uid ? (record.copied_by_name ?? '') : '')
+  const [copiedByName, setCopiedByName] = useState(
+    record && !record.copied_by_uid ? (record.copied_by_name ?? '') : '',
+  )
   const [size, setSize] = useState(record?.size_gb ? String(record.size_gb) : '')
   const [cards, setCards] = useState(record?.card_count ? String(record.card_count) : '')
+  const [cardNames, setCardNames] = useState<string[]>(record?.card_labels ?? [])
   const [label, setLabel] = useState(record?.data_label ?? defaultLabel(shoot, slot))
   const [notes, setNotes] = useState(record?.notes ?? '')
   const [primary, setPrimary] = useState<Copy>({
@@ -126,10 +139,34 @@ export function DataRecordDialog({
   })
 
   // What was typed survives a refresh or a closed tab until it is saved.
-  const initial = useState(() => ({ type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup }))[0]
+  const initial = useState(() => ({
+    type,
+    received,
+    copiedBy,
+    copiedByName,
+    size,
+    cards,
+    cardNames,
+    label,
+    notes,
+    primary,
+    backup,
+  }))[0]
   const draft = useFormDraft(
     `data-record:${record?.id ?? `new:${slot.id}`}`,
-    { type, received, copiedBy, copiedByName, size, cards, label, notes, primary, backup },
+    {
+      type,
+      received,
+      copiedBy,
+      copiedByName,
+      size,
+      cards,
+      cardNames,
+      label,
+      notes,
+      primary,
+      backup,
+    },
     restore,
   )
   function restore(v: typeof initial) {
@@ -139,6 +176,7 @@ export function DataRecordDialog({
     setCopiedByName(v.copiedByName)
     setSize(v.size)
     setCards(v.cards)
+    setCardNames(v.cardNames ?? [])
     setLabel(v.label)
     setNotes(v.notes)
     setPrimary(v.primary)
@@ -148,7 +186,14 @@ export function DataRecordDialog({
   const who = slot.user_name ?? 'this booking'
   const locations = useStorageLocations()
   const [more, setMore] = useState(
-    () => !!(record?.size_gb || record?.card_count || record?.notes || (record?.data_type && record.data_type !== defaultDataType(slot.service_name))),
+    () =>
+      !!(
+        record?.size_gb ||
+        record?.card_count ||
+        record?.card_labels?.length ||
+        record?.notes ||
+        (record?.data_type && record.data_type !== defaultDataType(slot.service_name))
+      ),
   )
 
   // A remembered disk or helper that has since been removed is not offered.
@@ -161,12 +206,15 @@ export function DataRecordDialog({
   useEffect(() => {
     if (record || !people.data || !members.data) return
     setCopiedBy((c) => {
-      if (c.startsWith('p:')) return people.data.some((p) => `p:${p.id}` === c && p.is_active) ? c : (session?.user_id ?? '')
-      if (c && c !== OTHER && c !== slot.user_id && !members.data.some((m) => m.user_id === c)) return session?.user_id ?? ''
+      if (c.startsWith('p:'))
+        return people.data.some((p) => `p:${p.id}` === c && p.is_active)
+          ? c
+          : (session?.user_id ?? '')
+      if (c && c !== OTHER && c !== slot.user_id && !members.data.some((m) => m.user_id === c))
+        return session?.user_id ?? ''
       return c
     })
   }, [record, people.data, members.data, session?.user_id, slot.user_id])
-
 
   async function save() {
     if (copiedBy === OTHER && !copiedByName.trim()) {
@@ -198,7 +246,8 @@ export function DataRecordDialog({
       data_label: label.trim() || defaultLabel(shoot, slot),
       date_received: received || null,
       size_gb: sizeN,
-      card_count: cardsN,
+      card_count: Math.max(cardsN, cardNames.length),
+      card_labels: cardNames,
       notes: notes.trim() || null,
       copied_by_uid: copiedBy && copiedBy !== OTHER && !copiedBy.startsWith('p:') ? copiedBy : null,
       copied_by_person_id: helper?.id ?? null,
@@ -231,13 +280,16 @@ export function DataRecordDialog({
           team_member_name: slot.user_name ?? undefined,
           requirement_name: slot.service_name ?? undefined,
         })
-      const pay = payStatus.data && payout ? payoutRequest(payout, payStatus.data, new Date().toISOString().slice(0, 10)) : null
+      const pay =
+        payStatus.data && payout
+          ? payoutRequest(payout, payStatus.data, new Date().toISOString().slice(0, 10))
+          : null
       if (pay) {
         await paySlot.mutateAsync({ slotId: slot.id, body: pay })
         if (pay.paid_now > 0) toast.success(`Paid ${who} ₹${pay.paid_now.toLocaleString('en-IN')}`)
       }
       writeRemembered(session?.company_id, {
-        copiedBy: helper ? `p:${helper.id}` : fields.copied_by_uid ?? '',
+        copiedBy: helper ? `p:${helper.id}` : (fields.copied_by_uid ?? ''),
         primary: fields.primary_location_id ?? '',
         backup: fields.backup_location_id ?? '',
       })
@@ -304,7 +356,12 @@ export function DataRecordDialog({
               <Label htmlFor="dr-received" className="text-xs">
                 Received on
               </Label>
-              <Input id="dr-received" type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
+              <Input
+                id="dr-received"
+                type="date"
+                value={received}
+                onChange={(e) => setReceived(e.target.value)}
+              />
             </div>
             {copiedBy === OTHER && (
               <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -353,7 +410,8 @@ export function DataRecordDialog({
             aria-expanded={more}
             className="flex w-fit items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
-            <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} /> More details
+            <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} /> More
+            details
             <span className="font-normal">· type, size, cards, notes</span>
           </button>
           {more && (
@@ -387,15 +445,21 @@ export function DataRecordDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dr-cards" className="text-xs">
-                  Cards
+                  How many cards
                 </Label>
                 <Input
                   id="dr-cards"
                   inputMode="numeric"
                   placeholder="e.g. 3"
-                  value={cards}
+                  value={cardNames.length > Number(cards || 0) ? String(cardNames.length) : cards}
                   onChange={(e) => setCards(e.target.value.replace(/\D/g, ''))}
                 />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-4">
+                <Label htmlFor="dr-card-names" className="text-xs">
+                  Card names
+                </Label>
+                <CardLabelsField id="dr-card-names" value={cardNames} onChange={setCardNames} />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-4">
                 <Label htmlFor="dr-label" className="text-xs">
@@ -475,7 +539,12 @@ function CopyRow({
         {skipped ? (
           <p className="text-sm text-muted-foreground">Not needed for this data.</p>
         ) : (
-          <LocationPicker value={value.location} onChange={(location) => onChange({ ...value, location })} label={`${title} location`} example={example} />
+          <LocationPicker
+            value={value.location}
+            onChange={(location) => onChange({ ...value, location })}
+            label={`${title} location`}
+            example={example}
+          />
         )}
         <Select
           aria-label={`${title} status`}
@@ -520,7 +589,17 @@ function CopyRow({
 }
 
 /** Pick a saved disk/cloud, or name a new one on the spot. */
-function LocationPicker({ value, onChange, label, example }: { value: string; onChange: (id: string) => void; label: string; example?: string }) {
+function LocationPicker({
+  value,
+  onChange,
+  label,
+  example,
+}: {
+  value: string
+  onChange: (id: string) => void
+  label: string
+  example?: string
+}) {
   const locations = useStorageLocations()
   const create = useCreateStorageLocation()
   const [adding, setAdding] = useState(false)
@@ -544,7 +623,11 @@ function LocationPicker({ value, onChange, label, example }: { value: string; on
           disabled={!name.trim() || create.isPending}
           onClick={() =>
             create.mutate(
-              { name: name.trim(), ...kindFields(kind), location_type: kindFields(kind).location_type ?? undefined },
+              {
+                name: name.trim(),
+                ...kindFields(kind),
+                location_type: kindFields(kind).location_type ?? undefined,
+              },
               {
                 onSuccess: (loc) => {
                   onChange(loc.id)
@@ -568,7 +651,12 @@ function LocationPicker({ value, onChange, label, example }: { value: string; on
   return (
     <Select
       aria-label={label}
-      className={cn('[&>button]:transition-colors', value ? '[&>button]:border-success/50' : '[&>button]:border-warning/60 [&>button]:bg-warning/5')}
+      className={cn(
+        '[&>button]:transition-colors',
+        value
+          ? '[&>button]:border-success/50'
+          : '[&>button]:border-warning/60 [&>button]:bg-warning/5',
+      )}
       value={value}
       onChange={(e) => (e.target.value === NEW ? setAdding(true) : onChange(e.target.value))}
     >

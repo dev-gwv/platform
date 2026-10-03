@@ -9,6 +9,7 @@ import { IconTile } from '@/shared/ui/icon-tile'
 import { useAttendanceMe, useCheckOut } from './api'
 import { readPosition, useAutoState, useMarkNow } from './auto'
 import { SelfieCapture } from './SelfieCapture'
+import { ArrivedButton, canArrive } from '@/features/allocation/SlotAnswer'
 import { dayClock, lateText } from './board'
 
 const clock = (iso: string | null | undefined) =>
@@ -77,12 +78,18 @@ export function TodayAttendanceCard() {
   } else if (d.shoot_today && !t?.check_in_at) {
     tone = 'amber'
     title = `On a shoot today · ${d.shoot_today.name} ${clock(d.shoot_today.start_at)}–${clock(d.shoot_today.end_at)}`
-    sub = "Tap I've reached at the venue."
-    action = (
-      <Button size="sm" variant="outline" asChild>
-        <Link to="/shoots/my">My shoots</Link>
-      </Button>
-    )
+    // Inside the window the button itself; before it, where the shoot is.
+    if (canArrive(d.shoot_today)) {
+      sub = 'Tap it when you get to the venue.'
+      action = <ArrivedButton slotId={d.shoot_today.slot_id} className="ipc-nudge" />
+    } else {
+      sub = "I've reached opens 3 hours before the start."
+      action = (
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/shoots/my">My shoots</Link>
+        </Button>
+      )
+    }
   } else if (t?.check_in_at && t.check_out_at) {
     tone = 'green'
     icon = CheckCircle2

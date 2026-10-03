@@ -658,6 +658,8 @@ export const boardDeliverable = z.object({
   custom_status_code: z.string().nullish(),
   estimated_date: isoDate.nullish(),
   delivered_at: isoDateTime.nullish(),
+  /** When the editor started; null while given but not begun. */
+  started_at: isoDateTime.nullish(),
   delivery_link: z.string().nullish(),
   visibility_scope: deliverableVisibility,
   shoot_id: uuid.nullish(),

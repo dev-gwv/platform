@@ -14,6 +14,7 @@ import * as Sentry from '@sentry/react'
 import { ThemeProvider } from '@/shared/theme/ThemeProvider'
 import { ConfirmProvider } from '@/shared/ui/confirm'
 import { router } from '@/app/router'
+import { ApiError } from '@/shared/api/client'
 import { registerPwa } from '@/shared/pwa/install'
 
 const queryClient = new QueryClient({
@@ -25,6 +26,14 @@ const queryClient = new QueryClient({
       if (mutation.meta?.silent) return
       // The toast is the user's answer; Sentry is ours. A mutation that fails
       // for everyone looks, from here, like one person seeing one toast.
+      // A plan limit (402, 0241) is not a fault: say it, and offer the way up.
+      if (error instanceof ApiError && error.status === 402) {
+        toast.error(error.message, {
+          action: { label: 'Upgrade', onClick: () => void router.navigate({ to: '/settings/subscription' }) },
+          duration: 10_000,
+        })
+        return
+      }
       Sentry.captureException(error)
       toast.error(error instanceof Error ? error.message : 'Something went wrong.')
     },

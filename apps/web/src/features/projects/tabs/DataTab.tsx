@@ -13,6 +13,7 @@ import { cn } from '@/shared/ui/cn'
 import { useBulkData, useDataBoard, useDeleteDataRecord } from '@/features/data/api'
 import { byAge, figures, nextAction } from '@/features/data/board-model'
 import { STAGE_LABEL, STAGE_TONE } from '@/features/data/stage'
+import { cardsLine } from '@/features/data/cards'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
 
 const shortDay = (iso: string | null) =>
@@ -111,7 +112,12 @@ export function DataTab({ projectId }: { projectId: string }) {
                             {[r.role, r.record?.copied_by_name ? `copied by ${r.record.copied_by_name}` : null].filter(Boolean).join(' · ')}
                           </p>
                         </td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{r.record?.data_type ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground">
+                          <p>{r.record?.data_type ?? '—'}</p>
+                          {r.record && cardsLine(r.record.card_count, r.record.card_labels) && (
+                            <p className="text-xs">{cardsLine(r.record.card_count, r.record.card_labels)}</p>
+                          )}
+                        </td>
                         <td className="max-w-[12rem] px-3 py-2.5">
                           <p className="truncate">{r.record?.primary_location_name ?? '—'}</p>
                           {r.record?.folder_path && <p className="truncate text-xs text-muted-foreground">{r.record.folder_path}</p>}

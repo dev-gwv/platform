@@ -19,8 +19,39 @@ export const plan = z.object({
   savings_label: z.string().nullable().nullish(),
   monthly_equivalent: money.nullish(),
   sort_order: z.number().int().nullish(),
+  /** 0241: starter / pro / max, the plan's limits (missing = unlimited) and its extras. */
+  tier: z.enum(['starter', 'pro', 'max']).nullish(),
+  limits: z.lazy(() => planLimits).nullish(),
+  includes: z.array(z.string()).nullish(),
 })
 export type Plan = z.infer<typeof plan>
+
+/** What a plan allows; a missing key is unlimited. Leads are never limited. */
+export const PLAN_LIMIT_KEYS = ['projects_per_month', 'invoices_per_month', 'team_logins', 'enquiry_forms'] as const
+export type PlanLimitKey = (typeof PLAN_LIMIT_KEYS)[number]
+export const planLimits = z.object({
+  projects_per_month: z.number().int().optional(),
+  invoices_per_month: z.number().int().optional(),
+  team_logins: z.number().int().optional(),
+  enquiry_forms: z.number().int().optional(),
+})
+export type PlanLimits = z.infer<typeof planLimits>
+
+/** The studio's plan, its limits and what it has used (my_plan_usage, 0241). */
+export const planUsage = z.object({
+  plan_key: z.string().nullable(),
+  plan_name: z.string().nullable(),
+  tier: z.enum(['starter', 'pro', 'max']).nullable(),
+  limits: planLimits,
+  includes: z.array(z.string()),
+  used: z.object({
+    projects_per_month: z.number().int(),
+    invoices_per_month: z.number().int(),
+    team_logins: z.number().int(),
+    enquiry_forms: z.number().int(),
+  }),
+})
+export type PlanUsage = z.infer<typeof planUsage>
 
 export const subscriptionStatus = z.object({
   plan_key: z.string().nullable(),

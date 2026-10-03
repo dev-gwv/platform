@@ -16,6 +16,7 @@ import { TodayAttendanceCard } from '@/features/attendance/TodayAttendanceCard'
 import { useMyData } from '@/features/data/api'
 import { optedOut } from '@/features/data/stage'
 import { useMyProfile } from '@/features/profile/api'
+import { profileLine } from './profile-line'
 import { useMyDeliverables } from '@/features/projects/api'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { SubmitWorkDialog } from '@/features/work/SubmitWorkDialog'
@@ -273,12 +274,12 @@ function ProfileNudge() {
     }
   })
   if (!data || session?.is_owner || hidden || data.completeness.missing.length === 0) return null
-  const missing = data.completeness.missing.map((m) => PROFILE_FIELD_LABEL[m]).join(', ')
+  const line = profileLine(data.completeness.percent, data.completeness.missing.map((m) => PROFILE_FIELD_LABEL[m]))
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm">
       <UserRoundCheck className="size-4 text-warning" aria-hidden />
       <span className="min-w-0 flex-1">
-        Your profile is {data.completeness.percent}% done · still needed: {missing}
+        {line}
       </span>
       <Button asChild size="sm">
         <Link to="/profile">Finish it</Link>

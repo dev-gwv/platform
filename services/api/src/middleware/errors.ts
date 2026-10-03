@@ -48,6 +48,6 @@ export function notFoundHandler(c: Context<AppEnv>): Response {
 }
 
 /** Throw this from anywhere to return a clean status to the client. */
-export function fail(status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 503, message: string): never {
+export function fail(status: 400 | 401 | 402 | 403 | 404 | 409 | 410 | 422 | 503, message: string): never {
   throw new HTTPException(status, { message })
 }

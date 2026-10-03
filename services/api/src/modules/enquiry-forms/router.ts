@@ -19,6 +19,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { newRawToken } from '../../lib/auth-token'
+import { enquiryEmbedCode } from '@ipc/domain'
 
 /**
  * Enquiry forms (0195): one QR per vendor the studio works with.
@@ -35,6 +36,7 @@ const base = (appUrl: string | undefined) => (appUrl ?? '').replace(/\/+$/, '')
 const selectForms = (sql: TransactionSql) => sql`
   select f.id, f.name, f.kind, f.phone, f.notes, f.code, f.source_id, f.show_phone, f.is_active,
          f.archived_at, f.created_at, f.scans, f.page_views, f.page_viewed_at, f.view_token,
+         f.purpose, f.title, f.intro, f.thank_you, f.accent, f.show_logo, f.fields,
          coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
          st.last_enquiry_at
     from enquiry_forms f
@@ -44,9 +46,12 @@ type FormRow = Record<string, unknown> & { code: string; view_token: string | nu
 
 const toForm = (appUrl: string | undefined, r: FormRow) => {
   const { view_token, ...rest } = r
+  const formUrl = `${base(appUrl)}/enquire/${r.code}`
   return enquiryForm.parse({
     ...rest,
-    form_url: `${base(appUrl)}/enquire/${r.code}`,
+    form_url: formUrl,
+    // A relative APP_URL (local runs) still gets a code to look at.
+    embed_code: enquiryEmbedCode(/^https?:/.test(formUrl) ? formUrl : `https://example.invalid${formUrl}`),
     page_url: view_token ? `${base(appUrl)}/enquiry-view/${view_token}` : null,
   })
 }
@@ -85,6 +90,13 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const [made] = await sql<{ id: string }[]>`
           select (create_enquiry_form(${d.name}, ${d.kind ?? null}, ${d.phone ?? null}, ${d.notes ?? null})).id`
+        // A form for the studio's own website starts asking for the email too.
+        if (d.purpose === 'website') {
+          await sql`update enquiry_forms
+                       set purpose = 'website',
+                           fields = fields || '{"email":"optional"}'::jsonb
+                     where id = ${made!.id}`
+        }
         return sql<FormRow[]>`${selectForms(sql)} where f.id = ${made!.id}`
       }),
     )
@@ -103,7 +115,8 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
     if (archived !== undefined) patch.archived_at = archived ? new Date().toISOString() : null
     const rows = await attempt(c, 'enquiry_forms.update', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const done = await sql`update enquiry_forms set ${sql(patch)} where id = ${id} returning id`
+        const row = patch.fields ? { ...patch, fields: sql.json(patch.fields as never) } : patch
+        const done = await sql`update enquiry_forms set ${sql(row)} where id = ${id} returning id`
         if (!done[0]) return []
         return sql<FormRow[]>`${selectForms(sql)} where f.id = ${id}`
       }),
@@ -185,8 +198,15 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
         withService(c.env, (sql) => sql<{ lead_id: string }[]>`
           select * from enquiry_form_submit(
             ${code}, ${d.name}, ${d.phone}, ${d.email || null}, ${d.event_type ?? null},
-            ${d.event_date || null}, ${d.city ?? null}, ${d.message ?? null})`),
-      { onCode: (pg) => (pg === 'P0002' ? fail(404, NOT_OPEN) : undefined) },
+            ${d.event_date || null}, ${d.city ?? null}, ${d.message ?? null}, ${d.budget ?? null})`),
+      {
+        onCode: (pg, err) =>
+          pg === 'P0002'
+            ? fail(404, NOT_OPEN)
+            : pg === '22023'
+              ? fail(422, (err as { message?: string }).message ?? 'Please check the form.')
+              : undefined,
+      },
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     // The lead id stays with the studio; the person only needs to know it arrived.

@@ -24,6 +24,10 @@ describe('stage names and colours', () => {
   it('names the stage, or the step when there is none', () => {
     expect(stageName({ status: 'review', custom_status_code: 'with_client' }, DEFAULTS)).toBe('With client')
     expect(stageName({ status: 'review' }, DEFAULTS)).toBe('Review')
+    // Given but not begun reads honestly; a row without the field keeps "Editing".
+    expect(stageName({ status: 'in_progress', started_at: null }, DEFAULTS)).toBe('Not started yet')
+    expect(stageName({ status: 'in_progress', started_at: '2026-10-01T10:00:00Z' }, DEFAULTS)).toBe('Editing')
+    expect(stageName({ status: 'in_progress' }, DEFAULTS)).toBe('Editing')
     expect(stageName({ status: 'in_progress', custom_status_code: 'gone' }, DEFAULTS)).toBe('Editing')
     expect(stageName({ status: 'cancelled' }, DEFAULTS)).toBe('Dropped')
   })

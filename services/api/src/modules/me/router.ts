@@ -229,7 +229,7 @@ export const meRouter = new Hono<AppEnv>()
                             'copied_by', coalesce(cu.name, r.copied_by_name),
                             'date_received', r.date_received,
                             'handed_to_editor_at', r.handed_to_editor_at,
-                            'card_count', coalesce(r.card_count, 0), 'size_gb', coalesce(r.size_gb, 0),
+                            'card_count', coalesce(r.card_count, 0), 'card_labels', coalesce(r.card_labels, '{}'), 'size_gb', coalesce(r.size_gb, 0),
                             'notes', r.notes)
                           order by r.created_at)
                      from shoot_data_records r

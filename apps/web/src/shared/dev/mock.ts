@@ -1249,6 +1249,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   }
   if (method === 'GET' && path === '/subscription/plans') return plansFx
+  if (method === 'GET' && path === '/subscription/usage')
+    return { plan_key: null, plan_name: null, tier: null, limits: {}, includes: [], used: { projects_per_month: 3, invoices_per_month: 5, team_logins: 4, enquiry_forms: 1 } }
   if (method === 'POST' && path === '/subscription/order')
     return { order_id: uid(0xd0), amount: 5900 }
   if (method === 'POST' && path === '/subscription/activate')

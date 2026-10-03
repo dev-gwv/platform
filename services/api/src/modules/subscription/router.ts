@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import {
+import { planUsage,
   activateRequest,
   activateResponse,
   createOrderRequest,
@@ -39,7 +39,8 @@ export const subscriptionRouter = new Hono<AppEnv>()
         (sql) => sql`
           select id, key, name, price, billing_interval,
                  description, currency, duration_days, features, is_active,
-                 badge, billing_label, savings_label, monthly_equivalent, sort_order
+                 badge, billing_label, savings_label, monthly_equivalent, sort_order,
+                 tier, limits, includes
           from plans
          where is_active = true
            -- A studio sees only its own audience's plans: IPC Diamond members the
@@ -66,6 +67,15 @@ export const subscriptionRouter = new Hono<AppEnv>()
           : Number(r['monthly_equivalent']),
       sort_order: r['sort_order'] === null || r['sort_order'] === undefined ? null : Number(r['sort_order']),
     }))))
+  })
+
+  /** The studio's plan, its limits and this month's use, for the bars on its Subscription page. */
+  .get('/usage', async (c) => {
+    const rows = await attempt(c, 'subscription.usage', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ v: unknown }[]>`select my_plan_usage() as v`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not load your plan.')
+    return c.json(planUsage.parse(rows[0].v))
   })
 
   // Lovable parity: extended status (current/latest/can_purchase/webhook + history + recovery).

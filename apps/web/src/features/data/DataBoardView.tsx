@@ -27,6 +27,7 @@ import {
   type Focus,
   type Level,
 } from './board-model'
+import { cardsLine } from './cards'
 import { STAGE_LABEL, STAGE_TONE } from './stage'
 
 const LEVEL_RING: Record<Level, string> = {
@@ -36,7 +37,13 @@ const LEVEL_RING: Record<Level, string> = {
 }
 
 const day = (d: string | null) =>
-  d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'No date'
+  d
+    ? new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      })
+    : 'No date'
 
 /**
  * Every booked person's cards, from the shoot day to the archive. Lanes left
@@ -61,7 +68,10 @@ export function DataBoardView({
   const open = useMemo(() => rows.filter((r) => inFocus(r, 'open')), [rows])
   const f = useMemo(() => figures(open), [open])
   const holders = useMemo(() => mostPending(open), [open])
-  const shown = useMemo(() => rows.filter((r) => inFocus(r, focus) && matches(r, q)).sort(byAge), [rows, focus, q])
+  const shown = useMemo(
+    () => rows.filter((r) => inFocus(r, focus) && matches(r, q)).sort(byAge),
+    [rows, focus, q],
+  )
   const pickedRows = shown.filter((r) => picked.has(r.key))
 
   const toggle = (keys: string[], on: boolean) =>
@@ -78,7 +88,25 @@ export function DataBoardView({
     downloadCsv(
       `data-${new Date().toISOString().slice(0, 10)}.csv`,
       toCsv(
-        ['Shoot date', 'Shoot', 'Project', 'Client', 'Person', 'Role', 'Stage', 'Days since shoot', 'Cards', 'Size (GB)', 'Main copy', 'Main folder', 'Backup', 'Backup folder', 'Verified by', 'Next step'],
+        [
+          'Shoot date',
+          'Shoot',
+          'Project',
+          'Client',
+          'Person',
+          'Role',
+          'Stage',
+          'Days since shoot',
+          'Cards',
+          'Card names',
+          'Size (GB)',
+          'Main copy',
+          'Main folder',
+          'Backup',
+          'Backup folder',
+          'Verified by',
+          'Next step',
+        ],
         shown.map((r) => [
           r.shoot_date,
           r.shoot_name,
@@ -89,6 +117,7 @@ export function DataBoardView({
           STAGE_LABEL[r.stage],
           r.age_days,
           r.record?.card_count ?? '',
+          r.record?.card_labels?.join(' ') ?? '',
           r.record?.size_gb ?? '',
           r.record?.primary_location_name,
           r.record?.folder_path,
@@ -111,26 +140,54 @@ export function DataBoardView({
             label="With crew"
             value={f.crew}
             tone={f.crew ? 'danger' : 'success'}
-            hint={f.critical ? `${f.critical} critical (7+ days)` : f.late ? `${f.late} late (3+ days)` : 'Cards not handed over'}
+            hint={
+              f.critical
+                ? `${f.critical} critical (7+ days)`
+                : f.late
+                  ? `${f.late} late (3+ days)`
+                  : 'Cards not handed over'
+            }
           />
         </Figure>
         <Figure onClick={() => setFocus('open')}>
-          <MetricCard label="To copy" value={f.received} tone={f.received ? 'warning' : 'success'} hint="In the studio, one copy to make" />
+          <MetricCard
+            label="To copy"
+            value={f.received}
+            tone={f.received ? 'warning' : 'success'}
+            hint="In the studio, one copy to make"
+          />
         </Figure>
         <Figure onClick={() => setFocus('open')}>
-          <MetricCard label="Needs backup" value={f.copied} tone={f.copied ? 'warning' : 'success'} hint="Only one copy so far" />
+          <MetricCard
+            label="Needs backup"
+            value={f.copied}
+            tone={f.copied ? 'warning' : 'success'}
+            hint="Only one copy so far"
+          />
         </Figure>
         <Figure onClick={() => setFocus('issues')}>
-          <MetricCard label="Issues" value={f.issues} tone={f.issues ? 'danger' : 'muted'} hint="A copy with a problem" />
+          <MetricCard
+            label="Issues"
+            value={f.issues}
+            tone={f.issues ? 'danger' : 'muted'}
+            hint="A copy with a problem"
+          />
         </Figure>
       </div>
 
       {holders.length > 0 && <ChaseStrip holders={holders} />}
 
       <div className="flex flex-wrap items-center gap-2">
-        <FilterTabs tabs={FOCI.map((x) => ({ value: x.key, label: x.label }))} value={focus} onChange={setFocus} />
+        <FilterTabs
+          tabs={FOCI.map((x) => ({ value: x.key, label: x.label }))}
+          value={focus}
+          onChange={setFocus}
+        />
         <div className="relative min-w-[14rem] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             aria-label="Search data"
             placeholder="Shoot, project, person, disk…"
@@ -143,7 +200,11 @@ export function DataBoardView({
           <Download /> CSV
         </Button>
       </div>
-      {truncated && <p className="text-xs text-muted-foreground">Showing the oldest 3,000. Search to narrow it down.</p>}
+      {truncated && (
+        <p className="text-xs text-muted-foreground">
+          Showing the oldest 3,000. Search to narrow it down.
+        </p>
+      )}
 
       {lanesShown ? (
         <div className="-mx-1 overflow-x-auto px-1 pb-2">
@@ -152,26 +213,48 @@ export function DataBoardView({
               const inLane = shown.filter((r) => laneOf(r.stage) === lane.key)
               const all = inLane.length > 0 && inLane.every((r) => picked.has(r.key))
               return (
-                <section key={lane.key} aria-label={lane.label} className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted/40 p-2">
+                <section
+                  key={lane.key}
+                  aria-label={lane.label}
+                  className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted/40 p-2"
+                >
                   <header className="flex items-center gap-2 px-1">
                     <input
                       type="checkbox"
                       aria-label={`Select all in ${lane.label}`}
                       checked={all}
                       disabled={!inLane.length}
-                      onChange={(e) => toggle(inLane.map((r) => r.key), e.target.checked)}
+                      onChange={(e) =>
+                        toggle(
+                          inLane.map((r) => r.key),
+                          e.target.checked,
+                        )
+                      }
                     />
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-semibold">
-                        {lane.label} <span className="font-normal text-muted-foreground tabular-nums">{inLane.length}</span>
+                        {lane.label}{' '}
+                        <span className="font-normal text-muted-foreground tabular-nums">
+                          {inLane.length}
+                        </span>
                       </h3>
                       <p className="truncate text-[11px] text-muted-foreground">{lane.hint}</p>
                     </div>
                   </header>
                   {inLane.map((r) => (
-                    <DataCard key={r.key} row={r} picked={picked.has(r.key)} onPick={(on) => toggle([r.key], on)} onOpen={() => onOpen(r)} />
+                    <DataCard
+                      key={r.key}
+                      row={r}
+                      picked={picked.has(r.key)}
+                      onPick={(on) => toggle([r.key], on)}
+                      onOpen={() => onOpen(r)}
+                    />
                   ))}
-                  {!inLane.length && <p className="px-1 py-4 text-center text-xs text-muted-foreground">Nothing here.</p>}
+                  {!inLane.length && (
+                    <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                      Nothing here.
+                    </p>
+                  )}
                 </section>
               )
             })}
@@ -180,21 +263,35 @@ export function DataBoardView({
       ) : shown.length ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((r) => (
-            <DataCard key={r.key} row={r} picked={picked.has(r.key)} onPick={(on) => toggle([r.key], on)} onOpen={() => onOpen(r)} />
+            <DataCard
+              key={r.key}
+              row={r}
+              picked={picked.has(r.key)}
+              onPick={(on) => toggle([r.key], on)}
+              onOpen={() => onOpen(r)}
+            />
           ))}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Nothing here.</p>
+        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          Nothing here.
+        </p>
       )}
 
-      {pickedRows.length > 0 && <DataBulkBar rows={pickedRows} onDone={() => setPicked(new Set())} />}
+      {pickedRows.length > 0 && (
+        <DataBulkBar rows={pickedRows} onDone={() => setPicked(new Set())} />
+      )}
     </div>
   )
 }
 
 function Figure({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="rounded-xl text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       {children}
     </button>
   )
@@ -204,18 +301,27 @@ function Figure({ onClick, children }: { onClick: () => void; children: ReactNod
 function ChaseStrip({ holders }: { holders: ReturnType<typeof mostPending> }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3">
-      <p className="mr-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Chase first</p>
+      <p className="mr-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Chase first
+      </p>
       {holders.map((h) => {
         const wa = waNumber(h.phone)
         return (
-          <div key={h.user_id} className="flex items-center gap-1 rounded-full border border-border py-0.5 pl-3 pr-1 text-sm">
+          <div
+            key={h.user_id}
+            className="flex items-center gap-1 rounded-full border border-border py-0.5 pl-3 pr-1 text-sm"
+          >
             <span className="font-medium">{h.name}</span>
             <span className="text-xs text-muted-foreground tabular-nums">
               · {h.count} shoot{h.count === 1 ? '' : 's'}
               {h.oldest >= 3 ? `, ${h.oldest}d` : ''}
             </span>
             {h.phone && (
-              <a href={`tel:${h.phone}`} aria-label={`Call ${h.name}`} className="rounded-full p-1.5 text-primary hover:bg-muted">
+              <a
+                href={`tel:${h.phone}`}
+                aria-label={`Call ${h.name}`}
+                className="rounded-full p-1.5 text-primary hover:bg-muted"
+              >
                 <Phone className="size-3.5" />
               </a>
             )}
@@ -237,7 +343,17 @@ function ChaseStrip({ holders }: { holders: ReturnType<typeof mostPending> }) {
   )
 }
 
-function DataCard({ row, picked, onPick, onOpen }: { row: DataBoardRow; picked: boolean; onPick: (on: boolean) => void; onOpen: () => void }) {
+function DataCard({
+  row,
+  picked,
+  onPick,
+  onOpen,
+}: {
+  row: DataBoardRow
+  picked: boolean
+  onPick: (on: boolean) => void
+  onOpen: () => void
+}) {
   const level = levelOf(row)
   const r = row.record
   const link = r?.cloud_link || r?.backup_cloud_link
@@ -250,7 +366,13 @@ function DataCard({ row, picked, onPick, onOpen }: { row: DataBoardRow; picked: 
       )}
     >
       <div className="flex items-start gap-2">
-        <input type="checkbox" className="mt-1" aria-label={`Select ${row.user_name ?? 'row'} on ${row.shoot_name ?? 'shoot'}`} checked={picked} onChange={(e) => onPick(e.target.checked)} />
+        <input
+          type="checkbox"
+          className="mt-1"
+          aria-label={`Select ${row.user_name ?? 'row'} on ${row.shoot_name ?? 'shoot'}`}
+          checked={picked}
+          onChange={(e) => onPick(e.target.checked)}
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{row.user_name ?? r?.data_label ?? 'Data'}</p>
           <p className="truncate text-xs text-muted-foreground">
@@ -258,18 +380,30 @@ function DataCard({ row, picked, onPick, onOpen }: { row: DataBoardRow; picked: 
           </p>
         </div>
         {level !== 'ok' ? (
-          <StatusBadge tone={level === 'critical' ? 'danger' : 'warning'}>{row.age_days}d</StatusBadge>
+          <StatusBadge tone={level === 'critical' ? 'danger' : 'warning'}>
+            {row.age_days}d
+          </StatusBadge>
         ) : (
-          <span className="text-[11px] text-muted-foreground tabular-nums">{row.age_days ? `${row.age_days}d` : 'Today'}</span>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {row.age_days ? `${row.age_days}d` : 'Today'}
+          </span>
         )}
       </div>
       <p className="truncate text-xs text-muted-foreground">
-        {day(row.shoot_date)} · {[row.project_name, row.client_name].filter(Boolean).join(' · ') || 'No project'}
+        {day(row.shoot_date)} ·{' '}
+        {[row.project_name, row.client_name].filter(Boolean).join(' · ') || 'No project'}
       </p>
       {r && (r.primary_location_name || r.backup_location_name) && (
         <p className="truncate text-xs">
           {r.primary_location_name && <span>Main: {r.primary_location_name}</span>}
-          {r.backup_location_name && <span className="text-muted-foreground"> · Backup: {r.backup_location_name}</span>}
+          {r.backup_location_name && (
+            <span className="text-muted-foreground"> · Backup: {r.backup_location_name}</span>
+          )}
+        </p>
+      )}
+      {r && cardsLine(r.card_count, r.card_labels) && (
+        <p className="truncate text-xs text-muted-foreground">
+          {cardsLine(r.card_count, r.card_labels)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -311,7 +445,12 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
 
   function apply() {
     bulk.mutate(
-      { ...bulkIds(rows), action, location_id: needs ? location : null, folder: needs ? folder.trim() || null : null },
+      {
+        ...bulkIds(rows),
+        action,
+        location_id: needs ? location : null,
+        folder: needs ? folder.trim() || null : null,
+      },
       { onSuccess: onDone },
     )
   }
@@ -323,7 +462,12 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
       className="sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
     >
       <span className="text-sm font-semibold">{rows.length} selected</span>
-      <Select aria-label="What happened" value={action} onChange={(e) => setAction(e.target.value as BulkDataAction)} className="h-9 w-44">
+      <Select
+        aria-label="What happened"
+        value={action}
+        onChange={(e) => setAction(e.target.value as BulkDataAction)}
+        className="h-9 w-44"
+      >
         {BULK_ACTIONS.map((a) => (
           <option key={a.key} value={a.key}>
             {a.label}
@@ -332,7 +476,12 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
       </Select>
       {needs && (
         <>
-          <Select aria-label="Which location" value={location} onChange={(e) => setLocation(e.target.value)} className="h-9 w-48">
+          <Select
+            aria-label="Which location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="h-9 w-48"
+          >
             <option value="">Pick a disk or cloud…</option>
             {(locations.data ?? [])
               .filter((l) => l.is_active)
@@ -342,7 +491,13 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
                 </option>
               ))}
           </Select>
-          <Input aria-label="Folder" placeholder="Folder (optional)" value={folder} onChange={(e) => setFolder(e.target.value)} className="h-9 w-48" />
+          <Input
+            aria-label="Folder"
+            placeholder="Folder (optional)"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            className="h-9 w-48"
+          />
         </>
       )}
       <Button size="sm" onClick={apply} disabled={bulk.isPending || (needs && !location)}>

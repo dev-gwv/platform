@@ -67,7 +67,7 @@ export function stepsFor(flow: DeliveryFlow = 'full'): StepKey[] {
   return flow === 'simple' ? all.filter((s) => s !== 'review') : [...all]
 }
 
-type Placed = { status: string; custom_status_code?: string | null | undefined }
+type Placed = { status: string; custom_status_code?: string | null | undefined; started_at?: string | null | undefined }
 
 /** A step's named stages, in the studio's order. */
 export function stagesIn(stages: readonly DeliverableStage[], step: StepKey): DeliverableStage[] {
@@ -81,11 +81,18 @@ export function namedStage(d: Placed, stages: readonly DeliverableStage[]): Deli
   return stages.find((s) => s.code === d.custom_status_code && s.stage === step) ?? null
 }
 
-/** "With manager" when it has a named stage, else the step: "Editing". */
+/**
+ * "With manager" when it has a named stage, else the step: "Editing" -- or
+ * "Not started yet" while it has been given to someone who has not begun
+ * (only where the row carries `started_at`; null there means not begun).
+ */
 export function stageName(d: Placed, stages: readonly DeliverableStage[]): string {
   const step = stageOf(d.status)
   if (step === 'cancelled') return STAGE_LABEL.cancelled
-  return namedStage(d, stages)?.label ?? STEP_LABEL[step]
+  const named = namedStage(d, stages)
+  if (named) return named.label
+  if (step === 'in_progress' && d.started_at === null) return 'Not started yet'
+  return STEP_LABEL[step]
 }
 
 export function stageTone(d: Placed, stages: readonly DeliverableStage[]): StageTone {

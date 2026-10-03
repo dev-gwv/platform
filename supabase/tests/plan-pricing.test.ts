@@ -156,7 +156,8 @@ describe('plan pricing', () => {
   it('re-running the seed updates rather than duplicating', async () => {
     // The whole suite applies every migration twice in the idempotency check.
     await db.exec(readFileSync(join(migDir, '0141_plan_pricing.sql'), 'utf8'))
-    const r = await db.query<{ n: string }>(`select count(*) as n from plans;`)
+    // The tiered plans 0241 adds (Starter / Pro / Studio Max) are not this seed's.
+    const r = await db.query<{ n: string }>(`select count(*) as n from plans where tier is null;`)
     expect(Number(r.rows[0]!.n)).toBe(4) // three member plans + the outsider's Yearly (0214)
   })
 })

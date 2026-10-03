@@ -15,6 +15,7 @@ import { MyProfilePage } from '@/routes/my-profile'
 import { LeavePage } from '@/routes/leave'
 import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { HelpSetupPage } from '@/routes/help-setup'
+import { HelpWhatsAppPage } from '@/routes/help-whatsapp'
 import { HelpPage } from '@/routes/help'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
@@ -214,6 +215,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/data-deletion', DataDeletionPage),
   // Setup tutorials; the setup emails link here, often opened signed out.
   publicRoute('/help/setup', HelpSetupPage),
+  publicRoute('/help/whatsapp', HelpWhatsAppPage),
   // Every tutorial, the questions studios ask, and how to reach us (0236).
   publicRoute('/help', HelpPage),
 

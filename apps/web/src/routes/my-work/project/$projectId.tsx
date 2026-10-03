@@ -17,6 +17,7 @@ import { humanize } from '@/shared/ui/format'
 import { useMyProject } from '@/features/my-work/api'
 import { MyEditRow } from '@/features/projects/MyDeliverables'
 import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
+import { cardsLine } from '@/features/data/cards'
 import { STAGE_LABEL as DATA_STAGE_LABEL } from '@/features/data/stage'
 
 type View = 'work' | 'shoots' | 'data'
@@ -334,7 +335,7 @@ function DataCard({ r }: { r: MyProjectData }) {
           {[
             r.copied_by ? `Copied by ${r.copied_by}` : null,
             r.date_received ? `received ${day(r.date_received)}` : null,
-            r.card_count ? `${r.card_count} card${r.card_count === 1 ? '' : 's'}` : null,
+            cardsLine(r.card_count, r.card_labels),
             r.size_gb ? `${r.size_gb} GB` : null,
           ]
             .filter(Boolean)

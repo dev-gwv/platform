@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
 import type { TodayBoardRow } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
+import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
@@ -35,11 +37,16 @@ export function TodayBoard() {
   if (board.isError || !board.data) return <ErrorState onRetry={() => void board.refetch()} />
   const b = board.data
   if (!b.enabled) {
+    // One slim line with its one button, not a page-filling box.
     return (
-      <EmptyState
-        title="Attendance is off"
-        description="Turn it on in Settings → Attendance, and this board fills as your team checks in."
-      />
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2">
+        <p className="text-sm">
+          <span className="font-semibold">Attendance is off.</span> <span className="text-muted-foreground">Nobody is marked or cut.</span>
+        </p>
+        <Button asChild size="sm">
+          <Link to="/settings/attendance-location">Turn it on</Link>
+        </Button>
+      </div>
     )
   }
   if (b.day_off) return <EmptyState title={b.day_off} description="Nobody is expected in today." />

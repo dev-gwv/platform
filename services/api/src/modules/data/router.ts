@@ -40,7 +40,7 @@ const selectRecords = (sql: Sql | TransactionSql, where: PendingQuery<Row[]>) =>
          d.primary_status, d.backup_status,
          d.primary_location_id, pl.name as primary_location_name,
          d.backup_location_id, bl.name as backup_location_name,
-         d.card_count, d.size_gb, d.verified_at, d.created_at,
+         d.card_count, coalesce(d.card_labels, '{}') as card_labels, d.size_gb, d.verified_at, d.created_at,
          d.folder_path, d.cloud_link, coalesce(d.file_count, 0) as file_count,
          d.date_received, d.received_by_name, d.notes, d.data_status,
          coalesce(d.issue_found, false) as issue_found, coalesce(d.is_not_required, false) as is_not_required,
@@ -160,7 +160,8 @@ export const dataRouter = new Hono<AppEnv>()
           returning id, name, kind, location_type, capacity_gb, owner, notes, is_active`
         return rows[0] ?? null
       }),
-    )
+    { onCode: (code) => (code === '23505' ? ('taken' as const) : undefined) })
+    if (row === 'taken') fail(409, 'You already have a location with that name.')
     if (!row) fail(404, 'That location was not found.')
     const updated = storageLocation.parse(row)
     await audit(c, { action: 'storage_location.update', entityType: 'storage_location', entityId: id, after: parsed.data })

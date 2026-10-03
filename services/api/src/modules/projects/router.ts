@@ -612,7 +612,7 @@ export const projectsRouter = new Hono<AppEnv>()
         const items = await sql`
           select d.id, d.project_id, p.name as project_name, cl.name as client_name,
                  d.title, d.description, d.status, d.custom_status_code, d.estimated_date,
-                 d.delivered_at, d.delivery_link, d.visibility_scope,
+                 d.delivered_at, d.started_at, d.delivery_link, d.visibility_scope,
                  d.shoot_id, s.name as shoot_name, s.shoot_date,
                  d.assignee_id, u.name as assignee_name,
                  (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
