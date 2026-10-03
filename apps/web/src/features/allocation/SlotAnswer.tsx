@@ -30,6 +30,26 @@ function useSlotAction<T>(path: (id: string) => string, done: string) {
 export const canArrive = (s: Pick<TeamSlot, 'start_at' | 'end_at'>, now = Date.now()) =>
   now >= new Date(s.start_at).getTime() - 3 * 3600_000 && now <= new Date(s.end_at).getTime()
 
+/** "I've reached" for one booking, with the venue's location when the phone gives it. */
+export function ArrivedButton({ slotId, className }: { slotId: string; className?: string }) {
+  const arrived = useSlotAction<{ lat?: number; lng?: number }>((id) => `/allocation/${id}/arrived`, 'Marked as reached')
+  return (
+    <Button
+      size="sm"
+      className={className}
+      disabled={arrived.isPending}
+      onClick={() =>
+        void readPosition(true).then(
+          (p) => arrived.mutate({ id: slotId, body: { lat: p.coords.latitude, lng: p.coords.longitude } }),
+          () => arrived.mutate({ id: slotId, body: {} }),
+        )
+      }
+    >
+      <MapPinCheck /> I've reached
+    </Button>
+  )
+}
+
 /**
  * The person booked answers their booking (0207): Confirm, or Can't make it
  * with a reason; on the day, I've reached. What the booking needs next is
@@ -37,30 +57,13 @@ export const canArrive = (s: Pick<TeamSlot, 'start_at' | 'end_at'>, now = Date.n
  */
 export function SlotAnswer({ slot }: { slot: TeamSlot }) {
   const respond = useSlotAction<{ response: 'confirmed' | 'declined'; reason?: string }>((id) => `/allocation/${id}/respond`, 'Thanks — your answer is saved')
-  const arrived = useSlotAction<{ lat?: number; lng?: number }>((id) => `/allocation/${id}/arrived`, 'Marked as reached')
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState('')
   if (slot.status !== 'booked' || new Date(slot.end_at).getTime() < Date.now()) return null
 
   if (slot.arrived_at) return <StatusBadge tone="success">Reached {time.format(new Date(slot.arrived_at))}</StatusBadge>
 
-  if (canArrive(slot) && slot.response !== 'declined') {
-    return (
-      <Button
-        size="sm"
-        className="h-7"
-        disabled={arrived.isPending}
-        onClick={() =>
-          void readPosition(true).then(
-            (p) => arrived.mutate({ id: slot.id, body: { lat: p.coords.latitude, lng: p.coords.longitude } }),
-            () => arrived.mutate({ id: slot.id, body: {} }),
-          )
-        }
-      >
-        <MapPinCheck /> I've reached
-      </Button>
-    )
-  }
+  if (canArrive(slot) && slot.response !== 'declined') return <ArrivedButton slotId={slot.id} className="h-7" />
 
   if (slot.response === 'declined') return <StatusBadge tone="danger">You declined</StatusBadge>
   if (slot.response === 'confirmed') return <StatusBadge tone="success">Confirmed</StatusBadge>

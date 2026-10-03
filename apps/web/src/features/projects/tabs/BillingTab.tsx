@@ -252,14 +252,21 @@ export function BillingTab({
   const checks = canBill && invoices ? projectMoneyChecks(project.total_cost, invoices, project.payments) : []
 
   /** A new invoice for this project, with one line when it is for a part of the plan. */
-  const invoiceFor = (line?: { description: string; amount: number }) =>
+  // One plan part becomes one line; a plain "Create invoice" starts from the
+  // whole project (the package and its extras, the advance already received
+  // ticked), the same as the journey -- never an empty table.
+  const invoiceFor = (line?: { description: string; amount: number }) => {
+    const whole = line ? [] : projectInvoiceLines(project)
     setInvoicing({
       client_id: project.client_id,
       project_id: project.id,
       // Raised from the project to be sent: a draft could not be paid or shared.
       status: 'sent',
-      ...(line ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] } : {}),
+      ...(line
+        ? { lines: [{ description: line.description, quantity: '1', rate: String(line.amount), gst_rate: 0 }] }
+        : { subject: project.name, applied: unappliedPayments(project), ...(whole.length > 0 ? { lines: whole } : {}) }),
     })
+  }
 
   // "Create the invoice" from the journey: the whole project, already filled
   // in -- client, project, the package and every chargeable extra as lines,
