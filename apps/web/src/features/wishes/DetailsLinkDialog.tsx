@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Copy, ExternalLink, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { buildWhatsAppUrl } from '@ipc/contracts'
@@ -35,13 +35,20 @@ export function DetailsLinkDialog({
   onClose: () => void
 }) {
   const issue = useIssueDetailsLink(projectId)
-  const started = useRef(false)
+  const mint = issue.mutateAsync
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  // Each opening makes a fresh link. If React mounts twice (dev), the second
+  // link is the live one and the only one shown.
   useEffect(() => {
-    if (started.current) return
-    started.current = true
-    issue.mutate()
-  }, [issue])
-  const url = issue.data?.url
+    let live = true
+    mint()
+      .then((d) => live && setUrl(d.url))
+      .catch(() => live && setFailed(true))
+    return () => {
+      live = false
+    }
+  }, [mint])
   const words = url ? detailsMessage(clientName, studioName ?? null, projectName, url) : ''
 
   function copy(text: string) {
@@ -58,7 +65,7 @@ export function DetailsLinkDialog({
           <p className="text-sm text-muted-foreground">
             {clientName ?? 'The client'} fills their phone, address, birthdays, wedding day and events. The project fills itself in.
           </p>
-          {issue.isError ? (
+          {failed ? (
             <p className="text-sm text-destructive">We could not make the link. Please try again.</p>
           ) : !url ? (
             <Skeleton className="h-24" />
