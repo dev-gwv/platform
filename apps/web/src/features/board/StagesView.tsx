@@ -156,7 +156,11 @@ export function StagesView({ items, stages, canEdit, me, selected, onToggle, onO
       <Dialog open={!!asking} onOpenChange={(o) => !o && setAsking(null)}>
         <DialogContent
           title={asking ? `Move to ${asking.lane.label}` : ''}
-          description="Paste the link that went to the client, if there is one. It stays on the deliverable."
+          description={
+            asking?.lane.code === 'with_client' || asking?.lane.status === 'completed'
+              ? 'Paste the link that went to the client, if there is one. It stays on the deliverable.'
+              : 'Paste the link to the work, if there is one. It stays on the deliverable.'
+          }
           className="max-w-md"
         >
           <form

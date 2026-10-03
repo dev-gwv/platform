@@ -19,6 +19,8 @@ function useSlotAction<T>(path: (id: string) => string, done: string) {
       toast.success(done)
       void qc.invalidateQueries({ queryKey: ['allocation'] })
       void qc.invalidateQueries({ queryKey: ['shoots'] })
+      // "I've reached" is a shoot day's attendance: the Home card follows at once.
+      void qc.invalidateQueries({ queryKey: ['hr', 'attendance', 'me'] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

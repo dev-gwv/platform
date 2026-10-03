@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useMyDeliverables } from '@/features/projects/api'
+import { workSummary } from '@/features/my-work/summary'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink, Layers, Mic, Pencil, Send } from 'lucide-react'
@@ -119,16 +121,8 @@ function MyWork() {
   }, [tasks, submissions, projectById])
 
   // Summary: due today / pending / in review / overdue.
-  const summary = useMemo(() => {
-    const open = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
-    return {
-      dueToday: open.filter((t) => t.due_date === today).length,
-      pending: open.filter((t) => t.status === 'to_do').length,
-      inReview: submissions.filter((s) => s.status === 'submitted').length,
-      overdue: open.filter((t) => t.due_date && t.due_date < today).length,
-      completed: tasks.filter((t) => t.status === 'completed').length + submissions.filter((s) => s.status === 'approved').length,
-    }
-  }, [tasks, submissions, today])
+  const { data: edits = [] } = useMyDeliverables({ done: 14 })
+  const summary = useMemo(() => workSummary(tasks, submissions, edits, today), [tasks, submissions, edits, today])
 
   const rows: TaskRow[] = useMemo(() => {
     const cmp = (a: TaskRow, b: TaskRow) => {
