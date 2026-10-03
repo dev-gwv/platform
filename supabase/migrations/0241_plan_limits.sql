@@ -1,0 +1,7 @@
+-- 0241: plans with limits and what they include.
+--
+-- A plan says how many projects and invoices a month, how many team logins
+-- and enquiry forms it allows (null = unlimited), and which extras it carries
+-- (white-label, the studio's own WhatsApp, sequences that send by themselves).
+-- The database checks the limits as a row is made; nothing already there is
+-- touched. Paying for a plan now records which plan the studio is on.
