@@ -2900,6 +2900,14 @@ if (listed) {
   check('form builder: only the seven colours', bad.status === 422, bad.status)
 }
 
+// ── 0241: plan limits and the usage bars ──────────────────────────
+{
+  const usage = await api('/subscription/usage', { token: aToken })
+  check('plans: a studio on a trial has no limits to show', usage.status === 200 && Object.keys(usage.json.limits ?? {}).length === 0 && typeof usage.json.used?.projects_per_month === 'number', usage.json)
+  const plans = await api('/subscription/plans', { token: aToken })
+  check('plans: the proposed plans stay hidden until the owner picks', plans.status === 200 && !(plans.json ?? []).some((p) => p.tier), (plans.json ?? []).map((p) => p.key))
+}
+
 // ── 0198: overdue alerts and the morning email ───────────────────
 {
   const dry = await fetch(`${API}/cron/reminders?dry=1`, {

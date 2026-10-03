@@ -54,7 +54,10 @@ function Whatsapp() {
         </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Follow-ups go out from your studio's own number and name, by themselves. Clients' replies land on the lead, and a new number becomes a new
-          enquiry.
+          enquiry.{' '}
+          <Link to="/help/whatsapp" className="font-medium text-primary hover:underline">
+            How to connect your number
+          </Link>
         </p>
       </div>
       {!s.entitled ? (

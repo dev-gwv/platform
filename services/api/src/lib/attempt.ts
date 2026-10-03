@@ -21,6 +21,7 @@ import { reportError } from './error-reporter'
  *       23505 (unique)             -> 409
  *       23503 (foreign key in use) -> 409
  *       22023 / P0001 (RPC checks) -> 422
+ *       54000 (a plan limit)       -> 402
  *       connection failures        -> 503
  *
  * `onCode` lets a caller claim a code first (e.g. 23505 -> "that role code is
@@ -76,6 +77,10 @@ export async function attempt<T, C = never>(
       case '22023':
       case 'P0001':
         fail(422, 'Please check the details and try again.')
+      // falls through
+      case '54000':
+        // A plan limit (0241): the database's sentence says which and why.
+        fail(402, d.message || 'Your plan does not allow more of these. Upgrade to add more.')
       // falls through
       default:
         if (d.code && CONNECTION_CODES.has(d.code)) {

@@ -30,12 +30,6 @@ const asUser = async <T>(user: string, fn: () => Promise<T>): Promise<T> => {
 type Form = { id: string; code: string; source_id: string }
 let form: Form
 
-const submit = (code: string, name: string, phone: string, extra: Partial<Record<string, string>> = {}) =>
-  q<{ lead_id: string; created: boolean }>(
-    `select * from enquiry_form_submit($1, $2, $3, null, $4, $5::date, $6, $7)`,
-    [code, name, phone, extra.event_type ?? null, extra.event_date ?? null, extra.city ?? null, extra.message ?? null],
-  )
-
 beforeAll(async () => {
   db = new PGlite()
   await db.exec(`create schema if not exists auth;`)

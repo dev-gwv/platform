@@ -14,6 +14,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
+import { UsageCard } from '@/features/billing/UsageCard'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -42,6 +43,8 @@ export function SubscriptionPage() {
 type Outcome = { tone: 'success' | 'error' | 'info'; text: string }
 
 function Subscription() {
+  // Plans that come both ways (0241) show one way at a time; yearly first, the cheaper month.
+  const [payEvery, setPayEvery] = useState<'yearly' | 'monthly'>('yearly')
   const { session, refresh } = useAuth()
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [dialog, setDialog] = useState<'success' | 'failed' | null>(null)
@@ -178,6 +181,7 @@ function Subscription() {
           </CardContent>
         </Card>
       )}
+      <UsageCard className="mb-4" />
       {/* Outsiders see one price; an IPC Diamond member proves it here (0214). */}
       {status.data && session?.is_owner && <DiamondVerifyCard status={status.data} className="mb-4" />}
       {outcome && (
@@ -196,8 +200,27 @@ function Subscription() {
           description="Plans are published by the platform. Until one is, your studio keeps its current access."
         />
       ) : (
+        <>
+        {data.some((p) => p.tier) && (
+          <div className="mb-3 inline-flex rounded-full border border-border p-0.5" role="radiogroup" aria-label="How to pay">
+            {(['yearly', 'monthly'] as const).map((i) => (
+              <button
+                key={i}
+                type="button"
+                role="radio"
+                aria-checked={payEvery === i}
+                onClick={() => setPayEvery(i)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  payEvery === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                {i === 'yearly' ? 'Pay yearly' : 'Pay monthly'}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-3">
-          {data.map((p) => {
+          {data.filter((p) => !p.tier || p.billing_interval === payEvery).map((p) => {
             // A studio already inside its plan is renewing, not choosing.
             const renewing = !status.data?.can_purchase
             const free = p.price <= 0
@@ -290,6 +313,7 @@ function Subscription() {
             )
           })}
         </div>
+        </>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
         Prices exclude 18% GST. Paying means you agree to the{' '}

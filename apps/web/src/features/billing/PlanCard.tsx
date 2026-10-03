@@ -6,6 +6,8 @@ import { callApi } from '@/shared/api/client'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
 import { planLine } from './plan-line'
+import { usePlanUsage } from './UsageCard'
+import { nearestLimit } from './usage'
 
 /**
  * The studio's plan, pinned at the foot of the sidebar: which plan, how long
@@ -22,7 +24,9 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
     enabled: allowed,
     staleTime: 10 * 60_000,
   })
+  const usage = usePlanUsage(allowed)
   if (!allowed) return null
+  const near = nearestLimit(usage.data)
   const s = q.data
   const trial = s?.plan_source === 'trial'
   const left = s?.days_left ?? null
@@ -70,6 +74,8 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
       <p className={cn('mt-0.5 text-xs', ended ? 'text-destructive' : 'text-muted-foreground')}>
         {line}
       </p>
+      {/* Only when a limit is close (80%): one line, never a list (0241). */}
+      {near && <p className={cn('mt-0.5 text-xs font-medium', near.tone === 'full' ? 'text-destructive' : 'text-tone-amber')}>{near.line}</p>}
       <Link
         to="/settings/subscription"
         className="mt-2 flex h-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90"
