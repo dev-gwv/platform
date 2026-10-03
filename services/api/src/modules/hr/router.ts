@@ -38,7 +38,7 @@ import { requireAuth } from '../../middleware/auth'
 import { requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { uuidParam, dateParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { rpcJson } from '../../lib/rpc'
 import { audit } from '../../lib/audit'
@@ -194,6 +194,13 @@ export const hrRouter = new Hono<AppEnv>()
       }),
     { onCode: explain })
     if (!ok) fail(400, 'We could not save that decision.')
+    // Decided: the "asked for leave" alert is done for every approver, not
+    // only the one who answered it.
+    await withService(c.env, (sql) =>
+      sql`update notifications set read_at = now()
+           where type = 'leave.requested' and entity_type = 'leave' and entity_id = ${id}
+             and company_id = ${c.get('auth').companyId} and read_at is null`,
+    ).catch(() => undefined)
     await audit(c, { action: parsed.data.approve ? 'leave.approve' : 'leave.reject', entityType: 'leave', entityId: id, after: parsed.data })
     return c.body(null, 204)
   })

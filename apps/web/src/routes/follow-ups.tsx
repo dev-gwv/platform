@@ -22,7 +22,7 @@ import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { useAccess } from '@/shared/auth/useAccess'
-import { NO_EXTRAS, NO_FACETS, activeExtrasCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
+import { NO_EXTRAS, NO_FACETS, activeExtrasCount, activeFacetCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
 import { DateField } from '@/shared/ui/date-field'
 import { cn } from '@/shared/ui/cn'
 
@@ -109,6 +109,7 @@ function Crm() {
     remember(EXTRAS_KEY, x)
   }
   const extrasOn = activeExtrasCount(extras)
+  const facetsOn = activeFacetCount(facets)
 
   /**
    * How the chosen leads are drawn: as a list, bucketed by when they are due,
@@ -291,15 +292,18 @@ function Crm() {
           aria-expanded={showFilters}
         >
           <SlidersHorizontal /> Filter
-          {extrasOn + (showArchived ? 1 : 0) > 0 && (
+          {extrasOn + facetsOn + (showArchived ? 1 : 0) > 0 && (
             <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[0.65rem] font-semibold text-primary-foreground tabular-nums">
-              {extrasOn + (showArchived ? 1 : 0)}
+              {extrasOn + facetsOn + (showArchived ? 1 : 0)}
             </span>
           )}
         </Button>
       </div>
 
-      {!isEmptyStudio && (
+      {/* Filters stay hidden until Filter is pressed (the owner's rule); a
+          filter already narrowing the list keeps its row in view, so a lead
+          never seems to vanish for no reason. */}
+      {!isEmptyStudio && (showFilters || facetsOn > 0) && (
         <div className="mt-3">
           <BoardFilters leads={unfaceted} value={facets} onChange={setFacets} />
         </div>

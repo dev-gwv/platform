@@ -22,7 +22,7 @@ import { cn } from '@/shared/ui/cn'
 import { TONE_CLASSES, wantsLinkAt } from '@/features/projects/stages'
 import { todayIso } from '@/features/projects/deliverable-stage'
 import { BoardCard, CardFace } from './BoardCard'
-import { laneOf, lanesFor, sortInLane, type Lane } from './board-model'
+import { laneOf, lanesFor, reviewLane, skipsReview, sortInLane, type Lane } from './board-model'
 import { useBoardMove } from './api'
 import { useDeliveryFlow } from '@/features/projects/stages-api'
 
@@ -90,6 +90,7 @@ export function StagesView({ items, stages, canEdit, me, selected, onToggle, onO
   const [active, setActive] = useState<BoardDeliverable | null>(null)
   const [asking, setAsking] = useState<{ d: BoardDeliverable; lane: Lane } | null>(null)
   const [link, setLink] = useState('')
+  const [skipping, setSkipping] = useState<{ d: BoardDeliverable; lane: Lane; review: Lane } | null>(null)
 
   const go = (d: BoardDeliverable, lane: Lane, delivery_link?: string | null) =>
     move.mutate({ id: d.id, status: lane.status, custom_status_code: lane.code, ...(delivery_link !== undefined ? { delivery_link } : {}) })
@@ -109,6 +110,23 @@ export function StagesView({ items, stages, canEdit, me, selected, onToggle, onO
       toast.error(`A manager moves work to ${lane.label}.`)
       return
     }
+    // Unchecked work jumping past review: the owner or a manager says whether
+    // it needs one; anyone else's goes to review first.
+    const review = skipsReview(d, lane, stages, flow) ? reviewLane(lanes, stages, flow) : null
+    if (review) {
+      if (canEdit) {
+        setSkipping({ d, lane, review })
+      } else {
+        toast(`${d.title} goes to ${review.label} first.`)
+        land(d, review)
+      }
+      return
+    }
+    land(d, lane)
+  }
+
+  /** Move it, asking for the client link first where one goes out. */
+  function land(d: BoardDeliverable, lane: Lane) {
     if (wantsLinkAt(lane)) {
       setLink(d.delivery_link ?? '')
       setAsking({ d, lane })
@@ -153,10 +171,43 @@ export function StagesView({ items, stages, canEdit, me, selected, onToggle, onO
         </DragOverlay>
       </DndContext>
 
+      <Dialog open={!!skipping} onOpenChange={(o) => !o && setSkipping(null)}>
+        <DialogContent title="Does this need a review?" description={skipping ? `${skipping.d.title} has not been checked yet.` : ''}>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!skipping) return
+                const { d, lane } = skipping
+                setSkipping(null)
+                land(d, lane)
+              }}
+            >
+              No, move to {skipping?.lane.label}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!skipping) return
+                const { d, review } = skipping
+                setSkipping(null)
+                land(d, review)
+              }}
+            >
+              Yes, send to {skipping?.review.label}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!asking} onOpenChange={(o) => !o && setAsking(null)}>
         <DialogContent
           title={asking ? `Move to ${asking.lane.label}` : ''}
-          description="Paste the link that went to the client, if there is one. It stays on the deliverable."
+          description={
+            asking?.lane.code === 'with_client' || asking?.lane.status === 'completed'
+              ? 'Paste the link that went to the client, if there is one. It stays on the deliverable.'
+              : 'Paste the link to the work, if there is one. It stays on the deliverable.'
+          }
           className="max-w-md"
         >
           <form

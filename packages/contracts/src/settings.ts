@@ -206,6 +206,19 @@ export const updateMyProfileRequest = z.object({
 })
 export type UpdateMyProfileRequest = z.input<typeof updateMyProfileRequest>
 
+/**
+ * Where to send a member's pay, entered by whoever pays the team -- for
+ * someone with no login, or who sent it on WhatsApp. Same checks as the
+ * person's own form. Blank clears a field.
+ */
+export const setPayToRequest = updateMyProfileRequest.pick({
+  upi_id: true,
+  bank_account_name: true,
+  bank_account_number: true,
+  bank_ifsc: true,
+})
+export type SetPayToRequest = z.input<typeof setPayToRequest>
+
 /** Owner view: each member's gaps (field names only, never values). */
 export const teamProfileGap = z.object({ user_id: z.string().uuid(), percent: z.number().int(), missing: profileField.array() })
 export type TeamProfileGap = z.infer<typeof teamProfileGap>

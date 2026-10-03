@@ -262,7 +262,7 @@ export function InvoicePaper({
         <div className="mt-6 flex flex-col-reverse gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-sm text-sm">
             <Caption>Total in words</Caption>
-            <p className="mt-1 font-medium italic text-slate-800">Indian Rupee {amountInWords(invoice.total)} only</p>
+            <p className="mt-1 font-medium italic text-slate-800">{amountInWords(invoice.total)} only</p>
             {invoice.notes && (
               <div className="mt-4">
                 <Caption>Notes</Caption>

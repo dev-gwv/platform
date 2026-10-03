@@ -1,6 +1,6 @@
 import type { BoardDeliverable, DeliverableStage, StepKey } from '@ipc/contracts'
 import { stageOf, todayIso } from '@/features/projects/deliverable-stage'
-import { STEP_LABEL, STEP_TONE, stagesIn, stepsFor, toneOf, type DeliveryFlow, type StageTone } from '@/features/projects/stages'
+import { STEP_LABEL, STEP_TONE, forwardPath, stagesIn, stepsFor, toneOf, type DeliveryFlow, type StageTone } from '@/features/projects/stages'
 
 /**
  * The production board's arithmetic, kept out of the components so it can be
@@ -52,6 +52,40 @@ export function lanesFor(stages: readonly DeliverableStage[], flow: DeliveryFlow
     }
   }
   return lanes
+}
+
+/**
+ * The lane where review starts: the first review stop on the road forward
+ * ("With manager", or a plain Review). Null in a Simple studio, which has none.
+ */
+export function reviewLane(lanes: readonly Lane[], stages: readonly DeliverableStage[], flow: DeliveryFlow = 'full'): Lane | null {
+  if (flow !== 'full') return null
+  const stop = forwardPath(stages, flow).find((p) => p.status === 'review')
+  return stop ? (lanes.find((l) => l.status === stop.status && l.code === stop.code) ?? null) : null
+}
+
+/**
+ * Would this move jump over review? Work not yet checked (To do, Editing,
+ * Changes requested) going past the first review stop -- to Approved, With
+ * client or Delivered -- in a studio that checks before it goes. The board
+ * asks before it does that, so a drag that lands a column too far never
+ * skips the check by accident.
+ */
+export function skipsReview(
+  d: Pick<BoardDeliverable, 'status'>,
+  to: Pick<Lane, 'status' | 'code'>,
+  stages: readonly DeliverableStage[],
+  flow: DeliveryFlow = 'full',
+): boolean {
+  if (flow !== 'full') return false
+  const from = stageOf(d.status)
+  if (from !== 'pending' && from !== 'in_progress') return false
+  if (to.status === 'completed') return true
+  if (to.status !== 'review') return false
+  const path = forwardPath(stages, flow)
+  const first = path.findIndex((p) => p.status === 'review')
+  const at = path.findIndex((p) => p.status === to.status && p.code === (to.code ?? null))
+  return first >= 0 && at > first
 }
 
 /**

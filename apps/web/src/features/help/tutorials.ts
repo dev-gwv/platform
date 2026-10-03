@@ -27,10 +27,15 @@ export const TUTORIALS: readonly Tutorial[] = [
   { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 53, section: 'Clients & sales', pages: ['/follow-ups'] },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 43, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/] },
   { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 41, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'] },
-  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 32, section: 'Editing', pages: ['/production-board'] },
+  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 32, section: 'Editing', pages: [] },
+  { key: 'board', title: 'Run the production board', blurb: 'Every edit by stage, late work first.', seconds: 49, section: 'Editing', pages: ['/production-board'] },
+  { key: 'team-day', title: "Your team's day", blurb: 'What a team member sees and taps on their own login.', seconds: 40, section: 'Team', pages: ['/my-work'] },
   { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 38, section: 'Money', pages: ['/billing/payments'] },
   { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 34, section: 'Money', pages: ['/team-payouts'] },
+  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices'] },
+  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 50, section: 'Money', pages: ['/company-expenses'] },
   { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 43, section: 'Team', pages: ['/settings/attendance-location', '/attendance'] },
+  { key: 'leave', title: 'Leave and balances', blurb: 'Days a year, asked, approved -- and what is left.', seconds: 39, section: 'Team', pages: ['/leave'] },
 ]
 
 const matches = (page: string | RegExp, path: string) =>
@@ -70,4 +75,4 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance']
+export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave']
