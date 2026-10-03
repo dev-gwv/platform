@@ -58,6 +58,8 @@ import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
+import { useDetailsStatus } from '@/features/wishes/api'
+import { FromTheClient } from '@/features/wishes/FromTheClient'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 import { useINR } from '@/shared/money/MoneyMask'
 import { clockOfInstant, shortDayLabel } from '@/shared/ui/time-format'
@@ -162,6 +164,7 @@ export function ShootsTab({
       setAddOpen(false)
       void qc.invalidateQueries({ queryKey: ['shoots'] })
       void qc.invalidateQueries({ queryKey: ['projects'] })
+      void qc.invalidateQueries({ queryKey: ['client-details', 'project', projectId] })
     },
     onError: (e: Error) => toast.error(e.message),
     onSettled: () => setPending(null),
@@ -187,6 +190,7 @@ export function ShootsTab({
     return (short ?? data[0])?.id ?? null
   }, [focusAssign, data, slots.data])
 
+  const details = useDetailsStatus(projectId, canEdit)
   const hasShoots = (data?.length ?? 0) > 0
   const chipsOpen = canEdit && !isLoading && (!hasShoots || addOpen)
 
@@ -207,6 +211,9 @@ export function ShootsTab({
         </div>
       )}
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
+      {canEdit && (details.data?.waiting.length ?? 0) > 0 && (
+        <FromTheClient events={details.data!.waiting} busy={create.isPending} onAdd={(e) => create.mutate(e)} />
+      )}
 
       {chipsOpen && (
         <section aria-labelledby="add-events" className="rounded-xl border border-border bg-card p-4">

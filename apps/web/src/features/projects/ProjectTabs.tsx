@@ -1,5 +1,6 @@
 import {
   Banknote,
+  Cake,
   Calculator,
   Camera,
   CheckSquare,
@@ -45,6 +46,8 @@ export const PROJECT_TABS = [
   // page of its own in the sidebar (Data & Backup, Referrals).
   { value: 'data', label: 'Data', icon: Database },
   { value: 'referrals', label: 'Referrals', icon: Gift },
+  // The client's birthdays and anniversary, and the wish for each (0243).
+  { value: 'wishes', label: 'Wishes', icon: Cake },
 ] as const
 export type ProjectTab = (typeof PROJECT_TABS)[number]['value']
 
@@ -62,7 +65,9 @@ export const PROJECT_GROUPS = [
   { value: 'terms', label: 'Terms', icon: FileSignature, views: ['terms'] },
   { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs', 'payouts'] },
   { value: 'data', label: 'Data', icon: Database, views: ['data'] },
-  { value: 'referrals', label: 'Referrals', icon: Gift, views: ['referrals'] },
+  // Keeping the client close: their wishes, and the friends they send. Still
+  // eight across the top; ?tab=referrals opens here as before.
+  { value: 'wishes', label: 'Wishes', icon: Cake, views: ['wishes', 'referrals'] },
 ] as const satisfies ReadonlyArray<{ value: string; label: string; icon: LucideIcon; views: readonly ProjectTab[] }>
 export type ProjectGroup = (typeof PROJECT_GROUPS)[number]['value']
 
@@ -90,7 +95,8 @@ export function visibleViews(
       (v !== 'data' || can.action('projects', 'edit')) &&
       (v !== 'costs' || can.action('projects', 'edit')) &&
       (v !== 'payouts' || can.module('team_payouts')) &&
-      (v !== 'referrals' || can.module('referrals')),
+      (v !== 'referrals' || can.module('referrals')) &&
+      (v !== 'wishes' || can.action('clients', 'view')),
   )
 }
 

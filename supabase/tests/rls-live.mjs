@@ -2915,6 +2915,77 @@ if (listed) {
   check('plans: the home page lists no plan until they are switched on', pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 0, pubJson)
 }
 
+// ── 0243: a client's birthdays and anniversary ───────────────────
+{
+  const cl = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Wish Test Couple', phone: '9811122233' } })
+  const cid = cl.json?.id ?? cl.json?.existing_client?.id
+  const bday = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Priya', month: 3, day: 14 } })
+  const ann = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 12, day: 12, year: 2026 } })
+  const twice = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 1, day: 1 } })
+  const feb31 = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Rahul', month: 2, day: 31 } })
+  check(
+    'wishes: a client keeps a birthday and one anniversary; a second anniversary or 31 Feb is refused in words',
+    bday.status === 201 && ann.status === 201 && twice.status === 409 && feb31.status === 422,
+    { bday: bday.status, ann: ann.status, twice: twice.json, feb31: feb31.json },
+  )
+  const list = await api(`/wishes/client/${cid}`, { token: aToken })
+  const off = await api(`/wishes/occasions/${bday.json?.id}`, { token: aToken, method: 'PATCH', body: { wish: false } })
+  const upcoming = await api('/wishes/upcoming?days=366', { token: aToken })
+  check(
+    'wishes: the dates list, a wish switched off drops out of what is coming',
+    list.status === 200 && list.json.length === 2 && off.json?.wish === false &&
+      upcoming.status === 200 && !upcoming.json.some((u) => u.id === bday.json?.id) && upcoming.json.some((u) => u.id === ann.json?.id),
+    { list: list.json, upcoming: upcoming.json },
+  )
+}
+
+// ── 0244: the details form a client fills ────────────────────────
+{
+  const cl = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Form Couple', phone: '9822233344' } })
+  const cid = cl.json?.id ?? cl.json?.existing_client?.id
+  const pr = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Form Couple Wedding', client_id: cid, package_cost: 1000 } })
+  const link = await api(`/client-details/projects/${pr.json?.id}`, { token: aToken, method: 'POST' })
+  const raw = /\/details\/([^/?#]+)$/.exec(link.json?.url ?? '')?.[1] ?? ''
+  const form = await api(`/public/details/${raw}`)
+  const sent = await api(`/public/details/${raw}`, {
+    method: 'POST',
+    body: {
+      name: 'Form Couple', partner_name: 'Rahul', birthday: { day: 3, month: 4 }, wedding: { day: 9, month: 12, year: 2026 },
+      events: [{ name: 'Haldi', date: '2026-12-08', start_time: '10:00', hours: 3 }, { name: 'Wedding', date: '2026-12-09' }],
+    },
+  })
+  const dates = await api(`/wishes/client/${cid}`, { token: aToken })
+  const again = await api(`/public/details/${raw}`, { method: 'POST', body: { name: 'Form Couple', events: [{ name: 'Reception', date: '2026-12-10' }] } })
+  const status = await api(`/client-details/projects/${pr.json?.id}`, { token: aToken })
+  check(
+    'details form: a project link prefills, fills the dates and the days, and a later send waits on the Shoots tab',
+    link.status === 201 && raw.length > 40 && form.status === 200 && form.json?.kind === 'project' &&
+      sent.status === 200 && sent.json?.days_added === 2 && dates.json?.length === 2 &&
+      again.json?.events_waiting === 1 && status.json?.waiting?.[0]?.name === 'Reception',
+    { link: link.status, form: form.status, sent: sent.json, dates: dates.json?.length, again: again.json, status: status.json },
+  )
+
+  const studio = await api('/client-details/studio', { token: aToken })
+  const code = /\/details\/([^/?#]+)$/.exec(studio.json?.url ?? '')?.[1] ?? ''
+  const noPhone = await api(`/public/details/${code}`, { method: 'POST', body: { name: 'QR Client' } })
+  const made = await api(`/public/details/${code}`, { method: 'POST', body: { name: 'QR Client', phone: '9833344455', events: [{ name: 'Sangeet', date: '2027-02-01' }] } })
+  const bad = await api('/public/details/not-a-real-link', { method: 'POST', body: { name: 'X', phone: '9000000000' } })
+  const empEmail = `details-emp-${rand()}@example.com`
+  const inv = await api('/team/invitations', { token: aToken, method: 'POST', body: { name: 'Details Employee', email: empEmail, role: 'employee' }, ip: '10.44.0.1' })
+  const joined = await api('/auth/accept-invite', {
+    method: 'POST',
+    ip: '10.44.0.1',
+    body: { token: /[?&]token=([^&]+)/.exec(inv.json.invite_link ?? '')?.[1] ?? '', password: 'Employee12345!' },
+  })
+  const staffMint = await api(`/client-details/projects/${pr.json?.id}`, { token: joined.json?.access_token, method: 'POST' })
+  check(
+    'details form: the studio QR makes a client and a project, needs a phone; a wrong link is 404; staff cannot make links',
+    studio.status === 200 && code.length >= 8 && noPhone.status === 422 && made.status === 200 &&
+      made.json?.project_made === true && made.json?.days_added === 1 && bad.status === 404 && staffMint.status === 403,
+    { studio: studio.status, noPhone: noPhone.json, made: made.json, bad: bad.status, staff: staffMint.status, inv: inv.status, joined: joined.status, j: joined.json },
+  )
+}
+
 // ── 0198: overdue alerts and the morning email ───────────────────
 {
   const dry = await fetch(`${API}/cron/reminders?dry=1`, {

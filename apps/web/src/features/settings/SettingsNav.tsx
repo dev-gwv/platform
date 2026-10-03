@@ -111,6 +111,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     items: [
       { to: '/settings/messaging', label: 'Messaging', icon: Bell, module: 'settings' },
       { to: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle, module: 'settings' },
+      { to: '/settings/client-form', label: 'Client details form', icon: ClipboardList, module: 'clients' },
     ],
   },
   {

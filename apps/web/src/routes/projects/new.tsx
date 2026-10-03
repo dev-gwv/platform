@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  ClipboardList,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -336,6 +337,36 @@ function NewProject() {
     }
   }
 
+  /**
+   * "Send them a form" (0244): the studio types only the project, a name and a
+   * phone; the project is made now and opens with the details form ready to
+   * send, and the client fills the rest -- their dates and their events.
+   */
+  async function sendForm() {
+    setError(null)
+    if (!draft.name.trim()) return setError('Add the project name first.')
+    if (!draft.client_id && (!draft.new_client_name.trim() || !draft.new_client_phone.trim()))
+      return setError('Add the client’s name and phone first.')
+    setBusy(true)
+    try {
+      let clientId = draft.client_id
+      if (!clientId) {
+        const { toNewClientRequest } = await import('@/features/projects/wizard')
+        const created = await createClient.mutateAsync(toNewClientRequest(draft))
+        clientId = created.id
+        patch({ client_id: created.id })
+      }
+      const { id } = await createProject.mutateAsync(toProjectRequest({ ...draft, deliverables: [], payments: [] }, clientId))
+      clearDraft()
+      if (fromSetup) void closeSetup('done')
+      void navigate({ to: '/projects/$id', params: { id }, search: { details: '1' } as never })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the project.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const invalid = useMemo(
     () => new Set(WIZARD_STEPS.filter((s) => visited.has(s) && errors[s])),
     [visited, errors],
@@ -383,7 +414,7 @@ function NewProject() {
 
       <div ref={sectionRef} className="mt-3 scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
-          {step === 'client' && <ClientStep draft={draft} patch={patch} />}
+          {step === 'client' && <ClientStep draft={draft} patch={patch} onSendForm={busy ? undefined : () => void sendForm()} />}
           {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
           {step === 'deliverables' && (
             <DeliverablesStep draft={draft} patch={patch} />
@@ -567,7 +598,7 @@ function Field({
   )
 }
 
-function ClientStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
+function ClientStep({ draft, patch, onSendForm }: { draft: ProjectDraft; patch: Patch; onSendForm?: (() => void) | undefined }) {
   const { data: clients } = useClients()
   const [mode, setMode] = useState<'existing' | 'new'>(draft.new_client_name ? 'new' : 'existing')
   const [q, setQ] = useState('')
@@ -595,7 +626,14 @@ function ClientStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
       />
 
       <div>
-        <Label>Client</Label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label>Client</Label>
+          {onSendForm && (draft.client_id || (draft.new_client_name.trim() && draft.new_client_phone.trim())) && (
+            <Button type="button" size="sm" variant="outline" onClick={onSendForm}>
+              <ClipboardList className="size-4" /> Send them a form
+            </Button>
+          )}
+        </div>
         <div className="mt-2 inline-flex gap-1 rounded-lg bg-muted p-1">
           {(['existing', 'new'] as const).map((m) => (
             <button
