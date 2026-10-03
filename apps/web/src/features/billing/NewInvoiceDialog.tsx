@@ -90,7 +90,9 @@ export function NewInvoiceDialog({
               ? `${made.invoice_number} saved as a draft. Send it when you are ready.`
               : req.payment
                 ? `${made.invoice_number} saved, and the payment is recorded.`
-                : `${made.invoice_number} saved. Share it on WhatsApp or email.`,
+                : next
+                  ? `${made.invoice_number} saved. Next, ${next.label.toLowerCase()}.`
+                  : `${made.invoice_number} saved. Share it on WhatsApp or email.`,
             next ? { action: { label: next.label, onClick: next.onClick }, duration: 10_000 } : undefined,
           )
           onClose()

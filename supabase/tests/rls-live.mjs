@@ -1556,6 +1556,9 @@ if (listed) {
       lvRow?.status === 'approved' && !!lvRow?.decided_by_name,
     { bad: lvBad.status, ask: lvAsk.status, twice: lvTwice.status, self: lvSelf.status, other: lvOther.status, noNote: lvNoNote.status, ok: lvOk.status, row: lvRow },
   )
+  const lvBell = await api('/notifications?type=leave.requested', { token: aToken })
+  const lvAlert = (lvBell.json?.items ?? lvBell.json ?? []).find((n) => n.entity_id === lvAsk.json.id)
+  check('leave: once decided, the "asked for leave" alert reads as read', !!lvAlert && !!lvAlert.read_at, { status: lvBell.status, alert: lvAlert })
   const lvRoster = await api(`/hr/attendance?date=${lvDay}`, { token: aToken })
   const lvEdRow = (lvRoster.json ?? []).find((r) => r.user_id === edUid)
   check('leave: the roster marks the member on leave that day', lvEdRow?.on_leave === true, { row: lvEdRow })

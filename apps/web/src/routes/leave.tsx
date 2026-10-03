@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { CalendarOff, Check, Clock3, Plus, Trash2, X } from 'lucide-react'
 import type { AttendanceCorrection, LeaveKind, LeaveRequest } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -102,8 +103,10 @@ function Leave() {
 
 // ── mine ─────────────────────────────────────────────────────────
 function MyLeave() {
+  const { session } = useAuth()
   const leave = useLeave('mine')
-  const balances = useLeaveBalances()
+  // Your own balance only: for an owner or manager the plain read is everyone's.
+  const balances = useLeaveBalances(session?.user_id ?? null)
   const fixes = useCorrections('mine')
   const cancel = useCancelLeave()
   const confirm = useConfirm()
@@ -215,8 +218,9 @@ function MyLeave() {
 }
 
 function AskLeaveDialog({ onClose }: { onClose: () => void }) {
+  const { session } = useAuth()
   const ask = useAskLeave()
-  const balances = useLeaveBalances()
+  const balances = useLeaveBalances(session?.user_id ?? null)
   const today = todayIST()
   const [kind, setKind] = useState<LeaveKind>('casual')
   const [from, setFrom] = useState(today)

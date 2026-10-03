@@ -32,7 +32,10 @@ export const TUTORIALS: readonly Tutorial[] = [
   { key: 'team-day', title: "Your team's day", blurb: 'What a team member sees and taps on their own login.', seconds: 40, section: 'Team', pages: ['/my-work'] },
   { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 38, section: 'Money', pages: ['/billing/payments'] },
   { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 34, section: 'Money', pages: ['/team-payouts'] },
+  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices'] },
+  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 50, section: 'Money', pages: ['/company-expenses'] },
   { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 43, section: 'Team', pages: ['/settings/attendance-location', '/attendance'] },
+  { key: 'leave', title: 'Leave and balances', blurb: 'Days a year, asked, approved -- and what is left.', seconds: 39, section: 'Team', pages: ['/leave'] },
 ]
 
 const matches = (page: string | RegExp, path: string) =>
@@ -72,4 +75,4 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day']
+export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave']
