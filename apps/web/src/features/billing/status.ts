@@ -4,6 +4,8 @@
  * it is a sent invoice with money still owed after its due date.
  */
 
+import { todayInIndia } from '@/shared/ui/days-left'
+
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
 interface InvoiceLike {
@@ -12,7 +14,8 @@ interface InvoiceLike {
   due_date: string | null
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+/** India's today: the UTC date is still yesterday until 5:30 am IST (an invoice read one day less late here than on Payments received). */
+const today = () => todayInIndia()
 
 export function isOverdue(inv: InvoiceLike, on = today()): boolean {
   return inv.balance_due > 0 && inv.status !== 'cancelled' && inv.status !== 'draft' && !!inv.due_date && inv.due_date < on

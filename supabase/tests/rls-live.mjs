@@ -3701,6 +3701,87 @@ if (listed) {
   )
 }
 
+// ── Getting started: each step is read from the studio's own data ──
+{
+  const gs = await api('/settings/getting-started', { token: aToken })
+  check(
+    'getting started: the studio with leads, bookings and quotations has those steps ticked',
+    gs.status === 200 && gs.json.enquiry === true && gs.json.booking === true && gs.json.quotation === true &&
+      typeof gs.json.started_at === 'string',
+    gs.json,
+  )
+}
+
+// ── Help (0236): anyone can read it, only a platform admin changes it ──
+{
+  const open = await api('/public/help')
+  check(
+    'help: signed out, /public/help answers with the questions studios ask',
+    open.status === 200 && Array.isArray(open.json.faqs) && open.json.faqs.length > 0 && Array.isArray(open.json.videos) &&
+      'support_whatsapp' in open.json,
+    { status: open.status, faqs: open.json.faqs?.length },
+  )
+  const read = await api('/platform/help', { token: aToken })
+  const write = await api('/platform/help/contacts', { token: aToken, method: 'PUT', body: { support_whatsapp: '919999999999', support_email: null } })
+  const faq = await api('/platform/help/faqs', { token: aToken, method: 'POST', body: { question: 'Is this mine?', answer: 'No.' } })
+  const anon = await api('/platform/help/faqs', { method: 'POST', body: { question: 'Is this mine?', answer: 'No.' } })
+  check(
+    'help: a studio owner cannot read or change the Help console (403), signed out is 401',
+    read.status === 403 && write.status === 403 && faq.status === 403 && anon.status === 401,
+    { read: read.status, write: write.status, faq: faq.status, anon: anon.status },
+  )
+}
+
+// ── A lead's quote on the studio's letterhead: the public link carries it ──
+{
+  await api('/settings/company', { token: aToken, method: 'PATCH', body: { invoice_phone: '022 4000 1234' } })
+  const lead = await api('/crm/leads', { token: aToken, method: 'POST', body: { name: `Letterhead ${rand()}`, phone: randPhone() } })
+  const q = await api('/crm/quotes', {
+    token: aToken,
+    method: 'POST',
+    body: { lead_id: lead.json.lead?.id, title: 'Wedding cover', lines: [{ description: 'Candid photography', quantity: 1, rate: 85000, gst_rate: 18 }] },
+  })
+  const sent = await api(`/crm/quotes/${q.json.id}/send`, { token: aToken, method: 'POST', body: {} })
+  const tok = new URL(sent.json.url ?? '/', 'http://x').searchParams.get('token')
+  const pub = await api(`/public/quote/${encodeURIComponent(tok ?? '')}`)
+  check(
+    "lead quote: the client's link carries the studio's letterhead (name, phone, issued date)",
+    pub.status === 200 && typeof pub.json.letterhead?.name === 'string' && pub.json.letterhead?.phone === '022 4000 1234' &&
+      typeof pub.json.letterhead?.issued_at === 'string',
+    { q: q.status, sent: sent.status, pub: pub.status, head: pub.json.letterhead },
+  )
+}
+
+// ── Refer a studio (0237): a studio that signs up with a code is listed for the one that sent it ──
+{
+  const mine = await api('/studio-referrals', { token: aToken })
+  const name = `Referred ${rand()}`
+  const ip = `198.51.100.${1 + Math.floor(Math.random() * 250)}`
+  const reg = await api('/auth/register', {
+    ip,
+    method: 'POST',
+    body: { company_name: name, admin_name: 'Bina', email: `ref-${rand()}@madeup.test`, phone: randPhone(), password: 'Testpass12345!', studio_ref: mine.json.code },
+  })
+  const bad = await api('/auth/register', {
+    ip,
+    method: 'POST',
+    body: { company_name: `Bad ref ${rand()}`, admin_name: 'Chitra', email: `ref-${rand()}@madeup.test`, phone: randPhone(), password: 'Testpass12345!', studio_ref: 'NOPE0000' },
+  })
+  const after = await api('/studio-referrals', { token: aToken })
+  check(
+    'refer a studio: the owner has a link, and a studio that signs up with the code shows on their list (a wrong code still signs up)',
+    mine.status === 200 && /\?studio_ref=[A-Z0-9]{8}$/.test(mine.json.link) && reg.status === 200 && bad.status === 200 &&
+      after.json.referrals?.some((r) => r.studio_name === name && r.paid_at === null),
+    { mine: mine.status, reg: reg.status, bad: bad.status, list: after.json.referrals?.length },
+  )
+  const console_ = await api('/platform/studio-referrals', { token: aToken })
+  const terms = await api('/platform/studio-referrals/terms', { token: aToken, method: 'PUT', body: { reward: 1, discount_pct: null, hold_days: null } })
+  check('refer a studio: a studio owner cannot open the platform console or set the terms (403)', console_.status === 403 && terms.status === 403, {
+    console: console_.status,
+    terms: terms.status,
+  })
+}
+
 // ── Simple delivery (0234): handed in is delivered; a Full studio always reviews ──
 {
   const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`

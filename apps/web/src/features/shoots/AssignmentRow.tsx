@@ -8,7 +8,7 @@ import { Input, Label } from '@/shared/ui/input'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useSetSlotData } from '@/features/allocation/api'
 import { SendTermsDialog } from '@/features/team-terms/SendTermsDialog'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
@@ -47,6 +47,7 @@ export function AssignmentRow({
   /** Their latest terms for this shoot: undefined when the studio does not use team terms, null when none were sent. */
   terms?: TeamTermsSend | null | undefined
 }) {
+  const inr = useINR()
   const [editing, setEditing] = useState(false)
   const [optingOut, setOptingOut] = useState(false)
   const setSlotData = useSetSlotData()
@@ -112,7 +113,7 @@ export function AssignmentRow({
       </div>
 
       <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
-        {payout != null ? formatINR(payout) : 'No payout'}
+        {payout != null ? inr(payout) : 'No payout'}
       </span>
 
       {canEdit && (

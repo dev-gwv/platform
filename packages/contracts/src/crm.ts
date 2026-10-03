@@ -1790,6 +1790,22 @@ export const publicQuote = z.object({
   client_name: z.string().nullable(),
   items: z.array(quoteItem),
   expired: z.boolean(),
+  /** The studio's letterhead, so the client's copy is on the studio's paper. */
+  letterhead: z
+    .object({
+      name: z.string(),
+      legal_name: z.string().nullable(),
+      logo_url: z.string().nullable(),
+      gstin: z.string().nullable(),
+      phone: z.string().nullable(),
+      email: z.string().nullable(),
+      website: z.string().nullable(),
+      address: z.string().nullable(),
+      footer_note: z.string().nullable(),
+      brand_color: z.string().nullable(),
+      issued_at: isoDateTime.nullable(),
+    })
+    .nullish(),
 })
 export type PublicQuote = z.infer<typeof publicQuote>
 

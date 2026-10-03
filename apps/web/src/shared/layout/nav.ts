@@ -5,6 +5,8 @@ import { MY_TIME, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } fr
 import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import {
   BarChart3,
+  Gift,
+  LifeBuoy,
   Mail,
   MapPin,
   Gauge,
@@ -225,6 +227,8 @@ export const NAV: NavEntry[] = [
       leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),
       leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
       leaf('Email', '/platform/email', Mail, { platformOnly: true }),
+      leaf('Help', '/platform/help', LifeBuoy, { platformOnly: true }),
+      leaf('Studio referrals', '/platform/studio-referrals', Gift, { platformOnly: true }),
       leaf('Payments to check', '/platform/payments', CreditCard, { platformOnly: true }),
     ],
   },

@@ -30,7 +30,7 @@ import { ErrorState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { useProfitAndLoss } from '@/features/financials/api'
 import { collectedLine, marginOf, toCollectLine } from '@/features/projects/money-lines'
@@ -56,6 +56,7 @@ import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
 import type { JourneyKey } from '@/features/projects/journey'
+import { Money, useAmountsHidden, useINR } from '@/shared/money/MoneyMask'
 
 type Tab = Exclude<ProjectTab, 'quotation'>
 
@@ -103,6 +104,8 @@ export function ProjectDetailPage() {
 }
 
 function ProjectDetail() {
+  // Re-render on the hide switch: toCollectLine formats with screenINR.
+  useAmountsHidden()
   const { id } = useParams({ from: '/authed/projects/$id' })
   const navigate = useNavigate()
   const { data, isLoading, isError, refetch } = useProject(id)
@@ -330,13 +333,13 @@ function ProjectDetail() {
       </div>
 
       {seesMoney && (
-        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
-          <Figure icon={IndianRupee} label="Project value" value={formatINR(data.total_cost)} />
-          <Figure icon={CircleCheck} label="Received" value={formatINR(received)} tone="success" sub={collectedLine(money)} />
+        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3')}>
+          <Figure icon={IndianRupee} label="Project value" value={<Money value={data.total_cost} />} />
+          <Figure icon={CircleCheck} label="Received" value={<Money value={received} />} tone="success" sub={collectedLine(money)} />
           <Figure
             icon={Clock}
             label="Still to collect"
-            value={formatINR(balance)}
+            value={<Money value={balance} />}
             sub={toCollectLine(money)}
             tone={balance > 0 ? 'warning' : 'success'}
             action={
@@ -458,7 +461,7 @@ function Figure({
 }: {
   icon: typeof Clock
   label: string
-  value: string
+  value: ReactNode
   /** One plain line under the label: "20% collected". */
   sub?: string | undefined
   tone?: 'success' | 'warning' | 'info' | 'danger'
@@ -466,7 +469,9 @@ function Figure({
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
+      {/* Figures and their lines wrap rather than truncate: at 1280px with
+          the sidebar open "₹2,8…" and "Still to co…" said nothing. */}
+      <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3 sm:p-4">
         <span
           className={cn(
             'hidden size-10 shrink-0 sm:flex items-center justify-center rounded-lg',
@@ -481,12 +486,12 @@ function Figure({
         >
           <Icon className="size-5" aria-hidden />
         </span>
-        <div className="min-w-0">
-          <p className={cn('truncate text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-destructive')}>{value}</p>
-          <p className="truncate text-xs text-muted-foreground sm:text-sm">{label}</p>
-          {sub && <p className="truncate text-xs text-muted-foreground" title={sub}>{sub}</p>}
+        <div className="min-w-0 flex-1 basis-28">
+          <p className={cn('whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-destructive')}>{value}</p>
+          <p className="text-xs leading-snug text-muted-foreground sm:text-sm">{label}</p>
+          {sub && <p className="text-xs leading-snug text-muted-foreground">{sub}</p>}
         </div>
-        {action && <div className="shrink-0 sm:ml-auto sm:self-end">{action}</div>}
+        {action && <div className="shrink-0 self-end">{action}</div>}
       </CardContent>
     </Card>
   )
@@ -507,6 +512,7 @@ function EditProjectDialog({
   showQuotation: boolean
   received: number
 }) {
+  const inr = useINR()
   const update = useUpdateProject(id)
   const confirm = useConfirm()
   const [open, setOpen] = useState(false)
@@ -565,7 +571,7 @@ function EditProjectDialog({
     e.preventDefault()
     if (belowReceived) {
       const yes = await confirm({
-        title: `New total is below ${formatINR(received)} already received?`,
+        title: `New total is below ${inr(received)} already received?`,
         description: 'The package no longer covers the money recorded. Continue anyway?',
         confirmLabel: 'Save anyway',
       })
@@ -622,7 +628,7 @@ function EditProjectDialog({
           </div>
           {belowReceived && (
             <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-              Received {formatINR(received)} already exceeds this package. Review the Billing tab
+              Received {inr(received)} already exceeds this package. Review the Billing tab
               after saving.
             </p>
           )}

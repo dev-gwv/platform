@@ -1105,14 +1105,14 @@ export const billingRouter = new Hono<AppEnv>()
         // project's own figures untouched, which is the split this replaced.
         const projectId = d.project_id ?? invoiceProject ?? null
         const clientId = d.client_id ?? projectClient ?? invoiceClient ?? null
-        const dateReceived = d.date_received ?? new Date().toISOString().slice(0, 10)
+        const dateReceived = d.date_received ?? todayInIndia()
         const gst = (d.gst_number ?? '').trim() || null
         const made = await sql<{ id: string }[]>`
           insert into received_payments
-            (company_id, project_id, invoice_id, client_id, amount, description, status, is_gst, gst_number, date_received, file_url, paid_on, recorded_by)
+            (company_id, project_id, invoice_id, client_id, amount, description, status, is_gst, gst_number, date_received, file_url, paid_on, mode, recorded_by)
           values (${auth.companyId}, ${projectId}, ${d.invoice_id ?? null}, ${clientId}, ${d.amount},
                   ${d.description?.trim() || null}, ${d.status}, ${d.is_gst}, ${gst},
-                  ${dateReceived}, ${d.file_url?.trim() || null}, ${dateReceived}, ${auth.userId})
+                  ${dateReceived}, ${d.file_url?.trim() || null}, ${dateReceived}, ${d.mode?.trim() || null}, ${auth.userId})
           returning id`
         return made[0] ?? null
       }),
@@ -1162,7 +1162,8 @@ export const billingRouter = new Hono<AppEnv>()
             gst_number = ${nextIsGst ? nextGst : null},
             date_received = coalesce(${d.date_received ?? null}, date_received),
             paid_on = coalesce(${d.date_received ?? null}, paid_on),
-            file_url = ${d.file_url !== undefined ? (d.file_url?.trim() || null) : sql`file_url`}
+            file_url = ${d.file_url !== undefined ? (d.file_url?.trim() || null) : sql`file_url`},
+            mode = ${d.mode !== undefined ? (d.mode?.trim() || null) : sql`mode`}
           where id = ${id} and company_id = ${auth.companyId}`
         return 'ok' as const
       }),

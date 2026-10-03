@@ -8,9 +8,10 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { RoleTile } from '@/shared/ui/icon-tile'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { PAY_STATE_LABEL, payState, useProjectPayouts } from '@/features/team-payouts/pay'
 import { PayDialog } from '@/features/team-payouts/PayDialog'
+import { useINR } from '@/shared/money/MoneyMask'
+import { screenINR } from '@/shared/money/hide'
 
 const day = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : null
@@ -23,8 +24,8 @@ export function payoutsSentence(rows: readonly Pick<ProjectPayoutRow, 'user_id' 
   const owed = new Set(rows.filter((r) => r.amount - r.paid > 0.001).map((r) => r.user_id)).size
   const unset = rows.filter((r) => r.amount <= 0 && r.paid <= 0).length
   const parts = [
-    due > 0 ? `${formatINR(due)} still to pay ${owed} ${owed === 1 ? 'person' : 'people'}` : 'Everyone with a payout is paid',
-    paid > 0 ? `${formatINR(paid)} paid` : null,
+    due > 0 ? `${screenINR(due)} still to pay ${owed} ${owed === 1 ? 'person' : 'people'}` : 'Everyone with a payout is paid',
+    paid > 0 ? `${screenINR(paid)} paid` : null,
     unset > 0 ? `${unset} ${unset === 1 ? 'booking has' : 'bookings have'} no payout set` : null,
   ]
   return parts.filter(Boolean).join(' · ') + '.'
@@ -36,6 +37,7 @@ export function payoutsSentence(rows: readonly Pick<ProjectPayoutRow, 'user_id' 
  * the moment most studios settle a freelancer.
  */
 export function PayoutsTab({ projectId }: { projectId: string }) {
+  const inr = useINR()
   const q = useProjectPayouts(projectId)
   const [paying, setPaying] = useState<ProjectPayoutRow | null>(null)
 
@@ -75,9 +77,9 @@ export function PayoutsTab({ projectId }: { projectId: string }) {
                     </span>
                   )}
                   <div className="min-w-[7rem] text-right">
-                    <p className="text-sm font-semibold tabular-nums">{r.amount > 0 ? formatINR(r.amount) : '—'}</p>
+                    <p className="text-sm font-semibold tabular-nums">{r.amount > 0 ? inr(r.amount) : '—'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {state === 'part' ? `${formatINR(r.paid)} paid` : r.cost_status !== 'final' && r.amount > 0 ? 'not final' : ' '}
+                      {state === 'part' ? `${inr(r.paid)} paid` : state !== 'paid' && r.cost_status !== 'final' && r.amount > 0 ? 'not final' : ' '}
                     </p>
                   </div>
                   <span
@@ -93,7 +95,7 @@ export function PayoutsTab({ projectId }: { projectId: string }) {
                   </span>
                   {state !== 'paid' ? (
                     <Button size="sm" className={cn(r.data_in && owed > 0 && 'ipc-nudge')} onClick={() => setPaying(r)}>
-                      {owed > 0 ? `Pay ${formatINR(owed)}` : 'Set payout'}
+                      {owed > 0 ? `Pay ${inr(owed)}` : 'Set payout'}
                     </Button>
                   ) : (
                     <Button size="sm" variant="outline" onClick={() => setPaying(r)}>

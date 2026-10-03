@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { CrmStats } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { TONE_BG, TONE_CHIP, type ToneName } from '@/shared/ui/tones'
 import { prettyWord, useLookupColor } from '../fields'
 import { bucketSeries, followUpSentence, qualityRows, type Bucket } from '../report-model'
@@ -58,15 +58,16 @@ function FollowUpCard({ h }: { h: CrmStats['follow_up_health'] }) {
 }
 
 function PipelineCard({ data }: { data: CrmStats }) {
+  const inr = useINR()
   return (
     <Card>
       <CardContent className="p-4">
         <p className="font-medium">Open pipeline</p>
-        <p className="mt-1 text-3xl font-semibold tabular-nums">{formatINR(data.pipeline_value)}</p>
+        <p className="mt-1 text-3xl font-semibold tabular-nums"><Money value={data.pipeline_value} /></p>
         <p className="mt-1 text-sm text-muted-foreground">
           {data.pipeline_value > 0 ? 'The value of every lead still open.' : 'No open lead has a value yet — add one on the lead to see it here.'}
           {data.proposal_count > 0 &&
-            ` ${data.proposal_count} ${data.proposal_count === 1 ? 'proposal is' : 'proposals are'} out, worth ${formatINR(data.proposal_value)}.`}
+            ` ${data.proposal_count} ${data.proposal_count === 1 ? 'proposal is' : 'proposals are'} out, worth ${inr(data.proposal_value)}.`}
         </p>
       </CardContent>
     </Card>

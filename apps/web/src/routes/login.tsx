@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { readStudioRef } from '@/features/studio-referrals/studio-ref'
 import { LegalLinks } from '@/features/legal/LegalPage'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MailCheck } from 'lucide-react'
@@ -108,6 +109,8 @@ export function LoginPage() {
    * exact same object the server will parse. Phone is required on register
    * (Lovable parity) — always sent, never omitted.
    */
+  // The studio that sent them, if they came through a referral link (0237).
+  const studioRef = readStudioRef()
   function payload(): Record<string, unknown> {
     if (isForgot) return { email }
     if (isRegister) {
@@ -117,6 +120,7 @@ export function LoginPage() {
         email,
         password,
         phone: phone.trim(),
+        ...(studioRef ? { studio_ref: studioRef } : {}),
       }
     }
     return { email, password }

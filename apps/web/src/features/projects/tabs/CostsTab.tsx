@@ -5,10 +5,10 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
 import { useProjectCosts } from '../api'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 
 const day = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
@@ -20,6 +20,7 @@ const day = (iso: string | null) =>
  * the payouts to the team", in one place.
  */
 export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookTeam?: (() => void) | undefined }) {
+  const inr = useINR()
   const costs = useProjectCosts(projectId)
   const canAddExpense = useAccess().hasModule('company_expenses')
 
@@ -42,7 +43,7 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Figure label="Project value" value={c.project_value} />
-            <Figure label="Team payouts" value={c.team_total} sub={due > 0 ? `${formatINR(due)} still to pay` : c.team_total > 0 ? 'All paid' : undefined} />
+            <Figure label="Team payouts" value={c.team_total} sub={due > 0 ? `${inr(due)} still to pay` : c.team_total > 0 ? 'All paid' : undefined} />
             <Figure label="Expenses" value={c.expenses === null ? null : c.expenses_total} />
             <Figure label={c.profit >= 0 ? 'Left for the studio' : 'Over budget by'} value={Math.abs(c.profit)} tone={c.profit >= 0 ? 'good' : 'bad'} />
           </div>
@@ -83,7 +84,7 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
                   <td className="px-3 py-2 text-right tabular-nums">
                     {t.cost > 0 ? (
                       <>
-                        {formatINR(t.cost)}
+                        {inr(t.cost)}
                         {t.cost_status !== 'final' && <p className="text-[11px] text-muted-foreground">not final</p>}
                       </>
                     ) : (
@@ -91,7 +92,7 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
                     )}
                   </td>
                   <td className="hidden px-3 py-2 text-right tabular-nums sm:table-cell">
-                    {t.paid > 0 ? formatINR(t.paid) : <span className="text-muted-foreground">—</span>}
+                    {t.paid > 0 ? inr(t.paid) : <span className="text-muted-foreground">—</span>}
                   </td>
                 </tr>
               ))}
@@ -125,7 +126,7 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
                       <p className="text-xs text-muted-foreground">{[e.description, e.party_name && `paid to ${e.party_name}`].filter(Boolean).join(' · ') || '—'}</p>
                     </td>
                     <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{day(e.expense_date)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatINR(e.amount)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{inr(e.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -139,18 +140,19 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
 
 /** The numbers in one sentence, as the owner reads them. */
 function Sentence({ c }: { c: ProjectCostSheet }) {
+  const inr = useINR()
   if (c.total_cost === 0) return <span className="text-muted-foreground">No costs on this project yet. Payouts you set when booking the team and expenses you add show here.</span>
   return (
     <>
-      This project has cost <b>{formatINR(c.total_cost)}</b> so far
+      This project has cost <b>{inr(c.total_cost)}</b> so far
       {c.expenses !== null && c.expenses_total > 0 && c.team_total > 0 && (
         <>
-          {' '}({formatINR(c.team_total)} team, {formatINR(c.expenses_total)} expenses)
+          {' '}({inr(c.team_total)} team, {inr(c.expenses_total)} expenses)
         </>
       )}
       {c.project_value > 0 && (
         <>
-          {' '}— {c.profit >= 0 ? <b className="text-success">{formatINR(c.profit)} left</b> : <b className="text-destructive">{formatINR(-c.profit)} over</b>} of the {formatINR(c.project_value)} value.
+          {' '}— {c.profit >= 0 ? <b className="text-success">{inr(c.profit)} left</b> : <b className="text-destructive">{inr(-c.profit)} over</b>} of the {inr(c.project_value)} value.
         </>
       )}
     </>
@@ -161,7 +163,7 @@ function Figure({ label, value, sub, tone }: { label: string; value: number | nu
   return (
     <div className="rounded-lg border border-border px-3 py-2">
       <p className={cn('text-lg font-semibold tabular-nums', tone === 'good' && 'text-success', tone === 'bad' && 'text-destructive')}>
-        {value === null ? '—' : formatINR(value)}
+        {value === null ? '—' : <Money value={value} />}
       </p>
       <p className="text-xs text-muted-foreground">{label}</p>
       {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
@@ -170,12 +172,13 @@ function Figure({ label, value, sub, tone }: { label: string; value: number | nu
 }
 
 function Section({ title, total, action, children }: { title: string; total: number; action?: React.ReactNode; children: React.ReactNode }) {
+  const inr = useINR()
   return (
     <Card>
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <p className="text-sm font-semibold">
-            {title} <span className="font-normal text-muted-foreground">· {formatINR(total)}</span>
+            {title} <span className="font-normal text-muted-foreground">· {inr(total)}</span>
           </p>
           {action && <div className="no-print">{action}</div>}
         </div>

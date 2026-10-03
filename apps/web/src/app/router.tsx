@@ -15,6 +15,7 @@ import { MyProfilePage } from '@/routes/my-profile'
 import { LeavePage } from '@/routes/leave'
 import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
 import { HelpSetupPage } from '@/routes/help-setup'
+import { HelpPage } from '@/routes/help'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
@@ -87,11 +88,14 @@ import { WhatsappSettingsPage } from '@/routes/settings/whatsapp'
 import { PlatformMessagingPage } from '@/routes/platform/messaging'
 import { PlatformEmailPage } from '@/routes/platform/email'
 import { PlatformPaymentsPage } from '@/routes/platform/payments'
+import { PlatformHelpPage } from '@/routes/platform/help'
 import { AdvancedSettingsPage } from '@/routes/settings/advanced'
 import { TaskBundlesPage } from '@/routes/settings/task-bundles'
 import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
 import { LookupsPage } from '@/routes/settings/lookups'
 import { VendorsPage } from '@/routes/settings/vendors'
+import { ReferAStudioPage } from '@/routes/settings/refer-a-studio'
+import { PlatformStudioReferralsPage } from '@/routes/platform/studio-referrals'
 import { ReferralsPage } from '@/routes/referrals'
 import { ProjectTemplatesPage } from '@/routes/project-templates'
 import { TeamPayoutsPage } from '@/routes/team-payouts'
@@ -210,6 +214,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/data-deletion', DataDeletionPage),
   // Setup tutorials; the setup emails link here, often opened signed out.
   publicRoute('/help/setup', HelpSetupPage),
+  // Every tutorial, the questions studios ask, and how to reach us (0236).
+  publicRoute('/help', HelpPage),
 
   renewalLayout.addChildren([
     createRoute({
@@ -307,6 +313,7 @@ const routeTree = rootRoute.addChildren([
   route('/settings/attendance-location', AttendanceLocationPage),
   route('/settings/lookups', LookupsPage),
   route('/settings/vendors', VendorsPage),
+  route('/settings/refer-a-studio', ReferAStudioPage),
   route('/settings/advanced', AdvancedSettingsPage),
   route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),
   // Old-app addresses with no page of their own now (see ./legacy-links).
@@ -331,6 +338,8 @@ const routeTree = rootRoute.addChildren([
   route('/platform/payments', PlatformPaymentsPage),
   route('/platform/messaging', PlatformMessagingPage),
   route('/platform/email', PlatformEmailPage),
+  route('/platform/help', PlatformHelpPage),
+  route('/platform/studio-referrals', PlatformStudioReferralsPage),
   route('/settings/messaging', MessagingSettingsPage),
   route('/settings/whatsapp', WhatsappSettingsPage),
   ]),

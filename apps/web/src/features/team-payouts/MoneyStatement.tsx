@@ -5,7 +5,7 @@ import { crewBucketOf, lineBalance } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { crewRowLine } from './crew-view'
 import { PayDialog } from './PayDialog'
 import { useCanPay, useCrewPayouts } from './pay'
@@ -33,6 +33,7 @@ export function statementOrder(rows: readonly CrewPayoutRow[], today: string): C
  * each past booking with money left. Team payouts holds the rest.
  */
 export function MoneyStatement({ userId, name }: { userId: string; name: string }) {
+  const inr = useINR()
   const can = useCanPay()
   const q = useCrewPayouts(can ? userId : null)
   const [paying, setPaying] = useState<CrewPayoutRow | null>(null)
@@ -48,16 +49,16 @@ export function MoneyStatement({ userId, name }: { userId: string; name: string 
           <p className="mt-1 text-sm">
             {s.owed_now > 0 ? (
               <>
-                <span className="font-semibold text-warning">{formatINR(s.owed_now)}</span> owed for shoots already done
+                <span className="font-semibold text-warning">{inr(s.owed_now)}</span> owed for shoots already done
               </>
             ) : (
               'Nothing owed for shoots already done'
             )}
-            {s.upcoming > 0 && <> · {formatINR(s.upcoming)} for shoots coming up</>}
+            {s.upcoming > 0 && <> · {inr(s.upcoming)} for shoots coming up</>}
             {s.paid > 0 && (
               <>
                 {' '}
-                · {formatINR(s.paid)} paid{s.paid_ahead > 0 ? `, ${formatINR(s.paid_ahead)} of it in advance` : ''}
+                · {inr(s.paid)} paid{s.paid_ahead > 0 ? `, ${inr(s.paid_ahead)} of it in advance` : ''}
               </>
             )}
             .

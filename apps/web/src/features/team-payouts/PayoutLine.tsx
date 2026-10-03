@@ -2,7 +2,7 @@ import { CheckCircle2, IndianRupee } from 'lucide-react'
 import type { PaySlotRequest, SlotPayStatus } from '@ipc/contracts'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 
 export type PayoutChoice = 'later' | 'full' | 'part'
 export interface PayoutDraft {
@@ -55,6 +55,7 @@ export function PayoutLine({
   value: PayoutDraft
   onChange: (next: PayoutDraft) => void
 }) {
+  const inr = useINR()
   const typed = value.amount.trim() === '' ? status.amount : Number(value.amount) || 0
   const outstanding = Math.max(0, typed - status.paid)
   const settled = status.paid > 0 && outstanding <= 0.001
@@ -87,10 +88,10 @@ export function PayoutLine({
           <span className="text-xs text-muted-foreground">
             {settled ? (
               <span className="inline-flex items-center gap-1 text-success">
-                <CheckCircle2 className="size-3.5" aria-hidden /> Paid {formatINR(status.paid)}
+                <CheckCircle2 className="size-3.5" aria-hidden /> Paid {inr(status.paid)}
               </span>
             ) : (
-              `${formatINR(status.paid)} paid so far`
+              `${inr(status.paid)} paid so far`
             )}
           </span>
         )}
@@ -101,7 +102,7 @@ export function PayoutLine({
             Pay later
           </button>
           <button type="button" aria-pressed={value.choice === 'full'} className={chip(value.choice === 'full')} onClick={() => onChange({ ...value, choice: 'full' })}>
-            Paid {outstanding > 0 ? formatINR(outstanding) : 'in full'}
+            Paid {outstanding > 0 ? inr(outstanding) : 'in full'}
           </button>
           <button type="button" aria-pressed={value.choice === 'part'} className={chip(value.choice === 'part')} onClick={() => onChange({ ...value, choice: 'part' })}>
             Part paid

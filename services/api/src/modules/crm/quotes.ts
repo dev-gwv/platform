@@ -294,7 +294,24 @@ export const publicQuotesRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]?.q) fail(404, 'This link is invalid or has expired.')
-    return c.json(publicQuote.parse(rows[0].q))
+    // The letterhead rides beside the quote; a quote without it still opens.
+    const head = await attempt(c, 'quote.public_letterhead', () =>
+      withService(c.env, (sql) => sql<Record<string, unknown>[]>`
+        select coalesce(nullif(btrim(co.display_name), ''), co.name) as name, co.legal_name,
+               coalesce(nullif(co.invoice_logo_url, ''), nullif(co.avatar_url, '')) as logo_url,
+               co.invoice_gst_number as gstin, co.invoice_phone as phone, co.invoice_email as email,
+               co.website, co.invoice_address as address, co.document_footer_note as footer_note,
+               case when th.is_custom_theme then coalesce(th.primary_color, th.custom_color) end as brand_color,
+               q.sent_at as issued_at
+          from access_tokens t
+          join crm_quotes q on q.id = t.subject_id
+          join companies co on co.id = q.company_id
+          left join company_theme_settings th on th.company_id = co.id
+         where t.purpose = 'quote_accept'
+           and t.token_hash = encode(sha256(convert_to(${token}, 'UTF8')), 'hex')
+         limit 1`),
+    )
+    return c.json(publicQuote.parse({ ...(rows[0].q as object), letterhead: head?.[0] ?? null }))
   })
 
   .post('/quote/:token/accept', async (c) => {

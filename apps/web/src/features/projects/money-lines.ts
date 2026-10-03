@@ -1,4 +1,4 @@
-import { formatINR } from '@/shared/ui/format'
+import { screenINR } from '@/shared/money/hide'
 
 /**
  * The plain line under each money figure at the top of a project, so a
@@ -16,7 +16,7 @@ export function collectedLine(m: { total: number; received: number }): string | 
 export function toCollectLine(m: { total: number; due: number; promised: number }): string | undefined {
   if (!(m.total > 0) || m.due <= 0) return m.total > 0 ? 'All collected' : undefined
   const promised = Math.min(m.promised, m.due)
-  return promised > 0 ? `${pctOf(m.due, m.total)}% to come · ${formatINR(promised)} promised` : `${pctOf(m.due, m.total)}% to come`
+  return promised > 0 ? `${pctOf(m.due, m.total)}% to come · ${screenINR(promised)} promised` : `${pctOf(m.due, m.total)}% to come`
 }
 
 /** The margin tile, from the same booked profit as Billing > Profit & Loss. */

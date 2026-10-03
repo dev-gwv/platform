@@ -2,6 +2,7 @@ import { useRef, useState, type ComponentProps, type FocusEvent } from 'react'
 import { Clock, X } from 'lucide-react'
 import { cn } from './cn'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
+import { typedEnterSets } from './date-field'
 import {
   MINUTE_STEPS,
   QUICK_TIMES,
@@ -164,18 +165,20 @@ export function TimeField({
             if (globalThis.matchMedia?.('(pointer: coarse)').matches) e.preventDefault()
           }}
         >
-          <form
-            className="mb-3 flex items-center gap-1.5"
-            onSubmit={(e) => {
-              e.preventDefault()
-              applyTyped()
-            }}
-          >
+          {/* Not a <form>: inside a dialog's form, a nested submit bubbles
+              through the portal and saves the dialog without this value. */}
+          <div className="mb-3 flex items-center gap-1.5">
             <input
               value={typed}
               onChange={(e) => {
                 setTyped(e.target.value)
                 setTypedBad(false)
+              }}
+              onKeyDown={(e) => {
+                if (!typedEnterSets(e.key)) return
+                e.preventDefault()
+                e.stopPropagation()
+                applyTyped()
               }}
               placeholder="Type a time, e.g. 3:15 pm"
               aria-label="Type a time"
@@ -183,13 +186,13 @@ export function TimeField({
               className="h-8 w-full rounded-full border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
             />
             {typed && (
-              <button type="submit" className="h-8 shrink-0 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
+              <button type="button" onClick={applyTyped} className="h-8 shrink-0 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
                 Set
               </button>
             )}
-          </form>
+          </div>
 
-          {label('Common call times')}
+          {label('Common times')}
           <div className="mb-3 grid grid-cols-4 gap-1.5">
             {QUICK_TIMES.map((t) => (
               <button key={t} type="button" onClick={() => commit(t)} className={chip(t === current)}>

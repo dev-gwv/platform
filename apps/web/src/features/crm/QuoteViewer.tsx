@@ -4,7 +4,8 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { DownloadDocumentButton } from '@/shared/ui/download-document'
-import { formatINR } from '@/shared/ui/format'
+import { useStudioLetterhead } from '@/features/projects/letterhead'
+import { QuotePaper } from './QuotePaper'
 
 /**
  * Read a quote in the app, the way the client sees it.
@@ -20,6 +21,7 @@ import { formatINR } from '@/shared/ui/format'
  * instantly and works for a draft that has never been sent.
  */
 export function QuoteViewer({ quote, onClose }: { quote: CrmQuote | null; onClose: () => void }) {
+  const { studio, brandColor } = useStudioLetterhead()
   if (!quote) return null
 
   const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -39,7 +41,7 @@ export function QuoteViewer({ quote, onClose }: { quote: CrmQuote | null; onClos
         description={[quote.lead_name, quote.valid_until ? `Valid till ${dayFormat.format(new Date(quote.valid_until))}` : null]
           .filter(Boolean)
           .join(' · ') || 'Quotation'}
-        className="max-w-2xl"
+        className="max-w-3xl"
       >
         <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -51,64 +53,25 @@ export function QuoteViewer({ quote, onClose }: { quote: CrmQuote | null; onClos
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Description</th>
-                  <th className="px-3 py-2 text-right font-medium">Qty</th>
-                  <th className="px-3 py-2 text-right font-medium">Rate</th>
-                  <th className="px-3 py-2 text-right font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quote.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-4 text-center text-sm text-muted-foreground">
-                      This quote has no line items.
-                    </td>
-                  </tr>
-                ) : (
-                  quote.items.map((i) => (
-                    <tr key={i.id} className="border-t border-border">
-                      <td className="px-3 py-2">{i.description}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{i.quantity}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatINR(i.rate)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatINR(i.amount)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <dl className="ml-auto w-full max-w-xs text-sm">
-            <Row label="Subtotal" value={formatINR(quote.subtotal)} />
-            {quote.discount > 0 && <Row label="Discount" value={`− ${formatINR(quote.discount)}`} />}
-            {quote.tax > 0 && (
-              <Row
-                label={quote.intra_state ? 'GST (CGST + SGST)' : 'GST (IGST)'}
-                value={formatINR(quote.tax)}
-              />
-            )}
-            <div className="mt-1 flex items-center justify-between border-t border-border pt-2 font-semibold">
-              <dt>Total</dt>
-              <dd className="tabular-nums">{formatINR(quote.total)}</dd>
-            </div>
-          </dl>
-
-          {quote.notes && (
-            <section>
-              <p className="text-sm font-semibold">Notes</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{quote.notes}</p>
-            </section>
-          )}
-          {quote.terms && (
-            <section>
-              <p className="text-sm font-semibold">Terms</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{quote.terms}</p>
-            </section>
-          )}
+          <QuotePaper
+            data={{
+              studio,
+              brandColor,
+              number: quote.quote_number,
+              title: quote.title,
+              preparedFor: quote.lead_name,
+              issuedAt: quote.sent_at ?? quote.created_at,
+              validUntil: quote.valid_until,
+              items: quote.items,
+              subtotal: quote.subtotal,
+              discount: quote.discount,
+              tax: quote.tax,
+              total: quote.total,
+              intraState: quote.intra_state,
+              notes: quote.notes,
+              terms: quote.terms,
+            }}
+          />
 
           {/* The client's own answer, which is the evidence for the booking. */}
           {quote.accepted_at && (
@@ -138,11 +101,3 @@ export function QuoteViewer({ quote, onClose }: { quote: CrmQuote | null; onClos
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-0.5">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="tabular-nums">{value}</dd>
-    </div>
-  )
-}

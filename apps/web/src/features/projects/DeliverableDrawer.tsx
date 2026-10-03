@@ -9,7 +9,6 @@ import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
 import { PanelBoundary } from '@/shared/layout/RouteError'
-import { formatINR } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -23,6 +22,7 @@ import { useDeliverableStages } from './stages-api'
 import { VoiceNotePlayer } from './VoiceNotePlayer'
 import { VoiceNoteRecorder } from './VoiceNoteRecorder'
 import { useAddDeliverableNote, useDeleteDeliverableNote, useDeliverableNotes, useSendVoiceNote } from './notes-api'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
@@ -77,6 +77,7 @@ function DrawerBody({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const inr = useINR()
   const { session } = useAuth()
   const access = useAccess()
   const stages = useDeliverableStages()
@@ -106,7 +107,7 @@ function DrawerBody({
               {fromLabel(d)}
               {d.visibility_scope === 'internal' && <span className="font-semibold text-tone-violet">· Team only</span>}
               {d.is_additional_charge && d.additional_charge_amount > 0 && (
-                <span className="font-semibold text-tone-green">· +{formatINR(d.additional_charge_amount)}</span>
+                <span className="font-semibold text-tone-green">· +{inr(d.additional_charge_amount)}</span>
               )}
             </p>
           </div>

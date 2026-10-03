@@ -15,7 +15,8 @@ import { MetricCard } from '@/shared/ui/metric-card'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useDirectory, useMemberOverview, useSendReset, useUpdateMember } from '@/features/team/api'
@@ -525,6 +526,7 @@ function AttendanceTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
 
 // ── Pay ──────────────────────────────────────────────────────────────────
 function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
+  const inr = useINR()
   const m = o.member
   const salaries = o.salaries ?? []
   const payouts = o.payouts ?? []
@@ -532,7 +534,7 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
   const pending =
     salaries.reduce((n, s) => n + Math.max(0, s.base_amount - s.paid_amount), 0) +
     payouts.filter((p) => p.status === 'pending').reduce((n, p) => n + p.amount, 0)
-  const basis = [m.salary !== null ? `${formatINR(m.salary)} a month` : null, m.freelancer_rate !== null ? `${formatINR(m.freelancer_rate)} a shoot` : null]
+  const basis = [m.salary !== null ? `${inr(m.salary)} a month` : null, m.freelancer_rate !== null ? `${inr(m.freelancer_rate)} a shoot` : null]
     .filter(Boolean)
     .join(' · ')
 
@@ -540,8 +542,8 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MetricCard label="Pay" value={<span className="text-lg">{basis || 'Not set'}</span>} tone="muted" />
-        <MetricCard label="Paid" value={formatINR(paid)} tone="success" hint="in the entries below" />
-        <MetricCard label="Still to pay" value={formatINR(pending)} tone={pending > 0 ? 'warning' : 'muted'} />
+        <MetricCard label="Paid" value={<Money value={paid} />} tone="success" hint="in the entries below" />
+        <MetricCard label="Still to pay" value={<Money value={pending} />} tone={pending > 0 ? 'warning' : 'muted'} />
       </div>
 
       {o.salaries && (
@@ -567,8 +569,8 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
                         <td className="py-2">
                           {MONTHS[s.month - 1]} {s.year}
                         </td>
-                        <td className="tabular-nums">{formatINR(s.base_amount)}</td>
-                        <td className="tabular-nums">{formatINR(s.paid_amount)}</td>
+                        <td className="tabular-nums">{inr(s.base_amount)}</td>
+                        <td className="tabular-nums">{inr(s.paid_amount)}</td>
                         <td>
                           <StatusBadge tone={s.status === 'paid' ? 'success' : s.paid_amount > 0 ? 'warning' : 'neutral'}>{humanize(s.status)}</StatusBadge>
                         </td>
@@ -600,7 +602,7 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
                       {shortDay(p.period_start)} – {shortDay(p.period_end)}
                       {p.reference && <span className="text-xs text-muted-foreground"> · {p.payment_mode ? `${p.payment_mode} ` : ''}{p.reference}</span>}
                     </span>
-                    <span className="font-medium tabular-nums">{formatINR(p.amount)}</span>
+                    <span className="font-medium tabular-nums">{inr(p.amount)}</span>
                     <StatusBadge tone={p.status === 'completed' ? 'success' : p.status === 'pending' ? 'warning' : 'neutral'}>{humanize(p.status)}</StatusBadge>
                   </li>
                 ))}
@@ -615,6 +617,7 @@ function PayTab({ o, isSelf }: { o: MemberOverview; isSelf: boolean }) {
 
 /** Monthly payslips: your own once the month is approved, or anyone's for whoever runs payroll. */
 function Payslips({ userId, isSelf }: { userId: string; isSelf: boolean }) {
+  const inr = useINR()
   const { canView } = usePayrollPowers()
   const q = usePayslips(userId, isSelf || canView)
   if (!(isSelf || canView) || q.isError) return null
@@ -634,7 +637,7 @@ function Payslips({ userId, isSelf }: { userId: string; isSelf: boolean }) {
                 <span className="min-w-0 flex-1">
                   {MONTHS[s.pay_month - 1]} {s.pay_year}
                 </span>
-                <span className="font-medium tabular-nums">{formatINR(s.net_pay)}</span>
+                <span className="font-medium tabular-nums">{inr(s.net_pay)}</span>
                 <StatusBadge tone={s.paid_at ? 'success' : s.run_status === 'draft' ? 'neutral' : 'warning'}>
                   {s.paid_at ? 'Paid' : s.run_status === 'draft' ? 'Draft' : 'To be paid'}
                 </StatusBadge>

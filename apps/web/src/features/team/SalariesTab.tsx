@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Download, RefreshCcw } from 'lucide-react'
@@ -13,7 +13,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv } from '@/shared/ui/csv'
-import { formatINR } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useGenerateMonthlySalaries, useMonthlySalaries, useUpdateMonthlySalary } from './api'
 import { PayToCard } from './PayToCard'
 
@@ -38,6 +38,7 @@ const statusLabel = (s: string) =>
  * hooks (previously unused by any screen).
  */
 export function SalariesTab() {
+  const inr = useINR()
   const access = useAccess()
   const { session } = useAuth()
   const now = new Date()
@@ -162,9 +163,9 @@ export function SalariesTab() {
 
       {totals && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Stat label="Total base" value={formatINR(totals.base)} />
-          <Stat label="Total paid" value={formatINR(totals.paid)} />
-          <Stat label="Total pending" value={formatINR(totals.pending)} />
+          <Stat label="Total base" value={<Money value={totals.base} />} />
+          <Stat label="Total paid" value={<Money value={totals.paid} />} />
+          <Stat label="Total pending" value={<Money value={totals.pending} />} />
           <Stat label="Paid" value={String(totals.paid_count)} />
           <Stat label="Partially paid" value={String(totals.partial_count)} />
           <Stat label="Unpaid" value={String(totals.unpaid_count)} />
@@ -208,10 +209,10 @@ export function SalariesTab() {
                     <p className="font-medium">{r.name ?? r.user_id}</p>
                     {r.email && <p className="text-xs text-muted-foreground">{r.email}</p>}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatINR(r.base_amount)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatINR(r.paid_amount)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{inr(r.base_amount)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{inr(r.paid_amount)}</td>
                   <td className="px-4 py-2 text-right tabular-nums">
-                    {formatINR(Math.max(0, r.base_amount - r.paid_amount))}
+                    {inr(Math.max(0, r.base_amount - r.paid_amount))}
                   </td>
                   <td className="px-4 py-2">
                     <StatusBadge tone={STATUS_TONE[r.status] ?? 'neutral'}>{statusLabel(r.status)}</StatusBadge>
@@ -235,7 +236,7 @@ export function SalariesTab() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Card>
       <CardContent className="p-4">
@@ -252,6 +253,7 @@ function Stat({ label, value }: { label: string; value: string }) {
  * confirm (matching the server's overpay guard).
  */
 function UpdateSalaryDialog({ row, onClose }: { row: MonthlySalary; onClose: () => void }) {
+  const inr = useINR()
   const update = useUpdateMonthlySalary()
   const [paid, setPaid] = useState(String(row.paid_amount))
   const [confirmingOverpay, setConfirmingOverpay] = useState(false)
@@ -282,7 +284,7 @@ function UpdateSalaryDialog({ row, onClose }: { row: MonthlySalary; onClose: () 
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent
         title={`Update salary — ${row.name ?? row.user_id}`}
-        description={`Base ${formatINR(row.base_amount)} · currently ${formatINR(row.paid_amount)} paid.`}
+        description={`Base ${inr(row.base_amount)} · currently ${inr(row.paid_amount)} paid.`}
       >
         <div className="flex flex-col gap-3">
           <PayToCard userId={row.user_id} />

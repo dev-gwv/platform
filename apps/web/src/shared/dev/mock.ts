@@ -213,6 +213,16 @@ const profileFx = {
   avatar_url: null,
 }
 
+/** Help (0236): what the panel and /help show. */
+const helpFx = {
+  support_whatsapp: '919876543210' as string | null,
+  support_email: 'help@studioautopilot.in' as string | null,
+  faqs: [
+    { id: '00000000-0000-4000-8000-0000000004e0', question: 'Can Studio AutoPilot see my clients and prices?', answer: 'No. Your clients, prices and payments belong to your studio alone.', sort_order: 10 },
+  ] as { id: string; question: string; answer: string; sort_order: number }[],
+  videos: [] as { page_key: string; title: string; url: string }[],
+}
+
 const themeState = { preset_key: 'ipc_classic', font_key: null as string | null, color_scheme: 'light' }
 
 /** A month's payroll, approved, one person already paid; plus shoot payouts owed. */
@@ -780,6 +790,28 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ...profileFx }
   }
   if (method === 'GET' && path === '/settings/company') return companyFx
+  if (method === 'GET' && path === '/studio-referrals')
+    return {
+      code: 'A1B2C3D4',
+      link: 'https://studioautopilot.in/?studio_ref=A1B2C3D4',
+      terms: { reward: null, discount_pct: null, hold_days: null },
+      referrals: [
+        { id: uid(0x5f1), studio_name: 'Bina Films', signed_up_at: '2026-09-20T10:00:00Z', paid_at: '2026-09-28T10:00:00Z', reward_amount: null, rewarded_at: null, void_reason: null },
+        { id: uid(0x5f2), studio_name: 'Chitra Clicks', signed_up_at: '2026-09-30T10:00:00Z', paid_at: null, reward_amount: null, rewarded_at: null, void_reason: null },
+      ],
+    }
+  if (method === 'GET' && path === '/platform/studio-referrals') return { terms: { reward: null, discount_pct: null, hold_days: null }, referrals: [] }
+  if (path.startsWith('/platform/studio-referrals')) return {}
+  if (method === 'GET' && (path === '/public/help' || path === '/platform/help')) return helpFx
+  if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
+  if (method === 'POST' && path === '/platform/help/faqs') {
+    const faq = { id: uid(0x4e1 + helpFx.faqs.length), sort_order: helpFx.faqs.length * 10 + 10, ...(body as { question: string; answer: string }) }
+    helpFx.faqs.push(faq)
+    return faq
+  }
+  if (path.startsWith('/platform/help/')) return {}
+  if (method === 'GET' && path === '/settings/getting-started')
+    return { started_at: new Date().toISOString(), setup_closed: true, logo: true, package: false, enquiry: true, booking: false, quotation: false }
   if (method === 'PATCH' && path === '/settings/company') return companyFx
   if (method === 'GET' && path === '/settings/theme') return { ...themeState }
   if (method === 'PATCH' && path === '/settings/theme') {

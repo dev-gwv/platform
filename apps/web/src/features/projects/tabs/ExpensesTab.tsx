@@ -8,10 +8,10 @@ import { RowMenu } from '@/shared/ui/row-menu'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
-import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeleteExpense, useProjectExpenses } from '@/features/financials/api'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
@@ -21,6 +21,7 @@ const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-
  * the second expense stays on this project like the first.
  */
 export function ExpensesTab({ projectId }: { projectId: string }) {
+  const inr = useINR()
   const access = useAccess()
   const canSee = access.hasModule('company_expenses')
   const canAdd = access.hasAction('company_expenses', 'create')
@@ -60,7 +61,7 @@ export function ExpensesTab({ projectId }: { projectId: string }) {
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
             <p className="text-xs text-muted-foreground">Spent on this project</p>
-            <p className="text-lg font-semibold tabular-nums">{formatINR(total)}</p>
+            <p className="text-lg font-semibold tabular-nums"><Money value={total} /></p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
@@ -93,7 +94,7 @@ export function ExpensesTab({ projectId }: { projectId: string }) {
                 {e.party_name && <span className="text-xs text-muted-foreground"> · paid to {e.party_name}</span>}
               </span>
               <span className="text-xs text-muted-foreground">{day(e.expense_date)}</span>
-              <span className="w-24 text-right text-sm font-semibold tabular-nums">{formatINR(e.amount)}</span>
+              <span className="w-24 text-right text-sm font-semibold tabular-nums">{inr(e.amount)}</span>
               {(canEdit || canDelete) && (
                 <RowMenu
                   label={`More for ${e.description ?? e.category ?? 'expense'}`}
@@ -105,7 +106,7 @@ export function ExpensesTab({ projectId }: { projectId: string }) {
                             label: 'Delete',
                             icon: <Trash2 className="size-4" />,
                             onSelect: async () => {
-                              if (await confirm({ title: `Delete this ${formatINR(e.amount)} expense?`, destructive: true, confirmLabel: 'Delete' })) {
+                              if (await confirm({ title: `Delete this ${inr(e.amount)} expense?`, destructive: true, confirmLabel: 'Delete' })) {
                                 del.mutate(e.id)
                               }
                             },

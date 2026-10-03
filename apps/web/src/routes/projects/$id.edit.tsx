@@ -11,13 +11,13 @@ import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
-import { formatINR } from '@/shared/ui/format'
 import type { ProjectStatus, UpdateProjectRequest } from '@ipc/contracts'
 import { useProject, useUpdateProject } from '@/features/projects/api'
 import { useClient, useUpdateClient } from '@/features/clients/api'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { toast } from 'sonner'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const CLS_TEXTAREA =
   "w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -38,6 +38,7 @@ export function ProjectEditPage() {
  * so a stray Back press never eats unsaved work.
  */
 function ProjectEdit() {
+  const inr = useINR()
   const { id } = useParams({ from: '/authed/projects/$id/edit' })
   const navigate = useNavigate()
   const access = useAccess()
@@ -165,7 +166,7 @@ function ProjectEdit() {
   async function save(close: boolean) {
     if (belowReceived) {
       const yes = await confirm({
-        title: `New total is below ${formatINR(received)} already received?`,
+        title: `New total is below ${inr(received)} already received?`,
         description: 'The package no longer covers the money recorded. Continue anyway?',
         confirmLabel: 'Save anyway',
       })
@@ -285,7 +286,7 @@ function ProjectEdit() {
                 <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
                   <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                   <span>
-                    Received {formatINR(received)} already exceeds this package. Review the Billing tab after saving.
+                    Received {inr(received)} already exceeds this package. Review the Billing tab after saving.
                   </span>
                 </p>
               )}
@@ -294,15 +295,15 @@ function ProjectEdit() {
               <dl className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Package</dt>
-                  <dd className="tabular-nums">{formatINR(Number(form.package_cost ?? 0))}</dd>
+                  <dd className="tabular-nums">{inr(Number(form.package_cost ?? 0))}</dd>
                 </div>
                 <div className="mt-1 flex justify-between">
                   <dt className="text-muted-foreground">Add-ons</dt>
-                  <dd className="tabular-nums">{formatINR(addOns)}</dd>
+                  <dd className="tabular-nums">{inr(addOns)}</dd>
                 </div>
                 <div className="mt-1.5 flex justify-between border-t border-border pt-1.5 font-semibold">
                   <dt>Total</dt>
-                  <dd className="tabular-nums text-primary">{formatINR(liveTotal)}</dd>
+                  <dd className="tabular-nums text-primary">{inr(liveTotal)}</dd>
                 </div>
               </dl>
               <label className="flex items-center gap-2 text-sm">
@@ -406,8 +407,8 @@ function ProjectEdit() {
         <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Deliverables" value={String(data.deliverables.length)} />
           <Stat label="Payments" value={String(data.payments.length)} />
-          <Stat label="Received" value={formatINR(received)} />
-          <Stat label="Balance" value={formatINR(Math.max(0, liveTotal - received))} />
+          <Stat label="Received" value={inr(received)} />
+          <Stat label="Balance" value={inr(Math.max(0, liveTotal - received))} />
         </CardContent>
       </Card>
 
@@ -430,15 +431,15 @@ function ProjectEdit() {
           <dl className="grid grid-cols-3 gap-4 text-xs">
             <div>
               <dt className="text-muted-foreground">Package</dt>
-              <dd className="font-semibold tabular-nums">{formatINR(Number(form.package_cost ?? 0))}</dd>
+              <dd className="font-semibold tabular-nums">{inr(Number(form.package_cost ?? 0))}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Add-ons</dt>
-              <dd className="font-semibold tabular-nums">{formatINR(addOns)}</dd>
+              <dd className="font-semibold tabular-nums">{inr(addOns)}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Total</dt>
-              <dd className="text-base font-semibold tabular-nums text-primary">{formatINR(liveTotal)}</dd>
+              <dd className="text-base font-semibold tabular-nums text-primary">{inr(liveTotal)}</dd>
             </div>
           </dl>
           <div className="flex flex-wrap items-center gap-2">

@@ -3,7 +3,7 @@ import type { DueLineRow } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { daysLeft } from '@/shared/ui/days-left'
 
 const KIND: Record<DueLineRow['kind'], string> = {
@@ -29,6 +29,7 @@ export function DuePanel({
   today: string
   onMarkReceived: (paymentId: string) => void
 }) {
+  const inr = useINR()
   return (
     <Card className="mb-4">
       <CardContent className="p-0">
@@ -48,7 +49,7 @@ export function DuePanel({
                 <span className={cn('w-28 text-xs', l.bucket === 'overdue' ? 'font-medium text-destructive' : 'text-muted-foreground')}>
                   {daysLeft(l.due_on, today)?.text ?? 'No date yet'}
                 </span>
-                <span className="w-24 text-right font-semibold tabular-nums">{formatINR(l.amount)}</span>
+                <span className="w-24 text-right font-semibold tabular-nums">{inr(l.amount)}</span>
                 <span className="w-36 text-right">
                   {l.kind === 'invoice' && l.invoice_id ? (
                     <Button size="sm" variant="outline" asChild>

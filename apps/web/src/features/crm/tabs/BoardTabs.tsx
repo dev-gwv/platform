@@ -21,7 +21,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { Select } from '@/shared/ui/input'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import {
@@ -233,6 +233,7 @@ export function FollowUpBoardTab({
  * and required fields, and asks for a reason before a deal is lost.
  */
 export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOpen: (id: string) => void }) {
+  const inr = useINR()
   // One clock for the board, so a card cannot read "due today" while the one
   // beside it reads "overdue" because they asked at different moments.
   const now = useMemo(() => new Date(), [leads])
@@ -405,7 +406,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
           </Select>
         )}
         <p className="text-sm text-muted-foreground">
-          {inPipeline.length} deal{inPipeline.length === 1 ? '' : 's'} · {formatINR(total)} in {current.name}
+          {inPipeline.length} deal{inPipeline.length === 1 ? '' : 's'} · {inr(total)} in {current.name}
           {canEdit ? ' · drag a card to move it, tick cards to change many at once' : ''}
         </p>
       </div>
@@ -557,6 +558,7 @@ function DroppableStage({
   tickAll?: { state: 'none' | 'some' | 'all'; onToggle: () => void } | undefined
   children: ReactNode
 }) {
+  const inr = useINR()
   const { setNodeRef, isOver } = useDroppable({ id: `stage-${stage.id}` })
   const drag = useDraggable({ id: `col-${stage.id}`, disabled: !draggableHeader })
   const shift = drag.transform ? { transform: `translate3d(${drag.transform.x}px, 0, 0)` } : undefined
@@ -643,7 +645,7 @@ function DroppableStage({
         {/* What this column is worth, under its name -- the question a studio
             asks of a pipeline before it asks anything else. */}
         <p className="mt-0.5 text-[0.7rem] tabular-nums text-muted-foreground">
-          {formatINR(value)}
+          {inr(value)}
           {stage.kind === 'open' ? ` · ${stage.probability_default}%` : ''}
         </p>
         {gate && (

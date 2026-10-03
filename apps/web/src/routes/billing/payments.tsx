@@ -13,6 +13,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
@@ -45,6 +46,7 @@ const MODES = ['UPI', 'Cash', 'Bank transfer', 'Cheque', 'Card']
 const PAYMENT_TONE = { paid: 'success', pending: 'warning' } as const
 
 function PaymentsSection() {
+  const inr = useINR()
   const isMobile = useIsMobile()
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -157,7 +159,7 @@ function PaymentsSection() {
           <MoneyTile
             icon={AlertTriangle}
             tone="rose"
-            value={formatINR(due.data.overdue.amount)}
+            value={inr(due.data.overdue.amount)}
             label="Overdue"
             hint={due.data.overdue.count > 0 ? `${due.data.overdue.count} ${due.data.overdue.count === 1 ? 'payment' : 'payments'} late` : 'Nothing late'}
             onClick={() => setDueView(dueView === 'overdue' ? '' : 'overdue')}
@@ -166,7 +168,7 @@ function PaymentsSection() {
           <MoneyTile
             icon={Hourglass}
             tone="amber"
-            value={formatINR(due.data.soon.amount)}
+            value={inr(due.data.soon.amount)}
             label="Due in 30 days"
             hint={`${due.data.soon.count} to collect`}
             onClick={() => setDueView(dueView === 'soon' ? '' : 'soon')}
@@ -175,7 +177,7 @@ function PaymentsSection() {
           <MoneyTile
             icon={Clock}
             tone="blue"
-            value={formatINR(due.data.later.amount)}
+            value={inr(due.data.later.amount)}
             label="Later"
             hint="Further out, or no date yet"
             onClick={() => setDueView(dueView === 'later' ? '' : 'later')}
@@ -184,7 +186,7 @@ function PaymentsSection() {
           <MoneyTile
             icon={CalendarCheck}
             tone="green"
-            value={formatINR(due.data.received.amount)}
+            value={inr(due.data.received.amount)}
             label={`Received · ${period.label}`}
             hint={`${due.data.received.count} ${due.data.received.count === 1 ? 'payment' : 'payments'}`}
             onClick={() => setDueView('')}
@@ -256,7 +258,7 @@ function PaymentsSection() {
               {items.map((r) => (
                 <RecordCard
                   key={r.id}
-                  title={formatINR(r.amount)}
+                  title={inr(r.amount)}
                   subtitle={`${r.client_name ?? '—'} · ${r.project_name ?? 'No project'}${r.invoice_number ? ` · ${r.invoice_number}` : ''}`}
                   badge={<PaymentBadge status={r.status} />}
                   fields={[
@@ -308,7 +310,7 @@ function PaymentsSection() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatINR(r.amount)}{r.mode && <div className="text-xs font-normal text-muted-foreground">{r.mode}</div>}</td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{inr(r.amount)}{r.mode && <div className="text-xs font-normal text-muted-foreground">{r.mode}</div>}</td>
                       <td className="px-3 py-2"><PaymentBadge status={r.status} /></td>
                       <td className="px-3 py-2">
                         {r.invoice_id ? (

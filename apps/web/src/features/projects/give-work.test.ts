@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamMember } from '@ipc/contracts'
-import { defaultWorkDays, orderPeople, suggestDue, workloadText } from './give-work'
+import { defaultWorkDays, orderPeople, placeMe, suggestDue, workloadText } from './give-work'
 
 const person = (user_id: string, name: string, role_names: string[] = []) =>
   ({ user_id, name, role: 'employee', role_names, engagement_type: null, phone: null, email: null, payout_type: null, freelancer_rate: null, login_enabled: true, last_seen_at: null }) as TeamMember
@@ -21,6 +21,13 @@ describe('giving work out', () => {
     ])
     const order = orderPeople([person('c', 'Chirag', ['Candid Photographer']), person('a', 'Asha', ['Video Editor']), person('b', 'Bina', ['Photo Editor'])], load)
     expect(order.map((p) => p.name)).toEqual(['Bina', 'Asha', 'Chirag'])
+  })
+
+  it('lists editors above "Me" unless I edit too', () => {
+    const editors = [person('b', 'Bina', ['Photo Editor']), person('c', 'Chirag', ['Candid Photographer'])]
+    expect(placeMe(editors, person('m', 'Asha', ['Owner'])).map((p) => p.name)).toEqual(['Bina', 'Asha', 'Chirag'])
+    expect(placeMe(editors, person('m', 'Asha', ['Video Editor'])).map((p) => p.name)).toEqual(['Asha', 'Bina', 'Chirag'])
+    expect(placeMe(editors, null).map((p) => p.name)).toEqual(['Bina', 'Chirag'])
   })
 
   it('suggests a due date from the studio’s own work days, else from what it is', () => {

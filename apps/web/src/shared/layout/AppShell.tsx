@@ -17,6 +17,7 @@ import { QuickLinks } from './QuickLinks'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
+import { HideAmountsButton } from '@/shared/money/MoneyMask'
 import { TrialChip } from '@/features/billing/TrialChip'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
@@ -24,6 +25,7 @@ import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
+import { HelpButton } from '@/features/help/HelpPanel'
 import { HubTabs } from './HubTabs'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
 
@@ -208,6 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <div className="flex items-center gap-1">
               <NotificationBell />
+              <HideAmountsButton />
               <Button variant="ghost" size="icon" onClick={toggleScheme} aria-label="Toggle theme">
                 {scheme === 'dark' ? <Sun /> : <Moon />}
               </Button>
@@ -349,6 +352,7 @@ function Sidebar({
         )}
       </nav>
       <div className={cn('shrink-0 px-3 pb-3', collapsed && 'px-2')}>
+        <HelpButton collapsed={collapsed} />
         <PlanCard collapsed={collapsed} />
       </div>
       {/* On a phone the bar has room only for the bulb; the menu says it in full. */}

@@ -48,6 +48,8 @@ import { crmCallsRouter } from './modules/crm-calls/router'
 import { crmSequencesRouter } from './modules/crm-sequences/router'
 import { featuresRouter, platformFeaturesRouter } from './modules/features/router'
 import { studioWhatsappRouter } from './modules/studio-whatsapp/router'
+import { platformHelpRouter, publicHelpRouter } from './modules/help/router'
+import { platformStudioReferralsRouter, studioReferralsRouter } from './modules/studio-referrals/router'
 import { publicOnboardingRouter } from './modules/onboarding/router'
 import { messagingRouter } from './modules/messaging/router'
 import { reportsRouter } from './modules/reports/router'
@@ -178,6 +180,10 @@ app.route('/public', publicFilesRouter)
 app.route('/settings', settingsRouter)
 app.route('/platform', platformRouter)
 app.route('/platform', platformFeaturesRouter)
+app.route('/platform', platformHelpRouter)
+app.route('/platform', platformStudioReferralsRouter)
+app.route('/studio-referrals', studioReferralsRouter)
+app.route('/public', publicHelpRouter)
 app.route('/features', featuresRouter)
 app.route('/whatsapp', studioWhatsappRouter)
 app.route('/feedback', feedbackRouter)

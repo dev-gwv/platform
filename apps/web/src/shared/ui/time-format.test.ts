@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPeriod, from12h, niceTime, parseTime, parseTypedTime, to12h, toHHMM } from './time-format'
+import { clockOfInstant, defaultPeriod, from12h, niceTime, parseTime, parseTypedTime, scheduleTimeText, shortDayLabel, timeRangeLine, to12h, toHHMM } from './time-format'
 
 describe('parseTime', () => {
   it('reads the browser and Postgres shapes', () => {
@@ -68,5 +68,29 @@ describe('parseTypedTime', () => {
   })
   it.each(['13 pm', '25:00', '9:75', 'hello', '', '3:'])('rejects %s', (typed) => {
     expect(parseTypedTime(typed)).toBeNull()
+  })
+})
+
+describe('shoot hours on cards and the quotation', () => {
+  // 18:00 IST on 21 Nov is 12:30 UTC.
+  const start = '2026-11-21T12:30:00Z'
+  it('reads an instant on India\'s clock, without a leading zero', () => {
+    expect(clockOfInstant(start)).toBe('6:00 pm')
+    expect(clockOfInstant('2026-11-21T10:30:00Z')).toBe('4:00 pm')
+    expect(clockOfInstant(null)).toBeNull()
+  })
+  it('says the range and the length', () => {
+    expect(timeRangeLine(start, '2026-11-21T18:30:00Z')).toBe('6:00 pm–12:00 am · 6 h')
+    expect(timeRangeLine(start, null)).toBe('6:00 pm')
+    expect(timeRangeLine(null, null)).toBeNull()
+  })
+  it('reads an old link\'s bare 24-hour time on a 12-hour clock', () => {
+    expect(scheduleTimeText('18:00')).toBe('6:00 pm')
+    expect(scheduleTimeText('18:00:00')).toBe('6:00 pm')
+    expect(scheduleTimeText('6:00 pm–12:00 am · 6 h')).toBe('6:00 pm–12:00 am · 6 h')
+    expect(scheduleTimeText(null)).toBe('')
+  })
+  it('names the day like Assign team', () => {
+    expect(shortDayLabel('2026-12-12')).toBe('Sat, 12 Dec')
   })
 })

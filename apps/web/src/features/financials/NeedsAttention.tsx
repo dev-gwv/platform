@@ -3,10 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { AlertTriangle, ChevronRight, Coins, Percent, ReceiptText, Tag, TrendingDown, Users } from 'lucide-react'
 import type { ProfitAndLoss } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
-import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useBillingOverview } from '@/features/billing/api'
 import { useExpenseSummary, useOverCollected } from './api'
+import { useINR } from '@/shared/money/MoneyMask'
 
 /**
  * What needs doing about money, on top of Profit & Loss: late invoices,
@@ -18,6 +18,7 @@ import { useExpenseSummary, useOverCollected } from './api'
  * expenses summary, the P&L itself); this only brings them together.
  */
 export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
+  const inr = useINR()
   const access = useAccess()
   const overview = useBillingOverview()
   const expenses = useExpenseSummary({ reimbursement: 'pending' })
@@ -41,7 +42,7 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
         key="overdue"
         icon={<AlertTriangle className="size-4 text-destructive" aria-hidden />}
         label={`${overdue.count} ${overdue.count === 1 ? 'invoice is' : 'invoices are'} overdue`}
-        value={formatINR(overdue.amount)}
+        value={inr(overdue.amount)}
         to="/billing/invoices"
         search={{ status: 'overdue' }}
       />,
@@ -53,7 +54,7 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
         key="reimburse"
         icon={<ReceiptText className="size-4 text-tone-amber" aria-hidden />}
         label="To pay back to your team"
-        value={formatINR(reimburse)}
+        value={inr(reimburse)}
         to="/company-expenses"
         search={{ view: 'to_reimburse' }}
       />,
@@ -65,7 +66,7 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
         key="owed"
         icon={<Users className="size-4 text-tone-violet" aria-hidden />}
         label="Owed to the team for shoots"
-        value={formatINR(owed)}
+        value={inr(owed)}
         to="/team-payouts"
       />,
     )
@@ -101,7 +102,7 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
         icon={<Coins className="size-4 text-tone-amber" aria-hidden />}
         label={
           over.length === 1
-            ? `${first.project_name} has received ${formatINR(-first.receivables)} more than its value`
+            ? `${first.project_name} has received ${inr(-first.receivables)} more than its value`
             : `${over.length} projects have received more than their value`
         }
         value={over.length === 1 ? 'Check' : over.map((p) => p.project_name).slice(0, 2).join(', ')}

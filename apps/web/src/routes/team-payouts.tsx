@@ -25,11 +25,12 @@ import {
   useCreatePayoutSettlement,
 } from '@/features/team-payouts/api'
 import { useCrewPayouts } from '@/features/team-payouts/pay'
-import { CREW_VIEWS, crewRowLine, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
+import { CREW_VIEWS, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
 import { useDirectory } from '@/features/team/api'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
-import { formatINR, humanize } from '@/shared/ui/format'
+import { humanize } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { type CreateTeamPayoutRequest, type CrewPayoutRow, type PayoutEntryType, type TeamPayout } from '@ipc/contracts'
 import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Wallet, CalendarClock, Filter } from 'lucide-react'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
@@ -316,6 +317,7 @@ type SettlementEntry = {
  * and /owed read one query).
  */
 function ShootPayoutsTracker() {
+  const inr = useINR()
   const q = useCrewPayouts()
   const [viewParam, setViewParam] = useUrlParam('view', 'owed')
   const view = crewViewOf(viewParam)
@@ -353,7 +355,7 @@ function ShootPayoutsTracker() {
       r.amount,
       r.paid,
       Math.max(0, r.amount - r.paid),
-      crewRowLine(r, today),
+      crewRowLine(r, today, false),
     ])
     downloadCsv(
       `shoot-payouts-${view}-${today}.csv`,
@@ -383,19 +385,19 @@ function ShootPayoutsTracker() {
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
           label="Owed now"
-          value={formatINR(q.data.owed_now)}
+          value={<Money value={q.data.owed_now} />}
           icon={Clock}
           hint="Shoots already done, minus what you've paid."
         />
         <StatCard
           label="Paid"
-          value={formatINR(q.data.paid)}
+          value={<Money value={q.data.paid} />}
           icon={CheckCircle}
-          hint={q.data.paid_ahead > 0 ? `${formatINR(q.data.paid_ahead)} of it in advance` : undefined}
+          hint={q.data.paid_ahead > 0 ? `${inr(q.data.paid_ahead)} of it in advance` : undefined}
         />
         <StatCard
           label="Upcoming"
-          value={formatINR(q.data.upcoming)}
+          value={<Money value={q.data.upcoming} />}
           icon={CalendarClock}
           hint="Promised for future shoots. Not owed yet."
         />
@@ -464,17 +466,12 @@ function ShootPayoutsTracker() {
       ) : (
         <div className="space-y-4">
           {[...byMember.entries()].map(([userId, list]) => {
-            const left = list.reduce((n, r) => n + Math.max(0, r.amount - r.paid), 0)
             return (
               <div key={userId} className="space-y-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="font-semibold">{list[0]!.user_name ?? 'Member'}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {left > 0
-                      ? `${formatINR(left)} ${view === 'upcoming' ? 'after the shoots' : view === 'owed' ? 'owed' : 'left'}`
-                      : 'All paid'}
-                    {' · '}
-                    {list.length} {list.length === 1 ? 'shoot' : 'shoots'}
+                    {crewPersonLine(list, today, inr)}
                   </p>
                 </div>
                 {list.map((r) => (
@@ -490,6 +487,7 @@ function ShootPayoutsTracker() {
 }
 
 function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: string; entries: readonly SettlementEntry[] }) {
+  const inr = useINR()
   const [historyOpen, setHistoryOpen] = useState(false)
   const left = Math.max(0, row.amount - row.paid)
   const mine = entries.filter((e) => e.slot_id === row.slot_id)
@@ -502,7 +500,7 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
         <p className="font-medium">{[row.project_name, row.shoot_name].filter(Boolean).join(' · ') || 'A shoot'}</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {[dayLabel(row.shoot_date), row.role].filter(Boolean).join(' · ')}
-          {row.stands && row.amount > 0 && row.cost_status !== 'final' && ' · amount may change'}
+          {crewRowNote(row)}
         </p>
       </div>
       <p className={cn('text-sm tabular-nums', past && left > 0.001 ? 'font-semibold text-warning' : 'text-muted-foreground')}>
@@ -531,7 +529,7 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
                   </p>
                   {e.notes && <p className="text-xs text-muted-foreground">{e.notes}</p>}
                 </div>
-                <span className={e.amount_paid < 0 ? 'text-destructive' : 'text-success'}>{formatINR(e.amount_paid)}</span>
+                <span className={e.amount_paid < 0 ? 'text-destructive' : 'text-success'}>{inr(e.amount_paid)}</span>
               </div>
             ))}
             {mine.length === 0 && <p className="text-sm text-muted-foreground">No entries yet.</p>}
@@ -550,6 +548,7 @@ const ENTRY_TYPES: readonly { value: PayoutEntryType; label: string; title: stri
 
 /** Amount defaults to the outstanding balance, but stays editable -- a partial payment is the norm, not an edge case. */
 function MarkPaidDialog({ slotId, userId, pending, solid }: { slotId: string; userId: string; pending: number; solid?: boolean }) {
+  const inr = useINR()
   const create = useCreatePayoutSettlement()
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState(String(pending))
@@ -602,7 +601,7 @@ function MarkPaidDialog({ slotId, userId, pending, solid }: { slotId: string; us
           <Wallet className="mr-1 h-4 w-4" /> Pay
         </Button>
       </DialogTrigger>
-      <DialogContent title="Record a settlement" description={`Outstanding: ${formatINR(pending)}`}>
+      <DialogContent title="Record a settlement" description={`Outstanding: ${inr(pending)}`}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {open && <PayToCard userId={userId} />}
           <div className="grid grid-cols-2 gap-3">

@@ -14,7 +14,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { useBillingOverview, useDeleteInvoice, useInvoices, useSendInvoice } from '@/features/billing/api'
 import { toast } from 'sonner'
@@ -54,6 +54,7 @@ export function InvoicesPage({ newInvoice }: { newInvoice?: boolean } = {}) {
  * "this project's invoices" or "what is overdue" is a link that can be sent.
  */
 function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
+  const inr = useINR()
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   const access = useAccess()
@@ -215,13 +216,13 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
       {/* What is owed and what is late, before the list: the reason most people open this page. */}
       {summary && (
         <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MoneyTile icon={FileText} tone="violet" value={formatINR(summary.billed)} label="Total invoiced" hint={`${summary.total_invoices} invoice${summary.total_invoices === 1 ? '' : 's'}`} onClick={() => change(() => setStatus('all'))} active={status === 'all'} />
-          <MoneyTile icon={CheckCircle2} tone="green" value={formatINR(summary.paid)} label="Amount paid" hint="Received against these invoices" onClick={() => change(() => setStatus('paid'))} active={status === 'paid'} />
-          <MoneyTile icon={Clock} tone="amber" value={formatINR(summary.pending)} label="Amount pending" hint="Waiting to be paid" onClick={() => change(() => setStatus('pending'))} active={status === 'pending'} />
+          <MoneyTile icon={FileText} tone="violet" value={inr(summary.billed)} label="Total invoiced" hint={`${summary.total_invoices} invoice${summary.total_invoices === 1 ? '' : 's'}`} onClick={() => change(() => setStatus('all'))} active={status === 'all'} />
+          <MoneyTile icon={CheckCircle2} tone="green" value={inr(summary.paid)} label="Amount paid" hint="Received against these invoices" onClick={() => change(() => setStatus('paid'))} active={status === 'paid'} />
+          <MoneyTile icon={Clock} tone="amber" value={inr(summary.pending)} label="Amount pending" hint="Waiting to be paid" onClick={() => change(() => setStatus('pending'))} active={status === 'pending'} />
           <MoneyTile
             icon={AlarmClock}
             tone={overview?.overdue.count ? 'rose' : 'green'}
-            value={formatINR(overview?.overdue.amount ?? 0)}
+            value={inr(overview?.overdue.amount ?? 0)}
             label="Overdue"
             hint={overview?.overdue.count ? `${overview.overdue.count} invoice${overview.overdue.count === 1 ? '' : 's'} past due` : 'Nothing late'}
             onClick={() => change(() => setStatus('overdue'))}
@@ -327,9 +328,9 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                     subtitle={`${inv.client_name ?? '—'}${inv.project_name ? ` · ${inv.project_name}` : ''}`}
                     badge={<InvoiceBadge invoice={inv} />}
                     fields={[
-                      { label: 'Total', value: formatINR(inv.total) },
-                      { label: 'Paid', value: formatINR(Math.max(0, inv.total - inv.balance_due)) },
-                      { label: 'Balance', value: formatINR(inv.balance_due), strong: true },
+                      { label: 'Total', value: inr(inv.total) },
+                      { label: 'Paid', value: inr(Math.max(0, inv.total - inv.balance_due)) },
+                      { label: 'Balance', value: inr(inv.balance_due), strong: true },
                       { label: 'Date', value: shortDate(inv.invoice_date) },
                       { label: 'Due', value: dueText(inv) ?? shortDate(inv.due_date) },
                     ]}
@@ -378,19 +379,19 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                         <td className={cn('whitespace-nowrap px-3 py-2 text-muted-foreground', late && 'font-medium text-destructive')}>
                           {dueText(inv) ?? shortDate(inv.due_date)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatINR(inv.total)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{inr(inv.total)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-xs tabular-nums">
                           {inv.status === 'cancelled' ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
                             <>
-                              <div className="text-tone-green">Rec: {formatINR(Math.max(0, inv.total - inv.balance_due))}</div>
-                              <div className={cn(inv.balance_due > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>Rem: {formatINR(inv.balance_due)}</div>
+                              <div className="text-tone-green">Rec: {inr(Math.max(0, inv.total - inv.balance_due))}</div>
+                              <div className={cn(inv.balance_due > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>Rem: {inr(inv.balance_due)}</div>
                             </>
                           )}
                         </td>
                         <td className={cn('px-3 py-2 text-right font-semibold tabular-nums', inv.balance_due > 0 ? (late ? 'text-destructive' : 'text-tone-amber') : 'text-tone-green')}>
-                          {inv.status === 'cancelled' ? '—' : formatINR(inv.balance_due)}
+                          {inv.status === 'cancelled' ? '—' : inr(inv.balance_due)}
                         </td>
                         <td className="px-3 py-2">
                           <InvoiceBadge invoice={inv} />

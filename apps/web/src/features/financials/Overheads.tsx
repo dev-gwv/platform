@@ -6,9 +6,9 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useConfirm } from '@/shared/ui/confirm'
-import { formatINR } from '@/shared/ui/format'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useCreateFixedOverhead, useDeleteFixedOverhead, useFixedOverheads, useUpdateFixedOverhead } from './api'
+import { useINR } from '@/shared/money/MoneyMask'
 
 const CATS = ['rent', 'salaries', 'utilities', 'internet', 'software', 'insurance', 'maintenance', 'marketing', 'other'] as const
 type Cat = (typeof CATS)[number]
@@ -32,6 +32,7 @@ const firstOfMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth
  * month" saves retyping the same rent every month.
  */
 export function OverheadsCard() {
+  const inr = useINR()
   const months = useMemo(() => {
     const now = new Date()
     return Array.from({ length: 15 }, (_, i) => {
@@ -81,7 +82,7 @@ export function OverheadsCard() {
                 <span className="block truncate font-medium">{r.label || CAT_LABEL[r.category as Cat] || r.category}</span>
                 {r.label && <span className="block text-xs text-muted-foreground">{CAT_LABEL[r.category as Cat] ?? r.category}</span>}
               </span>
-              <span className="tabular-nums">{formatINR(r.amount)}</span>
+              <span className="tabular-nums">{inr(r.amount)}</span>
               <Button size="icon" variant="ghost" className="size-8" aria-label={`Edit ${r.label || r.category}`} onClick={() => setEditing(r)}>
                 <Pencil />
               </Button>
@@ -97,12 +98,12 @@ export function OverheadsCard() {
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           <span className="text-sm">
-            Total <span className="font-semibold tabular-nums">{formatINR(total)}</span>
+            Total <span className="font-semibold tabular-nums">{inr(total)}</span>
           </span>
           <span className="flex gap-2">
             {rows.length === 0 && (last.data?.length ?? 0) > 0 && (
               <Button size="sm" variant="outline" disabled={create.isPending} onClick={() => void copyLast()}>
-                Copy last month ({formatINR((last.data ?? []).reduce((s, r) => s + r.amount, 0))})
+                Copy last month ({inr((last.data ?? []).reduce((s, r) => s + r.amount, 0))})
               </Button>
             )}
             <Button size="sm" onClick={() => setEditing('new')}>

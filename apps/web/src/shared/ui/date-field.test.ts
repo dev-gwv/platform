@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromIso, niceDate, parseTyped, quickDates, toIso } from './date-field'
+import { fromIso, niceDate, parseTyped, quickDates, toIso, typedEnterSets } from './date-field'
 
 describe('date field helpers', () => {
   it('round-trips ISO dates in local time', () => {
@@ -48,5 +48,12 @@ describe('date field helpers', () => {
     const chips = quickDates(wed, new Date(2026, 8, 24))
     expect(chips.find((q) => q.label === 'Today')?.ok).toBe(false)
     expect(chips.find((q) => q.label === 'Tomorrow')?.ok).toBe(true)
+  })
+})
+
+describe('typing a date', () => {
+  it('lets Enter set the typed value, not other keys', () => {
+    expect(typedEnterSets('Enter')).toBe(true)
+    expect(typedEnterSets('a')).toBe(false)
   })
 })

@@ -138,6 +138,8 @@ export const payTo = z.object({
   bank_account_name: z.string().nullable(),
   bank_account_number: z.string().nullable(),
   bank_ifsc: z.string().nullable(),
+  /** False for a member the studio added without a login: nobody reminds them, so the studio asks. */
+  login_enabled: z.boolean().default(true),
 })
 export type PayTo = z.infer<typeof payTo>
 
@@ -332,3 +334,19 @@ export const integrationStatusList = z.object({
   environment: z.string(),
 })
 export type IntegrationStatusList = z.infer<typeof integrationStatusList>
+
+/**
+ * Getting started (dashboard): what a new studio has done of its first five
+ * things, read from the data itself so a step can never go stale.
+ */
+export const gettingStarted = z.object({
+  /** When the studio was made, or set up -- the card shows for 60 days from here. */
+  started_at: z.coerce.string(),
+  setup_closed: z.boolean(),
+  logo: z.boolean(),
+  package: z.boolean(),
+  enquiry: z.boolean(),
+  booking: z.boolean(),
+  quotation: z.boolean(),
+})
+export type GettingStarted = z.infer<typeof gettingStarted>

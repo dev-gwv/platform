@@ -32,6 +32,8 @@ describe('the settings rail', () => {
         '/platform/studios',
         // The people and shops the studio pays (parties).
         '/settings/vendors',
+        // Refer a studio (0237).
+        '/settings/refer-a-studio',
       ].sort(),
     )
   })

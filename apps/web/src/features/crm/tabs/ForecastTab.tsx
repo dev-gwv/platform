@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonTiles } from '@/shared/ui/skeleton'
 import { StatCard } from '@/shared/ui/stat-card'
 import { ErrorState } from '@/shared/ui/states'
-import { formatINR } from '@/shared/ui/format'
+import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useForecast } from '../api'
 import { DateRange } from './DateRange'
 
@@ -60,9 +60,9 @@ export function ForecastTab({ range: pageRange }: { range: CrmStatsQuery }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Weighted forecast" value={formatINR(data.weighted)} />
-            <StatCard label="Open pipeline" value={formatINR(data.open_value)} />
-            <StatCard label="Won" value={formatINR(data.won_value)} />
+            <StatCard label="Weighted forecast" value={<Money value={data.weighted} />} />
+            <StatCard label="Open pipeline" value={<Money value={data.open_value} />} />
+            <StatCard label="Won" value={<Money value={data.won_value} />} />
             <StatCard label="Win rate" value={data.win_rate === null ? '—' : `${Math.round(data.win_rate * 100)}%`} />
           </div>
           <p className="text-sm text-muted-foreground">
@@ -99,6 +99,7 @@ export function ForecastTab({ range: pageRange }: { range: CrmStatsQuery }) {
 }
 
 function Bars({ rows }: { rows: ReadonlyArray<{ label: string; value: number; total: number }> }) {
+  const inr = useINR()
   if (rows.length === 0) return <p className="mt-4 text-sm text-muted-foreground">Nothing in this range.</p>
   const max = Math.max(1, ...rows.map((r) => r.total))
   return (
@@ -108,11 +109,11 @@ function Bars({ rows }: { rows: ReadonlyArray<{ label: string; value: number; to
           <span className="w-36 truncate text-sm" title={r.label}>
             {r.label}
           </span>
-          <div className="relative h-2.5 flex-1 rounded-full bg-muted" role="img" aria-label={`${r.label}: ${formatINR(r.value)} weighted of ${formatINR(r.total)}`}>
+          <div className="relative h-2.5 flex-1 rounded-full bg-muted" role="img" aria-label={`${r.label}: ${inr(r.value)} weighted of ${inr(r.total)}`}>
             <div className="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/25" style={{ width: `${Math.round((r.total / max) * 100)}%` }} />
             <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${Math.round((r.value / max) * 100)}%` }} />
           </div>
-          <span className="w-24 text-right text-xs tabular-nums">{formatINR(r.value)}</span>
+          <span className="w-24 text-right text-xs tabular-nums">{inr(r.value)}</span>
         </div>
       ))}
     </div>

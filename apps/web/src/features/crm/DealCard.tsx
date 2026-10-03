@@ -4,7 +4,7 @@ import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
 import type { CrmLead } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Avatar } from '@/shared/ui/avatar'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { DateBadge, DueBadge, ScoreBadge, lastTouch } from './tabs/shared'
 import { TagChips } from './TagChip'
 import { EventTile } from '@/shared/ui/icon-tile'
@@ -61,6 +61,7 @@ export function DealCard({
   /** Omit where cards cannot be picked. `range` is a shift-click. */
   onTick?: ((id: string, range: boolean) => void) | undefined
 }) {
+  const inr = useINR()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     disabled: !draggable,
@@ -165,7 +166,7 @@ export function DealCard({
         {lead.deal_value !== null && (
           <span className="mt-1.5 block">
             <span className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold tabular-nums">{formatINR(lead.deal_value)}</span>
+              <span className="text-sm font-semibold tabular-nums">{inr(lead.deal_value)}</span>
               {pct !== null && <span className="text-[0.65rem] tabular-nums text-muted-foreground">{pct}%</span>}
             </span>
             {pct !== null && (

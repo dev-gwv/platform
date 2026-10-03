@@ -5,7 +5,7 @@ import type { ShootListItem, TeamSlot } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { hoursLabel, rangeLabel, shootHours, timeLabel } from '@/features/shoots/assign'
 import { AlsoBookedLine, dayOfSlot } from '@/features/shoots/PersonDay'
@@ -251,6 +251,7 @@ export function BookedPerson({
   /** Everyone's bookings around this day: shows "Also booked …" under the name. */
   daySlots?: readonly TeamSlot[] | undefined
 }) {
+  const inr = useINR()
   const pay = slot.final_cost ?? slot.estimated_cost
   return (
     <li className="flex items-center gap-2 rounded-lg bg-card/90 px-2 py-1.5 shadow-sm">
@@ -268,7 +269,7 @@ export function BookedPerson({
           {hoursLabel(slot)}
           {canPlan && (
             <span className={cn('ml-1', COST_TONE[slot.cost_status])}>
-              · {pay != null && slot.cost_status !== 'not_decided' ? `${formatINR(pay)} ${slot.cost_status}` : 'Payout not added'}
+              · {pay != null && slot.cost_status !== 'not_decided' ? `${inr(pay)} ${slot.cost_status}` : 'Payout not added'}
             </span>
           )}
         </p>

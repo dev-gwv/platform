@@ -14,9 +14,9 @@ import { Segmented } from '@/shared/ui/segmented'
 import { Switch } from '@/shared/ui/switch'
 import { TimeField } from '@/shared/ui/time-field'
 import { useAttendanceSettings, useResolveLink, useSaveAttendanceSettings } from './api'
+import { enabledSinceText } from './board'
 import { PlacesAndRules } from './PlacesAndRules'
 
-const dateText = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
 function useFence() {
@@ -84,7 +84,7 @@ function SwitchCard({ s }: { s: AttendanceSettings }) {
       <CardContent className="flex flex-wrap items-center gap-3 p-4">
         <Check className="size-4 text-success" aria-hidden />
         <p className="min-w-0 flex-1 text-sm font-medium">
-          Attendance is on{s.enabled_at ? ` since ${dateText(s.enabled_at)}` : ''}.
+          Attendance is on{s.enabled_at ? ` since ${enabledSinceText(s.enabled_at)}` : ''}.
         </p>
         <Button
           variant="ghost"

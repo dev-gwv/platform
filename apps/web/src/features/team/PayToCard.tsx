@@ -2,6 +2,7 @@ import { Copy, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { usePayTo } from '@/features/profile/api'
+import { missingPayToText } from './pay-to'
 
 /**
  * Where this person wants their pay, shown in the dialog where it is paid --
@@ -17,7 +18,7 @@ export function PayToCard({ userId }: { userId: string | null }) {
   if (!p.upi_id && !hasBank) {
     return (
       <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-        {p.name} has not added UPI or bank details yet. They are reminded every day until they do.
+        {missingPayToText(p.name, p.login_enabled)}
       </p>
     )
   }

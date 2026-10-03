@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { todayInIndia } from '@/shared/ui/days-left'
@@ -28,6 +28,7 @@ export function PayDialog({
   paid: number
   onClose: () => void
 }) {
+  const inr = useINR()
   const pay = usePaySlot()
   const [total, setTotal] = useState(amount > 0 ? String(amount) : '')
   const totalN = Number(total) || 0
@@ -57,7 +58,7 @@ export function PayDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={`Pay ${name}`} description={paid > 0 ? `${formatINR(paid)} paid so far.` : undefined} className="max-w-md">
+      <DialogContent title={`Pay ${name}`} description={paid > 0 ? `${inr(paid)} paid so far.` : undefined} className="max-w-md">
         <div className="flex flex-col gap-3">
           <PayToCard userId={userId} />
           <div className="grid grid-cols-2 gap-3">
@@ -85,7 +86,7 @@ export function PayDialog({
               : nowN <= 0
                 ? 'Nothing is paid now; only the amount is saved.'
                 : left > 0
-                  ? `${formatINR(left)} will still be owed after this.`
+                  ? `${inr(left)} will still be owed after this.`
                   : `${name} will be paid in full.`}
           </p>
         </div>
@@ -94,7 +95,7 @@ export function PayDialog({
             Cancel
           </Button>
           <Button onClick={save} disabled={pay.isPending || over || (nowN <= 0 && Math.abs(totalN - amount) <= 0.001)}>
-            {pay.isPending ? 'Saving…' : nowN > 0 ? `Pay ${formatINR(nowN)}` : 'Save amount'}
+            {pay.isPending ? 'Saving…' : nowN > 0 ? `Pay ${inr(nowN)}` : 'Save amount'}
           </Button>
         </DialogFooter>
       </DialogContent>

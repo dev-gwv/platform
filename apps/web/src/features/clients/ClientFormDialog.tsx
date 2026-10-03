@@ -5,6 +5,7 @@ import type { Client } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
+import { cn } from '@/shared/ui/cn'
 import { useCreateClient, useUpdateClient } from './api'
 
 interface Props {
@@ -148,7 +149,8 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus aria-invalid={name.trim() === '' ? true : undefined} />
+            {/* Empty is not an error yet: amber says "fill me", never red before anyone has typed. */}
+            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus className={cn(!name.trim() && 'border-warning/60 bg-warning/5')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">

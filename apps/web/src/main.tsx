@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { captureStudioRef } from './features/studio-referrals/studio-ref'
 import { createRoot } from 'react-dom/client'
 import '@/styles.css'
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -46,6 +47,9 @@ if (!MOCK_ENABLED && !sentryOn) installClientErrorReporting()
 
 // Home-screen install (no caching; see public/sw.js).
 if (!MOCK_ENABLED) registerPwa()
+
+// A referral link (?studio_ref=) on any page is remembered for sign-up.
+captureStudioRef()
 
 const el = document.getElementById('root')
 if (!el) throw new Error('#root not found')
