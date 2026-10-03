@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
+import { LeadLimitLine } from '@/features/billing/LeadLimitLine'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -252,6 +253,7 @@ function Crm() {
         * hundred rows long, the controls scrolling away means scrolling back up
         * to change anything.
         */}
+      <LeadLimitLine />
       <div className="sticky top-0 z-20 -mx-1 mt-2 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1">
         <Segmented
           label="How to show these leads"

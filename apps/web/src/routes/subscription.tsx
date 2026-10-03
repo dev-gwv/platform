@@ -1,9 +1,10 @@
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
 import {
   plan,
+  planQuote,
   createOrderResponse,
   activateResponse,
   subscriptionStatus,
@@ -16,6 +17,7 @@ import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { UsageCard } from '@/features/billing/UsageCard'
 import { perDay } from '@/features/billing/usage'
+import { PlanPicker } from '@/features/billing/PlanPicker'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -44,15 +46,20 @@ export function SubscriptionPage() {
 type Outcome = { tone: 'success' | 'error' | 'info'; text: string }
 
 function Subscription() {
-  // Plans that come both ways (0241) show one way at a time; yearly first, the cheaper month.
-  const [payEvery, setPayEvery] = useState<'yearly' | 'monthly'>('yearly')
   const { session, refresh } = useAuth()
+  const qc = useQueryClient()
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [dialog, setDialog] = useState<'success' | 'failed' | null>(null)
   const [failedMsg, setFailedMsg] = useState('')
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['subscription', 'plans'],
     queryFn: () => callApi('/subscription/plans', { responseSchema: plans }),
+    enabled: !!session,
+  })
+  // What paying for each plan would mean now: buy, renew, upgrade for the difference, or later (0242).
+  const quotes = useQuery({
+    queryKey: ['subscription', 'quotes'],
+    queryFn: () => callApi('/subscription/quotes', { responseSchema: planQuote.array() }),
     enabled: !!session,
   })
   // Lovable parity: extended status (current/latest/can_purchase/webhook + history + recovery).
@@ -111,6 +118,8 @@ function Subscription() {
         text: `Plan active until ${new Date(r.expires_at).toLocaleDateString('en-IN')}.`,
       })
       setDialog('success')
+      // The plan, its year, the usage bars and what each plan would cost now all moved.
+      void qc.invalidateQueries({ queryKey: ['subscription'] })
       await refresh()
     },
     onError: (e) => {
@@ -202,26 +211,18 @@ function Subscription() {
         />
       ) : (
         <>
-        {data.some((p) => p.tier) && (
-          <div className="mb-3 inline-flex rounded-full border border-border p-0.5" role="radiogroup" aria-label="How to pay">
-            {(['yearly', 'monthly'] as const).map((i) => (
-              <button
-                key={i}
-                type="button"
-                role="radio"
-                aria-checked={payEvery === i}
-                onClick={() => setPayEvery(i)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  payEvery === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'
-                }`}
-              >
-                {i === 'yearly' ? 'Pay yearly' : 'Pay monthly'}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Starter, Pro and Studio Max (0242): three short cards, the chips, Compare plans. */}
+        <PlanPicker
+          plans={data}
+          quotes={quotes.data}
+          onChoose={(p) => subscribe.mutate(p)}
+          busy={subscribe.isPending}
+          canChoose={!!session?.is_owner}
+          chooseHint="Only the studio owner can change the plan."
+        />
+        {data.some((p) => !p.tier) && (
         <div className="grid gap-4 md:grid-cols-3">
-          {data.filter((p) => !p.tier || p.billing_interval === payEvery).map((p) => {
+          {data.filter((p) => !p.tier).map((p) => {
             // A studio already inside its plan is renewing, not choosing.
             const renewing = !status.data?.can_purchase
             const free = p.price <= 0
@@ -315,6 +316,7 @@ function Subscription() {
             )
           })}
         </div>
+        )}
         </>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
