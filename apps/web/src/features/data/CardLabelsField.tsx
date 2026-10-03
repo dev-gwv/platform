@@ -7,7 +7,15 @@ import { addCardLabels } from './cards'
  * The cards by name: type "SD-04" and press Enter (or a comma); each becomes
  * a chip with its own ×. Enter never submits the dialog around it.
  */
-export function CardLabelsField({ id, value, onChange }: { id?: string; value: string[]; onChange: (labels: string[]) => void }) {
+export function CardLabelsField({
+  id,
+  value,
+  onChange,
+}: {
+  id?: string
+  value: string[]
+  onChange: (labels: string[]) => void
+}) {
   const [typed, setTyped] = useState('')
   const commit = () => {
     if (!typed.trim()) return
@@ -17,7 +25,10 @@ export function CardLabelsField({ id, value, onChange }: { id?: string; value: s
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring/40">
       {value.map((label) => (
-        <span key={label} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium">
+        <span
+          key={label}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium"
+        >
           {label}
           <button
             type="button"

@@ -37,7 +37,9 @@ export function CrewDataDialog({
   const locations = useStorageLocations()
   const [received, setReceived] = useState(() => new Date().toLocaleDateString('en-CA'))
   const [disk, setDisk] = useState('')
-  const [rows, setRows] = useState(() => Object.fromEntries(slots.map((s) => [s.id, { cards: '', gb: '' }])))
+  const [rows, setRows] = useState(() =>
+    Object.fromEntries(slots.map((s) => [s.id, { cards: '', gb: '' }])),
+  )
   const [busy, setBusy] = useState(false)
   // Pay each person as their cards come in: a tick pays what is still owed.
   const canPay = useCanPay()
@@ -51,7 +53,8 @@ export function CrewDataDialog({
   const toPay = canPay ? slots.filter((s) => pay[s.id] && owed(s.id) > 0) : []
 
   const filled = slots.filter((s) => Number(rows[s.id]?.cards) > 0)
-  const set = (id: string, k: 'cards' | 'gb', v: string) => setRows((r) => ({ ...r, [id]: { ...r[id]!, [k]: v } }))
+  const set = (id: string, k: 'cards' | 'gb', v: string) =>
+    setRows((r) => ({ ...r, [id]: { ...r[id]!, [k]: v } }))
 
   async function onSave(e: FormEvent) {
     e.preventDefault()
@@ -88,7 +91,10 @@ export function CrewDataDialog({
     let paid = 0
     for (const s of toPay) {
       try {
-        await paySlot.mutateAsync({ slotId: s.id, body: { paid_now: owed(s.id), paid_date: new Date().toLocaleDateString('en-CA') } })
+        await paySlot.mutateAsync({
+          slotId: s.id,
+          body: { paid_now: owed(s.id), paid_date: new Date().toLocaleDateString('en-CA') },
+        })
         paid++
       } catch {
         // usePaySlot toasts the reason.
@@ -110,11 +116,21 @@ export function CrewDataDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="crew-received">Received on</Label>
-              <Input id="crew-received" type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
+              <Input
+                id="crew-received"
+                type="date"
+                value={received}
+                onChange={(e) => setReceived(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="crew-disk">Copied to</Label>
-              <Select id="crew-disk" value={disk} onChange={(e) => setDisk(e.target.value)} className={cn(!disk && 'border-warning/60')}>
+              <Select
+                id="crew-disk"
+                value={disk}
+                onChange={(e) => setDisk(e.target.value)}
+                className={cn(!disk && 'border-warning/60')}
+              >
                 <option value="">Not copied yet</option>
                 {active.map((l) => (
                   <option key={l.id} value={l.id}>
@@ -132,14 +148,33 @@ export function CrewDataDialog({
               return (
                 <li
                   key={s.id}
-                  className={cn('flex items-center gap-2 rounded-md border px-3 py-2', done ? 'border-success/50 bg-success/15' : 'border-border bg-card')}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border px-3 py-2',
+                    done ? 'border-success/50 bg-success/15' : 'border-border bg-card',
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{s.user_name ?? 'Someone'}</p>
-                    {s.service_name && <p className="truncate text-xs text-muted-foreground">{s.service_name}</p>}
+                    {s.service_name && (
+                      <p className="truncate text-xs text-muted-foreground">{s.service_name}</p>
+                    )}
                   </div>
-                  <Input value={r.cards} onChange={(e) => set(s.id, 'cards', e.target.value)} inputMode="numeric" placeholder="Cards" aria-label={`${s.user_name ?? 'Their'} cards`} className="w-20" />
-                  <Input value={r.gb} onChange={(e) => set(s.id, 'gb', e.target.value)} inputMode="decimal" placeholder="GB" aria-label={`${s.user_name ?? 'Their'} GB`} className="w-20" />
+                  <Input
+                    value={r.cards}
+                    onChange={(e) => set(s.id, 'cards', e.target.value)}
+                    inputMode="numeric"
+                    placeholder="Cards"
+                    aria-label={`${s.user_name ?? 'Their'} cards`}
+                    className="w-20"
+                  />
+                  <Input
+                    value={r.gb}
+                    onChange={(e) => set(s.id, 'gb', e.target.value)}
+                    inputMode="decimal"
+                    placeholder="GB"
+                    aria-label={`${s.user_name ?? 'Their'} GB`}
+                    className="w-20"
+                  />
                   {canPay && owed(s.id) > 0 && (
                     <button
                       type="button"
@@ -148,7 +183,9 @@ export function CrewDataDialog({
                       onClick={() => setPay((p) => ({ ...p, [s.id]: !p[s.id] }))}
                       className={cn(
                         'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                        pay[s.id] ? 'border-success bg-success text-white' : 'border-dashed border-warning/70 bg-warning/[0.06] text-foreground hover:bg-warning/10',
+                        pay[s.id]
+                          ? 'border-success bg-success text-white'
+                          : 'border-dashed border-warning/70 bg-warning/[0.06] text-foreground hover:bg-warning/10',
                       )}
                     >
                       {pay[s.id] ? '✓ Paid ' : 'Pay '}
@@ -161,14 +198,22 @@ export function CrewDataDialog({
           </ul>
 
           <p className="text-xs text-muted-foreground">
-            {filled.length} of {slots.length} filled{toPay.length ? ` · ${toPay.length} to pay` : ''} · anyone left at 0 cards stays on the list for later.
+            {filled.length} of {slots.length} filled
+            {toPay.length ? ` · ${toPay.length} to pay` : ''} · anyone left at 0 cards stays on the
+            list for later.
           </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={(filled.length === 0 && toPay.length === 0) || busy}>
-              {busy ? 'Saving…' : filled.length ? `Save ${filled.length} ${filled.length === 1 ? 'record' : 'records'}` : toPay.length ? `Pay ${toPay.length}` : 'Save'}
+              {busy
+                ? 'Saving…'
+                : filled.length
+                  ? `Save ${filled.length} ${filled.length === 1 ? 'record' : 'records'}`
+                  : toPay.length
+                    ? `Pay ${toPay.length}`
+                    : 'Save'}
             </Button>
           </div>
         </form>

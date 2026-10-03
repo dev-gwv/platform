@@ -87,7 +87,7 @@ describe('the public form', () => {
       `select * from enquiry_form_public($1)`,
       [form.code.toUpperCase()],
     )
-    expect(row).toEqual({ studio: 'Asha Studio', form_name: 'Riya Boutique', is_open: true })
+    expect(row).toMatchObject({ studio: 'Asha Studio', form_name: 'Riya Boutique', is_open: true, purpose: 'vendor' })
     expect((await q<{ scans: number }>(`select scans from enquiry_forms where id = $1`, [form.id]))[0]!.scans).toBe(1)
   })
 

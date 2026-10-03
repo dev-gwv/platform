@@ -2866,6 +2866,40 @@ if (listed) {
   )
 }
 
+// ── 0240: the studio builds its own form, for its website ────────
+{
+  const made = await api('/enquiry-forms', { token: aToken, method: 'POST', body: { name: 'Website', purpose: 'website' } })
+  const w = made.json
+  check(
+    'form builder: a website form asks the email and carries code to paste',
+    made.status === 201 && w.purpose === 'website' && w.fields.email === 'optional' && w.embed_code.includes(`/enquire/${w.code}?embed=1`),
+    { status: made.status, body: w },
+  )
+  const fields = { ...w.fields, budget: 'required', city: 'off' }
+  const saved = await api(`/enquiry-forms/${w.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { title: 'Plan your wedding with us', thank_you: 'We will call you within the hour.', accent: 'rose', fields },
+  })
+  const pub = await api(`/public/enquiry/${w.code}`)
+  check(
+    'form builder: the public form carries the words, colour and fields; no vendor badge',
+    saved.status === 200 && pub.status === 200 && pub.json.title === 'Plan your wedding with us' && pub.json.accent === 'rose' && pub.json.fields.budget === 'required' && pub.json.purpose === 'website',
+    { saved: saved.status, pub: pub.json },
+  )
+  const phone = `8${String(Date.now()).slice(-9)}`
+  const noBudget = await api(`/public/enquiry/${w.code}`, { method: 'POST', body: { name: 'Asha Rao', phone } })
+  const withBudget = await api(`/public/enquiry/${w.code}`, { method: 'POST', body: { name: 'Asha Rao', phone, budget: 250000, city: 'Pune' } })
+  const leads = await api(`/enquiry-forms/${w.id}/leads`, { token: aToken })
+  check(
+    'form builder: a required field is required on the server too; a field the form does not ask is not kept',
+    noBudget.status === 422 && /budget/i.test(noBudget.json?.error ?? noBudget.json?.message ?? '') && withBudget.status === 200 && leads.json.length === 1,
+    { noBudget: noBudget.json, withBudget: withBudget.status, leads: leads.json },
+  )
+  const bad = await api(`/enquiry-forms/${w.id}`, { token: aToken, method: 'PATCH', body: { accent: 'neon' } })
+  check('form builder: only the seven colours', bad.status === 422, bad.status)
+}
+
 // ── 0198: overdue alerts and the morning email ───────────────────
 {
   const dry = await fetch(`${API}/cron/reminders?dry=1`, {

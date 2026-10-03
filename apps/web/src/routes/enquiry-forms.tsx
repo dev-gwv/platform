@@ -1,6 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Copy, Download, MessageCircle, Plus, QrCode, RefreshCw, Link2Off } from 'lucide-react'
+import {
+  ArrowLeft,
+  Code2,
+  Copy,
+  Download,
+  Globe,
+  MessageCircle,
+  Pencil,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Link2Off,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { buildWhatsAppUrl, type EnquiryForm, type EnquiryFormLead } from '@ipc/contracts'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -26,6 +38,8 @@ import {
   useEnquiryForms,
   useUpdateEnquiryForm,
 } from '@/features/enquiry-forms/api'
+import { FormBuilderDialog } from '@/features/enquiry-forms/FormBuilderDialog'
+import { fieldsLine } from '@/features/enquiry-forms/form-fields'
 
 /**
  * Enquiry forms: a QR for each vendor the studio works with. Someone scans
@@ -34,12 +48,25 @@ import {
  * shows what their QR brought in.
  */
 
-const KINDS = ['Boutique', 'Jeweller', 'Venue', 'Salon', 'Decorator', 'Wedding planner', 'Caterer', 'Influencer', 'Store']
+const KINDS = [
+  'Boutique',
+  'Jeweller',
+  'Venue',
+  'Salon',
+  'Decorator',
+  'Wedding planner',
+  'Caterer',
+  'Influencer',
+  'Store',
+]
 
 const numbers = (f: Pick<EnquiryForm, 'scans' | 'enquiries' | 'booked'>) =>
   `${f.scans} ${f.scans === 1 ? 'scan' : 'scans'} · ${f.enquiries} ${f.enquiries === 1 ? 'enquiry' : 'enquiries'} · ${f.booked} booked`
 
-const LEAD_STATUS: Record<string, { label: string; tone: 'neutral' | 'info' | 'success' | 'danger' }> = {
+const LEAD_STATUS: Record<
+  string,
+  { label: string; tone: 'neutral' | 'info' | 'success' | 'danger' }
+> = {
   new: { label: 'New', tone: 'neutral' },
   contacted: { label: 'In talks', tone: 'info' },
   qualified: { label: 'In talks', tone: 'info' },
@@ -68,17 +95,24 @@ export function EnquiryFormsPage() {
   const all = forms.data ?? []
   const live = all.filter((f) => !f.archived_at)
   const ended = all.filter((f) => f.archived_at)
-  const total = live.reduce((t, f) => ({ scans: t.scans + f.scans, enquiries: t.enquiries + f.enquiries, booked: t.booked + f.booked }), {
-    scans: 0,
-    enquiries: 0,
-    booked: 0,
-  })
+  const total = live.reduce(
+    (t, f) => ({
+      scans: t.scans + f.scans,
+      enquiries: t.enquiries + f.enquiries,
+      booked: t.booked + f.booked,
+    }),
+    {
+      scans: 0,
+      enquiries: 0,
+      booked: 0,
+    },
+  )
 
   return (
     <>
       <PageHeader
         title="Enquiry forms"
-        description="A QR for each vendor you work with. Every enquiry is credited to them."
+        description="A form for your website, and a QR for each vendor you work with."
         actions={
           canCreate && (
             <Button onClick={() => setAdding(true)}>
@@ -91,13 +125,16 @@ export function EnquiryFormsPage() {
       {forms.isPending ? (
         <Skeleton className="mt-2 h-40" />
       ) : forms.isError ? (
-        <ErrorState message="We could not load your enquiry forms." onRetry={() => void forms.refetch()} />
+        <ErrorState
+          message="We could not load your enquiry forms."
+          onRetry={() => void forms.refetch()}
+        />
       ) : all.length === 0 ? (
         <Card className="mt-2">
           <CardContent className="p-6">
             <EmptyState
               title="No enquiry forms yet"
-              description="Make one for a boutique, a venue or a decorator you work with. Print their QR, and every enquiry from it is marked as theirs."
+              description="Put one on your website, or make a QR for a boutique or venue you work with. Every enquiry lands in Leads."
               action={
                 canCreate && (
                   <Button onClick={() => setAdding(true)}>
@@ -168,7 +205,11 @@ function FormRow({ form }: { form: EnquiryForm }) {
         className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50"
       >
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <QrCode className="size-4" aria-hidden />
+          {form.purpose === 'website' ? (
+            <Globe className="size-4" aria-hidden />
+          ) : (
+            <QrCode className="size-4" aria-hidden />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">
@@ -190,13 +231,17 @@ function FormRow({ form }: { form: EnquiryForm }) {
 function AddFormDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateEnquiryForm()
   const navigate = useNavigate()
-  const [name, setName] = useState('')
+  const [purpose, setPurpose] = useState<'website' | 'vendor'>('website')
+  const [name, setName] = useState('Website')
   const [kind, setKind] = useState('')
   const [phone, setPhone] = useState('')
+  const vendor = purpose === 'vendor'
 
   const submit = () =>
     create.mutate(
-      { name: name.trim(), kind: kind.trim() || null, phone: phone.trim() || null },
+      vendor
+        ? { name: name.trim(), kind: kind.trim() || null, phone: phone.trim() || null, purpose }
+        : { name: name.trim(), purpose },
       {
         onSuccess: (f) => {
           onClose()
@@ -207,7 +252,7 @@ function AddFormDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Add an enquiry form" description="One QR for one vendor. You can print it right after.">
+      <DialogContent title="Add an enquiry form">
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -215,47 +260,96 @@ function AddFormDialog({ onClose }: { onClose: () => void }) {
             if (name.trim()) submit()
           }}
         >
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Where it goes">
+            {(
+              [
+                ['website', Globe, 'Your website', 'Paste it into your site'],
+                ['vendor', QrCode, 'A vendor', 'A QR for their counter'],
+              ] as const
+            ).map(([p, Icon, title, line]) => (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={purpose === p}
+                onClick={() => {
+                  setPurpose(p)
+                  if (p === 'website' && !name.trim()) setName('Website')
+                  if (p === 'vendor' && name === 'Website') setName('')
+                }}
+                className={cn(
+                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
+                  purpose === p
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:bg-accent/50',
+                )}
+              >
+                <Icon
+                  className={cn('size-4', purpose === p ? 'text-primary' : 'text-muted-foreground')}
+                  aria-hidden
+                />
+                <span className="text-sm font-medium">{title}</span>
+                <span className="text-xs text-muted-foreground">{line}</span>
+              </button>
+            ))}
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ef-name">
-              Who is it for <span className="text-destructive">*</span>
+              {vendor ? 'Who is it for' : 'Name it'} <span className="text-destructive">*</span>
             </Label>
-            <Input id="ef-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Riya Boutique" autoFocus />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ef-kind">What they are</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {KINDS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKind(kind === k ? '' : k)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs transition-colors',
-                    kind === k ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:bg-accent',
-                  )}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-            <Input id="ef-kind" value={kind} onChange={(e) => setKind(e.target.value)} placeholder="Or type your own" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ef-phone">Their mobile</Label>
             <Input
-              id="ef-phone"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="To send them their QR and page on WhatsApp"
+              id="ef-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={vendor ? 'Riya Boutique' : 'Website'}
             />
           </div>
+          {vendor && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ef-kind">What they are</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setKind(kind === k ? '' : k)}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs transition-colors',
+                        kind === k
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border hover:bg-accent',
+                      )}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  id="ef-kind"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value)}
+                  placeholder="Or type your own"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ef-phone">Their mobile</Label>
+                <Input
+                  id="ef-phone"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="To send them their QR and page on WhatsApp"
+                />
+              </div>
+            </>
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!name.trim() || create.isPending}>
-              {create.isPending ? 'Making…' : 'Add and make QR'}
+              {create.isPending ? 'Making…' : vendor ? 'Add and make QR' : 'Make the form'}
             </Button>
           </div>
         </form>
@@ -283,23 +377,33 @@ function FormDetail({ form }: { form: EnquiryForm }) {
 
   return (
     <>
-      <Link to="/enquiry-forms" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/enquiry-forms"
+        className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="size-4" aria-hidden /> Enquiry forms
       </Link>
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
             {form.name}
-            {form.archived_at ? <StatusBadge>Ended</StatusBadge> : !form.is_active && <StatusBadge tone="warning">Off</StatusBadge>}
+            {form.archived_at ? (
+              <StatusBadge>Ended</StatusBadge>
+            ) : (
+              !form.is_active && <StatusBadge tone="warning">Off</StatusBadge>
+            )}
           </span>
         }
         description={[form.kind, numbers(form)].filter(Boolean).join(' · ')}
       />
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <QrCard form={form} />
         <div className="flex flex-col gap-4">
-          <VendorPageCard form={form} canEdit={canEdit} />
+          {form.purpose === 'website' ? <WebsiteCard form={form} /> : <QrCard form={form} />}
+          <FormCard form={form} canEdit={canEdit} />
+        </div>
+        <div className="flex flex-col gap-4">
+          {form.purpose === 'vendor' && <VendorPageCard form={form} canEdit={canEdit} />}
           <LeadsCard form={form} />
         </div>
       </div>
@@ -314,7 +418,14 @@ function FormDetail({ form }: { form: EnquiryForm }) {
               onClick={() =>
                 update.mutate(
                   { is_active: !form.is_active },
-                  { onSuccess: (f) => toast.success(f.is_active ? 'Taking enquiries again.' : 'Switched off. The QR now says the form is closed.') },
+                  {
+                    onSuccess: (f) =>
+                      toast.success(
+                        f.is_active
+                          ? 'Taking enquiries again.'
+                          : 'Switched off. The QR now says the form is closed.',
+                      ),
+                  },
                 )
               }
             >
@@ -330,16 +441,35 @@ function FormDetail({ form }: { form: EnquiryForm }) {
                 update.mutate({ archived: false })
                 return
               }
-              const ok = await confirm({
-                title: `End the partnership with ${form.name}?`,
-                description: 'The QR stops taking enquiries and their page stops working. Their past enquiries stay in Leads.',
-                confirmLabel: 'End it',
-                destructive: true,
-              })
-              if (ok) update.mutate({ archived: true }, { onSuccess: () => toast.success('Ended. You can bring it back from the list.') })
+              const ok = await confirm(
+                form.purpose === 'website'
+                  ? {
+                      title: `Stop using ${form.name}?`,
+                      description:
+                        'The form on your website says it is closed. Its past enquiries stay in Leads.',
+                      confirmLabel: 'Stop it',
+                      destructive: true,
+                    }
+                  : {
+                      title: `End the partnership with ${form.name}?`,
+                      description:
+                        'The QR stops taking enquiries and their page stops working. Their past enquiries stay in Leads.',
+                      confirmLabel: 'End it',
+                      destructive: true,
+                    },
+              )
+              if (ok)
+                update.mutate(
+                  { archived: true },
+                  { onSuccess: () => toast.success('Ended. You can bring it back from the list.') },
+                )
             }}
           >
-            {form.archived_at ? 'Bring it back' : 'End partnership'}
+            {form.archived_at
+              ? 'Bring it back'
+              : form.purpose === 'website'
+                ? 'Stop using it'
+                : 'End partnership'}
           </Button>
         </div>
       )}
@@ -351,7 +481,8 @@ function QrCard({ form }: { form: EnquiryForm }) {
   const { session } = useAuth()
   const svg = useMemo(() => qrSvg(form.form_url), [form.form_url])
   const [busy, setBusy] = useState(false)
-  const studio = session?.studios.find((m) => m.company_id === session.company_id)?.company_name ?? ''
+  const studio =
+    session?.studios.find((m) => m.company_id === session.company_id)?.company_name ?? ''
 
   const message = `Hi! Here is your QR for ${studio || 'our studio'}. Anyone who scans it can send us an enquiry, and it is marked as coming from you.\n${form.form_url}`
 
@@ -374,7 +505,12 @@ function QrCard({ form }: { form: EnquiryForm }) {
             onClick={async () => {
               setBusy(true)
               try {
-                await downloadQrPng(form.form_url, `qr-${form.name}`, studio || form.name, `Scan to enquire · via ${form.name}`)
+                await downloadQrPng(
+                  form.form_url,
+                  `qr-${form.name}`,
+                  studio || form.name,
+                  `Scan to enquire · via ${form.name}`,
+                )
                 toast.success('QR downloaded, ready to print')
               } catch {
                 toast.error('Could not download the QR. Please try again.')
@@ -391,12 +527,21 @@ function QrCard({ form }: { form: EnquiryForm }) {
                 <MessageCircle /> WhatsApp
               </a>
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => void copy(form.form_url, 'Link')}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => void copy(form.form_url, 'Link')}
+            >
               <Copy /> Copy link
             </Button>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <a href={form.form_url} target="_blank" rel="noreferrer" className="truncate text-xs text-muted-foreground hover:underline">
+            <a
+              href={form.form_url}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate text-xs text-muted-foreground hover:underline"
+            >
               {form.form_url.replace(/^https?:\/\//, '')}
             </a>
             <button
@@ -408,6 +553,69 @@ function QrCard({ form }: { form: EnquiryForm }) {
             </button>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** What the form asks, in one line, and the button that builds it. */
+function FormCard({ form, canEdit }: { form: EnquiryForm; canEdit: boolean }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="text-base">The form</CardTitle>
+        {canEdit && (
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Pencil /> Edit form
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1">
+        <p className="text-sm">
+          {form.title || 'Tell us about your event and we will call you back.'}
+        </p>
+        <p className="text-xs text-muted-foreground">{fieldsLine(form.fields)}</p>
+      </CardContent>
+      {editing && <FormBuilderDialog form={form} onClose={() => setEditing(false)} />}
+    </Card>
+  )
+}
+
+/** The code for the studio's own website, and the plain link. */
+function WebsiteCard({ form }: { form: EnquiryForm }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">On your website</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Paste this where the form should appear. It sizes itself.
+        </p>
+        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px] leading-relaxed">
+          {form.embed_code}
+        </pre>
+        <div className="flex gap-2">
+          <Button className="flex-1" onClick={() => void copy(form.embed_code, 'Website code')}>
+            <Code2 /> Copy code
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => void copy(form.form_url, 'Link')}
+          >
+            <Copy /> Copy link
+          </Button>
+        </div>
+        <a
+          href={form.form_url}
+          target="_blank"
+          rel="noreferrer"
+          className="truncate text-xs text-muted-foreground hover:underline"
+        >
+          Open the form · {form.form_url.replace(/^https?:\/\//, '')}
+        </a>
       </CardContent>
     </Card>
   )
@@ -444,7 +652,8 @@ function VendorPageCard({ form, canEdit }: { form: EnquiryForm; canEdit: boolean
               {
                 label: 'Stop sharing',
                 icon: <Link2Off className="size-4" />,
-                onSelect: () => page.mutate(false, { onSuccess: () => toast.success('Their page is off.') }),
+                onSelect: () =>
+                  page.mutate(false, { onSuccess: () => toast.success('Their page is off.') }),
               },
             ]}
           />
@@ -457,7 +666,11 @@ function VendorPageCard({ form, canEdit }: { form: EnquiryForm; canEdit: boolean
               Let {form.name} see the enquiries their QR brought in, and which ones booked.
             </p>
             {canEdit && (
-              <Button className="self-start" disabled={page.isPending || !!form.archived_at} onClick={() => page.mutate(true)}>
+              <Button
+                className="self-start"
+                disabled={page.isPending || !!form.archived_at}
+                onClick={() => page.mutate(true)}
+              >
                 Make their page link
               </Button>
             )}
@@ -470,7 +683,11 @@ function VendorPageCard({ form, canEdit }: { form: EnquiryForm; canEdit: boolean
                   <MessageCircle /> Send on WhatsApp
                 </a>
               </Button>
-              <Button variant="outline" className="flex-1" onClick={() => void copy(form.page_url!, 'Page link')}>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => void copy(form.page_url!, 'Page link')}
+              >
                 <Copy /> Copy
               </Button>
             </div>
@@ -511,14 +728,20 @@ function LeadsCard({ form }: { form: EnquiryForm }) {
         {leads.isPending ? (
           <Skeleton className="h-16" />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None yet. They will show up here the moment someone scans and sends.</p>
+          <p className="text-sm text-muted-foreground">
+            None yet. They will show up here the moment someone scans and sends.
+          </p>
         ) : (
           <ul className="-mx-2 flex flex-col">
             {rows.slice(0, 20).map((l) => (
               <LeadLine key={l.id} lead={l} />
             ))}
             {rows.length > 20 && (
-              <li className="px-2 pt-1 text-xs text-muted-foreground">+ {rows.length - 20} more in Leads</li>
+              <li className="px-2 pt-1 text-xs">
+                <Link to="/follow-ups" className="text-muted-foreground hover:underline">
+                  + {rows.length - 20} more in Leads
+                </Link>
+              </li>
             )}
           </ul>
         )}
@@ -529,7 +752,15 @@ function LeadsCard({ form }: { form: EnquiryForm }) {
 
 function LeadLine({ lead }: { lead: EnquiryFormLead }) {
   const s = LEAD_STATUS[lead.status] ?? { label: lead.status, tone: 'neutral' as const }
-  const when = [lead.event_type, lead.event_date && new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })]
+  const when = [
+    lead.event_type,
+    lead.event_date &&
+      new Date(lead.event_date).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+  ]
     .filter(Boolean)
     .join(' · ')
   return (
@@ -542,7 +773,8 @@ function LeadLine({ lead }: { lead: EnquiryFormLead }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{lead.name ?? 'No name'}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {when || `Enquired ${new Date(lead.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+            {when ||
+              `Enquired ${new Date(lead.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
           </p>
         </div>
         <StatusBadge tone={s.tone}>{s.label}</StatusBadge>

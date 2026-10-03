@@ -8,6 +8,24 @@ import { uuid, isoDate, isoDateTime } from './shared/primitives'
  * that lists what their QR brought in.
  */
 
+// ── what a form asks (0240) ──────────────────────────────────────
+/** Name and phone are always asked. Each of these is off, optional or required. */
+export const ENQUIRY_FIELD_KEYS = ['email', 'event_type', 'event_date', 'city', 'budget', 'message'] as const
+export type EnquiryFieldKey = (typeof ENQUIRY_FIELD_KEYS)[number]
+export const enquiryFieldSetting = z.enum(['off', 'optional', 'required'])
+export type EnquiryFieldSetting = z.infer<typeof enquiryFieldSetting>
+export const enquiryFields = z.object({
+  email: enquiryFieldSetting.default('off'),
+  event_type: enquiryFieldSetting.default('optional'),
+  event_date: enquiryFieldSetting.default('optional'),
+  city: enquiryFieldSetting.default('optional'),
+  budget: enquiryFieldSetting.default('off'),
+  message: enquiryFieldSetting.default('optional'),
+})
+export type EnquiryFields = z.infer<typeof enquiryFields>
+export const enquiryPurpose = z.enum(['vendor', 'website'])
+export const enquiryAccent = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'])
+
 // ── studio side ──────────────────────────────────────────────────
 export const enquiryForm = z.object({
   id: uuid,
@@ -31,6 +49,15 @@ export const enquiryForm = z.object({
   form_url: z.string(),
   /** The vendor's page, or null while it is off. */
   page_url: z.string().nullable(),
+  purpose: enquiryPurpose.default('vendor'),
+  title: z.string().nullable().default(null),
+  intro: z.string().nullable().default(null),
+  thank_you: z.string().nullable().default(null),
+  accent: enquiryAccent.nullable().default(null),
+  show_logo: z.boolean().default(true),
+  fields: enquiryFields.default({}),
+  /** What a studio pastes into its own website. */
+  embed_code: z.string(),
 })
 export type EnquiryForm = z.infer<typeof enquiryForm>
 
@@ -41,6 +68,7 @@ export const createEnquiryFormRequest = z.object({
   kind: text(60).nullish(),
   phone: text(30).nullish(),
   notes: text(1000).nullish(),
+  purpose: enquiryPurpose.optional(),
 })
 export type CreateEnquiryFormRequest = z.input<typeof createEnquiryFormRequest>
 
@@ -53,6 +81,13 @@ export const updateEnquiryFormRequest = z
     show_phone: z.boolean(),
     is_active: z.boolean(),
     archived: z.boolean(),
+    purpose: enquiryPurpose,
+    title: text(120).nullable(),
+    intro: text(300).nullable(),
+    thank_you: text(300).nullable(),
+    accent: enquiryAccent.nullable(),
+    show_logo: z.boolean(),
+    fields: enquiryFields,
   })
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')
@@ -76,6 +111,13 @@ export const publicEnquiryForm = z.object({
   studio: z.string(),
   form_name: z.string(),
   is_open: z.boolean(),
+  purpose: enquiryPurpose.default('vendor'),
+  title: z.string().nullable().default(null),
+  intro: z.string().nullable().default(null),
+  thank_you: z.string().nullable().default(null),
+  accent: enquiryAccent.nullable().default(null),
+  logo_url: z.string().nullable().default(null),
+  fields: enquiryFields.default({}),
 })
 export type PublicEnquiryForm = z.infer<typeof publicEnquiryForm>
 
@@ -92,6 +134,7 @@ export const submitEnquiryRequest = z.object({
   event_date: isoDate.or(z.literal('')).nullish(),
   city: text(120).nullish(),
   message: text(2000).nullish(),
+  budget: z.number().min(0).max(1e10).nullish(),
   /** Left empty by people; bots fill every field they see. */
   website: z.string().max(500).optional(),
 })

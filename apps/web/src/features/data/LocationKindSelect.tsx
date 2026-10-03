@@ -25,7 +25,9 @@ export const kindLabelOf = (loc: Pick<StorageLocation, 'kind' | 'location_type'>
 }
 
 /** The fields to save for a chosen type value. */
-export const kindFields = (value: string): { kind: StorageLocationKind; location_type: string | null } =>
+export const kindFields = (
+  value: string,
+): { kind: StorageLocationKind; location_type: string | null } =>
   isKind(value) ? { kind: value, location_type: null } : { kind: 'other', location_type: value }
 
 /** Pick a location type, or add the studio's own. */

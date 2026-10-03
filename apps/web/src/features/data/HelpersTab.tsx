@@ -96,7 +96,12 @@ function HelperRow({ person }: { person: DataPerson }) {
   async function onSave(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    await update.mutateAsync({ id: person.id, name: name.trim(), role: role.trim(), phone: phone.trim() })
+    await update.mutateAsync({
+      id: person.id,
+      name: name.trim(),
+      role: role.trim(),
+      phone: phone.trim(),
+    })
     setEditing(false)
   }
 
@@ -104,9 +109,31 @@ function HelperRow({ person }: { person: DataPerson }) {
     return (
       <li className="rounded-lg border border-primary/40 bg-card p-2">
         <form onSubmit={(e) => void onSave(e)} className="flex flex-wrap items-center gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" maxLength={120} className="w-48" autoFocus />
-          <Input value={role} onChange={(e) => setRole(e.target.value)} aria-label="What they do" placeholder="What they do" maxLength={80} className="w-40" />
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Phone" placeholder="Phone" inputMode="tel" maxLength={20} className="w-36" />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Name"
+            maxLength={120}
+            className="w-48"
+            autoFocus
+          />
+          <Input
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            aria-label="What they do"
+            placeholder="What they do"
+            maxLength={80}
+            className="w-40"
+          />
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            aria-label="Phone"
+            placeholder="Phone"
+            inputMode="tel"
+            maxLength={20}
+            className="w-36"
+          />
           <Button type="submit" size="sm" disabled={!name.trim() || update.isPending}>
             <Check /> Save
           </Button>
@@ -119,11 +146,18 @@ function HelperRow({ person }: { person: DataPerson }) {
   }
 
   return (
-    <li className={cn('flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-3 py-2', !person.is_active && 'opacity-70')}>
+    <li
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-3 py-2',
+        !person.is_active && 'opacity-70',
+      )}
+    >
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{person.name}</p>
         {(person.role || person.phone) && (
-          <p className="truncate text-xs text-muted-foreground">{[person.role, person.phone].filter(Boolean).join(' · ')}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {[person.role, person.phone].filter(Boolean).join(' · ')}
+          </p>
         )}
       </div>
       {person.is_active && (
@@ -136,7 +170,11 @@ function HelperRow({ person }: { person: DataPerson }) {
         variant="outline"
         disabled={update.isPending}
         onClick={() => update.mutate({ id: person.id, is_active: !person.is_active })}
-        title={person.is_active ? 'Leaves the Copied by list; their records stay' : 'Back in the Copied by list'}
+        title={
+          person.is_active
+            ? 'Leaves the Copied by list; their records stay'
+            : 'Back in the Copied by list'
+        }
       >
         {person.is_active ? (
           <>
