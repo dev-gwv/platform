@@ -1,0 +1,2 @@
+-- 0243: a client's birthdays and anniversary (client_occasions), the
+-- wedding day filling the anniversary by itself, for the project's Wishes tab.
