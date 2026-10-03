@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmLead } from '@ipc/contracts'
-import { NO_EXTRAS, NO_FACETS, UNSET, activeExtrasCount, applyExtras, applyFacets, facetCounts } from './board-filters'
+import { NO_EXTRAS, NO_FACETS, UNSET, activeExtrasCount, activeFacetCount, applyExtras, applyFacets, facetCounts } from './board-filters'
 
 const lead = (p: Partial<CrmLead>): CrmLead =>
   ({ id: Math.random().toString(36), stage_id: 's1', assigned_to: null, event_type: null, quality: null, source: 'manual', tags: [], functions: [], ...p }) as CrmLead
@@ -78,5 +78,12 @@ describe('applyExtras', () => {
   it('counts what is switched on', () => {
     expect(activeExtrasCount(NO_EXTRAS)).toBe(0)
     expect(activeExtrasCount({ ...NO_EXTRAS, due: 'today', hotOnly: true, budgetMin: 1 })).toBe(3)
+  })
+})
+
+describe('activeFacetCount', () => {
+  it('counts every pick that narrows the list', () => {
+    expect(activeFacetCount(NO_FACETS)).toBe(0)
+    expect(activeFacetCount({ ...NO_FACETS, stage: ['s1', 's2'], tag: ['t'] })).toBe(3)
   })
 })
