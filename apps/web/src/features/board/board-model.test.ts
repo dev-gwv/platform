@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardDeliverable, DeliverableStage } from '@ipc/contracts'
-import { applyFilters, focusCounts, laneOf, lanesFor, personLoad, sortForList, sortInLane } from './board-model'
+import { applyFilters, focusCounts, laneOf, lanesFor, personLoad, reviewLane, skipsReview, sortForList, sortInLane } from './board-model'
 
 const st = (code: string, label: string, stage: DeliverableStage['stage'], sort: number, color = 'slate', team = true): DeliverableStage => ({
   id: `00000000-0000-4000-8000-${String(sort).padStart(12, '0')}`,
@@ -154,5 +154,29 @@ describe('Simple delivery (0234)', () => {
     const lanes = lanesFor(DEFAULTS, 'simple', true)
     expect(lanes.filter((l) => l.status === 'review').map((l) => l.label)).toEqual(['Review'])
     expect(laneOf({ status: 'review', custom_status_code: 'with_client' }, lanes)?.label).toBe('Review')
+  })
+})
+
+describe('skipping review', () => {
+  const lanes = lanesFor(DEFAULTS)
+  const lane = (label: string) => lanes.find((l) => l.label === label)!
+
+  it('asks when unchecked work jumps past the first review stop', () => {
+    expect(skipsReview({ status: 'in_progress' }, lane('Approved'), DEFAULTS)).toBe(true)
+    expect(skipsReview({ status: 'pending' }, lane('With client'), DEFAULTS)).toBe(true)
+    expect(skipsReview({ status: 'in_progress' }, lane('Delivered'), DEFAULTS)).toBe(true)
+  })
+
+  it('never asks for a move into review, a move within review, or a Simple studio', () => {
+    expect(skipsReview({ status: 'in_progress' }, lane('With manager'), DEFAULTS)).toBe(false)
+    expect(skipsReview({ status: 'review' }, lane('Delivered'), DEFAULTS)).toBe(false)
+    expect(skipsReview({ status: 'pending' }, lane('Editing'), DEFAULTS)).toBe(false)
+    expect(skipsReview({ status: 'in_progress' }, lane('Delivered'), DEFAULTS, 'simple')).toBe(false)
+  })
+
+  it('knows where review starts', () => {
+    expect(reviewLane(lanes, DEFAULTS)?.label).toBe('With manager')
+    expect(reviewLane(lanesFor([]), [])?.label).toBe('Review')
+    expect(reviewLane(lanesFor(DEFAULTS, 'simple'), DEFAULTS, 'simple')).toBeNull()
   })
 })
