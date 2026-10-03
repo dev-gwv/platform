@@ -2900,12 +2900,19 @@ if (listed) {
   check('form builder: only the seven colours', bad.status === 422, bad.status)
 }
 
-// ── 0241: plan limits and the usage bars ──────────────────────────
+// ── 0241/0242: plan limits, the plan year and the usage bars ──────────────────────────
 {
   const usage = await api('/subscription/usage', { token: aToken })
-  check('plans: a studio on a trial has no limits to show', usage.status === 200 && Object.keys(usage.json.limits ?? {}).length === 0 && typeof usage.json.used?.projects_per_month === 'number', usage.json)
+  check('plans: a studio on a trial has no limits to show', usage.status === 200 && Object.keys(usage.json.limits ?? {}).length === 0 && typeof usage.json.used?.projects === 'number', usage.json)
   const plans = await api('/subscription/plans', { token: aToken })
   check('plans: the proposed plans stay hidden until the owner picks', plans.status === 200 && !(plans.json ?? []).some((p) => p.tier), (plans.json ?? []).map((p) => p.key))
+  // 0242: the plan year follows the billing date; a trial has none yet.
+  check('plans: usage counts in the plan year, with no window on a trial', usage.json?.period === 'year' && usage.json?.window_ends == null && typeof usage.json.used?.team_members === 'number', usage.json)
+  const quotes = await api('/subscription/quotes', { token: aToken })
+  check('plans: every plan on offer says what paying would mean now', quotes.status === 200 && Array.isArray(quotes.json) && quotes.json.every((q) => q.kind === 'buy'), quotes.json)
+  const pub = await fetch(`${API}/public/plans`)
+  const pubJson = await pub.json().catch(() => null)
+  check('plans: the home page lists no plan until they are switched on', pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 0, pubJson)
 }
 
 // ── 0198: overdue alerts and the morning email ───────────────────

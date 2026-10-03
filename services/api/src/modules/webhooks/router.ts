@@ -648,6 +648,16 @@ export const metaRouter = new Hono<AppEnv>()
       return rows[0] ? open(c.env, rows[0].token_enc).catch(() => null) : null
     })
     if (!token) fail(422, 'Connect with Facebook first, so we have this page\'s permission.')
+    // The plan's Facebook Pages (0242), checked before Facebook is asked: the
+    // database would refuse the row only after the page was subscribed there.
+    const room = await attempt(c, 'meta.page_room', () =>
+      withService(c.env, (sql) => sql<{ room: number | null; already: boolean }[]>`
+        select plan_room(${companyId}, 'facebook_pages') as room,
+               exists (select 1 from fb_pages where company_id = ${companyId} and page_id = ${page_id} and is_connected) as already`),
+    )
+    if (room?.[0] && room[0].room === 0 && !room[0].already) {
+      fail(402, 'Your plan has no room for another Facebook Page. Upgrade to connect more.')
+    }
     let error: string | null = null
     try {
       await subscribePage(token, page_id)

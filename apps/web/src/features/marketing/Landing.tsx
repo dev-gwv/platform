@@ -1,11 +1,15 @@
 import type { ReactNode } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { plan } from '@ipc/contracts'
 import { CalendarCheck, Facebook, Receipt, Users, type LucideIcon } from 'lucide-react'
 import { buttonVariants } from '@/shared/ui/button'
 import { IconTile, type Tone } from '@/shared/ui/icon-tile'
 import { Wordmark } from '@/shared/ui/wordmark'
 import { LegalLinks } from '@/features/legal/LegalPage'
 import { LEGAL, PLANS, TRIAL_DAYS } from '@/features/legal/legal'
+import { callApi } from '@/shared/api/client'
+import { PlanPicker } from '@/features/billing/PlanPicker'
 
 /**
  * What a stranger sees at the front door: who we are, what the software does,
@@ -105,6 +109,7 @@ export function Landing() {
         </Section>
 
         <Section title="Price">
+          <PublicPrice fallback={
           <div className="grid gap-3 sm:grid-cols-2">
             {PLANS.map((p) => (
               <div key={p.name} className="rounded-2xl border border-border bg-card p-5">
@@ -122,6 +127,7 @@ export function Landing() {
               </p>
             </div>
           </div>
+          } />
         </Section>
       </main>
 
@@ -143,6 +149,28 @@ export function Landing() {
           <LegalLinks className="justify-start" />
         </div>
       </footer>
+    </div>
+  )
+}
+
+/**
+ * Starter, Pro and Studio Max once they are switched on (0242): the same
+ * three short cards the studio sees inside, each leading to sign-up. Until
+ * then (or if the API cannot be reached) the page keeps today's words.
+ */
+function PublicPrice({ fallback }: { fallback: ReactNode }) {
+  const navigate = useNavigate()
+  const plans = useQuery({
+    queryKey: ['public', 'plans'],
+    queryFn: () => callApi('/public/plans', { responseSchema: plan.array() }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  if (!plans.data || plans.data.length === 0) return <>{fallback}</>
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">Every studio starts with a {TRIAL_DAYS}-day free trial. Prices are before 18% GST.</p>
+      <PlanPicker plans={plans.data} onChoose={() => void navigate({ to: '/login', search: { mode: 'register' } as never })} />
     </div>
   )
 }

@@ -26,7 +26,7 @@ import { performanceRouter } from './modules/performance/router'
 import { meRouter } from './modules/me/router'
 import { cronRouter } from './modules/cron/router'
 import { notificationsRouter } from './modules/notifications/router'
-import { subscriptionRouter } from './modules/subscription/router'
+import { publicPlansRouter, subscriptionRouter } from './modules/subscription/router'
 import { termsRouter, publicTermsRouter } from './modules/terms/router'
 import { publicQuotesRouter } from './modules/crm/quotes'
 import { teamTermsRouter, publicTeamTermsRouter } from './modules/team-terms/router'
@@ -184,6 +184,7 @@ app.route('/platform', platformHelpRouter)
 app.route('/platform', platformStudioReferralsRouter)
 app.route('/studio-referrals', studioReferralsRouter)
 app.route('/public', publicHelpRouter)
+app.route('/public', publicPlansRouter)
 app.route('/features', featuresRouter)
 app.route('/whatsapp', studioWhatsappRouter)
 app.route('/feedback', feedbackRouter)

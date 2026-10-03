@@ -3,7 +3,7 @@ import { planUsage } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
-import { usageBars } from './usage'
+import { usageBars, windowLine } from './usage'
 
 export function usePlanUsage(enabled = true) {
   return useQuery({
@@ -17,7 +17,7 @@ export function usePlanUsage(enabled = true) {
 const BAR = { calm: 'bg-tone-green', near: 'bg-tone-amber', full: 'bg-destructive' } as const
 
 /**
- * What the plan allows and what is used, one bar each (0241). Nothing at all
+ * What the plan allows and what is used, one bar each (0241, 0242). Nothing at all
  * on a trial or an unlimited plan -- there is nothing to watch.
  */
 export function UsageCard({ className }: { className?: string }) {
@@ -27,7 +27,11 @@ export function UsageCard({ className }: { className?: string }) {
   return (
     <Card className={className}>
       <CardContent className="flex flex-col gap-3 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{usage.data?.plan_name} plan</p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{usage.data?.plan_name} plan</p>
+          {/* The plan year follows the day the studio paid, never the calendar (0242). */}
+          {windowLine(usage.data) && <p className="text-xs text-muted-foreground">{windowLine(usage.data)}</p>}
+        </div>
         <ul className="grid gap-3 sm:grid-cols-2">
           {bars.map((b) => (
             <li key={b.key} className="flex flex-col gap-1">

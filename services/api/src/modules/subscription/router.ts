@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { planUsage,
+import { planQuote, planUsage,
   activateRequest,
   activateResponse,
   createOrderRequest,
@@ -22,6 +22,47 @@ import { createRazorpayOrder, verifyRazorpaySignature } from '../../lib/razorpay
 import { checkDiamondScreenshot } from '../../lib/diamond-check'
 import { sendDiamondClaimNotice, sendDiamondResultEmail } from '../../lib/email'
 
+/** One plans row as the contract reads it; numerics arrive as strings from the driver. */
+function planRow(r: Record<string, unknown>) {
+  return {
+    ...r,
+    price: Number(r['price']),
+    description: (r['description'] as string | null) ?? null,
+    currency: (r['currency'] as string | null) ?? 'INR',
+    duration_days: r['duration_days'] ?? null,
+    features: Array.isArray(r['features']) ? r['features'] : null,
+    is_active: true,
+    badge: (r['badge'] as string | null) ?? null,
+    billing_label: (r['billing_label'] as string | null) ?? null,
+    savings_label: (r['savings_label'] as string | null) ?? null,
+    monthly_equivalent:
+      r['monthly_equivalent'] === null || r['monthly_equivalent'] === undefined ? null : Number(r['monthly_equivalent']),
+    sort_order: r['sort_order'] === null || r['sort_order'] === undefined ? null : Number(r['sort_order']),
+    free_emails_month: r['free_emails_month'] === null || r['free_emails_month'] === undefined ? null : Number(r['free_emails_month']),
+  }
+}
+
+/**
+ * The plans anyone can see on the home page: Starter, Pro and Studio Max once
+ * they are switched on (0242). Empty until then, and the page keeps its words.
+ */
+export const publicPlansRouter = new Hono<AppEnv>().get('/plans', async (c) => {
+  const rows = await attempt(c, 'subscription.public_plans', () =>
+    withService(
+      c.env,
+      (sql) => sql<Record<string, unknown>[]>`
+        select id, key, name, price, billing_interval, description, currency, duration_days, features,
+               badge, billing_label, savings_label, monthly_equivalent, sort_order, tier, limits, includes, free_emails_month
+          from plans
+         where is_active and audience = 'outsider' and tier is not null
+         order by sort_order, price`,
+    ),
+  )
+  if (!rows) fail(503, 'Plans are not available right now.')
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.json(plan.array().parse(rows.map(planRow)))
+})
+
 /**
  * Plans + checkout. The order is priced in SQL (create_payment_order); when
  * Razorpay is configured the same amount is registered with the provider and
@@ -40,7 +81,7 @@ export const subscriptionRouter = new Hono<AppEnv>()
           select id, key, name, price, billing_interval,
                  description, currency, duration_days, features, is_active,
                  badge, billing_label, savings_label, monthly_equivalent, sort_order,
-                 tier, limits, includes
+                 tier, limits, includes, free_emails_month
           from plans
          where is_active = true
            -- A studio sees only its own audience's plans: IPC Diamond members the
@@ -50,23 +91,26 @@ export const subscriptionRouter = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not load plans.')
-    return c.json(plan.array().parse((rows as Record<string, unknown>[]).map((r) => ({
-      ...r,
-      description: (r['description'] as string | null) ?? null,
-      currency: (r['currency'] as string | null) ?? 'INR',
-      duration_days: r['duration_days'] ?? null,
-      features: Array.isArray(r['features']) ? r['features'] : null,
-      is_active: true,
-      badge: (r['badge'] as string | null) ?? null,
-      billing_label: (r['billing_label'] as string | null) ?? null,
-      savings_label: (r['savings_label'] as string | null) ?? null,
-      // numeric(12,2) arrives as a string from the driver.
-      monthly_equivalent:
-        r['monthly_equivalent'] === null || r['monthly_equivalent'] === undefined
-          ? null
-          : Number(r['monthly_equivalent']),
-      sort_order: r['sort_order'] === null || r['sort_order'] === undefined ? null : Number(r['sort_order']),
-    }))))
+    return c.json(plan.array().parse((rows as Record<string, unknown>[]).map(planRow)))
+  })
+
+  /** What paying for each plan would mean now: buy, renew, upgrade (the difference) or later (0242). */
+  .get('/quotes', async (c) => {
+    const rows = await attempt(c, 'subscription.quotes', () =>
+      withUser(
+        c.env,
+        c.get('auth').userId,
+        (sql) => sql<Record<string, unknown>[]>`
+          select plan_id, kind, credit, amount, current_name, blocked_until::text as blocked_until
+            from my_plan_quotes()`,
+      ),
+    )
+    if (!rows) fail(400, 'We could not load plans.')
+    return c.json(
+      planQuote.array().parse(
+        rows.map((r) => ({ ...r, credit: Number(r['credit'] ?? 0), amount: Number(r['amount'] ?? 0) })),
+      ),
+    )
   })
 
   /** The studio's plan, its limits and this month's use, for the bars on its Subscription page. */
@@ -184,6 +228,8 @@ export const subscriptionRouter = new Hono<AppEnv>()
           select * from create_payment_order(p_plan_id => ${planId})`
         return rows[0] ?? null
       }),
+      // A lower plan waits for the current one to end; the database says until when.
+      { onCode: (code, err) => (code === '22023' ? fail(422, (err as { message?: string }).message ?? 'That plan is not available yet.') : undefined) },
     )
     if (!row) fail(400, 'We could not start checkout.')
 

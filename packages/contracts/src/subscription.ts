@@ -23,35 +23,63 @@ export const plan = z.object({
   tier: z.enum(['starter', 'pro', 'max']).nullish(),
   limits: z.lazy(() => planLimits).nullish(),
   includes: z.array(z.string()).nullish(),
+  /** 0242: free emails a month before credits; null = included (fair use). */
+  free_emails_month: z.number().int().nullish(),
 })
 export type Plan = z.infer<typeof plan>
 
-/** What a plan allows; a missing key is unlimited. Leads are never limited. */
-export const PLAN_LIMIT_KEYS = ['projects_per_month', 'invoices_per_month', 'team_logins', 'enquiry_forms'] as const
+/**
+ * What a plan allows; a missing key is unlimited (0242). Projects, invoices
+ * and leads count in the studio's plan year (from the day it paid); the rest
+ * count what stands now. Leads that arrive by themselves are never refused.
+ */
+export const PLAN_LIMIT_KEYS = [
+  'projects',
+  'leads',
+  'invoices',
+  'team_logins',
+  'team_members',
+  'enquiry_forms',
+  'facebook_pages',
+  'packages',
+  'storage_mb',
+] as const
 export type PlanLimitKey = (typeof PLAN_LIMIT_KEYS)[number]
-export const planLimits = z.object({
-  projects_per_month: z.number().int().optional(),
-  invoices_per_month: z.number().int().optional(),
-  team_logins: z.number().int().optional(),
-  enquiry_forms: z.number().int().optional(),
-})
+export const planLimits = z.object(
+  Object.fromEntries(PLAN_LIMIT_KEYS.map((k) => [k, z.number().int().optional()])) as Record<PlanLimitKey, z.ZodOptional<z.ZodNumber>>,
+)
 export type PlanLimits = z.infer<typeof planLimits>
 
-/** The studio's plan, its limits and what it has used (my_plan_usage, 0241). */
+/** The studio's plan, its limits, what it has used and its plan year (my_plan_usage, 0242). */
 export const planUsage = z.object({
   plan_key: z.string().nullable(),
   plan_name: z.string().nullable(),
   tier: z.enum(['starter', 'pro', 'max']).nullable(),
   limits: planLimits,
   includes: z.array(z.string()),
-  used: z.object({
-    projects_per_month: z.number().int(),
-    invoices_per_month: z.number().int(),
-    team_logins: z.number().int(),
-    enquiry_forms: z.number().int(),
-  }),
+  used: z.object(
+    Object.fromEntries(PLAN_LIMIT_KEYS.map((k) => [k, z.number().int().default(0)])) as Record<PlanLimitKey, z.ZodDefault<z.ZodNumber>>,
+  ),
+  window_starts: z.string().nullish(),
+  window_ends: z.string().nullish(),
+  period: z.enum(['year', 'month']).default('year'),
 })
 export type PlanUsage = z.infer<typeof planUsage>
+
+/**
+ * What paying for a plan would mean now (plan_quote, 0242): buy, renew, an
+ * upgrade with what is left of the current plan taken off, or later (a lower
+ * plan waits for the current one to end).
+ */
+export const planQuote = z.object({
+  plan_id: uuid,
+  kind: z.enum(['buy', 'renew', 'upgrade', 'later']),
+  credit: money,
+  amount: money,
+  current_name: z.string().nullable(),
+  blocked_until: z.string().nullable(),
+})
+export type PlanQuote = z.infer<typeof planQuote>
 
 export const subscriptionStatus = z.object({
   plan_key: z.string().nullable(),
