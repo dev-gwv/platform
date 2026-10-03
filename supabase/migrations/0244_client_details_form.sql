@@ -1,0 +1,2 @@
+-- 0244: the details form a client fills (Wishes, part 2).
+-- Claimed; body follows on this branch.
