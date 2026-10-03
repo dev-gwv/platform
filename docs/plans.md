@@ -1,87 +1,69 @@
-# Studio AutoPilot plans: the proposal
+# Studio AutoPilot plans
 
-Status: **proposal, waiting on the owner's pick.** The limits engine, the
-usage bars and monthly billing are built so any option below is a data change,
-not a code change. The new plans go live only when the owner names an option
-(and its prices) — until then studios see the plans they see today.
+Status: **built, switched off.** The plans below are in the database
+(0241, 0242) with `is_active = false`. They go live when the owner says
+"put the plans live"; until then studios see the plans they see today.
 
-## What every option shares
+## The plans
 
-- **Prices are before GST.** Checkout adds 18%, as it does today.
-- **Two ways to pay for each plan:** yearly (the lower monthly price, paid at once)
-  or monthly (a 30-day pass, renewed by the studio; reminders go 7 days and
-  1 day before it ends, the emails that already exist).
-- **Limits count what is made in a calendar month (India time)**: a studio on
-  Starter sees "4 of 8 projects this month" and the count starts again on the 1st.
-  Team logins and enquiry forms count what exists now, not per month.
-- **Leads are never limited.** An enquiry from Facebook, the website form or a
-  vendor's QR is the studio's customer. Refusing one would lose real money, so
-  leads always come in on every plan.
-- **Nothing is taken away.** Hitting a limit stops the next one being *made*
-  ("Your plan makes 8 projects a month. Upgrade to make more."). Everything
-  already there stays, opens and can be edited.
-- **Studios already paying keep what they bought** until it ends; the limits
-  apply from their next renewal. A free trial has no limits, so a new studio
-  sees the whole app before it chooses.
-
-## Option A — recommended: three plans, a gentle ladder
-
-| | **Starter** | **Pro** | **Studio Max** |
+| | **Starter** | **Pro** (Most popular) | **Studio Max** |
 |---|---|---|---|
-| Billed yearly | ₹1,499 / month (₹17,988 a year) | ₹2,499 / month (₹29,988 a year) | ₹3,999 / month (₹47,988 a year) |
+| Billed yearly | ₹1,499 / month (₹17,988 a year, ₹49 a day) | ₹2,499 / month (₹29,988 a year, ₹82 a day) | ₹3,999 / month (₹47,988 a year, ₹131 a day) |
 | Billed monthly | ₹1,999 / month | ₹2,999 / month | ₹4,999 / month |
-| Projects | 8 a month | Unlimited | Unlimited |
-| Invoices | 25 a month | Unlimited | Unlimited |
-| Team logins | 5 | Unlimited | Unlimited |
-| Enquiry forms (website + vendor QRs) | 3 | Unlimited | Unlimited |
-| Leads | Unlimited | Unlimited | Unlimited |
-| Everything else (shoots, crew, payouts, data, attendance, CRM, quotations) | ✓ | ✓ | ✓ |
-| Emails sent in the studio's own name, no "Studio AutoPilot" footer (white-label) | — | — | ✓ |
-| The studio's own WhatsApp Business number (Cloud API), with the setup guide | — | — | ✓ |
+| Projects | 30 a year (April to March) | Unlimited | Unlimited |
+| Team logins (besides the owner) | 3 | 10 | Unlimited |
+| Invoices, enquiry forms, crew, leads | Unlimited | Unlimited | Unlimited |
+| Everything else (shoots, payouts, data, attendance, CRM, quotations) | ✓ | ✓ | ✓ |
+| Emails in the studio's own name (white-label) | — | — | ✓ |
+| The studio's own WhatsApp number, set up with the studio (`/help/whatsapp`) | — | — | ✓ |
 | Follow-up sequences that send by themselves | — | — | ✓ |
+| Priority help on WhatsApp | — | — | ✓ |
 
-Why: Starter fits a studio doing up to ~8 shoots a month (a busy small studio
-in season). The step to Pro is about the price of one album page, so a growing
-studio does not feel pushed. Studio Max is for the studio that wants its own
-brand and number in front of clients.
+## Why these numbers
 
-## Option B — a higher top
+**The project limit is the lever that decides which plan a studio picks.**
+A project is one booking: a wedding with its haldi, mehendi and reception is
+one project, not four. A small studio books about 2 to 3 a month in season;
+a working studio 40 to 80 a year.
 
-Same Starter. **Pro ₹2,999 / month yearly (₹3,999 monthly)**, **Studio Max
-₹5,999 / month yearly (₹7,499 monthly)**. Fewer studios on Max, more revenue
-from each; better if you plan to set up their WhatsApp for them by hand.
+- **30 a year** lets a new or part-time studio run its whole year on Starter
+  and feel the app is generous, but a working studio passes it inside its
+  first wedding season (October to February). That is when it upgrades, and
+  it upgrades having already put its clients, crew and money into the app.
+- **Pro removes the project limit entirely** rather than raising it. "Unlimited"
+  is the word that sells; a studio never has to count again. The step from
+  Starter is ₹1,000 a month (₹33 a day), less than one album page.
+- **Logins are the second lever.** 3 on Starter covers the owner's editor and
+  one shooter; a studio that gives its whole crew a login needs Pro's 10.
+  Studio Max is unlimited for a studio with a big team.
+- **Studio Max sells the brand, not more of the same:** the studio's own name
+  on every email and its own WhatsApp number in front of the client, follow-ups
+  that send themselves, and priority help. Nobody else in the market offers
+  white-label or own-WhatsApp.
 
-## Option C — two plans and an add-on
+StudioOps (the nearest competitor) sells 75 projects a year for ₹1,299 a
+month and unlimited at ₹2,499. We do not race it on price; we give more
+software for the money and make Pro the obvious choice.
 
-**Starter** and **Pro (unlimited)** as in Option A, and **"Your brand"** as an
-add-on at ₹1,500 / month on top of Pro: white-label + own WhatsApp + sequences.
-Simplest page to read; the add-on needs one more checkbox at checkout.
+## Rules every plan keeps
 
-## Questions for the owner
+- **Prices are before GST.** Checkout adds 18%.
+- **Yearly plans show their price a day** ("Just ₹82 a day") under the monthly
+  figure; monthly plans do not.
+- **Projects count per financial year** (from 1 April, India time):
+  "25 of 30 projects this year (April to March)". Logins count what exists now.
+- **Leads are never limited.** An enquiry is the studio's customer arriving.
+- **Nothing is taken away.** A limit stops the next one being *made*, in a
+  sentence with **Upgrade**; everything already there stays and can be edited.
+- **A free trial has no limits**, so a new studio sees the whole app first.
+- **Studios already paying keep what they bought** until it ends.
 
-1. **Which option, and are the prices right?**
-2. **IPC Diamond members.** Today they pay ₹1,999 monthly / ₹18,000 yearly /
-   ₹33,000 for 2 years with no limits. Suggested: Diamond members get **Pro at
-   the Starter price** (₹1,499 / month yearly), which keeps their ₹18,000-a-year
-   deal and gives them a reason to stay members. Or keep their current plans
-   unchanged.
-3. **The ₹1,00,000 yearly plan for outsiders** — retire it once these plans are
-   live (suggested), or keep it as a "done-for-you setup" plan?
-4. **Auto-renew.** Monthly is a 30-day pass today (the studio pays again). True
-   auto-debit needs Razorpay Subscriptions (an e-mandate the customer approves
-   once). Worth doing once the plans settle; it is its own piece of work.
+## When the plans go live (one migration)
 
-## What is built (whatever option is picked)
+1. Switch on the six Starter / Pro / Studio Max rows.
+2. Retire the ₹1,00,000 yearly outsider plan (anyone on it keeps it until it ends).
+3. IPC Diamond members keep their member plans unless the owner says otherwise.
 
-- Each plan carries its **limits** and what it **includes** (white-label, own
-  WhatsApp, sequences). `company_can()` reads the plan as well as the manual
-  switches on `/platform/studios`, so a Studio Max studio gets them by paying.
-- **The limits are checked by the database**, not the screen, so no route
-  around the page can skip them.
-- **Usage bars** on Settings → Subscription ("4 of 8 projects this month"), and
-  a one-line nudge on the sidebar plan card only when a studio is close (80%).
-- When a limit is reached, the button's message says so in a sentence with
-  **Upgrade**.
-- Paying for a plan now also records **which** plan the studio is on (before,
-  only the end date was kept, so the sidebar said "Your plan").
-- **WhatsApp setup guide**: a step-by-step page linked from Settings → WhatsApp.
+## Later
+
+- **Auto-renew** through Razorpay Subscriptions, once Razorpay approves the domain.

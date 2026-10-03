@@ -27,9 +27,10 @@ export const plan = z.object({
 export type Plan = z.infer<typeof plan>
 
 /** What a plan allows; a missing key is unlimited. Leads are never limited. */
-export const PLAN_LIMIT_KEYS = ['projects_per_month', 'invoices_per_month', 'team_logins', 'enquiry_forms'] as const
+export const PLAN_LIMIT_KEYS = ['projects_per_year', 'projects_per_month', 'invoices_per_month', 'team_logins', 'enquiry_forms'] as const
 export type PlanLimitKey = (typeof PLAN_LIMIT_KEYS)[number]
 export const planLimits = z.object({
+  projects_per_year: z.number().int().optional(),
   projects_per_month: z.number().int().optional(),
   invoices_per_month: z.number().int().optional(),
   team_logins: z.number().int().optional(),
@@ -37,7 +38,7 @@ export const planLimits = z.object({
 })
 export type PlanLimits = z.infer<typeof planLimits>
 
-/** The studio's plan, its limits and what it has used (my_plan_usage, 0241). */
+/** The studio's plan, its limits and what it has used (my_plan_usage, 0241; per financial year since 0242). */
 export const planUsage = z.object({
   plan_key: z.string().nullable(),
   plan_name: z.string().nullable(),
@@ -45,6 +46,7 @@ export const planUsage = z.object({
   limits: planLimits,
   includes: z.array(z.string()),
   used: z.object({
+    projects_per_year: z.number().int().default(0),
     projects_per_month: z.number().int(),
     invoices_per_month: z.number().int(),
     team_logins: z.number().int(),

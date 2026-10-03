@@ -15,6 +15,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { UsageCard } from '@/features/billing/UsageCard'
+import { perDay } from '@/features/billing/usage'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -267,6 +268,7 @@ function Subscription() {
                       {formatINR(p.monthly_equivalent)}/month, paid up front
                     </p>
                   )}
+                  {perDay(p) != null && <p className="text-sm font-medium text-success">Just {formatINR(perDay(p)!)} a day</p>}
                   <p className="text-xs text-muted-foreground">
                     {p.billing_label ?? ''}
                     {p.billing_label ? ' · ' : ''}+ GST (18%)

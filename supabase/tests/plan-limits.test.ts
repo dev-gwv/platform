@@ -5,8 +5,8 @@ import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 /**
- * Plans with limits (0241): a Starter studio makes so many projects and
- * invoices a month and no more; a trial and an unlimited plan are never
+ * Plans with limits (0241, 0242): a Starter studio makes so many projects a
+ * year and no more; a trial and an unlimited plan are never
  * stopped; extras come with the plan; paying records the plan.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
@@ -47,16 +47,30 @@ beforeAll(async () => {
 })
 
 describe('plan limits (0241)', () => {
-  it('lets a Starter studio make 8 projects a month, then says why it stops', async () => {
-    for (let i = 1; i <= 8; i++) await project(COMPANY, CLIENT, `Wedding ${i}`)
-    await expect(project(COMPANY, CLIENT, 'Wedding 9')).rejects.toThrow(/Starter plan makes 8 projects a month\. Upgrade to add more\./)
+  it('lets a Starter studio make 30 projects a year, then says why it stops', async () => {
+    for (let i = 1; i <= 30; i++) await project(COMPANY, CLIENT, `Wedding ${i}`)
+    await expect(project(COMPANY, CLIENT, 'Wedding 31')).rejects.toThrow(
+      /Starter plan makes 30 projects a year \(April to March\)\. Upgrade to add more\./,
+    )
   })
 
-  it('counts this month only', async () => {
-    await q(`update projects set created_at = now() - interval '40 days' where company_id = $1 and name = 'Wedding 1'`, [COMPANY])
-    await project(COMPANY, CLIENT, 'Wedding 9')
-    const [u] = await q<{ v: { projects_per_month: number } }>(`select company_usage($1) as v`, [COMPANY])
-    expect(u!.v.projects_per_month).toBe(8)
+  it('counts this financial year only (from 1 April, India)', async () => {
+    await q(`update projects set created_at = now() - interval '400 days' where company_id = $1 and name = 'Wedding 1'`, [COMPANY])
+    await project(COMPANY, CLIENT, 'Wedding 31')
+    const [u] = await q<{ v: { projects_per_year: number; projects_per_month: number } }>(`select company_usage($1) as v`, [COMPANY])
+    expect(u!.v.projects_per_year).toBe(30)
+    const [fy] = await q<{ d: string }>(
+      `select to_char(make_date(extract(year from now() at time zone 'Asia/Kolkata')::int
+         - case when extract(month from now() at time zone 'Asia/Kolkata') < 4 then 1 else 0 end, 4, 1), 'MM-DD') as d`,
+    )
+    expect(fy!.d).toBe('04-01')
+  })
+
+  it('no longer limits a Starter studio\'s invoices', async () => {
+    const [p] = await q<{ limits: Record<string, number> }>(`select limits from plans where key = 'starter_yearly'`)
+    expect(p!.limits).toEqual({ projects_per_year: 30, team_logins: 3 })
+    const [pro] = await q<{ limits: Record<string, number> }>(`select limits from plans where key = 'pro_yearly'`)
+    expect(pro!.limits).toEqual({ team_logins: 10 })
   })
 
   it('never stops a studio on a trial', async () => {
@@ -68,12 +82,12 @@ describe('plan limits (0241)', () => {
   it('counts team logins, not the owner and not people without a login', async () => {
     await q(`insert into auth.users (id, email) select gen_random_uuid(), 'm' || g || '@s.test' from generate_series(1, 6) g`)
     const ids = await q<{ id: string }>(`select id from auth.users where email like 'm%@s.test' order by email`)
-    for (const [i, r] of ids.slice(0, 5).entries()) {
+    for (const [i, r] of ids.slice(0, 3).entries()) {
       await q(`insert into users (user_id, company_id, role, name, email) values ($1, $2, 'employee', $3, $4)`, [r.id, COMPANY, `M${i}`, `m${i}@x.test`])
     }
     await expect(
       q(`insert into users (user_id, company_id, role, name, email) values ($1, $2, 'employee', 'Sixth', 'six@x.test')`, [ids[5]!.id, COMPANY]),
-    ).rejects.toThrow(/5 team logins/)
+    ).rejects.toThrow(/3 team logins/)
     await q(
       `insert into users (user_id, company_id, role, name, email, login_enabled) values ($1, $2, 'employee', 'Freelancer', 'fl@x.test', false)`,
       [ids[5]!.id, COMPANY],
