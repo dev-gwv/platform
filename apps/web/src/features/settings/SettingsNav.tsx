@@ -127,7 +127,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       },
       { to: '/settings/advanced', label: 'Advanced tools', icon: Wrench, module: 'settings' },
       // Where the old app kept it: every studio's access, for the platform owner.
-      { to: '/platform/studios', label: 'Studio access', icon: ShieldCheck, module: 'settings', platformOnly: true },
+      { to: '/platform/studios', label: 'Studio Access Manager', icon: ShieldCheck, module: 'settings', platformOnly: true },
     ],
   },
 ]
