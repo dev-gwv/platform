@@ -58,15 +58,17 @@ beforeAll(async () => {
 describe('leave', () => {
   it('a member asks; the owner is told; the member cannot approve it', async () => {
     await as(PRIYA)
-    const [{ id }] = (await q<{ id: string }>(`select request_leave('sick', '2026-10-05', '2026-10-06', false, 'Fever') as id`)) as [{ id: string }]
+    // Far from today: the sweep test below marks the real day just ended, and
+    // leave on it would keep Priya from being marked absent.
+    const [{ id }] = (await q<{ id: string }>(`select request_leave('sick', '2099-10-05', '2099-10-06', false, 'Fever') as id`)) as [{ id: string }]
     expect(await fails(`select decide_leave('${id}', true, null)`)).toMatch(/not allowed/)
-    expect(await fails(`select request_leave('casual', '2026-10-06', '2026-10-07', false, null)`)).toMatch(/already have leave/)
+    expect(await fails(`select request_leave('casual', '2099-10-06', '2099-10-07', false, null)`)).toMatch(/already have leave/)
     await as(OWNER)
     const told = await q<{ title: string }>(`select title from notifications where recipient_uid = '${OWNER}' and type = 'leave.requested'`)
     expect(told).toEqual([{ title: 'Priya asked for leave' }])
     expect(await fails(`select decide_leave('${id}', false, '')`)).toMatch(/say why/)
     await q(`select decide_leave('${id}', true, 'Get well')`)
-    const [r] = await q<{ status: string; ok: boolean }>(`select status, on_leave('${PRIYA}', '2026-10-06') as ok from leave_requests where id = '${id}'`)
+    const [r] = await q<{ status: string; ok: boolean }>(`select status, on_leave('${PRIYA}', '2099-10-06') as ok from leave_requests where id = '${id}'`)
     expect(r).toEqual({ status: 'approved', ok: true })
     const heard = await q<{ title: string }>(`select title from notifications where recipient_uid = '${PRIYA}' and type = 'leave.decided'`)
     expect(heard).toEqual([{ title: 'Leave approved' }])
