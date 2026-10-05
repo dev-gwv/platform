@@ -116,6 +116,14 @@ const ackRequest = z.object({
   email: z.string().max(200).optional(),
   signature: z.string().max(400_000).regex(SIGNATURE).optional(),
 })
+/** The client signs on the studio's own device: a name and a signature, both needed. */
+const signHereRequest = z.object({
+  name: z.string().trim().min(1).max(160),
+  signature: z.string().max(400_000).regex(SIGNATURE),
+})
+/** How an agreement made on the studio's device is marked (acknowledged_user_agent). */
+const IN_PERSON = 'Signed in person'
+const browserAgent = (ua: string | undefined) => (ua?.startsWith(IN_PERSON) ? `browser: ${ua}` : ua ?? null)
 
 /** One row per project: its most recent terms document and whether it's been agreed to. */
 const termsDocument = z.object({
@@ -147,6 +155,8 @@ const projectTermsVersion = z.object({
   emailed_to: z.string().nullable(),
   /** The live link to share again -- the same one the client already has. Only for people who may edit. */
   share_url: z.string().nullable(),
+  /** Signed on the studio's own phone or tablet ("Sign now with Priya"). */
+  signed_in_person: z.boolean(),
   /** The last email attempt, whatever it answered: "sent" or why not. */
   last_email: z
     .object({ to: z.string().nullable(), status: z.string(), at: z.string(), error: z.string().nullable() })
@@ -299,6 +309,15 @@ export const termsRouter = new Hono<AppEnv>()
     // The raw link lets whoever holds it agree on the client's behalf, so it
     // goes only to people who may send the terms in the first place.
     const canShare = c.get('auth').access.hasAction('projects', 'edit')
+    const inPerson = new Set(
+      (
+        (await attempt(c, 'terms.signed_in_person', () =>
+          withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+            select id from project_terms_documents
+             where project_id = ${projectId}::uuid and acknowledged_user_agent like ${IN_PERSON + '%'}`),
+        )) ?? []
+      ).map((r) => r.id),
+    )
     type Row = Record<string, unknown> & {
       share_token: string | null
       last_email_to: string | null
@@ -311,6 +330,7 @@ export const termsRouter = new Hono<AppEnv>()
         (rows as unknown as Row[]).map(({ share_token, last_email_to, last_email_status, last_email_at, last_email_error, ...r }) => ({
           ...r,
           share_url: canShare && share_token ? termsLink(c.env, share_token) : null,
+          signed_in_person: inPerson.has(String(r.id)),
           last_email:
             last_email_status && last_email_at
               ? {
@@ -323,6 +343,56 @@ export const termsRouter = new Hono<AppEnv>()
         })),
       ),
     )
+  })
+
+  /**
+   * "Sign now with Priya": the client agrees and signs on the studio's own
+   * phone or tablet. It goes through the same link and the same steps as the
+   * client's own page -- the live link if there is one, else a fresh one --
+   * so the agreement, the signature, the bell and the owner's email are
+   * exactly what a signature on the link gives.
+   */
+  .post('/documents/:id/sign-here', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid document id.')
+    const parsed = signHereRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) {
+      fail(422, parsed.error.issues.some((i) => i.path[0] === 'signature')
+        ? 'Please sign in the box first.'
+        : 'Please enter the name of the person signing.')
+    }
+    const auth = c.get('auth')
+    const token = await attempt(
+      c,
+      'terms.sign_here_link',
+      () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          const live = await sql<{ t: string | null }[]>`select terms_live_share_token(${id}::uuid) as t`
+          if (live[0]?.t) return live[0].t
+          // No working link (it ran out, or was made before links were kept):
+          // the same fresh link "Make a new link" would give. A cancelled or
+          // agreed document is refused by the function itself.
+          const fresh = await sql<{ token: string }[]>`select terms_document_new_link(${id}::uuid, 336) as token`
+          return fresh[0]?.token ?? null
+        }),
+      {
+        onCode: (code, err) =>
+          code === '22023' || code === 'P0001' ? fail(409, err instanceof Error ? err.message : 'These terms can no longer be signed.') : undefined,
+      },
+    )
+    if (!token) fail(409, 'These terms can no longer be signed. They may already be agreed, or a newer version was sent.')
+    const who = await attempt(c, 'terms.sign_here_who', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ name: string | null }[]>`select name from users where user_id = ${auth.userId}::uuid`),
+    )
+    const by = who?.[0]?.name?.trim()
+    await recordAgreement(c, token, {
+      name: parsed.data.name,
+      email: null,
+      signature: parsed.data.signature,
+      userAgent: by ? `${IN_PERSON} · ${by}` : IN_PERSON,
+    })
+    await audit(c, { action: 'terms.sign_here', entityType: 'terms_document', entityId: id, after: { name: parsed.data.name } })
+    return c.json({ ok: true })
   })
 
   /**
@@ -734,48 +804,65 @@ export const publicTermsRouter = new Hono<AppEnv>()
         : 'Please enter your name to agree.')
     }
     const token = textParam(c, 'token', 400)
-    const ip = resolveClientIp(c.req.raw.headers, c.env.CLIENT_IP_HEADER)
-    const ua = c.req.header('User-Agent') ?? null
-    const rows = await attempt(c, 'terms.public_ack', () =>
-      withService(
-        c.env,
-        (sql) => sql<{ ok: boolean }[]>`
-          select acknowledge_terms(
-            p_raw => ${token},
-            p_name => ${parsed.data.name},
-            p_email => ${parsed.data.email ?? null},
-            p_ip => ${ip === 'unknown' ? null : ip},
-            p_user_agent => ${ua}
-          ) as ok`,
-      ),
-    )
-    if (!rows) fail(400, 'We could not record your agreement.')
-    if (rows[0]?.ok === false) await refuseLink(c, token, 409)
-    // The signature rides on the agreement just recorded; a failure here is
-    // logged by attempt() and never undoes the agreement.
-    if (parsed.data.signature) {
-      await attempt(c, 'terms.sign', () =>
-        withService(c.env, (sql) => sql`select terms_sign(${token}, ${parsed.data.signature!})`),
-      )
-    }
-    // The owner hears by email too; a failure here never undoes the agreement.
-    const notice = await attempt(c, 'terms.agreed_notice', () =>
-      withService(c.env, async (sql) => {
-        const r = await sql<{ owner_email: string | null; project_id: string | null; project_name: string | null; client_name: string | null; agreed_by: string | null }[]>`
-          select owner_email, project_id, project_name, client_name, agreed_by from terms_agreed_notice(${token})`
-        return r[0] ?? null
-      }),
-    )
-    if (notice?.owner_email) {
-      await sendTermsAgreedEmail(c.env, notice.owner_email, {
-        clientName: notice.client_name ?? parsed.data.name,
-        projectName: notice.project_name,
-        agreedBy: notice.agreed_by ?? parsed.data.name,
-        link: `${c.env.APP_URL ?? ''}${notice.project_id ? `/projects/${notice.project_id}?tab=terms` : '/project-documents'}`,
-      })
-    }
+    await recordAgreement(c, token, {
+      name: parsed.data.name,
+      email: parsed.data.email ?? null,
+      signature: parsed.data.signature ?? null,
+      // A browser cannot pass itself off as a signature taken at the studio.
+      userAgent: browserAgent(c.req.header('User-Agent')),
+    })
     return c.json({ ok: true })
   })
+
+/**
+ * One agreement, however it was made: the client's own link or "Sign now"
+ * on the studio's device. Records it (refusing a link that no longer works),
+ * keeps the signature, and tells the owner by email. Throws on a dead link.
+ */
+async function recordAgreement(
+  c: Context<AppEnv>,
+  token: string,
+  a: { name: string; email: string | null; signature: string | null; userAgent: string | null },
+): Promise<void> {
+  const ip = resolveClientIp(c.req.raw.headers, c.env.CLIENT_IP_HEADER)
+  const rows = await attempt(c, 'terms.public_ack', () =>
+    withService(
+      c.env,
+      (sql) => sql<{ ok: boolean }[]>`
+        select acknowledge_terms(
+          p_raw => ${token},
+          p_name => ${a.name},
+          p_email => ${a.email},
+          p_ip => ${ip === 'unknown' ? null : ip},
+          p_user_agent => ${a.userAgent}
+        ) as ok`,
+    ),
+  )
+  if (!rows) fail(400, 'We could not record the agreement.')
+  if (rows[0]?.ok === false) await refuseLink(c, token, 409)
+  // The signature rides on the agreement just recorded; a failure here is
+  // logged by attempt() and never undoes the agreement.
+  if (a.signature) {
+    const signature = a.signature
+    await attempt(c, 'terms.sign', () => withService(c.env, (sql) => sql`select terms_sign(${token}, ${signature})`))
+  }
+  // The owner hears by email too; a failure here never undoes the agreement.
+  const notice = await attempt(c, 'terms.agreed_notice', () =>
+    withService(c.env, async (sql) => {
+      const r = await sql<{ owner_email: string | null; project_id: string | null; project_name: string | null; client_name: string | null; agreed_by: string | null }[]>`
+        select owner_email, project_id, project_name, client_name, agreed_by from terms_agreed_notice(${token})`
+      return r[0] ?? null
+    }),
+  )
+  if (notice?.owner_email) {
+    await sendTermsAgreedEmail(c.env, notice.owner_email, {
+      clientName: notice.client_name ?? a.name,
+      projectName: notice.project_name,
+      agreedBy: notice.agreed_by ?? a.name,
+      link: `${c.env.APP_URL ?? ''}${notice.project_id ? `/projects/${notice.project_id}?tab=terms` : '/project-documents'}`,
+    })
+  }
+}
 
 /**
  * A link that will not open, and why -- so the client knows whether to ask
