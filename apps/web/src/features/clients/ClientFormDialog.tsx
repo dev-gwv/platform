@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type MutableRefObject } from 'react'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
-import { Plus, Pencil } from 'lucide-react'
+import { ChevronDown, Plus, Pencil } from 'lucide-react'
 import type { Client } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -10,6 +10,7 @@ import { useCreateClient, useUpdateClient } from './api'
 import { ClientDates } from '@/features/wishes/ClientDates'
 import { useAddOccasion } from '@/features/wishes/api'
 import type { OccasionDraft } from '@/features/wishes/OccasionForm'
+import { useLearn, type Learn } from '@/features/help/LearnCard'
 
 interface Props {
   /** Present in edit mode; absent to create a new client. */
@@ -52,6 +53,12 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
   const [gstin, setGstin] = useState(client?.gstin ?? '')
   const [notes, setNotes] = useState(client?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
+  // A new client needs only a name (and a phone): the rest waits under
+  // "More details". Editing opens it when anything there is filled in.
+  const [more, setMore] = useState(
+    !!(client?.alternate_phone || client?.city || client?.address || client?.relation || client?.gstin || client?.notes),
+  )
+  const learn = useRef<Learn | null>(null)
   // A new client's birthdays and anniversary wait here and are saved with them (0243).
   const [dates, setDates] = useState<OccasionDraft[]>([])
   const addOccasion = useAddOccasion()
@@ -126,6 +133,7 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
         for (const d of dates) await addOccasion.mutateAsync({ client_id: created.id, ...d }).catch(() => undefined)
       }
       draft.clear()
+      if (!isEdit) learn.current?.progress()
       setOpen(false)
       if (!isEdit) {
         reset()
@@ -157,11 +165,12 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
         title={isEdit ? 'Edit client' : 'New client'}
         description={isEdit ? "Update what's on file for them." : 'Add someone you work with.'}
       >
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
+        <form onSubmit={onSubmit} onInvalid={() => learn.current?.refused()} className="flex flex-col gap-3">
+          {!isEdit && <ClientLearn into={learn} />}
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
             {/* Empty is not an error yet: amber says "fill me", never red before anyone has typed. */}
-            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus className={cn(!name.trim() && 'border-warning/60 bg-warning/5')} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder="e.g. Priya Sharma" className={cn(!name.trim() && 'border-warning/60 bg-warning/5')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -172,50 +181,64 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Alternate phone</Label>
-              <Input value={alternatePhone} onChange={(e) => setAlternatePhone(e.target.value)} placeholder="Optional" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
               <Label>Email</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="client@email.in" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>City</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Mumbai" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Address</Label>
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              placeholder="Full address, for the invoice and paperwork"
-              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Relation</Label>
-              <Input value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Referral, Repeat, Vendor…" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>GSTIN</Label>
-              <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
-            </div>
-          </div>
-          <ClientDates clientId={client?.id} pending={dates} onPending={setDates} />
-          <div className="flex flex-col gap-1.5">
-            <Label>Notes</Label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            className="flex items-center gap-1 self-start text-sm font-medium text-primary underline-offset-2 hover:underline"
+          >
+            <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} aria-hidden />
+            {more ? 'Fewer details' : 'More details'}
+            {!more && <span className="font-normal text-muted-foreground"> · address, birthdays, GSTIN (optional)</span>}
+          </button>
+          {more && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Alternate phone</Label>
+                  <Input value={alternatePhone} onChange={(e) => setAlternatePhone(e.target.value)} placeholder="Optional" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>City</Label>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Mumbai" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Address</Label>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={2}
+                  placeholder="Full address, for the invoice and paperwork"
+                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Relation</Label>
+                  <Input value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Referral, Repeat, Vendor…" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>GSTIN</Label>
+                  <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
+                </div>
+              </div>
+              <ClientDates clientId={client?.id} pending={dates} onPending={setDates} />
+              <div className="flex flex-col gap-1.5">
+                <Label>Notes</Label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                />
+              </div>
+            </>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <DialogClose asChild>
@@ -224,11 +247,21 @@ export function ClientFormDialog({ client, trigger, open: openProp, onOpenChange
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy} data-setup-nudge={nudge ? '' : undefined}>
-              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add client'}
+              {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Save client'}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * The "how to add a client" video at the top of a new client's form. It lives
+ * as long as the dialog is open, so closing it unsaved counts as a try.
+ */
+function ClientLearn({ into }: { into: MutableRefObject<Learn | null> }) {
+  const learn = useLearn('client', { countClose: true })
+  into.current = learn
+  return learn.card ? <>{learn.card}</> : null
 }

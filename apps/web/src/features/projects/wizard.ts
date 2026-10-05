@@ -23,19 +23,20 @@ import { niceTime } from '@/shared/ui/time-format'
 export const WIZARD_STEPS = ['client', 'shoots', 'deliverables', 'billing', 'review'] as const
 export type WizardStep = (typeof WIZARD_STEPS)[number]
 
+/** What each step is called, in the studio's words (step ids never change). */
 export const STEP_LABELS: Record<WizardStep, string> = {
-  client: 'Project & Client',
-  shoots: 'Shoots',
+  client: "Who it's for",
+  shoots: 'Event days',
   deliverables: 'Deliverables',
-  billing: 'Billing',
+  billing: 'Price',
   review: 'Review',
 }
 
 export const STEP_HINTS: Record<WizardStep, string> = {
   client: 'Name the project and say who it is for.',
-  shoots: 'The days you are shooting. Deliverable dates follow these.',
+  shoots: 'Each day you shoot: Haldi, Wedding, Reception… with its date and time.',
   deliverables: 'What the client receives, and what costs extra.',
-  billing: 'The package price and anything already paid.',
+  billing: 'The package price, and any advance already paid.',
   review: 'Confirm everything before creating the project.',
 }
 

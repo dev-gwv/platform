@@ -1,6 +1,7 @@
 import { ArrowRight, UserPlus, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { useLearn } from '@/features/help/LearnCard'
 
 export type AddMode = 'choose' | 'single' | 'bulk'
 
@@ -27,6 +28,8 @@ export function AddTeamChooser({
    */
   setup?: boolean
 }) {
+  // Setup goes straight to the list, so its video is the list's.
+  const learn = useLearn(setup ? 'team-bulk' : 'team')
   if (setup) {
     return (
       <div className="mx-auto w-full max-w-2xl text-center">
@@ -35,6 +38,7 @@ export function AddTeamChooser({
         <Button size="lg" className="mt-5" data-setup-nudge="" onClick={() => onPick('bulk')}>
           <Users /> Add your team
         </Button>
+        {learn.card && <div className="mx-auto mt-5 max-w-md text-left">{learn.card}</div>}
       </div>
     )
   }
@@ -44,6 +48,7 @@ export function AddTeamChooser({
       <p className="mt-1 text-sm text-muted-foreground">
         The people who shoot and edit with you. Add them one by one, or all at once.
       </p>
+      {learn.card && <div className="mt-4">{learn.card}</div>}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Choice

@@ -22,6 +22,7 @@ import {
   hintKey,
   userHints,
   setHintRequest,
+  learnSignals,
   type AuthToken,
   type PlanGate,
 } from '@ipc/contracts'
@@ -764,11 +765,27 @@ export const authRouter = new Hono<AppEnv>()
     return c.json(userHints.parse(rows[0]?.hints ?? {}))
   })
 
+  // What the how-to cards step back on (counts only, as the caller sees them).
+  .get('/learn', requireAuth, async (c) => {
+    const a = c.get('auth')
+    const rows = await attempt(c, 'auth.learn', () =>
+      withUser(c.env, a.userId, (sql) => sql<{ teammates: number; clients: number; projects: number; since: Date }[]>`
+        select (select count(*)::int from users u where u.company_id = ${a.companyId}::uuid and u.user_id <> ${a.userId}::uuid) as teammates,
+               (select count(*)::int from clients) as clients,
+               (select count(*)::int from projects) as projects,
+               (select created_at from users where user_id = ${a.userId}::uuid) as since`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not load that.')
+    return c.json(learnSignals.parse(rows[0]))
+  })
+
   .put('/hints/:key', requireAuth, async (c) => {
     const key = hintKey.safeParse(c.req.param('key'))
     if (!key.success) fail(404, 'Unknown note.')
     const parsed = setHintRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Invalid note.')
+    const v = parsed.data.value
+    if (v !== null && (key.data === 'learn') !== 'watched' in v) fail(422, 'Invalid note.')
     const a = c.get('auth')
     const rows = await attempt(c, 'auth.hint_set', () =>
       withUser(
