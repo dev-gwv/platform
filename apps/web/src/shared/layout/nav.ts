@@ -221,7 +221,7 @@ export const NAV: NavEntry[] = [
     match: '/platform',
     platformOnly: true,
     children: [
-      leaf('Studios', '/platform/studios', Building2, { platformOnly: true }),
+      leaf('Studio Access Manager', '/platform/studios', ShieldCheck, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
       leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
       leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),

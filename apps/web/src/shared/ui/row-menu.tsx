@@ -9,6 +9,10 @@ export interface RowMenuItem {
   icon?: ReactNode
   onSelect: () => void
   disabled?: boolean
+  /** Red, for the one action that takes something away (Revoke, Delete). */
+  danger?: boolean
+  /** A thin line above this item, to group the menu. */
+  divider?: boolean
 }
 
 /**
@@ -93,7 +97,8 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
             style={{ position: 'fixed', top: box.top, right: box.right }}
             className="z-50 min-w-48 rounded-lg border border-border bg-card p-1 text-sm shadow-lg"
           >
-            {items.map((item) => (
+            {items.map((item) => [
+              item.divider ? <div key={`${item.label}-line`} role="separator" className="my-1 h-px bg-border" /> : null,
               <button
                 key={item.label}
                 type="button"
@@ -106,12 +111,13 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
                 className={cn(
                   'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
                   'disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
+                  item.danger && 'text-destructive [&_svg]:text-destructive',
                 )}
               >
                 {item.icon}
                 {item.label}
-              </button>
-            ))}
+              </button>,
+            ])}
           </div>,
           document.body,
         )}

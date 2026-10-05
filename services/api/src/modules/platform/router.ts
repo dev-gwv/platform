@@ -115,12 +115,14 @@ export const platformRouter = new Hono<AppEnv>()
     const q = (c.req.query('search') ?? '').trim().toLowerCase()
     const gate = c.req.query('plan_gate') ?? ''
     const sort = c.req.query('sort') ?? 'created_desc'
+    // The Studio Access Manager reads the whole list and pages it itself;
+    // only a caller that asks for a page gets one.
     const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1)
-    const pageSize = Math.min(200, Math.max(1, Number(c.req.query('page_size') ?? 100) || 100))
+    const pageSize = c.req.query('page_size') ? Math.min(200, Math.max(1, Number(c.req.query('page_size')) || 100)) : Number.MAX_SAFE_INTEGER
     let list = (rows as Record<string, unknown>[])
     if (q) {
       list = list.filter((s) =>
-        [s['name'], s['owner_email'], s['owner_name']].some((v) =>
+        [s['name'], s['owner_email'], s['owner_name'], s['owner_phone']].some((v) =>
           typeof v === 'string' && v.toLowerCase().includes(q)))
     }
     if (gate) list = list.filter((s) => s['plan_gate'] === gate)
