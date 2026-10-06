@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { LifeBuoy, Mail, MessageCircle, PlayCircle } from 'lucide-react'
+import { GraduationCap, LifeBuoy, Mail, MessageCircle, PlayCircle } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
@@ -75,6 +75,8 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
+      <GuideLink onNavigate={onNavigate} />
+
       {(help?.support_whatsapp || help?.support_email) && (
         <>
           <div>
@@ -152,5 +154,27 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
       )}
       <TutorialPlayer tutorial={playing} onClose={() => setPlaying(null)} />
     </div>
+  )
+}
+
+/** "How to use Studio AutoPilot": the step-by-step guide, in English or Hindi. */
+export function GuideLink({ onNavigate, className }: { onNavigate?: () => void; className?: string }) {
+  return (
+    <Link
+      to="/learn"
+      onClick={onNavigate}
+      className={cn(
+        'flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3.5 text-left transition-colors hover:bg-primary/10',
+        className,
+      )}
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <GraduationCap className="size-5" aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block font-semibold">How to use Studio AutoPilot</span>
+        <span className="block text-sm text-muted-foreground">Step by step, with videos · English · हिन्दी</span>
+      </span>
+    </Link>
   )
 }

@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { lengthLabel, TUTORIALS, tutorialFor, tutorialsWith } from './tutorials'
+import { lengthLabel, playsIn, posterSrc, SHIPPED, SHIPPED_HI, titleIn, TUTORIALS, tutorialFor, tutorialsWith, videoSrc, type HelpLang } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
 
 describe('tutorials', () => {
@@ -22,6 +24,27 @@ describe('tutorials', () => {
 
   it('lists only recordings that are shipped', () => {
     expect(tutorialsWith([], ['team']).map((t) => t.key)).toEqual(['team'])
+  })
+
+  it('ships every listed recording and its poster, in English and in Hindi', () => {
+    const pub = (path: string) => fileURLToPath(new URL(`../../../public${path}`, import.meta.url))
+    for (const t of TUTORIALS.filter((x) => SHIPPED.includes(x.key))) {
+      const langs: HelpLang[] = SHIPPED_HI.includes(t.key) ? ['en', 'hi'] : ['en']
+      for (const lang of langs) {
+        expect(existsSync(pub(videoSrc(t, lang))), videoSrc(t, lang)).toBe(true)
+        expect(existsSync(pub(posterSrc(t, lang)!)), posterSrc(t, lang)).toBe(true)
+      }
+      if (SHIPPED_HI.includes(t.key)) expect(t.hi?.title, t.key).toBeTruthy()
+    }
+  })
+
+  it('plays Hindi where there is a Hindi recording, and English otherwise', () => {
+    const team = TUTORIALS.find((t) => t.key === 'team')!
+    expect(videoSrc(team, 'hi')).toBe('/help/hi/team.mp4')
+    expect(titleIn(team, 'hi')).toBe(team.hi!.title)
+    const linked = { ...team, url: 'https://videos.example/team.mp4' }
+    expect(playsIn(linked, 'hi')).toBe('en')
+    expect(videoSrc(linked, 'hi')).toBe('https://videos.example/team.mp4')
   })
 
   it('says the length plainly', () => {

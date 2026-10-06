@@ -17,6 +17,7 @@ import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } fro
 import { HelpSetupPage } from '@/routes/help-setup'
 import { HelpWhatsAppPage } from '@/routes/help-whatsapp'
 import { HelpPage } from '@/routes/help'
+import { LearnPage } from '@/routes/learn'
 import { RouteError } from '@/shared/layout/RouteError'
 import { CompleteSetupPage } from '@/routes/complete-setup'
 import { VerifyEmailPage } from '@/routes/verify'
@@ -222,6 +223,9 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/help/whatsapp', HelpWhatsAppPage),
   // Every tutorial, the questions studios ask, and how to reach us (0236).
   publicRoute('/help', HelpPage),
+  // "How to use Studio AutoPilot": every job, in order, with its video and
+  // the steps written out, in English or Hindi. Public, for a WhatsApp link.
+  publicRoute('/learn', LearnPage),
 
   renewalLayout.addChildren([
     createRoute({
