@@ -1,0 +1,52 @@
+import { Tutorial, sleep } from './lib.mjs'
+import { setup, kit, quickStep1 } from './wiz.mjs'
+const t = new Tutorial('project-shoots', { title: 'Project step 2: the event days', subtitle: 'Each function with its date, hours and team', steps: 5 })
+const { p } = await setup(t)
+await quickStep1(p)
+await p.mouse.move(5, 5)
+const k = kit(t, p)
+const { main } = k
+
+await t.start()
+await t.titleCard(1600)
+const haldi = main.getByTitle('Add Haldi')
+await t.step('Tap a function to add its day: Haldi', haldi, { hold: 900 })
+await k.tap(haldi, { after: 700 })
+
+await t.step('Pick the date and the start time', k.card(), { hold: 0 })
+await k.spotUnion(k.card(), k.durRow())
+await sleep(500)
+await k.date('20/11/2026')
+await k.time('10:00 AM')
+await sleep(300)
+
+await t.step('Tap how many hours it runs', k.durRow().locator('xpath=..'), { hold: 900 })
+await k.hours('4', 900)
+
+await t.step('Add requirements: who this day needs', main.getByRole('button', { name: 'Add requirements' }).last(), { hold: 900 })
+await k.roles(['Candid Photographer', 'Cinematographer'], { slow: true })
+await main.getByText('All shoots look good').first().waitFor({ timeout: 4000 }).catch(() => {})
+await sleep(400)
+await k.spot(main.getByText(/2 people/).first().locator('xpath=..'), 8)
+await sleep(800)
+
+const wed = main.getByTitle('Add Wedding Day')
+await t.step('Add the Wedding the same way', wed, { hold: 700 })
+k.speed.ms = 260
+await k.tap(wed, { after: 450 })
+await k.spotUnion(k.card(), k.durRow())
+await k.date('21/11/2026')
+await k.time('6:00 PM')
+await k.hours('6', 250)
+await k.roles(['Candid Photographer'])
+await t.say('Both days are set. Next: Deliverables', null, { hold: 0 })
+await t.point(k.next); await t.layer('ripple'); await sleep(200)
+await t.layer('spot', null)
+await k.next.click()
+await main.getByText('Step 3 of 5').waitFor({ timeout: 8000 }).catch(() => {})
+await t.layer('spot', null); await t.layer('hidePointer')
+await sleep(600)
+await t.say('Delivery dates count from these days', null, { hold: 1500 })
+await t.endCard('Plan every day once, the team follows')
+await t.stop()
+t.build()
