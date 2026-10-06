@@ -11,7 +11,8 @@ import { useTutorials } from './api'
 import { isRetired, remember } from './learning'
 import { startStuck, stuckReason, stuckStep, type StuckEvent, type StuckState } from './stuck-rules'
 import { TutorialPlayer } from './TutorialPlayer'
-import { lengthLabel, posterSrc, type Tutorial } from './tutorials'
+import { useHelpLang } from './lang'
+import { lengthLabel, posterSrc, titleIn, type Tutorial } from './tutorials'
 
 /** How many of each thing the studio has, for the cards to step back on. */
 export function useLearnSignals() {
@@ -156,14 +157,15 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
 
 /** The card itself: the video's first frame, one line, and a quiet close. */
 export function LearnCardView({ tutorial, onPlay, onClose, className }: { tutorial: Tutorial; onPlay: () => void; onClose: () => void; className?: string }) {
-  const poster = posterSrc(tutorial)
+  const [lang] = useHelpLang()
+  const poster = posterSrc(tutorial, lang)
   return (
     <div className={cn('flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-2 pr-1', className)} data-testid="learn-card">
       <button
         type="button"
         onClick={onPlay}
         className="group relative aspect-video w-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
-        aria-label={`Play: ${tutorial.title}`}
+        aria-label={`Play: ${titleIn(tutorial, lang)}`}
       >
         {poster && <img src={poster} alt="" className="size-full object-cover" loading="lazy" />}
         <span className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/35">
@@ -173,7 +175,7 @@ export function LearnCardView({ tutorial, onPlay, onClose, className }: { tutori
       <button type="button" onClick={onPlay} className="min-w-0 flex-1 text-left">
         <span className="block text-sm font-semibold text-primary">New to this? Watch how</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {tutorial.title}
+          {titleIn(tutorial, lang)}
           {tutorial.seconds ? ` · ${lengthLabel(tutorial.seconds)}` : ''}
         </span>
       </button>

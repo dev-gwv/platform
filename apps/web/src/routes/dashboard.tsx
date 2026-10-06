@@ -31,6 +31,7 @@ import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
 import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
 import { GettingStartedCard } from '@/features/dashboard/GettingStartedCard'
+import { GuideCard } from '@/features/help/GuideCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
@@ -67,6 +68,7 @@ function DashboardInner() {
     return (
       <>
         <PageHeader title={first ? `Hi, ${first}` : 'Home'} />
+        <GuideCard />
         <div className="mt-4">
           <StaffHome />
         </div>
@@ -181,6 +183,7 @@ function StudioCommandCenter() {
       <ProfileBanner />
       <YourDayStrip />
       {session && isSetupAudience(session) && <GettingStartedCard />}
+      <GuideCard />
 
       {/* Three numbers, the way a project page opens: what is running, what
           needs a hand, what is still to come in. Everything else is one

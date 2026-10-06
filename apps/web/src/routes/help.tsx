@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Mail, MessageCircle, Play } from 'lucide-react'
 import { useHelp, useTutorials } from '@/features/help/api'
-import { TutorialPlayer } from '@/features/help/TutorialPlayer'
-import { lengthLabel, posterSrc, type Tutorial } from '@/features/help/tutorials'
+import { LangSwitch, TutorialPlayer } from '@/features/help/TutorialPlayer'
+import { GuideLink } from '@/features/help/HelpPanel'
+import { useHelpLang } from '@/features/help/lang'
+import { blurbIn, lengthLabel, posterSrc, titleIn, type HelpLang, type Tutorial } from '@/features/help/tutorials'
 import { mailLink, whatsappLink } from '@/features/help/support'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
@@ -21,6 +23,7 @@ export function HelpPage() {
   const help = useHelp().data
   const tutorials = useTutorials()
   const [playing, setPlaying] = useState<Tutorial | null>(null)
+  const [lang, setLang] = useHelpLang()
 
   useEffect(() => {
     const before = document.title
@@ -47,8 +50,12 @@ export function HelpPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Help & tutorials</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Help & tutorials</h1>
+          <LangSwitch lang={lang} onChange={setLang} />
+        </div>
         <p className="mt-1 text-muted-foreground">Short videos of the real app. Each one is under a minute.</p>
+        <GuideLink className="mt-5 max-w-xl" />
 
         <div className="mt-8 flex flex-col gap-10">
           {SECTIONS.map((section) => {
@@ -59,7 +66,7 @@ export function HelpPage() {
                 <h2 className="mb-3 text-lg font-semibold">{section}</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {list.map((t) => (
-                    <TutorialCard key={t.key} tutorial={t} onPlay={() => setPlaying(t)} />
+                    <TutorialCard key={t.key} tutorial={t} lang={lang} onPlay={() => setPlaying(t)} />
                   ))}
                 </div>
               </section>
@@ -111,8 +118,8 @@ export function HelpPage() {
   )
 }
 
-function TutorialCard({ tutorial, onPlay }: { tutorial: Tutorial; onPlay: () => void }) {
-  const poster = posterSrc(tutorial)
+function TutorialCard({ tutorial, lang, onPlay }: { tutorial: Tutorial; lang: HelpLang; onPlay: () => void }) {
+  const poster = posterSrc(tutorial, lang)
   return (
     <button
       type="button"
@@ -133,8 +140,8 @@ function TutorialCard({ tutorial, onPlay }: { tutorial: Tutorial; onPlay: () => 
         )}
       </span>
       <span className="flex flex-col gap-0.5 p-3">
-        <span className="font-semibold">{tutorial.title}</span>
-        {tutorial.blurb && <span className="text-sm text-muted-foreground">{tutorial.blurb}</span>}
+        <span className="font-semibold">{titleIn(tutorial, lang)}</span>
+        {blurbIn(tutorial, lang) && <span className="text-sm text-muted-foreground">{blurbIn(tutorial, lang)}</span>}
       </span>
     </button>
   )

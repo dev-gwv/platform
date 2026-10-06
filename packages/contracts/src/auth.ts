@@ -194,13 +194,20 @@ export const learnNote = z.object({
 })
 export type LearnNote = z.infer<typeof learnNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn'] as const
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
 /** The caller's own notes, keyed by hint. Unknown keys pass through untouched. */
 export const userHints = z
-  .object({ assign_note: hintNote.optional(), getting_started: hintNote.optional(), hide_amounts: hintNote.optional(), learn: learnNote.optional() })
+  .object({
+    assign_note: hintNote.optional(),
+    getting_started: hintNote.optional(),
+    hide_amounts: hintNote.optional(),
+    learn: learnNote.optional(),
+    // The "Learn Studio AutoPilot step by step" note: gone once closed or the guide is opened.
+    guide: hintNote.optional(),
+  })
   .passthrough()
 export type UserHints = z.infer<typeof userHints>
 

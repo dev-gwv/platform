@@ -46,8 +46,8 @@ export function useCloseSetup() {
   }
 }
 
-/** Pages a refresh never pulls away from: help, and the platform admin's own screens. */
-const RESUME_EXEMPT = ['/help', '/platform']
+/** Pages a refresh never pulls away from: help, the guide, and the platform admin's own screens. */
+const RESUME_EXEMPT = ['/help', '/learn', '/platform']
 
 let resumeChecked = false
 
