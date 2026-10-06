@@ -1,0 +1,51 @@
+import { Tutorial, studio, sleep, api } from './lib.mjs'
+import { withSpot, padEnd, frozen, sayHere } from './helpers.mjs'
+import { seedProject } from './seed-q.mjs'
+import { seedTeam } from './seed-team.mjs'
+// Run with TZ=Asia/Kolkata so shoot times read as the studio sees them.
+const t = new Tutorial('assign', { title: 'Book your team for a shoot', subtitle: 'Who is free, what they are paid, booked in one go', steps: 5 })
+const s = await studio({ name: 'Mehta Studios', owner: 'Asha Mehta', skipSetup: true })
+const { pid } = await seedProject(s)
+const [, , arjun] = await seedTeam(s)
+// Arjun already has a morning booking that day, so his line reads differently.
+{
+  const c = await api('/clients', { token: s.token, method: 'POST', body: { name: 'Kavya Kapoor', phone: '9811100022' } })
+  const pr = await api('/projects', { token: s.token, method: 'POST', body: { name: 'Kapoor Engagement', client_id: c.json.id, package_cost: 90000 } })
+  const st = new Date('2026-12-12T10:00:00+05:30'), en = new Date('2026-12-12T13:00:00+05:30')
+  const sh = await api('/shoots', { token: s.token, method: 'POST', body: { project_id: pr.json.id, name: 'Engagement', shoot_date: '2026-12-12', start_at: st.toISOString(), end_at: en.toISOString(), requirements: [{ name: 'Candid Photographer', quantity: 1 }] } })
+  const b = await api('/allocation/batch', { token: s.token, method: 'POST', body: { items: [{ user_id: arjun, shoot_id: sh.json.id, service_name: 'Candid Photographer', start_at: st.toISOString(), end_at: en.toISOString(), estimated_cost: 7000 }] } })
+  if (b.status >= 300) console.log('book arjun', b.status, JSON.stringify(b.json))
+}
+const p = await t.open(s)
+const h = withSpot(t)
+await t.goto(`/projects/${pid}?tab=shoots`)
+// Bring the Wedding day into view before recording starts.
+const wedTitle = p.locator('main :text-is("Wedding"):visible').first()
+await wedTitle.waitFor({ timeout: 20000 }).catch(async () => { await p.screenshot({ path: 'assign-fail.png' }); console.log(p.url()) })
+await wedTitle.evaluate((e) => e.scrollIntoView({ block: 'start' }))
+await p.mouse.wheel(0, -90); await sleep(800)
+await t.start()
+await t.titleCard()
+const card = wedTitle.locator('xpath=ancestor::div[.//button[normalize-space()="Assign team"]][1]')
+const assign = card.getByRole('button', { name: 'Assign team' }).first()
+await t.step('Each day lists who it needs. Tap “Assign team”', assign, { hold: 1500 })
+await h.click(assign, { after: 300 }); await h.unspot(); await sleep(1300)
+const d = p.getByRole('dialog').last()
+await t.step('Choose a person for each role', d.getByText('Choose person').first(), { hold: 1100 })
+await h.click(d.getByText('Choose person').first(), { after: 300 }); await h.unspot(); await sleep(700)
+const list = d.locator('div').filter({ has: p.getByPlaceholder('Search name or role') }).filter({ hasText: 'Ravi Kumar' }).last()
+await sayHere(t, 'Each name says if they are free that day', list, 2600)
+await h.click(d.getByText('Ravi Kumar'), { after: 300 }); await h.unspot(); await sleep(800)
+await h.click(d.getByText('Choose person').first(), { after: 300 }); await h.unspot(); await sleep(700)
+await h.click(d.getByText('Neha Singh'), { after: 300 }); await h.unspot(); await sleep(1600)
+await t.step('Their pay fills in from their wedding rate', d.getByText(/Pay ₹12,000/), { hold: 2200, pad: 10 })
+const book = d.getByRole('button', { name: /^Book \d/ })
+await t.step('“2 of 2 chosen”: press Book', book, { hold: 1300 })
+await h.click(book, { after: 300 }); await h.unspot(); await sleep(2200)
+const done = d.getByRole('button', { name: 'Done' })
+await t.step('Booked. Press Done', done, { hold: 1500 })
+await h.click(done, { after: 300 }); await h.unspot(); await sleep(1500)
+await t.say('The Wedding day is staffed, with each person’s pay', card, { hold: 2600 })
+await t.endCard('Your crew, booked without a phone call')
+await t.stop()
+padEnd(t); frozen(t); t.build()
