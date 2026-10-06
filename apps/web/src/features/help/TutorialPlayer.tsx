@@ -6,8 +6,9 @@ import { watchedEnough } from './learning'
 import { blurbIn, hasHindi, lengthLabel, posterSrc, titleIn, videoSrc, type HelpLang, type Tutorial } from './tutorials'
 
 /**
- * One tutorial, playing, in a wide dialog. Sound is on: it carries a soft
- * music bed. English or हिन्दी switches the captions (the same recording);
+ * One tutorial, playing, in a wide dialog. Sound is on: a woman's voice
+ * talks through each step over soft music. English or हिन्दी switches the
+ * voice and the captions (the same steps);
  * the pick is remembered for the next video. `onWatched` fires once, when
  * nearly all of it has played.
  */
