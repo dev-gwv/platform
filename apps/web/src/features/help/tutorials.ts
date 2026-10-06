@@ -16,6 +16,8 @@ export interface Tutorial {
   section: 'Get started' | 'Clients & sales' | 'Shoots & team' | 'Editing' | 'Money' | 'Team'
   /** The pages it is about: whole path, or a prefix ending in /. */
   pages: readonly (string | RegExp)[]
+  /** The project page's tabs it is about (`?tab=` view ids: shoots, deliverables, billing…). */
+  views?: readonly string[]
   /** A link from the platform console instead of the shipped file. */
   url?: string
   /** The Hindi recording's title and line (captions in Hindi, the app in English). */
@@ -36,14 +38,14 @@ export const TUTORIALS: readonly Tutorial[] = [
   { key: 'project-billing', title: 'Project step 4: the price', blurb: 'The package price, the advance, then Create.', seconds: 28, section: 'Get started', pages: [], hi: { title: 'प्रोजेक्ट स्टेप 4: कीमत', blurb: 'पैकेज की कीमत, एडवांस, फिर Create।' } },
   { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 56, section: 'Clients & sales', pages: ['/follow-ups'], hi: { title: 'लीड जोड़ें और बुक करें', blurb: 'इन्क्वायरी से बुक हुए प्रोजेक्ट तक, एक बार में।' } },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 47, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/], hi: { title: 'अपना कोटेशन भेजें', blurb: 'क्लाइंट की नज़र से देखें, फिर भेजें।' } },
-  { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 46, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'], hi: { title: 'शूट के लिए टीम बुक करें', blurb: 'कौन फ़्री है, कितना पेमेंट, कुछ टैप में बुक।' } },
-  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 38, section: 'Editing', pages: [], hi: { title: 'एडिटिंग का काम दें', blurb: 'जिस एडिटर के पास सबसे कम काम है, उसे दें।' } },
+  { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 46, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'], views: ['shoots'], hi: { title: 'शूट के लिए टीम बुक करें', blurb: 'कौन फ़्री है, कितना पेमेंट, कुछ टैप में बुक।' } },
+  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 38, section: 'Editing', pages: [], views: ['deliverables'], hi: { title: 'एडिटिंग का काम दें', blurb: 'जिस एडिटर के पास सबसे कम काम है, उसे दें।' } },
   { key: 'board', title: 'Run the production board', blurb: 'Every edit by stage, late work first.', seconds: 53, section: 'Editing', pages: ['/production-board'], hi: { title: 'प्रोडक्शन बोर्ड चलाएँ', blurb: 'हर एडिट स्टेज के हिसाब से, लेट काम सबसे ऊपर।' } },
   { key: 'team-day', title: "Your team's day", blurb: 'What a team member sees and taps on their own login.', seconds: 45, section: 'Team', pages: ['/my-work'], hi: { title: 'आपकी टीम का दिन', blurb: 'टीम मेंबर अपने लॉगिन पर क्या देखता और दबाता है।' } },
-  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 44, section: 'Money', pages: ['/billing/payments'], hi: { title: 'पेमेंट दर्ज करें', blurb: 'क्या बाकी है, और आया पैसा, एक ही बार गिना।' } },
-  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 43, section: 'Money', pages: ['/team-payouts'], hi: { title: 'अपनी टीम को पेमेंट करें', blurb: 'हो चुके शूट का किसका कितना बकाया है।' } },
-  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices'], hi: { title: 'इनवॉइस बनाएँ', blurb: 'प्रोजेक्ट से अपने आप भरता है; भेजें और पेमेंट देखें।' } },
-  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 52, section: 'Money', pages: ['/company-expenses'], hi: { title: 'खर्च जोड़ें', blurb: 'क्या खर्च हुआ, किसी प्रोजेक्ट पर या स्टूडियो पर।' } },
+  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 44, section: 'Money', pages: ['/billing/payments'], views: ['billing'], hi: { title: 'पेमेंट दर्ज करें', blurb: 'क्या बाकी है, और आया पैसा, एक ही बार गिना।' } },
+  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 43, section: 'Money', pages: ['/team-payouts'], views: ['payouts'], hi: { title: 'अपनी टीम को पेमेंट करें', blurb: 'हो चुके शूट का किसका कितना बकाया है।' } },
+  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices', '/billing/invoices/new', /^\/billing\/invoices\/[^/]+\/edit$/], hi: { title: 'इनवॉइस बनाएँ', blurb: 'प्रोजेक्ट से अपने आप भरता है; भेजें और पेमेंट देखें।' } },
+  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 52, section: 'Money', pages: ['/company-expenses'], views: ['expenses'], hi: { title: 'खर्च जोड़ें', blurb: 'क्या खर्च हुआ, किसी प्रोजेक्ट पर या स्टूडियो पर।' } },
   { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 50, section: 'Team', pages: ['/settings/attendance-location', '/attendance'], hi: { title: 'अटेंडेंस चालू करें', blurb: 'आपकी जगह, आपके घंटे, बस।' } },
   { key: 'leave', title: 'Leave and balances', blurb: 'Days a year, asked, approved -- and what is left.', seconds: 42, section: 'Team', pages: ['/leave'], hi: { title: 'छुट्टी और बैलेंस', blurb: 'साल की छुट्टियाँ, माँगी गईं, मंज़ूर -- और कितनी बचीं।' } },
 ]
@@ -66,9 +68,13 @@ export function tutorialsWith(videos: readonly HelpVideo[] = [], shipped: readon
   return list
 }
 
-/** The tutorial about this page, if there is one. */
-export function tutorialFor(path: string, list: readonly Tutorial[]): Tutorial | null {
+/** A project's own page, where the open tab (`?tab=`) picks the tutorial. */
+const PROJECT_PAGE = /^\/projects\/(?!new$)[^/]+$/
+
+/** The tutorial about this page (and, on a project, its open tab), if there is one. */
+export function tutorialFor(path: string, list: readonly Tutorial[], tab?: string | null): Tutorial | null {
   const clean = path.replace(/\/+$/, '') || '/'
+  if (tab && PROJECT_PAGE.test(clean)) return list.find((t) => t.views?.includes(tab)) ?? null
   return list.find((t) => t.pages.some((p) => matches(p, clean))) ?? null
 }
 

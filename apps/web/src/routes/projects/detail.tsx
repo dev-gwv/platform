@@ -55,6 +55,7 @@ import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { WishesTab } from '@/features/wishes/WishesTab'
+import { WatchHow } from '@/features/help/WatchHow'
 import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
@@ -280,6 +281,9 @@ function ProjectDetail() {
 
         {canEdit && (
           <div className="flex flex-wrap items-center gap-2">
+            {/* The video for the open tab: Shoots -> booking the team, Work ->
+                giving an edit, Billing -> recording a payment... */}
+            <WatchHow />
             {/* Status is one press here rather than buried in the edit dialog:
                 it is the field that changes most often. */}
             <Select
