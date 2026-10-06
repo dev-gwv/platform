@@ -12,6 +12,8 @@ const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
 const OWNER_EMAIL = 'connect@wpbmastery.in'
 const ADMIN = 'e0000000-0000-4000-8000-000000000001'
+/** 0246: the second platform admin, the owner's other login. */
+const MULBERRY = 'e0000000-0000-4000-8000-000000000003'
 const STRANGER = 'e0000000-0000-4000-8000-000000000002'
 
 let db: PGlite
@@ -38,7 +40,7 @@ beforeAll(async () => {
   // The owner's account exists before 0218 runs, as on the live server.
   const files = readdirSync(migDir).filter((x) => x.endsWith('.sql') && !x.startsWith('0000_')).sort()
   for (const f of files.filter((x) => x < '0218')) await db.exec(readFileSync(join(migDir, f), 'utf8'))
-  await db.exec(`insert into auth.users (id, email) values ('${ADMIN}', '${OWNER_EMAIL}')`)
+  await db.exec(`insert into auth.users (id, email) values ('${ADMIN}', '${OWNER_EMAIL}'), ('${MULBERRY}', ' Connect@TheMulberryWeddings.in ')`)
   for (const f of files.filter((x) => x >= '0218')) await db.exec(readFileSync(join(migDir, f), 'utf8'))
   // Sign-up, run as the new person (register_company_and_admin reads auth.uid()).
   await db.exec(`
@@ -55,6 +57,11 @@ describe('0218 studio access carry-over', () => {
   it("makes the owner's account a platform admin", async () => {
     const r = await one<{ n: number }>(`select count(*)::int as n from platform_admins where user_id = '${ADMIN}'`)
     expect(r.n).toBe(1)
+  })
+
+  it('0246: connect@themulberryweddings.in is a platform admin too, and a stranger is not', async () => {
+    const r = await rows<{ user_id: string }>(`select user_id from platform_admins where user_id in ('${MULBERRY}', '${STRANGER}')`)
+    expect(r.map((x) => x.user_id)).toEqual([MULBERRY])
   })
 
   it('keeps the imported list away from every client role', async () => {
