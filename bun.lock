@@ -25,6 +25,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@ipc/contracts": "workspace:*",
         "@ipc/domain": "workspace:*",
+        "@ipc/help": "workspace:*",
         "@ipc/permissions": "workspace:*",
         "@radix-ui/react-alert-dialog": "^1.1.15",
         "@radix-ui/react-dialog": "^1.1.23",
@@ -67,6 +68,13 @@
       "name": "@ipc/domain",
       "version": "0.0.0",
     },
+    "packages/help": {
+      "name": "@ipc/help",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ipc/contracts": "workspace:*",
+      },
+    },
     "packages/permissions": {
       "name": "@ipc/permissions",
       "version": "0.0.0",
@@ -78,6 +86,7 @@
         "@anthropic-ai/sdk": "^0.129.0",
         "@ipc/contracts": "workspace:*",
         "@ipc/domain": "workspace:*",
+        "@ipc/help": "workspace:*",
         "@ipc/permissions": "workspace:*",
         "@sentry/bun": "^10.75.0",
         "hono": "^4.6.0",
@@ -312,6 +321,8 @@
     "@ipc/contracts": ["@ipc/contracts@workspace:packages/contracts"],
 
     "@ipc/domain": ["@ipc/domain@workspace:packages/domain"],
+
+    "@ipc/help": ["@ipc/help@workspace:packages/help"],
 
     "@ipc/permissions": ["@ipc/permissions@workspace:packages/permissions"],
 

@@ -14,6 +14,7 @@ import { cn } from '../ui/cn'
 import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './nav'
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
+import { AssistantButton } from '@/features/assistant/AssistantButton'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
@@ -209,6 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SuggestFeatureButton />
 
             <div className="flex items-center gap-1">
+              <AssistantButton />
               <NotificationBell />
               <HideAmountsButton />
               <Button variant="ghost" size="icon" onClick={toggleScheme} aria-label="Toggle theme">

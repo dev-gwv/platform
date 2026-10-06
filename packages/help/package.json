@@ -1,0 +1,18 @@
+{
+  "name": "@ipc/help",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./guide": "./src/guide.ts",
+    "./tutorials": "./src/tutorials.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ipc/contracts": "workspace:*"
+  }
+}

@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { Link } from '@tanstack/react-router'
+import { ArrowRight, CalendarClock, Loader2, Send, Sparkles } from 'lucide-react'
+import type { AskReply, AssistantSource, AssistantTurn } from '@ipc/contracts'
+import { Button } from '@/shared/ui/button'
+import { cn } from '@/shared/ui/cn'
+import { useAsk } from './api'
+
+/**
+ * The help assistant's conversation.
+ *
+ * It holds the exchange in component state and sends the last few turns back
+ * with each question. Nothing is stored: a help conversation is worth having
+ * while the panel is open and worth nothing afterwards, and saving it would
+ * mean a table of studios' questions for no one to read.
+ *
+ * No streaming. Nothing in this app streams -- every call goes through
+ * callApi, which owns token rotation and the correlation id -- and a help
+ * answer arrives whole in a second or two, which is the better trade.
+ */
+
+interface Said {
+  role: 'user' | 'assistant'
+  text: string
+  sources?: readonly AssistantSource[]
+  callUrl?: string | null
+  /** A failure we could not answer through; drawn differently. */
+  broke?: boolean
+}
+
+/** Sent back with each question. Enough for a follow-up, not enough to crowd the prompt. */
+const CARRY = 6
+
+const OPENERS = [
+  'How do I add my team?',
+  'How do I send a quotation?',
+  'How do I book crew for a shoot day?',
+]
+
+export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left: number }) {
+  const [said, setSaid] = useState<Said[]>([])
+  const [draft, setDraft] = useState('')
+  const ask = useAsk()
+  const thread = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
+
+  // Keep the newest exchange in view as it arrives.
+  useEffect(() => {
+    thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: 'smooth' })
+  }, [said, ask.isPending])
+
+  const spent = left <= 0
+
+  function send(question: string) {
+    const q = question.trim()
+    if (!q || ask.isPending || spent) return
+
+    // The history is what was on screen BEFORE this question, which is why it
+    // is taken here rather than from `said` inside the callback.
+    const history: AssistantTurn[] = said.slice(-CARRY).map((s) => ({ role: s.role, content: s.text }))
+    setSaid((prev) => [...prev, { role: 'user', text: q }])
+    setDraft('')
+
+    ask.mutate(
+      { question: q, history },
+      {
+        onSuccess: (r: AskReply) =>
+          setSaid((prev) => [
+            ...prev,
+            { role: 'assistant', text: r.answer, sources: r.sources, callUrl: r.call_url, broke: r.status === 'failed' },
+          ]),
+        onError: (e: Error) =>
+          setSaid((prev) => [
+            ...prev,
+            { role: 'assistant', text: e.message, callUrl, broke: true },
+          ]),
+      },
+    )
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends, Shift+Enter makes a new line: a question is one line far
+    // more often than it is two.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send(draft)
+    }
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    send(draft)
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={thread} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {said.length === 0 ? (
+          <Opening onPick={send} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {said.map((s, i) => (
+              <Bubble key={i} said={s} />
+            ))}
+            {ask.isPending && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+                <Loader2 className="size-4 animate-spin" aria-hidden /> Looking it up…
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={onSubmit} className="border-t border-border p-3">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={box}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={1}
+            maxLength={500}
+            disabled={spent}
+            aria-label="Your question"
+            placeholder={spent ? 'You have used today’s questions.' : 'Ask about anything in the app…'}
+            className={cn(
+              // Every control looks like a control: a real border, and amber
+              // while it is empty and waiting for something.
+              'max-h-28 min-h-9 flex-1 resize-none rounded-md border bg-card px-3 py-2 text-sm',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+              draft.trim() ? 'border-success/60' : 'border-warning/60',
+            )}
+          />
+          <Button type="submit" size="icon" disabled={!draft.trim() || ask.isPending || spent} aria-label="Send">
+            {ask.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {spent
+            ? 'The assistant opens again tomorrow.'
+            : `Answers come from the app’s own help. ${left} question${left === 1 ? '' : 's'} left today.`}
+        </p>
+      </form>
+    </div>
+  )
+}
+
+/** Nothing asked yet: three real questions, because a blank box asks nothing. */
+function Opening({ onPick }: { onPick: (q: string) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2">
+        <Sparkles className="mt-0.5 size-4 shrink-0 text-tone-violet" aria-hidden />
+        <p className="text-sm text-muted-foreground">
+          Ask how to do something in the app and I will tell you where it is.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {OPENERS.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            {q}
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Bubble({ said }: { said: Said }) {
+  if (said.role === 'user') {
+    return (
+      <div className="self-end rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground max-w-[85%]">
+        {said.text}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className={cn(
+          'max-w-[92%] whitespace-pre-wrap rounded-md border px-3 py-2 text-sm',
+          // Red only for a real problem; an answer we could not give is one.
+          said.broke ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-muted/40',
+        )}
+      >
+        {said.text}
+      </div>
+
+      {said.sources && said.sources.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {said.sources.map((s) =>
+            s.to ? (
+              <Link
+                key={s.title}
+                to={s.to}
+                className="rounded-sm border border-border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                Open {s.title}
+              </Link>
+            ) : (
+              <span key={s.title} className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground">
+                {s.title}
+              </span>
+            ),
+          )}
+        </div>
+      )}
+
+      {said.callUrl && (
+        <Button variant="outline" size="sm" className="self-start" asChild>
+          {/* Opens away from the app, so the conversation is still here afterwards. */}
+          <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
+            <CalendarClock /> Book a call
+          </a>
+        </Button>
+      )}
+    </div>
+  )
+}
