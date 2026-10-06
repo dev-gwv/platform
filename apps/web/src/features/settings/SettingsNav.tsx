@@ -192,7 +192,10 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
 
       <nav
         aria-label="Settings"
-        className="sticky top-0 hidden w-52 shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-3 md:flex"
+        // Pinned while the page scrolls, so it carries its own scroll: on a
+        // laptop screen the More group (Lookups, System, Studio access) sits
+        // below the fold and could not be reached.
+        className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-52 shrink-0 flex-col gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3 md:flex"
       >
         <p className="flex items-center gap-2 px-2 text-sm font-semibold">
           <ClipboardList className="size-4 text-muted-foreground" aria-hidden /> Settings
