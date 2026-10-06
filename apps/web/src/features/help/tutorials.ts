@@ -21,9 +21,14 @@ export interface Tutorial {
 }
 
 export const TUTORIALS: readonly Tutorial[] = [
-  { key: 'team', title: 'Add your team', blurb: 'The people who shoot and edit with you, in a minute.', seconds: 37, section: 'Get started', pages: ['/employees'] },
-  { key: 'client', title: 'Add your first client', blurb: 'Name and number is enough to start.', seconds: 31, section: 'Get started', pages: ['/clients'] },
-  { key: 'project', title: 'Create your first project', blurb: 'Events, deliverables and the price -- then the quotation is ready.', seconds: 53, section: 'Get started', pages: ['/projects/new'] },
+  { key: 'team', title: 'Add one person to your team', blurb: 'Name, phone, job role -- and a login if they need one.', seconds: 34, section: 'Get started', pages: ['/employees'] },
+  { key: 'team-bulk', title: 'Add your whole team at once', blurb: 'One row per person, or paste them from a sheet.', seconds: 43, section: 'Get started', pages: [] },
+  { key: 'client', title: 'Add your first client', blurb: 'Name and number is enough to start.', seconds: 22, section: 'Get started', pages: ['/clients'] },
+  { key: 'project', title: 'Create your first project', blurb: 'Events, deliverables and the price -- then the quotation is ready.', seconds: 50, section: 'Get started', pages: ['/projects/new'] },
+  { key: 'project-client', title: "Project step 1: who it's for", blurb: 'Name the project and pick or add the client.', seconds: 22, section: 'Get started', pages: [] },
+  { key: 'project-shoots', title: 'Project step 2: the event days', blurb: 'Haldi, Wedding, Reception -- date, start time, how long.', seconds: 40, section: 'Get started', pages: [] },
+  { key: 'project-deliverables', title: 'Project step 3: what they get', blurb: 'Album, film, teaser -- tick what is in the package.', seconds: 21, section: 'Get started', pages: [] },
+  { key: 'project-billing', title: 'Project step 4: the price', blurb: 'The package price, the advance, then Create.', seconds: 21, section: 'Get started', pages: [] },
   { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 53, section: 'Clients & sales', pages: ['/follow-ups'] },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 43, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/] },
   { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 41, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'] },
@@ -75,4 +80,4 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'client', 'project', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave']
+export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave']

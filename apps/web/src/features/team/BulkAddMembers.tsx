@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Check, ClipboardPaste, Eye, EyeOff, Loader2, Plus, X } from 'lucide-react'
 import type { ProductionStage } from '@ipc/contracts'
 import { toast } from 'sonner'
+import { useLearn } from '@/features/help/LearnCard'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
@@ -50,6 +51,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   const { data: roles } = useEmployeeRoles()
   const { data: library } = useRoleLibrary()
   const calls = useBulkTeamCalls()
+  const learn = useLearn('team-bulk', { countClose: true })
 
   const [rows, setRows] = useState<BulkRow[]>(() => Array.from({ length: START_ROWS }, newRow))
   const [showErrors, setShowErrors] = useState(false)
@@ -124,10 +126,12 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   async function submit() {
     if (todo.length === 0) {
       toast.error('Type at least one person first.')
+      learn.refused()
       return
     }
     if (errors.size > 0) {
       setShowErrors(true)
+      learn.refused()
       toast.error(`${plural(errors.size, 'row')} need${errors.size === 1 ? 's' : ''} fixing first — see the red fields.`)
       return
     }
@@ -197,6 +201,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
       )
     }
     if (failed === 0) {
+      learn.progress()
       toast.success(`${plural(added, 'person', 'people')} added.`)
       draft.clear()
       onDone(added)
@@ -222,6 +227,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
           Cancel
         </Button>
       </div>
+
+      {learn.card && <div className="mt-4 max-w-2xl">{learn.card}</div>}
 
       {draft.restoredAt && (
         <div className="mt-4">

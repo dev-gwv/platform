@@ -183,13 +183,40 @@ export const hintNote = z.object({
 })
 export type HintNote = z.infer<typeof hintNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts'] as const
+/**
+ * The how-to videos a person has learnt from: watched to the end, or closed
+ * with "Don't show again". Either retires that video's card for them.
+ */
+const tutorialKey = z.string().regex(/^[a-z][a-z0-9-]{0,39}$/)
+export const learnNote = z.object({
+  watched: z.array(tutorialKey).max(60).default([]),
+  closed: z.array(tutorialKey).max(60).default([]),
+})
+export type LearnNote = z.infer<typeof learnNote>
+
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
 /** The caller's own notes, keyed by hint. Unknown keys pass through untouched. */
-export const userHints = z.object({ assign_note: hintNote.optional(), getting_started: hintNote.optional(), hide_amounts: hintNote.optional() }).passthrough()
+export const userHints = z
+  .object({ assign_note: hintNote.optional(), getting_started: hintNote.optional(), hide_amounts: hintNote.optional(), learn: learnNote.optional() })
+  .passthrough()
 export type UserHints = z.infer<typeof userHints>
 
-export const setHintRequest = z.object({ value: hintNote.nullable() })
+/**
+ * What the how-to cards step back on: how many of each thing the studio has
+ * (the caller excluded from the team), and how long this person has had
+ * their login.
+ */
+export const learnSignals = z.object({
+  teammates: z.number().int().min(0),
+  clients: z.number().int().min(0),
+  projects: z.number().int().min(0),
+  since: z.coerce.string(),
+})
+export type LearnSignals = z.infer<typeof learnSignals>
+
+/** `learn` takes a LearnNote; every other key a HintNote. */
+export const setHintRequest = z.object({ value: z.union([learnNote.strict(), hintNote]).nullable() })
 export type SetHintRequest = z.infer<typeof setHintRequest>

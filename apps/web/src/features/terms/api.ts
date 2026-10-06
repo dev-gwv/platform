@@ -46,6 +46,8 @@ export const projectTermsVersion = z.object({
   emailed_to: z.string().nullable(),
   /** The live link to share again -- the same one the client already has (0215). */
   share_url: z.string().nullable().default(null),
+  /** Signed on the studio's own phone or tablet ("Sign now with Priya"). */
+  signed_in_person: z.boolean().default(false),
   /** The last email attempt: sent, or why not. */
   last_email: z
     .object({ to: z.string().nullable(), status: z.string(), at: z.string(), error: z.string().nullable() })
@@ -87,6 +89,17 @@ export function useSendTermsAgain() {
   return useMutation({
     mutationFn: ({ documentId, ...body }: { documentId: string; email?: boolean; to_email?: string | null; expiry_days?: number }) =>
       callApi(`/terms/documents/${documentId}/link`, { method: 'POST', body, responseSchema: sentLink }),
+    onSuccess: () => invalidateTerms(qc),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** The client agrees and signs on the studio's own device. */
+export function useSignHere() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ documentId, ...body }: { documentId: string; name: string; signature: string }) =>
+      callApi(`/terms/documents/${documentId}/sign-here`, { method: 'POST', body, responseSchema: z.object({ ok: z.boolean() }) }),
     onSuccess: () => invalidateTerms(qc),
     onError: (e: Error) => toast.error(e.message),
   })

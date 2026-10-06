@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from 'react'
+import { useLearn, type Learn } from '@/features/help/LearnCard'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -158,6 +159,8 @@ function NewProject() {
   const [step, setStep] = useState<WizardStep>('client')
   const [visited, setVisited] = useState<Set<WizardStep>>(new Set(['client']))
   const [showErrors, setShowErrors] = useState(false)
+  /** This step's how-to video: told when Next is refused, or a step is done. */
+  const learn = useRef<Learn | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [restored, setRestored] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -239,8 +242,10 @@ function NewProject() {
   function onNext() {
     if (stepError) {
       setShowErrors(true)
+      learn.current?.refused()
       return
     }
+    learn.current?.progress()
     goTo(nextStep(step))
   }
 
@@ -414,6 +419,7 @@ function NewProject() {
 
       <div ref={sectionRef} className="mt-3 scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
+          <StepLearn key={step} step={step} into={learn} />
           {step === 'client' && <ClientStep draft={draft} patch={patch} onSendForm={busy ? undefined : () => void sendForm()} />}
           {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
           {step === 'deliverables' && (
@@ -459,7 +465,13 @@ function NewProject() {
           {totals.promised > 0 && <Money label="Promised" value={totals.promised} />}
           {totals.received + totals.promised > 0 && <Money label="Still to collect" value={totals.balance} />}
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {/* Why Next did not go on, beside the button that was pressed. */}
+            {showErrors && stepError && step !== 'review' && (
+              <span role="status" className="text-sm font-medium text-destructive">
+                {stepError}
+              </span>
+            )}
             <Button variant="ghost" onClick={() => void navigate({ to: '/projects' })} disabled={busy}>
               Cancel
             </Button>
@@ -2354,3 +2366,19 @@ function ReviewTile({
 const countLabel = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 const summarise = (names: string[]) => (names.length === 0 ? 'None' : names.join(', '))
+
+/** Which how-to video goes with each step of the wizard. */
+const STEP_VIDEO: Record<WizardStep, string> = {
+  client: 'project-client',
+  shoots: 'project-shoots',
+  deliverables: 'project-deliverables',
+  billing: 'project-billing',
+  review: 'project-billing',
+}
+
+/** The step's how-to card, at the top of the step; gone once they know the way. */
+function StepLearn({ step, into }: { step: WizardStep; into: MutableRefObject<Learn | null> }) {
+  const learn = useLearn(STEP_VIDEO[step])
+  into.current = learn
+  return learn.card ? <div className="mb-4">{learn.card}</div> : null
+}

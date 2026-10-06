@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, FileSignature, Hourglass, Link2, PencilLine, Printer, Send, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Eye, FileSignature, Hourglass, Link2, PenLine, PencilLine, Printer, Send, XCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -22,6 +22,7 @@ import { TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { ShareTermsPanel, type EmailOutcome } from '@/features/terms/ShareTermsPanel'
 import { useCompanyProfile } from '@/features/settings/api'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
+import { SignHereDialog } from '@/features/terms/SignHereDialog'
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 const time = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
@@ -69,6 +70,8 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
   const [viewing, setViewing] = useState<string | null>(null)
   const [sharing, setSharing] = useState<Sharing | null>(null)
   const [showOld, setShowOld] = useState(false)
+  /** The document the client is signing on this device ("Sign now with Priya"). */
+  const [signing, setSigning] = useState<string | null>(null)
   const again = useSendTermsAgain()
 
   const versions = data ?? []
@@ -96,7 +99,24 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
         }
       : undefined
 
-  const share = sharing && <ShareDialog sharing={sharing} project={project} onClose={() => setSharing(null)} />
+  const share = sharing && (
+    <ShareDialog
+      sharing={sharing}
+      project={project}
+      onClose={() => setSharing(null)}
+      onSignHere={
+        canEdit
+          ? () => {
+              setSigning(sharing.link.document_id)
+              setSharing(null)
+            }
+          : undefined
+      }
+    />
+  )
+  const signHere = signing && (
+    <SignHereDialog key={signing} documentId={signing} clientName={project.client_name ?? null} onClose={() => setSigning(null)} />
+  )
 
   const onSent = (link: SentLink) => {
     setComposing(false)
@@ -160,6 +180,7 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
           onCancel={composing ? () => setComposing(false) : undefined}
         />
         {share}
+        {signHere}
       </div>
     )
   }
@@ -174,6 +195,7 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
         onResend={() => shareAgain(current)}
         resending={again.isPending}
         onNewVersion={() => setComposing(true)}
+        onSignHere={() => setSigning(current.id)}
         onCancel={async () => {
           if (await confirm({ title: 'Cancel this link?', description: `${client} will no longer be able to open it or agree.`, confirmLabel: 'Cancel link', destructive: true })) {
             cancel.mutate(current.id)
@@ -224,6 +246,7 @@ export function TermsTab({ project, canEdit }: { project: TermsProject; canEdit:
 
       <TermsDocumentViewer documentId={viewing} onClose={() => setViewing(null)} />
       {share}
+      {signHere}
     </div>
   )
 }
@@ -236,6 +259,7 @@ function CurrentCard({
   onResend,
   resending,
   onNewVersion,
+  onSignHere,
   onCancel,
 }: {
   v: ProjectTermsVersion
@@ -245,6 +269,7 @@ function CurrentCard({
   onResend: () => void
   resending: boolean
   onNewVersion: () => void
+  onSignHere: () => void
   onCancel: () => void
 }) {
   const s = stateOf(v)
@@ -253,7 +278,7 @@ function CurrentCard({
 
   const headline =
     s === 'agreed'
-      ? `Agreed by ${v.acknowledged_by_name ?? client} on ${dayTime(v.acknowledged_at!)}`
+      ? `Agreed by ${v.acknowledged_by_name ?? client} on ${dayTime(v.acknowledged_at!)}${v.signed_in_person ? ' · signed in person' : ''}`
       : s === 'waiting'
         ? `Waiting for ${client} to agree`
         : s === 'expired'
@@ -304,8 +329,14 @@ function CurrentCard({
           {/* Changing the terms is the common need, so it is a button, not a
               menu item: it opens the terms as sent, to edit and send as a new
               version -- the old link then stops working. */}
+          {/* The client is in the studio: they sign right here, on this device. */}
+          {canEdit && (s === 'waiting' || s === 'expired') && (
+            <Button onClick={onSignHere}>
+              <PenLine /> Sign now with {client.split(/\s+/)[0]}
+            </Button>
+          )}
           {canEdit && (
-            <Button onClick={onNewVersion}>
+            <Button variant={s === 'waiting' || s === 'expired' ? 'outline' : 'default'} onClick={onNewVersion}>
               <PencilLine /> Edit &amp; resend
             </Button>
           )}
@@ -334,7 +365,18 @@ function CurrentCard({
   )
 }
 
-function ShareDialog({ sharing, project, onClose }: { sharing: Sharing; project: TermsProject; onClose: () => void }) {
+function ShareDialog({
+  sharing,
+  project,
+  onClose,
+  onSignHere,
+}: {
+  sharing: Sharing
+  project: TermsProject
+  onClose: () => void
+  /** The client is with you: they sign on this device instead. */
+  onSignHere?: (() => void) | undefined
+}) {
   const { link, emailed, title, description } = sharing
   const company = useCompanyProfile()
   const studioName = company.data?.display_name || company.data?.name || undefined
@@ -352,6 +394,14 @@ function ShareDialog({ sharing, project, onClose }: { sharing: Sharing; project:
           studioName={studioName}
           emailed={emailed ?? null}
         />
+        {onSignHere && (
+          <p className="text-sm text-muted-foreground">
+            {project.client_name?.trim().split(/\s+/)[0] ?? 'The client'} with you?{' '}
+            <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={onSignHere}>
+              Let them sign here
+            </button>
+          </p>
+        )}
         <DialogFooter>
           <Button onClick={onClose}>Done</Button>
         </DialogFooter>

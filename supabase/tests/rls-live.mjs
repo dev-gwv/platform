@@ -39,10 +39,11 @@ const check = (name, ok, detail) => {
  * credential limit. (With no proxy in front, the API reads the last
  * X-Forwarded-For hop as the peer.)
  */
-async function api(path, { token, method = 'GET', body, ip } = {}) {
+async function api(path, { token, method = 'GET', body, ip, headers = {} } = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
+      ...headers,
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(ip ? { 'X-Forwarded-For': ip } : {}),
@@ -2013,6 +2014,43 @@ if (listed) {
     status: cp.status,
     ids: Array.isArray(cp.json) ? cp.json.map((x) => x.id) : cp.json,
   })
+}
+
+// ── Terms signed in person: "Sign now with Priya" on the studio's device ──
+{
+  const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='
+  const client = await api('/clients', { token: aToken, method: 'POST', body: { name: `Sign Here ${rand()}`, phone: randPhone() } })
+  const project = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Sign here project', client_id: client.json.id, package_cost: 50000 } })
+  const pid = project.json.id
+  const sent = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Signed at the studio.' } })
+  const docId = sent.json.document_id
+  const noSig = await api(`/terms/documents/${docId}/sign-here`, { token: aToken, method: 'POST', body: { name: 'Priya Sharma' } })
+  const foreign = await api(`/terms/documents/${docId}/sign-here`, { token: newPw.json.access_token, method: 'POST', body: { name: 'X', signature: SIG } })
+  const signed = await api(`/terms/documents/${docId}/sign-here`, { token: aToken, method: 'POST', body: { name: 'Priya Sharma', signature: SIG } })
+  const twice = await api(`/terms/documents/${docId}/sign-here`, { token: aToken, method: 'POST', body: { name: 'Priya Sharma', signature: SIG } })
+  const list = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  const theirs = await api(`/public/terms/${sent.json.token}/payload`)
+  check(
+    'terms: the client signs on the studio’s device -- agreed, signed in person, their copy carries the signature; once only, never another studio',
+    noSig.status === 422 && foreign.status >= 400 && signed.status === 200 && twice.status === 409 &&
+      list.json[0]?.acknowledged_by_name === 'Priya Sharma' && list.json[0]?.signed_in_person === true &&
+      theirs.json?.signature === SIG,
+    { noSig: noSig.status, foreign: foreign.status, signed: signed.json, twice: twice.status, list: list.json?.[0], sig: !!theirs.json?.signature },
+  )
+
+  // A cancelled link: the terms were withdrawn, so nobody signs them here either.
+  const v2 = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Version two.' } })
+  await api(`/terms/documents/${v2.json.document_id}/revoke`, { token: aToken, method: 'POST' })
+  const cancelled = await api(`/terms/documents/${v2.json.document_id}/sign-here`, { token: aToken, method: 'POST', body: { name: 'Priya', signature: SIG } })
+  // A browser on the client's own link cannot claim to be "signed in person".
+  const v3 = await api('/terms/issue', { token: aToken, method: 'POST', body: { project_id: pid, rendered_body: 'Version three.' } })
+  await api(`/public/terms/${v3.json.token}/ack`, { method: 'POST', body: { name: 'Priya' }, headers: { 'User-Agent': 'Signed in person · Fake' } })
+  const after = await api(`/terms/projects/${pid}/documents`, { token: aToken })
+  check(
+    'terms: a cancelled link cannot be signed here, and a browser cannot pass for a signature taken at the studio',
+    cancelled.status === 409 && after.json[0]?.acknowledged_at && after.json[0]?.signed_in_person === false,
+    { cancelled: cancelled.status, after: after.json?.[0] },
+  )
 }
 
 // ── Project money: promised is not received; a payment can be changed ───

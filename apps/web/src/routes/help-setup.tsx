@@ -16,6 +16,9 @@ import { Wordmark } from '@/shared/ui/wordmark'
  * The videos are real recordings of these pages, kept under apps/web/public/help
  * next to a poster frame of the same name.
  */
+/** Setup's first step opens the bulk list, so its video is the list's. */
+const VIDEO: Record<string, string> = { team: 'team-bulk' }
+
 export function HelpSetupPage() {
   const { hash } = useLocation()
   useEffect(() => {
@@ -67,11 +70,11 @@ export function HelpSetupPage() {
                 controls
                 playsInline
                 preload="metadata"
-                poster={`/help/${s.key}.jpg`}
+                poster={`/help/${VIDEO[s.key] ?? s.key}.jpg`}
                 width={1280}
                 height={720}
               >
-                <source src={`/help/${s.key}.mp4`} type="video/mp4" />
+                <source src={`/help/${VIDEO[s.key] ?? s.key}.mp4`} type="video/mp4" />
               </video>
               <Button asChild className="mt-4">
                 <Link to={s.action.to} search={s.action.search as never}>

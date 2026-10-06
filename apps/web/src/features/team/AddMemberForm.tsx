@@ -3,6 +3,7 @@ import { Check, Loader2, UserPlus, Wand2 } from 'lucide-react'
 import type { ProductionStage } from '@ipc/contracts'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
 import type { FieldErrors } from '@/shared/forms/field-errors'
+import { useLearn } from '@/features/help/LearnCard'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
@@ -36,6 +37,7 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
   const [showPassword, setShowPassword] = useState(false)
   const add = useAddMember()
   const powers = useTeamPowers()
+  const learn = useLearn('team', { countClose: true })
 
   // What was typed survives a refresh or a closed tab until it is saved.
   // The starting password is never written to storage: it is typed again.
@@ -52,10 +54,12 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
   function submit() {
     if (!isValid(form)) {
       setShowErrors(true)
+      learn.refused()
       return
     }
     add.mutate(toRequest(form), {
       onSuccess: () => {
+        learn.progress()
         saved.clear()
         onDone()
       },
@@ -79,6 +83,8 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
           Cancel
         </Button>
       </div>
+
+      {learn.card && <div className="mt-4">{learn.card}</div>}
 
       {saved.restoredAt && (
         <div className="mt-4">
