@@ -20,12 +20,22 @@ import { z } from 'zod'
  * of these changed its path.
  */
 export const ASSISTANT_PROVIDERS = [
-  { key: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', suggest: 'llama-3.3-70b-versatile' },
-  { key: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', suggest: 'meta-llama/llama-3.3-70b-instruct' },
+  { key: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', suggest: 'openai/gpt-oss-120b' },
+  { key: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', suggest: 'openai/gpt-oss-120b' },
   { key: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', suggest: 'gpt-4o-mini' },
-  { key: 'together', label: 'Together', baseUrl: 'https://api.together.xyz/v1', suggest: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
+  { key: 'together', label: 'Together', baseUrl: 'https://api.together.xyz/v1', suggest: 'openai/gpt-oss-120b' },
   { key: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', suggest: 'deepseek-chat' },
 ] as const
+
+/**
+ * Tried in turn when the chosen model is gone.
+ *
+ * Groq retires models on a schedule and answers 404 for a name that worked last
+ * month: llama-3.3-70b-versatile went on 16 August 2026 and qwen3.6-27b a month
+ * later. A help assistant that stops answering until someone edits a setting is
+ * the predictable result, so the driver walks this list instead.
+ */
+export const ASSISTANT_FALLBACK_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'] as const
 
 /** What the driver and the console fall back to when nothing is configured. */
 export const ASSISTANT_DEFAULT_BASE_URL = ASSISTANT_PROVIDERS[0].baseUrl

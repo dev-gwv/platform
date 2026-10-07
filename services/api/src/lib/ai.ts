@@ -1,4 +1,4 @@
-import { ASSISTANT_DEFAULT_BASE_URL, ASSISTANT_DEFAULT_MODEL } from '@ipc/contracts'
+import { ASSISTANT_DEFAULT_BASE_URL, ASSISTANT_DEFAULT_MODEL, ASSISTANT_FALLBACK_MODELS } from '@ipc/contracts'
 
 /**
  * The AI engine: one interface, so the provider is a setting and not a rewrite.
@@ -131,6 +131,30 @@ export function refusalSentence(status: number, raw: string): string {
   return `${why}${tail}.`
 }
 
+/**
+ * Extra body fields a particular model family needs.
+ *
+ * gpt-oss is a reasoning model: left alone it spends tokens thinking before it
+ * answers, which for "where do I add a team member" is latency and cost for
+ * nothing. Groq returns that thinking in its own `reasoning` field rather than
+ * in `content`, so switching it off costs us no part of the answer.
+ *
+ * Keyed on the model name because the model is a setting and the provider is a
+ * URL -- the same gpt-oss runs on Groq, OpenRouter and Together, and all three
+ * want the same treatment. An unknown model gets nothing added, which is what
+ * every plain chat model wants.
+ */
+function tuningFor(model: string): Record<string, unknown> {
+  if (/gpt-oss/i.test(model)) return { reasoning_effort: 'low', include_reasoning: false }
+  return {}
+}
+
+/** Worth trying the same request again: a blip, not a refusal. */
+const transient = (status: number) => status === 429 || status >= 500
+
+/** The model is gone. Groq answers 404 for a name it retired. */
+const modelGone = (status: number) => status === 404
+
 /** The wire shape, kept local: nothing above this file should know it. */
 interface WireChoice {
   message?: {
@@ -157,12 +181,94 @@ export function openAiCompatible(cfg: {
   model?: string | undefined
   id?: string | undefined
   timeoutMs?: number | undefined
+  /** Tried in turn if the chosen model is gone. Defaults to ASSISTANT_FALLBACK_MODELS. */
+  fallbackModels?: readonly string[] | undefined
   fetchImpl?: typeof fetch | undefined
 }): ChatProvider {
   const baseUrl = (cfg.baseUrl || ASSISTANT_DEFAULT_BASE_URL).replace(/\/+$/, '')
   const model = cfg.model || ASSISTANT_DEFAULT_MODEL
   const doFetch = cfg.fetchImpl ?? fetch
   const id = cfg.id || hostOf(baseUrl)
+
+  /** The chosen model first, then the fallbacks, each name only once. */
+  const chain = [...new Set([model, ...(cfg.fallbackModels ?? ASSISTANT_FALLBACK_MODELS)])]
+
+  /** One POST. Returns the reply, and the status when the provider refused. */
+  async function once(useModel: string, req: ChatRequest): Promise<{ reply: ChatReply; status: number }> {
+    // Hand-rolled rather than AbortSignal.timeout so the reason is ours to
+    // report: an aborted fetch and a dropped connection throw the same way.
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), cfg.timeoutMs ?? TIMEOUT_MS)
+    try {
+      const res = await doFetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${cfg.apiKey!}`, 'Content-Type': 'application/json' },
+        signal: abort.signal,
+        body: JSON.stringify({
+          model: useModel,
+          // A help answer should not vary between two people asking the same
+          // thing on the same day.
+          temperature: req.temperature ?? 0.2,
+          max_tokens: req.maxTokens ?? 800,
+          ...tuningFor(useModel),
+          messages: req.messages.map((m) =>
+            m.role === 'tool'
+              ? { role: 'tool', content: m.content, tool_call_id: m.toolCallId ?? '' }
+              : { role: m.role, content: m.content },
+          ),
+          ...(req.tools?.length
+            ? {
+                tools: req.tools.map((t) => ({
+                  type: 'function',
+                  function: { name: t.name, description: t.description, parameters: t.parameters },
+                })),
+                tool_choice: 'auto',
+              }
+            : {}),
+        }),
+      })
+
+      if (!res.ok) {
+        const raw = await res.text().catch(() => '')
+        console.error(`[ai] ${id} ${useModel} refused ${res.status}: ${raw.slice(0, 500)}`)
+        return { reply: { ok: false, kind: 'refused', error: refusalSentence(res.status, raw) }, status: res.status }
+      }
+
+      const json = (await res.json().catch(() => ({}))) as WireReply
+      const choice = json.choices?.[0]
+      return {
+        status: 200,
+        reply: {
+          ok: true,
+          text: (choice?.message?.content ?? '').trim(),
+          calls: (choice?.message?.tool_calls ?? []).flatMap((c) =>
+            c.function?.name ? [{ id: c.id ?? '', name: c.function.name, args: parseArgs(c.function.arguments) }] : [],
+          ),
+          model: json.model || useModel,
+          usage: {
+            promptTokens: json.usage?.prompt_tokens ?? null,
+            completionTokens: json.usage?.completion_tokens ?? null,
+          },
+          truncated: choice?.finish_reason === 'length',
+        },
+      }
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === 'AbortError'
+      console.error(`[ai] ${id} ${useModel} ${aborted ? 'timed out' : 'threw'}`, e instanceof Error ? e.message : e)
+      return {
+        // 0: nothing came back, so there is no status to reason about. Treated
+        // as transient, because a dropped connection usually is.
+        status: 0,
+        reply: {
+          ok: false,
+          kind: 'unreachable',
+          error: aborted ? 'The AI provider did not answer in time.' : 'We could not reach the AI provider.',
+        },
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
 
   return {
     id,
@@ -172,73 +278,42 @@ export function openAiCompatible(cfg: {
         return { ok: false, kind: 'no_key', error: 'The AI assistant is not set up on the server (no API key).' }
       }
 
-      // Hand-rolled rather than AbortSignal.timeout so the reason is ours to
-      // report: an aborted fetch and a dropped connection throw the same way.
-      const abort = new AbortController()
-      const timer = setTimeout(() => abort.abort(), cfg.timeoutMs ?? TIMEOUT_MS)
-      try {
-        const res = await doFetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
-          signal: abort.signal,
-          body: JSON.stringify({
-            model,
-            // A help answer should not vary between two people asking the same
-            // thing on the same day.
-            temperature: req.temperature ?? 0.2,
-            max_tokens: req.maxTokens ?? 800,
-            messages: req.messages.map((m) =>
-              m.role === 'tool'
-                ? { role: 'tool', content: m.content, tool_call_id: m.toolCallId ?? '' }
-                : { role: m.role, content: m.content },
-            ),
-            ...(req.tools?.length
-              ? {
-                  tools: req.tools.map((t) => ({
-                    type: 'function',
-                    function: { name: t.name, description: t.description, parameters: t.parameters },
-                  })),
-                  tool_choice: 'auto',
-                }
-              : {}),
-          }),
-        })
+      let last: ChatReply | null = null
 
-        if (!res.ok) {
-          const raw = await res.text().catch(() => '')
-          console.error(`[ai] ${id} refused ${res.status}: ${raw.slice(0, 500)}`)
-          return { ok: false, kind: 'refused', error: refusalSentence(res.status, raw) }
+      for (const useModel of chain) {
+        let status = -1
+        // One retry for a blip. Not more: a studio is waiting, and three
+        // attempts at a provider that is down is just a slower failure.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const got = await once(useModel, req)
+          if (got.reply.ok) {
+            if (useModel !== model) console.warn(`[ai] ${id} answered on ${useModel}; ${model} is unavailable`)
+            return got.reply
+          }
+          last = got.reply
+          status = got.status
+          // status 0 is "nothing came back": a dropped connection or a timeout,
+          // which is usually worth one more go.
+          if (!(status === 0 || transient(status)) || attempt === 1) break
+          await wait(RETRY_PAUSE_MS)
         }
 
-        const json = (await res.json().catch(() => ({}))) as WireReply
-        const choice = json.choices?.[0]
-        return {
-          ok: true,
-          text: (choice?.message?.content ?? '').trim(),
-          calls: (choice?.message?.tool_calls ?? []).flatMap((c) =>
-            c.function?.name ? [{ id: c.id ?? '', name: c.function.name, args: parseArgs(c.function.arguments) }] : [],
-          ),
-          model: json.model || model,
-          usage: {
-            promptTokens: json.usage?.prompt_tokens ?? null,
-            completionTokens: json.usage?.completion_tokens ?? null,
-          },
-          truncated: choice?.finish_reason === 'length',
-        }
-      } catch (e) {
-        const aborted = e instanceof Error && e.name === 'AbortError'
-        console.error(`[ai] ${id} ${aborted ? 'timed out' : 'threw'}`, e instanceof Error ? e.message : e)
-        return {
-          ok: false,
-          kind: 'unreachable',
-          error: aborted ? 'The AI provider did not answer in time.' : 'We could not reach the AI provider.',
-        }
-      } finally {
-        clearTimeout(timer)
+        // Only a retired model is worth trying the next name for. A bad key or
+        // a malformed request would fail identically all the way down the chain,
+        // turning one clear error into three slow ones.
+        if (!modelGone(status)) return last!
+        console.warn(`[ai] ${id} has no model ${useModel}; trying the next one`)
       }
+
+      return last!
     },
   }
 }
+
+/** Long enough to clear a rate-limit burst, short enough nobody notices twice. */
+const RETRY_PAUSE_MS = 400
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Arguments arrive as a JSON string, and a model can send a broken one. */
 function parseArgs(raw: string | undefined): unknown {

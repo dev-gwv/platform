@@ -182,3 +182,121 @@ describe('refusalSentence', () => {
     expect(refusalSentence(400, JSON.stringify({ message: 'x'.repeat(5000) })).length).toBeLessThan(300)
   })
 })
+
+describe('retry and the fallback chain', () => {
+  /** Answers each call from a script, and records the model each asked for. */
+  function scripted(steps: { status: number; body: unknown }[]) {
+    const models: string[] = []
+    const f = vi.fn(async (_url: string, init: RequestInit) => {
+      models.push(JSON.parse(String(init.body)).model as string)
+      const step = steps[Math.min(models.length - 1, steps.length - 1)]!
+      return new Response(JSON.stringify(step.body), {
+        status: step.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    return { f: f as unknown as typeof fetch, models }
+  }
+
+  it('tries again once after a rate limit, and succeeds', async () => {
+    const { f, models } = scripted([
+      { status: 429, body: { error: { message: 'slow down' } } },
+      { status: 200, body: ok('Open Team then People.') },
+    ])
+    const r = await openAiCompatible({ apiKey: 'k', timeoutMs: 5_000, fetchImpl: f }).chat({ messages: [] })
+    expect(r.ok).toBe(true)
+    expect(models).toHaveLength(2)
+    // The same model, not the fallback: a rate limit is a blip, not a retirement.
+    expect(new Set(models).size).toBe(1)
+  })
+
+  it('gives up after one retry rather than hammering a provider that is down', async () => {
+    const { f, models } = scripted([{ status: 503, body: {} }])
+    const r = await openAiCompatible({
+      apiKey: 'k',
+      model: 'only-model',
+      fallbackModels: [],
+      fetchImpl: f,
+    }).chat({ messages: [] })
+    expect(r.ok).toBe(false)
+    expect(models).toEqual(['only-model', 'only-model'])
+  })
+
+  it('does not retry a refusal that a second try cannot fix', async () => {
+    // A bad key is a bad key. Retrying it just makes the failure slower.
+    const { f, models } = scripted([{ status: 401, body: { error: { message: 'Invalid API Key' } } }])
+    const r = await openAiCompatible({ apiKey: 'bad', fallbackModels: [], fetchImpl: f }).chat({ messages: [] })
+    expect(r.ok).toBe(false)
+    expect(models).toHaveLength(1)
+  })
+
+  it('moves to the next model when the chosen one has been retired', async () => {
+    // Groq answers 404 for a name it has retired -- llama-3.3-70b-versatile
+    // went on 16 August 2026 -- and this is the whole reason the chain exists.
+    const { f, models } = scripted([
+      { status: 404, body: { error: { message: 'The model `llama-3.3-70b-versatile` does not exist' } } },
+      { status: 200, body: ok('Open Team then People.') },
+    ])
+    const r = await openAiCompatible({
+      apiKey: 'k',
+      model: 'llama-3.3-70b-versatile',
+      fallbackModels: ['openai/gpt-oss-120b'],
+      fetchImpl: f,
+    }).chat({ messages: [] })
+    expect(r.ok).toBe(true)
+    expect(models).toEqual(['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'])
+  })
+
+  it('does not walk the chain for a failure every model would share', async () => {
+    const { f, models } = scripted([{ status: 401, body: {} }])
+    await openAiCompatible({
+      apiKey: 'bad',
+      model: 'a',
+      fallbackModels: ['b', 'c'],
+      fetchImpl: f,
+    }).chat({ messages: [] })
+    expect(models).toEqual(['a'])
+  })
+
+  it('reports the last failure when every model in the chain is gone', async () => {
+    const { f, models } = scripted([{ status: 404, body: { error: { message: 'no such model' } } }])
+    const r = await openAiCompatible({ apiKey: 'k', model: 'a', fallbackModels: ['b'], fetchImpl: f }).chat({ messages: [] })
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.error).toContain('check the model name')
+    expect(models).toEqual(['a', 'b'])
+  })
+
+  it('never asks for the same model twice because it is also a fallback', async () => {
+    const { f, models } = scripted([{ status: 404, body: {} }])
+    await openAiCompatible({
+      apiKey: 'k',
+      model: 'openai/gpt-oss-120b',
+      fallbackModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
+      fetchImpl: f,
+    }).chat({ messages: [] })
+    expect(models).toEqual(['openai/gpt-oss-120b', 'openai/gpt-oss-20b'])
+  })
+})
+
+describe('model-aware tuning', () => {
+  const bodyOf = (f: unknown) =>
+    JSON.parse(String((f as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]![1].body))
+
+  it('switches gpt-oss reasoning off, so a help answer is not paid for twice', async () => {
+    // Groq returns gpt-oss thinking in its own `reasoning` field, never in
+    // content, so turning it off loses no part of the answer.
+    const f = reply(ok('hi'))
+    await openAiCompatible({ apiKey: 'k', model: 'openai/gpt-oss-120b', fetchImpl: f as unknown as typeof fetch }).chat({ messages: [] })
+    expect(bodyOf(f)).toMatchObject({ reasoning_effort: 'low', include_reasoning: false })
+  })
+
+  it('adds nothing for a plain chat model', async () => {
+    // An unknown provider may reject a field it does not know, so nothing
+    // speculative goes on the wire.
+    const f = reply(ok('hi'))
+    await openAiCompatible({ apiKey: 'k', model: 'gpt-4o-mini', fetchImpl: f as unknown as typeof fetch }).chat({ messages: [] })
+    expect(bodyOf(f)).not.toHaveProperty('reasoning_effort')
+    expect(bodyOf(f)).not.toHaveProperty('include_reasoning')
+  })
+})
