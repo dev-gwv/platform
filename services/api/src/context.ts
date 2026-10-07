@@ -100,6 +100,11 @@ export interface Env {
   APP_VERSION: string
   /** Google OAuth Client ID for GIS id_token verification (optional). */
   GOOGLE_CLIENT_ID: string
+  /**
+   * The old app's public Firebase web key: imported people's first sign-in
+   * checks their old password against it (lib/legacy-login.ts). Optional.
+   */
+  FIREBASE_WEB_API_KEY: string
 }
 
 /**
