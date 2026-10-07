@@ -35,6 +35,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { isDevLike } from '../../lib/env'
 import { issueToken, hashPassword, verifyPassword, verifyToken, TTL_SECONDS } from '../../lib/auth-token'
+import { adoptLegacyPassword } from '../../lib/legacy-login'
 import { clearRefreshCookie, cookieMode, readRefreshCookie, setRefreshCookie } from '../../lib/session-cookie'
 import { originAllowed } from '../../lib/allowed-origins'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../../lib/email'
@@ -291,7 +292,13 @@ export const authRouter = new Hono<AppEnv>()
     // Always spend a verification, even for an unknown address: short-circuiting
     // here made a miss answer an order of magnitude faster than a hit, which
     // enumerates the customer base by latency alone.
-    const ok = await verifyPassword(password, row?.encrypted_password ?? (await decoyHash()))
+    let ok = await verifyPassword(password, row?.encrypted_password ?? (await decoyHash()))
+    // Someone brought over from the old app signs in with the password they
+    // had there (0249); it becomes their password here.
+    if (row && !row.encrypted_password && (await adoptLegacyPassword(c.env, row.id, email, password))) {
+      row.encrypted_password = 'adopted'
+      ok = true
+    }
     if (!row?.encrypted_password || !ok) {
       fail(401, 'Invalid email or password.')
     }
