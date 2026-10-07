@@ -385,6 +385,35 @@ export const authRouter = new Hono<AppEnv>()
       )
     }
 
+    // Someone who signed in with Google once but never named their studio has a
+    // login and no studio. Without needs_setup the app took them as signed in,
+    // found nothing to open and sent them back to sign in, every time.
+    // Someone whose every studio has turned them off is told so, as /login does.
+    const access = await attempt(c, 'auth.google.access', () =>
+      withService(c.env, async (sql) => {
+        const [r] = await sql<{ active: number; studios: number; studio: string | null }[]>`
+          select (select count(*)::int from list_login_profiles(${row.id})) as active,
+                 (select count(*)::int
+                    from users u
+                    join auth.users p on p.id = u.user_id
+                   where p.id = ${row.id} or p.identity_id = ${row.id}) as studios,
+                 (select c.name
+                    from users u
+                    join auth.users p on p.id = u.user_id
+                    join companies c on c.id = u.company_id
+                   where p.id = ${row.id} or p.identity_id = ${row.id}
+                   order by u.deleted_at desc nulls first
+                   limit 1) as studio`
+        return r ?? null
+      }),
+    )
+    if (access && access.studios === 0) {
+      return c.json({ ...(await signIn(c, row.id)), needs_setup: true })
+    }
+    if (access && access.active === 0 && access.studio) {
+      fail(403, `Your sign-in for ${access.studio} has been turned off. Ask ${access.studio} to turn it back on.`)
+    }
+
     return c.json(await signIn(c, row.id))
   })
 
