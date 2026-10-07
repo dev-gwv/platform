@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { completeSetupRequest, sessionState } from '@ipc/contracts'
-import { callApi, ApiError } from '@/shared/api/client'
+import { z, authToken, completeSetupRequest, sessionState } from '@ipc/contracts'
+import { callApi, ApiError, markCookieSession } from '@/shared/api/client'
+import { setTokens } from '@/shared/auth/token'
+import { humanize } from '@/shared/ui/format'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { setupLanding } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'
@@ -16,6 +18,8 @@ import { PageBackdrop } from '@/shared/brand/PageBackdrop'
  * session already resolves a studio (this page revisited, or a normal login),
  * there's nothing to complete -- send them on rather than asking again.
  */
+const pendingInvite = z.object({ studio: z.string().nullable(), role: z.string().nullable() })
+
 export function CompleteSetupPage() {
   const navigate = useNavigate()
   const { session, loading, refresh, signOut } = useAuth()
@@ -24,6 +28,35 @@ export function CompleteSetupPage() {
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Invited to a studio by email, signed in with Google instead (0250).
+  const [invite, setInvite] = useState<{ studio: string; role: string | null } | null>(null)
+  const [joining, setJoining] = useState(false)
+
+  useEffect(() => {
+    if (loading || session) return
+    let live = true
+    callApi('/auth/pending-invite', { responseSchema: pendingInvite })
+      .then((r) => live && setInvite(r.studio ? { studio: r.studio, role: r.role } : null))
+      .catch(() => null)
+    return () => {
+      live = false
+    }
+  }, [loading, session])
+
+  async function joinInvite() {
+    setError(null)
+    setJoining(true)
+    try {
+      const pair = await callApi('/auth/join-invite', { method: 'POST', responseSchema: authToken })
+      setTokens(pair)
+      markCookieSession(!pair.refresh_token)
+      // A full load: nothing cached before this belongs to the studio being joined.
+      window.location.assign('/dashboard')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'We could not add you to the studio. Please try again.')
+      setJoining(false)
+    }
+  }
 
   useEffect(() => {
     if (!loading && session) {
@@ -90,6 +123,19 @@ export function CompleteSetupPage() {
                 One more step — tell us what to call your studio, and you're in.
               </p>
             </div>
+
+            {invite && (
+              <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <p className="text-sm">
+                  <span className="font-semibold">{invite.studio}</span> has invited you to join their team
+                  {invite.role ? ` as ${humanize(invite.role)}` : ''}.
+                </p>
+                <Button type="button" onClick={() => void joinInvite()} disabled={joining}>
+                  {joining ? 'Joining…' : `Join ${invite.studio}`}
+                </Button>
+                <p className="text-xs text-muted-foreground">Or set up a studio of your own below.</p>
+              </div>
+            )}
 
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">

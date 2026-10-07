@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Camera, XCircle } from 'lucide-react'
 import { authToken, invitationPreview } from '@ipc/contracts'
@@ -30,8 +30,7 @@ import { Wordmark } from '@/shared/ui/wordmark'
  * so accepting signs them straight in.
  */
 export function AcceptInvitePage() {
-  const { refresh, session, signOut } = useAuth()
-  const navigate = useNavigate()
+  const { session, signOut } = useAuth()
   const token = new URLSearchParams(window.location.search).get('token')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -86,8 +85,9 @@ export function AcceptInvitePage() {
           responseSchema: authToken,
         }),
       )
-      await refresh()
-      await navigate({ to: '/dashboard' })
+      // A full load, as switching studios does: the cache holds the rows of
+      // whichever studio was open before, and they must not show under this one.
+      window.location.assign('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -153,8 +153,8 @@ export function AcceptInvitePage() {
 
                 {session && !differentEmail && (
                   <p className="mt-3 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-                    You&apos;re signed in as {session.email}. Accepting links this invitation to
-                    your current session — or sign out first to accept as a different email.
+                    You&apos;re signed in as {session.email}. Accept with that login&apos;s password
+                    and this studio is added to it — switch between studios from your account menu.
                   </p>
                 )}
                 {differentEmail && (

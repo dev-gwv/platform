@@ -417,6 +417,47 @@ export const authRouter = new Hono<AppEnv>()
     return c.json(await signIn(c, row.id))
   })
 
+  // A login with no studio that was invited to one -- a team member who pressed
+  // "Continue with Google" instead of opening their email link -- sees the
+  // invitation on Complete setup and joins it there (0250). Bearer-checked by
+  // hand like /complete-setup: requireAuth needs a studio, which is the point.
+  .get('/pending-invite', async (c) => {
+    const claims = await verifyToken(c.env, (c.req.header('Authorization') ?? '').replace(/^Bearer /, ''))
+    if (!claims) fail(401, 'Please sign in to continue.')
+    const rows = await attempt(c, 'auth.pending_invite', () =>
+      withService(
+        c.env,
+        (sql) => sql<{ studio: string; role: string }[]>`
+          select c.name as studio, i.role::text as role
+            from auth.users a
+            join user_invitations i on lower(i.email) = lower(a.email)
+            join companies c on c.id = i.company_id
+           where a.id = auth_identity_of(${claims.uid}) and a.email_verified
+             and i.accepted_at is null and i.revoked_at is null and i.expires_at > now()
+           order by i.created_at desc
+           limit 1`,
+      ),
+    )
+    if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    return c.json({ studio: rows[0]?.studio ?? null, role: rows[0]?.role ?? null })
+  })
+
+  .post('/join-invite', async (c) => {
+    const claims = await verifyToken(c.env, (c.req.header('Authorization') ?? '').replace(/^Bearer /, ''))
+    if (!claims) fail(401, 'Please sign in to continue.')
+    const joined = await attempt(c, 'auth.join_invite', () =>
+      withService(c.env, async (sql) => {
+        const [r] = await sql<{ identity: string | null; uid: string | null }[]>`
+          select auth_identity_of(${claims.uid}) as identity,
+                 join_invitation_as(auth_identity_of(${claims.uid})) as uid`
+        return r ?? null
+      }),
+    )
+    if (!joined) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    if (!joined.uid || !joined.identity) fail(410, 'This invitation has expired or was withdrawn. Ask the studio to send a new one.')
+    return c.json(await signIn(c, joined.identity, joined.uid))
+  })
+
   // Second half of the Google-signup path: the identity already exists (just
   // minted by /google above), but no studio does yet. Deliberately NOT behind
   // requireAuth -- that requires get_auth_context() to already resolve a
@@ -456,7 +497,7 @@ export const authRouter = new Hono<AppEnv>()
     if (result === 'invited') {
       fail(
         409,
-        'You have already been invited to a studio. Open the invitation link in your email to join it, rather than creating a new studio here.',
+        'You have been invited to a studio. Join it above, rather than creating a new one here.',
       )
     }
     if (!result) fail(400, 'We could not set up your studio. Please try again.')
