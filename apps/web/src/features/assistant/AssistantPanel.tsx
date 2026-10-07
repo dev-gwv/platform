@@ -4,6 +4,7 @@ import { ArrowRight, CalendarClock, Loader2, Send, Sparkles } from 'lucide-react
 import type { AskReply, AssistantSource, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
+import { RichText } from './rich-text'
 import { useAsk } from './api'
 
 /**
@@ -185,12 +186,12 @@ function Bubble({ said }: { said: Said }) {
     <div className="flex flex-col gap-2">
       <div
         className={cn(
-          'max-w-[92%] whitespace-pre-wrap rounded-md border px-3 py-2 text-sm',
+          'max-w-[92%] rounded-md border px-3 py-2 text-sm leading-relaxed',
           // Red only for a real problem; an answer we could not give is one.
           said.broke ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-muted/40',
         )}
       >
-        {said.text}
+        <RichText text={said.text} />
       </div>
 
       {said.sources && said.sources.length > 0 && (
