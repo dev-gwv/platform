@@ -163,10 +163,23 @@ create or replace function legacy.has_data(p_old uuid) returns boolean language 
                                 'invoices', 'expenses', 'storage_locations'))
 $$;
 
+-- The owner's own call on a studio, over the email match below: merge it into
+-- a given studio here (target), or bring it as a studio of its own (no target).
+create table if not exists legacy.choice (
+  old_company uuid primary key,
+  target      uuid,
+  why         text not null
+);
+-- The Mulberry Weddings (abdlhans@): its own studio, not Abdlhan's Studio (7 Oct 2026).
+insert into legacy.choice values ('9924e651-8b9e-418f-afca-385ff3c739eb', null, 'owner: keep it a studio of its own')
+on conflict (old_company) do update set target = excluded.target, why = excluded.why;
+
 -- A studio already made here by the same owner: the old app's admins' emails
 -- against this app's owners and admins. Studios this importer made never count.
 create or replace function legacy.merge_target(p_old uuid) returns uuid language sql stable as $$
-  select coalesce(
+  select case when exists (select 1 from legacy.choice where old_company = p_old)
+              then (select target from legacy.choice where old_company = p_old)
+         else coalesce(
     (select l.joined_company_id from public.legacy_studios l
       where l.old_company_id = p_old::text and l.joined_company_id is not null
         and not exists (select 1 from legacy.src s where s.tbl = 'companies' and s.r->>'id' = l.joined_company_id::text)),
@@ -178,7 +191,7 @@ create or replace function legacy.merge_target(p_old uuid) returns uuid language
         and lower(u.email) in (select lower(btrim(r->>'email')) from legacy.rows('admins', p_old) r)
         and not exists (select 1 from legacy.src s where s.tbl = 'companies' and s.r->>'id' = c.id::text)
       order by (u.role = 'super_admin') desc, c.created_at
-      limit 1))
+      limit 1)) end
 $$;
 
 -- ---------------------------------------------------------------------------
