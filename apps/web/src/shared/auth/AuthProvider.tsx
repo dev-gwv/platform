@@ -17,6 +17,12 @@ interface AuthValue {
    * stored tokens are kept so a retry can succeed without a fresh sign-in.
    */
   bootError: string | null
+  /**
+   * Signed in, but the login has no studio yet: a Google sign-up that never
+   * named one. The route guard sends them to /complete-setup, not /login --
+   * sending them to sign in again only brought them back here.
+   */
+  noStudio: boolean
   /** Re-read the session; resolves to it (null when signed out). */
   refresh: () => Promise<SessionState | null>
   /** Re-run the boot after a bootError. */
@@ -37,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState | null>(null)
   const [loading, setLoading] = useState(true)
   const [bootError, setBootError] = useState<string | null>(null)
+  const [noStudio, setNoStudio] = useState(false)
   const qc = useQueryClient()
 
   /**
@@ -48,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearToken()
     markCookieSession(false)
     setSession(null)
+    setNoStudio(false)
     qc.clear()
   }, [qc])
 
@@ -70,11 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // server did not answer. Say so, with Retry, rather than sign them out.
       if (hasStoredSession()) throw new Error('We could not reach the server. Check your connection and try again.')
       setSession(null)
+      setNoStudio(false)
       return null
     }
     try {
       const s = await callApi('/auth/session', { responseSchema: sessionState })
       setSession(s)
+      setNoStudio(false)
       // Every later event carries who and which studio. Set here rather than
       // at sign-in so a returning session (page reload, token refresh) is
       // identified too, not just a fresh login.
@@ -85,6 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = e instanceof ApiError ? e.status : undefined
       if (status === 401 || status === 403) {
         setSession(null)
+        // The one 403 that is not "signed out": a real login with no studio.
+        setNoStudio(status === 403 && e instanceof ApiError && /no studio/i.test(e.message))
         return null
       }
       throw e
@@ -164,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthCtx
-      value={{ session, loading, bootError, refresh, retry: boot, signOut, signOutEverywhere, switchStudio }}
+      value={{ session, loading, bootError, noStudio, refresh, retry: boot, signOut, signOutEverywhere, switchStudio }}
     >
       {children}
     </AuthCtx>

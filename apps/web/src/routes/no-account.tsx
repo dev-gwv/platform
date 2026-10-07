@@ -36,7 +36,7 @@ export function NoAccountPage() {
                   studio yet.
                 </>
               ) : (
-                'This sign-in isn&apos;t linked to a studio yet.'
+                'This sign-in isn’t linked to a studio yet.'
               )}{' '}
               Start a new studio, or ask your studio admin to invite you.
             </p>

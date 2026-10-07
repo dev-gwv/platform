@@ -286,6 +286,9 @@ export function LoginPage() {
       rememberSession(result)
       if (result.needs_setup) {
         // Google proved who they are; there's no studio yet to fetch a session for.
+        // Re-read first: a session left from another account in this browser
+        // would otherwise send the setup page straight to that studio.
+        await refresh()
         await navigate({ to: '/complete-setup' })
         return
       }
@@ -607,6 +610,12 @@ export function LoginPage() {
                         )}
                       </Field>
                     )
+                  )}
+
+                  {!isForgot && !isRegister && (
+                    <p className="text-xs text-muted-foreground">
+                      Moved from the old app? Sign in with the same email and password.
+                    </p>
                   )}
 
                   {error && (

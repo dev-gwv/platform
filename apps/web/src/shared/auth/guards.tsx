@@ -23,14 +23,19 @@ export function RequireAuth({
   allowExpired?: boolean
   allowNoAccount?: boolean
 }) {
-  const { session, loading, bootError, retry } = useAuth()
+  const { session, loading, bootError, noStudio, retry } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
     if (loading || session || bootError) return
+    // Signed in with no studio yet: naming one is the way in, not signing in again.
+    if (noStudio) {
+      void navigate({ to: '/complete-setup' })
+      return
+    }
     const redirect = `${window.location.pathname}${window.location.search}`
     void navigate({ to: '/login', search: { redirect } as never })
-  }, [loading, session, bootError, navigate])
+  }, [loading, session, bootError, noStudio, navigate])
 
   useEffect(() => {
     if (loading || !session) return
