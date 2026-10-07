@@ -6,6 +6,7 @@ import { useAddFaq, useDeleteFaq, useDeleteHelpVideo, useEditFaq, useSaveHelpCon
 import { SHIPPED, TUTORIALS } from '@/features/help/tutorials'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { AssistantSettingsCard } from '@/features/assistant/AssistantSettingsCard'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -42,6 +43,7 @@ function HelpConsole() {
       ) : (
         <div className="flex max-w-3xl flex-col gap-6">
           <Contacts whatsapp={help.data.support_whatsapp} email={help.data.support_email} />
+          <AssistantSettingsCard />
           <Faqs faqs={help.data.faqs} />
           <Videos videos={help.data.videos} />
         </div>

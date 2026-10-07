@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // This package is imported by both apps/web and services/api, so its own
+    // typecheck compiles @ipc/contracts' source too. DOM is here for the
+    // globals that source uses (URL); the API gets them from bun-types and the
+    // web app from its own DOM lib. Nothing in this package touches the DOM.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

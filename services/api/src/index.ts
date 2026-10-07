@@ -50,6 +50,7 @@ import { crmCallsRouter } from './modules/crm-calls/router'
 import { crmSequencesRouter } from './modules/crm-sequences/router'
 import { featuresRouter, platformFeaturesRouter } from './modules/features/router'
 import { studioWhatsappRouter } from './modules/studio-whatsapp/router'
+import { assistantRouter, platformAssistantRouter } from './modules/assistant/router'
 import { platformHelpRouter, publicHelpRouter } from './modules/help/router'
 import { platformStudioReferralsRouter, studioReferralsRouter } from './modules/studio-referrals/router'
 import { publicOnboardingRouter } from './modules/onboarding/router'
@@ -127,6 +128,14 @@ app.use('/auth/refresh', rateLimit({ windowMs: 60_000, limit: 120 }))
 app.use('/auth/logout', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/auth/logout-all', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/auth/change-password', rateLimit({ windowMs: 60_000, limit: 10 }))
+// A question costs a call to the AI provider, so it sits in the expensive-write
+// tier. Only the POST: the panel reads /assistant/state on every page it opens,
+// and rate-limiting that would be rate-limiting the header. This is the abuse
+// ceiling per address -- the per-studio allowance is assistant_asked_today()
+// (0247), because a studio behind one office connection shares an address with
+// its whole team.
+const assistantLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
+app.use('/assistant/ask', async (c, next) => (c.req.method === 'POST' ? assistantLimiter(c, next) : next()))
 app.use('/public/*', rateLimit({ windowMs: 60_000, limit: 30 }))
 const enquiryLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
 // A client note on a deliverable notifies the studio: a much lower ceiling
@@ -185,7 +194,9 @@ app.route('/public', publicFilesRouter)
 app.route('/settings', settingsRouter)
 app.route('/platform', platformRouter)
 app.route('/platform', platformFeaturesRouter)
+app.route('/assistant', assistantRouter)
 app.route('/platform', platformHelpRouter)
+app.route('/platform', platformAssistantRouter)
 app.route('/platform', platformStudioReferralsRouter)
 app.route('/studio-referrals', studioReferralsRouter)
 app.route('/public', publicHelpRouter)

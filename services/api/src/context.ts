@@ -14,6 +14,21 @@ export interface Env {
   EMAIL_FROM: string
   /** Reads IPC Diamond screenshots (lib/diamond-check.ts). Optional: without it a person approves each claim. */
   ANTHROPIC_API_KEY?: string
+  /**
+   * The help assistant's provider key (0247, lib/ai.ts). Optional: without it
+   * the assistant answers "not switched on yet" and logs the question as
+   * skipped, so nothing breaks and the gap is visible.
+   *
+   * Which provider it belongs to is AI_BASE_URL's business, not this key's --
+   * Groq, OpenRouter, OpenAI and the rest all take a bearer token. The key
+   * stays here and never in platform_settings; the model, the address and the
+   * prompt are rows, so they change without a deploy.
+   */
+  AI_API_KEY?: string
+  /** Chat-completions base URL. Empty means Groq (ASSISTANT_DEFAULT_BASE_URL in @ipc/contracts). */
+  AI_BASE_URL?: string
+  /** Model name. Empty means the default in lib/ai.ts. platform_settings wins over this. */
+  AI_MODEL?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
   /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */
