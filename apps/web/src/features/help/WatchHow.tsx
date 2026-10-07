@@ -8,12 +8,14 @@ import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 
 /**
  * "Watch how · 40 s" beside a page's title -- only on a page that has a
- * tutorial. Plays it here, without leaving the page.
+ * tutorial (on a project, the tutorial for its open tab). Plays it here, without leaving the page.
  */
-export function WatchHow() {
+export function WatchHow({ tutorialKey }: { tutorialKey?: string } = {}) {
   const path = useRouterState({ select: (s) => s.location.pathname })
+  const tab = useRouterState({ select: (s) => (s.location.search as { tab?: unknown }).tab })
   const list = useTutorials()
-  const tutorial = tutorialFor(path, list)
+  // A full-screen editor names its own video; a page goes by its address.
+  const tutorial = tutorialKey ? (list.find((t) => t.key === tutorialKey) ?? null) : tutorialFor(path, list, typeof tab === 'string' ? tab : null)
   const [playing, setPlaying] = useState<Tutorial | null>(null)
   if (!tutorial) return null
   return (

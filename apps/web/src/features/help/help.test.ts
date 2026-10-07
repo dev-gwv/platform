@@ -10,6 +10,13 @@ describe('tutorials', () => {
     expect(tutorialFor('/follow-ups', list)?.key).toBe('leads')
     expect(tutorialFor('/projects/abc-123/quotation', list)?.key).toBe('quotation')
     expect(tutorialFor('/projects/abc-123', list)).toBeNull()
+    expect(tutorialFor('/projects/abc-123', list, 'overview')).toBeNull()
+    expect(tutorialFor('/projects/abc-123', list, 'shoots')?.key).toBe('assign')
+    expect(tutorialFor('/projects/abc-123', list, 'deliverables')?.key).toBe('give-work')
+    expect(tutorialFor('/projects/abc-123', list, 'billing')?.key).toBe('payments')
+    expect(tutorialFor('/projects/new', list, 'shoots')?.key).toBe('project')
+    expect(tutorialFor('/billing/invoices/new', list)?.key).toBe('invoices')
+    expect(tutorialFor('/billing/invoices/abc-123/edit', list)?.key).toBe('invoices')
     expect(tutorialFor('/reports', list)).toBeNull()
   })
 

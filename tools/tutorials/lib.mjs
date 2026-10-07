@@ -8,9 +8,23 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? '/opt/node22/
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { HI } from './hi.mjs'
-import { VO } from './vo.mjs'
-import { say } from '../tts/say.mjs'
+import { HI as HI_BASE } from './hi.mjs'
+import { VO as VO_BASE } from './vo.mjs'
+import { readdirSync } from 'node:fs'
+// A tutorial may also carry its script in lines/<key>.mjs: export const VO = { <key>: {...} }, HI = { 'caption': 'हिन्दी' }.
+const HI = { ...HI_BASE }
+const VO = { ...VO_BASE }
+{
+  const dir = new URL('./lines/', import.meta.url)
+  let files = []
+  try { files = readdirSync(dir).filter((f) => f.endsWith('.mjs')) } catch { /* no extra lines */ }
+  for (const f of files) {
+    const m = await import(new URL(f, dir))
+    Object.assign(HI, m.HI ?? {})
+    Object.assign(VO, m.VO ?? {})
+  }
+}
+import { say } from './tts/say.mjs'
 
 /** TUT_LANG=hi records the same tutorial with Hindi captions into final/hi/. */
 export const LANG = process.env.TUT_LANG === 'hi' ? 'hi' : 'en'

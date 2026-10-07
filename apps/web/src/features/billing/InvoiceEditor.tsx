@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { WatchHow } from '@/features/help/WatchHow'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -338,9 +339,12 @@ export function InvoiceEditor({
             </p>
           </div>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onCancel} aria-label="Close">
-          <X />
-        </Button>
+        <div className="flex items-center gap-2">
+          <WatchHow tutorialKey="invoices" />
+          <Button type="button" variant="ghost" size="icon" onClick={onCancel} aria-label="Close">
+            <X />
+          </Button>
+        </div>
       </div>
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 pb-32 pt-6 sm:px-8">

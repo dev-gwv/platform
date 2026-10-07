@@ -30,6 +30,7 @@ export interface GuideChapter {
 
 export const PARTS: readonly GuidePart[] = [
   { track: 'studio', title: { en: 'Start here', hi: 'शुरुआत यहाँ से' } },
+  { track: 'studio', title: { en: 'Get more enquiries', hi: 'ज़्यादा इन्क्वायरी पाएँ' } },
   { track: 'studio', title: { en: 'Win the booking', hi: 'बुकिंग पक्की करें' } },
   { track: 'studio', title: { en: 'Shoot and edit', hi: 'शूट और एडिट' } },
   { track: 'studio', title: { en: 'Money', hi: 'पैसा' } },
@@ -116,11 +117,72 @@ export const CHAPTERS: readonly GuideChapter[] = [
       ],
     },
   },
+  {
+    key: 'studio',
+    part: 0,
+    video: 'studio',
+    to: '/settings/company',
+    title: { en: 'Your studio: name, logo and packages', hi: 'आपका स्टूडियो: नाम, लोगो और पैकेज' },
+    steps: {
+      en: [
+        'Open **Settings → Company profile**, type your studio name and press **Save changes**.',
+        'Under Brand identity, upload your logo (under 1 MB). It saves by itself and shows on every quotation and invoice.',
+        'Open **Settings → Project templates** and press **New template**.',
+        'Name your usual package, add its days and what the client gets, and press **Save**. Pick it with **Use for a new project**.',
+      ],
+      hi: [
+        '**Settings → Company profile** खोलें, स्टूडियो का नाम लिखें और **Save changes** दबाएँ।',
+        'Brand identity में अपना लोगो डालें (1 MB से कम)। यह अपने आप सेव होता है और हर कोटेशन और इनवॉइस पर दिखता है।',
+        '**Settings → Project templates** खोलें और **New template** दबाएँ।',
+        'अपने पैकेज का नाम, उसके दिन और क्लाइंट को क्या मिलेगा, लिखें और **Save** दबाएँ। **Use for a new project** से इसे चुनें।',
+      ],
+    },
+  },
 
   // ── Win the booking ──
   {
-    key: 'leads',
+    key: 'enquiry-form',
     part: 1,
+    video: 'enquiry-form',
+    to: '/enquiry-forms',
+    title: { en: 'Your enquiry form and QR code', hi: 'आपका इन्क्वायरी फ़ॉर्म और QR कोड' },
+    steps: {
+      en: [
+        'Open **Enquiry forms** and press **Add form**: **Your website**, or **A vendor** for a QR code.',
+        '**Edit form** shows the form beside you: the heading, what it asks (Off, Ask or Required) and the button colour.',
+        'Website: press **Copy code** and give it to whoever runs your site. Vendor: print the QR.',
+        'Every enquiry lands in **Leads** by itself.',
+      ],
+      hi: [
+        '**Enquiry forms** खोलें और **Add form** दबाएँ: **Your website**, या QR कोड के लिए **A vendor**।',
+        '**Edit form** में फ़ॉर्म साथ में दिखता है: हेडिंग, क्या पूछना है (Off, Ask या Required) और बटन का रंग।',
+        'वेबसाइट: **Copy code** दबाएँ और अपनी साइट चलाने वाले को दें। वेंडर: QR प्रिंट करें।',
+        'हर इन्क्वायरी अपने आप **Leads** में आती है।',
+      ],
+    },
+  },
+  {
+    key: 'facebook',
+    part: 1,
+    video: 'facebook',
+    to: '/facebook',
+    title: { en: 'Bring in your Facebook leads', hi: 'अपनी Facebook लीड्स लाएँ' },
+    steps: {
+      en: [
+        'Open **CRM → Lead sources** and press **Connect with Facebook**.',
+        'Log in to Facebook and pick the Page your lead ads run on.',
+        'From then on, every lead from your Facebook and Instagram lead ads lands in **Leads** by itself.',
+      ],
+      hi: [
+        '**CRM → Lead sources** खोलें और **Connect with Facebook** दबाएँ।',
+        'Facebook में लॉगिन करें और वह Page चुनें जिस पर आपके लीड ऐड्स चलते हैं।',
+        'इसके बाद Facebook और Instagram लीड ऐड्स की हर लीड अपने आप **Leads** में आती है।',
+      ],
+    },
+  },
+  {
+    key: 'leads',
+    part: 2,
     video: 'leads',
     to: '/follow-ups',
     title: { en: 'Track enquiries and book them', hi: 'इन्क्वायरी संभालें और बुक करें' },
@@ -143,7 +205,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'quotation',
-    part: 1,
+    part: 2,
     video: 'quotation',
     to: '/projects',
     title: { en: 'Send the quotation', hi: 'कोटेशन भेजें' },
@@ -162,11 +224,51 @@ export const CHAPTERS: readonly GuideChapter[] = [
       ],
     },
   },
+  {
+    key: 'terms',
+    part: 2,
+    video: 'terms',
+    to: '/projects',
+    title: { en: 'Send your terms, and get them signed', hi: 'अपनी शर्तें भेजें, और साइन करवाएँ' },
+    steps: {
+      en: [
+        "Open the project's **Terms** tab and pick your usual terms. The payment plan fills in.",
+        'Read them, then press **Create link & send**: send it on WhatsApp.',
+        'Client with you? Press **Sign now**: they check their name and sign with a finger on your phone, then **I agree**.',
+        'The tab turns green with their signature on file.',
+      ],
+      hi: [
+        'प्रोजेक्ट का **Terms** टैब खोलें और अपनी शर्तें चुनें। पेमेंट प्लान अपने आप भरता है।',
+        'पढ़ें, फिर **Create link & send** दबाएँ: WhatsApp पर भेजें।',
+        'क्लाइंट साथ में हैं? **Sign now** दबाएँ: वे अपना नाम देखें और आपके फ़ोन पर उंगली से साइन करें, फिर **I agree**।',
+        'टैब हरा हो जाता है, उनके साइन के साथ।',
+      ],
+    },
+  },
+  {
+    key: 'details-form',
+    part: 2,
+    video: 'details-form',
+    to: '/projects',
+    title: { en: 'Let the client fill in their details', hi: 'क्लाइंट को अपनी डिटेल ख़ुद भरने दें' },
+    steps: {
+      en: [
+        'On the project, press **⋯ → Send details form** and send the link on WhatsApp.',
+        'The client adds names, dates and their events on their own phone, then presses **Send**.',
+        'Their events wait on the **Shoots** tab, and fill only what you left blank.',
+      ],
+      hi: [
+        'प्रोजेक्ट पर **⋯ → Send details form** दबाएँ और लिंक WhatsApp पर भेजें।',
+        'क्लाइंट अपने फ़ोन पर नाम, तारीखें और अपने इवेंट भरकर **Send** दबाते हैं।',
+        'उनके इवेंट **Shoots** टैब पर आते हैं, और सिर्फ़ वही भरते हैं जो आपने खाली छोड़ा था।',
+      ],
+    },
+  },
 
   // ── Shoot and edit ──
   {
     key: 'assign',
-    part: 2,
+    part: 3,
     video: 'assign',
     to: '/team-allocation',
     title: { en: 'Book your team for each day', hi: 'हर दिन के लिए टीम बुक करें' },
@@ -187,7 +289,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'give-work',
-    part: 2,
+    part: 3,
     video: 'give-work',
     to: '/projects',
     title: { en: 'Give editing work', hi: 'एडिटिंग का काम दें' },
@@ -208,7 +310,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'board',
-    part: 2,
+    part: 3,
     video: 'board',
     to: '/production-board',
     title: { en: 'Keep editing on track', hi: 'एडिटिंग समय पर रखें' },
@@ -227,11 +329,32 @@ export const CHAPTERS: readonly GuideChapter[] = [
       ],
     },
   },
+  {
+    key: 'data',
+    part: 3,
+    video: 'data',
+    to: '/data-management',
+    title: { en: 'Record the cards after a shoot', hi: 'शूट के बाद कार्ड दर्ज करें' },
+    steps: {
+      en: [
+        'After the day, its card on the **Shoots** tab says how much data is in.',
+        'Press **Add data** beside a person: who copied it, the main disk and the backup, each marked **Copied**.',
+        'Press **Save**. The next person starts with the same disks.',
+        'When every card is in and backed up, the day turns green.',
+      ],
+      hi: [
+        'शूट के बाद **Shoots** टैब पर उस दिन के कार्ड में दिखता है कि कितना डेटा आया।',
+        'किसी व्यक्ति के आगे **Add data** दबाएँ: किसने कॉपी किया, मेन डिस्क और बैकअप, हर एक **Copied**।',
+        '**Save** दबाएँ। अगला व्यक्ति उन्हीं डिस्क से शुरू होता है।',
+        'जब हर कार्ड आ जाए और बैकअप हो जाए, दिन हरा हो जाता है।',
+      ],
+    },
+  },
 
   // ── Money ──
   {
     key: 'invoices',
-    part: 3,
+    part: 4,
     video: 'invoices',
     to: '/billing/invoices',
     title: { en: 'Send an invoice', hi: 'इनवॉइस भेजें' },
@@ -252,7 +375,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'payments',
-    part: 3,
+    part: 4,
     video: 'payments',
     to: '/billing/payments',
     title: { en: 'Record money in', hi: 'आया पैसा दर्ज करें' },
@@ -273,7 +396,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'payouts',
-    part: 3,
+    part: 4,
     video: 'payouts',
     to: '/team-payouts',
     title: { en: 'Pay your crew', hi: 'टीम को पेमेंट करें' },
@@ -294,7 +417,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'expenses',
-    part: 3,
+    part: 4,
     video: 'expenses',
     to: '/company-expenses',
     title: { en: 'Add an expense', hi: 'खर्च जोड़ें' },
@@ -317,7 +440,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   // ── Your team's time ──
   {
     key: 'attendance',
-    part: 4,
+    part: 5,
     video: 'attendance',
     to: '/settings/attendance-location',
     title: { en: 'Turn on attendance', hi: 'अटेंडेंस चालू करें' },
@@ -338,7 +461,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'leave',
-    part: 4,
+    part: 5,
     video: 'leave',
     to: '/leave',
     title: { en: 'Approve leave', hi: 'छुट्टी मंज़ूर करें' },
@@ -359,7 +482,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-day',
-    part: 4,
+    part: 5,
     video: 'team-day',
     title: { en: 'What your team sees', hi: 'आपकी टीम क्या देखती है' },
     steps: {
@@ -377,11 +500,32 @@ export const CHAPTERS: readonly GuideChapter[] = [
       ],
     },
   },
+  {
+    key: 'salaries',
+    part: 5,
+    video: 'salaries',
+    to: '/payroll',
+    title: { en: 'Salaries and payslips', hi: 'सैलरी और पे-स्लिप' },
+    steps: {
+      en: [
+        'On **Team → People**, press **Edit** on a person, pick **Monthly salaried** and type the salary.',
+        'Open **Team → Pay → Payroll**, pick the month and press **Work out pay**: days in, leave and absences are counted.',
+        'Each line right? **Approve** the month, then **Mark paid** with the UTR.',
+        'Each person sees their **Payslip** on their own login.',
+      ],
+      hi: [
+        '**Team → People** पर किसी व्यक्ति पर **Edit** दबाएँ, **Monthly salaried** चुनें और सैलरी लिखें।',
+        '**Team → Pay → Payroll** खोलें, महीना चुनें और **Work out pay** दबाएँ: हाज़िरी, छुट्टी और गैरहाज़िरी गिनी जाती है।',
+        'हर लाइन सही है? महीना **Approve** करें, फिर UTR के साथ **Mark paid**।',
+        'हर व्यक्ति अपने लॉगिन पर अपनी **Payslip** देखता है।',
+      ],
+    },
+  },
 
   // ── The team's track ──
   {
     key: 'team-home',
-    part: 5,
+    part: 6,
     video: 'team-day',
     to: '/dashboard',
     title: { en: 'Your Home', hi: 'आपका Home' },
@@ -400,7 +544,8 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-attendance',
-    part: 5,
+    part: 6,
+    video: 'check-in',
     to: '/attendance/my',
     title: { en: 'Mark your attendance', hi: 'अपनी अटेंडेंस लगाएँ' },
     steps: {
@@ -418,7 +563,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-shoots',
-    part: 5,
+    part: 6,
     video: 'team-day',
     to: '/shoots/my',
     title: { en: 'Your shoots', hi: 'आपके शूट' },
@@ -437,8 +582,8 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-edits',
-    part: 6,
-    video: 'team-day',
+    part: 7,
+    video: 'hand-in',
     to: '/my-work',
     title: { en: 'Your edits', hi: 'आपके एडिट' },
     steps: {
@@ -458,7 +603,8 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-leave',
-    part: 6,
+    part: 7,
+    video: 'ask-leave',
     to: '/leave',
     title: { en: 'Ask for leave', hi: 'छुट्टी माँगें' },
     steps: {
@@ -476,7 +622,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-pay',
-    part: 6,
+    part: 7,
     to: '/payouts/my',
     title: { en: 'Your pay', hi: 'आपका पेमेंट' },
     steps: {

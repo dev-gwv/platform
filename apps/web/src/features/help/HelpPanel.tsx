@@ -55,7 +55,8 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
   const help = useHelp().data
   const tutorials = useTutorials()
   const path = useRouterState({ select: (s) => s.location.pathname })
-  const here = tutorialFor(path, tutorials)
+  const tab = useRouterState({ select: (s) => (s.location.search as { tab?: unknown }).tab })
+  const here = tutorialFor(path, tutorials, typeof tab === 'string' ? tab : null)
   const [playing, setPlaying] = useState<Tutorial | null>(null)
   const studio =
     session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'

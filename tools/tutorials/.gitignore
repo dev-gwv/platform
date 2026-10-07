@@ -2,3 +2,4 @@ final/
 tts/clips/
 *.png
 *.log
+out/

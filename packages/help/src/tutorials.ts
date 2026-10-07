@@ -16,6 +16,8 @@ export interface Tutorial {
   section: 'Get started' | 'Clients & sales' | 'Shoots & team' | 'Editing' | 'Money' | 'Team'
   /** The pages it is about: whole path, or a prefix ending in /. */
   pages: readonly (string | RegExp)[]
+  /** The project page's tabs it is about (`?tab=` view ids: shoots, deliverables, billing…). */
+  views?: readonly string[]
   /** A link from the platform console instead of the shipped file. */
   url?: string
   /** The Hindi recording's title and line (captions in Hindi, the app in English). */
@@ -36,16 +38,26 @@ export const TUTORIALS: readonly Tutorial[] = [
   { key: 'project-billing', title: 'Project step 4: the price', blurb: 'The package price, the advance, then Create.', seconds: 28, section: 'Get started', pages: [], hi: { title: 'प्रोजेक्ट स्टेप 4: कीमत', blurb: 'पैकेज की कीमत, एडवांस, फिर Create।' } },
   { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 56, section: 'Clients & sales', pages: ['/follow-ups'], hi: { title: 'लीड जोड़ें और बुक करें', blurb: 'इन्क्वायरी से बुक हुए प्रोजेक्ट तक, एक बार में।' } },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 47, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/], hi: { title: 'अपना कोटेशन भेजें', blurb: 'क्लाइंट की नज़र से देखें, फिर भेजें।' } },
-  { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 46, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'], hi: { title: 'शूट के लिए टीम बुक करें', blurb: 'कौन फ़्री है, कितना पेमेंट, कुछ टैप में बुक।' } },
-  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 38, section: 'Editing', pages: [], hi: { title: 'एडिटिंग का काम दें', blurb: 'जिस एडिटर के पास सबसे कम काम है, उसे दें।' } },
+  { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 46, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'], views: ['shoots'], hi: { title: 'शूट के लिए टीम बुक करें', blurb: 'कौन फ़्री है, कितना पेमेंट, कुछ टैप में बुक।' } },
+  { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 38, section: 'Editing', pages: [], views: ['deliverables'], hi: { title: 'एडिटिंग का काम दें', blurb: 'जिस एडिटर के पास सबसे कम काम है, उसे दें।' } },
   { key: 'board', title: 'Run the production board', blurb: 'Every edit by stage, late work first.', seconds: 53, section: 'Editing', pages: ['/production-board'], hi: { title: 'प्रोडक्शन बोर्ड चलाएँ', blurb: 'हर एडिट स्टेज के हिसाब से, लेट काम सबसे ऊपर।' } },
   { key: 'team-day', title: "Your team's day", blurb: 'What a team member sees and taps on their own login.', seconds: 45, section: 'Team', pages: ['/my-work'], hi: { title: 'आपकी टीम का दिन', blurb: 'टीम मेंबर अपने लॉगिन पर क्या देखता और दबाता है।' } },
-  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 44, section: 'Money', pages: ['/billing/payments'], hi: { title: 'पेमेंट दर्ज करें', blurb: 'क्या बाकी है, और आया पैसा, एक ही बार गिना।' } },
-  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 43, section: 'Money', pages: ['/team-payouts'], hi: { title: 'अपनी टीम को पेमेंट करें', blurb: 'हो चुके शूट का किसका कितना बकाया है।' } },
-  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices'], hi: { title: 'इनवॉइस बनाएँ', blurb: 'प्रोजेक्ट से अपने आप भरता है; भेजें और पेमेंट देखें।' } },
-  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 52, section: 'Money', pages: ['/company-expenses'], hi: { title: 'खर्च जोड़ें', blurb: 'क्या खर्च हुआ, किसी प्रोजेक्ट पर या स्टूडियो पर।' } },
+  { key: 'payments', title: 'Record a payment', blurb: 'What is due, and money in, counted once.', seconds: 44, section: 'Money', pages: ['/billing/payments'], views: ['billing'], hi: { title: 'पेमेंट दर्ज करें', blurb: 'क्या बाकी है, और आया पैसा, एक ही बार गिना।' } },
+  { key: 'payouts', title: 'Pay your crew', blurb: 'Who you owe for shoots already done.', seconds: 43, section: 'Money', pages: ['/team-payouts'], views: ['payouts'], hi: { title: 'अपनी टीम को पेमेंट करें', blurb: 'हो चुके शूट का किसका कितना बकाया है।' } },
+  { key: 'invoices', title: 'Make an invoice', blurb: 'The project fills it in; send it and see it paid.', seconds: 51, section: 'Money', pages: ['/billing/invoices', '/billing/invoices/new', /^\/billing\/invoices\/[^/]+\/edit$/], hi: { title: 'इनवॉइस बनाएँ', blurb: 'प्रोजेक्ट से अपने आप भरता है; भेजें और पेमेंट देखें।' } },
+  { key: 'expenses', title: 'Add an expense', blurb: 'What you spent, on a project or the studio.', seconds: 52, section: 'Money', pages: ['/company-expenses'], views: ['expenses'], hi: { title: 'खर्च जोड़ें', blurb: 'क्या खर्च हुआ, किसी प्रोजेक्ट पर या स्टूडियो पर।' } },
   { key: 'attendance', title: 'Turn on attendance', blurb: 'Your place, your hours, done.', seconds: 50, section: 'Team', pages: ['/settings/attendance-location', '/attendance'], hi: { title: 'अटेंडेंस चालू करें', blurb: 'आपकी जगह, आपके घंटे, बस।' } },
   { key: 'leave', title: 'Leave and balances', blurb: 'Days a year, asked, approved -- and what is left.', seconds: 42, section: 'Team', pages: ['/leave'], hi: { title: 'छुट्टी और बैलेंस', blurb: 'साल की छुट्टियाँ, माँगी गईं, मंज़ूर -- और कितनी बचीं।' } },
+  { key: 'studio', title: 'Your studio: name, logo and packages', blurb: 'Set your name and logo once, and save the package you sell most.', seconds: 57, section: 'Get started', pages: ['/settings/company', '/settings/project-templates'], hi: { title: 'आपका स्टूडियो: नाम, लोगो और पैकेज', blurb: 'नाम और लोगो एक बार सेट करें, और अपना पैकेज सेव करें।' } },
+  { key: 'terms', title: 'Send your terms, and get them signed', blurb: 'The client signs with a finger, right on your phone.', seconds: 44, section: 'Clients & sales', pages: [], views: ['terms'], hi: { title: 'अपनी शर्तें भेजें, और साइन करवाएँ', blurb: 'क्लाइंट आपके फ़ोन पर ही उंगली से साइन करते हैं।' } },
+  { key: 'details-form', title: 'Let the client fill in their details', blurb: 'One link on WhatsApp; the project fills itself in.', seconds: 56, section: 'Clients & sales', pages: ['/settings/client-form'], hi: { title: 'क्लाइंट को अपनी डिटेल ख़ुद भरने दें', blurb: 'WhatsApp पर एक लिंक; प्रोजेक्ट अपने आप भरता है।' } },
+  { key: 'enquiry-form', title: 'Your enquiry form and QR code', blurb: 'On your website or with a vendor -- every enquiry lands in Leads.', seconds: 50, section: 'Clients & sales', pages: ['/enquiry-forms', /^\/enquiry-forms\/[^/]+$/], hi: { title: 'आपका इन्क्वायरी फ़ॉर्म और QR कोड', blurb: 'वेबसाइट पर या वेंडर के पास -- हर इन्क्वायरी Leads में आती है।' } },
+  { key: 'facebook', title: 'Bring in your Facebook leads', blurb: 'Connect your Page once; lead ads land in Leads by themselves.', seconds: 29, section: 'Clients & sales', pages: ['/facebook'], hi: { title: 'अपनी Facebook लीड्स लाएँ', blurb: 'अपना Page एक बार जोड़ें; लीड ऐड्स अपने आप Leads में आते हैं।' } },
+  { key: 'data', title: 'Record the cards after a shoot', blurb: 'Who copied them, the main disk and the backup.', seconds: 50, section: 'Shoots & team', pages: ['/data-management'], views: ['data'], hi: { title: 'शूट के बाद कार्ड दर्ज करें', blurb: 'किसने कॉपी किए, मेन डिस्क और बैकअप।' } },
+  { key: 'salaries', title: 'Salaries and payslips', blurb: 'Set a salary, work out the month, pay, and the payslip is ready.', seconds: 56, section: 'Team', pages: ['/payroll', '/team/salaries'], hi: { title: 'सैलरी और पे-स्लिप', blurb: 'सैलरी तय करें, महीने का हिसाब बनाएँ, पेमेंट करें, पे-स्लिप तैयार।' } },
+  { key: 'check-in', title: 'For your team: mark your attendance', blurb: 'Check in at the studio in one tap.', seconds: 31, section: 'Team', pages: ['/attendance/my'], hi: { title: 'टीम के लिए: अपनी अटेंडेंस लगाएँ', blurb: 'स्टूडियो पर एक टैप में चेक इन।' } },
+  { key: 'ask-leave', title: 'For your team: ask for leave', blurb: 'See what is left, then ask in a minute.', seconds: 43, section: 'Team', pages: [], hi: { title: 'टीम के लिए: छुट्टी माँगें', blurb: 'कितनी बची है देखें, फिर एक मिनट में माँगें।' } },
+  { key: 'hand-in', title: 'For your team: hand in your edit', blurb: 'From My work to review, in one go.', seconds: 46, section: 'Team', pages: [], hi: { title: 'टीम के लिए: अपना एडिट जमा करें', blurb: 'My work से सीधे रिव्यू तक, एक बार में।' } },
 ]
 
 const matches = (page: string | RegExp, path: string) =>
@@ -66,9 +78,13 @@ export function tutorialsWith(videos: readonly HelpVideo[] = [], shipped: readon
   return list
 }
 
-/** The tutorial about this page, if there is one. */
-export function tutorialFor(path: string, list: readonly Tutorial[]): Tutorial | null {
+/** A project's own page, where the open tab (`?tab=`) picks the tutorial. */
+const PROJECT_PAGE = /^\/projects\/(?!new$)[^/]+$/
+
+/** The tutorial about this page (and, on a project, its open tab), if there is one. */
+export function tutorialFor(path: string, list: readonly Tutorial[], tab?: string | null): Tutorial | null {
   const clean = path.replace(/\/+$/, '') || '/'
+  if (tab && PROJECT_PAGE.test(clean)) return list.find((t) => t.views?.includes(tab)) ?? null
   return list.find((t) => t.pages.some((p) => matches(p, clean))) ?? null
 }
 
@@ -92,7 +108,7 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave']
+export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave', 'studio', 'terms', 'details-form', 'enquiry-form', 'facebook', 'data', 'salaries', 'check-in', 'ask-leave', 'hand-in']
 
 /** Which of them also have a Hindi recording, in apps/web/public/help/hi. */
 export const SHIPPED_HI: readonly string[] = SHIPPED
