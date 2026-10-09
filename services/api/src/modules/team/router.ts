@@ -1422,22 +1422,20 @@ export const teamRouter = new Hono<AppEnv>()
         const members = await sql<{ user_id: string; salary: string | null }[]>`
           select user_id, salary::text as salary from users
           where deleted_at is null and status = 'active' and role <> 'super_admin'`
-        let created = 0
-        let skipped = 0
-        for (const m of members) {
-          const base = m.salary === null ? 0 : Number(m.salary)
-          const first = `${year}-${String(month).padStart(2, '0')}-01`
-          const existing = await sql<{ id: string }[]>`
-            select id from monthly_salaries
-            where user_id = ${m.user_id}
-              and ((pay_year = ${year} and pay_month = ${month})
-                or (pay_year is null and pay_month is null and month = ${first}::date))`
-          if (existing.length) {
-            skipped += 1
-            continue
-          }
-          await sql`
-            insert into monthly_salaries ${sql({
+        if (members.length === 0) return { created: 0, skipped: 0 }
+        const first = `${year}-${String(month).padStart(2, '0')}-01`
+        // Who already has this month, in one read rather than one per person.
+        const existing = await sql<{ user_id: string }[]>`
+          select distinct user_id from monthly_salaries
+          where user_id = any(${members.map((m) => m.user_id)}::uuid[])
+            and ((pay_year = ${year} and pay_month = ${month})
+              or (pay_year is null and pay_month is null and month = ${first}::date))`
+        const has = new Set(existing.map((e) => e.user_id))
+        const rows = members
+          .filter((m) => !has.has(m.user_id))
+          .map((m) => {
+            const base = m.salary === null ? 0 : Number(m.salary)
+            return {
               company_id: auth.companyId,
               user_id: m.user_id,
               month: first,
@@ -1449,10 +1447,10 @@ export const teamRouter = new Hono<AppEnv>()
               base_amount: base,
               paid_amount: 0,
               status: 'unpaid',
-            })}`
-          created += 1
-        }
-        return { created, skipped }
+            }
+          })
+        if (rows.length) await sql`insert into monthly_salaries ${sql(rows)}`
+        return { created: rows.length, skipped: members.length - rows.length }
       }),
     )
     if (!result) fail(400, 'We could not generate salaries.')

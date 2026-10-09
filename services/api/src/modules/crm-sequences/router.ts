@@ -208,11 +208,12 @@ export const crmSequencesRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, 'Pick the leads to add.')
     const started = await attempt(c, 'crm.sequence_enroll', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const leads = await sql<{ id: string }[]>`
-          select id from crm_leads
+        // One statement: the function still runs once per lead, each call
+        // seeing the ones before it, but without a round trip apiece.
+        const leads = await sql`
+          select start_lead_cadence(id, ${id}) from crm_leads
            where id in ${sql(parsed.data.lead_ids)} and not is_archived and merged_into is null
              and status not in ('converted', 'lost')`
-        for (const l of leads) await sql`select start_lead_cadence(${l.id}, ${id})`
         return leads.length
       }),
     )

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { emailSyncConfigured, fetchRecentMessages } from './email-sync'
+import { emailSyncConfigured, fetchRecentMessages, planEmailImport, type SyncedMessage } from './email-sync'
 
 describe('email sync', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -67,5 +67,56 @@ describe('email sync', () => {
   it('throws on a provider refusal', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('denied', { status: 403 })))
     await expect(fetchRecentMessages({ EMAIL_SYNC_PROVIDER: 'gmail', EMAIL_SYNC_TOKEN: 't', EMAIL_SYNC_MAILBOX: 'a@b.in' })).rejects.toThrow(/403/)
+  })
+})
+
+describe('planEmailImport', () => {
+  const msg = (external_id: string, counterpart: string): SyncedMessage => ({
+    external_id,
+    direction: 'in',
+    subject: external_id,
+    snippet: '',
+    counterpart,
+    at: '2026-10-01T10:00:00.000Z',
+  })
+  const leads = new Map([
+    ['priya@x.in', { lead_id: 'L1', contact_id: 'C1' }],
+    ['rahul@y.in', { lead_id: 'L2', contact_id: null }],
+  ])
+  const contacts = new Map([['meera@z.in', 'C3']])
+
+  it('files a message under its lead, else its contact, and counts the rest', () => {
+    const { batches, unmatched } = planEmailImport(
+      [msg('m1', 'priya@x.in'), msg('m2', 'rahul@y.in'), msg('m3', 'meera@z.in'), msg('m4', 'nobody@q.in')],
+      leads,
+      contacts,
+    )
+    expect(unmatched).toBe(1)
+    expect(batches.map((b) => b.map((r) => [r.external_id, r.lead_id, r.contact_id]))).toEqual([
+      [
+        ['m1', 'L1', 'C1'],
+        ['m2', 'L2', null],
+        ['m3', null, 'C3'],
+      ],
+    ])
+  })
+
+  it('never puts one lead twice in a batch, keeping the order', () => {
+    const { batches } = planEmailImport(
+      [msg('m1', 'priya@x.in'), msg('m2', 'meera@z.in'), msg('m3', 'priya@x.in'), msg('m4', 'rahul@y.in')],
+      leads,
+      contacts,
+    )
+    expect(batches.map((b) => b.map((r) => r.external_id))).toEqual([['m1', 'm2'], ['m3', 'm4']])
+  })
+
+  it('keeps a repeated message once', () => {
+    const { batches, unmatched } = planEmailImport(
+      [msg('m1', 'priya@x.in'), msg('m1', 'priya@x.in'), msg('m9', 'x@q.in'), msg('m9', 'x@q.in')],
+      leads,
+      contacts,
+    )
+    expect(batches.flat().map((r) => r.external_id)).toEqual(['m1'])
+    expect(unmatched).toBe(2)
   })
 })
