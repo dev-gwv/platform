@@ -8,6 +8,7 @@ import {
 } from '@ipc/domain'
 import type { CreateProjectRequest, CreateShootRequest, DeliverableInput } from '@ipc/contracts'
 import { niceTime } from '@/shared/ui/time-format'
+import { guestCountFromText } from '@/features/shoots/guests'
 
 /**
  * Create Project, as data.
@@ -60,6 +61,8 @@ export interface ShootDraft {
   /** City / Venue as it should print — the map link is a separate field. */
   location: string
   map_link: string
+  /** How many guests the day expects, as typed; blank when nobody has said. */
+  guests: string
   status: 'planned' | 'confirmed'
   requirements: ShootRequirementDraft[]
 }
@@ -142,6 +145,7 @@ export const newShoot = (): ShootDraft => ({
   hours: '',
   location: '',
   map_link: '',
+  guests: '',
   status: 'planned',
   requirements: [],
 })
@@ -485,6 +489,7 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
     .map(({ s, draftIndex }) => {
       const startAt = shootStartAt(s)
       const endAt = shootEndAt(s)
+      const guests = guestCountFromText(s.guests ?? '')
       return {
         draftIndex,
         project_id: projectId,
@@ -495,6 +500,8 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
         ...(endAt ? { end_at: endAt } : {}),
         ...(s.location.trim() ? { location: s.location.trim() } : {}),
         ...(s.map_link.trim() ? { map_link: s.map_link.trim() } : {}),
+        // A draft kept from before the field existed has no `guests`.
+        ...(guests != null ? { guest_count: guests } : {}),
         requirements: s.requirements
           .filter((r) => r.name.trim())
           .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),

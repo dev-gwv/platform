@@ -34,6 +34,8 @@ export const shootListItem = z.object({
   end_at: isoDateTime.nullable(),
   location: z.string().nullable(),
   map_link: z.string().nullable(),
+  /** How many guests the day expects; null until someone says. */
+  guest_count: z.number().int().nullable().default(null),
   status: shootStatus,
   /** What the day was planned to need — the booking screen fills against it. */
   requirements: z.array(shootRequirement),
@@ -71,6 +73,15 @@ export type UpdateServiceRequest = z.infer<typeof updateServiceRequest>
  * An empty or blank string clears it: forms submit "" for "no link", and
  * rejecting that with a 422 would make the field impossible to clear.
  */
+/**
+ * How many guests a day expects. A blank box arrives as "" or null and clears
+ * it, the same way an empty map link does.
+ */
+export const guestCount = z.preprocess(
+  (v) => (v === '' ? null : v),
+  z.number().int().min(0).max(100000).nullish(),
+)
+
 const mapLink = z.preprocess(
   (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
   z.string().trim().max(500).nullish(),
@@ -84,6 +95,7 @@ export const createShootRequest = z.object({
   end_at: isoDateTime.optional(),
   location: z.string().trim().max(200).optional(),
   map_link: mapLink.optional(),
+  guest_count: guestCount.optional(),
   status: shootStatus.default('planned'),
   // Optional rather than defaulted: a caller with no crew to record should not
   // have to send an empty array to say so.
@@ -101,6 +113,7 @@ export const updateShootRequest = z.object({
   end_at: isoDateTime.nullable().optional(),
   location: z.string().trim().max(200).nullable().optional(),
   map_link: mapLink.optional(),
+  guest_count: guestCount.optional(),
   status: shootStatus.optional(),
   requirements: z.array(shootRequirementInput).max(40).optional(),
 }).refine((v) => !v.start_at || !v.end_at || new Date(v.end_at) > new Date(v.start_at), {

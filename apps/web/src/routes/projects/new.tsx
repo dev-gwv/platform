@@ -26,6 +26,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  UsersRound,
   Wallet,
   X,
   type LucideIcon,
@@ -1436,10 +1437,10 @@ function ShootCard({
 
       {open && (
         <div className="px-4 pb-4">
-          {/* The optional fields (venue, map link) sit ahead of the required
+          {/* The optional fields (venue, map link, guests) sit ahead of the required
               ones: the card folds the moment the last required field --
               the duration -- is set, so nothing optional may come after it. */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Field label="Shoot title" required>
               <Input
                 value={shoot.name}
@@ -1471,6 +1472,18 @@ function ShootCard({
                 value={shoot.map_link}
                 onChange={(e) => onChange({ map_link: e.target.value })}
                 placeholder="Paste the map link"
+              />
+            </Field>
+            <Field label="Guests" icon={UsersRound}>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100000}
+                step={1}
+                value={shoot.guests ?? ''}
+                onChange={(e) => onChange({ guests: e.target.value })}
+                placeholder="e.g. 300"
               />
             </Field>
           </div>
