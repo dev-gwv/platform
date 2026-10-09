@@ -46,7 +46,7 @@ export function NotificationBell() {
 
   // The shell outlives navigation, so nothing else would shut the panel when
   // the page changes underneath it.
-  useEffect(() => setOpen(false), [pathname])
+  useEffect(() => { setOpen(false) }, [pathname])
 
   /** Up and down walk the alerts, from wherever focus is in the panel. */
   function onArrows(e: KeyboardEvent<HTMLDivElement>) {

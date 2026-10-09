@@ -6,12 +6,15 @@ import { cn } from '@/shared/ui/cn'
 import { DateField } from '@/shared/ui/date-field'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { Input } from '@/shared/ui/input'
+import { guestsValue } from '@/features/shoots/guests'
 import { EventTypeChip } from './fields'
 
 export interface EventRow {
   event_type: string | null
   event_date: string | null
   location: string | null
+  /** Expected guests; optional so older rows and callers need not carry it. */
+  guests?: number | null
 }
 
 export const EMPTY_EVENT: EventRow = { event_type: null, event_date: null, location: null }
@@ -24,6 +27,7 @@ export const toFunctions = (rows: readonly EventRow[]): LeadFunctionInput[] =>
       event_type: r.event_type?.trim() || null,
       event_date: r.event_date || null,
       location: r.location?.trim() || null,
+      guests: r.guests ?? null,
     }))
 
 /**
@@ -54,7 +58,7 @@ export function LeadEvents({
     const next: EventRow[] = JSON.parse(incoming) as EventRow[]
     setRows((cur) => {
       // Keep a blank row the person just added; take everything else from the source.
-      const blanks = cur.filter((r) => !r.event_type && !r.event_date && !r.location)
+      const blanks = cur.filter((r) => !r.event_type && !r.event_date && !r.location && !r.guests)
       const merged = [...next, ...blanks]
       return merged.length ? merged : [EMPTY_EVENT]
     })
@@ -99,6 +103,16 @@ export function LeadEvents({
             onChange={(e) => change(i, { location: e.target.value }, false)}
             onBlur={() => onCommit(rows)}
             className="h-8 min-w-28 flex-1"
+          />
+          <Input
+            aria-label={`Guests at ${r.event_type ?? 'this event'}`}
+            placeholder="Guests"
+            inputMode="numeric"
+            value={r.guests ? String(r.guests) : ''}
+            disabled={disabled}
+            onChange={(e) => change(i, { guests: guestsValue(e.target.value) }, false)}
+            onBlur={() => onCommit(rows)}
+            className="h-8 w-20"
           />
           {!disabled && (rows.length > 1 || r.event_type || r.event_date || r.location) && (
             <button

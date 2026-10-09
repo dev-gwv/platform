@@ -98,6 +98,8 @@ export const leadFunction = z.object({
   event_type: z.string().nullable().default(null),
   event_date: isoDate.nullable().default(null),
   location: z.string().nullable().default(null),
+  /** Expected guests (0251); rides into the shoot when the lead is booked. */
+  guests: z.number().int().nullable().default(null),
 })
 export type LeadFunction = z.infer<typeof leadFunction>
 
@@ -107,6 +109,7 @@ export const leadFunctionInput = z
     event_type: z.string().trim().max(80).nullable().optional(),
     event_date: isoDate.nullable().optional(),
     location: z.string().trim().max(200).nullable().optional(),
+    guests: z.number().int().min(1).max(100000).nullable().optional(),
   })
   .refine((f) => !!(f.event_type?.trim() || f.event_date), { message: 'Give the function a name or a date.' })
 export type LeadFunctionInput = z.infer<typeof leadFunctionInput>

@@ -40,6 +40,7 @@ import {
   type TimeWindow,
 } from './assign'
 import { ShootWhenFields, whenToPatch, type WhenFields } from './ShootWhenFields'
+import { guestsLabel } from './guests'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
 import { AlsoBookedLine, PersonDayLine } from './PersonDay'
 import { useLeave } from '@/features/hr/leave-api'
@@ -110,6 +111,8 @@ function shootLine(shoot: ShootListItem): string {
   }
   if (shoot.start_at && shoot.end_at) parts.push(clockRange(shoot.start_at, shoot.end_at))
   if (shoot.location) parts.push(shoot.location)
+  const guests = guestsLabel(shoot.guests)
+  if (guests) parts.push(guests)
   return parts.join(' · ')
 }
 

@@ -17,6 +17,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
 import { foregroundForHex } from '@/shared/theme/presets'
 import { MONTHS } from '@/features/wishes/OccasionForm'
+import { guestsValue } from '@/features/shoots/guests'
 
 const EVENT_PICKS = ['Haldi', 'Mehendi', 'Sangeet', 'Wedding', 'Reception', 'Engagement', 'Pre-wedding'] as const
 const OCCASIONS = ['Wedding', 'Engagement', 'Pre-wedding', 'Birthday'] as const
@@ -32,9 +33,10 @@ interface EventDraft {
   start_time: string
   hours: string
   venue: string
+  guests: string
 }
 const noDate: DateDraft = { day: '', month: '', year: '' }
-const noEvent: EventDraft = { name: '', date: '', start_time: '', hours: '', venue: '' }
+const noEvent: EventDraft = { name: '', date: '', start_time: '', hours: '', venue: '', guests: '' }
 
 const toDraft = (o?: { day: number; month: number; year: number | null }): DateDraft =>
   o ? { day: String(o.day), month: String(o.month), year: o.year ? String(o.year) : '' } : noDate
@@ -170,6 +172,7 @@ export function ClientDetailsPage() {
               start_time: e.start_time ?? '',
               hours: e.hours ? String(e.hours) : '',
               venue: e.venue ?? '',
+              guests: e.guests ? String(e.guests) : '',
             })),
           )
         }
@@ -204,6 +207,7 @@ export function ClientDetailsPage() {
           start_time: x.start_time || null,
           hours: x.hours ? Number(x.hours) : null,
           venue: x.venue.trim() || null,
+          guests: guestsValue(x.guests),
         })),
     }
     setBusy(true)
@@ -362,7 +366,16 @@ export function ClientDetailsPage() {
                     ))}
                   </Select>
                 </div>
-                <Input aria-label="Venue" placeholder="Venue" value={ev.venue} onChange={(e) => setEvent(i, { venue: e.target.value })} />
+                <div className="grid grid-cols-[1fr_6.5rem] gap-2">
+                  <Input aria-label="Venue" placeholder="Venue" value={ev.venue} onChange={(e) => setEvent(i, { venue: e.target.value })} />
+                  <Input
+                    aria-label="Guests"
+                    placeholder="Guests"
+                    inputMode="numeric"
+                    value={ev.guests}
+                    onChange={(e) => setEvent(i, { guests: e.target.value.replace(/[^\d]/g, '').slice(0, 6) })}
+                  />
+                </div>
               </div>
             ))}
             {events.length < 12 && (

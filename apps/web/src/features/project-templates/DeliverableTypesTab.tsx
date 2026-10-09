@@ -191,7 +191,7 @@ function TypeRow({
 function NameBox({ value, onSave }: { value: string; onSave: (title: string) => Promise<unknown> }) {
   const [text, setText] = useState(value)
   // A save (here or in another tab) is the new truth for this box only.
-  useEffect(() => setText(value), [value])
+  useEffect(() => { setText(value) }, [value])
 
   const commit = () => {
     const next = text.trim()
@@ -230,7 +230,7 @@ function DaysBox({
   onSave: (days: number | null) => Promise<unknown>
 }) {
   const [text, setText] = useState(daysText(value))
-  useEffect(() => setText(daysText(value)), [value])
+  useEffect(() => { setText(daysText(value)) }, [value])
 
   const commit = () => {
     const parsed = parseDays(text)

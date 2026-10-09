@@ -187,7 +187,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   // A stale highlight can point past the end of a shorter result list, or at a
   // different command entirely once the record queries resolve and re-rank —
   // so this follows `results`, not just the text typed.
-  useEffect(() => setActive(0), [results])
+  useEffect(() => { setActive(0) }, [results])
 
   // Keep the highlighted row in view when arrowing past the fold.
   useEffect(() => {

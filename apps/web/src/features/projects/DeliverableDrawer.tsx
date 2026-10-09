@@ -194,7 +194,7 @@ function DrawerBody({
 function Brief({ d, canEdit }: { d: Deliverable; canEdit: boolean }) {
   const update = useUpdateDeliverable(d.project_id)
   const [text, setText] = useState(d.description ?? '')
-  useEffect(() => setText(d.description ?? ''), [d.description])
+  useEffect(() => { setText(d.description ?? '') }, [d.description])
   // The brief saves on blur; a refresh before that no longer loses it.
   const draft = useFormDraft(
     canEdit ? `deliverable-brief:${d.id}` : null,
@@ -288,7 +288,7 @@ function Timeline({
   const confirm = useConfirm()
   const end = useRef<HTMLDivElement>(null)
   const notes = data ?? []
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [notes.length])
+  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [notes.length])
 
   return (
     <section className="mt-6">

@@ -23,7 +23,7 @@ export function AssistantButton() {
 
   // The shell outlives navigation, so nothing else would close the panel when
   // the page changes underneath it.
-  useEffect(() => setOpen(false), [pathname])
+  useEffect(() => { setOpen(false) }, [pathname])
 
   // Off, still loading, or unreachable: no button. A button that cannot work is
   // worse than no button, and `ready` is false when the server has no key.

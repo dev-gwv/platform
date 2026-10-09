@@ -13,6 +13,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  UsersRound,
   X,
   IndianRupee,
 } from 'lucide-react'
@@ -54,6 +55,8 @@ import { CrewDataDialog } from '@/features/data/CrewDataDialog'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootHours, shootProgress } from '@/features/shoots/assign'
 import { ShootWhenFields, whenOfShoot, whenToPatch, type WhenFields } from '@/features/shoots/ShootWhenFields'
+import { GuestsField } from '@/features/shoots/GuestsField'
+import { guestsLabel, guestsValue } from '@/features/shoots/guests'
 import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
@@ -126,8 +129,6 @@ export function ShootsTab({
   const [addOpen, setAddOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
-  /** Shoots a chip made with today's date, until someone sets the real one. */
-  const [placeholderDates, setPlaceholderDates] = useState<Set<string>>(() => new Set())
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['shoots', 'project', projectId],
@@ -227,10 +228,9 @@ export function ShootsTab({
                 disabled={create.isPending}
                 onClick={() => {
                   setPending(name)
-                  create.mutate(
-                    { name, shoot_date: todayISO() },
-                    { onSuccess: (made) => setPlaceholderDates((d) => new Set(d).add(made.id)) },
-                  )
+                  // No date until someone sets it: a placeholder "today" became a
+                  // real shoot today after a refresh, on every calendar.
+                  create.mutate({ name })
                 }}
               >
                 <Plus className="size-4 text-primary" />
@@ -255,7 +255,6 @@ export function ShootsTab({
                   setPending(p.name)
                   create.mutate({
                     name: p.name,
-                    shoot_date: todayISO(),
                     requirements: p.payload.requirements,
                   })
                 }}
@@ -303,7 +302,6 @@ export function ShootsTab({
               focus={s.id === focusId}
               onFocused={onFocused}
               canEdit={canEdit}
-              dateIsPlaceholder={placeholderDates.has(s.id) && s.shoot_date === todayISO()}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
               allSlots={slots.data ?? []}
               records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
@@ -322,7 +320,6 @@ function ShootPlanner({
   slots,
   allSlots,
   records,
-  dateIsPlaceholder = false,
   focus = false,
   onFocused,
 }: {
@@ -332,7 +329,6 @@ function ShootPlanner({
   /** Every booking in the studio, for "also booked elsewhere that day". */
   allSlots: TeamSlot[]
   records: DataRecord[]
-  dateIsPlaceholder?: boolean
   focus?: boolean
   onFocused?: (() => void) | undefined
 }) {
@@ -409,7 +405,7 @@ function ShootPlanner({
   const href = mapHref(shoot.map_link)
   const staffed = progress.required > 0 && progress.assigned >= progress.required
   // Before the day there are no cards to chase, so data stays out of sight.
-  const dayPassed = !!shoot.shoot_date && shoot.shoot_date <= new Date().toLocaleDateString('en-CA')
+  const dayPassed = !!shoot.shoot_date && shoot.shoot_date <= todayISO()
 
   async function removeHolder(sl: TeamSlot) {
     const yes = await confirm({
@@ -452,18 +448,19 @@ function ShootPlanner({
               )}
             </span>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              {shoot.shoot_date &&
-                (dateIsPlaceholder ? (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
-                  >
-                    Date: today · tap to set the real day
-                  </button>
-                ) : (
-                  <span>{shortDayLabel(shoot.shoot_date) ?? shoot.shoot_date}</span>
-                ))}
+              {shoot.shoot_date ? (
+                <span>{shortDayLabel(shoot.shoot_date) ?? shoot.shoot_date}</span>
+              ) : canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="rounded-full border border-dashed border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
+                >
+                  Set the date
+                </button>
+              ) : (
+                <span>Date to be set</span>
+              )}
               {/* The hours the day runs, or the one amber ask when nobody has
                   said yet: the team cannot be planned without them. */}
               {start && hours ? (
@@ -490,6 +487,12 @@ function ShootPlanner({
                 <span className="flex items-center gap-1">
                   <MapPin className="size-3" />
                   {shoot.location}
+                </span>
+              )}
+              {guestsLabel(shoot.guests) && (
+                <span className="flex items-center gap-1">
+                  <UsersRound className="size-3" />
+                  {guestsLabel(shoot.guests)}
                 </span>
               )}
               {href ? (
@@ -878,13 +881,15 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
   const [when, setWhen] = useState<WhenFields>(() => ({ ...whenOfShoot(shoot), date: shoot.shoot_date ?? whenOfShoot(shoot).date }))
   const [location, setLocation] = useState(shoot.location ?? '')
   const [mapLink, setMapLink] = useState(shoot.map_link ?? '')
+  const [guests, setGuests] = useState(shoot.guests ? String(shoot.guests) : '')
   const [status, setStatus] = useState<ShootStatus>(shoot.status)
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, when, location, mapLink, status }, (v) => {
+  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, when, location, mapLink, guests, status }, (v) => {
     setName(v.name)
     if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
     setMapLink(v.mapLink)
+    setGuests(typeof v.guests === 'string' ? v.guests : '')
     setStatus(v.status)
   })
 
@@ -897,6 +902,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
             <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <ShootWhenFields value={when} onChange={setWhen} idPrefix="edit" />
+          <GuestsField id="edit-guests" value={guests} onChange={setGuests} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-status">Status</Label>
             <Select id="edit-status" value={status} onChange={(e) => setStatus(e.target.value as ShootStatus)}>
@@ -937,6 +943,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
                       location: location.trim() || null,
                       // '' clears it; the contract turns that into null.
                       map_link: mapLink.trim(),
+                      guests: guestsValue(guests),
                     },
                   },
                   {
@@ -968,16 +975,18 @@ function CustomShootDialog({
   busy: boolean
   onClose: () => void
   /** `saved` drops the kept draft once the shoot is really created. */
-  onCreate: (v: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string }, saved: () => void) => void
+  onCreate: (v: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string; guests?: number }, saved: () => void) => void
 }) {
   const [name, setName] = useState('')
-  const [when, setWhen] = useState<WhenFields>({ date: todayISO(), time: '', hours: null })
+  const [when, setWhen] = useState<WhenFields>({ date: '', time: '', hours: null })
   const [location, setLocation] = useState('')
+  const [guests, setGuests] = useState('')
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, when, location }, (v) => {
+  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, when, location, guests }, (v) => {
     setName(v.name)
     if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
+    setGuests(typeof v.guests === 'string' ? v.guests : '')
   })
 
   return (
@@ -996,6 +1005,7 @@ function CustomShootDialog({
             />
           </div>
           <ShootWhenFields value={when} onChange={setWhen} idPrefix="shoot" compact />
+          <GuestsField id="shoot-guests" value={guests} onChange={setGuests} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shoot-loc">Venue</Label>
             <Input
@@ -1024,6 +1034,7 @@ function CustomShootDialog({
                       }
                     })(),
                     ...(location.trim() ? { location: location.trim() } : {}),
+                    ...(guestsValue(guests) ? { guests: guestsValue(guests)! } : {}),
                   },
                   draft.clear,
                 )

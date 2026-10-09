@@ -33,7 +33,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   const panel = useRef<HTMLDivElement>(null)
 
   // The shell outlives navigation now, so nothing else would shut this.
-  useEffect(() => setOpen(false), [pathname])
+  useEffect(() => { setOpen(false) }, [pathname])
 
   useEffect(() => {
     if (!open) return

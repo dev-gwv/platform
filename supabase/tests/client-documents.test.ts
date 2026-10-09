@@ -85,11 +85,11 @@ beforeAll(async () => {
     insert into crm_leads (id, company_id, name) values ('${LEAD}', '${COMPANY}', 'A Lead');
     insert into crm_quotes (id, company_id, lead_id, quote_number, status)
     values ('${CRM_QUOTE}', '${COMPANY}', '${LEAD}', 'Q-1', 'sent');
-    insert into team_work_submissions (id, company_id, project_id, status, title,
+    insert into team_work_submissions (id, company_id, project_id, status, title, notes,
                                        submission_link, delivery_type, delivery_label, ready_at)
     -- 'approved', not 'sent': the status check allows only submitted/approved/
     -- rejected, so get_delivery_for_token's 'sent' branch can never match.
-    values ('${SUBMISSION}', '${COMPANY}', '${PROJECT}', 'approved', 'Final films',
+    values ('${SUBMISSION}', '${COMPANY}', '${PROJECT}', 'approved', 'Final films', 'EDITOR-NOTE: colour on reel 2 still off',
             'https://example.test/gallery', 'link', 'Open your gallery', now());
     insert into crm_webhook_sources (company_id, source_key, label, kind)
     values ('${COMPANY}', 'src-key', 'Website', 'webform');
@@ -178,9 +178,11 @@ describe('client-facing document readers', () => {
     expect(Number(after['access_count'])).toBe(Number(before['access_count']) + 1)
   })
 
-  it('the delivery reader returns the handover note, not an error', async () => {
+  it('the delivery reader returns the handover, not an error', async () => {
     const row = await one(`select * from get_delivery_for_token('dtok')`)
     expect(row['submission_link']).toBe('https://example.test/gallery')
+    // The hand-in's notes are the editor's words to the manager (0251).
+    expect(row['notes']).toBeNull()
     expect(row['delivery_label']).toBe('Open your gallery')
     expect(row['company_name']).toBe('Studio Ltd')
     expect(row['company_legal_name']).toBe('Studio Private Ltd')

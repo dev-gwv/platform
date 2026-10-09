@@ -66,7 +66,7 @@ export function VoiceNoteRecorder({
   const chunks = useRef<Blob[]>([])
   const stream = useRef<MediaStream | null>(null)
 
-  useEffect(() => onBusyChange?.(state.kind === 'recording' || state.kind === 'preview'), [state.kind, onBusyChange])
+  useEffect(() => { onBusyChange?.(state.kind === 'recording' || state.kind === 'preview') }, [state.kind, onBusyChange])
 
   // Tick the timer while recording, and stop at the limit.
   useEffect(() => {

@@ -269,7 +269,7 @@ function PriceRow({ label, value }: { label: string; value: string }) {
 function BalanceCard({ data, pricePaise }: { data: MessagingSummary; pricePaise: number }) {
   const save = useSaveMessagingSettings()
   const [low, setLow] = useState(String(data.wallet.low_balance_paise / 100))
-  useEffect(() => setLow(String(data.wallet.low_balance_paise / 100)), [data.wallet.low_balance_paise])
+  useEffect(() => { setLow(String(data.wallet.low_balance_paise / 100)) }, [data.wallet.low_balance_paise])
   const left = messagesLeft(data.wallet.balance_paise, pricePaise)
   const lowPaise = Math.round(Number(low) * 100)
   const lowValid = Number.isFinite(lowPaise) && lowPaise >= 0 && lowPaise <= 10000000
@@ -399,7 +399,7 @@ function EventsSection({ data }: { data: MessagingSummary }) {
   const save = useSaveMessagingSettings()
   const test = useSendTest()
   const [local, setLocal] = useState(data.settings)
-  useEffect(() => setLocal(data.settings), [data.settings])
+  useEffect(() => { setLocal(data.settings) }, [data.settings])
 
   const flip = (event: (typeof data.settings)[number]['event'], channel: 'whatsapp' | 'email', on: boolean) => {
     const next = local.map((s) => (s.event === event ? { ...s, [channel]: on } : s))

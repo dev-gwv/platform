@@ -120,7 +120,8 @@ const selectLead = (sql: TransactionSql) => sql`
          -- Every function the lead is asking for, earliest first (0212).
          coalesce((
            select jsonb_agg(jsonb_build_object('id', f.id, 'event_type', f.event_type,
-                                               'event_date', f.event_date, 'location', f.location)
+                                               'event_date', f.event_date, 'location', f.location,
+                                               'guests', f.guests)
                             order by f.event_date nulls last, f.sort, f.created_at)
              from crm_lead_functions f
             where f.lead_id = l.id
@@ -140,9 +141,9 @@ async function writeFunctions(sql: TransactionSql, leadId: string, list: readonl
   await sql`delete from crm_lead_functions where lead_id = ${leadId}`
   for (const [i, f] of list.entries()) {
     await sql`
-      insert into crm_lead_functions (company_id, lead_id, event_type, event_date, location, sort)
+      insert into crm_lead_functions (company_id, lead_id, event_type, event_date, location, guests, sort)
       select l.company_id, l.id, ${f.event_type?.trim() || null}, ${f.event_date ?? null},
-             ${f.location?.trim() || null}, ${i}
+             ${f.location?.trim() || null}, ${f.guests ?? null}, ${i}
         from crm_leads l where l.id = ${leadId}`
   }
 }
@@ -953,8 +954,8 @@ export const crmRouter = new Hono<AppEnv>()
           // when the project already has shoots (a quote may have brought them).
           if (made?.project_id) {
             await sql`
-              insert into shoots (company_id, project_id, name, shoot_date, location)
-              select f.company_id, ${made.project_id}, coalesce(f.event_type, 'Shoot'), f.event_date, f.location
+              insert into shoots (company_id, project_id, name, shoot_date, location, guests)
+              select f.company_id, ${made.project_id}, coalesce(f.event_type, 'Shoot'), f.event_date, f.location, f.guests
                 from crm_lead_functions f
                where f.lead_id = ${leadId}
                  and not exists (select 1 from shoots s where s.project_id = ${made.project_id})

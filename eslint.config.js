@@ -52,6 +52,21 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
+      /**
+       * An effect written `useEffect(() => el.scrollIntoView(), …)` returns
+       * whatever the call returns, and React keeps it as the cleanup. Chrome
+       * 150 made scrollIntoView return a Promise, so the next re-run "called"
+       * it and the deliverable panel crashed ("He is not a function"). An
+       * effect's body is a block, always.
+       */
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression[expression=true]:not([body.type='ArrowFunctionExpression']):not([body.type='Identifier'])",
+          message: 'Give the effect a block body: `useEffect(() => { … }, deps)`. An expression body returns its value as the cleanup.',
+        },
+      ],
     },
   },
   {

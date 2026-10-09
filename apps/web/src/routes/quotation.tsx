@@ -43,6 +43,7 @@ const asShoots = (v: unknown): QuotationDocShoot[] =>
     date: text(s['date'] ?? s['shoot_date']),
     time: text(s['time']),
     city: text(s['city'] ?? s['location']),
+    guests: typeof s['guests'] === 'number' ? s['guests'] : null,
     services: list(s['services']).map((sv) => ({
       name: text(sv['name']) ?? 'Service',
       quantity: Number(sv['quantity'] ?? 1),
