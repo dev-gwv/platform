@@ -1,0 +1,6 @@
+-- 0251: how many guests a shoot day expects.
+--
+-- A studio plans the crew and the cards from the size of the crowd: a haldi
+-- for 50 needs one camera, a reception for 800 needs four. The shoot had a
+-- date, the hours and the venue but nowhere to write the headcount, so it
+-- lived in notes where nothing could read it.
