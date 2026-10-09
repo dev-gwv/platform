@@ -1,5 +1,6 @@
 import { parseCsv } from '@ipc/domain'
 import type { LegacyStudio, LegacyStudioInput } from '@ipc/contracts'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 /**
  * The old app's subscribers, read from its Studio Access "Export CSV"
@@ -63,14 +64,14 @@ export function parseLegacyCsv(text: string): LegacyParse | null {
 export type LegacyState = 'active' | 'soon' | 'expired' | 'unknown'
 
 /** Same words as the old board: expired, expiring within 7 days, active. */
-export function legacyState(expires: string | null | undefined, today = new Date().toISOString().slice(0, 10)): LegacyState {
+export function legacyState(expires: string | null | undefined, today = todayInIndia()): LegacyState {
   if (!expires) return 'unknown'
   if (expires < today) return 'expired'
   const days = Math.round((Date.parse(expires) - Date.parse(today)) / 86_400_000)
   return days <= 7 ? 'soon' : 'active'
 }
 
-export function legacyDaysLeft(expires: string | null | undefined, today = new Date().toISOString().slice(0, 10)): number | null {
+export function legacyDaysLeft(expires: string | null | undefined, today = todayInIndia()): number | null {
   if (!expires) return null
   return Math.max(0, Math.round((Date.parse(expires) - Date.parse(today)) / 86_400_000))
 }

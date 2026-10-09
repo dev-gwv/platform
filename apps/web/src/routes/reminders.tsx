@@ -396,7 +396,7 @@ function RemindersContent() {
               <label className="text-sm font-medium">Due Date</label>
               <Input
                 type="datetime-local"
-                value={form.due_at ? new Date(form.due_at).toISOString().slice(0, 16) : ''}
+                value={form.due_at ? localInput(form.due_at) : ''}
                 onChange={(e) => setForm({ ...form, due_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
               />
             </div>
@@ -460,4 +460,12 @@ export function RemindersPage() {
       <RemindersContent />
     </AuthedPage>
   )
+}
+
+/** A datetime-local value in the viewer's own clock; toISOString() is UTC and showed 5 h 30 min early. */
+function localInput(iso: string): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`
 }

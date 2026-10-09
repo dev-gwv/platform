@@ -28,6 +28,7 @@ import {
   startPayout,
   type PayoutDraft,
 } from '@/features/team-payouts/PayoutLine'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 const OTHER = '__other'
 const NEW = '__new'
@@ -282,7 +283,7 @@ export function DataRecordDialog({
         })
       const pay =
         payStatus.data && payout
-          ? payoutRequest(payout, payStatus.data, new Date().toISOString().slice(0, 10))
+          ? payoutRequest(payout, payStatus.data, todayInIndia())
           : null
       if (pay) {
         await paySlot.mutateAsync({ slotId: slot.id, body: pay })

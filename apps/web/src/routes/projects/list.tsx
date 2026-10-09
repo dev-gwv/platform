@@ -22,6 +22,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { useIssueQuotation, useProjectsPage, useDeleteProject } from '@/features/projects/api'
 import { Money, useINR } from '@/shared/money/MoneyMask'
+import { useAccess } from '@/shared/auth/useAccess'
 
 type Filter = ProjectStatus | 'all'
 type ProjectSort = 'recent' | 'oldest' | 'name' | 'pending_desc' | 'upcoming' | 'value_desc'
@@ -61,6 +62,10 @@ export function ProjectsListPage() {
  */
 function ProjectsList() {
   const inr = useINR()
+  // A Project Manager runs projects and sees no money: the API sends it as 0,
+  // so the boxes and columns would only say ₹0 (CLAUDE.md, "Money needs money access").
+  const access = useAccess()
+  const seesMoney = access.hasModule('billing') || access.hasModule('money')
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<ProjectSort>('recent')
@@ -139,14 +144,16 @@ function ProjectsList() {
         }
       />
 
-      <Card className="mt-4">
-        <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
-          <Figure icon={Briefcase} label={filtered ? 'Projects shown' : 'Projects'} value={String(total)} />
-          <Figure icon={Briefcase} label="Total value" value={<Money value={paged?.summary.value ?? 0} />} />
-          <Figure icon={CircleCheck} label="Received" value={<Money value={paged?.summary.received ?? 0} />} tone="success" />
-          <Figure icon={Clock} label="Still to collect" value={<Money value={paged?.summary.due ?? 0} />} tone="warning" />
-        </CardContent>
-      </Card>
+      {seesMoney && (
+        <Card className="mt-4">
+          <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
+            <Figure icon={Briefcase} label={filtered ? 'Projects shown' : 'Projects'} value={String(total)} />
+            <Figure icon={Briefcase} label="Total value" value={<Money value={paged?.summary.value ?? 0} />} />
+            <Figure icon={CircleCheck} label="Received" value={<Money value={paged?.summary.received ?? 0} />} tone="success" />
+            <Figure icon={Clock} label="Still to collect" value={<Money value={paged?.summary.due ?? 0} />} tone="warning" />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <FilterTabs<Filter>
@@ -247,9 +254,9 @@ function ProjectsList() {
                   <ProjectMenu project={p} />
                 </div>
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 text-sm">
-                  <span className="font-semibold">{inr(p.total_cost)}</span>
-                  <span className="text-success">{inr(p.received)} in</span>
-                  {due(p) > 0 && <span className="text-warning">{inr(due(p))} due</span>}
+                  {seesMoney && <span className="font-semibold">{inr(p.total_cost)}</span>}
+                  {seesMoney && <span className="text-success">{inr(p.received)} in</span>}
+                  {seesMoney && due(p) > 0 && <span className="text-warning">{inr(due(p))} due</span>}
                   {p.next_shoot_date && (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <CalendarDays className="size-3.5" aria-hidden /> {shortDay(p.next_shoot_date)}
@@ -267,9 +274,9 @@ function ProjectsList() {
                   <th className="px-4 py-2.5 font-medium">Project</th>
                   <th className="px-4 py-2.5 font-medium">Next shoot</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Value</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Received</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Due</th>
+                  {seesMoney && <th className="px-4 py-2.5 text-right font-medium">Value</th>}
+                  {seesMoney && <th className="px-4 py-2.5 text-right font-medium">Received</th>}
+                  {seesMoney && <th className="px-4 py-2.5 text-right font-medium">Due</th>}
                   <th className="w-12 px-3 py-2.5" />
                 </tr>
               </thead>
@@ -289,13 +296,17 @@ function ProjectsList() {
                     <td className="px-4 py-2.5">
                       <StatusBadge tone={STATUS_TONE[p.status]}>{humanize(p.status)}</StatusBadge>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{inr(p.total_cost)}</td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums', p.received > 0 ? 'text-success' : 'text-muted-foreground')}>
-                      {inr(p.received)}
-                    </td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums', due(p) > 0 ? 'font-medium text-warning' : 'text-muted-foreground')}>
-                      {inr(due(p))}
-                    </td>
+                    {seesMoney && <td className="px-4 py-2.5 text-right font-medium tabular-nums">{inr(p.total_cost)}</td>}
+                    {seesMoney && (
+                      <td className={cn('px-4 py-2.5 text-right tabular-nums', p.received > 0 ? 'text-success' : 'text-muted-foreground')}>
+                        {inr(p.received)}
+                      </td>
+                    )}
+                    {seesMoney && (
+                      <td className={cn('px-4 py-2.5 text-right tabular-nums', due(p) > 0 ? 'font-medium text-warning' : 'text-muted-foreground')}>
+                        {inr(due(p))}
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 text-right">
                       <ProjectMenu project={p} />
                     </td>

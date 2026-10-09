@@ -41,6 +41,7 @@ import {
 } from '@/features/projects/tracking'
 import { DeliverableTile, EventTile } from '@/shared/ui/icon-tile'
 import { useINR } from '@/shared/money/MoneyMask'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 
 const list = projectTrackingRow.array()
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
@@ -58,18 +59,9 @@ export function ProjectTrackingPage() {
 
 /** Tab, sort and search live in the address, so a link or a refresh lands in the same place. */
 function useUrlState<T extends string>(key: string, fallback: T, valid: (v: string) => boolean) {
-  const [value, setValue] = useState<T>(() => {
-    const v = new URLSearchParams(window.location.search).get(key)
-    return v !== null && valid(v) ? (v as T) : fallback
-  })
-  const set = (v: T) => {
-    setValue(v)
-    const url = new URL(window.location.href)
-    if (v === fallback) url.searchParams.delete(key)
-    else url.searchParams.set(key, v)
-    window.history.replaceState(window.history.state, '', url)
-  }
-  return [value, set] as const
+  const [raw, setRaw] = useUrlParam(key, fallback)
+  const value = valid(raw) ? (raw as T) : fallback
+  return [value, setRaw as (v: T) => void] as const
 }
 
 /**

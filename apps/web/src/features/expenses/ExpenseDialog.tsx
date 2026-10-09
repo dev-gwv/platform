@@ -15,8 +15,9 @@ import { ExpenseCategoryPicker } from './CategoryManager'
 import { ReceiptsPanel } from './ReceiptsPanel'
 import { blankItem, cleanItems, itemsFrom, itemsTotal, type ItemDraft } from './items'
 import { useINR } from '@/shared/money/MoneyMask'
+import { todayInIndia } from '@/shared/ui/days-left'
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => todayInIndia()
 const GST_RATES = [0, 5, 12, 18, 28]
 
 /**
