@@ -5,5 +5,5 @@ import { Navigate } from '@tanstack/react-router'
  * Generate. It is Payroll's history now; this address opens it there.
  */
 export function TeamSalariesPage() {
-  return <Navigate to="/payroll" search={{ history: '1' } as never} replace />
+  return <Navigate to="/payroll" search={{ history: 1 } as never} replace />
 }

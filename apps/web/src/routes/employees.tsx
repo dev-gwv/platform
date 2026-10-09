@@ -58,7 +58,7 @@ function TeamPage() {
   // Salaries are Payroll's now; an old ?section=salaries link goes to their history.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('section') === 'salaries')
-      void navigate({ to: '/payroll', search: { history: '1' } as never, replace: true })
+      void navigate({ to: '/payroll', search: { history: 1 } as never, replace: true })
   }, [navigate])
   // Only someone allowed to add people is ever put into it -- anyone else
   // following an old link lands on the directory, not on a form that would
