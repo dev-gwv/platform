@@ -2339,7 +2339,7 @@ if (listed) {
   )
   check(
     'portal: client deliverables with status and link; internal work, notes and prices are not there',
-    titles.includes('Wedding album') && !titles.includes('Culling (team only)') && albumRow?.status === 'ready' &&
+    titles.includes('Wedding album') && !titles.includes('Culling (team only)') && albumRow?.status === 'delivered' &&
       albumRow?.delivery_link === 'https://drive.example.com/album' && !raw.includes('SECRET-NOTE') && !raw.includes(cull.json.id) &&
       !raw.includes('additional_charge') && !raw.includes('internal_notes') && !raw.includes('estimated_cost'),
     { titles, albumRow },

@@ -8,20 +8,21 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  Eye,
   FileText,
   Mail,
   MapPin,
+  MessageCircle,
   PencilLine,
   Phone,
   Printer,
-  Receipt,
   Sparkles,
   ThumbsUp,
   Users,
   Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { publicClientPortal, publicInvoice, z, type PublicClientPortal } from '@ipc/contracts'
+import { buildWhatsAppUrl, publicClientPortal, publicInvoice, z, type PublicClientPortal } from '@ipc/contracts'
 import { ApiError, callApi } from '@/shared/api/client'
 import { mapHref, mapSearchHref } from '@/features/shoots/map-link'
 import { Button } from '@/shared/ui/button'
@@ -35,8 +36,9 @@ import { foregroundForHex, presetFor } from '@/shared/theme/presets'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { termsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
-import { DELIVERABLE_STATUS_LABEL, openedAgo } from '@/features/client-portal/format'
+import { DELIVERABLE_STATUS_LABEL, expectedLine, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
 import { DeliverableTile } from '@/shared/ui/icon-tile'
+import { guestsLabel } from '@/features/shoots/guests'
 
 /**
  * PUBLIC page -- no login, no app shell. The one link a studio sends its
@@ -98,10 +100,17 @@ export function ClientPortalPage() {
 
   if (error) return <LinkDoesNotOpen message={error instanceof ApiError ? error.message : null} />
   if (isLoading || !data) return <PortalSkeleton />
+  return <PortalView data={data} token={token} />
+}
 
+/**
+ * The page itself, for the client's link and for the studio's own "See it as
+ * the client" (token null: nothing on it can be pressed, nothing is counted).
+ */
+export function PortalView({ data, token }: { data: PublicClientPortal; token: string | null }) {
   const { studio, project } = data
   const hello = project.client_name ? `Hello, ${project.client_name}` : 'Hello'
-  const ready = data.deliverables.filter((d) => d.status === 'ready').length
+  const today = todayInIndia()
 
   return (
     <div style={brandStyle(studio)} className="min-h-screen bg-background">
@@ -119,17 +128,7 @@ export function ClientPortalPage() {
       </header>
 
       <main className="mx-auto -mt-9 flex max-w-2xl flex-col gap-6 px-4 pb-12">
-        <Card className="shadow-md">
-          <CardContent className="grid grid-cols-3 divide-x divide-border/70 p-0 text-center">
-            <Glance label={data.shoots.length === 1 ? 'Shoot' : 'Shoots'} value={String(data.shoots.length)} />
-            <Glance label="Ready" value={`${ready}/${data.deliverables.length}`} />
-            {data.money ? (
-              <Glance label="Balance" value={formatINR(data.money.balance)} />
-            ) : (
-              <Glance label={data.terms.length === 1 ? 'Document' : 'Documents'} value={String(data.terms.length)} />
-            )}
-          </CardContent>
-        </Card>
+        <Tracker steps={trackerSteps(data, today)} />
 
         <Section icon={CalendarDays} title="Your shoots" empty={data.shoots.length === 0 ? 'Your shoot dates will show here once they are fixed.' : null}>
           {data.shoots.map((s) => (
@@ -143,11 +142,26 @@ export function ClientPortalPage() {
           empty={data.deliverables.length === 0 ? 'What we are making for you will show here.' : null}
         >
           {data.deliverables.map((d) => (
-            <DeliverableCard key={d.id} token={token} item={d} allowFeedback={data.options.allow_feedback} />
+            <DeliverableCard key={d.id} token={token} item={d} allowFeedback={data.options.allow_feedback} today={today} />
           ))}
         </Section>
 
-        {data.money && <MoneySection token={token} money={data.money} />}
+        {data.updates.length > 0 && (
+          <Section icon={Clock} title="Latest updates">
+            <Card>
+              <CardContent className="flex flex-col gap-2.5 p-4">
+                {data.updates.map((u, i) => (
+                  <p key={`${u.at}-${i}`} className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="min-w-0 break-words">{u.text}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{shortFmt.format(new Date(u.at))}</span>
+                  </p>
+                ))}
+              </CardContent>
+            </Card>
+          </Section>
+        )}
+
+        {data.money && <MoneySection money={data.money} />}
 
         {data.terms.length > 0 && (
           <Section icon={FileText} title="Your documents">
@@ -165,11 +179,13 @@ export function ClientPortalPage() {
                         : `Sent on ${shortFmt.format(new Date(t.sent_at))}`}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/p/$token/terms/$docId" params={{ token, docId: t.id }}>
-                      Read
-                    </Link>
-                  </Button>
+                  {token && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/p/$token/terms/$docId" params={{ token, docId: t.id }}>
+                        Read
+                      </Link>
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -204,12 +220,40 @@ function StudioMark({ studio }: { studio: PublicClientPortal['studio'] }) {
   )
 }
 
-function Glance({ label, value }: { label: string; value: string }) {
+/** Booked → Shoot days → Footage safe → Editing → Ready to view → Delivered. */
+function Tracker({ steps }: { steps: TrackerStep[] }) {
   return (
-    <div className="min-w-0 px-2 py-4">
-      <p className="truncate text-lg font-semibold tabular-nums">{value}</p>
-      <p className="truncate text-xs text-muted-foreground">{label}</p>
-    </div>
+    <Card className="shadow-md">
+      <CardContent className="p-4">
+        <ol className="flex flex-col">
+          {steps.map((s, i) => (
+            <li key={s.key} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span
+                  className={cn(
+                    'flex size-6 shrink-0 items-center justify-center rounded-full border-2',
+                    s.state === 'done' && 'border-success bg-success text-white',
+                    s.state === 'now' && 'border-primary bg-primary/10 text-primary',
+                    s.state === 'todo' && 'border-border bg-card text-muted-foreground',
+                  )}
+                  aria-hidden
+                >
+                  {s.state === 'done' ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}
+                </span>
+                {i < steps.length - 1 && <span className={cn('w-0.5 flex-1', s.state === 'done' ? 'bg-success' : 'bg-border')} />}
+              </div>
+              <div className={cn('min-w-0 pb-4', i === steps.length - 1 && 'pb-0')}>
+                <p className={cn('text-sm font-semibold', s.state === 'todo' && 'text-muted-foreground')}>
+                  {s.label}
+                  {s.state === 'now' && <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Now</span>}
+                </p>
+                {s.line && <p className="text-xs text-muted-foreground">{s.line}</p>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -280,6 +324,7 @@ function ShootCard({ shoot }: { shoot: PublicClientPortal['shoots'][number] }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {shoot.shoot_date ? dayFmt.format(asDate(shoot.shoot_date)) : 'Date to be fixed'}
             {time ? ` · ${time}` : ''}
+            {guestsLabel(shoot.guests) ? ` · ${guestsLabel(shoot.guests)}` : ''}
           </p>
           {shoot.location && (
             <p className="mt-1 flex items-start gap-1.5 text-sm">
@@ -308,18 +353,20 @@ function ShootCard({ shoot }: { shoot: PublicClientPortal['shoots'][number] }) {
 }
 
 // ── deliverables ─────────────────────────────────────────────────
-const STATUS_TONE = { not_started: 'neutral', in_progress: 'warning', ready: 'success' } as const
-const STATUS_ICON = { not_started: Clock, in_progress: Sparkles, ready: CheckCircle2 } as const
+const STATUS_TONE = { not_started: 'neutral', in_progress: 'info', final_checks: 'info', ready: 'warning', delivered: 'success' } as const
+const STATUS_ICON = { not_started: Clock, in_progress: Sparkles, final_checks: Sparkles, ready: Eye, delivered: CheckCircle2 } as const
 const ok = z.object({ ok: z.boolean() })
 
 function DeliverableCard({
   token,
   item,
   allowFeedback,
+  today,
 }: {
-  token: string
+  token: string | null
   item: PublicClientPortal['deliverables'][number]
   allowFeedback: boolean
+  today: string
 }) {
   const qc = useQueryClient()
   const [asking, setAsking] = useState(false)
@@ -328,6 +375,7 @@ function DeliverableCard({
   const Icon = STATUS_ICON[item.status]
 
   async function send(kind: 'approved' | 'change_requested') {
+    if (!token) return
     if (kind === 'change_requested' && !message.trim()) {
       toast.error('Please tell the studio what you would like changed.')
       return
@@ -369,13 +417,13 @@ function DeliverableCard({
         {item.description && <p className="break-words text-sm text-muted-foreground">{item.description}</p>}
 
         <p className="text-sm text-muted-foreground">
-          {item.status === 'ready' && item.delivered_at
-            ? `Ready since ${shortFmt.format(new Date(item.delivered_at))}`
-            : item.expected_date
-              ? `Expected by ${shortFmt.format(asDate(item.expected_date))}`
-              : item.status === 'ready'
-                ? 'Ready for you'
-                : 'We will share a date soon'}
+          {item.status === 'delivered'
+            ? item.delivered_at
+              ? `Delivered on ${shortFmt.format(new Date(item.delivered_at))}`
+              : 'Delivered'
+            : item.status === 'ready'
+              ? 'Ready for you to see'
+              : expectedLine(item.expected_date, today, (d) => shortFmt.format(asDate(d)))}
         </p>
 
         {item.delivery_link && /^https?:\/\//i.test(item.delivery_link) && (
@@ -400,7 +448,7 @@ function DeliverableCard({
           </p>
         )}
 
-        {allowFeedback && item.status === 'ready' && !asking && (
+        {token && allowFeedback && item.status === 'ready' && !asking && (
           <div className="grid grid-cols-2 gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void send('approved')}>
               <ThumbsUp /> Looks great
@@ -437,7 +485,7 @@ function DeliverableCard({
 }
 
 // ── money ────────────────────────────────────────────────────────
-function MoneySection({ token, money }: { token: string; money: NonNullable<PublicClientPortal['money']> }) {
+function MoneySection({ money }: { money: NonNullable<PublicClientPortal['money']> }) {
   const pct = money.total > 0 ? Math.min(100, Math.round((money.received / money.total) * 100)) : 0
   return (
     <Section icon={Wallet} title="Payments">
@@ -462,30 +510,14 @@ function MoneySection({ token, money }: { token: string; money: NonNullable<Publ
               </p>
             </div>
           </div>
+          {money.next_due && money.balance > 0 && (
+            <p className="text-sm">
+              <span className="font-semibold">Next:</span> {formatINR(money.next_due.amount)}
+              {money.next_due.due_date ? ` by ${shortFmt.format(asDate(money.next_due.due_date))}` : ''}
+            </p>
+          )}
         </CardContent>
       </Card>
-      {money.invoices.map((inv) => (
-        <Card key={inv.id}>
-          <CardContent className="flex items-center gap-3 p-4">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Receipt className="size-5" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">Invoice {inv.invoice_number ?? ''}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatINR(inv.total)}
-                {inv.balance_due > 0 ? ` · ${formatINR(inv.balance_due)} due` : ' · Paid'}
-                {inv.balance_due > 0 && inv.due_date ? ` by ${shortFmt.format(asDate(inv.due_date))}` : ''}
-              </p>
-            </div>
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/p/$token/invoice/$invoiceId" params={{ token, invoiceId: inv.id }}>
-                View
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
     </Section>
   )
 }
@@ -504,6 +536,13 @@ function StudioContact({ studio }: { studio: PublicClientPortal['studio'] }) {
             <Button size="sm" variant="outline" asChild>
               <a href={`tel:${studio.phone}`}>
                 <Phone /> Call
+              </a>
+            </Button>
+          )}
+          {studio.phone && (
+            <Button size="sm" variant="outline" asChild>
+              <a href={buildWhatsAppUrl(studio.phone, 'Hi! A question about our booking.')} target="_blank" rel="noreferrer noopener">
+                <MessageCircle /> WhatsApp
               </a>
             </Button>
           )}

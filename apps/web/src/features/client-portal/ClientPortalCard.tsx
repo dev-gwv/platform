@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Copy, ExternalLink, Globe, Link2Off, MessageCircle, RefreshCw, ThumbsUp, PencilLine } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Copy, ExternalLink, Eye, Globe, Link2Off, MessageCircle, RefreshCw, ThumbsUp, PencilLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { buildWhatsAppUrl, type ClientPortalLinkInfo } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -22,9 +23,9 @@ import { absolutePortalUrl, openedAgo } from './format'
  * "Client portal" -- one private page per project for the couple: shoots,
  * deliverables and their links, what is paid and what is left, the terms.
  *
- * Only a fingerprint of the link is kept on the server, so the full link can
- * be shown right after it is made. This browser remembers it for the person
- * who made it; anyone else makes a new one (which retires the old).
+ * The server keeps the live link (0252), so anyone who can see the project can
+ * copy it again -- "New link" is only for when the old one should stop. A link
+ * made before 0252 is remembered only by the browser that made it.
  */
 const remembered = (linkId: string) => `ipc-portal-link:${linkId}`
 
@@ -75,7 +76,9 @@ export function ClientPortalCard({
   const showPayments = true
 
   const link = data?.link ?? null
-  const url = link ? (fresh?.id === link.id ? fresh.url : recall(link.id)) : null
+  // The server keeps the live link since 0252; older links only this browser remembers.
+  const kept = data?.url ? absolutePortalUrl(data.url, window.location.origin) : null
+  const url = link ? (fresh?.id === link.id ? fresh.url : (kept ?? recall(link.id))) : null
 
   async function makeLink(replacing: boolean) {
     if (replacing) {
@@ -115,7 +118,7 @@ export function ClientPortalCard({
   }
 
   const message = (u: string) =>
-    `Hi ${clientName ?? 'there'}! Here is your private page for ${projectName} — your shoot dates, photos and videos as they get ready, and payments, all in one place: ${u}`
+    `Hi ${clientName ?? 'there'}! Track ${projectName} here, like an order: your shoot days, your photos and films as they get ready, and payments, all on one private page. No login needed: ${u}`
 
   return (
     <Card>
@@ -163,6 +166,13 @@ export function ClientPortalCard({
                       <MessageCircle /> Send on WhatsApp
                     </a>
                   </Button>
+                  {kept && (
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link to="/projects/$id/client-view" params={{ id: projectId }}>
+                        <Eye /> See it as the client
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </>
             ) : (
@@ -179,7 +189,7 @@ export function ClientPortalCard({
                   disabled={update.isPending}
                   onChange={(v) => update.mutate({ show_payments: v })}
                   label="Show payments"
-                  description="Package, received, balance and invoices."
+                  description="Total, paid, balance and the next payment."
                 />
                 <Switch
                   checked={link.show_team}

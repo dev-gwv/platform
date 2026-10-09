@@ -120,7 +120,7 @@ describe('the token opens one project', () => {
   it('leaves out internal, hidden and cancelled deliverables', async () => {
     const doc = (await portal(RAW))!
     expect(doc.deliverables.map((d) => d.id)).toEqual([D_CLIENT])
-    expect(doc.deliverables[0]).toMatchObject({ status: 'ready', delivery_link: 'https://drive.example/album' })
+    expect(doc.deliverables[0]).toMatchObject({ status: 'delivered', delivery_link: 'https://drive.example/album' })
   })
 
   it('carries no costs, notes or crew pay', async () => {
@@ -230,7 +230,7 @@ describe('work the studio has not checked yet (0251)', () => {
   const D_WITH_CLIENT = 'd0000000-0000-4000-8000-000000000303'
   const RAW3 = 'portal-raw-token-three'
 
-  it('reads as in progress, with no link, until the studio approved it', async () => {
+  it('reads as final checks, with no link, until the studio approved it', async () => {
     await db.exec(`
       insert into projects (id, company_id, client_id, name, created_by)
         values ('${P3}', '${STUDIO}', '${CLIENT}', 'Third', '${OWNER}');
@@ -245,7 +245,7 @@ describe('work the studio has not checked yet (0251)', () => {
     await q(`select issue_client_portal_link('${P3}', ${hash(RAW3)})`)
     const doc = (await portal(RAW3))!
     expect(doc.deliverables.map((d) => [d.id, d.status, d.delivery_link])).toEqual([
-      [D_MANAGER, 'in_progress', null],
+      [D_MANAGER, 'final_checks', null],
       [D_APPROVED, 'ready', 'https://x.test/album'],
       [D_WITH_CLIENT, 'ready', 'https://x.test/film'],
     ])
@@ -255,6 +255,65 @@ describe('work the studio has not checked yet (0251)', () => {
   it('carries the guests of each day', async () => {
     const doc = (await portal(RAW3)) as unknown as { shoots: { guests: number | null }[] }
     expect(doc.shoots.map((s) => s.guests)).toEqual([400])
+  })
+})
+
+describe('the tracker (0252)', () => {
+  const P4 = 'd0000000-0000-4000-8000-0000000000d4'
+  const D_WAITING = 'd0000000-0000-4000-8000-000000000401'
+  const RAW4 = 'portal-raw-token-four'
+  type Tracker = {
+    booked: { quotation_accepted_at: string | null; terms_agreed_at: string | null }
+    footage: { tracks: boolean; shot: number; safe: number }
+    updates: { at: string; text: string }[]
+    money: { next_due: { amount: number; due_date: string | null } | null } | null
+  }
+  const tracker = async (count = true) =>
+    (await q<{ doc: Tracker }>(`select get_client_portal('${RAW4}', ${count}) as doc`))[0]!.doc
+
+  beforeAll(async () => {
+    await db.exec(`
+      insert into projects (id, company_id, client_id, name, created_by)
+        values ('${P4}', '${STUDIO}', '${CLIENT}', 'Fourth', '${OWNER}');
+      insert into shoots (company_id, project_id, name, shoot_date) values
+        ('${STUDIO}', '${P4}', 'Haldi', '2026-01-10'), ('${STUDIO}', '${P4}', 'Reception', '2099-01-01');
+      insert into deliverables (id, company_id, project_id, title, visibility_scope, show_on_quotation, status, custom_status_code)
+        values ('${D_WAITING}', '${STUDIO}', '${P4}', 'Teaser', 'client', true, 'review', 'with_client');
+      insert into invoices (company_id, project_id, client_id, invoice_number, status, total, balance_due, due_date) values
+        ('${STUDIO}', '${P4}', '${CLIENT}', 'INV-9', 'sent', 50000, 50000, '2026-11-05');
+    `)
+    await as(OWNER)
+    await q(`select issue_client_portal_link('${P4}', ${hash(RAW4)})`)
+  })
+
+  it('says the days shot, the next payment and what happened', async () => {
+    const t = await tracker()
+    expect(t.footage).toMatchObject({ shot: 1 })
+    expect(t.money!.next_due).toEqual({ amount: 50000, due_date: '2026-11-05' })
+    expect(t.updates.map((u) => u.text)).toContain('Haldi shot')
+    expect(t.updates.map((u) => u.text)).not.toContain('Reception shot')
+    expect(t.booked).toEqual({ quotation_accepted_at: null, terms_agreed_at: null })
+  })
+
+  it('does not count the studio looking as a client visit', async () => {
+    const views = async () => (await q<{ n: number }>(`select view_count as n from client_portal_links where project_id = '${P4}' and revoked_at is null`))[0]!.n
+    const before = await views()
+    await tracker(false)
+    expect(await views()).toBe(before)
+    await tracker(true)
+    expect(await views()).toBe(before + 1)
+  })
+
+  it('"looks great" on work with the client marks it client approved', async () => {
+    expect((await q<{ ok: boolean }>(`select client_portal_leave_feedback('${RAW4}', '${D_WAITING}', 'approved', null) as ok`))[0]!.ok).toBe(true)
+    expect(await q(`select custom_status_code from deliverables where id = '${D_WAITING}'`)).toEqual([{ custom_status_code: 'client_approved' }])
+  })
+
+  it('keeps the live token away from the studio app', async () => {
+    await db.exec(`set role authenticated;`)
+    const err = await fails(`select * from client_portal_link_tokens`)
+    await db.exec(`reset role;`)
+    expect(err).toMatch(/permission denied/)
   })
 })
 

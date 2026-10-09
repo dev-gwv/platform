@@ -60,6 +60,12 @@ export const clientPortalRouter = new Hono<AppEnv>()
         const links = await sql`
           select ${sql.unsafe(LINK_COLUMNS)} from client_portal_links
            where project_id = ${id} and revoked_at is null`
+        // The live link, when it was kept (0252): read as the service, because
+        // the studio app itself can never read the tokens table.
+        const kept = links[0]
+          ? await withService(c.env, (svc) => svc<{ token: string }[]>`
+              select token from client_portal_link_tokens where link_id = ${(links[0] as { id: string }).id}`)
+          : []
         const feedback = await sql`
           select f.id, f.deliverable_id, d.title as deliverable_title, f.kind, f.message, f.created_at
             from client_portal_feedback f
@@ -67,7 +73,7 @@ export const clientPortalRouter = new Hono<AppEnv>()
            where f.project_id = ${id}
            order by f.created_at desc
            limit 5`
-        return { link: links[0] ?? null, recent_feedback: feedback }
+        return { link: links[0] ?? null, token: kept[0]?.token ?? null, recent_feedback: feedback }
       }),
     )
     if (!data) fail(400, 'We could not load the client portal.')
@@ -75,6 +81,7 @@ export const clientPortalRouter = new Hono<AppEnv>()
     return c.json(
       clientPortalStatus.parse({
         link: data.link ? clientPortalLinkInfo.parse(data.link) : null,
+        url: data.token ? portalUrl(c.env.APP_URL, data.token) : null,
         recent_feedback: z.array(clientPortalFeedbackItem).parse(data.recent_feedback),
       }),
     )
@@ -109,6 +116,14 @@ export const clientPortalRouter = new Hono<AppEnv>()
     )
     if (!row) fail(400, 'We could not make the link.')
     const link = clientPortalLinkInfo.parse(row)
+    // Keep the live link so the studio can show and copy it again (0252).
+    // After the link's own transaction, so the row is there to point at; a
+    // failure here only means the link cannot be shown again later.
+    await attempt(c, 'client_portal.keep_token', () =>
+      withService(c.env, (svc) => svc`
+        insert into client_portal_link_tokens (link_id, token) values (${link.id}, ${raw})
+        on conflict (link_id) do nothing`),
+    )
     await audit(c, {
       action: 'client_portal.create',
       entityType: 'project',
@@ -151,6 +166,32 @@ export const clientPortalRouter = new Hono<AppEnv>()
     const link = clientPortalLinkInfo.parse(row)
     await audit(c, { action: 'client_portal.update', entityType: 'project', entityId: id, after: d })
     return c.json(link)
+  })
+
+  /**
+   * "See it as the client": the page the live link shows, read without
+   * counting a client visit. Needs a link kept since 0252.
+   */
+  .get('/projects/:id/preview', requireAction('projects', 'view'), requireStudioWork, async (c) => {
+    const id = uuidParam(c)
+    const doc = await attempt(c, 'client_portal.preview', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const links = await sql<{ id: string }[]>`
+          select id from client_portal_links where project_id = ${id} and revoked_at is null`
+        if (!links[0]) return { missing: true as const }
+        return withService(c.env, async (svc) => {
+          const kept = await svc<{ token: string }[]>`select token from client_portal_link_tokens where link_id = ${links[0]!.id}`
+          if (!kept[0]) return { old: true as const }
+          const rows = await svc<{ doc: unknown }[]>`select get_client_portal(p_raw => ${kept[0].token}, p_count => false) as doc`
+          return { doc: rows[0]?.doc ?? null }
+        })
+      }),
+    )
+    if (!doc) fail(400, 'We could not load the client page.')
+    if ('missing' in doc) fail(404, 'This project has no live client link.')
+    if ('old' in doc) fail(409, 'This link was made before previews existed. Make a new link to see it as the client.')
+    if (!doc.doc) fail(404, 'This project has no live client link.')
+    return c.json(publicClientPortal.parse(doc.doc))
   })
 
   /** Stop the link. The client sees "this link no longer works". */

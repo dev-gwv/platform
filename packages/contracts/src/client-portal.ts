@@ -60,6 +60,8 @@ export type ClientPortalLinkInfo = z.infer<typeof clientPortalLinkInfo>
 
 export const clientPortalStatus = z.object({
   link: clientPortalLinkInfo.nullable(),
+  /** The live link itself, when it was made after 0252 kept it; null for older links. */
+  url: z.string().nullable().default(null),
   recent_feedback: z.array(clientPortalFeedbackItem),
 })
 export type ClientPortalStatus = z.infer<typeof clientPortalStatus>
@@ -73,7 +75,12 @@ export const clientPortalIssued = z.object({
 export type ClientPortalIssued = z.infer<typeof clientPortalIssued>
 
 // ── what the client sees ─────────────────────────────────────────
-export const clientPortalDeliverableStatus = z.enum(['not_started', 'in_progress', 'ready'])
+/**
+ * A photo or film in the client's words (0252): Not started, Being edited,
+ * Final checks (handed in, not yet checked by the studio -- no link), Ready to
+ * view (with its link), Delivered.
+ */
+export const clientPortalDeliverableStatus = z.enum(['not_started', 'in_progress', 'final_checks', 'ready', 'delivered'])
 export type ClientPortalDeliverableStatus = z.infer<typeof clientPortalDeliverableStatus>
 
 export const publicClientPortal = z.object({
@@ -132,6 +139,8 @@ export const publicClientPortal = z.object({
       total: z.number(),
       received: z.number(),
       balance: z.number(),
+      /** The next payment due: the earliest sent invoice with money left (0252). */
+      next_due: z.object({ amount: z.number(), due_date: isoDate.nullable() }).nullable().default(null),
       invoices: z.array(
         z.object({
           id: uuid,
@@ -145,6 +154,14 @@ export const publicClientPortal = z.object({
       ),
     })
     .nullable(),
+  /** The tracker (0252): booked, footage safe, and the last five updates. */
+  booked: z
+    .object({ quotation_accepted_at: z.string().nullable(), terms_agreed_at: z.string().nullable() })
+    .default({ quotation_accepted_at: null, terms_agreed_at: null }),
+  footage: z
+    .object({ tracks: z.boolean(), shot: z.number().int(), safe: z.number().int() })
+    .default({ tracks: false, shot: 0, safe: 0 }),
+  updates: z.array(z.object({ at: z.string(), text: z.string() })).default([]),
   terms: z.array(
     z.object({
       id: uuid,

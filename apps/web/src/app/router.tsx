@@ -47,6 +47,7 @@ import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
 import { PublicInvoicePage } from '@/routes/public-invoice'
 import { StopEmailsPage } from '@/routes/stop-emails'
 import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
+import { ClientPortalPreviewPage } from '@/routes/client-portal-preview'
 import { InvoiceDetailPage } from '@/routes/invoice-detail'
 import { CompanyExpensesPage } from '@/routes/company-expenses'
 import { FinancialsPage } from '@/routes/financials'
@@ -247,6 +248,7 @@ const routeTree = rootRoute.addChildren([
   route('/projects', ProjectsListPage),
   route('/projects/new', NewProjectPage),
   route('/projects/$id', ProjectDetailPage),
+  route('/projects/$id/client-view', ClientPortalPreviewPage),
   route('/projects/$id/edit', ProjectEditPage),
   route('/projects/$id/quotation', ProjectQuotationPage),
   route('/project-tracking', ProjectTrackingPage),
