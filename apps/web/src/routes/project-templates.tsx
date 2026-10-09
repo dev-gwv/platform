@@ -27,6 +27,7 @@ import { PresetsTab } from '@/features/project-templates/PresetsTab'
 import { DeliverableTypesTab } from '@/features/project-templates/DeliverableTypesTab'
 import { type CreateProjectTemplateRequest } from '@ipc/contracts'
 import { Plus, Trash2, Pencil, Package, Camera, ListChecks, Calendar, ArrowRight } from 'lucide-react'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 
 type Tab = 'templates' | 'shoot-presets' | 'work-presets' | 'deliverable-types'
 
@@ -39,18 +40,9 @@ const TABS: { value: Tab; label: string }[] = [
 
 /** The tab lives in the address (?tab=), so a link or a refresh lands on it. */
 function useTab(): [Tab, (t: Tab) => void] {
-  const [tab, setTabState] = useState<Tab>(() => {
-    const v = new URLSearchParams(window.location.search).get('tab')
-    return TABS.some((t) => t.value === v) ? (v as Tab) : 'templates'
-  })
-  const setTab = (t: Tab) => {
-    setTabState(t)
-    const url = new URL(window.location.href)
-    if (t === 'templates') url.searchParams.delete('tab')
-    else url.searchParams.set('tab', t)
-    window.history.replaceState(window.history.state, '', url)
-  }
-  return [tab, setTab]
+  const [raw, setRaw] = useUrlParam('tab', 'templates')
+  const tab = TABS.some((t) => t.value === raw) ? (raw as Tab) : 'templates'
+  return [tab, setRaw]
 }
 
 function ProjectTemplatesContent() {

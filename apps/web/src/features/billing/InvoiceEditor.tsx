@@ -53,6 +53,7 @@ import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } f
 import { HsnSearchDialog } from './HsnSearchDialog'
 import { DESIGN_INFO } from './InvoicePaper'
 import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-form-draft'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 /** Payment terms as a studio says them, and how many days each allows. */
 export const PAYMENT_TERMS: { label: string; days: number | null }[] = [
@@ -67,7 +68,7 @@ export const PAYMENT_TERMS: { label: string; days: number | null }[] = [
 ]
 
 function endOfMonth(iso: string): string {
-  const d = new Date(`${iso || new Date().toISOString().slice(0, 10)}T00:00:00Z`)
+  const d = new Date(`${iso || todayInIndia()}T00:00:00Z`)
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
 }
 

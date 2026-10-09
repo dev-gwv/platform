@@ -32,6 +32,7 @@ import { useProjects } from '@/features/projects/api'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 
 const shootsList = shootListItem.array()
 
@@ -53,7 +54,7 @@ export function DataManagementPage({ initialTab }: { initialTab?: DmTab } = {}) 
 function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
   const canManage = useAccess().hasAction('projects', 'edit')
   // Opened from a project's Data tab: the same board, narrowed to that project.
-  const [projectFilter, setProjectFilter] = useState(() => new URLSearchParams(window.location.search).get('project') ?? '')
+  const [projectFilter, setProjectFilter] = useUrlParam('project')
   const board = useDataBoard(projectFilter || undefined)
   const [tab, setTab] = useState<DmTab>(initialTab ?? 'records')
   const [opened, setOpened] = useState<DataBoardRow | null>(null)
@@ -71,12 +72,7 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
   }
 
   const rows = board.data?.rows ?? []
-  const clearProject = () => {
-    setProjectFilter('')
-    const url = new URL(window.location.href)
-    url.searchParams.delete('project')
-    window.history.replaceState(window.history.state, '', url)
-  }
+  const clearProject = () => setProjectFilter('')
 
   return (
     <>

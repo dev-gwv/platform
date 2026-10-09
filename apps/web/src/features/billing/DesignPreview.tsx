@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { companyProfile, type InvoiceDetail } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { InvoicePaper, type LayoutOverride } from './InvoicePaper'
+import { todayInIndia } from '@/shared/ui/days-left'
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayInIndia()
 
 /** A believable invoice to show a design on: the studio's own letterhead, a sample wedding client. */
 const SAMPLE: InvoiceDetail = {

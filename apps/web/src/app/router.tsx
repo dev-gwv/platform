@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 import {
   createRootRoute,
   createRoute,
@@ -7,117 +7,132 @@ import {
   Link,
   Navigate,
   useNavigate,
+  lazyRouteComponent,
   type AnyRoute,
+  type RouteComponent,
 } from '@tanstack/react-router'
-import { LoginPage } from '@/routes/login'
-import { HomePage } from '@/routes/home'
-import { MyProfilePage } from '@/routes/my-profile'
-import { LeavePage } from '@/routes/leave'
-import { ContactPage, DataDeletionPage, PrivacyPage, RefundPage, TermsPage } from '@/routes/legal'
-import { HelpSetupPage } from '@/routes/help-setup'
-import { HelpWhatsAppPage } from '@/routes/help-whatsapp'
-import { HelpPage } from '@/routes/help'
-import { LearnPage } from '@/routes/learn'
 import { RouteError } from '@/shared/layout/RouteError'
-import { CompleteSetupPage } from '@/routes/complete-setup'
-import { VerifyEmailPage } from '@/routes/verify'
-import { ResetPasswordPage } from '@/routes/reset-password'
-import { AcceptInvitePage } from '@/routes/accept-invite'
-import { NoAccountPage } from '@/routes/no-account'
-import { PlanExpiredPage } from '@/routes/plan-expired'
-import { DashboardPage } from '@/routes/dashboard'
-import { ProjectsListPage } from '@/routes/projects/list'
-import { NewProjectPage } from '@/routes/projects/new'
-import { ProjectDetailPage } from '@/routes/projects/detail'
-import { ProjectEditPage } from '@/routes/projects/$id.edit'
-import { ProjectQuotationPage } from '@/routes/projects/$id.quotation'
-import { ProjectTrackingPage } from '@/routes/project-tracking'
-import { LeadSourcesPage } from '@/routes/lead-sources'
-import { ShootsPage } from '@/routes/shoots'
-import { ClientsListPage } from '@/routes/clients/list'
-import { ProductionBoardPage } from '@/routes/production-board'
-import { TasksPage } from '@/routes/tasks'
-import { TeamAllocationPage } from '@/routes/team-allocation'
-import { DataManagementPage } from '@/routes/data-management'
-import { MyWorkPage } from '@/routes/my-work'
-import { BillingPage } from '@/routes/billing'
-import { InvoicesPage } from '@/routes/billing/invoices'
-import { PaymentsPage } from '@/routes/billing/payments'
-import { PaymentReceiptPage } from '@/routes/billing/payment-receipt'
-import { PublicInvoicePage } from '@/routes/public-invoice'
-import { StopEmailsPage } from '@/routes/stop-emails'
-import { ClientPortalInvoicePage, ClientPortalPage, ClientPortalTermsPage } from '@/routes/client-portal'
-import { ClientPortalPreviewPage } from '@/routes/client-portal-preview'
-import { InvoiceDetailPage } from '@/routes/invoice-detail'
-import { CompanyExpensesPage } from '@/routes/company-expenses'
-import { FinancialsPage } from '@/routes/financials'
-import { FollowUpsPage } from '@/routes/follow-ups'
-import { CrmSetupPage } from '@/routes/follow-ups/setup'
-import { CrmReportsPage } from '@/routes/follow-ups/reports'
-import { CallQueuePage } from '@/routes/follow-ups/queue'
-import { SendNowPage } from '@/routes/follow-ups/send'
-import { AttendancePage, MyAttendancePage } from '@/routes/attendance'
-import { MyPerformancePage, TeamPerformancePage } from '@/routes/performance'
-import { MyPayoutsPage } from '@/routes/my-payouts'
-import { NotificationsPage } from '@/routes/notifications'
-import { EmployeesPage } from '@/routes/employees'
-import { TeamSalariesPage } from '@/routes/team-salaries'
-import { EmployeeDetailPage } from '@/routes/employees/$id'
-import { SubscriptionPage } from '@/routes/subscription'
-import { SettingsPage } from '@/routes/settings'
-import { DeliveryStagesPage } from '@/routes/delivery-stages'
-import { RolesAccessPage } from '@/routes/settings/roles'
-import { TeamTermsPage } from '@/routes/settings/team-terms'
-import { AppearancePage } from '@/routes/settings/appearance'
-import { TermsAcknowledgePage } from '@/routes/terms-acknowledge'
-import { QuoteAcceptPage } from '@/routes/quote-accept'
-import { TeamTermsAcknowledgePage } from '@/routes/team-terms-acknowledge'
-import { QuotationPage } from '@/routes/quotation'
-import { ReceiptPage } from '@/routes/receipt'
-import { DeliveryPage } from '@/routes/delivery'
-import { ReferPage } from '@/routes/refer'
 import { LEGACY_AUTHED_PATHS, LEGACY_PUBLIC_PATHS, legacyTarget } from './legacy-links'
-import { EnquirePage, EnquiryViewPage } from '@/routes/enquire'
-import { ClientDetailsPage } from '@/routes/client-details'
-import { EnquiryFormDetailPage, EnquiryFormsPage } from '@/routes/enquiry-forms'
-import { ProjectDocumentsPage } from '@/routes/project-documents'
-import { TeamWorkPreviewPage } from '@/routes/team-work-preview'
-import { PlatformStudiosPage } from '@/routes/platform/studios'
-import { PlatformUsagePage } from '@/routes/platform/usage'
-import { PlatformFeedbackPage } from '@/routes/platform/feedback'
-import { PlatformDiamondPage } from '@/routes/platform/diamond'
-import { SystemPage } from '@/routes/settings/system'
-import { MessagingSettingsPage } from '@/routes/settings/messaging'
-import { WhatsappSettingsPage } from '@/routes/settings/whatsapp'
-import { PlatformMessagingPage } from '@/routes/platform/messaging'
-import { PlatformEmailPage } from '@/routes/platform/email'
-import { PlatformPaymentsPage } from '@/routes/platform/payments'
-import { PlatformHelpPage } from '@/routes/platform/help'
-import { AdvancedSettingsPage } from '@/routes/settings/advanced'
-import { TaskBundlesPage } from '@/routes/settings/task-bundles'
-import { AttendanceLocationPage } from '@/routes/settings/attendance-location'
-import { LookupsPage } from '@/routes/settings/lookups'
-import { VendorsPage } from '@/routes/settings/vendors'
-import { ClientFormPage } from '@/routes/settings/client-form'
-import { ReferAStudioPage } from '@/routes/settings/refer-a-studio'
-import { PlatformStudioReferralsPage } from '@/routes/platform/studio-referrals'
-import { ReferralsPage } from '@/routes/referrals'
-import { ProjectTemplatesPage } from '@/routes/project-templates'
-import { TeamPayoutsPage } from '@/routes/team-payouts'
-import { PayrollPage } from '@/routes/payroll'
-import { ReportsPage } from '@/routes/reports'
-import { PayslipPage } from '@/routes/payslip'
-import { RemindersPage } from '@/routes/reminders'
-import { ActivityPage } from '@/routes/activity'
-import { InvoiceTemplatesPage } from '@/routes/billing/templates'
-import { MyTasksPage } from '@/routes/tasks/my'
-import { MyShootsPage } from '@/routes/shoots/my'
-import { ShootDetailPage } from '@/routes/shoots/$shootId'
-import { AttendanceUidPage } from '@/routes/attendance/$uid'
-import { AllocationMemberPage } from '@/routes/team-allocation/member/$uid'
-import { MyWorkProjectPage } from '@/routes/my-work/project/$projectId'
 import { RequireAuth } from '@/shared/auth/guards'
 import { AppShell } from '@/shared/layout/AppShell'
+
+// Each page is its own chunk, loaded when it is opened: the first load used to
+// carry the whole studio app (3.25 MB), client links and enquiry forms included.
+const LoginPage = lazyRouteComponent(() => import('@/routes/login'), 'LoginPage')
+const HomePage = lazyRouteComponent(() => import('@/routes/home'), 'HomePage')
+const MyProfilePage = lazyRouteComponent(() => import('@/routes/my-profile'), 'MyProfilePage')
+const LeavePage = lazyRouteComponent(() => import('@/routes/leave'), 'LeavePage')
+const ContactPage = lazyRouteComponent(() => import('@/routes/legal'), 'ContactPage')
+const DataDeletionPage = lazyRouteComponent(() => import('@/routes/legal'), 'DataDeletionPage')
+const PrivacyPage = lazyRouteComponent(() => import('@/routes/legal'), 'PrivacyPage')
+const RefundPage = lazyRouteComponent(() => import('@/routes/legal'), 'RefundPage')
+const TermsPage = lazyRouteComponent(() => import('@/routes/legal'), 'TermsPage')
+const HelpSetupPage = lazyRouteComponent(() => import('@/routes/help-setup'), 'HelpSetupPage')
+const HelpWhatsAppPage = lazyRouteComponent(() => import('@/routes/help-whatsapp'), 'HelpWhatsAppPage')
+const HelpPage = lazyRouteComponent(() => import('@/routes/help'), 'HelpPage')
+const LearnPage = lazyRouteComponent(() => import('@/routes/learn'), 'LearnPage')
+const CompleteSetupPage = lazyRouteComponent(() => import('@/routes/complete-setup'), 'CompleteSetupPage')
+const VerifyEmailPage = lazyRouteComponent(() => import('@/routes/verify'), 'VerifyEmailPage')
+const ResetPasswordPage = lazyRouteComponent(() => import('@/routes/reset-password'), 'ResetPasswordPage')
+const AcceptInvitePage = lazyRouteComponent(() => import('@/routes/accept-invite'), 'AcceptInvitePage')
+const NoAccountPage = lazyRouteComponent(() => import('@/routes/no-account'), 'NoAccountPage')
+const PlanExpiredPage = lazyRouteComponent(() => import('@/routes/plan-expired'), 'PlanExpiredPage')
+const DashboardPage = lazyRouteComponent(() => import('@/routes/dashboard'), 'DashboardPage')
+const ProjectsListPage = lazyRouteComponent(() => import('@/routes/projects/list'), 'ProjectsListPage')
+const NewProjectPage = lazyRouteComponent(() => import('@/routes/projects/new'), 'NewProjectPage')
+const ProjectDetailPage = lazyRouteComponent(() => import('@/routes/projects/detail'), 'ProjectDetailPage')
+const ProjectEditPage = lazyRouteComponent(() => import('@/routes/projects/$id.edit'), 'ProjectEditPage')
+const ProjectQuotationPage = lazyRouteComponent(() => import('@/routes/projects/$id.quotation'), 'ProjectQuotationPage')
+const ProjectTrackingPage = lazyRouteComponent(() => import('@/routes/project-tracking'), 'ProjectTrackingPage')
+const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
+const ShootsPage = lazyRouteComponent(() => import('@/routes/shoots'), 'ShootsPage')
+const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
+const ProductionBoardPage = lazyRouteComponent(() => import('@/routes/production-board'), 'ProductionBoardPage')
+const TasksPage = lazyRouteComponent(() => import('@/routes/tasks'), 'TasksPage')
+const TeamAllocationPage = lazyRouteComponent(() => import('@/routes/team-allocation'), 'TeamAllocationPage')
+const DataManagementPage = lazyRouteComponent(() => import('@/routes/data-management'), 'DataManagementPage')
+const MyWorkPage = lazyRouteComponent(() => import('@/routes/my-work'), 'MyWorkPage')
+const BillingPage = lazyRouteComponent(() => import('@/routes/billing'), 'BillingPage')
+const InvoicesPage = lazyRouteComponent(() => import('@/routes/billing/invoices'), 'InvoicesPage')
+const PaymentsPage = lazyRouteComponent(() => import('@/routes/billing/payments'), 'PaymentsPage')
+const PaymentReceiptPage = lazyRouteComponent(() => import('@/routes/billing/payment-receipt'), 'PaymentReceiptPage')
+const PublicInvoicePage = lazyRouteComponent(() => import('@/routes/public-invoice'), 'PublicInvoicePage')
+const StopEmailsPage = lazyRouteComponent(() => import('@/routes/stop-emails'), 'StopEmailsPage')
+const ClientPortalInvoicePage = lazyRouteComponent(() => import('@/routes/client-portal'), 'ClientPortalInvoicePage')
+const ClientPortalPage = lazyRouteComponent(() => import('@/routes/client-portal'), 'ClientPortalPage')
+const ClientPortalTermsPage = lazyRouteComponent(() => import('@/routes/client-portal'), 'ClientPortalTermsPage')
+const ClientPortalPreviewPage = lazyRouteComponent(() => import('@/routes/client-portal-preview'), 'ClientPortalPreviewPage')
+const InvoiceDetailPage = lazyRouteComponent(() => import('@/routes/invoice-detail'), 'InvoiceDetailPage')
+const CompanyExpensesPage = lazyRouteComponent(() => import('@/routes/company-expenses'), 'CompanyExpensesPage')
+const FinancialsPage = lazyRouteComponent(() => import('@/routes/financials'), 'FinancialsPage')
+const FollowUpsPage = lazyRouteComponent(() => import('@/routes/follow-ups'), 'FollowUpsPage')
+const CrmSetupPage = lazyRouteComponent(() => import('@/routes/follow-ups/setup'), 'CrmSetupPage')
+const CrmReportsPage = lazyRouteComponent(() => import('@/routes/follow-ups/reports'), 'CrmReportsPage')
+const CallQueuePage = lazyRouteComponent(() => import('@/routes/follow-ups/queue'), 'CallQueuePage')
+const SendNowPage = lazyRouteComponent(() => import('@/routes/follow-ups/send'), 'SendNowPage')
+const AttendancePage = lazyRouteComponent(() => import('@/routes/attendance'), 'AttendancePage')
+const MyAttendancePage = lazyRouteComponent(() => import('@/routes/attendance'), 'MyAttendancePage')
+const MyPerformancePage = lazyRouteComponent(() => import('@/routes/performance'), 'MyPerformancePage')
+const TeamPerformancePage = lazyRouteComponent(() => import('@/routes/performance'), 'TeamPerformancePage')
+const MyPayoutsPage = lazyRouteComponent(() => import('@/routes/my-payouts'), 'MyPayoutsPage')
+const NotificationsPage = lazyRouteComponent(() => import('@/routes/notifications'), 'NotificationsPage')
+const EmployeesPage = lazyRouteComponent(() => import('@/routes/employees'), 'EmployeesPage')
+const TeamSalariesPage = lazyRouteComponent(() => import('@/routes/team-salaries'), 'TeamSalariesPage')
+const EmployeeDetailPage = lazyRouteComponent(() => import('@/routes/employees/$id'), 'EmployeeDetailPage')
+const SubscriptionPage = lazyRouteComponent(() => import('@/routes/subscription'), 'SubscriptionPage')
+const SettingsPage = lazyRouteComponent(() => import('@/routes/settings'), 'SettingsPage')
+const DeliveryStagesPage = lazyRouteComponent(() => import('@/routes/delivery-stages'), 'DeliveryStagesPage')
+const RolesAccessPage = lazyRouteComponent(() => import('@/routes/settings/roles'), 'RolesAccessPage')
+const TeamTermsPage = lazyRouteComponent(() => import('@/routes/settings/team-terms'), 'TeamTermsPage')
+const AppearancePage = lazyRouteComponent(() => import('@/routes/settings/appearance'), 'AppearancePage')
+const TermsAcknowledgePage = lazyRouteComponent(() => import('@/routes/terms-acknowledge'), 'TermsAcknowledgePage')
+const QuoteAcceptPage = lazyRouteComponent(() => import('@/routes/quote-accept'), 'QuoteAcceptPage')
+const TeamTermsAcknowledgePage = lazyRouteComponent(() => import('@/routes/team-terms-acknowledge'), 'TeamTermsAcknowledgePage')
+const QuotationPage = lazyRouteComponent(() => import('@/routes/quotation'), 'QuotationPage')
+const ReceiptPage = lazyRouteComponent(() => import('@/routes/receipt'), 'ReceiptPage')
+const DeliveryPage = lazyRouteComponent(() => import('@/routes/delivery'), 'DeliveryPage')
+const ReferPage = lazyRouteComponent(() => import('@/routes/refer'), 'ReferPage')
+const EnquirePage = lazyRouteComponent(() => import('@/routes/enquire'), 'EnquirePage')
+const EnquiryViewPage = lazyRouteComponent(() => import('@/routes/enquire'), 'EnquiryViewPage')
+const ClientDetailsPage = lazyRouteComponent(() => import('@/routes/client-details'), 'ClientDetailsPage')
+const EnquiryFormDetailPage = lazyRouteComponent(() => import('@/routes/enquiry-forms'), 'EnquiryFormDetailPage')
+const EnquiryFormsPage = lazyRouteComponent(() => import('@/routes/enquiry-forms'), 'EnquiryFormsPage')
+const ProjectDocumentsPage = lazyRouteComponent(() => import('@/routes/project-documents'), 'ProjectDocumentsPage')
+const TeamWorkPreviewPage = lazyRouteComponent(() => import('@/routes/team-work-preview'), 'TeamWorkPreviewPage')
+const PlatformStudiosPage = lazyRouteComponent(() => import('@/routes/platform/studios'), 'PlatformStudiosPage')
+const PlatformUsagePage = lazyRouteComponent(() => import('@/routes/platform/usage'), 'PlatformUsagePage')
+const PlatformFeedbackPage = lazyRouteComponent(() => import('@/routes/platform/feedback'), 'PlatformFeedbackPage')
+const PlatformDiamondPage = lazyRouteComponent(() => import('@/routes/platform/diamond'), 'PlatformDiamondPage')
+const SystemPage = lazyRouteComponent(() => import('@/routes/settings/system'), 'SystemPage')
+const MessagingSettingsPage = lazyRouteComponent(() => import('@/routes/settings/messaging'), 'MessagingSettingsPage')
+const WhatsappSettingsPage = lazyRouteComponent(() => import('@/routes/settings/whatsapp'), 'WhatsappSettingsPage')
+const PlatformMessagingPage = lazyRouteComponent(() => import('@/routes/platform/messaging'), 'PlatformMessagingPage')
+const PlatformEmailPage = lazyRouteComponent(() => import('@/routes/platform/email'), 'PlatformEmailPage')
+const PlatformPaymentsPage = lazyRouteComponent(() => import('@/routes/platform/payments'), 'PlatformPaymentsPage')
+const PlatformHelpPage = lazyRouteComponent(() => import('@/routes/platform/help'), 'PlatformHelpPage')
+const AdvancedSettingsPage = lazyRouteComponent(() => import('@/routes/settings/advanced'), 'AdvancedSettingsPage')
+const TaskBundlesPage = lazyRouteComponent(() => import('@/routes/settings/task-bundles'), 'TaskBundlesPage')
+const AttendanceLocationPage = lazyRouteComponent(() => import('@/routes/settings/attendance-location'), 'AttendanceLocationPage')
+const LookupsPage = lazyRouteComponent(() => import('@/routes/settings/lookups'), 'LookupsPage')
+const VendorsPage = lazyRouteComponent(() => import('@/routes/settings/vendors'), 'VendorsPage')
+const ClientFormPage = lazyRouteComponent(() => import('@/routes/settings/client-form'), 'ClientFormPage')
+const ReferAStudioPage = lazyRouteComponent(() => import('@/routes/settings/refer-a-studio'), 'ReferAStudioPage')
+const PlatformStudioReferralsPage = lazyRouteComponent(() => import('@/routes/platform/studio-referrals'), 'PlatformStudioReferralsPage')
+const ReferralsPage = lazyRouteComponent(() => import('@/routes/referrals'), 'ReferralsPage')
+const ProjectTemplatesPage = lazyRouteComponent(() => import('@/routes/project-templates'), 'ProjectTemplatesPage')
+const TeamPayoutsPage = lazyRouteComponent(() => import('@/routes/team-payouts'), 'TeamPayoutsPage')
+const PayrollPage = lazyRouteComponent(() => import('@/routes/payroll'), 'PayrollPage')
+const ReportsPage = lazyRouteComponent(() => import('@/routes/reports'), 'ReportsPage')
+const PayslipPage = lazyRouteComponent(() => import('@/routes/payslip'), 'PayslipPage')
+const RemindersPage = lazyRouteComponent(() => import('@/routes/reminders'), 'RemindersPage')
+const ActivityPage = lazyRouteComponent(() => import('@/routes/activity'), 'ActivityPage')
+const InvoiceTemplatesPage = lazyRouteComponent(() => import('@/routes/billing/templates'), 'InvoiceTemplatesPage')
+const MyTasksPage = lazyRouteComponent(() => import('@/routes/tasks/my'), 'MyTasksPage')
+const MyShootsPage = lazyRouteComponent(() => import('@/routes/shoots/my'), 'MyShootsPage')
+const ShootDetailPage = lazyRouteComponent(() => import('@/routes/shoots/$shootId'), 'ShootDetailPage')
+const AttendanceUidPage = lazyRouteComponent(() => import('@/routes/attendance/$uid'), 'AttendanceUidPage')
+const AllocationMemberPage = lazyRouteComponent(() => import('@/routes/team-allocation/member/$uid'), 'AllocationMemberPage')
+const MyWorkProjectPage = lazyRouteComponent(() => import('@/routes/my-work/project/$projectId'), 'MyWorkProjectPage')
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -180,11 +195,11 @@ function LegacyRedirect() {
 }
 
 /** Public: no session, no shell. */
-const publicRoute = (path: string, component: () => ReactNode): AnyRoute =>
+const publicRoute = (path: string, component: RouteComponent): AnyRoute =>
   createRoute({ getParentRoute: () => rootRoute, path, component })
 
 /** Signed in: the shell is already around it. */
-const route = (path: string, component: () => ReactNode): AnyRoute =>
+const route = (path: string, component: RouteComponent): AnyRoute =>
   createRoute({ getParentRoute: () => authedLayout, path, component })
 
 const routeTree = rootRoute.addChildren([

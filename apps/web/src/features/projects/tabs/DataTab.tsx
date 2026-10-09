@@ -15,6 +15,7 @@ import { byAge, figures, nextAction } from '@/features/data/board-model'
 import { STAGE_LABEL, STAGE_TONE } from '@/features/data/stage'
 import { cardsLine } from '@/features/data/cards'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 const shortDay = (iso: string | null) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : null
@@ -180,8 +181,8 @@ export function DataTab({ projectId }: { projectId: string }) {
             user_id: opened.user_id ?? '',
             user_name: opened.user_name,
             service_name: opened.role,
-            start_at: opened.start_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-            end_at: opened.end_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+            start_at: opened.start_at ?? `${opened.shoot_date ?? todayInIndia()}T00:00:00.000Z`,
+            end_at: opened.end_at ?? `${opened.shoot_date ?? todayInIndia()}T00:00:00.000Z`,
           }}
           record={opened.record ?? undefined}
           onClose={() => setOpened(null)}
