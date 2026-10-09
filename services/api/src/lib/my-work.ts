@@ -58,6 +58,19 @@ export function selectMyDeliverables(
              order by r.created_at
              limit 1) as data_where,
            ab.name as assigned_by_name,
+           (select jsonb_build_object('id', n.id, 'kind', n.kind, 'body', n.body, 'file_id', n.file_id,
+                                      'duration_seconds', n.duration_seconds, 'author_name', au.name,
+                                      'created_at', n.created_at)
+              from deliverable_notes n
+              left join users au on au.user_id = n.author_id and au.company_id = n.company_id
+             where n.deliverable_id = d.id and n.kind in ('text', 'voice')
+               and n.author_id is distinct from ${o.userId}::uuid
+             order by n.created_at desc
+             limit 1) as last_note,
+           (select count(*)::int from notifications nt
+             where nt.company_id = d.company_id and nt.recipient_uid = ${o.userId}::uuid
+               and nt.type = 'deliverable_note' and nt.entity_type = 'deliverable'
+               and nt.entity_id = d.id and nt.read_at is null) as unread_notes,
            case when d.status in ('completed', 'cancelled') then coalesce(d.delivered_at, d.updated_at) end as done_at
       from mine d
       join projects p on p.id = d.project_id

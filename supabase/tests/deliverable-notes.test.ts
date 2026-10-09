@@ -13,6 +13,7 @@ const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 const OWNER = 'd0000000-0000-4000-8000-000000000001'
 const EDITOR = 'd0000000-0000-4000-8000-000000000002'
 const OTHER_OWNER = 'd0000000-0000-4000-8000-000000000003'
+const MANAGER = 'd0000000-0000-4000-8000-000000000004'
 const COMPANY = 'd0000000-0000-4000-8000-0000000000aa'
 const OTHER = 'd0000000-0000-4000-8000-0000000000ab'
 const CLIENT = 'd0000000-0000-4000-8000-0000000000c1'
@@ -41,12 +42,13 @@ beforeAll(async () => {
     await db.exec(readFileSync(join(migDir, f), 'utf8'))
   }
   await db.exec(`
-    insert into auth.users (id, email) values ('${OWNER}', 'o@s.test'), ('${EDITOR}', 'e@s.test'), ('${OTHER_OWNER}', 'x@t.test');
+    insert into auth.users (id, email) values ('${OWNER}', 'o@s.test'), ('${EDITOR}', 'e@s.test'), ('${OTHER_OWNER}', 'x@t.test'), ('${MANAGER}', 'm@s.test');
     insert into companies (id, name, owner_user_id) values
       ('${COMPANY}', 'Studio', '${OWNER}'), ('${OTHER}', 'Other', '${OTHER_OWNER}');
     insert into users (user_id, company_id, role, name, email) values
       ('${OWNER}', '${COMPANY}', 'super_admin', 'Owner', 'o@s.test'),
       ('${EDITOR}', '${COMPANY}', 'employee', 'Rahul', 'e@s.test'),
+      ('${MANAGER}', '${COMPANY}', 'manager', 'Asha', 'm@s.test'),
       ('${OTHER_OWNER}', '${OTHER}', 'super_admin', 'Other', 'x@t.test');
     insert into clients (id, company_id, name) values ('${CLIENT}', '${COMPANY}', 'Sharma'), ('${OTHER_CLIENT}', '${OTHER}', 'Them');
     insert into projects (id, company_id, client_id, name, package_cost, created_by) values
@@ -123,15 +125,26 @@ describe('stage history', () => {
 })
 
 describe('telling the other side', () => {
-  it('tells the editor when someone else writes, with a link straight to it', async () => {
+  it('tells the editor when someone else writes, with a link to it on their own My work', async () => {
     await db.exec(`insert into deliverable_notes (deliverable_id, kind, file_id, duration_seconds) values ('${DELIVERABLE}', 'voice', '${FILE}', 8)`)
     const [n] = await notificationsFor(EDITOR)
     expect(n).toMatchObject({ type: 'deliverable_note', title: 'Owner sent a voice note on Wedding Film' })
-    expect(n!.deep_link).toBe(`/projects/${PROJECT}?tab=deliverables&d=${DELIVERABLE}`)
+    expect(n!.deep_link).toBe(`/my-work?d=${DELIVERABLE}`)
     expect(await notificationsFor(OWNER)).toHaveLength(0)
   })
 
-  it('tells the project owner when the editor writes', async () => {
+  it('sends the editor reply to whoever wrote to them (0253), not the project creator', async () => {
+    await as(MANAGER)
+    await db.exec(`insert into deliverable_notes (deliverable_id, kind, file_id, duration_seconds) values ('${DELIVERABLE}', 'voice', '${FILE}', 8)`)
+    await as(EDITOR)
+    await db.exec(`insert into deliverable_notes (deliverable_id, kind, body) values ('${DELIVERABLE}', 'text', 'On it')`)
+    expect(await notificationsFor(MANAGER)).toEqual([
+      { type: 'deliverable_note', title: 'Rahul left a note on Wedding Film', deep_link: `/projects/${PROJECT}?tab=deliverables&d=${DELIVERABLE}` },
+    ])
+    expect(await notificationsFor(OWNER)).toHaveLength(0)
+  })
+
+  it('tells the project owner when the editor writes first', async () => {
     await as(EDITOR)
     await db.exec(`insert into deliverable_notes (deliverable_id, kind, body) values ('${DELIVERABLE}', 'text', 'First cut is up')`)
     expect((await notificationsFor(OWNER))[0]).toMatchObject({ title: 'Rahul left a note on Wedding Film' })

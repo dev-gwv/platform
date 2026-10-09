@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { useMyDeliverables } from '@/features/projects/api'
-import { workSummary } from '@/features/my-work/summary'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Ban, Bell, CalendarDays, CheckCircle2, Clock, ExternalLink, Layers, Mic, Pencil, Send } from 'lucide-react'
+import { AlertCircle, Ban, CalendarDays, CheckCircle2, Clock, ExternalLink, Filter, Mic, Pencil, Send } from 'lucide-react'
+import { daysLeftText, daysUntil, todayInIndia } from '@/shared/ui/days-left'
+import { shortDayLabel } from '@/shared/ui/time-format'
 import { WORK_STATUS_LABEL, shootListItem, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -18,13 +18,12 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { assigneeStatusOptions } from '@/features/tasks/delegation'
 import { useProjects } from '@/features/projects/api'
-import { useRevokeDelivery, useWorkReminderSettings } from '@/features/work/api'
+import { useRevokeDelivery } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
 import { MyDeliverables } from '@/features/projects/MyDeliverables'
-import { StartNowCard } from '@/features/projects/StartNowCard'
 import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
 import { useConfirm } from '@/shared/ui/confirm'
-import { STATUS_LABEL, todayISO } from '@/features/tasks/board'
+import { STATUS_LABEL } from '@/features/tasks/board'
 
 const list = workSubmission.array()
 const shootsList = shootListItem.array()
@@ -72,16 +71,16 @@ interface TaskRow {
 }
 
 function MyWork() {
-  const today = todayISO()
+  const today = todayInIndia()
   const tasksQ = useMyTasks()
   const subsQ = useMySubmissions()
   const shootsQ = useMyShoots()
   const { data: projects } = useProjects()
-  const reminders = useWorkReminderSettings()
   const move = useUpdateMyTaskStatus()
   // Sending to the client is the reviewer's call; the API refuses anyone else.
   const canDeliver = useAccess().hasAction('team_work_preview', 'edit')
 
+  const [filtering, setFiltering] = useState(false)
   const [sort, setSort] = useState<SortKey>('due_asc')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [projectFilter, setProjectFilter] = useState<string>('all')
@@ -120,9 +119,6 @@ function MyWork() {
     }))
   }, [tasks, submissions, projectById])
 
-  // Summary: due today / pending / in review / overdue.
-  const { data: edits = [] } = useMyDeliverables({ done: 14 })
-  const summary = useMemo(() => workSummary(tasks, submissions, edits, today), [tasks, submissions, edits, today])
 
   const rows: TaskRow[] = useMemo(() => {
     const cmp = (a: TaskRow, b: TaskRow) => {
@@ -163,7 +159,6 @@ function MyWork() {
 
   const loading = tasksQ.isLoading || subsQ.isLoading
   const failed = tasksQ.isError || subsQ.isError
-  const reminderDays = reminders.data?.enabled ? (reminders.data.reminder_days ?? []) : []
 
   function changeStatus(t: TaskListItem, status: TaskStatus) {
     move.mutate({ id: t.id, status })
@@ -198,7 +193,7 @@ function MyWork() {
                     <StatusBadge tone={t.status === 'completed' ? 'success' : t.status === 'in_progress' ? 'info' : 'neutral'}>
                       {STATUS_LABEL[t.status]}
                     </StatusBadge>
-                    {t.due_date && <StatusBadge tone={overdue ? 'danger' : t.due_date === today ? 'warning' : 'neutral'}>{overdue ? `Overdue · ${t.due_date}` : t.due_date === today ? 'Due today' : t.due_date}</StatusBadge>}
+                    {t.due_date && <StatusBadge tone={overdue ? 'danger' : t.due_date === today ? 'warning' : 'neutral'}>{daysLeftText(daysUntil(t.due_date, today))}</StatusBadge>}
                     {submission && <StatusBadge tone={TONE[submission.status]}>{WORK_STATUS_LABEL[submission.status]}</StatusBadge>}
                   </div>
                 </div>
@@ -207,7 +202,7 @@ function MyWork() {
                   <div className="flex flex-wrap gap-1.5 text-xs">
                     {linked.map((s) => (
                       <span key={s.id} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-muted-foreground">
-                        <CalendarDays className="size-3" /> {s.name}{s.shoot_date ? ` · ${s.shoot_date}` : ''}
+                        <CalendarDays className="size-3" /> {s.name}{s.shoot_date ? ` · ${shortDayLabel(s.shoot_date) ?? s.shoot_date}` : ''}
                       </span>
                     ))}
                   </div>
@@ -248,35 +243,11 @@ function MyWork() {
 
   return (
     <>
-      <PageHeader
-        title="My work"
-        description="Your tasks, deliverables, shoot details, and submissions."
-        actions={<SubmitDialog />}
-      />
+      <PageHeader title="My work" actions={<SubmitDialog />} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <SummaryCard label="Due today" value={summary.dueToday} icon={CalendarDays} />
-        <SummaryCard label="Pending" value={summary.pending} icon={Clock} />
-        <SummaryCard label="In review" value={summary.inReview} icon={Layers} />
-        <SummaryCard label="Overdue" value={summary.overdue} icon={AlertCircle} warn={summary.overdue > 0} />
-        <SummaryCard label="Completed" value={summary.completed} icon={CheckCircle2} />
-      </div>
-
-      <StartNowCard />
+      {/* One list a phone can read: the edits (each once, with its one
+          word), then the tasks. No figure tiles, no second "start now" list. */}
       <MyDeliverables />
-
-      {reminderDays.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
-          <Bell className="size-3.5 text-muted-foreground" />
-          <span className="font-medium">Reminders:</span>
-          {reminderDays.map((d) => (
-            <span key={d} className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-primary">
-              {d === 0 ? 'On due date' : `${d}d before`}
-            </span>
-          ))}
-          <Link to="/reminders" className="ml-auto text-primary hover:underline">Manage reminders</Link>
-        </div>
-      )}
 
       {projectTabs.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
@@ -287,7 +258,13 @@ function MyWork() {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => setFiltering((v) => !v)} aria-expanded={filtering}>
+          <Filter /> Filter
+        </Button>
+      </div>
+      {filtering && (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Sort</span>
         <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-8 w-56">
           <option value="due_asc">Due date: nearest first</option>
@@ -304,6 +281,7 @@ function MyWork() {
           <option value="completed">Completed</option>
         </Select>
       </div>
+      )}
 
       <div className="mt-4">
         {loading ? (
@@ -341,22 +319,6 @@ function MyWork() {
         />
       )}
     </>
-  )
-}
-
-function SummaryCard({ label, value, icon: Icon, warn }: { label: string; value: number; icon: typeof Clock; warn?: boolean }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <span className={warn ? 'text-destructive' : 'text-primary'}>
-          <Icon className="size-4" />
-        </span>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold tabular-nums">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 

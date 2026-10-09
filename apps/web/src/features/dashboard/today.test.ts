@@ -115,6 +115,25 @@ describe("a team member's day", () => {
     expect(next.map((i) => i.note)).toEqual(['Start Mon, 26 Oct', '6 days left · Thu, 29 Oct'])
   })
 
+  it('puts a note waiting to be heard at the top, saying who sent it and when', () => {
+    const { today } = myDay({
+      ...base,
+      now: NOW,
+      edits: [
+        edit('Album', { start_by: '2026-10-20' }),
+        edit('Wedding film', {
+          unread_notes: 1,
+          last_note: {
+            id: id(), kind: 'voice', body: null, file_id: id(), duration_seconds: 12,
+            author_name: 'Asha Mehra', created_at: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
+          },
+        }),
+      ],
+    })
+    expect(today.map((i) => i.note)).toEqual(['Start · 3 days late', 'Asha sent you a voice note · 2 h ago'])
+    expect(today[1]).toMatchObject({ kind: 'edit', heard: false })
+  })
+
   it('marks a call late once its hour has gone, and asks for cards still owed', () => {
     const shot = slot({ start_at: at('2026-10-20', 10), end_at: at('2026-10-20', 14) })
     const { today } = myDay({

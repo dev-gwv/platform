@@ -65,6 +65,24 @@ export const meRouter = new Hono<AppEnv>()
   })
 
   // Email copies of my alerts (0227): on unless I turned them off.
+  // The notes on one of their deliverables have been heard: its alerts are
+  // read, so Home stops putting it at the top. Only the caller's own alerts.
+  .post('/deliverables/:id/notes-read', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'me.notes_read', () =>
+      withService(c.env, (sql) => sql<{ id: string }[]>`
+        update notifications
+           set read_at = now()
+         where company_id = ${auth.companyId} and recipient_uid = ${auth.userId}
+           and type = 'deliverable_note' and entity_type = 'deliverable'
+           and entity_id = ${id} and read_at is null
+        returning id`),
+    )
+    if (!rows) fail(400, 'We could not mark those notes as heard.')
+    return c.json({ read: rows.length })
+  })
+
   .get('/alert-emails', async (c) => {
     const auth = c.get('auth')
     const rows = await attempt(c, 'me.alert_emails', () =>

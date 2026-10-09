@@ -176,6 +176,18 @@ export function useMyDeliverables(opts: { done?: number } = {}) {
   })
 }
 
+/** The notes on one of my deliverables are heard: Home stops raising it. */
+export function useNotesHeard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/me/deliverables/${id}/notes-read`, { method: 'POST', responseSchema: z.unknown() }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['projects', 'my-deliverables'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
 /** The editor says "I've started" -- which stops the start reminders. */
 export function useStartDeliverable() {
   const qc = useQueryClient()

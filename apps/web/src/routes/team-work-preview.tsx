@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, ClipboardList, Camera, FileCheck } from 'lucide-react'
-import { WORK_STATUS_LABEL, taskListItem, shootListItem, z } from '@ipc/contracts'
+import { Eye, ClipboardList, Camera, FileCheck, Film, Mic } from 'lucide-react'
+import { WORK_STATUS_LABEL, myDeliverable, taskListItem, shootListItem, z } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Select } from '@/shared/ui/input'
@@ -15,6 +15,8 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { useDirectory } from '@/features/team/api'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { ReviewButtons } from '@/features/work/ReviewButtons'
+import { noteLine } from '@/features/dashboard/today'
+import { daysLeftText, daysUntil, todayInIndia } from '@/shared/ui/days-left'
 
 const tasksList = taskListItem.array()
 const shootsList = shootListItem.array()
@@ -58,6 +60,12 @@ function TeamWorkPreview() {
     queryFn: () => callApi(`/shoots?assignee=${userId}`, { responseSchema: shootsList }),
     enabled: !!session && !!userId,
   })
+  // Their edits, exactly as their own My work and Home read them.
+  const edits = useQuery({
+    queryKey: ['team-work-preview', 'edits', userId],
+    queryFn: () => callApi(`/projects/deliverables/mine?user=${userId}`, { responseSchema: myDeliverable.array() }),
+    enabled: !!session && !!userId,
+  })
   const submissions = useQuery({
     queryKey: ['team-work-preview', 'submissions', userId],
     queryFn: () => callApi(`/work/submissions?user_id=${userId}`, { responseSchema: submissionsList }),
@@ -93,10 +101,38 @@ function TeamWorkPreview() {
 
       {!userId ? (
         <div className="mt-4">
-          <EmptyState title="Nobody selected" description="Pick a team member above to see their tasks, shoots and submissions." />
+          <EmptyState title="Nobody selected" description="Pick a team member above to see their edits, tasks, shoots and submissions." />
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <Section title="Edits" icon={Film} loading={edits.isLoading}>
+            {(edits.data ?? []).length === 0 ? (
+              <EmptyState title="No edits given" />
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {(edits.data ?? []).map((d) => (
+                  <li key={d.id} className="rounded-lg border border-border p-3 text-sm">
+                    <p className="font-medium">{d.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{d.project_name}</span>
+                      {d.changes_requested && <StatusBadge tone="danger">Changes requested</StatusBadge>}
+                      {d.estimated_date && <span>· {daysLeftText(daysUntil(d.estimated_date, todayInIndia()))}</span>}
+                      {d.voice_count > 0 && (
+                        <span className="inline-flex items-center gap-1"><Mic className="size-3" aria-hidden /> {d.voice_count}</span>
+                      )}
+                    </div>
+                    {d.last_note && (
+                      <p className={d.unread_notes > 0 ? 'mt-1 text-xs font-medium text-warning' : 'mt-1 text-xs text-muted-foreground'}>
+                        {noteLine(d.last_note, new Date())}
+                        {d.unread_notes > 0 ? ' · not heard yet' : ' · heard'}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
           <Section title="Tasks" icon={ClipboardList} loading={tasks.isLoading}>
             {(tasks.data ?? []).length === 0 ? (
               <EmptyState title="No tasks assigned" />

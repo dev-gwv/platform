@@ -27,6 +27,8 @@ export interface TodayItem {
   task?: TaskListItem
   edit?: MyDeliverable
   call?: MyFollowUp
+  /** An edit raised because a note to the editor is waiting to be heard. */
+  heard?: boolean
 }
 
 export interface DayInput {
@@ -55,6 +57,15 @@ const daysBetween = (from: string, to: string) =>
 
 export function lateText(days: number): string {
   return days === 1 ? '1 day late' : `${days} days late`
+}
+
+/** "Asha sent you a voice note · 2 h ago" -- who, what, and how long it has waited. */
+export function noteLine(n: { kind: 'text' | 'voice'; author_name: string | null; created_at: string }, now: Date): string {
+  const who = n.author_name?.split(' ')[0] || 'Someone'
+  const what = n.kind === 'voice' ? 'sent you a voice note' : 'left you a note'
+  const mins = Math.max(0, Math.round((now.getTime() - new Date(n.created_at).getTime()) / 60_000))
+  const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 24 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`
+  return `${who} ${what} · ${ago}`
 }
 
 /** "Fri, 23 Oct" for anything after today. */
@@ -118,11 +129,13 @@ export function myDay(input: DayInput): { today: TodayItem[]; next: TodayItem[] 
     }
   }
 
-  // Edits: sent back, late to start, or due; the week's after.
+  // Edits: a note waiting to be heard, sent back, late to start, or due; the week's after.
   for (const d of input.edits) {
     const title = `${d.title} · ${d.project_name}`
     const base = { kind: 'edit' as const, id: d.id, title, edit: d }
-    if (d.changes_requested) {
+    if (d.unread_notes > 0 && d.last_note) {
+      todayList.push({ ...base, note: noteLine(d.last_note, input.now), late: false, sort: '04', heard: false })
+    } else if (d.changes_requested) {
       todayList.push({ ...base, note: 'Sent back for changes', late: false, sort: '05' })
     } else if (!d.started_at && d.start_by && d.start_by <= today) {
       const n = daysBetween(d.start_by, today)

@@ -1015,11 +1015,20 @@ export const projectsRouter = new Hono<AppEnv>()
     const auth = c.get('auth')
     // ?done=14 also brings what was delivered in the last 14 days.
     const done = Math.max(0, Math.min(Number(c.req.query('done') ?? 0) || 0, 60))
-    // A service read, scoped here to the caller's own edits in their studio:
+    // ?user= is "See what Nitin sees": someone else's list, for whoever may
+    // preview the team's work. Always inside the caller's own studio.
+    const other = c.req.query('user')
+    let userId = auth.userId
+    if (other && other !== auth.userId) {
+      if (!/^[0-9a-f-]{36}$/i.test(other)) fail(422, 'That is not a team member.')
+      if (!auth.isOwner && !auth.access.hasModule('team_work_preview')) fail(403, 'You cannot preview other people’s work.')
+      userId = other
+    }
+    // A service read, scoped here to one person's edits in the caller's studio:
     // row security would hide the shooters' data records, and whether the
     // data is in -- and where -- is the point.
     const rows = await attempt(c, 'projects.deliverables_mine', () =>
-      withService(c.env, (sql) => selectMyDeliverables(sql, { companyId: auth.companyId, userId: auth.userId, done })),
+      withService(c.env, (sql) => selectMyDeliverables(sql, { companyId: auth.companyId, userId, done })),
     )
     if (!rows) fail(400, 'We could not load your deliverables.')
     return c.json(myDeliverable.array().parse(rows))
