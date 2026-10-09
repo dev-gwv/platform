@@ -36,7 +36,7 @@ function SendNow() {
         description={
           items.length
             ? `${items.length} message${items.length === 1 ? '' : 's'} ready. Tap to open it with the words typed in.`
-            : 'Messages your sequences have written, ready to send.'
+            : undefined
         }
       />
       {q.isPending ? (

@@ -129,7 +129,6 @@ function ProjectsList() {
 
       <PageHeader
         title="All Projects"
-        description="Every booked project — what it's worth, what's come in, and what's still due."
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => void exportCsv()} disabled={total === 0 || exporting}>

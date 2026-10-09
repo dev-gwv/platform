@@ -57,7 +57,6 @@ function TeamTerms() {
     <>
       <PageHeader
         title="Team terms"
-        description="What your crew agrees to when you book them."
         actions={
           <div className="flex flex-wrap gap-2">
             <StarterLibrary owned={owned} />

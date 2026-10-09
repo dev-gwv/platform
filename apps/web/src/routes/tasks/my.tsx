@@ -9,7 +9,6 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import {
@@ -208,12 +207,7 @@ function MyTasks() {
 
   return (
     <>
-      <PageHeader title="My tasks" description="Everything assigned to you, most urgent first." />
-      <HowToUse
-        title="Work the list top-down"
-        description="Overdue first, then what is due soonest. Start a task when you pick it up and mark it done when it is."
-        steps={['Pick the top task.', 'Change its status.', 'Attach a voice note when words are faster than typing.']}
-      />
+      <PageHeader title="My tasks" />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryCard label="Due today" value={summary.dueToday} icon={Clock} />

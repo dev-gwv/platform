@@ -122,7 +122,6 @@ function Lookups() {
     <>
       <PageHeader
         title="Lookups"
-        description="Manage dropdown values used across leads, enquiries, expenses and billing."
         actions={<Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>}
       />
       <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5">

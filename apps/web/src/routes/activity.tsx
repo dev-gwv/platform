@@ -64,10 +64,7 @@ function ActivityContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Activity Log"
-        description="See who did what, when — a lightweight trail of actions across the studio."
-      />
+      <PageHeader title="Activity Log" />
 
       <Card>
         <CardContent className="p-4 sm:p-4">

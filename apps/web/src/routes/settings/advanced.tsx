@@ -36,7 +36,7 @@ function Advanced() {
 
   return (
     <>
-      <PageHeader title="Advanced tools" description="Tools you need now and then." />
+      <PageHeader title="Advanced tools" />
       {visible.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           No advanced tools available for your role.

@@ -31,7 +31,7 @@ function Payments() {
 
   return (
     <>
-      <PageHeader title="Payments to check" description="Paid at Razorpay, plan not given yet." />
+      <PageHeader title="Payments to check" />
       {q.isLoading ? (
         <SkeletonList rows={4} columns={4} />
       ) : q.isError || !q.data ? (

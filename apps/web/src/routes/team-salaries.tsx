@@ -10,7 +10,7 @@ import { SalariesTab } from '@/features/team/SalariesTab'
 export function TeamSalariesPage() {
   return (
     <AuthedPage module="team_salaries">
-      <PageHeader title="Monthly salaries" description="Each person's salary for the month, and what has been paid." />
+      <PageHeader title="Monthly salaries" />
       <SalariesTab />
     </AuthedPage>
   )

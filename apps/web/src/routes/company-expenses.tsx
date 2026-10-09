@@ -193,7 +193,6 @@ function Expenses() {
     <>
       <PageHeader
         title="Expenses"
-        description="Every rupee that went out: studio costs and the ones someone paid from their own pocket."
         actions={
           <div className="no-print flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => setCatsOpen(true)}>

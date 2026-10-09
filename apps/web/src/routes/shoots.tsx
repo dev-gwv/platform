@@ -180,7 +180,6 @@ function Shoots() {
     <>
       <PageHeader
         title="Shoots"
-        description="Every scheduled shoot across your projects."
         actions={
           <>
             <Button variant="outline" asChild>

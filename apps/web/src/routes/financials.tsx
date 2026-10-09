@@ -95,7 +95,6 @@ function ProfitAndLossPage() {
     <>
       <PageHeader
         title="Profit & Loss"
-        description="What came in, what it cost, and what is left — every rupee counted once."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={exportGst} disabled={!gst.data} title="GST collected on invoices and paid on expenses, month by month">

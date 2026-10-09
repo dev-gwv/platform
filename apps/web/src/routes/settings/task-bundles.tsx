@@ -52,7 +52,6 @@ function Bundles() {
     <>
       <PageHeader
         title="Task Bundles"
-        description="Reusable task templates that can be applied to projects."
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus /> New bundle

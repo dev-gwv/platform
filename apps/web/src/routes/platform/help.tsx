@@ -35,7 +35,7 @@ function HelpConsole() {
 
   return (
     <>
-      <PageHeader title="Help" description="What studios see when they press Help." />
+      <PageHeader title="Help" />
       {help.isLoading ? (
         <SkeletonList rows={4} />
       ) : help.isError || !help.data ? (

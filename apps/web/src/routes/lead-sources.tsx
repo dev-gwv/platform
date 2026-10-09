@@ -26,7 +26,6 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
@@ -81,27 +80,10 @@ function LeadSources() {
    * check whether leads are arriving.
    */
   const [showMeta, setShowMeta] = useState(false)
-  const hasSources = (data?.length ?? 0) > 0
 
   return (
     <>
-      <PageHeader
-        title="Lead sources"
-        description="The forms and ad campaigns that drop leads straight into your CRM."
-        actions={<NewSourceDialog />}
-      />
-
-      {!hasSources && (
-      <HowToUse
-        title="Connect a source once, then forget it"
-        description="Each source has its own URL. Point a web form or a Meta lead-ads webhook at it and the leads arrive assigned, deduped, and ready to follow up."
-        steps={[
-          'Create a source and copy its URL.',
-          'Point your form or ad account at it.',
-          'Watch the lead count climb here.',
-        ]}
-      />
-      )}
+      <PageHeader title="Lead sources" actions={<NewSourceDialog />} />
 
       <div className="mt-6">
         <MetaConnectionCard />

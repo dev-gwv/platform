@@ -107,7 +107,6 @@ function Usage() {
     <>
       <PageHeader
         title="Usage"
-        description="Heartbeat sessions per studio — route views + 60s visible-tab heartbeats."
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={exportSummary}><Download className="mr-1 size-4" /> Summary</Button>

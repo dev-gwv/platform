@@ -89,7 +89,7 @@ function Payroll() {
 
   return (
     <>
-      <PageHeader title="Payroll" description="Work out, approve and pay the whole team’s salary for a month." />
+      <PageHeader title="Payroll" />
 
       <div className="flex flex-col gap-4">
         {/* Month and what to do next */}

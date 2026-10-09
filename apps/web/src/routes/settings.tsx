@@ -46,7 +46,7 @@ function Settings() {
 
   return (
     <>
-      <PageHeader title="Company profile" description="Your studio's details, as clients see them." />
+      <PageHeader title="Company profile" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <ProfileCard className="lg:col-span-2" canEditCompany={isOwner} />

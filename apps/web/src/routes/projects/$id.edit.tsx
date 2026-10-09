@@ -226,7 +226,6 @@ function ProjectEdit() {
       />
       <PageHeader
         title={`Edit ${data.name}`}
-        description="Project fields up top, live shoot planning below. Nothing saves until you press Save."
         actions={
           <Button variant="outline" size="sm" onClick={() => void onBack()}>
             <ArrowLeft /> Back to project

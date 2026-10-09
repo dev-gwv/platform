@@ -147,7 +147,6 @@ function ClientsList() {
     <>
       <PageHeader
         title="Clients"
-        description="Everyone your studio works with."
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={exportCsv} disabled={exporting.length === 0}>

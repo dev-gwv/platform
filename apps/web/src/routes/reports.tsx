@@ -50,7 +50,7 @@ export function ReportsPage() {
 
   return (
     <>
-      <PageHeader title="Reports" description="How the studio is doing, for any period." />
+      <PageHeader title="Reports" />
 
       <Card>
         <CardContent className="flex flex-col gap-2 p-4">

@@ -145,11 +145,6 @@ function Tasks({ managed }: { managed: boolean }) {
     <>
       <PageHeader
         title={managed ? 'Task management' : 'My tasks'}
-        description={
-          managed
-            ? 'Give work, see who is carrying what, and review it to done.'
-            : 'Do the work, submit a link, and it goes for review.'
-        }
         actions={
           <>
             {managed && <BundlesDialog />}

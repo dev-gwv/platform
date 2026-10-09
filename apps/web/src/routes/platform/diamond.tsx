@@ -53,7 +53,7 @@ function Claims() {
 
   return (
     <>
-      <PageHeader title="IPC Diamond claims" description="Studios that sent a screenshot of the IPC Diamonds - Premium group." />
+      <PageHeader title="IPC Diamond claims" />
       <FilterTabs
         value={status}
         onChange={(v) => setStatus(v)}

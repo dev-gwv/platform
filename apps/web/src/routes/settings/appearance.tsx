@@ -195,7 +195,7 @@ function Appearance() {
   if (isLoading) {
     return (
       <>
-        <PageHeader title="Theme & Branding" description="How your studio's dashboard looks." />
+        <PageHeader title="Theme & Branding" />
         <SkeletonCards count={3} />
       </>
     )
@@ -203,10 +203,7 @@ function Appearance() {
 
   return (
     <>
-      <PageHeader
-        title="Theme & Branding"
-        description="Pick the palette and typeface your whole studio sees."
-      />
+      <PageHeader title="Theme & Branding" />
 
       <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4 text-sm">
         <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />

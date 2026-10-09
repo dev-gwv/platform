@@ -8,7 +8,6 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SkeletonList, SkeletonTiles } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { Select } from '@/shared/ui/input'
 import { StatCard } from '@/shared/ui/stat-card'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -63,15 +62,7 @@ function System({ focus }: { focus?: 'services' | 'work-submissions' | undefined
   }, [focus])
   return (
     <>
-      <PageHeader
-        title="System"
-        description="What changed, who changed it, and whether the machinery behind the studio is running."
-      />
-      <HowToUse
-        title="Find out what happened"
-        description="Every change to the studio is written here with who made it and a reference you can quote to support."
-        steps={['Filter the audit log by area.', 'Check the last scheduled runs.', 'Read the health card before reporting an outage.']}
-      />
+      <PageHeader title="System" />
       <HealthCard />
       {session?.is_owner ? (
         <>

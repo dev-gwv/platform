@@ -178,7 +178,6 @@ function RemindersContent() {
     <div className="space-y-4">
       <PageHeader
         title="Reminders"
-        description="Manage your reminders and tasks"
         actions={
           <Button onClick={openCreate} size="sm">
             <Plus className="mr-1 h-4 w-4" /> New Reminder

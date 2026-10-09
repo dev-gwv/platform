@@ -77,7 +77,7 @@ function MyShoots() {
 
   return (
     <>
-      <PageHeader title="My shoots" description="Where you are booked, and when to be there." />
+      <PageHeader title="My shoots" />
 
       {owed > 0 && (
         <p className="mt-4 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">

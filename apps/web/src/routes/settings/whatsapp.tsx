@@ -25,7 +25,7 @@ import { facebookSignup } from '@/features/studio-whatsapp/facebook-signup'
 export function WhatsappSettingsPage() {
   return (
     <AuthedPage module="settings">
-      <PageHeader title="WhatsApp" description="Your studio's own WhatsApp number." />
+      <PageHeader title="WhatsApp" />
       <Whatsapp />
     </AuthedPage>
   )

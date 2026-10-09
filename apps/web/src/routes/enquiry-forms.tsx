@@ -112,7 +112,6 @@ export function EnquiryFormsPage() {
     <>
       <PageHeader
         title="Enquiry forms"
-        description="A form for your website, and a QR for each vendor you work with."
         actions={
           canCreate && (
             <Button onClick={() => setAdding(true)}>

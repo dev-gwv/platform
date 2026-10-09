@@ -85,7 +85,7 @@ function InvoiceSettings() {
   const [tab, setTab] = useUrlParam('tab', 'details')
   return (
     <>
-      <PageHeader title="Invoicing" description="What every invoice says about you, how it looks, and the words at the bottom." />
+      <PageHeader title="Invoicing" />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="details">Your details & bank</TabsTrigger>

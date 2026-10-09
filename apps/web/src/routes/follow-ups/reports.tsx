@@ -87,7 +87,6 @@ function CrmReports() {
     <>
       <PageHeader
         title="Lead reports"
-        description="How the leads are going. The day's work is on the Leads page."
         actions={
           <div className="flex flex-wrap gap-2">
             <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))} aria-label="Period">

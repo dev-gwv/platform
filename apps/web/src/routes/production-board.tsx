@@ -102,10 +102,7 @@ function Board() {
 
   return (
     <>
-      <PageHeader
-        title="Production Board"
-        description="Track work and delivery progress across every project. Assign, triage, and move deliverables forward from one place."
-      />
+      <PageHeader title="Production Board" />
 
       {isLoading ? (
         <SkeletonCards count={4} />

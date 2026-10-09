@@ -161,7 +161,7 @@ function StudioCommandCenter() {
             {greeting(session?.display_name)}
           </>
         }
-        description={settingUp ? "Let's set up your studio." : 'Your studio at a glance.'}
+        description={settingUp ? "Let's set up your studio." : undefined}
         actions={
           !settingUp &&
           access.hasAction('projects', 'create') && (

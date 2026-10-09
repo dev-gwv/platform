@@ -62,7 +62,7 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
   if (!canManage) {
     return (
       <>
-        <PageHeader title="Data management" description="Where every shoot's cards are." />
+        <PageHeader title="Data management" />
         <EmptyState
           title="For studio managers"
           description="Hand your own cards over from My Shoots -- the studio sees them there."
@@ -78,7 +78,6 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
     <>
       <PageHeader
         title="Data management"
-        description="Every booked person's cards, from the shoot day to the archive."
         actions={
           <div className="flex gap-2">
             <ManageLocationsDialog />

@@ -41,7 +41,7 @@ function Inbox() {
 
   return (
     <>
-      <PageHeader title="Feature suggestions" description="From the “Suggest a feature · सुझाव दें” button, in every studio." />
+      <PageHeader title="Feature suggestions" />
       <FilterTabs
         value={status}
         onChange={(v) => setStatus(v)}

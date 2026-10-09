@@ -221,7 +221,6 @@ function Crm() {
     <>
       <PageHeader
         title="Leads"
-        description="Everyone who got in touch, and who you owe a call."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild>
