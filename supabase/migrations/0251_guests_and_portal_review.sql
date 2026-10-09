@@ -1,0 +1,3 @@
+-- 0251: expected guests on every event; the client's page stops showing
+-- unchecked hand-ins as "ready"; the delivery page stops showing the editor's
+-- private hand-in notes. (Claimed; body follows on this branch.)

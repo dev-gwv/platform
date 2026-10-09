@@ -1,0 +1,3 @@
+-- 0252: the client tracking page on /p/<token>: tracker steps, plain-word
+-- deliverable statuses, latest updates, next payment, one live link per
+-- project, and the studio's own opens not counted. (Claimed; body follows.)
