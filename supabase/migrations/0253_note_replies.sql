@@ -1,0 +1,2 @@
+-- 0253: a reply to a note goes to whoever sent it. (Claimed; body follows on
+-- this branch in batch 2.)
