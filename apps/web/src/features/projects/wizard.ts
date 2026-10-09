@@ -8,6 +8,7 @@ import {
 } from '@ipc/domain'
 import type { CreateProjectRequest, CreateShootRequest, DeliverableInput } from '@ipc/contracts'
 import { niceTime } from '@/shared/ui/time-format'
+import { guestsValue } from '@/features/shoots/guests'
 
 /**
  * Create Project, as data.
@@ -60,6 +61,8 @@ export interface ShootDraft {
   /** City / Venue as it should print — the map link is a separate field. */
   location: string
   map_link: string
+  /** Expected guests as typed ("400"); optional, and missing in older drafts. */
+  guests?: string
   status: 'planned' | 'confirmed'
   requirements: ShootRequirementDraft[]
 }
@@ -495,6 +498,7 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
         ...(endAt ? { end_at: endAt } : {}),
         ...(s.location.trim() ? { location: s.location.trim() } : {}),
         ...(s.map_link.trim() ? { map_link: s.map_link.trim() } : {}),
+        ...(guestsValue(s.guests ?? '') ? { guests: guestsValue(s.guests ?? '')! } : {}),
         requirements: s.requirements
           .filter((r) => r.name.trim())
           .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),

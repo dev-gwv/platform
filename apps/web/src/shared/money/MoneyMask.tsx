@@ -24,7 +24,7 @@ export function useINR(): (amount: number) => string {
 export function Money({ value, className }: { value: number; className?: string }) {
   const hidden = useAmountsHidden()
   const [peek, setPeek] = useState(false)
-  useEffect(() => setPeek(false), [hidden])
+  useEffect(() => { setPeek(false) }, [hidden])
   if (!hidden || peek) return <span className={cn('tabular-nums', className)}>{screenINR(value, false)}</span>
   return (
     <button

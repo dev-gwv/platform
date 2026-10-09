@@ -84,6 +84,7 @@ function toSchedule(shoots: ShootListItem[]): QuotationDocShoot[] {
       // "6:00 pm–12:00 am · 6 h", as the shoot cards say it.
       time: timeRangeLine(s.start_at, s.end_at),
       city: s.location,
+      guests: s.guests,
       services: s.requirements.map((r) => ({ name: r.name, quantity: r.quantity })),
     }))
 }

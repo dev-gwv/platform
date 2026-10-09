@@ -2,9 +2,10 @@ import type { DetailsEvent } from '@ipc/contracts'
 import { MONTHS } from './OccasionForm'
 
 /** A client's event as the body of a new shoot day: India time, start + hours. */
-export function eventToShoot(e: DetailsEvent): { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string } {
-  const out: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string } = { name: e.name.trim() }
+export function eventToShoot(e: DetailsEvent): { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string; guests?: number } {
+  const out: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string; guests?: number } = { name: e.name.trim() }
   if (e.date) out.shoot_date = e.date
+  if (e.guests && e.guests >= 1) out.guests = e.guests
   if (e.venue?.trim()) out.location = e.venue.trim()
   if (e.date && e.start_time && /^\d{1,2}:\d{2}$/.test(e.start_time)) {
     const start = new Date(`${e.date}T${e.start_time.padStart(5, '0')}:00+05:30`)

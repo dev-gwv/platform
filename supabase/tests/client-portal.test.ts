@@ -222,3 +222,39 @@ describe('the link can be stopped', () => {
     expect(await q(`select 1 from client_portal_links where token_hash in ('${RAW}', '${RAW2}', 'expiring')`)).toHaveLength(0)
   })
 })
+
+describe('work the studio has not checked yet (0251)', () => {
+  const P3 = 'd0000000-0000-4000-8000-0000000000d3'
+  const D_MANAGER = 'd0000000-0000-4000-8000-000000000301'
+  const D_APPROVED = 'd0000000-0000-4000-8000-000000000302'
+  const D_WITH_CLIENT = 'd0000000-0000-4000-8000-000000000303'
+  const RAW3 = 'portal-raw-token-three'
+
+  it('reads as in progress, with no link, until the studio approved it', async () => {
+    await db.exec(`
+      insert into projects (id, company_id, client_id, name, created_by)
+        values ('${P3}', '${STUDIO}', '${CLIENT}', 'Third', '${OWNER}');
+      insert into shoots (company_id, project_id, name, guests) values ('${STUDIO}', '${P3}', 'Wedding', 400);
+      insert into deliverables (id, company_id, project_id, title, visibility_scope, show_on_quotation, status,
+                                custom_status_code, delivery_link, estimated_date) values
+        ('${D_MANAGER}', '${STUDIO}', '${P3}', 'Teaser', 'client', true, 'review', 'with_manager', 'https://x.test/teaser', '2027-01-01'),
+        ('${D_APPROVED}', '${STUDIO}', '${P3}', 'Album', 'client', true, 'review', 'approved', 'https://x.test/album', '2027-01-02'),
+        ('${D_WITH_CLIENT}', '${STUDIO}', '${P3}', 'Film', 'client', true, 'review', 'with_client', 'https://x.test/film', '2027-01-03');
+    `)
+    await as(OWNER)
+    await q(`select issue_client_portal_link('${P3}', ${hash(RAW3)})`)
+    const doc = (await portal(RAW3))!
+    expect(doc.deliverables.map((d) => [d.id, d.status, d.delivery_link])).toEqual([
+      [D_MANAGER, 'in_progress', null],
+      [D_APPROVED, 'ready', 'https://x.test/album'],
+      [D_WITH_CLIENT, 'ready', 'https://x.test/film'],
+    ])
+    expect(JSON.stringify(doc)).not.toContain('x.test/teaser')
+  })
+
+  it('carries the guests of each day', async () => {
+    const doc = (await portal(RAW3)) as unknown as { shoots: { guests: number | null }[] }
+    expect(doc.shoots.map((s) => s.guests)).toEqual([400])
+  })
+})
+

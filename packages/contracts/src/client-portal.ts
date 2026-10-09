@@ -107,6 +107,7 @@ export const publicClientPortal = z.object({
       end_at: isoDateTime.nullable(),
       location: z.string().nullable(),
       map_link: z.string().nullable(),
+      guests: z.number().int().nullable().default(null),
       status: z.string(),
       team: z.array(z.object({ first_name: z.string(), role: z.string().nullable() })),
     }),

@@ -154,7 +154,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   // The lead's functions as editable rows; a lead from before 0212 that only
   // has the old single event shows that one.
   const eventRows: EventRow[] = lead.functions.length
-    ? lead.functions.map((f) => ({ event_type: f.event_type, event_date: f.event_date, location: f.location }))
+    ? lead.functions.map((f) => ({ event_type: f.event_type, event_date: f.event_date, location: f.location, guests: f.guests }))
     : lead.event_type || lead.event_date
       ? [{ event_type: lead.event_type, event_date: lead.event_date, location: lead.event_location }]
       : []

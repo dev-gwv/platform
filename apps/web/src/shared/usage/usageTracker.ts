@@ -1,11 +1,12 @@
 // Lovable parity: usageTracker (simplified port of src/lib/usageTracker.ts).
 // - One session per tab (sessionStorage).
-// - 60s heartbeat while tab is visible.
+// - A heartbeat every 5 minutes while the tab is visible (enough for
+//   "last seen"; once a minute filled the table for nothing).
 // - POST /activity/track {route} with a route→module map.
 // - Fails silently. Never blocks UI. Separate from activity_log by design.
 
 const SESSION_KEY = 'ipc:usageSession'
-const HEARTBEAT_MS = 60_000
+const HEARTBEAT_MS = 5 * 60_000
 
 let sessionId: string | null = null
 let heartbeatTimer: number | null = null

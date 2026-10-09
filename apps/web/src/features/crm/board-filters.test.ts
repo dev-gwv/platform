@@ -32,7 +32,7 @@ describe('facetCounts', () => {
 })
 
 describe('several functions on one lead', () => {
-  const fn = (event_type: string, event_date: string | null) => ({ id: event_type, event_type, event_date, location: null })
+  const fn = (event_type: string, event_date: string | null) => ({ id: event_type, event_type, event_date, location: null, guests: null })
   const D = lead({ event_type: 'Haldi', functions: [fn('Haldi', '2026-12-12'), fn('Wedding', '2026-12-14')] })
 
   it('is found under any of its functions', () => {

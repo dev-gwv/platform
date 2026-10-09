@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { scheduleTimeText } from '@/shared/ui/time-format'
+import { guestsLabel } from '@/features/shoots/guests'
 import { EyeOff, Pencil } from 'lucide-react'
 import { parseQuotationTerms } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -56,6 +57,8 @@ export interface QuotationDocShoot {
   date?: string | null | undefined
   time?: string | null | undefined
   city?: string | null | undefined
+  /** Expected guests (0251); the column shows only when a day has a number. */
+  guests?: number | null | undefined
   services: { name: string; quantity: number }[]
 }
 
@@ -416,6 +419,7 @@ function DeliverablesBlock({
 }
 
 function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocShoot[]; showServices: boolean; onEdit?: (() => void) | undefined }) {
+  const anyGuests = shoots.some((s) => !!s.guests)
   const when = (s: QuotationDocShoot) => `${formatQuotationDate(s.date)}${s.time ? ` · ${scheduleTimeText(s.time)}` : ''}`
   return (
     <section className="q-section paper-block mt-6">
@@ -427,6 +431,7 @@ function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocSho
               <th className="px-3 py-2">Shoot</th>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">City</th>
+              {anyGuests && <th className="px-3 py-2">Guests</th>}
               {showServices && <th className="px-3 py-2">Services</th>}
             </tr>
           </thead>
@@ -436,6 +441,7 @@ function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocSho
                 <td className="px-3 py-2 font-medium">{s.title}</td>
                 <td className="px-3 py-2 text-muted-foreground">{when(s)}</td>
                 <td className="px-3 py-2 text-muted-foreground">{s.city || '—'}</td>
+                {anyGuests && <td className="px-3 py-2 text-muted-foreground">{s.guests ? `~${s.guests.toLocaleString('en-IN')}` : '—'}</td>}
                 {showServices && (
                   <td className="px-3 py-2 text-muted-foreground">{s.services.length ? serviceList(s) : '—'}</td>
                 )}
@@ -451,6 +457,7 @@ function ShootsBlock({ shoots, showServices, onEdit }: { shoots: QuotationDocSho
             <p className="mt-0.5 text-xs text-muted-foreground">
               {when(s)}
               {s.city ? ` · ${s.city}` : ''}
+              {guestsLabel(s.guests) ? ` · ${guestsLabel(s.guests)}` : ''}
             </p>
             {showServices && s.services.length > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">{serviceList(s)}</p>

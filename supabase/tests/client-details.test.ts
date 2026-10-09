@@ -74,10 +74,13 @@ describe('the client details form (0244)', () => {
       wedding: { day: 12, month: 12, year: 2026 },
       events: [
         { name: 'Haldi', date: '2026-12-11', start_time: '10:00', hours: 4, venue: 'Home' },
-        { name: 'Wedding', date: '2026-12-12', start_time: '19:00', hours: 5 },
+        { name: 'Wedding', date: '2026-12-12', start_time: '19:00', hours: 5, guests: 400 },
       ],
     })
     expect(r).toMatchObject({ project_id: WEDDING, project_made: false, days_added: 2, events_waiting: 0 })
+    // Guests ride onto the day (0251).
+    expect(await q(`select name, guests from shoots where project_id = $1 order by shoot_date`, [WEDDING]))
+      .toEqual([{ name: 'Haldi', guests: null }, { name: 'Wedding', guests: 400 }])
 
     const [c] = await q<Record<string, string>>(`select name, phone, email, city, alternate_phone, notes from clients where id = $1`, [PRIYA])
     expect(c).toMatchObject({ name: 'Priya', phone: '+91 98765 43210', email: 'studio@typed.test', city: 'Jaipur' })

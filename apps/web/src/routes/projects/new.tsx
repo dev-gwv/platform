@@ -26,6 +26,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  UsersRound,
   Wallet,
   X,
   type LucideIcon,
@@ -1476,6 +1477,14 @@ function ShootCard({
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Guests" icon={UsersRound}>
+              <Input
+                inputMode="numeric"
+                value={shoot.guests ?? ''}
+                onChange={(e) => onChange({ guests: e.target.value.replace(/[^\d]/g, '').slice(0, 6) })}
+                placeholder="e.g. 400"
+              />
+            </Field>
             <Field label="Start time" icon={Clock}>
               <Input
                 type="time"

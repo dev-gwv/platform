@@ -61,7 +61,7 @@ async function saveRequirements(
 
 /** The shared projection, as a fragment the two list queries embed. */
 const selectShoots = (sql: TransactionSql) => sql`
-  select s.id, s.name, s.project_id, s.shoot_date, s.start_at, s.end_at, s.location, s.map_link, s.status,
+  select s.id, s.name, s.project_id, s.shoot_date, s.start_at, s.end_at, s.location, s.map_link, s.guests, s.status,
          p.name as project_name, cl.name as client_name,
          -- The booking screen fills crew against these, so they travel with
          -- the shoot rather than costing a request per row.

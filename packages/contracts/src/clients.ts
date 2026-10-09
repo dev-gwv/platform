@@ -133,6 +133,7 @@ export const detailsEvent = z.object({
   start_time: z.string().regex(/^\d{1,2}:\d{2}$/).nullable().optional(),
   hours: z.number().min(0.5).max(24).nullable().optional(),
   venue: z.string().trim().max(300).nullable().optional(),
+  guests: z.number().int().min(1).max(100000).nullable().optional(),
 })
 export type DetailsEvent = z.infer<typeof detailsEvent>
 
@@ -184,6 +185,7 @@ export const publicClientDetails = z.object({
           start_time: z.string().nullable(),
           hours: z.coerce.number().nullable(),
           venue: z.string().nullable(),
+          guests: z.coerce.number().nullable().default(null),
         }),
       ),
     })

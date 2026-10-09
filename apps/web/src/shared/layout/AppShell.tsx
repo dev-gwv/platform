@@ -28,6 +28,7 @@ import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
 import { HubTabs } from './HubTabs'
+import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
 
 
@@ -111,7 +112,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // The shell used to unmount on every navigation, which reset this for free.
   // It mounts once now, so the drawer and its scrim would otherwise stay open
   // over the page the user just navigated to.
-  useEffect(() => setMobileOpen(false), [pathname])
+  useEffect(() => { setMobileOpen(false) }, [pathname])
+
+  // "Last seen" on the team list reads these visits. The tracker was built
+  // and never started, so every member read "has not opened the app yet".
+  useEffect(() => { return startUsageTracking(() => globalThis.location?.pathname ?? '/') }, [])
+  const firstRoute = useRef(true)
+  useEffect(() => {
+    if (firstRoute.current) { firstRoute.current = false; return }
+    trackRouteView(pathname)
+  }, [pathname])
 
   useEffect(() => {
     globalThis.localStorage?.setItem(COLLAPSE_KEY, collapsed ? '1' : '0')
@@ -123,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // visit only.
   const focus = pathname.startsWith('/projects/new')
   const [peek, setPeek] = useState(false)
-  useEffect(() => setPeek(false), [pathname])
+  useEffect(() => { setPeek(false) }, [pathname])
   const railCollapsed = focus ? !peek : collapsed
 
   const toggleGroup = useCallback(
