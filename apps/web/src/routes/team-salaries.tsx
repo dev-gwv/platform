@@ -1,17 +1,9 @@
-import { AuthedPage } from '@/shared/layout/AuthedPage'
-import { PageHeader } from '@/shared/layout/page-header'
-import { SalariesTab } from '@/features/team/SalariesTab'
+import { Navigate } from '@tanstack/react-router'
 
 /**
- * The monthly salary ledger, under Pay beside Payroll and Team payouts. It
- * used to be a second tab row inside the Team directory, which stacked two
- * rows of tabs on one page once People got its own.
+ * Monthly salaries was a second salary ledger beside Payroll, with its own
+ * Generate. It is Payroll's history now; this address opens it there.
  */
 export function TeamSalariesPage() {
-  return (
-    <AuthedPage module="team_salaries">
-      <PageHeader title="Monthly salaries" />
-      <SalariesTab />
-    </AuthedPage>
-  )
+  return <Navigate to="/payroll" search={{ history: '1' } as never} replace />
 }

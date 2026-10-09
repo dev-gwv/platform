@@ -37,7 +37,8 @@ const statusLabel = (s: string) =>
  * month, then track paid against base. Wires the existing monthly-salary
  * hooks (previously unused by any screen).
  */
-export function SalariesTab() {
+/** `history`: shown under Payroll as its older records -- no Generate, no heading. */
+export function SalariesTab({ history = false }: { history?: boolean } = {}) {
   const inr = useINR()
   const access = useAccess()
   const { session } = useAuth()
@@ -101,23 +102,25 @@ export function SalariesTab() {
   const years = Array.from({ length: 6 }, (_, i) => now.getFullYear() - 2 + i)
 
   return (
-    <div className="mt-6 flex flex-col gap-4">
+    <div className={history ? 'mt-4 flex flex-col gap-4' : 'mt-6 flex flex-col gap-4'}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Salary management</h2>
-          <p className="text-sm text-muted-foreground">
-            Generate and track monthly salaries for your team.{' '}
-            <Link to="/payroll" className="font-medium text-primary underline-offset-2 hover:underline">
-              Pay the month from attendance in Payroll
-            </Link>
-            {list.isFetching && list.data ? ' · refreshing…' : ''}
-          </p>
-        </div>
+        {!history && (
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Salary management</h2>
+            <p className="text-sm text-muted-foreground">
+              Generate and track monthly salaries for your team.{' '}
+              <Link to="/payroll" className="font-medium text-primary underline-offset-2 hover:underline">
+                Pay the month from attendance in Payroll
+              </Link>
+              {list.isFetching && list.data ? ' · refreshing…' : ''}
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={rows.length === 0}>
             <Download /> Export CSV
           </Button>
-          {canManage && (
+          {canManage && !history && (
             <Button onClick={() => void onGenerate()} disabled={generate.isPending}>
               <RefreshCcw /> {generate.isPending ? 'Generating…' : 'Generate salaries'}
             </Button>
@@ -182,7 +185,9 @@ export function SalariesTab() {
             <EmptyState
               title="No salary records for this period."
               description={
-                canManage
+                history
+                  ? 'Nothing was recorded here for this month. New months are made in Payroll.'
+                  : canManage
                   ? 'Click Generate salaries to create rows for active employees.'
                   : 'Ask an admin to generate salaries for this month.'
               }

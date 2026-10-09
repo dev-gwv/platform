@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Building2, Check, ChevronDown, Download, Loader2, LogOut, Palette, UserRound, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Download, Loader2, LogOut, Moon, Palette, Sun, UserRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { companyProfile, type StudioMembership } from '@ipc/contracts'
 import { callApi } from '../api/client'
@@ -11,6 +11,7 @@ import { Avatar } from '../ui/avatar'
 import { cn } from '../ui/cn'
 import { humanize } from '../ui/format'
 import { useInstall } from '../pwa/install'
+import { useTheme } from '../theme/ThemeProvider'
 
 /**
  * Who you are signed in as, and the two or three things you do about it.
@@ -29,6 +30,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const install = useInstall()
+  const { scheme, toggleScheme } = useTheme()
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
 
@@ -103,6 +105,21 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
 
           <div className="border-t border-border p-1.5">
             <Item to="/profile" icon={UserRound} label="My profile" />
+            {/* The light/dark switch lived in the top bar; one more icon there
+                for something set once. */}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={toggleScheme}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              {scheme === 'dark' ? (
+                <Sun className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              ) : (
+                <Moon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              )}
+              {scheme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
           </div>
 
           {canSettings && (

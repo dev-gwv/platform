@@ -18,6 +18,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { RemindersContent } from '@/routes/reminders'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { useProjects } from '@/features/projects/api'
@@ -78,11 +79,14 @@ export function TasksPage() {
   )
 }
 
-type TaskView = 'people' | 'list' | 'board'
+type TaskView = 'people' | 'list' | 'board' | 'reminders'
+// Reminders were a page of their own: a third to-do list beside Tasks and
+// lead follow-ups. They are a view here now, and /reminders opens it.
 const VIEWS: ReadonlyArray<{ value: TaskView; label: string }> = [
   { value: 'people', label: 'People' },
   { value: 'list', label: 'List' },
   { value: 'board', label: 'Board' },
+  { value: 'reminders', label: 'Reminders' },
 ]
 
 function Tasks({ managed }: { managed: boolean }) {
@@ -153,6 +157,17 @@ function Tasks({ managed }: { managed: boolean }) {
         }
       />
 
+      {view === 'reminders' ? (
+        <>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Segmented label="View" value={view} onChange={(v) => setView(v)} options={VIEWS} />
+          </div>
+          <div className="mt-4">
+            <RemindersContent embedded />
+          </div>
+        </>
+      ) : (
+      <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={Flame} label="High priority" value={stats.highPriority} tone="danger" />
         <Stat icon={Clock} label="In progress" value={stats.inProgress} tone="info" />
@@ -250,6 +265,8 @@ function Tasks({ managed }: { managed: boolean }) {
           </>
         )}
       </div>
+      </>
+      )}
 
       {actions.dialogs}
       {openId && (

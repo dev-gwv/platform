@@ -1,7 +1,7 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
-import { MY_TIME, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
+import { MONEY, MY_TIME, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
 import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import {
   BarChart3,
@@ -15,21 +15,15 @@ import {
   CalendarClock,
   Database,
   Briefcase,
-  Plus,
-  Target,
   ListChecks,
   Camera,
   ListTodo,
   CreditCard,
-  Receipt,
   Banknote,
   Wallet,
   TrendingUp,
   Contact,
   Inbox,
-  Bell,
-  Megaphone,
-  QrCode,
   Users,
   Clock,
   Settings,
@@ -37,9 +31,7 @@ import {
   Gem,
   ShieldCheck,
   Building2,
-  Activity,
   IndianRupee,
-  Ellipsis,
   type LucideIcon,
   MessageCircle,
 } from 'lucide-react'
@@ -96,11 +88,12 @@ const leaf = (
  * set; admins/managers get workflow groups.
  */
 export const NAV: NavEntry[] = [
-  leaf('Dashboard', '/dashboard', LayoutDashboard, { module: 'dashboard', roles: ['super_admin', 'admin', 'manager', 'platform_admin'] }),
-  // Staff: the same page is their day -- what to do today and what is next.
-  leaf('Home', '/dashboard', LayoutDashboard, { module: 'dashboard', roles: ['employee'] }),
-  // How the studio is doing for a period: sales, money, delivery, team.
-  leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
+  // Twelve lines for the studio, one word each (the audit, owner's yes):
+  // Home · Leads · Clients · Projects · Shoots · Post-production · Tasks ·
+  // Data & Backup · Money · Team · Reports · Settings. Making something new is
+  // the top bar's "+ New"; alerts are the bell; the occasional set-up pages
+  // (enquiry forms, lead sources, referrals, activity) are in Settings.
+  leaf('Home', '/dashboard', LayoutDashboard, { module: 'dashboard' }),
 
   // Employee-only personal set.
   // Their edits and their tasks on one page (My Tasks folded in; /tasks
@@ -111,68 +104,21 @@ export const NAV: NavEntry[] = [
   leaf('My payouts', '/payouts/my', Banknote, { roles: ['employee'] }),
   leaf('My performance', '/performance/me', Gauge, { roles: ['employee'] }),
 
-  {
-    kind: 'group',
-    label: 'Production',
-    icon: KanbanSquare,
-    match: '/production',
-    children: [
-      leaf('Production Board', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
-      leaf('Team Booking', '/team-allocation', CalendarClock, { module: 'projects', studioWork: true }),
-      leaf('Data & Backup', '/data-management', Database, { module: 'projects', studioWork: true }),
-    ],
-  },
-  {
-    kind: 'group',
-    label: 'Projects',
-    icon: Briefcase,
-    match: '/projects',
-    children: [
-      leaf('All Projects', '/projects', Briefcase, { module: 'projects', studioWork: true }),
-      leaf('Create Project', '/projects/new', Plus, { module: 'projects', studioWork: true }),
-      leaf('Project Tracking', '/project-tracking', Target, { module: 'projects', studioWork: true }),
-      // Templates, documents and delivery stages are set up once and then left
-      // alone, so they live under Settings rather than in the daily menu.
-    ],
-  },
-
-  leaf('Task Management', '/tasks', ListChecks, { module: 'tasks', badge: 'tasks-overdue' }),
-
-  {
-    kind: 'group',
-    label: 'Billing',
-    icon: CreditCard,
-    match: '/billing',
-    children: [
-      // Four heads, like the old app: what is owed, what came in, what went
-      // out, what is left. Invoice settings live under Settings.
-      leaf('Invoices', '/billing/invoices', Receipt, { module: 'billing' }),
-      leaf('Payments received', '/billing/payments', Banknote, { module: 'billing' }),
-      leaf('Expenses', '/company-expenses', Wallet, { module: 'company_expenses' }),
-      leaf('Profit & Loss', '/financials', TrendingUp, { module: 'financials' }),
-    ],
-  },
-  {
-    kind: 'group',
-    label: 'CRM & Clients',
-    icon: Contact,
-    match: '/clients',
-    children: [
-      // Three, from six. Enquiries was the same list one step earlier -- an
-      // unworked enquiry is now a lead wearing an "Uncontacted" badge (0168).
-      // Contacts and Companies were an org-chart layer on a business whose
-      // customer is a family; what they held lives on the lead itself.
-      //
-      // The path stays /follow-ups: /leads already belongs to the lead_sources
-      // module's route patterns, and every reminder and notification link
-      // points here.
-      leaf('Leads', '/follow-ups', Inbox, { module: 'crm' }),
-      leaf('Clients', '/clients', Contact, { module: 'clients' }),
-      // A QR per vendor; its leads are credited to them (0195).
-      leaf('Enquiry forms', '/enquiry-forms', QrCode, { module: 'crm' }),
-      leaf('Lead Sources', '/lead-sources', Megaphone, { module: 'lead_sources' }),
-    ],
-  },
+  // The path stays /follow-ups: /leads already belongs to the lead_sources
+  // module's route patterns, and every reminder and notification link
+  // points here.
+  leaf('Leads', '/follow-ups', Inbox, { module: 'crm' }),
+  leaf('Clients', '/clients', Contact, { module: 'clients' }),
+  // All projects, and a "Needs attention" tab (Project Tracking).
+  leaf('Projects', '/projects', Briefcase, { module: 'projects', studioWork: true, hub: PROJECTS_HUB }),
+  // One shoots page: Team Booking (Shoots · Calendar · People · Conflicts).
+  leaf('Shoots', '/team-allocation', CalendarClock, { module: 'projects', studioWork: true }),
+  leaf('Post-production', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
+  // Reminders are a view of it now (?view=reminders).
+  leaf('Tasks', '/tasks', ListChecks, { module: 'tasks' }),
+  leaf('Data & Backup', '/data-management', Database, { module: 'projects', studioWork: true }),
+  // Payments · Invoices · Expenses · Profit & Loss, one tab row.
+  leaf('Money', '/billing/payments', IndianRupee, { hub: MONEY }),
   {
     kind: 'group',
     label: 'Team',
@@ -182,30 +128,12 @@ export const NAV: NavEntry[] = [
       // Four hubs, from nine links: each opens a page with its own tab row.
       leaf('People', '/employees', Users, { hub: TEAM_PEOPLE }),
       leaf('Attendance & leave', '/attendance', Clock, { hub: TEAM_TIME }),
-      leaf('Pay', '/payroll', IndianRupee, { hub: TEAM_PAY }),
+      leaf('Pay', '/team-payouts', Wallet, { hub: TEAM_PAY }),
       leaf('Roles & terms', '/settings/roles', ShieldCheck, { hub: TEAM_SETUP }),
     ],
   },
-
-  // The occasional destinations, behind one heading. Six loose rows here made
-  // the menu read as six more things a new studio had to learn before it
-  // could start; none is part of setting a studio up, and the two most urgent
-  // (alerts and reminders) also live on the bell in the header.
-  {
-    kind: 'group',
-    label: 'More',
-    icon: Ellipsis,
-    match: '/activity',
-    children: [
-      // Alerts and reminders reach everyone: overdue follow-ups land on
-      // whoever owns them, CRM module or not.
-      leaf('Alerts', '/notifications', Bell),
-      leaf('Reminders', '/reminders', Bell),
-      // Activity trail: see what's changed across the studio.
-      leaf('Activity', '/activity', Activity, { studioWork: true }),
-      leaf('Referrals', '/referrals', Target, { module: 'referrals' }),
-    ],
-  },
+  // How the studio is doing for a period: sales, money, delivery, team.
+  leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
 
   // The studio's plan is not a menu line any more: it is the card pinned at
   // the foot of the sidebar (PlanCard), with its days left and an Upgrade
@@ -309,10 +237,11 @@ export interface QuickLink extends NavLeaf {
  * once. A path with no NAV entry — or one this account cannot reach — drops
  * out rather than rendering a pill that 403s.
  */
-const QUICK_TONES: { to: string; tone: QuickTone }[] = [
-  { to: '/team-allocation', tone: 'blue' },
-  { to: '/projects', tone: 'green' },
-  { to: '/project-tracking', tone: 'violet' },
+const QUICK_TONES: { to: string; tone: QuickTone; label?: string }[] = [
+  { to: '/follow-ups', tone: 'blue' },
+  // Search finds the hub's first tab as "All projects"; the pill says Projects.
+  { to: '/projects', tone: 'green', label: 'Projects' },
+  { to: '/team-allocation', tone: 'violet' },
 ]
 
 export function quickLinks(role: string, access: Access, isPlatformAdmin: boolean): QuickLink[] {
@@ -320,9 +249,9 @@ export function quickLinks(role: string, access: Access, isPlatformAdmin: boolea
     navDestinations(role, access, isPlatformAdmin).map((l) => [l.to, l] as const),
   )
   const out: QuickLink[] = []
-  for (const { to, tone } of QUICK_TONES) {
+  for (const { to, tone, label } of QUICK_TONES) {
     const leaf = reachable.get(to)
-    if (leaf) out.push({ ...leaf, tone })
+    if (leaf) out.push({ ...leaf, tone, ...(label ? { label } : {}) })
   }
   return out
 }

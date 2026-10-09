@@ -19,7 +19,10 @@ import {
   ServerCog,
   ShieldCheck,
   Store,
-  Wrench,
+  Activity,
+  Megaphone,
+  QrCode,
+  Target,
   type LucideIcon,
 } from 'lucide-react'
 import type { ModuleKey } from '@ipc/permissions'
@@ -64,6 +67,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         icon: MapPin,
         module: 'settings',
       },
+      // Where the old app kept it: every studio's access, for the platform owner.
+      { to: '/platform/studios', label: 'Studio Access Manager', icon: ShieldCheck, module: 'settings', platformOnly: true },
     ],
   },
   {
@@ -76,6 +81,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         icon: FileSignature,
         module: 'team_terms',
       },
+      // What changed across the studio. It was a line under the menu's "More".
+      { to: '/activity', label: 'Activity', icon: Activity, module: 'settings' },
     ],
   },
   {
@@ -93,6 +100,16 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     ],
   },
   {
+    // Where enquiries come from: set up once, then they bring leads by themselves.
+    label: 'Leads',
+    items: [
+      { to: '/enquiry-forms', label: 'Enquiry forms', icon: QrCode, module: 'crm' },
+      { to: '/lead-sources', label: 'Lead sources', icon: Megaphone, module: 'lead_sources' },
+      { to: '/settings/client-form', label: 'Client details form', icon: ClipboardList, module: 'clients' },
+      { to: '/referrals', label: 'Referrals', icon: Target, module: 'referrals' },
+    ],
+  },
+  {
     label: 'Money',
     items: [
       { to: '/settings/invoicing', label: 'Invoicing', icon: Receipt, module: 'billing' },
@@ -107,16 +124,10 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     ],
   },
   {
-    label: 'Messages',
+    label: 'Messages & lists',
     items: [
       { to: '/settings/messaging', label: 'Messaging', icon: Bell, module: 'settings' },
       { to: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle, module: 'settings' },
-      { to: '/settings/client-form', label: 'Client details form', icon: ClipboardList, module: 'clients' },
-    ],
-  },
-  {
-    label: 'More',
-    items: [
       { to: '/settings/lookups', label: 'Lookups', icon: ListTree, module: 'settings' },
       {
         to: '/settings/system',
@@ -125,9 +136,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         module: 'settings',
         also: ['/settings/services', '/settings/work-submissions'],
       },
-      { to: '/settings/advanced', label: 'Advanced tools', icon: Wrench, module: 'settings' },
-      // Where the old app kept it: every studio's access, for the platform owner.
-      { to: '/platform/studios', label: 'Studio Access Manager', icon: ShieldCheck, module: 'settings', platformOnly: true },
     ],
   },
 ]
@@ -193,7 +201,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
       <nav
         aria-label="Settings"
         // Pinned while the page scrolls, so it carries its own scroll: on a
-        // laptop screen the More group (Lookups, System, Studio access) sits
+        // laptop screen the last group (Lookups, System) sits
         // below the fold and could not be reached.
         className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-52 shrink-0 flex-col gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3 md:flex"
       >

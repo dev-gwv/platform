@@ -55,10 +55,10 @@ function addModeFromUrl(): AddMode | null {
 function TeamPage() {
   const navigate = useNavigate()
   const powers = useTeamPowers()
-  // Salaries moved to Pay > Monthly salaries; an old ?section=salaries link goes there.
+  // Salaries are Payroll's now; an old ?section=salaries link goes to their history.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('section') === 'salaries')
-      void navigate({ to: '/team/salaries', replace: true })
+      void navigate({ to: '/payroll', search: { history: '1' } as never, replace: true })
   }, [navigate])
   // Only someone allowed to add people is ever put into it -- anyone else
   // following an old link lands on the directory, not on a form that would

@@ -15,7 +15,7 @@ describe('top bar', () => {
     expect(header).not.toMatch(/overflow-hidden/)
   })
   it('keeps every chip on one line', () => {
-    for (const f of ['shared/layout/DueChip.tsx', 'features/billing/TrialChip.tsx', 'shared/layout/QuickLinks.tsx', 'features/feedback/SuggestFeature.tsx']) {
+    for (const f of ['shared/layout/DueChip.tsx', 'features/billing/TrialChip.tsx', 'shared/layout/QuickLinks.tsx', 'features/feedback/SuggestFeature.tsx', 'shared/layout/NewMenu.tsx']) {
       expect(src(f), f).toMatch(/whitespace-nowrap/)
     }
   })

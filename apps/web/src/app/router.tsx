@@ -45,7 +45,6 @@ const ProjectEditPage = lazyRouteComponent(() => import('@/routes/projects/$id.e
 const ProjectQuotationPage = lazyRouteComponent(() => import('@/routes/projects/$id.quotation'), 'ProjectQuotationPage')
 const ProjectTrackingPage = lazyRouteComponent(() => import('@/routes/project-tracking'), 'ProjectTrackingPage')
 const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
-const ShootsPage = lazyRouteComponent(() => import('@/routes/shoots'), 'ShootsPage')
 const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
 const ProductionBoardPage = lazyRouteComponent(() => import('@/routes/production-board'), 'ProductionBoardPage')
 const TasksPage = lazyRouteComponent(() => import('@/routes/tasks'), 'TasksPage')
@@ -110,7 +109,6 @@ const PlatformMessagingPage = lazyRouteComponent(() => import('@/routes/platform
 const PlatformEmailPage = lazyRouteComponent(() => import('@/routes/platform/email'), 'PlatformEmailPage')
 const PlatformPaymentsPage = lazyRouteComponent(() => import('@/routes/platform/payments'), 'PlatformPaymentsPage')
 const PlatformHelpPage = lazyRouteComponent(() => import('@/routes/platform/help'), 'PlatformHelpPage')
-const AdvancedSettingsPage = lazyRouteComponent(() => import('@/routes/settings/advanced'), 'AdvancedSettingsPage')
 const TaskBundlesPage = lazyRouteComponent(() => import('@/routes/settings/task-bundles'), 'TaskBundlesPage')
 const AttendanceLocationPage = lazyRouteComponent(() => import('@/routes/settings/attendance-location'), 'AttendanceLocationPage')
 const LookupsPage = lazyRouteComponent(() => import('@/routes/settings/lookups'), 'LookupsPage')
@@ -274,7 +272,8 @@ const routeTree = rootRoute.addChildren([
   route('/payouts/my', MyPayoutsPage),
   route('/clients', ClientsListPage),
 
-  route('/shoots', ShootsPage),
+  // One shoots page: Team Booking. The old list with six open filters is gone.
+  route('/shoots', () => <Navigate to="/team-allocation" replace />),
   route('/shoots/my', MyShootsPage),
   route('/shoots/$shootId', ShootDetailPage),
   route('/tasks', TasksPage),
@@ -342,7 +341,8 @@ const routeTree = rootRoute.addChildren([
   route('/settings/vendors', VendorsPage),
   route('/settings/client-form', ClientFormPage),
   route('/settings/refer-a-studio', ReferAStudioPage),
-  route('/settings/advanced', AdvancedSettingsPage),
+  // A page of links to pages that have their own menu lines now.
+  route('/settings/advanced', () => <Navigate to="/settings/company" replace />),
   route('/personal-expenses', () => <Navigate to="/company-expenses" replace />),
   // Old-app addresses with no page of their own now (see ./legacy-links).
   ...LEGACY_AUTHED_PATHS.map((p) => route(p, LegacyRedirect)),
