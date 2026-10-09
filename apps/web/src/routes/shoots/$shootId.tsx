@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarDays, MapPin } from 'lucide-react'
+import { ArrowLeft, CalendarDays, MapPin, UsersRound } from 'lucide-react'
 import { shootListItem } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -14,6 +14,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
 import { useSlots } from '@/features/allocation/api'
 import { EventTile } from '@/shared/ui/icon-tile'
+import { guestsLabel } from '@/features/shoots/guests'
 
 const list = shootListItem.array()
 
@@ -101,6 +102,11 @@ function ShootDetail() {
             {shoot.location && (
               <span className="flex items-center gap-1">
                 <MapPin className="size-4" /> {shoot.location}
+              </span>
+            )}
+            {guestsLabel(shoot.guest_count) && (
+              <span className="flex items-center gap-1">
+                <UsersRound className="size-4" /> {guestsLabel(shoot.guest_count)}
               </span>
             )}
           </div>

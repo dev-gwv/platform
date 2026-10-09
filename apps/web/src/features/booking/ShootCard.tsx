@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { ResponseChip } from '@/features/allocation/SlotAnswer'
-import { AlertTriangle, CheckCircle2, Clock, MapPin, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, MapPin, UserPlus, Users, UsersRound } from 'lucide-react'
 import type { ShootListItem, TeamSlot } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
@@ -10,6 +10,7 @@ import { cn } from '@/shared/ui/cn'
 import { hoursLabel, rangeLabel, shootHours, timeLabel } from '@/features/shoots/assign'
 import { AlsoBookedLine, dayOfSlot } from '@/features/shoots/PersonDay'
 import { mapHref } from '@/features/shoots/map-link'
+import { guestsLabel } from '@/features/shoots/guests'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
 import { EventTile } from '@/shared/ui/icon-tile'
 
@@ -114,6 +115,11 @@ export function ShootCard({
               <span className="inline-flex items-center gap-1">
                 <MapPin className="size-3.5" aria-hidden />
                 <span className="select-all">{shoot.map_link}</span>
+              </span>
+            )}
+            {guestsLabel(shoot.guest_count) && (
+              <span className="inline-flex items-center gap-1">
+                <UsersRound className="size-3.5" aria-hidden /> {guestsLabel(shoot.guest_count)}
               </span>
             )}
             {st.needed > 0 && (

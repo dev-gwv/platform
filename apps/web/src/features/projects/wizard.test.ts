@@ -302,6 +302,18 @@ describe('toProjectRequest', () => {
     })
     expect(toShootRequests(d, 'p')[0]?.map_link).toBe('Taj Palace, Jaipur (shared from WhatsApp)')
   })
+
+  it('sends the guest count when one is typed, and nothing when blank', () => {
+    const d = named({
+      shoots: [
+        { ...newShoot(), name: 'Reception', guests: '1,200' },
+        { ...newShoot(), name: 'Haldi' },
+      ],
+    })
+    const [reception, haldi] = toShootRequests(d, 'p')
+    expect(reception?.guest_count).toBe(1200)
+    expect(haldi && 'guest_count' in haldi).toBe(false)
+  })
 })
 
 describe('draft housekeeping', () => {

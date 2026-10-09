@@ -47,3 +47,37 @@ describe.each([
     expect(parse({ map_link: 'x'.repeat(500) }).success).toBe(true)
   })
 })
+
+/** How many guests a day expects (0251): optional, whole, and clearable. */
+describe.each([
+  [
+    'createShootRequest',
+    (body: object) =>
+      createShootRequest.safeParse({ project_id: PROJECT, name: 'Reception', ...body }),
+  ],
+  ['updateShootRequest', (body: object) => updateShootRequest.safeParse(body)],
+])('%s guest_count', (_name, parse) => {
+  it('keeps a headcount', () => {
+    const r = parse({ guest_count: 350 })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.guest_count).toBe(350)
+  })
+
+  it('clears it from a blank box or null', () => {
+    for (const blank of ['', null]) {
+      const r = parse({ guest_count: blank })
+      expect(r.success).toBe(true)
+      if (r.success) expect(r.data.guest_count).toBeNull()
+    }
+  })
+
+  it('leaves it undefined when it is left out', () => {
+    const r = parse({})
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.guest_count).toBeUndefined()
+  })
+
+  it('refuses a negative, fractional or absurd number', () => {
+    for (const bad of [-1, 2.5, 100001, '300']) expect(parse({ guest_count: bad }).success).toBe(false)
+  })
+})

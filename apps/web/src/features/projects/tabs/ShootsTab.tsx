@@ -13,6 +13,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  UsersRound,
   X,
   IndianRupee,
 } from 'lucide-react'
@@ -55,6 +56,7 @@ import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
 import { isLive, requirementFill, shootHours, shootProgress } from '@/features/shoots/assign'
 import { ShootWhenFields, whenOfShoot, whenToPatch, type WhenFields } from '@/features/shoots/ShootWhenFields'
 import { mapHref } from '@/features/shoots/map-link'
+import { guestCountFromText, guestCountText, guestsLabel } from '@/features/shoots/guests'
 import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
@@ -143,6 +145,7 @@ export function ShootsTab({
       start_at?: string
       end_at?: string
       location?: string
+      guest_count?: number
       requirements?: ShootRequirementInput[]
     }) =>
       callApi('/shoots', {
@@ -154,6 +157,7 @@ export function ShootsTab({
           ...(input.start_at ? { start_at: input.start_at } : {}),
           ...(input.end_at ? { end_at: input.end_at } : {}),
           ...(input.location ? { location: input.location } : {}),
+          ...(input.guest_count != null ? { guest_count: input.guest_count } : {}),
           ...(input.requirements?.length ? { requirements: input.requirements } : {}),
           status: 'planned',
         }),
@@ -490,6 +494,12 @@ function ShootPlanner({
                 <span className="flex items-center gap-1">
                   <MapPin className="size-3" />
                   {shoot.location}
+                </span>
+              )}
+              {guestsLabel(shoot.guest_count) && (
+                <span className="flex items-center gap-1">
+                  <UsersRound className="size-3" />
+                  {guestsLabel(shoot.guest_count)}
                 </span>
               )}
               {href ? (
@@ -878,13 +888,15 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
   const [when, setWhen] = useState<WhenFields>(() => ({ ...whenOfShoot(shoot), date: shoot.shoot_date ?? whenOfShoot(shoot).date }))
   const [location, setLocation] = useState(shoot.location ?? '')
   const [mapLink, setMapLink] = useState(shoot.map_link ?? '')
+  const [guests, setGuests] = useState(guestCountText(shoot.guest_count))
   const [status, setStatus] = useState<ShootStatus>(shoot.status)
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, when, location, mapLink, status }, (v) => {
+  const draft = useFormDraft(`project-shoot:${shoot.id}`, { name, when, location, mapLink, guests, status }, (v) => {
     setName(v.name)
     if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
     setMapLink(v.mapLink)
+    if (typeof v.guests === 'string') setGuests(v.guests)
     setStatus(v.status)
   })
 
@@ -920,6 +932,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
               placeholder="Paste the map link"
             />
           </div>
+          <GuestsField id="edit-guests" value={guests} onChange={setGuests} />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
               Cancel
@@ -937,6 +950,7 @@ function EditShootDialog({ shoot, onClose }: { shoot: ShootListItem; onClose: ()
                       location: location.trim() || null,
                       // '' clears it; the contract turns that into null.
                       map_link: mapLink.trim(),
+                      guest_count: guestCountFromText(guests),
                     },
                   },
                   {
@@ -968,17 +982,23 @@ function CustomShootDialog({
   busy: boolean
   onClose: () => void
   /** `saved` drops the kept draft once the shoot is really created. */
-  onCreate: (v: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string }, saved: () => void) => void
+  onCreate: (
+    v: { name: string; shoot_date?: string; start_at?: string; end_at?: string; location?: string; guest_count?: number },
+    saved: () => void,
+  ) => void
 }) {
   const [name, setName] = useState('')
   const [when, setWhen] = useState<WhenFields>({ date: todayISO(), time: '', hours: null })
   const [location, setLocation] = useState('')
+  const [guests, setGuests] = useState('')
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, when, location }, (v) => {
+  const draft = useFormDraft(`project-shoot:new:${projectId}`, { name, when, location, guests }, (v) => {
     setName(v.name)
     if (v.when && typeof v.when === 'object') setWhen({ date: v.when.date ?? '', time: v.when.time ?? '', hours: typeof v.when.hours === 'number' ? v.when.hours : null })
     setLocation(v.location)
+    if (typeof v.guests === 'string') setGuests(v.guests)
   })
+  const guestCount = guestCountFromText(guests)
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -1005,6 +1025,7 @@ function CustomShootDialog({
               placeholder="Taj Lands End, Mumbai"
             />
           </div>
+          <GuestsField id="shoot-guests" value={guests} onChange={setGuests} />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
               Cancel
@@ -1024,6 +1045,7 @@ function CustomShootDialog({
                       }
                     })(),
                     ...(location.trim() ? { location: location.trim() } : {}),
+                    ...(guestCount != null ? { guest_count: guestCount } : {}),
                   },
                   draft.clear,
                 )
@@ -1035,5 +1057,25 @@ function CustomShootDialog({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** How many guests the day expects -- optional, a whole number. */
+function GuestsField({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>Guests</Label>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={100000}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. 300"
+      />
+    </div>
   )
 }
