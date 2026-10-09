@@ -304,6 +304,21 @@ export const myDeliverable = z.object({
   assigned_by_name: z.string().nullable().default(null),
   /** Delivered or dropped: shown under "Done" for a while. */
   done_at: isoDateTime.nullable().default(null),
+  /** The latest note someone else wrote to the editor, for Home's Play / Reply (0253). */
+  last_note: z
+    .object({
+      id: uuid,
+      kind: z.enum(['text', 'voice']),
+      body: z.string().nullable(),
+      file_id: uuid.nullable(),
+      duration_seconds: z.number().int().nullable(),
+      author_name: z.string().nullable(),
+      created_at: isoDateTime,
+    })
+    .nullable()
+    .default(null),
+  /** Notes to the editor they have not opened yet (their unread alerts for it). */
+  unread_notes: z.number().int().default(0),
 })
 export type MyDeliverable = z.infer<typeof myDeliverable>
 

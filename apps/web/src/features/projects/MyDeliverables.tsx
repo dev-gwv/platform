@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { useAuth } from '@/shared/auth/AuthProvider'
-import { useMyDeliverables, useStartDeliverable } from '@/features/projects/api'
+import { useMyDeliverables, useNotesHeard, useStartDeliverable } from '@/features/projects/api'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { SECTION_LABEL, bySection, waitingFor, workSentence } from '@/features/projects/my-work-sections'
 import { DueChip, KindTile, MoveToMenu, NextStageButton } from '@/features/projects/DeliverableCard'
@@ -63,6 +63,13 @@ export function MyDeliverables() {
     const d = new URLSearchParams(searchStr).get('d')
     if (d) setOpenId(d)
   }, [searchStr])
+  const heard = useNotesHeard()
+  // Opening an item is hearing its notes: Home stops raising it.
+  const unheard = data?.find((d) => d.id === openId && d.unread_notes > 0)?.id
+  useEffect(() => {
+    if (unheard) heard.mutate(unheard)
+    // Once per item opened; the mutation object is stable enough for this.
+  }, [unheard])
   if (!data?.length) return null
   const me = { id: session?.user_id ?? null, name: session?.display_name ?? null }
   const open = data.find((d) => d.id === openId)
@@ -143,14 +150,30 @@ export function MyEditRow({ d, onOpen, showProject = true }: { d: MyDeliverable;
             </span>
           )}
           {!done && <DueChip d={d} />}
+          {/* Tapping a count opens the notes, to listen and reply. */}
           {d.voice_count > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-tone-blue-soft px-2 py-0.5 font-medium text-tone-blue">
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={`${d.voice_count} voice note${d.voice_count === 1 ? '' : 's'}: open to listen`}
+              className="inline-flex items-center gap-1 rounded-full bg-tone-blue-soft px-2 py-0.5 font-medium text-tone-blue hover:ring-1 hover:ring-tone-blue/40"
+            >
               <Mic className="size-3" aria-hidden /> {d.voice_count}
-            </span>
+            </button>
           )}
           {d.notes_count - d.voice_count > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium">
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={`${d.notes_count - d.voice_count} notes: open to read`}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 font-medium hover:bg-accent"
+            >
               <MessageSquare className="size-3" aria-hidden /> {d.notes_count - d.voice_count}
+            </button>
+          )}
+          {d.unread_notes > 0 && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 font-medium text-warning">
+              {d.unread_notes === 1 ? 'New note' : `${d.unread_notes} new notes`}
             </span>
           )}
         </div>

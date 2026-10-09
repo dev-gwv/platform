@@ -103,10 +103,9 @@ export const NAV: NavEntry[] = [
   leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
 
   // Employee-only personal set.
-  leaf('My Work', '/my-work', ListTodo, { roles: ['employee'] }),
-  // The same page as Task Management, showing only their own: where they
-  // submit work and see what was sent back.
-  leaf('My Tasks', '/tasks', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
+  // Their edits and their tasks on one page (My Tasks folded in; /tasks
+  // still opens for anyone who has a link to it).
+  leaf('My Work', '/my-work', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Attendance & leave', '/attendance/my', MapPin, { roles: ['employee'], hub: MY_TIME }),
   leaf('My payouts', '/payouts/my', Banknote, { roles: ['employee'] }),

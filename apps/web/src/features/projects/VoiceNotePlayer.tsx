@@ -19,6 +19,7 @@ export function VoiceNotePlayer({
   src,
   seconds,
   tone = 'default',
+  onPlay,
 }: {
   fileId?: string | null | undefined
   /** Where to fetch it from, when not /files/:id (the platform inbox). */
@@ -27,6 +28,8 @@ export function VoiceNotePlayer({
   src?: string | null | undefined
   seconds?: number | null | undefined
   tone?: 'default' | 'inverse' | undefined
+  /** Called when the listener presses play (Home marks the note heard). */
+  onPlay?: (() => void) | undefined
 }) {
   const [wanted, setWanted] = useState(false)
   const remote = useFileBlobUrl(src ? null : fileId, wanted, path)
@@ -46,6 +49,7 @@ export function VoiceNotePlayer({
 
   function toggle() {
     const el = audio.current
+    if (!el || el.paused) onPlay?.()
     if (!url || !el) {
       setWanted(true)
       return

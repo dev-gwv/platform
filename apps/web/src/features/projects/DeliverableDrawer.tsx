@@ -302,7 +302,9 @@ function Timeline({
         <p className="mt-2 text-sm text-destructive">Could not load the notes.</p>
       ) : notes.length === 0 ? (
         <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-          No notes yet. Send the editor a voice note or a message — they’ll be notified.
+          {d.assignee_id
+            ? `No notes yet. Send ${d.assignee_id === me ? 'the studio' : (d.assignee_name?.split(' ')[0] ?? 'the editor')} a voice note or a message — they’ll be told.`
+            : 'No notes yet. Notes reach the editor once someone is given this work.'}
         </p>
       ) : (
         <ol className="mt-3 flex flex-col gap-3">

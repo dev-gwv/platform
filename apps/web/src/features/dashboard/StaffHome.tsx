@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowRight, Check, ClipboardList, HardDrive, MapPin, Phone, Play, UserRoundCheck } from 'lucide-react'
+import { ArrowRight, Check, ClipboardList, HardDrive, MapPin, Phone, Play, Reply, UserRoundCheck } from 'lucide-react'
 import { PROFILE_FIELD_LABEL, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -17,9 +17,11 @@ import { useMyData } from '@/features/data/api'
 import { optedOut } from '@/features/data/stage'
 import { useMyProfile } from '@/features/profile/api'
 import { profileLine } from './profile-line'
-import { useMyDeliverables } from '@/features/projects/api'
+import { useMyDeliverables, useNotesHeard } from '@/features/projects/api'
+import { VoiceNotePlayer } from '@/features/projects/VoiceNotePlayer'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { SubmitWorkDialog } from '@/features/work/SubmitWorkDialog'
+import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { localDate } from '@/features/shoots/assign'
 import { useFollowUpDone, useMyFollowUps } from './api'
 import { myDay, openWorkLine, type TodayItem } from './today'
@@ -177,14 +179,9 @@ function RowAction({ item }: { item: TodayItem }) {
     )
   }
   if (item.kind === 'task' && item.task) return <TaskAction task={item.task} />
+  if (item.kind === 'edit' && item.edit && item.heard === false) return <NoteAction edit={item.edit} />
   if (item.kind === 'edit' && item.edit) return <EditAction item={item} />
-  if (item.kind === 'handover') {
-    return (
-      <Button asChild size="sm" variant="outline">
-        <Link to="/shoots/my">Hand over</Link>
-      </Button>
-    )
-  }
+  if (item.kind === 'handover' && item.slot) return <HandoverAction slot={item.slot} />
   if (item.kind === 'call' && item.call) return <CallAction call={item.call} />
   return null
 }
@@ -235,6 +232,53 @@ function EditAction({ item }: { item: TodayItem }) {
         Open
       </Link>
     </Button>
+  )
+}
+
+/** Hand over the cards right here: the same box as My shoots, without going there. */
+function HandoverAction({ slot }: { slot: NonNullable<TodayItem['slot']> }) {
+  const [open, setOpen] = useState(false)
+  const data = useMyData()
+  const record = (data.data ?? []).find((r) => r.slot_id === slot.id)
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <HardDrive /> Hand over
+      </Button>
+      {open && (
+        <HandoverDialog
+          slot={slot}
+          shootName={slot.shoot_name ?? slot.service_name ?? 'Shoot'}
+          record={record}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
+/** A note waiting for the editor: play it (or read it) right here, and Reply on My work. */
+function NoteAction({ edit }: { edit: NonNullable<TodayItem['edit']> }) {
+  const heard = useNotesHeard()
+  const n = edit.last_note!
+  const markHeard = () => {
+    if (!heard.isPending) heard.mutate(edit.id)
+  }
+  return (
+    <>
+      {n.kind === 'voice' && n.file_id ? (
+        <VoiceNotePlayer fileId={n.file_id} seconds={n.duration_seconds} onPlay={markHeard} />
+      ) : (
+        <span className="max-w-[16rem] truncate rounded-full bg-muted px-3 py-1 text-xs" title={n.body ?? undefined}>
+          “{n.body}”
+        </span>
+      )}
+      <Button asChild size="sm">
+        <Link to="/my-work" search={{ d: edit.id } as never}>
+          <Reply /> Reply
+        </Link>
+      </Button>
+    </>
   )
 }
 

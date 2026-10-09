@@ -19,6 +19,7 @@ import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { STAGE_LABEL, STAGE_TONE, optedOut } from '@/features/data/stage'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { SlotAnswer } from '@/features/allocation/SlotAnswer'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 /** A booking whose shoot is over, owes data, and has not been handed over. */
 const owesData = (sl: TeamSlot, rec: DataRecord | undefined, now: string) =>
@@ -67,7 +68,7 @@ function MyShoots() {
     return map
   }, [slots.data, session?.user_id])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayInIndia()
   const upcoming = (shoots.data ?? []).filter((s) => !s.shoot_date || s.shoot_date >= today)
   const past = (shoots.data ?? []).filter((s) => s.shoot_date && s.shoot_date < today)
   const now = new Date().toISOString()
@@ -158,7 +159,9 @@ function Section({
                         <p className="truncate text-sm text-muted-foreground">{s.project_name ?? 'No project'}</p>
                       </div>
                     </div>
-                    <StatusBadge tone={TONE[s.status]}>{humanize(s.status)}</StatusBadge>
+                    {/* One state per booking (its answer, below); the shoot's own
+                        status shows only when it is called off. */}
+                    {s.status === 'cancelled' && <StatusBadge tone={TONE[s.status]}>Cancelled</StatusBadge>}
                   </div>
                   <div className="mt-3 flex flex-col gap-1 text-sm text-muted-foreground">
                     <span className="flex items-center gap-2">
@@ -192,7 +195,7 @@ function Section({
                             {timeFormat.format(new Date(sl.start_at))} – {timeFormat.format(new Date(sl.end_at))}
                           </span>
                           <span className="text-muted-foreground">{sl.service_name ?? 'Crew'}</span>
-                          <StatusBadge tone={sl.status === 'booked' ? 'success' : 'neutral'}>{humanize(sl.status)}</StatusBadge>
+                          {sl.status !== 'booked' && <StatusBadge tone="neutral">{humanize(sl.status)}</StatusBadge>}
                           <SlotAnswer slot={sl} />
                           {sl.status === 'booked' && sl.end_at >= data.now && (
                             <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => downloadIcs(sl)}>
