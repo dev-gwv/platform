@@ -408,13 +408,17 @@ export const webhooksRouter = new Hono<AppEnv>()
     // A failed ledger write must NOT proceed to activation: the provider will
     // retry, and replay safety depends on the ledger having the row first.
     if (fresh === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
-    if (fresh === false) return c.json({ ok: true, duplicate: true })
 
     const pay = body!.payload?.payment?.entity
     // Only money that actually arrived gives a plan. A `payment.failed` (or
     // `payment.authorized` not yet captured) carries the same order_id and
     // payment id, and used to activate the subscription all the same.
     const paid = body!.event === 'payment.captured' || body!.event === 'order.paid'
+    // A replay of anything else is done with. A replay of a payment still
+    // tries the plan: activate_subscription does nothing to an order already
+    // paid, and this is how a paid order whose first activation failed gets
+    // its plan when Razorpay sends the event again.
+    if (fresh === false && !paid) return c.json({ ok: true, duplicate: true })
     if (paid && pay?.order_id && pay.id) {
       const orderId = pay.order_id
       const paymentId = pay.id
@@ -434,7 +438,12 @@ export const webhooksRouter = new Hono<AppEnv>()
       if (activated === 'no_order') {
         log.warn({ requestId: c.get('requestId'), orderId, eventId }, 'razorpay event for unknown order')
       }
+      // The money arrived but the plan did not: answer 503 so Razorpay sends
+      // the event again (it used to be 200, and the order waited for a
+      // platform admin to credit it by hand).
+      if (activated === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     }
+    if (fresh === false) return c.json({ ok: true, duplicate: true })
     return c.json({ ok: true })
   })
 

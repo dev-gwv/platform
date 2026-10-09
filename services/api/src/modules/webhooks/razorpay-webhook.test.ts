@@ -24,6 +24,7 @@ const db = vi.hoisted(() => ({
   fresh: true as boolean,
   orderId: 'po-1' as string | null,
   failLedger: false,
+  failActivate: false,
 }))
 
 vi.mock('../../lib/db', async (importOriginal) => {
@@ -37,7 +38,10 @@ vi.mock('../../lib/db', async (importOriginal) => {
         return [{ fresh: db.fresh }]
       }
       if (text.includes('from payment_orders')) return db.orderId ? [{ id: db.orderId }] : []
-      if (text.includes('activate_subscription')) return [{ duplicate: false, expires_at: null }]
+      if (text.includes('activate_subscription')) {
+        if (db.failActivate) throw new Error('activation failed')
+        return [{ duplicate: false, expires_at: null }]
+      }
       throw new Error(`unexpected statement: ${text}`)
     },
     { json: (v: unknown) => v },
@@ -80,6 +84,7 @@ beforeEach(() => {
   db.fresh = true
   db.orderId = 'po-1'
   db.failLedger = false
+  db.failActivate = false
   // attempt() and the unknown-order warning log to stderr; keep the run quiet.
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
 })
@@ -160,12 +165,26 @@ describe('money that arrived', () => {
     )
   })
 
-  it('a replayed event is a no-op', async () => {
+  it('a replayed event that is not a payment is a no-op', async () => {
+    db.fresh = false
+    const res = await post(event('payment.failed'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true, duplicate: true })
+    expect(activations()).toEqual([])
+  })
+
+  it('a replayed capture tries the plan again (a no-op for an order already paid)', async () => {
     db.fresh = false
     const res = await post(event('payment.captured'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true, duplicate: true })
-    expect(activations()).toEqual([])
+    expect(activations()).toHaveLength(1)
+  })
+
+  it('when the plan cannot be activated, answers 503 so Razorpay sends it again', async () => {
+    db.failActivate = true
+    const res = await post(event('payment.captured'))
+    expect(res.status).toBe(503)
   })
 
   it('a capture for an order we never made activates nothing', async () => {
