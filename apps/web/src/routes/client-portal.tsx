@@ -38,6 +38,7 @@ import { termsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
 import { DELIVERABLE_STATUS_LABEL, expectedLine, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
 import { DeliverableTile } from '@/shared/ui/icon-tile'
+import { guestsLabel } from '@/features/shoots/guests'
 
 /**
  * PUBLIC page -- no login, no app shell. The one link a studio sends its
@@ -323,6 +324,7 @@ function ShootCard({ shoot }: { shoot: PublicClientPortal['shoots'][number] }) {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {shoot.shoot_date ? dayFmt.format(asDate(shoot.shoot_date)) : 'Date to be fixed'}
             {time ? ` · ${time}` : ''}
+            {guestsLabel(shoot.guests) ? ` · ${guestsLabel(shoot.guests)}` : ''}
           </p>
           {shoot.location && (
             <p className="mt-1 flex items-start gap-1.5 text-sm">
