@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolveAccess, type AccessInput } from '@ipc/permissions'
 import { PROJECT_GROUPS, PROJECT_TABS, groupOf, viewsOf, visibleViews } from './ProjectTabs'
 
 const everything = { module: () => true, action: () => true }
@@ -49,5 +50,29 @@ describe('project tabs', () => {
 
   it('shows everything to an owner', () => {
     expect(visibleViews(everything)).toEqual(PROJECT_TABS.map((t) => t.value))
+  })
+
+  it('drops Billing and the Cost sheet for the real profiles without money, and keeps them for money', () => {
+    const viewsFor = (input: AccessInput) => {
+      const a = resolveAccess(input)
+      return visibleViews({ module: (m) => a.hasModule(m), action: (m, act) => a.hasAction(m, act) })
+    }
+    const noMoney: AccessInput[] = [
+      { role: 'employee', isOwner: false, profileKey: 'project_manager' },
+      { role: 'admin', isOwner: false },
+      { role: 'manager', isOwner: false },
+      { role: 'employee', isOwner: false, profileKey: 'photographer' },
+      { role: 'employee', isOwner: false },
+    ]
+    for (const input of noMoney) {
+      const seen = viewsFor(input)
+      expect(seen, JSON.stringify(input)).not.toContain('billing')
+      expect(seen, JSON.stringify(input)).not.toContain('costs')
+    }
+    // A Project Manager still runs the project: the work and the data stay.
+    expect(viewsFor(noMoney[0]!)).toEqual(expect.arrayContaining(['deliverables', 'data']))
+
+    expect(viewsFor({ role: 'super_admin', isOwner: true })).toEqual(expect.arrayContaining(['billing', 'costs']))
+    expect(viewsFor({ role: 'employee', isOwner: false, profileKey: 'finance_manager' })).toContain('billing')
   })
 })

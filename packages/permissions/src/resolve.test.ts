@@ -89,4 +89,29 @@ describe('seesStudioWork', () => {
     expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'project_manager' }))).toBe(true)
     expect(seesStudioWork(resolveAccess({ role: 'employee', isOwner: false, profileKey: 'crm_executive' }))).toBe(false)
   })
+
+  it('follows what the owner grants or takes away, not the title', () => {
+    const photographer = { role: 'employee', isOwner: false, profileKey: 'photographer' } as const
+    expect(seesStudioWork(resolveAccess({ ...photographer, overrides: [{ permission_key: 'billing', enabled: true }] }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ ...photographer, overrides: [{ permission_key: 'money', enabled: true }] }))).toBe(true)
+    expect(seesStudioWork(resolveAccess({ ...photographer, overrides: [{ permission_key: 'projects.edit', enabled: true }] }))).toBe(true)
+    // Seeing projects is not running them.
+    expect(seesStudioWork(resolveAccess({ ...photographer, overrides: [{ permission_key: 'projects', enabled: true }] }))).toBe(false)
+    // A Project Manager whose project editing is taken away is back to their own work.
+    expect(
+      seesStudioWork(
+        resolveAccess({
+          role: 'employee',
+          isOwner: false,
+          profileKey: 'project_manager',
+          overrides: [{ permission_key: 'projects.edit', enabled: false }],
+        }),
+      ),
+    ).toBe(false)
+    // The client hydrates the same answer from the wire set.
+    const pm = resolveAccess({ role: 'employee', isOwner: false, profileKey: 'project_manager' })
+    expect(seesStudioWork(accessFromSet(serializeAccess(pm), false))).toBe(true)
+    const staff = resolveAccess(photographer)
+    expect(seesStudioWork(accessFromSet(serializeAccess(staff), false))).toBe(false)
+  })
 })
