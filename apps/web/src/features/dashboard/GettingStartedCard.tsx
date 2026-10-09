@@ -15,6 +15,20 @@ import { showGettingStarted, startCountLine, startSteps } from './getting-starte
  * ticks itself from the data; the next one is amber with its one button. Goes
  * away at 5 of 5, after 60 days, or on Close (per person, through users.hints).
  */
+/** Whether the card is up, so Home shows one onboarding card at a time. */
+export function useGettingStartedShowing(): boolean {
+  const { session } = useAuth()
+  const q = useQuery({
+    queryKey: ['settings', 'getting-started'],
+    queryFn: () => callApi('/settings/getting-started', { responseSchema: gettingStarted }),
+    enabled: !!session,
+    staleTime: 30_000,
+  })
+  const hints = useHints()
+  if (hints.isPending || q.isPending) return true
+  return showGettingStarted(q.data, !!hints.data?.getting_started?.closed)
+}
+
 export function GettingStartedCard() {
   const { session } = useAuth()
   const q = useQuery({

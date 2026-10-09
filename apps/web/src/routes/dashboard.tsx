@@ -1,20 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Plus,
-  Receipt,
-} from 'lucide-react'
+import { ArrowRight, CalendarClock, PhoneCall, Plus, Receipt, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { projectTrackingRow, shootListItem, type ShootListItem } from '@ipc/contracts'
+import { projectTrackingRow, shootListItem } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { cn } from '@/shared/ui/cn'
 import {
   BAND_TONE,
   NEXT_ACTION_LABEL,
-  summary,
   track,
   type TrackedProject,
 } from '@/features/projects/tracking'
@@ -26,21 +19,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { useProjects } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
-import { useInvoices } from '@/features/billing/api'
+import { useBillingDue } from '@/features/billing/api'
+import { useCallQueue } from '@/features/crm-calls/api'
+import { useSlots } from '@/features/allocation/api'
+import { crewState } from '@ipc/domain'
 import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
-import { MyTasksCard } from '@/features/tasks/MyTasksCard'
 import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
-import { GettingStartedCard } from '@/features/dashboard/GettingStartedCard'
+import { GettingStartedCard, useGettingStartedShowing } from '@/features/dashboard/GettingStartedCard'
 import { GuideCard } from '@/features/help/GuideCard'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
-import { EventTile } from '@/shared/ui/icon-tile'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { greeting, todayLine } from '@/features/dashboard/greeting'
-import { attentionLine, collectLine, shootsWeekLine } from '@/features/dashboard/tiles'
+import { leadsTileLine, moneyTile, shootsTile } from '@/features/dashboard/tiles'
 import { seesStudioWork } from '@ipc/permissions'
 import { useINR } from '@/shared/money/MoneyMask'
 
@@ -86,7 +80,6 @@ function StudioCommandCenter() {
   const projects = useProjects()
   const clients = useClients()
   const members = useMembers()
-  const invoices = useInvoices()
 
   // The dashboard's operational half runs off the same tracking pass the
   // Project Tracking screen uses, so the two can never disagree about which
@@ -105,11 +98,61 @@ function StudioCommandCenter() {
   })
   const today = todayInIndia()
   const tracked = track(trackingRows.data ?? [], today)
-  const totals = summary(tracked)
-
-  const activeProjects = (projects.data ?? []).filter((p) => p.status === 'active').length
   const clientCount = Array.isArray(clients.data) ? clients.data.length : 0
-  const outstanding = (invoices.data?.items ?? []).reduce((s, i) => s + i.balance_due, 0)
+  const startShowing = useGettingStartedShowing()
+
+  // The three tiles' data: today's calls, the bookings against the week's
+  // shoots, and what is due by the Payments received rule.
+  const canCrm = access.hasModule('crm')
+  const queue = useCallQueue(access.hasAction('crm', 'edit') ? 'all' : 'mine')
+  const slots = useSlots()
+  const due = useBillingDue({ from: `${today.slice(0, 8)}01`, to: today })
+  const booked = (slots.data ?? []).filter((x) => x.status === 'booked')
+  const week = shootsTile(
+    shoots.data ?? [],
+    (id) => {
+      const s = (shoots.data ?? []).find((x) => x.id === id)
+      const state = s ? crewState(id, s.requirements, booked) : 'unplanned'
+      return state === 'unassigned' || state === 'partial'
+    },
+    today,
+  )
+  const money = due.data ? moneyTile(due.data, inr) : null
+  const tiles = [
+    canCrm && (
+      <Tile
+        key="leads"
+        icon={PhoneCall}
+        value={queue.data?.items.length ?? '–'}
+        label="Leads to call"
+        hint={queue.data ? leadsTileLine(queue.data.items) : undefined}
+        tone={queue.data?.items.length ? 'warning' : 'success'}
+        to="/follow-ups/queue"
+      />
+    ),
+    access.hasModule('projects') && (
+      <Tile
+        key="shoots"
+        icon={CalendarClock}
+        value={shoots.data ? week.count : '–'}
+        label="Shoots this week"
+        hint={shoots.data ? week.line : undefined}
+        tone={week.short ? 'warning' : 'primary'}
+        to="/team-allocation"
+      />
+    ),
+    access.hasModule('billing') && (
+      <Tile
+        key="money"
+        icon={Receipt}
+        value={money ? inr(money.amount) : '–'}
+        label="To collect"
+        hint={money?.line}
+        tone={due.data?.overdue.amount ? 'danger' : 'primary'}
+        to="/billing/payments"
+      />
+    ),
+  ].filter(Boolean)
 
   // The setup card is for whoever is standing the studio up, and only until
   // setup is over (done or skipped) -- then it is gone for good.
@@ -121,7 +164,7 @@ function StudioCommandCenter() {
   // count above collapses to zero. Without this an established studio hitting
   // a 500 is told to add its first client. Counts we could not load are not
   // counts of zero.
-  const queries = [projects, clients, members, invoices]
+  const queries = [projects, clients, members]
   const anyFailed = queries.some((q) => q.isError)
   const journeyReady = !queries.some((q) => q.isPending) && !anyFailed
   const journey = buildJourney(
@@ -183,48 +226,21 @@ function StudioCommandCenter() {
       <ProfileBanner />
       <YourDayStrip />
       {session && isSetupAudience(session) && <GettingStartedCard />}
-      <GuideCard />
+      {/* One onboarding card at a time: Getting started, then the guide. */}
+      {!(session && isSetupAudience(session) && startShowing) && <GuideCard />}
 
-      {/* Three numbers, the way a project page opens: what is running, what
-          needs a hand, what is still to come in. Everything else is one
-          click away in the menu. */}
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <Tile
-          icon={Activity}
-          value={activeProjects}
-          label="Active projects"
-          hint={access.hasModule('projects') ? shootsWeekLine(shoots.data ?? [], today) : undefined}
-          tone="primary"
-          to="/projects"
-        />
-        <Tile
-          icon={AlertTriangle}
-          value={totals.attention}
-          label="Need attention"
-          hint={attentionLine(totals)}
-          tone={totals.attention > 0 ? 'danger' : 'success'}
-          to="/project-tracking"
-          search={{ tab: 'attention' }}
-        />
-        {access.hasModule('billing') && (
-          <Tile
-            icon={Receipt}
-            value={inr(outstanding)}
-            label="To collect"
-            hint={collectLine(invoices.data?.items ?? [], today)}
-            tone="warning"
-            to="/billing/invoices"
-          />
-        )}
-      </div>
+      {/* Three tiles, each a sentence and the one place to act (the audit):
+          who to call, the week's shoots, and the money due. The figure is
+          the same rule as Payments received, so the two never disagree. */}
+      {tiles.length > 0 && (
+        <div className={cn('mt-4 grid grid-cols-1 gap-2 sm:gap-3', tiles.length === 2 ? 'sm:grid-cols-2' : tiles.length === 3 && 'sm:grid-cols-3')}>
+          {tiles}
+        </div>
+      )}
 
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
         {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
-        <div className="flex flex-col gap-4">
-          <WhoYouOwe />
-          {access.hasModule('projects') && <UpcomingShoots shoots={shoots.data ?? []} />}
-          <MyTasksCard hideWhenEmpty />
-        </div>
+        <WhoYouOwe />
       </div>
       </>
       )}
@@ -241,7 +257,7 @@ function Tile({
   to,
   search,
 }: {
-  icon: typeof Activity
+  icon: LucideIcon
   value: number | string
   label: string
   hint?: string | undefined
@@ -345,54 +361,6 @@ function NeedsAttention({ projects }: { projects: readonly TrackedProject[] }) {
     </Card>
   )
 }
-
-/** The next week of shoot days, so nobody finds out on the morning. */
-function UpcomingShoots({ shoots }: { shoots: readonly ShootListItem[] }) {
-  const today = todayInIndia()
-  const horizon = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
-  const soon = shoots
-    .filter((s) => s.shoot_date && s.shoot_date >= today && s.shoot_date <= horizon)
-    .filter((s) => s.status !== 'cancelled')
-    .sort((a, b) => (a.shoot_date ?? '').localeCompare(b.shoot_date ?? ''))
-    .slice(0, 3)
-
-  // Nothing this week: no card saying so.
-  if (soon.length === 0) return null
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle>Coming up</CardTitle>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/team-allocation">
-            See all <ArrowRight />
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y divide-border">
-          {soon.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 py-2.5">
-              <EventTile name={s.name} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{s.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{s.project_name ?? '—'}</span>
-              </span>
-              {s.shoot_date && <span className="shrink-0 text-xs text-muted-foreground">{prettyDay(s.shoot_date)}</span>}
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}
-
-const dayFormat = new Intl.DateTimeFormat('en-IN', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-})
-const prettyDay = (iso: string) => dayFormat.format(new Date(`${iso}T00:00:00`))
 
 /** The single symptom worth naming on a Needs-attention row. */
 function worstFlag(p: TrackedProject): string | null {
