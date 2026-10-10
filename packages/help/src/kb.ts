@@ -68,7 +68,7 @@ export const KB: readonly KbArticle[] = [
     body: [
       'Studio AutoPilot runs a photography or wedding studio from the first enquiry to the last payment.',
       'It holds your enquiries and follow-ups, your clients, your projects with their shoot days and deliverables, the crew you book for each day, the editing work and who has it, your invoices and the money in and out, and your team: attendance, leave and pay.',
-      'The menu down the left is the order of the work: **Leads**, **Clients**, **Projects**, **Shoots**, **Post-production**, **Tasks**, **Data & Backup**, **Money**, **Team**, **Reports**, **Settings**.',
+      'The menu down the left is the order of the work: **Leads**, **Clients**, **Projects**, **Shoots**, **Post-Production**, **Tasks**, **Data & Backup**, **Money**, **Team**, **Reports**, **Settings**.',
     ],
   },
   {
@@ -159,7 +159,7 @@ export const KB: readonly KbArticle[] = [
     body: [
       'Pick the leads and send one message to all of them, on WhatsApp or email.',
       'Tick leads on the board or the list to get the bulk bar, which also sets labels, stage, owner or quality on all of them at once.',
-      'Messages come out of your message credits. Your own WhatsApp number is part of the top plan — Settings → Money → Plan & billing says what yours includes.',
+      'Messages come out of your message credits. Your own WhatsApp number is part of the top plan — **Plan & billing** says what yours includes.',
     ],
   },
   {
@@ -277,7 +277,7 @@ export const KB: readonly KbArticle[] = [
     video: 'project',
     body: [
       'A project is one booking — a wedding, a pre-wedding, an event — with its days, its crew, its deliverables and its money.',
-      'Every project page has eight tabs: **Overview**, **Quotation**, **Shoots**, **Post-production** (Work, Work to review, Task Management), **Terms**, **Finance** (Billing, Expenses, Cost sheet, Payouts), **Data** and **Wishes** (Wishes, Referrals).',
+      'Every project page has eight tabs: **Overview**, **Quotation**, **Shoots**, **Post-Production** (Work, Work to review, Task Management), **Terms**, **Finance** (Billing, Expenses, Cost sheet, Payouts), **Data** and **Wishes** (Wishes, Referrals).',
       'Across the top is the journey line — Quotation · Invoice · Team · Deliver — which always names the next step with one button.',
     ],
   },
@@ -417,7 +417,7 @@ export const KB: readonly KbArticle[] = [
     key: 'editing-give-work',
     title: 'Giving editing work',
     area: 'Editing',
-    menu: 'Project → Post-production → Work',
+    menu: 'Project → Post-Production → Work',
     video: 'give-work',
     body: [
       '**Start editing** on a deliverable with nobody on it asks "Who will edit Wedding Teaser?" — your editors first, each with how much they already have ("2 in hand · 1 late"), the due date filled in, and a line of brief.',
@@ -429,7 +429,7 @@ export const KB: readonly KbArticle[] = [
     key: 'editing-board',
     title: 'The production board',
     area: 'Editing',
-    menu: 'Post-production',
+    menu: 'Post-Production',
     to: '/production-board',
     video: 'board',
     body: [
@@ -442,7 +442,7 @@ export const KB: readonly KbArticle[] = [
     key: 'editing-review',
     title: 'Work to review',
     area: 'Editing',
-    menu: 'Project → Post-production → Work to review',
+    menu: 'Project → Post-Production → Work to review',
     body: [
       'What your editors have handed in and is waiting for you. Open it, watch it, then approve it or send it back with what to change.',
       'Sent back, the work reopens for its editor with your note.',
@@ -470,7 +470,7 @@ export const KB: readonly KbArticle[] = [
     to: '/tasks',
     body: [
       'Tasks are the jobs that are not an edit: book the decorator, order the album, collect the balance.',
-      '**Tasks** in the menu is every task in the studio; **My tasks** is your own. A project\'s own tasks are on **Post-production → Task Management**.',
+      '**Tasks** in the menu is every task in the studio; **My tasks** is your own. A project\'s own tasks are on **Post-Production → Task Management**.',
       'A task has someone on it, a due date and a priority, and the person sees it on their Home for that day.',
       'Add a ready-made set with a task bundle from **Settings → Projects → Templates**.',
     ],
@@ -869,7 +869,7 @@ export const KB: readonly KbArticle[] = [
     to: '/settings/messaging',
     body: [
       'What the app sends on your behalf, and the wording of each message.',
-      'Messages come out of your message credits. Email in your own studio\'s name is part of the top plan — Settings → Money → Plan & billing says what yours includes.',
+      'Messages come out of your message credits. Email in your own studio\'s name is part of the top plan — **Plan & billing** says what yours includes.',
       'Automatic follow-up sequences are set up here, and a sequence never sends to a lead someone is already talking to.',
     ],
   },
@@ -880,7 +880,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Settings → Messages & lists → WhatsApp',
     to: '/help/whatsapp',
     body: [
-      'Messages can go out from your studio\'s own WhatsApp number instead of a shared one. It takes about 30 minutes, once. Settings → Money → Plan & billing says whether your plan includes it.',
+      'Messages can go out from your studio\'s own WhatsApp number instead of a shared one. It takes about 30 minutes, once. **Plan & billing** says whether your plan includes it.',
       'You need a number that is **not** currently on the WhatsApp or WhatsApp Business app — if it is, delete that account first, or use a fresh number.',
       'Then: open a Meta Business account, connect (the easy way is the guided flow; the manual way is making your own Meta app), copy the two IDs it gives you, make a permanent token, point the webhook at us so replies come back in, and submit your templates before going live.',
       'The full step-by-step is on the WhatsApp setup page.',
@@ -922,7 +922,7 @@ export const KB: readonly KbArticle[] = [
     key: 'plans-trial',
     title: 'The free trial',
     area: 'Plans',
-    menu: 'Settings → Money → Plan & billing',
+    menu: 'Plan & billing',
     to: '/settings/subscription',
     body: [
       'Everything works during the trial — there are no limits on it.',
@@ -935,20 +935,21 @@ export const KB: readonly KbArticle[] = [
     key: 'plans-prices',
     title: 'What it costs',
     area: 'Plans',
-    menu: 'Settings → Money → Plan & billing',
+    menu: 'Plan & billing',
     to: '/settings/subscription',
     body: [
+      'There are three plans: **Starter** ₹17,988 a year (or ₹1,999 a month), **Pro** ₹29,988 a year (or ₹2,999 a month) and **Studio Max** ₹47,988 a year (or ₹4,999 a month).',
+      'Every plan has every feature. Starter has number limits (30 projects a year, 3 team logins, 20 crew); Pro and Studio Max are unlimited, and Studio Max sends WhatsApp and email in your own name.',
       'An IPC Diamond member pays ₹1,999 a month, ₹18,000 a year, or ₹33,000 for two years.',
-      'Everyone else pays ₹1,00,000 a year.',
       'All of those are before 18% GST.',
-      'Your own page shows only the plans you can buy, with the exact amount including GST, so **Settings → Money → Plan & billing** is the figure to go by.',
+      'To buy or change a plan, press **Talk to us on WhatsApp** on **Plan & billing**: the message is already written, and we set it up on a short call.',
     ],
   },
   {
     key: 'plans-diamond',
     title: 'IPC Diamond membership',
     area: 'Plans',
-    menu: 'Settings → Money → Plan & billing',
+    menu: 'Plan & billing',
     to: '/settings/subscription',
     body: [
       'A member of the "IPC Diamonds - Premium" WhatsApp group gets the member prices and 30 days to try the app.',
@@ -960,7 +961,7 @@ export const KB: readonly KbArticle[] = [
     key: 'plans-upgrade',
     title: 'Changing or renewing a plan',
     area: 'Plans',
-    menu: 'Settings → Money → Plan & billing',
+    menu: 'Plan & billing',
     to: '/settings/subscription',
     body: [
       'Moving up part-way through only costs the difference — what is left of what you paid comes off the price — and the new plan year starts that day.',
@@ -973,7 +974,7 @@ export const KB: readonly KbArticle[] = [
     key: 'plans-ends',
     title: 'When access ends',
     area: 'Plans',
-    menu: 'Settings → Money → Plan & billing',
+    menu: 'Plan & billing',
     to: '/settings/subscription',
     body: [
       'Nothing is deleted. You can still sign in and reach your plan page to pay.',

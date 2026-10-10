@@ -7,7 +7,7 @@ const s = await studio({ name: 'Sharma Films', owner: 'Rakesh Sharma', skipSetup
 await seedBoard(s)
 const p = await t.open(s)
 const h = withSpot(t)
-await t.goto('/production-board')
+await t.goto('/production-board?view=stages')
 await p.getByText('Haldi Reels').first().waitFor({ timeout: 20000 })
 await t.start()
 await t.titleCard()

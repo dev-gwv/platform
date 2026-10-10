@@ -182,9 +182,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
 const ALL_ITEMS = SETTINGS_GROUPS.flatMap((g) => g.items)
 
 /** The same pages as a flat list, so the sidebar's Settings entry lights on all of them. */
-// Roles and team terms light the Team menu's "Roles & terms" instead: two lit
-// rows for one page reads as a bug.
-export const SETTINGS_PAGES = ALL_ITEMS.filter((i) => !['/settings/roles', '/settings/team-terms'].includes(i.to)).map(
+// Roles and team terms light the Team menu's "Roles & terms" instead, and the
+// plan lights its own "Plan & billing" line: two lit rows for one page reads
+// as a bug.
+export const SETTINGS_PAGES = ALL_ITEMS.filter(
+  (i) => !['/settings/roles', '/settings/team-terms', '/settings/subscription'].includes(i.to),
+).map(
   ({ to, label, module }) => ({ to, label, module }),
 )
 

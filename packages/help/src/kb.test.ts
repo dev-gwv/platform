@@ -92,17 +92,14 @@ describe('the app is actually covered', () => {
     const plans = KB.filter((a) => a.area === 'Plans')
     expect(plans.length).toBeGreaterThan(2)
     const said = plans.flatMap((a) => a.body).join(' ')
-    // The live rows: the Diamond tiers and the one outsider plan.
-    expect(said).toContain('₹1,999')
-    expect(said).toContain('₹18,000')
-    expect(said).toContain('₹33,000')
-    expect(said).toContain('₹1,00,000')
-    expect(said).toContain('18% GST')
-    // Starter, Pro and Studio Max are is_active = false and shown to nobody.
-    // Quoting them would price a studio out of a plan it cannot buy.
-    for (const dead of ['17,988', '29,988', '47,988', 'Starter', 'Studio Max']) {
-      expect(KB.flatMap((a) => a.body).join(' '), `${dead} is not a live plan`).not.toContain(dead)
+    // The live rows (0256): Starter, Pro and Studio Max, and the Diamond tiers.
+    for (const price of ['₹17,988', '₹29,988', '₹47,988', '₹1,999', '₹2,999', '₹4,999', '₹18,000', '₹33,000']) {
+      expect(said).toContain(price)
     }
+    expect(said).toContain('18% GST')
+    // The ₹1,00,000 plan is off sale since 0256; quoting it would price a
+    // studio out of a plan it cannot buy.
+    expect(KB.flatMap((a) => a.body).join(' '), '₹1,00,000 is not a live plan').not.toContain('1,00,000')
   })
 
   it('never promises anything about a studio\'s own bill', () => {

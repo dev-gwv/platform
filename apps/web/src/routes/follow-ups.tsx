@@ -30,7 +30,6 @@ import { cn } from '@/shared/ui/cn'
 
 const FACETS_KEY = 'crm:facets'
 const EXTRAS_KEY = 'crm:extras'
-const MODE_KEY = 'crm:mode'
 type Mode = 'list' | 'board' | 'pipeline'
 
 /** Read something this browser remembered; a private window just gets the default. */
@@ -47,14 +46,6 @@ function remember(key: string, value: unknown) {
     localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
   } catch {
     /* private window: it still works, it just is not remembered */
-  }
-}
-function rememberedMode(): Mode {
-  try {
-    const m = localStorage.getItem(MODE_KEY)
-    return m === 'list' || m === 'board' ? m : 'pipeline'
-  } catch {
-    return 'pipeline'
   }
 }
 
@@ -118,12 +109,11 @@ function Crm() {
    * or as the stage board. Separate from WHICH leads, so "Hot leads, on the
    * board" is now a thing that can be asked for.
    */
-  // The pipeline unless this person chose otherwise; their choice sticks.
-  const [mode, setModeState] = useState<Mode>(rememberedMode)
-  const setMode = (m: Mode) => {
-    setModeState(m)
-    remember(MODE_KEY, m)
-  }
+  // Leads always opens on the pipeline (owner, 10 Oct): a List or Board
+  // picked here holds while you stay on the page, and the next visit starts
+  // on the pipeline again. It used to be remembered, so one tap on List
+  // meant never seeing the pipeline first again.
+  const [mode, setMode] = useState<Mode>('pipeline')
 
   // A ?lead= link (a reminder, a converted enquiry, an alert) opens straight
   // to that lead -- even an archived one -- then clears itself so closing the

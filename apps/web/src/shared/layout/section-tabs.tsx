@@ -38,7 +38,7 @@ export function SectionTabs<T extends string>({
   label?: string
 }) {
   if (variant === 'chips') {
-    // The row inside a tab group (Post-production, Finance): each one a
+    // The row inside a tab group (Post-Production, Finance): each one a
     // bordered chip you can see is a control, the open one tinted in the
     // studio's colour so it reads as part of the strip above it.
     return (

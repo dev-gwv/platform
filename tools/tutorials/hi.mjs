@@ -111,7 +111,7 @@ export const HI = {
   // give work
   'Give editing work': 'एडिटिंग का काम दें',
   'Hand a film to an editor in one step': 'एक स्टेप में फ़िल्म एडिटर को सौंपें',
-  'Open the project’s Post-production tab': 'प्रोजेक्ट का “Post-production” टैब खोलें',
+  'Open the project’s Post-Production tab': 'प्रोजेक्ट का “Post-Production” टैब खोलें',
   'Nobody on the teaser yet? Tap Start editing': 'टीज़र पर अभी कोई नहीं? “Start editing” दबाएँ',
   'Editors are listed with how much they already have': 'एडिटर्स के साथ दिखता है उनके पास कितना काम है',
   'The due date is filled in. Add a line of brief': 'ड्यू डेट भरी हुई है। एक लाइन का ब्रीफ़ लिखें',

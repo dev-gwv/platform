@@ -237,9 +237,20 @@ export const platformPlan = z.object({
   duration_days: z.number().int().nullable(),
   audience: z.string().nullable(),
   is_active: z.boolean(),
+  /** Platform → Plans (0256): the tier, its limits, and the studios on it now. */
+  tier: z.string().nullable().optional(),
+  limits: z.record(z.string(), z.coerce.number()).optional(),
+  sort_order: z.number().int().optional(),
+  studios: z.number().int().optional(),
 })
 export type PlatformPlan = z.infer<typeof platformPlan>
 export const platformPlanList = z.array(platformPlan)
+
+/** Paying studios and studios on their free trial, for Platform → Plans. */
+export const platformPlanCounts = z.object({ paying: z.number().int(), on_trial: z.number().int() })
+export type PlatformPlanCounts = z.infer<typeof platformPlanCounts>
+
+export const platformPlanOnSaleRequest = z.object({ on_sale: z.boolean() })
 
 export const platformAssignPlanRequest = z.object({ plan_key: z.string().trim().min(1).max(80) })
 

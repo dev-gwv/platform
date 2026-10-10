@@ -51,28 +51,12 @@ export function HelpButton({ collapsed }: { collapsed?: boolean }) {
 }
 
 function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
-  const { session } = useAuth()
   const help = useHelp().data
   const tutorials = useTutorials()
   const path = useRouterState({ select: (s) => s.location.pathname })
   const tab = useRouterState({ select: (s) => (s.location.search as { tab?: unknown }).tab })
   const here = tutorialFor(path, tutorials, typeof tab === 'string' ? tab : null)
   const [playing, setPlaying] = useState<Tutorial | null>(null)
-  const studio =
-    session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
-  const message = supportMessage({
-    studio,
-    name: session?.display_name ?? '',
-    role: ROLE[session?.role ?? 'none'] ?? 'Member',
-    plan:
-      session?.plan_gate === 'active'
-        ? 'Paid'
-        : session?.plan_gate === 'grandfathered'
-          ? 'Trial'
-          : (session?.plan_gate ?? null),
-    page: path,
-    at: new Date(),
-  })
 
   return (
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
@@ -86,30 +70,7 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
               Tell us what you need. Your studio and this page are already in the message.
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {help?.support_whatsapp && (
-              <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
-                <a
-                  href={whatsappLink(help.support_whatsapp, message)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <MessageCircle /> WhatsApp us
-                </a>
-              </Button>
-            )}
-            {help?.support_email && (
-              <Button
-                asChild
-                variant="outline"
-                className={cn(!help.support_whatsapp && 'sm:col-span-2')}
-              >
-                <a href={mailLink(help.support_email, studio, message)}>
-                  <Mail /> Email us
-                </a>
-              </Button>
-            )}
-          </div>
+          <SupportButtons />
         </>
       )}
 
@@ -177,5 +138,55 @@ export function GuideLink({ onNavigate, className }: { onNavigate?: () => void; 
         <span className="block text-sm text-muted-foreground">Step by step, with videos · English · हिन्दी</span>
       </span>
     </Link>
+  )
+}
+
+/**
+ * WhatsApp us and Email us, each opened with who is asking, from which page,
+ * already written (the person still presses Send). Shown once its contact is
+ * set on Platform → Help. The sidebar's Help and the corner bubble share it.
+ */
+export function SupportButtons({ compact = false }: { compact?: boolean }) {
+  const { session } = useAuth()
+  const help = useHelp().data
+  const path = useRouterState({ select: (s) => s.location.pathname })
+  if (!help?.support_whatsapp && !help?.support_email) return null
+  const studio =
+    session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
+  const message = supportMessage({
+    studio,
+    name: session?.display_name ?? '',
+    role: ROLE[session?.role ?? 'none'] ?? 'Member',
+    plan:
+      session?.plan_gate === 'active'
+        ? 'Paid'
+        : session?.plan_gate === 'grandfathered'
+          ? 'Trial'
+          : (session?.plan_gate ?? null),
+    page: path,
+    at: new Date(),
+  })
+  return (
+    <div className={cn('grid gap-2', compact ? 'grid-cols-2' : 'sm:grid-cols-2')}>
+      {help.support_whatsapp && (
+        <Button asChild size={compact ? 'sm' : 'default'} className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
+          <a href={whatsappLink(help.support_whatsapp, message)} target="_blank" rel="noreferrer">
+            <MessageCircle /> WhatsApp us
+          </a>
+        </Button>
+      )}
+      {help.support_email && (
+        <Button
+          asChild
+          size={compact ? 'sm' : 'default'}
+          variant="outline"
+          className={cn(!help.support_whatsapp && (compact ? 'col-span-2' : 'sm:col-span-2'))}
+        >
+          <a href={mailLink(help.support_email, studio, message)}>
+            <Mail /> Email us
+          </a>
+        </Button>
+      )}
+    </div>
   )
 }

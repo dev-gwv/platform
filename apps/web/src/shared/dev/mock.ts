@@ -1291,8 +1291,12 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/platform/plans')
     return [
       { id: uid(0x7c1), key: 'diamond-annual', name: 'Diamond Annual', price: 18000, billing_interval: 'yearly', duration_days: 365, audience: 'diamond', is_active: true },
-      { id: uid(0x7c2), key: 'outsider-annual', name: 'Studio Annual', price: 100000, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: true },
+      { id: uid(0x7c2), key: 'outsider-annual', name: 'Studio Annual', price: 100000, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: false, studios: 2 },
+      { id: uid(0x7c5), key: 'starter_yearly', name: 'Starter', price: 17988, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: true, tier: 'starter', sort_order: 10, studios: 9, limits: { projects: 30, leads: 300, invoices: 60, team_logins: 3, team_members: 20 } },
+      { id: uid(0x7c6), key: 'pro_yearly', name: 'Pro', price: 29988, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: true, tier: 'pro', sort_order: 20, studios: 14, limits: {} },
     ]
+  if (method === 'GET' && path === '/platform/plans/counts') return { paying: 25, on_trial: 18 }
+  if (method === 'PATCH' && path.startsWith('/platform/plans/')) return { ok: true }
   if (method === 'POST' && /^\/platform\/studios\/[^/]+\/assign-plan$/.test(path)) return { ok: true, until: '2027-10-01T00:00:00Z' }
   if (method === 'GET' && path === '/platform/payments/recovery')
     return {

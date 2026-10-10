@@ -84,11 +84,19 @@ describe('plan pricing', () => {
     expect(r.rows.map((x) => x.key)).toEqual(['ipc_monthly', 'ipc_yearly', 'ipc_2year'])
   })
 
-  it('offers outsiders one plan, ₹1,00,000 for a year (0214)', async () => {
-    const r = await db.query<{ key: string; price: string; duration_days: number }>(
-      `select key, price, duration_days from plans where is_active and audience = 'outsider';`,
+  it('offers outsiders Starter, Pro and Studio Max; the ₹1,00,000 plan is off sale (0256)', async () => {
+    const r = await db.query<{ key: string; price: string }>(
+      `select key, price from plans where is_active and audience = 'outsider' order by sort_order;`,
     )
-    expect(r.rows.map((x) => [x.key, Number(x.price), x.duration_days])).toEqual([['studio_yearly', 100000, 365]])
+    expect(r.rows.map((x) => [x.key, Number(x.price)])).toEqual([
+      ['starter_yearly', 17988],
+      ['starter_monthly', 1999],
+      ['pro_yearly', 29988],
+      ['pro_monthly', 2999],
+      ['max_yearly', 47988],
+      ['max_monthly', 4999],
+    ])
+    expect((await plan('studio_yearly'))!['is_active']).toBe(false)
   })
 
   it('carries the old app’s prices', async () => {
@@ -143,7 +151,10 @@ describe('plan pricing', () => {
     // policy that filters every row away looks exactly like an empty table --
     // which is the state this whole change set out to fix.
     const r = await asUser<{ key: string }>(OWNER, `select key from plans where is_active;`)
-    expect(r.rows.map((x) => x.key).sort()).toEqual(['ipc_2year', 'ipc_monthly', 'ipc_yearly', 'studio_yearly'])
+    expect(r.rows.map((x) => x.key).sort()).toEqual([
+      'ipc_2year', 'ipc_monthly', 'ipc_yearly',
+      'max_monthly', 'max_yearly', 'pro_monthly', 'pro_yearly', 'starter_monthly', 'starter_yearly',
+    ])
   })
 
   it('hides a plan the platform has withdrawn', async () => {
@@ -151,6 +162,35 @@ describe('plan pricing', () => {
     const r = await asUser<{ key: string }>(OWNER, `select key from plans;`)
     expect(r.rows.map((x) => x.key)).not.toContain('ipc_2year')
     await db.exec(`update plans set is_active = true where key = 'ipc_2year';`)
+  })
+
+  it('Platform → Plans is the platform admin\'s alone, and counts the studios on each plan (0256)', async () => {
+    await expect(asUser(OWNER, `select platform_set_plan_on_sale('pro_yearly', false);`)).rejects.toThrow(/platform access only/)
+    await expect(asUser(OWNER, `select * from platform_plans();`)).rejects.toThrow(/platform access only/)
+
+    await db.exec(`insert into platform_admins (user_id) values ('${OWNER}') on conflict do nothing;`)
+    await db.exec(`update companies set plan = 'starter_yearly', plan_expiry = now() + interval '200 days' where id = '${COMPANY}';`)
+    try {
+      const rows = await asUser<{ key: string; studios: number; tier: string | null; limits: Record<string, number> }>(
+        OWNER,
+        `select key, studios, tier, limits from platform_plans();`,
+      )
+      const starter = rows.rows.find((r) => r.key === 'starter_yearly')!
+      expect(starter.studios).toBe(1)
+      expect(starter.tier).toBe('starter')
+      expect(starter.limits).toMatchObject({ projects: 30 })
+      const counts = await asUser<{ paying: number }>(OWNER, `select * from platform_plan_counts();`)
+      expect(counts.rows[0]!.paying).toBe(1)
+
+      await asUser(OWNER, `select platform_set_plan_on_sale('pro_yearly', false);`)
+      expect((await plan('pro_yearly'))!['is_active']).toBe(false)
+      await asUser(OWNER, `select platform_set_plan_on_sale('pro_yearly', true);`)
+      expect((await plan('pro_yearly'))!['is_active']).toBe(true)
+      await expect(asUser(OWNER, `select platform_set_plan_on_sale('no_such_plan', true);`)).rejects.toThrow(/unknown plan/)
+    } finally {
+      await db.exec(`delete from platform_admins where user_id = '${OWNER}';`)
+      await db.exec(`update companies set plan = null, plan_expiry = null where id = '${COMPANY}';`)
+    }
   })
 
   it('re-running the seed updates rather than duplicating', async () => {

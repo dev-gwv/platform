@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -307,6 +307,35 @@ export const platformRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not load the plans.')
     return c.json(platformPlanList.parse(rows))
+  })
+
+  /** Paying studios and studios on a free trial, for Platform → Plans. */
+  .get('/plans/counts', async (c) => {
+    const rows = await attempt(c, 'platform.plan_counts', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from platform_plan_counts()`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not count the studios.')
+    return c.json(platformPlanCounts.parse(rows[0]))
+  })
+
+  /** Put a plan on sale or take it off. A studio already on it keeps it. */
+  .patch('/plans/:key', async (c) => {
+    const parsed = platformPlanOnSaleRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Say whether the plan is on sale.')
+    const key = c.req.param('key')
+    const ok = await attempt(
+      c,
+      'platform.plan_on_sale',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          await sql`select platform_set_plan_on_sale(${key}, ${parsed.data.on_sale})`
+          return true
+        }),
+      { onCode: (code) => (code === '22023' ? fail(404, 'That plan is not in the catalogue.') : undefined) },
+    )
+    if (!ok) fail(400, 'We could not change the plan.')
+    await audit(c, { action: 'platform.plan_on_sale', entityType: 'plan', entityId: key, after: { on_sale: parsed.data.on_sale } })
+    return c.json({ ok: true })
   })
 
   .post('/studios/:id/assign-plan', async (c) => {

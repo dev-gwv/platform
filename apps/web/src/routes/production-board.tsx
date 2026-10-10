@@ -56,12 +56,14 @@ function Board() {
   const canSeeTasks = access.hasModule('tasks')
   const me = session?.user_id ?? null
 
-  const [viewParam, setView] = useUrlParam('view', 'stages')
+  // Opens on People: who has what (owner, 10 Oct). Stages, List and Tasks
+  // are a tab away, and a ?view= link still opens its own.
+  const [viewParam, setView] = useUrlParam('view', 'people')
   const [project, setProject] = useUrlParam('project')
   const [person, setPerson] = useUrlParam('person')
   const [focusParam, setFocus] = useUrlParam('focus')
   const [q, setQ] = useUrlParam('q')
-  const view: View = viewParam === 'people' || viewParam === 'list' || (viewParam === 'tasks' && canSeeTasks) ? viewParam : 'stages'
+  const view: View = viewParam === 'stages' || viewParam === 'list' || (viewParam === 'tasks' && canSeeTasks) ? viewParam : 'people'
   const focus = FOCI.some((f) => f.key === focusParam) ? (focusParam as Focus) : null
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -102,7 +104,7 @@ function Board() {
 
   return (
     <>
-      <PageHeader title="Post-production" />
+      <PageHeader title="Post-Production" />
 
       {isLoading ? (
         <SkeletonCards count={4} />
@@ -144,9 +146,9 @@ function Board() {
                 setSelected(new Set())
               }}
               tabs={[
+                { value: 'people', label: 'People' },
                 { value: 'stages', label: 'Stages' },
                 { value: 'list', label: 'List' },
-                { value: 'people', label: 'People' },
                 ...(canSeeTasks ? [{ value: 'tasks' as const, label: 'Tasks' }] : []),
               ]}
             />

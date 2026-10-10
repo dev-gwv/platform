@@ -27,6 +27,7 @@ import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
+import { HelpBubble } from '@/features/help/HelpBubble'
 import { HubTabs } from './HubTabs'
 import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
@@ -247,6 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </main>
         <MobileTabBar onMenu={() => setMobileOpen(true)} />
+        <HelpBubble />
       </div>
     </div>
   )

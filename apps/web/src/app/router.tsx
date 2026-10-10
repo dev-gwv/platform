@@ -108,6 +108,7 @@ const WhatsappSettingsPage = lazyRouteComponent(() => import('@/routes/settings/
 const PlatformMessagingPage = lazyRouteComponent(() => import('@/routes/platform/messaging'), 'PlatformMessagingPage')
 const PlatformEmailPage = lazyRouteComponent(() => import('@/routes/platform/email'), 'PlatformEmailPage')
 const PlatformPaymentsPage = lazyRouteComponent(() => import('@/routes/platform/payments'), 'PlatformPaymentsPage')
+const PlatformPlansPage = lazyRouteComponent(() => import('@/routes/platform/plans'), 'PlatformPlansPage')
 const PlatformHelpPage = lazyRouteComponent(() => import('@/routes/platform/help'), 'PlatformHelpPage')
 const TaskBundlesPage = lazyRouteComponent(() => import('@/routes/settings/task-bundles'), 'TaskBundlesPage')
 const AttendanceLocationPage = lazyRouteComponent(() => import('@/routes/settings/attendance-location'), 'AttendanceLocationPage')
@@ -364,6 +365,7 @@ const routeTree = rootRoute.addChildren([
   route('/platform/feedback', PlatformFeedbackPage),
   route('/platform/diamond', PlatformDiamondPage),
   route('/platform/payments', PlatformPaymentsPage),
+  route('/platform/plans', PlatformPlansPage),
   route('/platform/messaging', PlatformMessagingPage),
   route('/platform/email', PlatformEmailPage),
   route('/platform/help', PlatformHelpPage),

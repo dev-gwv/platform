@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan, PlanQuote } from '@ipc/contracts'
-import { COMPARE, INCLUDED, quoteWords, tierPlans } from './plan-features'
+import { COMPARE, INCLUDED, planEnquiryMessage, quoteWords, tierPlans } from './plan-features'
 
 const base = { currency: 'INR', duration_days: 365, billing_interval: 'yearly' as const, includes: [] as string[] }
 const starter: Plan = {
@@ -72,5 +72,34 @@ describe('what the plan button says', () => {
   it('waits for the current plan to end before a lower one', () => {
     const w = quoteWords(starter, q({ kind: 'later', current_name: 'Pro', blocked_until: '2027-10-14T10:00:00Z' }), inr)
     expect(w).toEqual({ button: 'From 14 Oct 2027', line: 'When your Pro plan ends', disabled: true })
+  })
+})
+
+describe('buying a plan is a WhatsApp message', () => {
+  const who = { studio: 'Mehta Studios', name: 'Asha Mehta', email: 'asha@mehta.in', inr }
+
+  it('names the plan, how it is paid, the price before GST and the login', () => {
+    expect(planEnquiryMessage({ ...who, plan: pro })).toBe(
+      [
+        "Hi Studio AutoPilot team, I'm Asha Mehta from Mehta Studios.",
+        "I'd like the Pro plan, paid yearly (₹29,988 + 18% GST).",
+        'Login: asha@mehta.in',
+        'Please call me to set it up.',
+      ].join('\n'),
+    )
+  })
+
+  it('says upgrade or renew when that is what paying would do', () => {
+    expect(planEnquiryMessage({ ...who, plan: max, kind: 'upgrade' })).toContain("I'd like to upgrade to the Studio Max plan, paid yearly")
+    expect(planEnquiryMessage({ ...who, plan: starter, kind: 'renew' })).toContain("I'd like to renew the Starter plan")
+  })
+
+  it('reads a monthly and a two-year plan in words', () => {
+    expect(planEnquiryMessage({ ...who, plan: { ...pro, billing_interval: 'monthly', price: 2999 } })).toContain('paid monthly (₹2,999 + 18% GST)')
+    expect(planEnquiryMessage({ ...who, plan: { name: '2-Year', price: 33000, billing_interval: 'biennial' } })).toContain('for 2 years (₹33,000')
+  })
+
+  it('leaves the login line out when there is no email', () => {
+    expect(planEnquiryMessage({ ...who, email: null, plan: pro })).not.toContain('Login')
   })
 })

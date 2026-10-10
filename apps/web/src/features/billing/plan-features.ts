@@ -85,3 +85,30 @@ export function quoteWords(p: Plan, q: PlanQuote | undefined, inr: (n: number) =
     disabled: true,
   }
 }
+
+/**
+ * Buying a plan is a conversation for now (owner, 10 Oct: "we can arrange a
+ * call for the time being"): the plan's button opens WhatsApp to support
+ * with this already written, the studio presses Send, and the platform owner
+ * gives the plan in Studio Access Manager. Prices are our own, so the words
+ * carry formatINR, never the masked figure.
+ */
+export function planEnquiryMessage(c: {
+  plan: Pick<Plan, 'name' | 'price' | 'billing_interval'>
+  kind?: PlanQuote['kind'] | undefined
+  studio: string
+  name: string
+  email: string | null | undefined
+  inr: (n: number) => string
+}): string {
+  const how =
+    c.plan.billing_interval === 'monthly' ? 'paid monthly' : c.plan.billing_interval === 'biennial' ? 'for 2 years' : 'paid yearly'
+  const want =
+    c.kind === 'upgrade' ? `to upgrade to the ${c.plan.name} plan` : c.kind === 'renew' ? `to renew the ${c.plan.name} plan` : `the ${c.plan.name} plan`
+  return [
+    `Hi Studio AutoPilot team, I'm ${c.name || 'the owner'} from ${c.studio}.`,
+    `I'd like ${want}, ${how} (${c.inr(c.plan.price)} + 18% GST).`,
+    ...(c.email ? [`Login: ${c.email}`] : []),
+    'Please call me to set it up.',
+  ].join('\n')
+}

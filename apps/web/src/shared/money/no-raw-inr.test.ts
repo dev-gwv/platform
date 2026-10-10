@@ -45,6 +45,7 @@ const ALLOWED = new Set([
   'routes/subscription.tsx',
   // Studio AutoPilot's own prices, never a studio's money.
   'features/billing/PlanPicker.tsx',
+  'features/platform/plan-rows.ts',
   'routes/refer.tsx',
 ])
 

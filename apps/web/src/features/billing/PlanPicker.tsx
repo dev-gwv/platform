@@ -38,7 +38,11 @@ const ICONS: Record<(typeof INCLUDED)[number]['icon'], LucideIcon> = {
  * yearly/monthly switch, three cards of at most three lines, one row of
  * "every plan has every feature" chips, and "Compare plans" -- closed until
  * pressed -- with only the rows that differ. Our own prices, so formatINR
- * (never masked). Used on Settings -> Subscription and the home page.
+ * (never masked). Used on Plan & billing and the home page.
+ *
+ * `action` names what the button does when it is not checkout: "Talk to us
+ * on WhatsApp" inside the app, "Start 7-day free trial" on the home page.
+ * A plan that must wait (a lower one, mid-year) keeps its "From 15 Oct".
  */
 export function PlanPicker({
   plans,
@@ -47,10 +51,12 @@ export function PlanPicker({
   busy,
   canChoose = true,
   chooseHint,
+  action,
 }: {
   plans: Plan[]
   quotes?: PlanQuote[] | undefined
-  onChoose: (p: Plan) => void
+  onChoose: (p: Plan, quote: PlanQuote | undefined) => void
+  action?: { label: string; icon?: LucideIcon; note?: string } | undefined
   busy?: boolean
   canChoose?: boolean
   chooseHint?: string
@@ -81,7 +87,10 @@ export function PlanPicker({
       <div className="grid w-full gap-5 pt-2 md:grid-cols-3">
         {shown.map((p) => {
           const highlight = p.badge === 'Most Popular'
-          const words = quoteWords(p, quotes?.find((q) => q.plan_id === p.id), formatINR)
+          const quote = quotes?.find((q) => q.plan_id === p.id)
+          const words = quoteWords(p, quote, formatINR)
+          const Icon = action?.icon
+          const line = words.line ?? (words.disabled ? null : (action?.note ?? null))
           const day = perDay(p)
           const monthly = p.billing_interval === 'monthly' ? p.price : (p.monthly_equivalent ?? Math.round(p.price / 12))
           return (
@@ -121,13 +130,21 @@ export function PlanPicker({
                 <div className="mt-auto flex flex-col gap-1.5">
                   <Button
                     variant={highlight ? 'default' : 'outline'}
-                    onClick={() => onChoose(p)}
+                    onClick={() => onChoose(p, quote)}
                     disabled={busy || words.disabled || !canChoose}
                     title={canChoose ? undefined : chooseHint}
                   >
-                    {busy ? 'Processing…' : words.button}
+                    {busy ? (
+                      'Processing…'
+                    ) : action && !words.disabled ? (
+                      <>
+                        {Icon && <Icon aria-hidden />} {action.label}
+                      </>
+                    ) : (
+                      words.button
+                    )}
                   </Button>
-                  {words.line && <p className="text-center text-xs text-muted-foreground">{words.line}</p>}
+                  {line && <p className="text-center text-xs text-muted-foreground">{line}</p>}
                 </div>
               </CardContent>
             </Card>

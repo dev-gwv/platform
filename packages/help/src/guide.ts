@@ -295,13 +295,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Give editing work', hi: 'एडिटिंग का काम दें' },
     steps: {
       en: [
-        "Open the project's **Post-production** tab.",
+        "Open the project's **Post-Production** tab.",
         'On a deliverable with nobody on it, press **Start editing**.',
         'Pick the editor: each one shows how much work they already have. The due date is filled in.',
         'Add a line of brief and press **Start editing with** them. You are told when it is handed in.',
       ],
       hi: [
-        'प्रोजेक्ट का **Post-production** टैब खोलें।',
+        'प्रोजेक्ट का **Post-Production** टैब खोलें।',
         'जिस डिलिवरेबल पर अभी कोई नहीं है, उस पर **Start editing** दबाएँ।',
         'एडिटर चुनें: हर एक के साथ दिखता है कि उनके पास पहले से कितना काम है। ड्यू डेट भरी हुई है।',
         'एक लाइन का ब्रीफ़ लिखें और **Start editing with** दबाएँ। काम जमा होने पर आपको पता चल जाएगा।',
@@ -316,7 +316,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Keep editing on track', hi: 'एडिटिंग समय पर रखें' },
     steps: {
       en: [
-        'Open **Post-production**.',
+        'Open **Post-Production**.',
         'The top counts late work, work due today and work with no editor.',
         'When a piece moves on, drag its card to the next stage.',
         '**List** puts late work first. Tick several and use **Give to…** to hand them out together.',
@@ -324,7 +324,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
         'Press **See it as the client** to check what they see. Opening it there is not counted as their visit.',
       ],
       hi: [
-        '**Post-production** खोलें।',
+        '**Post-Production** खोलें।',
         'ऊपर गिनती है: लेट काम, आज ड्यू काम, और बिना एडिटर वाला काम।',
         'काम आगे बढ़े तो उसका कार्ड अगले स्टेज पर खींच दें।',
         '**List** में लेट काम सबसे ऊपर है। कई पर टिक करें और **Give to…** से एक साथ सौंप दें।',
