@@ -233,6 +233,29 @@ export const settingsRouter = new Hono<AppEnv>()
     return c.json({ on: parsed.data.on })
   })
 
+  // The Monday email (0258): the owner's, and theirs to switch off or on.
+  .get('/weekly-email', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'settings.weekly_email', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ off: boolean; role: string }[]>`
+        select weekly_email_off as off, role from users
+         where user_id = ${auth.userId} and company_id = ${auth.companyId}`),
+    )
+    if (!rows?.[0]) fail(404, 'We could not load this setting.')
+    return c.json({ on: !rows[0].off, applies: rows[0].role === 'super_admin' })
+  })
+
+  .put('/weekly-email', async (c) => {
+    const parsed = z.object({ on: z.boolean() }).safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please say on or off.')
+    const auth = c.get('auth')
+    const ok = await attempt(c, 'settings.weekly_email_set', () =>
+      withService(c.env, (sql) => sql`select weekly_email_set(${auth.userId}, ${!parsed.data.on})`),
+    )
+    if (!ok) fail(400, 'We could not save this.')
+    return c.json({ on: parsed.data.on })
+  })
+
   // Your ID proof: private to you and the studio owner (member_documents RLS).
   .get('/profile/documents', async (c) => {
     const auth = c.get('auth')

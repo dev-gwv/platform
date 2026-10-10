@@ -1296,6 +1296,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       { id: uid(0x7c6), key: 'pro_yearly', name: 'Pro', price: 29988, billing_interval: 'yearly', duration_days: 365, audience: 'outsider', is_active: true, tier: 'pro', sort_order: 20, studios: 14, limits: {} },
     ]
   if (method === 'GET' && path === '/platform/plans/counts') return { paying: 25, on_trial: 18 }
+  if (path.startsWith('/calendar/link')) return { scope: path.includes('studio') ? 'studio' : 'mine', url: 'http://localhost:8787/public/calendar/demo-calendar-token-0000000000.ics' }
   if (method === 'PATCH' && path.startsWith('/platform/plans/')) return { ok: true }
   if (method === 'POST' && /^\/platform\/studios\/[^/]+\/assign-plan$/.test(path)) return { ok: true, until: '2027-10-01T00:00:00Z' }
   if (method === 'GET' && path === '/platform/payments/recovery')

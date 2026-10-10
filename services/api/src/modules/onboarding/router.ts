@@ -5,6 +5,7 @@ import { fail } from '../../middleware/errors'
 import { withService } from '../../lib/db'
 import { stopTokenValid } from '../../lib/onboarding-email'
 import { morningStopTokenValid } from '../../lib/morning-email'
+import { weeklyStopTokenValid } from '../../lib/weekly-email'
 
 const stopRequest = z.object({ c: z.string().uuid(), t: z.string().min(16).max(128) })
 const morningStopRequest = z.object({ u: z.string().uuid(), t: z.string().min(16).max(128) })
@@ -30,5 +31,15 @@ export const publicOnboardingRouter = new Hono<AppEnv>()
       fail(400, 'This link is not valid.')
     }
     await withService(c.env, (sql) => sql`select morning_email_set(${parsed.data!.u}, true)`)
+    return c.json({ ok: true })
+  })
+
+  /** "Stop the Monday email" from its footer: this person's Monday email only. */
+  .post('/weekly-email/stop', async (c) => {
+    const parsed = morningStopRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success || !(await weeklyStopTokenValid(c.env, parsed.data.u, parsed.data.t))) {
+      fail(400, 'This link is not valid.')
+    }
+    await withService(c.env, (sql) => sql`select weekly_email_set(${parsed.data!.u}, true)`)
     return c.json({ ok: true })
   })
