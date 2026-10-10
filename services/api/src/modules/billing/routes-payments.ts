@@ -300,10 +300,11 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
         const gst = (d.gst_number ?? '').trim() || null
         const made = await sql<{ id: string }[]>`
           insert into received_payments
-            (company_id, project_id, invoice_id, client_id, amount, description, status, is_gst, gst_number, date_received, file_url, paid_on, mode, recorded_by)
+            (company_id, project_id, invoice_id, client_id, amount, description, status, is_gst, gst_number, date_received, file_url, paid_on, mode, reference, recorded_by)
           values (${auth.companyId}, ${projectId}, ${d.invoice_id ?? null}, ${clientId}, ${d.amount},
                   ${d.description?.trim() || null}, ${d.status}, ${d.is_gst}, ${gst},
-                  ${dateReceived}, ${d.file_url?.trim() || null}, ${dateReceived}, ${d.mode?.trim() || null}, ${auth.userId})
+                  ${dateReceived}, ${d.file_url?.trim() || null}, ${dateReceived}, ${d.mode?.trim() || null},
+                  ${d.reference?.trim() || null}, ${auth.userId})
           returning id`
         return made[0] ?? null
       }),
@@ -324,8 +325,8 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
     const auth = c.get('auth')
     const outcome = await attempt(c, 'billing.payment_update', () =>
       withUser(c.env, auth.userId, async (sql) => {
-        const existing = await sql<{ id: string; is_gst: boolean; gst_number: string | null }[]>`
-          select id, coalesce(is_gst, false) as is_gst, gst_number from received_payments
+        const existing = await sql<{ id: string; is_gst: boolean; gst_number: string | null; project_id: string | null; invoice_id: string | null }[]>`
+          select id, coalesce(is_gst, false) as is_gst, gst_number, project_id, invoice_id from received_payments
            where id = ${id} and company_id = ${auth.companyId}`
         if (!existing[0]) return 'missing' as const
         if (d.project_id) {
@@ -333,6 +334,23 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
             select id from projects where id = ${d.project_id} and company_id = ${auth.companyId}`
           if (!proj[0]) return 'bad_project' as const
         }
+        // Moving to another invoice (or off one). The invoice's project comes
+        // with it unless a project was named, the way a new payment works, and
+        // a named project must be the invoice's own. Both invoices' totals are
+        // recomputed by received_payments_sync_invoice (0145).
+        let nextProject = d.project_id !== undefined ? d.project_id : existing[0].project_id
+        const nextInvoice = d.invoice_id !== undefined ? d.invoice_id : existing[0].invoice_id
+        if (d.invoice_id) {
+          const inv = await sql<{ project_id: string | null }[]>`
+            select project_id from invoices where id = ${d.invoice_id} and company_id = ${auth.companyId}`
+          if (!inv[0]) return 'bad_invoice' as const
+          const invProject = inv[0].project_id
+          if (invProject) {
+            if (d.project_id === undefined) nextProject = invProject
+            else if (d.project_id && d.project_id !== invProject) return 'mismatch' as const
+          }
+        }
+        if (!nextProject && !nextInvoice) return 'unlinked' as const
         if (d.client_id) {
           const cl = await sql<{ id: string }[]>`
             select id from clients where id = ${d.client_id} and company_id = ${auth.companyId}`
@@ -344,7 +362,8 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
           return 'bad_gst' as const
         }
         await sql`update received_payments set
-            project_id = coalesce(${d.project_id ?? null}, project_id),
+            project_id = ${nextProject},
+            invoice_id = ${nextInvoice},
             client_id = coalesce(${d.client_id ?? null}, client_id),
             amount = coalesce(${d.amount ?? null}, amount),
             description = ${d.description !== undefined ? (d.description?.trim() || null) : sql`description`},
@@ -354,7 +373,8 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
             date_received = coalesce(${d.date_received ?? null}, date_received),
             paid_on = coalesce(${d.date_received ?? null}, paid_on),
             file_url = ${d.file_url !== undefined ? (d.file_url?.trim() || null) : sql`file_url`},
-            mode = ${d.mode !== undefined ? (d.mode?.trim() || null) : sql`mode`}
+            mode = ${d.mode !== undefined ? (d.mode?.trim() || null) : sql`mode`},
+            reference = ${d.reference !== undefined ? (d.reference?.trim() || null) : sql`reference`}
           where id = ${id} and company_id = ${auth.companyId}`
         return 'ok' as const
       }),
@@ -362,6 +382,9 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
     if (outcome === 'missing') fail(404, 'That payment was not found.')
     if (outcome === 'bad_project') fail(422, 'Selected project does not belong to this studio.')
     if (outcome === 'bad_client') fail(422, 'Selected client does not belong to this studio.')
+    if (outcome === 'bad_invoice') fail(422, 'Selected invoice does not belong to this studio.')
+    if (outcome === 'mismatch') fail(422, 'That invoice belongs to another project.')
+    if (outcome === 'unlinked') fail(422, 'Choose the project or the invoice this payment is against.')
     if (outcome === 'bad_gst') fail(422, 'GST number is required when GST applies.')
     if (!outcome) fail(400, 'We could not save this payment.')
     await audit(c, { action: 'received_payment.update', entityType: 'received_payment', entityId: id, after: d })
