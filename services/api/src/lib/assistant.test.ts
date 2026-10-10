@@ -69,20 +69,23 @@ describe('needsHuman', () => {
     expect(needsHuman('my client has not paid the advance')).toBeNull()
   })
 
-  it('stops after the same question twice', () => {
+  it('still answers a question that was asked before', () => {
+    // This used to escalate, and it was the single worst thing the assistant
+    // did: "How do I add my team?" is the first suggested question AND an
+    // article, and asking it twice was met with "I have already given you my
+    // best answer on this". Since the thread survives navigation now, a repeat
+    // is ordinary rather than rare.
     const history = [
-      { role: 'user' as const, content: 'How do I assign a team to a shoot?' },
-      { role: 'assistant' as const, content: 'Open the Shoots tab…' },
+      { role: 'user' as const, content: 'How do I add my team?' },
+      { role: 'assistant' as const, content: 'Open Team then People.' },
     ]
-    expect(needsHuman('How do I assign a team to a shoot?', history)).toBeTruthy()
-    // Punctuation and case are not a different question.
-    expect(needsHuman('how do i assign a team to a shoot', history)).toBeTruthy()
-    expect(needsHuman('How do I add an expense?', history)).toBeNull()
+    expect(needsHuman('How do I add my team?', history)).toBeNull()
+    expect(needsHuman('how do i add my team', history)).toBeNull()
   })
 
-  it('does not call a repeated "hi" a dead end', () => {
-    const history = [{ role: 'user' as const, content: 'hello' }]
-    expect(needsHuman('hello', history)).toBeNull()
+  it('keeps escalating a money question however often it is asked', () => {
+    const history = [{ role: 'user' as const, content: 'I want a refund' }]
+    expect(needsHuman('I want a refund', history)).toBeTruthy()
   })
 })
 

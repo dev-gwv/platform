@@ -83,25 +83,27 @@ const HUMAN_ONLY: readonly { re: RegExp; why: string }[] = [
   { re: /\b(lost|deleted|missing|gone) (all |my |our |the )?(data|leads|projects|clients|everything)\b|\b(data|leads|projects|clients|everything) (are|is|have|has|were) ?(all )?(gone|missing|disappeared|deleted|lost|vanished)\b|\bhacked\b|\bdata breach\b/i, why: 'Missing data needs a person to look at your studio directly.' },
 ]
 
-/** Pure, so the rule can be tested without a provider. Null means "the model may try". */
-export function needsHuman(question: string, history: readonly AssistantTurn[] = []): string | null {
+/**
+ * Pure, so the rule can be tested without a provider. Null means "the model may
+ * try", which is the answer for almost everything.
+ *
+ * There used to be a second rule here: asked the same thing twice, hand them to
+ * a person. It was wrong twice over. It ran BEFORE the model, so a question the
+ * knowledge base answers in full -- "How do I add my team?", which is both the
+ * first suggested question and an article -- could be refused outright. And it
+ * got far worse when the conversation started surviving navigation: the thread
+ * no longer resets, so clicking the same suggestion an hour later counted as
+ * asking twice and was met with "I have already given you my best answer on
+ * this", which we had not.
+ *
+ * Asking again usually means "say that differently", not "fetch me a human".
+ * The model has the conversation and can rephrase; if it genuinely cannot help
+ * it still has the tool.
+ */
+export function needsHuman(question: string, _history: readonly AssistantTurn[] = []): string | null {
   for (const r of HUMAN_ONLY) if (r.re.test(question)) return r.why
-  // Asked the same thing twice: the first answer did not land, and a third
-  // rephrasing of it will not either.
-  const asked = history.filter((h) => h.role === 'user').map((h) => normalise(h.content))
-  const now = normalise(question)
-  if (now.length > 12 && asked.includes(now)) {
-    return 'I have already given you my best answer on this, so let us put you with a person.'
-  }
   return null
 }
-
-const normalise = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
 
 type AssistantStatus = 'answered' | 'escalated' | 'skipped' | 'failed'
 
