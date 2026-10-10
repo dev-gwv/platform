@@ -122,7 +122,7 @@ function CallQueue() {
   )
 }
 
-function Row({ lead, task, showAssignee }: { lead: CallQueueItem; task?: CrmActivity; showAssignee?: boolean }) {
+function Row({ lead, task, showAssignee }: { lead: CallQueueItem; task?: CrmActivity | undefined; showAssignee?: boolean | undefined }) {
   const urgent = lead.priority >= 100
   const last = lead.last_call_outcome ? CALL_OUTCOMES.find((o) => o.key === lead.last_call_outcome)?.label : null
   const what = [lead.event_type, lead.event_date ? fmtDate(lead.event_date) : null, lead.city].filter(Boolean).join(' · ')

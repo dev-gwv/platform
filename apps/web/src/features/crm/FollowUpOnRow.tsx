@@ -18,7 +18,7 @@ export function useOpenFollowUps(scope: 'mine' | 'all') {
  * What was promised, on the call row: the follow-up's type and priority as
  * chips and when it is owed. Red only once it is late.
  */
-export function FollowUpTag({ task, showAssignee }: { task: CrmActivity; showAssignee?: boolean }) {
+export function FollowUpTag({ task, showAssignee }: { task: CrmActivity; showAssignee?: boolean | undefined }) {
   const typeColor = useLookupColor('follow_up_type')
   const priorityColor = useLookupColor('follow_up_priority')
   const now = useMemo(() => new Date(), [])
