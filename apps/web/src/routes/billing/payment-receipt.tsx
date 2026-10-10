@@ -9,7 +9,8 @@ import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { usePaymentReceipt, useReceivedPayment } from '@/features/billing/api'
 import { ReceiptPaper } from '@/features/billing/ReceiptPaper'
-import { ReceivedPaymentDialog, DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { SendReceiptDialog } from '@/features/billing/SendReceiptDialog'
 import { copyReceiptLink, issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/features/billing/receiptShare'
 import { shortDate } from '@/features/billing/status'
@@ -128,7 +129,7 @@ function PaymentReceipt() {
 
       <ReceiptPaper receipt={data} createdAt={data.created_at} projectStatus={data.project_status} />
 
-      <ReceivedPaymentDialog open={editOpen} onOpenChange={setEditOpen} initial={editOpen ? (payment.data ?? null) : null} />
+      {editOpen && payment.data && <RecordPaymentDialog target={{ kind: 'pick', payment: payment.data }} onClose={() => setEditOpen(false)} />}
       <DeleteReceivedPaymentDialog
         payment={deleteOpen ? { id: data.id } : null}
         onOpenChange={setDeleteOpen}

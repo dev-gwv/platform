@@ -32,7 +32,7 @@ import { FullScreen } from '@/features/billing/NewInvoiceDialog'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { PaymentReminderCard } from '@/features/billing/PaymentReminder'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
-import { DeleteReceivedPaymentDialog, ReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
 import { isOverdue, shortDate } from '@/features/billing/status'
 
@@ -334,7 +334,9 @@ function InvoicePayments({ invoice }: { invoice: InvoiceDetail }) {
           })}
         </ul>
       </CardContent>
-      <ReceivedPaymentDialog open={!!editId && !!editing.data} onOpenChange={(v) => !v && setEditId(null)} initial={editing.data ?? null} />
+      {editId && editing.data && (
+        <RecordPaymentDialog key={editId} target={{ kind: 'pick', payment: editing.data }} onClose={() => setEditId(null)} />
+      )}
       <DeleteReceivedPaymentDialog payment={deleteId ? (deleting.data ?? null) : null} onOpenChange={(v) => !v && setDeleteId(null)} />
     </Card>
   )
