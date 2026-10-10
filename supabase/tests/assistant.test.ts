@@ -140,9 +140,11 @@ describe('assistant_log', () => {
 })
 
 describe('assistant_asked_today', () => {
+  // A model name is what says a question actually reached a provider, so the
+  // helper writes one; the rows without a model have their own test below.
   const log = (company: string, status: string, ago = '0 hours') =>
-    db.exec(`insert into assistant_log (company_id, question, status, created_at)
-             values ('${company}', 'q', '${status}', now() - interval '${ago}')`)
+    db.exec(`insert into assistant_log (company_id, question, status, model, created_at)
+             values ('${company}', 'q', '${status}', 'openai/gpt-oss-120b', now() - interval '${ago}')`)
 
   it('counts only what cost something', async () => {
     // A question skipped for want of a key, or one the provider refused, must
@@ -153,6 +155,20 @@ describe('assistant_asked_today', () => {
     await log(COMPANY, 'failed')
     const r = await q<{ n: number }>(`select assistant_asked_today('${COMPANY}') as n`)
     expect(r[0]!.n).toBe(2)
+  })
+
+  it('does not count a hand-off that never reached a model (0260)', async () => {
+    // The refund and lost-data guards answer before the call, so there is no
+    // model and nothing was spent. 0247 counted them anyway, which meant the
+    // one question a studio asked in a panic came out of the same fifty as a
+    // real one -- while its own comment claimed it counted "only what actually
+    // cost something".
+    await db.exec(`insert into assistant_log (company_id, question, status)
+                   values ('${COMPANY}', 'I want a refund', 'escalated')`)
+    expect((await q<{ n: number }>(`select assistant_asked_today('${COMPANY}') as n`))[0]!.n).toBe(0)
+
+    await log(COMPANY, 'escalated')
+    expect((await q<{ n: number }>(`select assistant_asked_today('${COMPANY}') as n`))[0]!.n).toBe(1)
   })
 
   it('is one studio\'s own count', async () => {
@@ -257,10 +273,79 @@ describe('what the provider cached (0259)', () => {
   })
 })
 
+/**
+ * The platform's own ceiling (0260).
+ *
+ * 0247 shipped two ceilings and neither knew what the provider allows: both
+ * counted questions, and Groq meters tokens -- 8,000 a minute across every
+ * studio at once. This is the function that finally counts the right thing.
+ */
+describe('assistant_budget_used', () => {
+  const spend = (prompt: number, cached: number | null, completion: number, ago = '0 minutes') =>
+    db.exec(`insert into assistant_log (company_id, question, status, model, prompt_tokens, cached_tokens, completion_tokens, created_at)
+             values ('${COMPANY}', 'q', 'answered', 'm', ${prompt}, ${cached === null ? 'null' : cached}, ${completion}, now() - interval '${ago}')`)
+
+  const used = () =>
+    q<{ minute_tokens: number; day_tokens: number }>(`select minute_tokens, day_tokens from assistant_budget_used()`)
+
+  it('is zero before anybody asks, never null', async () => {
+    // The API compares this against a limit, so a null would read as false and
+    // let every question through with no ceiling at all.
+    expect((await used())[0]).toMatchObject({ minute_tokens: 0, day_tokens: 0 })
+  })
+
+  it('counts what the provider counts, not what we sent', async () => {
+    // A cached prefix costs neither money nor rate limit. Subtracting it is
+    // the entire reason the prompt is split into a stable block and a selected
+    // one -- count the whole prompt and the ceiling is four times too tight.
+    await spend(3_200, 1_900, 400)
+    expect((await used())[0]).toMatchObject({ minute_tokens: 1_700, day_tokens: 1_700 })
+  })
+
+  it('treats a provider that reports no cache as having cached nothing', async () => {
+    await spend(3_200, null, 400)
+    expect((await used())[0]!.minute_tokens).toBe(3_600)
+  })
+
+  it('adds up every studio, because the budget is shared', async () => {
+    await spend(2_000, 0, 0)
+    await db.exec(`insert into assistant_log (company_id, question, status, model, prompt_tokens, cached_tokens, completion_tokens)
+                   values ('${COMPANY_B}', 'q', 'answered', 'm', 3000, 0, 0)`)
+    expect((await used())[0]!.day_tokens).toBe(5_000)
+  })
+
+  it('lets the minute go by while the day remembers', async () => {
+    await spend(1_000, 0, 0, '5 minutes')
+    const r = (await used())[0]!
+    expect(r.minute_tokens).toBe(0)
+    expect(r.day_tokens).toBe(1_000)
+  })
+
+  it('forgets yesterday', async () => {
+    await spend(9_000, 0, 0, '30 hours')
+    expect((await used())[0]!.day_tokens).toBe(0)
+  })
+
+  it('never goes negative when a provider reports more cache than prompt', async () => {
+    // Nonsense from a vendor must not read as a credit against the budget.
+    await spend(1_000, 5_000, 0)
+    expect((await used())[0]!.day_tokens).toBe(0)
+  })
+
+  it('is the service to read and nobody else', async () => {
+    await db.exec(`set role service_role`)
+    expect((await used())[0]!.day_tokens).toBe(0)
+    await db.exec(`reset role`)
+    await db.exec(`set role authenticated`)
+    await fails(`select * from assistant_budget_used()`)
+    await db.exec(`reset role`)
+  })
+})
+
 describe('the migrations', () => {
   it('can be applied twice', async () => {
     await db.exec(`insert into assistant_log (company_id, question, status) values ('${COMPANY}', 'keep me', 'answered')`)
-    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql', '0255_assistant_helpful.sql', '0259_assistant_cached_tokens.sql']) {
+    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql', '0255_assistant_helpful.sql', '0259_assistant_cached_tokens.sql', '0260_assistant_second_provider.sql']) {
       await db.exec(readFileSync(join(migDir, f), 'utf8'))
     }
     const r = await q<{ n: number }>(`select count(*)::int as n from assistant_log`)

@@ -26,6 +26,17 @@ export function AssistantHealthCard() {
   const marked = d.helpful + d.unhelpful
   const share = marked > 0 ? Math.round((d.helpful / marked) * 100) : null
 
+  /**
+   * What is left of the provider's budget.
+   *
+   * The figure the console was missing: questions a day never said whether the
+   * next question would work, because the provider meters tokens and shares
+   * them across every studio at once.
+   */
+  const pct = (used: number, limit: number) => Math.min(100, Math.round((used / Math.max(limit, 1)) * 100))
+  const dayPct = pct(d.budget.day_used, d.budget.day_limit)
+  const minutePct = pct(d.budget.minute_used, d.budget.minute_limit)
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-5">
@@ -50,6 +61,40 @@ export function AssistantHealthCard() {
             </>
           )}
         </p>
+
+        {/* Say what the numbers mean: a bar each, with the sentence under it. */}
+        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+          <p className="text-sm font-medium">What is left of the provider’s allowance</p>
+          {[
+            { what: 'Today', used: d.budget.day_used, limit: d.budget.day_limit, at: dayPct },
+            { what: 'This minute', used: d.budget.minute_used, limit: d.budget.minute_limit, at: minutePct },
+          ].map((b) => (
+            <div key={b.what} className="flex flex-col gap-1">
+              <p className="flex justify-between text-xs">
+                <span className="text-muted-foreground">{b.what}</span>
+                <span className="tabular-nums">
+                  {b.used.toLocaleString('en-IN')} of {b.limit.toLocaleString('en-IN')} tokens
+                </span>
+              </p>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-[width]',
+                    b.at >= 90 ? 'bg-destructive' : b.at >= 70 ? 'bg-warning' : 'bg-success',
+                  )}
+                  style={{ width: `${b.at}%` }}
+                />
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            {dayPct >= 90
+              ? 'Today’s allowance is nearly spent. Studios are being asked to try tomorrow.'
+              : dayPct >= 70
+                ? 'Most of today’s allowance is gone. A second provider would carry the rest.'
+                : 'Comfortable. Cached tokens are not counted here, because the provider does not count them either.'}
+          </p>
+        </div>
 
         <div className="flex flex-wrap gap-2 text-sm">
           <StatusBadge tone="success">{d.helpful} helped</StatusBadge>

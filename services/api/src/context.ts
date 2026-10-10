@@ -29,6 +29,17 @@ export interface Env {
   AI_BASE_URL?: string
   /** Model name. Empty means the default in lib/ai.ts. platform_settings wins over this. */
   AI_MODEL?: string
+  /**
+   * The second vendor's key (0260). Its address and model are rows on
+   * platform_settings, the same way the first vendor's are; only the key lives
+   * here.
+   *
+   * A separate key rather than a reused one on purpose: the failure this
+   * exists to survive is a provider refusing us -- a spent free-tier quota, a
+   * revoked key, an outage -- and a second address holding the same key
+   * survives none of those.
+   */
+  AI_FALLBACK_API_KEY?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
   /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */

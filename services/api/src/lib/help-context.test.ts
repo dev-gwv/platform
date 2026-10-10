@@ -149,11 +149,11 @@ describe('links', () => {
 
 describe('linksMentioned does not offer the wrong screen', () => {
   const links = [
-    { title: 'Salaries and payslips', to: '/payroll', video: 'salaries' },
-    { title: 'Clients', to: '/clients', video: null },
-    { title: 'Reports', to: '/reports', video: null },
-    { title: 'Send the quotation', to: '/projects', video: 'quotation' },
-    { title: 'The quotation', to: '/projects', video: null },
+    { title: 'Salaries and payslips', menu: 'Team → Pay → Payroll', to: '/payroll', video: 'salaries' },
+    { title: 'Clients', menu: null, to: '/clients', video: null },
+    { title: 'Reports', menu: null, to: '/reports', video: null },
+    { title: 'Send the quotation', menu: null, to: '/projects', video: 'quotation' },
+    { title: 'The quotation', menu: null, to: '/projects', video: null },
   ]
 
   it('ignores a one-word title, however often it appears', () => {
@@ -183,10 +183,39 @@ describe('linksMentioned does not offer the wrong screen', () => {
   it('caps at three', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({
       title: `Chapter number ${i} of the guide`,
+      menu: null,
       to: `/p${i}`,
       video: null,
     }))
     expect(linksMentioned(many.map((l) => l.title.toLowerCase()).join(' and '), many)).toHaveLength(3)
+  })
+
+  /**
+   * The reason this feature was dead in production.
+   *
+   * Four good live answers in a row carried no link and no Watch button,
+   * because an answer says where to go the way the app's menus say it -- "Team
+   * → Pay → Payroll" -- and never quotes an article's title at itself.
+   */
+  describe('the menu path an answer actually writes', () => {
+    it('offers the article when the answer names its menu path', () => {
+      const got = linksMentioned('Go to Team → Pay → Payroll and press Work out pay.', links)
+      expect(got.map((l) => l.title)).toEqual(['Salaries and payslips'])
+    })
+
+    it('matches the arrow however the model drew it', () => {
+      for (const said of ['Team -> Pay -> Payroll', 'Team > Pay > Payroll', 'Team / Pay / Payroll']) {
+        expect(linksMentioned(`Open ${said} to run the month.`, links), said).toHaveLength(1)
+      }
+    })
+
+    it('still offers one screen once when title and path are both said', () => {
+      expect(linksMentioned('Salaries and payslips lives at Team → Pay → Payroll.', links)).toHaveLength(1)
+    })
+
+    it('does not match a menu path inside a longer word', () => {
+      expect(linksMentioned('xteam → pay → payrollx', links)).toEqual([])
+    })
   })
 })
 
@@ -194,5 +223,32 @@ describe('estimateTokens', () => {
   it('is in the right order of magnitude', () => {
     expect(estimateTokens('a'.repeat(400))).toBe(100)
     expect(estimateTokens('')).toBe(0)
+  })
+})
+
+describe('what a question will be counted for', () => {
+  /**
+   * `tokens` is the whole prompt; `varying` is what the provider meters once
+   * the prefix is cached. Spending the rate limit against the first would
+   * refuse two questions a minute where three fit.
+   */
+  it('is much smaller than the whole prompt', () => {
+    const ctx = ask('How do I add my team?')
+    expect(ctx.varying).toBeLessThan(ctx.tokens / 2)
+  })
+
+  it('carries the answer as well as the help', () => {
+    const ctx = ask('How do I add my team?')
+    expect(ctx.varying).toBeGreaterThan(estimateTokens(ctx.selected))
+  })
+
+  it('still costs something when nothing matched', () => {
+    // The "nothing matched" block is short, but the answer is not free.
+    expect(ask('zzzz qqqq xyzzy').varying).toBeGreaterThan(300)
+  })
+
+  it('leaves room for three questions in a minute of Groq\u2019s free tier', () => {
+    // 8,000 a minute is the number this whole design is shaped around.
+    expect(ask('how do I send an invoice').varying * 3).toBeLessThan(8_000)
   })
 })

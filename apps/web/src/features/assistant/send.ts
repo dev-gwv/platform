@@ -3,6 +3,23 @@ import { callApi } from '@/shared/api/client'
 import { addSaid, setPending } from './thread'
 
 /**
+ * Longer than callApi's default 30 s, because the server's own budget can
+ * outlast it.
+ *
+ * lib/ai.ts allows 25 s for the model walk alone, and the route reads the
+ * settings, the day's count, the platform's token budget and the FAQs around
+ * that call and then writes the log. With a second provider in the chain the
+ * walk is two vendors, not one. At 30 s the browser gave up first -- and the
+ * studio was shown a timeout for an answer that had been generated, billed,
+ * counted against their day and written to the log. A failure that costs a
+ * question and shows nothing is the worst of both.
+ *
+ * Not SLOW_TIMEOUT_MS (120 s): nothing here should ever take two minutes, and
+ * a ceiling that high would hide a provider that has stopped answering.
+ */
+const ASK_TIMEOUT_MS = 45_000
+
+/**
  * Asking, outside React.
  *
  * This was a `useMutation` inside `AssistantPanel`, which is rendered inside
@@ -48,6 +65,7 @@ export async function askAssistant(
       method: 'POST',
       body: askRequest.parse(body),
       responseSchema: askReply,
+      timeoutMs: ASK_TIMEOUT_MS,
       signal: inFlight.signal,
     })
     addSaid({

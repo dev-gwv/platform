@@ -33,16 +33,25 @@ export function AssistantSettingsCard() {
   const [callUrl, setCallUrl] = useState('')
   const [limit, setLimit] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [fbUrl, setFbUrl] = useState('')
+  const [fbModel, setFbModel] = useState('')
+  const [perMinute, setPerMinute] = useState('')
+  const [perDay, setPerDay] = useState('')
 
   const d = q.data
+  const num = (v: number | null) => (v === null ? '' : String(v))
   useEffect(() => {
     if (!d) return
     setOn(d.assistant_enabled)
     setModel(d.assistant_model ?? '')
     setBaseUrl(d.assistant_base_url ?? '')
     setCallUrl(d.support_call_url ?? '')
-    setLimit(d.assistant_daily_limit === null ? '' : String(d.assistant_daily_limit))
+    setLimit(num(d.assistant_daily_limit))
     setPrompt(d.assistant_prompt ?? '')
+    setFbUrl(d.assistant_fallback_base_url ?? '')
+    setFbModel(d.assistant_fallback_model ?? '')
+    setPerMinute(num(d.assistant_minute_tokens))
+    setPerDay(num(d.assistant_day_tokens))
   }, [d])
 
   if (q.isLoading) return <SkeletonList rows={3} />
@@ -53,11 +62,22 @@ export function AssistantSettingsCard() {
     model !== (d.assistant_model ?? '') ||
     baseUrl !== (d.assistant_base_url ?? '') ||
     callUrl !== (d.support_call_url ?? '') ||
-    limit !== (d.assistant_daily_limit === null ? '' : String(d.assistant_daily_limit)) ||
-    prompt !== (d.assistant_prompt ?? '')
+    limit !== num(d.assistant_daily_limit) ||
+    prompt !== (d.assistant_prompt ?? '') ||
+    fbUrl !== (d.assistant_fallback_base_url ?? '') ||
+    fbModel !== (d.assistant_fallback_model ?? '') ||
+    perMinute !== num(d.assistant_minute_tokens) ||
+    perDay !== num(d.assistant_day_tokens)
 
   const n = Number(limit)
   const limitOk = limit.trim() === '' || (Number.isInteger(n) && n >= 1 && n <= 1000)
+  /** Empty means the server's default; anything typed must be a whole number in range. */
+  const whole = (v: string, lo: number, hi: number) =>
+    v.trim() === '' || (Number.isInteger(Number(v)) && Number(v) >= lo && Number(v) <= hi)
+  const minuteOk = whole(perMinute, 1_000, 10_000_000)
+  const dayOk = whole(perDay, 1_000, 1_000_000_000)
+  const budgetOk = minuteOk && dayOk
+  const asNumber = (v: string) => (v.trim() === '' ? null : Number(v))
 
   return (
     <Card>
@@ -127,6 +147,106 @@ export function AssistantSettingsCard() {
           />
         </label>
 
+        {/* ── the second vendor ─────────────────────────────── */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <p className="text-sm font-semibold">If that one will not answer</p>
+          {d.fallback_ready ? (
+            <StatusBadge tone="success">Second key is set</StatusBadge>
+          ) : (
+            <StatusBadge tone="neutral">No second key</StatusBadge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Tried when the first provider refuses or cannot be reached — a spent free-tier quota, a dead key, an outage.
+          It needs its own key on the server (AI_FALLBACK_API_KEY): the same key at a second address survives none of those.
+        </p>
+
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Second provider
+          <Select
+            value={ASSISTANT_PROVIDERS.find((p) => p.baseUrl === fbUrl)?.key ?? (fbUrl ? 'custom' : '')}
+            onChange={(e) => {
+              const pick = ASSISTANT_PROVIDERS.find((p) => p.key === e.target.value)
+              if (!pick) {
+                setFbUrl('')
+                setFbModel('')
+                return
+              }
+              setFbUrl(pick.baseUrl)
+              if (!fbModel.trim()) setFbModel(pick.suggest)
+            }}
+          >
+            <option value="">None — one provider only</option>
+            {ASSISTANT_PROVIDERS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+            <option value="custom" disabled>
+              Custom (type the address below)
+            </option>
+          </Select>
+        </label>
+
+        {fbUrl.trim() !== '' && (
+          <>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Second address
+              <Input
+                className={cn(fbUrl.trim() && 'border-success/60')}
+                value={fbUrl}
+                onChange={(e) => setFbUrl(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Second model
+              <Input className={filled(fbModel)} placeholder="openai/gpt-oss-20b" value={fbModel} onChange={(e) => setFbModel(e.target.value)} />
+            </label>
+            {!d.fallback_ready && (
+              <p className="text-xs text-warning">
+                AI_FALLBACK_API_KEY is not set on the server, so this address would refuse every question it is handed.
+              </p>
+            )}
+          </>
+        )}
+
+        {/* ── what the provider allows ──────────────────────── */}
+        <div className="mt-2 border-t border-border pt-3">
+          <p className="text-sm font-semibold">What the provider allows</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Shared by every studio at once, so this is counted in tokens and not in questions. Groq’s free tier for
+            gpt-oss-120b is 8,000 a minute and 200,000 a day, which is the default when these are empty.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Tokens a minute
+            <Input
+              className={cn('max-w-36', perMinute.trim() ? (minuteOk ? 'border-success/60' : 'border-destructive') : '')}
+              inputMode="numeric"
+              placeholder="8000"
+              value={perMinute}
+              onChange={(e) => setPerMinute(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Tokens a day
+            <Input
+              className={cn('max-w-36', perDay.trim() ? (dayOk ? 'border-success/60' : 'border-destructive') : '')}
+              inputMode="numeric"
+              placeholder="200000"
+              value={perDay}
+              onChange={(e) => setPerDay(e.target.value)}
+            />
+          </label>
+        </div>
+        {!budgetOk && (
+          <p className="text-xs text-destructive">
+            Whole numbers: 1,000–10,000,000 a minute and 1,000–1,000,000,000 a day, or empty for the free tier’s.
+          </p>
+        )}
+
         <label className="flex flex-col gap-1 text-sm font-medium">
           Where “Book a call” goes
           <Input className={filled(callUrl)} placeholder="https://cal.com/…" value={callUrl} onChange={(e) => setCallUrl(e.target.value)} />
@@ -167,7 +287,7 @@ export function AssistantSettingsCard() {
         <div className="flex flex-wrap items-center gap-2">
         <Button
           className="self-start"
-          disabled={!changed || !limitOk || save.isPending}
+          disabled={!changed || !limitOk || !budgetOk || save.isPending}
           onClick={() =>
             save.mutate({
               assistant_enabled: on,
@@ -176,6 +296,10 @@ export function AssistantSettingsCard() {
               assistant_base_url: baseUrl.trim() || null,
               support_call_url: callUrl.trim() || null,
               assistant_daily_limit: limit.trim() === '' ? null : n,
+              assistant_fallback_base_url: fbUrl.trim() || null,
+              assistant_fallback_model: fbModel.trim() || null,
+              assistant_minute_tokens: asNumber(perMinute),
+              assistant_day_tokens: asNumber(perDay),
             })
           }
         >

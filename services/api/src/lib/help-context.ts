@@ -46,12 +46,25 @@ import { DOCS, selectHelp } from './retrieve'
 /** Rough and deliberately rough: ~4 characters a token is close enough to spot a trend. */
 export const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
 
+/** What an answer costs on top of the prompt. See `varying` below. */
+const ANSWER_TOKENS = 400
+
 /** `**Book**` is how the guide marks a button name. The model does not need the stars. */
 const plain = (step: string): string => step.replace(/\*\*/g, '')
 
 /** What a studio can be pointed at, so an answer can end with somewhere to go. */
 export interface HelpLink {
   title: string
+  /**
+   * Where the article lives, as the app's menus name it ("Team → People").
+   *
+   * Matched as well as the title, and that is what made the links appear at
+   * all. An answer says "go to Post-Production → Work"; it does not say "see
+   * Giving editing work to an editor", because nobody writes an article title
+   * into a sentence. Matching only titles meant four good answers in a row
+   * carried no link and no Watch button -- the whole row was dead.
+   */
+  menu: string | null
   to: string | null
   video: string | null
 }
@@ -65,6 +78,21 @@ export interface HelpContext {
   links: readonly HelpLink[]
   /** The help portion of the prompt, for the log and the tripwire. */
   tokens: number
+  /**
+   * Only the part that changes, which is what the provider actually counts
+   * once the prefix is cached.
+   *
+   * `tokens` is the whole prompt and is the right number for the log and for
+   * spotting the corpus creeping back in. It is the wrong number to spend a
+   * rate limit against: charging every question for a stable block the
+   * provider serves free would refuse two questions a minute where three fit,
+   * which is a third of the free tier thrown away to a pessimistic estimate.
+   *
+   * It under-counts the first question after a two-hour quiet spell, when the
+   * prefix has expired and is charged in full. That is what the headroom in
+   * lib/ai-budget.ts is for.
+   */
+  varying: number
 }
 
 /**
@@ -81,7 +109,12 @@ const INDEX = [
 ].join('\n')
 
 /** Every link the model could name, since the index names them all. */
-const ALL_LINKS: readonly HelpLink[] = DOCS.map((d) => ({ title: d.title, to: d.to, video: d.video }))
+const ALL_LINKS: readonly HelpLink[] = DOCS.map((d) => ({
+  title: d.title,
+  menu: d.menu,
+  to: d.to,
+  video: d.video,
+}))
 
 /** The tutorials, as one short list. Small and stable, so it rides in the prefix. */
 const VIDEOS = [
@@ -137,7 +170,17 @@ export function composeHelpContext(
         ]),
       ].join('\n')
 
-  return { stable, selected, links: ALL_LINKS, tokens: estimateTokens(stable) + estimateTokens(selected) }
+  const varying = estimateTokens(selected)
+  return {
+    stable,
+    selected,
+    links: ALL_LINKS,
+    tokens: estimateTokens(stable) + varying,
+    // Plus what the answer itself will cost. The reply is capped at 800 tokens
+    // and a help answer is usually a third of that, so 400 is the figure that
+    // is wrong in both directions by about the same amount.
+    varying: varying + ANSWER_TOKENS,
+  }
 }
 
 /**
@@ -216,8 +259,20 @@ function mentions(said: string, title: string): boolean {
  */
 export function linksMentioned(answer: string, links: readonly HelpLink[], limit = 3): HelpLink[] {
   const said = answer.toLowerCase()
+  /**
+   * The title, or the menu path the article lives at.
+   *
+   * A menu path is held to the same citable() bar and is specific by nature:
+   * "Team → People" is two words and an arrow, and nothing says it by accident
+   * the way an answer says "clients". The arrow is normalised because an
+   * answer may write it as "->" or "/" and mean the same place.
+   */
+  const names = (l: HelpLink) => (l.menu ? [l.title, l.menu] : [l.title])
+  const arrows = (s: string) => s.replace(/\s*(?:→|->|>|\/)\s*/g, ' → ')
+  const asked = arrows(said)
+
   const hits = links
-    .filter((l) => citable(l.title) && mentions(said, l.title.toLowerCase()))
+    .filter((l) => names(l).some((n) => citable(n) && mentions(asked, arrows(n.toLowerCase()))))
     .sort((a, b) => b.title.length - a.title.length)
 
   const seen = new Set<string>()

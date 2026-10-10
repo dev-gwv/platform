@@ -21,6 +21,20 @@ import { z } from 'zod'
  */
 export const ASSISTANT_PROVIDERS = [
   { key: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', suggest: 'openai/gpt-oss-120b' },
+  // NVIDIA NIM carries the 20b sibling of our primary model but not the 120b,
+  // so falling through to it keeps the same prompt, the same tool-call shape
+  // and the same reasoning_effort tuning -- nothing above has to be re-tuned
+  // for the second vendor, which is the whole point of picking this one.
+  { key: 'nvidia', label: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', suggest: 'openai/gpt-oss-20b' },
+  // Google's OpenAI-compatible surface. A different family, so it is the
+  // backstop rather than the first fallback: same request shape, different
+  // habits in the answer.
+  {
+    key: 'gemini',
+    label: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    suggest: 'gemini-3.5-flash-lite',
+  },
   { key: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', suggest: 'openai/gpt-oss-120b' },
   { key: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', suggest: 'gpt-4o-mini' },
   { key: 'together', label: 'Together', baseUrl: 'https://api.together.xyz/v1', suggest: 'openai/gpt-oss-120b' },
@@ -53,6 +67,13 @@ export function assistantFallbacks(baseUrl: string | null | undefined): readonly
   if (known.key === 'groq' || known.key === 'openrouter' || known.key === 'together') {
     return ASSISTANT_FALLBACK_MODELS
   }
+  // NVIDIA publishes the 20b but not the 120b, so the chain runs the other way
+  // round here: its own sibling first, then a Nemotron of its own. Naming the
+  // 120b would be one guaranteed 404 on the way down.
+  if (known.key === 'nvidia') return ['openai/gpt-oss-20b', 'nvidia/nemotron-3-super-120b-a12b']
+  // Google retires a Flash generation on a schedule and leaves the older one
+  // reachable for a while, so the drop is to the previous Lite.
+  if (known.key === 'gemini') return ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
   return [known.suggest]
 }
 
@@ -155,12 +176,47 @@ export const saveAssistantSettingsRequest = z.object({
     .or(z.literal(''))
     .nullable(),
   assistant_daily_limit: z.number().int().min(1).max(1000).nullable(),
+  /**
+   * The second vendor, tried when the first refuses or cannot be reached.
+   *
+   * A model chain inside one address only covers a retired model name. It does
+   * nothing for the failure we will actually meet on a free tier -- a 429 from
+   * the provider, which looks the same on every model it hosts.
+   */
+  assistant_fallback_base_url: z
+    .string()
+    .trim()
+    .url('That does not look like a web address.')
+    .startsWith('https://', 'The address must start with https://')
+    .or(z.literal(''))
+    .nullable(),
+  assistant_fallback_model: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9._/:-]{1,120}$/, 'A model name, e.g. openai/gpt-oss-20b.')
+    .or(z.literal(''))
+    .nullable(),
+  /**
+   * The provider's budget, in the units the provider meters.
+   *
+   * Written here rather than guessed from a question count, because a question
+   * is not a unit anybody bills in: Groq's free tier for gpt-oss-120b is 8,000
+   * tokens a minute and 200,000 a day across every studio at once.
+   */
+  assistant_minute_tokens: z.number().int().min(1_000).max(10_000_000).nullable(),
+  assistant_day_tokens: z.number().int().min(1_000).max(1_000_000_000).nullable(),
 })
 export type SaveAssistantSettingsRequest = z.infer<typeof saveAssistantSettingsRequest>
 
 export const assistantSettings = saveAssistantSettingsRequest.extend({
   /** Whether the server has a key at all — the console says so plainly. */
   ready: z.boolean(),
+  /**
+   * Whether the server has the second vendor's key (AI_FALLBACK_API_KEY).
+   * A fallback address with no key behind it is worse than none: it looks
+   * configured and refuses every time it is reached.
+   */
+  fallback_ready: z.boolean(),
 })
 export type AssistantSettings = z.infer<typeof assistantSettings>
 
@@ -208,6 +264,20 @@ export const assistantHealth = z.object({
    * when the provider has not reported any.
    */
   cached_share: z.number().int().nullable(),
+  /**
+   * The provider's budget and what is left of it: counted tokens in the last
+   * minute and so far today, against the ceilings.
+   *
+   * The figure the console was missing. Questions-a-day said nothing about
+   * whether the next question would be refused, because the provider meters
+   * tokens and shares them across every studio at once.
+   */
+  budget: z.object({
+    minute_used: z.number().int(),
+    minute_limit: z.number().int(),
+    day_used: z.number().int(),
+    day_limit: z.number().int(),
+  }),
   recent: z.array(assistantLogRow),
 })
 export type AssistantHealth = z.infer<typeof assistantHealth>

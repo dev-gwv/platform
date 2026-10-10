@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ASSISTANT_DEFAULT_MODEL, assistantFallbacks } from '@ipc/contracts'
-import { openAiCompatible, refusalSentence } from './ai'
+import { firstOf, openAiCompatible, refusalSentence } from './ai'
 
 /**
  * The AI engine (0247). Every test injects `fetchImpl`, so nothing here reaches
@@ -392,5 +392,108 @@ describe('what the provider says about its cache', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.usage.cachedTokens).toBe(0)
+  })
+})
+
+describe('walking providers, not just models', () => {
+  /**
+   * The model chain inside one address only answers a retired model name --
+   * the rarest thing that goes wrong here. The common failure on a free tier
+   * is a 429, which looks identical on every model that provider hosts, so
+   * walking the chain could never help and only made the failure slower.
+   */
+  const vendor = (fetchImpl: typeof fetch, id: string) =>
+    openAiCompatible({ apiKey: 'k', fetchImpl, id, fallbackModels: [] })
+
+  it('hands a rate-limited question to the second vendor', async () => {
+    const groq = reply({ error: { message: 'rate limit' } }, 429)
+    const nvidia = reply(ok('from the second one'))
+    const r = await firstOf([
+      vendor(groq as unknown as typeof fetch, 'groq'),
+      vendor(nvidia as unknown as typeof fetch, 'nvidia'),
+    ]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+
+    expect(r.ok && r.text).toBe('from the second one')
+    expect(nvidia).toHaveBeenCalled()
+  })
+
+  it('hands over a dead key too, because the keys are separate', async () => {
+    const first = reply({ error: { message: 'invalid api key' } }, 401)
+    const second = reply(ok('still answered'))
+    const r = await firstOf([
+      vendor(first as unknown as typeof fetch, 'a'),
+      vendor(second as unknown as typeof fetch, 'b'),
+    ]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(r.ok && r.text).toBe('still answered')
+  })
+
+  it('does not ask a second vendor to repeat our own mistake', async () => {
+    // A 400 means we built the request wrong, and a wrong request is wrong
+    // everywhere. Trying two turns one clear error into two slow ones.
+    const first = reply({ error: { message: 'bad request' } }, 400)
+    const second = reply(ok('never reached'))
+    const r = await firstOf([
+      vendor(first as unknown as typeof fetch, 'a'),
+      vendor(second as unknown as typeof fetch, 'b'),
+    ]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(r.ok).toBe(false)
+    expect(second).not.toHaveBeenCalled()
+  })
+
+  it('steps over a vendor with no key without spending the budget on it', async () => {
+    const second = reply(ok('the configured one'))
+    const r = await firstOf([
+      openAiCompatible({ apiKey: undefined, fetchImpl: reply(ok('x')) as unknown as typeof fetch }),
+      vendor(second as unknown as typeof fetch, 'b'),
+    ]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(r.ok && r.text).toBe('the configured one')
+  })
+
+  it('keeps the first vendor when it answers', async () => {
+    const first = reply(ok('the primary'))
+    const second = reply(ok('never'))
+    const r = await firstOf([
+      vendor(first as unknown as typeof fetch, 'a'),
+      vendor(second as unknown as typeof fetch, 'b'),
+    ]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(r.ok && r.text).toBe('the primary')
+    expect(second).not.toHaveBeenCalled()
+  })
+
+  it(`is one provider's own self when there is only one`, async () => {
+    const one = vendor(reply(ok('solo')) as unknown as typeof fetch, 'only')
+    expect(firstOf([one])).toBe(one)
+  })
+
+  it('says it is not set up when there is no provider at all', async () => {
+    const r = await firstOf([]).chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.kind).toBe('no_key')
+  })
+
+  it('carries the status rather than reading it back off the sentence', async () => {
+    // The failover decision used to be made by running a regex over the error
+    // message, so rewording the sentence would have silently broken it.
+    const r = await askIt(reply({ error: { message: 'slow down' } }, 429) as unknown as typeof fetch)
+    expect(r.ok === false && r.status).toBe(429)
+  })
+})
+
+describe('the providers we can actually reach', () => {
+  it('knows NVIDIA NIM and Gemini by address', () => {
+    expect(assistantFallbacks('https://integrate.api.nvidia.com/v1')).toEqual([
+      'openai/gpt-oss-20b',
+      'nvidia/nemotron-3-super-120b-a12b',
+    ])
+    expect(assistantFallbacks('https://generativelanguage.googleapis.com/v1beta/openai')).toEqual([
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+    ])
+  })
+
+  it('never names the 120b at NVIDIA, which does not publish it', () => {
+    // Its catalogue carries the 20b sibling and not the 120b, so naming the
+    // 120b would be one guaranteed 404 on the way down.
+    expect(assistantFallbacks('https://integrate.api.nvidia.com/v1')).not.toContain('openai/gpt-oss-120b')
   })
 })

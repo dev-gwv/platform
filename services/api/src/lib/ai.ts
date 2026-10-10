@@ -94,6 +94,17 @@ export type ChatReply =
       kind: 'no_key' | 'refused' | 'unreachable'
       /** A sentence fit to show someone, never a status code on its own. */
       error: string
+      /**
+       * What the provider answered, when it answered at all. 0 means nothing
+       * came back and there is no status to reason about.
+       *
+       * Carried rather than re-derived: an earlier version of the fallback
+       * recovered this by running a regex over the sentence above, which ties
+       * the failover logic to the wording of an error message. Whoever rewrote
+       * the sentence would have broken the failover and nothing would have
+       * said so.
+       */
+      status?: number
     }
 
 export interface ChatProvider {
@@ -258,7 +269,10 @@ export function openAiCompatible(cfg: {
       if (!res.ok) {
         const raw = await res.text().catch(() => '')
         console.error(`[ai] ${id} ${useModel} refused ${res.status}: ${raw.slice(0, 500)}`)
-        return { reply: { ok: false, kind: 'refused', error: refusalSentence(res.status, raw) }, status: res.status }
+        return {
+          reply: { ok: false, kind: 'refused', error: refusalSentence(res.status, raw), status: res.status },
+          status: res.status,
+        }
       }
 
       const json = (await res.json().catch(() => ({}))) as WireReply
@@ -291,6 +305,7 @@ export function openAiCompatible(cfg: {
           ok: false,
           kind: 'unreachable',
           error: aborted ? 'The AI provider did not answer in time.' : 'We could not reach the AI provider.',
+          status: 0,
         },
       }
     } finally {
@@ -341,6 +356,77 @@ export function openAiCompatible(cfg: {
       }
 
       return last!
+    },
+  }
+}
+
+/**
+ * Worth asking a different vendor.
+ *
+ * The model chain inside `openAiCompatible` only covers one failure: a model
+ * name the provider has retired. That is the rarest thing that will go wrong
+ * here. The common one on a free tier is a 429 -- which looks identical on
+ * every model that provider hosts, so walking the chain cannot help and only
+ * makes the failure slower.
+ *
+ * A bad key (401/403) is also worth the second vendor, because the keys are
+ * separate; an expired Groq key does not make the NVIDIA one expired.
+ *
+ * What is NOT worth it: 400 and 422. Those mean we built the request wrong,
+ * and a wrong request is wrong at every vendor -- trying two turns one clear
+ * error into two slow ones and doubles the wait before anybody sees it.
+ */
+const worthAnotherVendor = (status: number | undefined): boolean =>
+  status === undefined || status === 0 || status === 401 || status === 403 || status === 404 ||
+  status === 429 || status >= 500
+
+/**
+ * Several providers as one, tried in order.
+ *
+ * Separate from the model chain on purpose: they answer different failures and
+ * live at different layers. `openAiCompatible` walks model names at one
+ * address; this walks addresses, each with its own key, its own quota and its
+ * own outage.
+ *
+ * It keeps `openAiCompatible`'s contract exactly -- the caller still sees one
+ * `ChatProvider` -- so `lib/assistant.ts` has no idea whether it is holding one
+ * vendor or three.
+ */
+export function firstOf(providers: readonly ChatProvider[], opts?: { totalMs?: number }): ChatProvider {
+  const usable = providers.filter(Boolean)
+  const head = usable[0]
+  if (!head) {
+    return {
+      id: 'none',
+      model: '',
+      chat: async () => ({ ok: false, kind: 'no_key', error: 'The AI assistant is not set up on the server (no API key).' }),
+    }
+  }
+  if (usable.length === 1) return head
+
+  return {
+    id: usable.map((p) => p.id).join('>'),
+    model: head.model,
+    async chat(req) {
+      const giveUpAt = Date.now() + (opts?.totalMs ?? TOTAL_MS)
+      let last: ChatReply | null = null
+
+      for (const p of usable) {
+        if (Date.now() >= giveUpAt) break
+        const reply = await p.chat(req)
+        if (reply.ok) {
+          if (p !== head) console.warn(`[ai] ${p.id} answered; ${head.id} was unavailable`)
+          return reply
+        }
+        last = reply
+        // 'no_key' is not a failure of this vendor, it is a vendor that was
+        // never configured. Step over it without spending any of the budget.
+        if (reply.kind === 'no_key') continue
+        if (!worthAnotherVendor(reply.status)) return reply
+        console.warn(`[ai] ${p.id} could not answer (${reply.status ?? '-'}); trying the next provider`)
+      }
+
+      return last ?? { ok: false, kind: 'unreachable', error: 'We could not reach the AI provider.', status: 0 }
     },
   }
 }
