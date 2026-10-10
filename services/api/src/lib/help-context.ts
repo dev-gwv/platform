@@ -5,8 +5,9 @@ import { withService } from './db'
 /**
  * The help the assistant answers from, as one block of text.
  *
- * Three sources, in one order, every time: the reference (kb.ts), the guide's
+ * Four sources, in one order, every time: the reference (kb.ts), the guide's
  * chapters, the tutorial list, and last the FAQs a platform admin can edit.
+ * The editable one goes last on purpose -- see the cache note below.
  *
  * There is still no vector store and no search index, and there are now two
  * reasons rather than one.
@@ -94,6 +95,11 @@ export function composeHelpContext(faqs: readonly { question: string; answer: st
     links.push({ title: c.title.en, to: c.to ?? null, video: c.video ?? null })
   }
 
+  // Deliberately the shipped list, not tutorialsWith(help_videos): a video a
+  // platform admin swapped out on /platform/help is not reflected here, because
+  // reading it would put a mutable row in the middle of the cached prefix. The
+  // cost is that the assistant can describe a recording that has been replaced;
+  // the titles are what it reads out, and those rarely change.
   out.push('', '== TUTORIAL VIDEOS: what each recording shows ==')
   for (const t of TUTORIALS) {
     out.push(`- "${t.title}" (${t.seconds}s, ${t.section}): ${t.blurb}`)
@@ -101,7 +107,7 @@ export function composeHelpContext(faqs: readonly { question: string; answer: st
 
   if (faqs.length) {
     out.push('', '== COMMON QUESTIONS ==')
-    for (const f of faqs) out.push('', `Q: ${f.question}`, `A: ${f.answer}`)
+    for (const f of faqs) out.push('', `Q: ${plain(f.question)}`, `A: ${plain(f.answer)}`)
   }
 
   const text = out.join('\n')
@@ -125,14 +131,62 @@ export async function buildHelpContext(env: Env): Promise<HelpContext> {
   }
 }
 
+/** Specific enough that matching it means something. */
+const citable = (title: string) => title.includes(' ') && title.length > 8
+
 /**
- * Which chapters an answer actually drew on, so the panel can offer a link.
+ * The title appears as a phrase, not as a fragment of a longer word.
+ */
+function mentions(said: string, title: string): boolean {
+  let from = 0
+  for (;;) {
+    const i = said.indexOf(title, from)
+    if (i === -1) return false
+    const before = said[i - 1]
+    const after = said[i + title.length]
+    const isWord = (c: string | undefined) => !!c && /[a-z0-9]/.test(c)
+    if (!isWord(before) && !isWord(after)) return true
+    from = i + 1
+  }
+}
+
+/**
+ * Which articles an answer actually drew on, so the panel can offer a link.
  *
  * Matched on the answer text rather than asked of the model: a model told to
- * report its sources will invent a plausible-looking one, and a chapter title
- * it did not mention is a worse link than no link.
+ * report its sources will invent a plausible-looking one, and a title it did
+ * not mention is a worse link than no link.
+ *
+ * Two rules keep it honest now that there are a hundred-odd titles in the pool.
+ *
+ * A title must be more than one word and reasonably long. Single words --
+ * "Reports", "Clients", "Invoices", "Expenses", "Attendance" -- are all article
+ * titles AND words that appear in half the answers this app will ever give, so
+ * matching them offered a link to the wrong article constantly. Those articles
+ * can no longer be cited at all, and that is the right trade: a wrong link
+ * sends someone to the wrong screen, a missing one costs them nothing.
+ *
+ * And the longest match wins, not the first. The list is built knowledge base
+ * first, sorted by key, so taking the first three handed back whatever was
+ * alphabetically earliest -- an answer about payroll offered "Clients" and
+ * "Invoices" ahead of "Salaries and payslips". Length is a decent proxy for
+ * specificity, and deduping by screen stops the same destination appearing
+ * twice when a chapter and an article cover the same ground.
  */
 export function linksMentioned(answer: string, links: readonly HelpLink[], limit = 3): HelpLink[] {
   const said = answer.toLowerCase()
-  return links.filter((l) => l.title.length > 6 && said.includes(l.title.toLowerCase())).slice(0, limit)
+  const hits = links
+    .filter((l) => citable(l.title) && mentions(said, l.title.toLowerCase()))
+    .sort((a, b) => b.title.length - a.title.length)
+
+  const seen = new Set<string>()
+  const out: HelpLink[] = []
+  for (const l of hits) {
+    const where = l.to ?? l.title
+    if (seen.has(where)) continue
+    seen.add(where)
+    out.push(l)
+    if (out.length === limit) break
+  }
+  return out
 }

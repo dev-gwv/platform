@@ -33,9 +33,14 @@ export interface Said {
 export interface Thread {
   said: readonly Said[]
   draft: string
+  /**
+   * A question is in the air. Here rather than in the panel because the request
+   * outlives the panel: see send.ts.
+   */
+  pending: boolean
 }
 
-const EMPTY: Thread = { said: [], draft: '' }
+const EMPTY: Thread = { said: [], draft: '', pending: false }
 
 let current: Thread = EMPTY
 const listeners = new Set<() => void>()
@@ -63,7 +68,13 @@ export function setDraft(draft: string): void {
 }
 
 export function addSaid(said: Said): void {
-  current = { said: [...current.said, said], draft: current.draft }
+  current = { ...current, said: [...current.said, said] }
+  emit()
+}
+
+export function setPending(pending: boolean): void {
+  if (current.pending === pending) return
+  current = { ...current, pending }
   emit()
 }
 
@@ -72,6 +83,25 @@ export function markHelpful(index: number, helpful: boolean): void {
   const next = current.said.map((s, i) => (i === index ? { ...s, helpful } : s))
   current = { ...current, said: next }
   emit()
+}
+
+/**
+ * Take back the last turn, so Try again re-asks instead of stacking a second
+ * copy of the question under the first failure.
+ */
+export function dropLastSaid(): void {
+  if (current.said.length === 0) return
+  current = { ...current, said: current.said.slice(0, -1) }
+  emit()
+}
+
+/** The last thing the studio asked, for Try again. */
+export function lastQuestion(): string | null {
+  for (let i = current.said.length - 1; i >= 0; i -= 1) {
+    const s = current.said[i]
+    if (s?.role === 'user') return s.text
+  }
+  return null
 }
 
 /** Start again, and on sign-out. */

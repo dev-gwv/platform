@@ -6,7 +6,7 @@ import { Input, Select, Textarea } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
-import { useAssistantSettings, useSaveAssistantSettings } from './api'
+import { useAssistantSettings, useSaveAssistantSettings, useTestAssistant } from './api'
 
 /**
  * The assistant's settings, on the Help console (0247).
@@ -25,6 +25,7 @@ const filled = (v: string) => (v.trim() ? 'border-success/60' : 'border-amber-40
 export function AssistantSettingsCard() {
   const q = useAssistantSettings()
   const save = useSaveAssistantSettings()
+  const test = useTestAssistant()
 
   const [on, setOn] = useState(false)
   const [model, setModel] = useState('')
@@ -163,6 +164,7 @@ export function AssistantSettingsCard() {
           The help content is added to this automatically — do not paste it in. {prompt.length}/8000.
         </p>
 
+        <div className="flex flex-wrap items-center gap-2">
         <Button
           className="self-start"
           disabled={!changed || !limitOk || save.isPending}
@@ -179,6 +181,46 @@ export function AssistantSettingsCard() {
         >
           {save.isPending ? 'Saving…' : 'Save assistant'}
         </Button>
+
+        {/* "A key is set" is not "the key works". This asks one real question. */}
+        <Button
+          variant="outline"
+          className="self-start"
+          disabled={test.isPending || changed}
+          onClick={() => test.mutate()}
+          title={changed ? 'Save first, then test' : undefined}
+        >
+          {test.isPending ? 'Asking…' : 'Test the connection'}
+        </Button>
+        </div>
+
+        {test.data && (
+          <div
+            className={cn(
+              'rounded-md border p-3 text-sm',
+              test.data.status === 'answered'
+                ? 'border-success/40 bg-success/5'
+                : test.data.status === 'escalated'
+                  ? 'border-warning/40 bg-warning/5'
+                  : 'border-destructive/40 bg-destructive/5',
+            )}
+          >
+            <p className="font-medium">
+              {test.data.status === 'answered'
+                ? `It works. ${test.data.model ?? 'The model'} answered in ${(test.data.ms / 1000).toFixed(1)}s.`
+                : test.data.status === 'escalated'
+                  ? 'It answered, but offered a call rather than the steps — check the prompt.'
+                  : test.data.status === 'skipped'
+                    ? 'Nothing was sent: the server has no AI_API_KEY.'
+                    : 'It could not answer.'}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{test.data.answer}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {test.data.prompt_tokens?.toLocaleString('en-IN') ?? '—'} tokens of help content went with the question.
+              {test.data.error ? ` · ${test.data.error}` : ''}
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

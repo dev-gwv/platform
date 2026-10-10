@@ -84,11 +84,29 @@ export function AssistantHealthCard() {
                 </thead>
                 <tbody>
                   {d.recent.map((r) => (
-                    <tr key={r.id} className={cn('border-t border-border', r.status === 'failed' && 'bg-destructive/5')}>
-                      <td className="px-2 py-1.5">{r.question}</td>
+                    <tr
+                      key={r.id}
+                      className={cn(
+                        'border-t border-border align-top',
+                        r.status === 'failed' && 'bg-destructive/5',
+                        r.helpful === false && 'bg-warning/5',
+                      )}
+                    >
+                      <td className="px-2 py-1.5">
+                        {r.question}
+                        {/*
+                          The answer, for the rows that went wrong. It was
+                          already being fetched and thrown away -- and "what did
+                          it actually say?" is the only thing that tells you
+                          which article to rewrite.
+                        */}
+                        {(r.helpful === false || r.status === 'failed') && r.answer && (
+                          <span className="mt-1 block whitespace-pre-wrap text-muted-foreground">{r.answer}</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5">
                         {r.status === 'answered'
-                          ? 'Answered'
+                          ? r.model ?? 'Answered'
                           : r.status === 'escalated'
                             ? 'Offered a call'
                             : r.status === 'skipped'

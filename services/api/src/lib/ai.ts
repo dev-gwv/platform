@@ -98,9 +98,13 @@ export interface ChatProvider {
 const TIMEOUT_MS = 30_000
 
 /**
- * 25s for everything, retries and fallbacks included -- inside the browser's own
- * 30 s, so whatever happens the studio hears the real answer rather than its
- * own timeout.
+ * 25s for everything, retries and fallbacks included, against the browser's own
+ * 30 s. It buys headroom rather than a guarantee: the route also reads the
+ * settings, the day's count and the FAQs around this call and then writes the
+ * log, so on a cold connection the whole request can still outlast the client.
+ * When it does, the studio sees a timeout for an answer that was generated and
+ * billed -- which is the argument for caching the corpus, not for a longer
+ * budget here.
  */
 const TOTAL_MS = 25_000
 

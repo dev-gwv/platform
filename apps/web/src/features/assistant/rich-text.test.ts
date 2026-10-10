@@ -19,3 +19,35 @@ describe("the assistant's answer, drawn", () => {
     expect(blocks[1]!.lines[1]).toBe('Press **Add**')
   })
 })
+
+describe('a link the model wrote', () => {
+  it('keeps an internal target instead of leaving naked brackets', () => {
+    // tidy() stripped "(/employees)" before inline() ever saw it, so a perfectly
+    // good Markdown link degraded to the literal text "[Team → People]" and the
+    // internal-Link branch was unreachable for every path.
+    expect(tidy('Open [Team → People](/employees) to add someone.')).toBe(
+      'Open [Team → People](/employees) to add someone.',
+    )
+  })
+
+  it('still drops a bare address said in passing', () => {
+    expect(tidy('Open Team → People (screen/employees) to add someone.')).toBe(
+      'Open Team → People to add someone.',
+    )
+    expect(tidy('Go to Leads (/follow-ups) first.')).toBe('Go to Leads first.')
+  })
+})
+
+describe('headings the prompt taught it to write', () => {
+  it('draws them instead of printing hashes', () => {
+    // The corpus hands the model "### Title" headings, so it writes them back.
+    const blocks = toBlocks('### Steps\n1. Open Team\n2. Press Add')
+    expect(blocks[0]).toEqual({ kind: 'h', lines: ['Steps'] })
+    expect(blocks[1]!.kind).toBe('ol')
+  })
+
+  it('never merges two headings into one', () => {
+    const blocks = toBlocks('## One\n## Two')
+    expect(blocks).toHaveLength(2)
+  })
+})

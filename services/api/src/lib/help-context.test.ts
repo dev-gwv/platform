@@ -14,10 +14,14 @@ import { composeHelpContext, estimateTokens, linksMentioned } from './help-conte
 const ctx = composeHelpContext([{ question: 'Can I change a quotation?', answer: 'Yes, edit and resend.' }])
 
 /**
- * The ceiling, not the current size. Today's corpus is about a quarter of this.
- * Crossing it means composeHelpContext() should start selecting chapters rather
- * than sending them all -- which is the point at which a search index earns its
- * keep, and not before.
+ * The ceiling, not the current size -- but the gap is no longer comfortable:
+ * the knowledge base took the corpus from roughly 5,000 tokens to about 12,400,
+ * which is 41% of this, and every article added spends more of it.
+ *
+ * Crossing it means composeHelpContext() should start selecting rather than
+ * sending everything -- which is the point at which a search index earns its
+ * keep, and not before. Note that selecting also forfeits the provider's
+ * prefix-cache discount, so the trade is worse than it looks.
  */
 const TOKEN_CEILING = 30_000
 
@@ -178,5 +182,67 @@ describe('the knowledge base is in the corpus', () => {
 
   it('strips the bold markers from an article', () => {
     expect(composeHelpContext().text).not.toContain('**')
+  })
+})
+
+describe('linksMentioned does not offer the wrong screen', () => {
+  const links = [
+    { title: 'Salaries and payslips', to: '/payroll', video: 'salaries' },
+    { title: 'Clients', to: '/clients', video: null },
+    { title: 'Reports', to: '/reports', video: null },
+    { title: 'Send the quotation', to: '/projects', video: 'quotation' },
+    { title: 'The quotation', to: '/projects', video: null },
+    { title: 'Roles & access: who can see what', to: '/settings/roles', video: null },
+  ]
+
+  it('ignores a one-word title, however often it appears', () => {
+    // "Clients" and "Reports" are article titles AND words half of all answers
+    // use. Matching them offered a link to the wrong article constantly.
+    expect(linksMentioned('Open Reports to see your clients and their reports.', links)).toEqual([])
+  })
+
+  it('still offers a title said in full', () => {
+    const got = linksMentioned('Run the month on Salaries and payslips.', links)
+    expect(got.map((l) => l.title)).toEqual(['Salaries and payslips'])
+  })
+
+  it('prefers the most specific title, not the alphabetically first', () => {
+    // The list is built knowledge-base-first and sorted by key, so taking the
+    // first match handed back whatever sorted earliest rather than whatever the
+    // answer was about.
+    const got = linksMentioned('Press Send the quotation when you are happy.', links)
+    expect(got[0]!.title).toBe('Send the quotation')
+  })
+
+  it('offers one screen once', () => {
+    // A chapter and an article can cover the same ground; two chips to the same
+    // place is noise, and keying them by title used to collide outright.
+    const got = linksMentioned('Use Send the quotation; The quotation is the document.', links)
+    expect(got).toHaveLength(1)
+  })
+
+  it('does not match a title inside a longer word', () => {
+    expect(linksMentioned('unsalaries and payslipsx', links)).toEqual([])
+  })
+
+  it('matches regardless of case, and caps at three', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      title: `Chapter number ${i} of the guide`,
+      to: `/p${i}`,
+      video: null,
+    }))
+    const said = many.map((l) => l.title.toLowerCase()).join(' and ')
+    expect(linksMentioned(said, many)).toHaveLength(3)
+  })
+})
+
+describe('an editable answer cannot put markup in the prompt', () => {
+  it('strips bold from an FAQ, the way it does from everything else', () => {
+    // The FAQs were the one source not run through plain(), so a platform admin
+    // writing **bold** put literal stars in the prompt and the model copied
+    // them into its answers.
+    const ctx = composeHelpContext([{ question: 'Press **Book**?', answer: 'Yes, press **Book**.' }])
+    expect(ctx.text).toContain('Press Book?')
+    expect(ctx.text).not.toContain('**')
   })
 })

@@ -22,6 +22,9 @@
  *     "resource", "asset", "media ingestion".
  *   - Never a price that is not in the `plans-*` articles, and never a promise
  *     about someone's own bill. Those belong to a person.
+ *   - Nothing about the platform console. Everything here goes into every
+ *     studio's prompt, so an article about our own vendor screens would both
+ *     describe our internals to a customer and offer them a link that 403s.
  *
  * Plain data only — this package is loaded by the API, so nothing here may
  * import React or touch the DOM.
@@ -914,18 +917,6 @@ export const KB: readonly KbArticle[] = [
       'If a client\'s dates are missing, the tab offers to ask them to fill them in.',
     ],
   },
-  {
-    key: 'studio-access',
-    title: 'Studio Access Manager',
-    area: 'Settings',
-    menu: 'Settings → Studio → Studio Access Manager',
-    to: '/platform/studios',
-    body: [
-      'This is for the people who run Studio AutoPilot, not for a studio. It shows every studio, when its access ends and how many days are left, with one Actions menu per row to assign a plan, extend access, set a date or revoke it.',
-      'It only appears if your account is a platform admin.',
-    ],
-  },
-
   // ── Plans ───────────────────────────────────────────────────
   {
     key: 'plans-trial',

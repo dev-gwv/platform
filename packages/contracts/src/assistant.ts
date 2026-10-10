@@ -76,7 +76,15 @@ export type AssistantState = z.infer<typeof assistantState>
 /** One earlier turn, so a follow-up ("and on mobile?") makes sense. */
 export const assistantTurn = z.object({
   role: z.enum(['user', 'assistant']),
-  content: z.string().max(4000),
+  /**
+   * Short on purpose. The client sends this back, so an 'assistant' turn is
+   * whatever the caller says it is -- there is no way to prove we wrote it.
+   * The panel only ever sends back real turns, but the contract is the
+   * boundary, and 10 x 4000 characters of caller-authored text sitting in the
+   * model's mouth is a screenshot waiting to happen. A help answer that needs
+   * more than 1,000 characters of itself quoted back is not a follow-up.
+   */
+  content: z.string().max(1000),
 })
 export type AssistantTurn = z.infer<typeof assistantTurn>
 
@@ -84,10 +92,11 @@ export const askRequest = z.object({
   question: z.string().trim().min(3, 'Ask a question of at least a few words.').max(500),
   /**
    * Carried by the panel, not stored: the conversation lives as long as the
-   * panel is open. Capped because the whole help corpus is already in the
-   * prompt and a long history would crowd it out.
+   * panel is open. Capped to what the panel actually sends -- the gap between
+   * the contract's limit and the UI's was pure attack surface -- and because
+   * the whole help corpus is already in the prompt.
    */
-  history: z.array(assistantTurn).max(10).default([]),
+  history: z.array(assistantTurn).max(6).default([]),
 })
 export type AskRequest = z.infer<typeof askRequest>
 
@@ -193,3 +202,22 @@ export const assistantHealth = z.object({
   recent: z.array(assistantLogRow),
 })
 export type AssistantHealth = z.infer<typeof assistantHealth>
+
+/**
+ * What a test question proved.
+ *
+ * `ready` on the settings only says a key is present, which is not the same as
+ * the key working, the model still existing, or the corpus loading. This is the
+ * one call that exercises the whole path.
+ */
+export const assistantTestResult = z.object({
+  status: z.enum(['answered', 'escalated', 'skipped', 'failed']),
+  answer: z.string(),
+  /** The model that actually answered -- not necessarily the one configured. */
+  model: z.string().nullable(),
+  prompt_tokens: z.number().int().nullable(),
+  /** How long the whole thing took, so a slow provider is visible. */
+  ms: z.number().int(),
+  error: z.string().nullable(),
+})
+export type AssistantTestResult = z.infer<typeof assistantTestResult>

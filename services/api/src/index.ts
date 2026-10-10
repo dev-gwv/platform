@@ -136,6 +136,9 @@ app.use('/auth/change-password', rateLimit({ windowMs: 60_000, limit: 10 }))
 // its whole team.
 const assistantLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
 app.use('/assistant/ask', async (c, next) => (c.req.method === 'POST' ? assistantLimiter(c, next) : next()))
+// A thumb costs nothing to serve, but it is the only quality signal the feature
+// has, and an unlimited endpoint that flips it is an unlimited way to poison it.
+app.use('/assistant/feedback', rateLimit({ windowMs: 60_000, limit: 30 }))
 app.use('/public/*', rateLimit({ windowMs: 60_000, limit: 30 }))
 const enquiryLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
 // A client note on a deliverable notifies the studio: a much lower ceiling

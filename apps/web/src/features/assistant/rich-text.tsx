@@ -12,9 +12,15 @@ import { Link } from '@tanstack/react-router'
 export function RichText({ text }: { text: string }) {
   const blocks = toBlocks(tidy(text))
   return (
-    <div className="flex flex-col gap-2">
+    // break-words so a long disk name or URL wraps instead of scrolling the
+    // whole panel sideways on a phone.
+    <div className="flex flex-col gap-2 break-words">
       {blocks.map((b, i) =>
-        b.kind === 'p' ? (
+        b.kind === 'h' ? (
+          <p key={i} className="font-semibold">
+            {inline(b.lines.join(' '))}
+          </p>
+        ) : b.kind === 'p' ? (
           <p key={i}>{inline(b.lines.join('\n'))}</p>
         ) : b.kind === 'ol' ? (
           <ol key={i} className="flex list-decimal flex-col gap-1.5 pl-5 marker:font-semibold marker:text-muted-foreground">
@@ -38,15 +44,24 @@ export function RichText({ text }: { text: string }) {
   )
 }
 
-/** Internal page addresses ("(screen/employees)", "(/employees)") mean nothing to a studio. */
+/**
+ * A bare page address in prose ("open Team (screen/employees)") means nothing
+ * to a studio, so it goes.
+ *
+ * The `(?<!\])` is the whole point: a Markdown link's target looks exactly like
+ * a bare parenthetical, and stripping it turned `[Team → People](/employees)`
+ * into the literal text `[Team → People]` — square brackets in the answer, and
+ * the internal-link branch in `inline()` unreachable for every path a model
+ * wrote.
+ */
 export function tidy(text: string): string {
   return text
-    .replace(/\s*\((?:screen\/|\/)[a-z0-9_/-]+\)/gi, '')
+    .replace(/(?<!\])\s*\((?:screen\/|\/)[a-z0-9_/-]+\)/gi, '')
     .replace(/\r\n/g, '\n')
     .trim()
 }
 
-type Block = { kind: 'p' | 'ol' | 'ul'; lines: string[] }
+type Block = { kind: 'p' | 'ol' | 'ul' | 'h'; lines: string[] }
 
 export function toBlocks(text: string): Block[] {
   const blocks: Block[] = []
@@ -54,14 +69,18 @@ export function toBlocks(text: string): Block[] {
     const line = raw.trimEnd()
     const ol = line.match(/^\s*\d+[.)]\s+(.*)$/)
     const ul = line.match(/^\s*[-*•]\s+(.*)$/)
-    const kind: Block['kind'] | null = ol ? 'ol' : ul ? 'ul' : line.trim() ? 'p' : null
+    // The prompt hands the model `### ` headings, so it writes them back. Drawn
+    // as plain text they came out as literal hashes in the answer.
+    const h = line.match(/^\s*#{1,6}\s+(.*)$/)
+    const kind: Block['kind'] | null = h ? 'h' : ol ? 'ol' : ul ? 'ul' : line.trim() ? 'p' : null
     if (!kind) {
       blocks.push({ kind: 'p', lines: [] }) // a blank line ends the paragraph
       continue
     }
-    const content = ol?.[1] ?? ul?.[1] ?? line.trim()
+    const content = h?.[1] ?? ol?.[1] ?? ul?.[1] ?? line.trim()
     const last = blocks[blocks.length - 1]
-    if (last && last.kind === kind && (kind !== 'p' || last.lines.length > 0)) last.lines.push(content)
+    // A heading never joins the one before it.
+    if (last && last.kind === kind && kind !== 'h' && (kind !== 'p' || last.lines.length > 0)) last.lines.push(content)
     else blocks.push({ kind, lines: [content] })
   }
   return blocks.filter((b) => b.lines.length > 0)
