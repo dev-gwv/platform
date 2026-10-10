@@ -251,10 +251,14 @@ function ProjectDetail() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">{data.name}</h1>
-            <StatusBadge tone={STATUS_TONE[data.status]}>
-              <StatusIcon className="mr-1 size-3" aria-hidden />
-              {humanize(data.status)}
-            </StatusBadge>
+            {/* Whoever can edit changes it in the select on the right; the badge
+                beside it said the same thing twice. */}
+            {!canEdit && (
+              <StatusBadge tone={STATUS_TONE[data.status]}>
+                <StatusIcon className="mr-1 size-3" aria-hidden />
+                {humanize(data.status)}
+              </StatusBadge>
+            )}
             {/* For everyone on the project, not only those who can edit it. */}
             <RemindMe
               entityType="project"
