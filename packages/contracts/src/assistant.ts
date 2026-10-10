@@ -180,6 +180,7 @@ export const assistantLogRow = z.object({
   helpful: z.boolean().nullable(),
   model: z.string().nullable(),
   prompt_tokens: z.number().int().nullable(),
+  cached_tokens: z.number().int().nullable(),
   error: z.string().nullable(),
   created_at: z.string(),
 })
@@ -199,6 +200,14 @@ export const assistantHealth = z.object({
   unhelpful: z.number().int(),
   /** The retrieval tripwire: average prompt size over the week. */
   avg_prompt_tokens: z.number().int().nullable(),
+  /**
+   * What share of the prompt the provider served from its cache, over the week.
+   *
+   * The number that says whether we fit: Groq's free tier allows 8,000 tokens a
+   * minute for gpt-oss-120b, and cached tokens do not count toward it. Null
+   * when the provider has not reported any.
+   */
+  cached_share: z.number().int().nullable(),
   recent: z.array(assistantLogRow),
 })
 export type AssistantHealth = z.infer<typeof assistantHealth>

@@ -1,187 +1,149 @@
 import { describe, expect, it } from 'vitest'
-import { CHAPTERS, KB, TUTORIALS } from '@ipc/help'
+import { KB } from '@ipc/help'
 import { composeHelpContext, estimateTokens, linksMentioned } from './help-context'
+import { DOCS } from './retrieve'
 
 /**
- * The help corpus the assistant answers from (0247).
+ * The help that goes with one question.
  *
- * The first test here is the one that matters: it is the tripwire under the
- * decision not to build retrieval. The whole corpus goes into every prompt
- * because it fits, and the day it stops fitting this test says so instead of
- * someone noticing that answers have gone vague.
+ * The ceiling here is the point of the file. The assistant used to send the
+ * whole corpus -- about 13,640 tokens -- against Groq's 8,000 a minute for
+ * gpt-oss-120b, so one question was larger than the whole per-minute budget.
+ * These tests hold the new shape: a small stable block the provider caches
+ * (and cached tokens cost neither money nor rate limit), plus only the articles
+ * a question is actually about.
  */
 
-const ctx = composeHelpContext([{ question: 'Can I change a quotation?', answer: 'Yes, edit and resend.' }])
+const ask = (q: string) => composeHelpContext(q)
 
 /**
- * The ceiling, not the current size -- but the gap is no longer comfortable:
- * the knowledge base took the corpus from roughly 5,000 tokens to about 12,400,
- * which is 41% of this, and every article added spends more of it.
+ * The whole help portion of the prompt, for one question, in tokens.
  *
- * Crossing it means composeHelpContext() should start selecting rather than
- * sending everything -- which is the point at which a search index earns its
- * keep, and not before. Note that selecting also forfeits the provider's
- * prefix-cache discount, so the trade is worse than it looks.
+ * Not a target -- a ceiling with room in it. If a question ever needs more than
+ * this, something is sending the corpus again by accident, and on the free tier
+ * that is the difference between a question that works and one that is refused.
  */
-const TOKEN_CEILING = 30_000
+const PROMPT_CEILING = 4_000
 
-describe('the corpus still fits in one prompt', () => {
-  it(`is under ${TOKEN_CEILING} tokens`, () => {
-    expect(ctx.tokens).toBeLessThan(TOKEN_CEILING)
+describe('one question fits in the rate limit', () => {
+  it(`costs under ${PROMPT_CEILING} tokens, help and all`, () => {
+    for (const q of [
+      'How do I add my team?',
+      'how do I send an invoice',
+      'what does it cost',
+      'attendance not marking',
+    ]) {
+      expect(ask(q).tokens, q).toBeLessThan(PROMPT_CEILING)
+    }
   })
 
-  it('is big enough to be the whole help, not a fragment', () => {
-    // The other way this breaks: a refactor quietly drops most of the guide and
-    // the assistant starts answering from almost nothing, which looks like a
-    // model problem and is not.
-    expect(ctx.tokens).toBeGreaterThan(1_500)
-    expect(CHAPTERS.length).toBeGreaterThan(15)
+  it('is far smaller than sending everything', () => {
+    // The whole corpus is ~13,640 tokens. If this creeps back up, the selection
+    // has stopped selecting.
+    expect(ask('How do I add my team?').tokens).toBeLessThan(5_000)
+  })
+
+  it('still carries enough to answer from', () => {
+    // The other way it breaks: selection returns almost nothing and the model
+    // answers from memory, which reads fine and is wrong.
+    expect(estimateTokens(ask('How do I add my team?').selected)).toBeGreaterThan(80)
   })
 })
 
-describe('composeHelpContext', () => {
-  it('includes every chapter, with its steps', () => {
-    for (const c of CHAPTERS) expect(ctx.text).toContain(c.title.en)
-    expect(ctx.text).toContain('Press Add Team Member')
-  })
-
-  it('strips the guide\'s bold markers', () => {
-    // `**Book**` is how the guide marks a button for the screen. The model only
-    // needs the word, and the stars turn up verbatim in answers otherwise.
-    expect(ctx.text).not.toContain('**')
-  })
-
-  it('says which screen a chapter is about, so an answer can point somewhere', () => {
-    expect(ctx.text).toContain('Screen: /employees')
-  })
-
-  it('tells the owner\'s chapters from the team member\'s', () => {
-    // Without this the assistant tells an owner to do something only a team
-    // member sees on their own login.
-    expect(ctx.text).toContain('[for the studio owner or manager]')
-    expect(ctx.text).toContain('[for the team member]')
+describe('the stable block', () => {
+  it('names every article and chapter, whatever was selected', () => {
+    // This is what makes cutting the corpus safe: the model always knows what
+    // exists, so a retrieval miss becomes "there is an article on X" rather
+    // than an invention.
+    const ctx = ask('something nobody has ever asked about')
+    for (const d of DOCS) expect(ctx.stable, d.title).toContain(d.title)
   })
 
   it('lists the tutorials', () => {
-    for (const t of TUTORIALS.slice(0, 5)) expect(ctx.text).toContain(t.title)
+    expect(ask('anything').stable).toContain('Add one person to your team')
   })
 
   it('includes the editable answers', () => {
-    expect(ctx.text).toContain('Can I change a quotation?')
-    expect(ctx.text).toContain('Yes, edit and resend.')
+    const ctx = composeHelpContext('anything', [{ question: 'Can I change a quotation?', answer: 'Yes.' }])
+    expect(ctx.stable).toContain('Can I change a quotation?')
+    expect(ctx.stable).toContain('COMMON QUESTIONS')
   })
 
-  it('works with no answers at all', () => {
-    // The FAQ read is allowed to fail; the shipped guide is the bulk of it.
-    const bare = composeHelpContext()
-    expect(bare.text).not.toContain('COMMON QUESTIONS')
-    expect(bare.tokens).toBeGreaterThan(1_500)
+  it('works with no editable answers at all', () => {
+    expect(ask('anything').stable).not.toContain('COMMON QUESTIONS')
   })
 
-  it('offers a link for every chapter and every article', () => {
-    // The knowledge base contributes links too, so an answer can point at a
-    // reference article and not only at a guide chapter.
-    expect(ctx.links).toHaveLength(CHAPTERS.length + KB.length)
-  })
-})
-
-describe('linksMentioned', () => {
-  const links = [
-    { title: 'Add your team', to: '/employees', video: 'team-bulk' },
-    { title: 'Send a quotation', to: '/projects', video: null },
-    { title: 'Money', to: '/billing', video: null },
-  ]
-
-  it('returns only what the answer actually named', () => {
-    const got = linksMentioned('Go and Add your team first.', links)
-    expect(got.map((l) => l.title)).toEqual(['Add your team'])
-  })
-
-  it('ignores case', () => {
-    expect(linksMentioned('add your team', links)).toHaveLength(1)
-  })
-
-  it('skips titles too short to match by accident', () => {
-    // "Money" appears in half the answers this app will ever give; a link fired
-    // by a common word is worse than no link.
-    expect(linksMentioned('That is about money in general.', links)).toEqual([])
-  })
-
-  it('caps how many it offers', () => {
-    const many = Array.from({ length: 9 }, (_, i) => ({ title: `Chapter number ${i}`, to: null, video: null }))
-    const said = many.map((l) => l.title).join(' and ')
-    expect(linksMentioned(said, many)).toHaveLength(3)
+  it('strips bold markers, from articles and from an edited answer alike', () => {
+    // The FAQs were once the one source not run through plain(), so an admin
+    // writing **bold** put literal stars in the prompt and the model copied
+    // them into its answers.
+    const ctx = composeHelpContext('How do I add my team?', [
+      { question: 'Press **Book**?', answer: 'Yes, **Book**.' },
+    ])
+    expect(ctx.stable).toContain('Press Book?')
+    expect(`${ctx.stable}\n${ctx.selected}`).not.toContain('**')
   })
 })
 
-describe('estimateTokens', () => {
-  it('is in the right order of magnitude', () => {
-    expect(estimateTokens('a'.repeat(400))).toBe(100)
-    expect(estimateTokens('')).toBe(0)
-  })
-})
-
-describe('the prompt prefix stays cacheable', () => {
+describe('the stable block stays cacheable', () => {
   /**
-   * Groq charges half for an identical prompt prefix. Ours is this corpus, so
-   * these two tests are worth real money: the first catches a per-request value
-   * entering the system message, the second catches a source whose order drifts.
+   * Cached tokens count against neither the bill nor the rate limit, so this is
+   * the test that keeps the feature inside 8,000 tokens a minute. It fails the
+   * moment anything per-request leaks into the part that must not change.
    */
-  it('builds byte-identically twice', () => {
-    expect(composeHelpContext().text).toBe(composeHelpContext().text)
+  it('is identical for two different questions', () => {
+    expect(ask('How do I add my team?').stable).toBe(ask('how do I record a payment').stable)
   })
 
   it('carries nothing per-request', () => {
-    const text = composeHelpContext().text
-    // Today, in the shapes an interpolated `new Date()` would leave behind.
-    //
-    // A literal clock time is deliberately not one of them: the guide and the
-    // shoots article both print example hours ("4:00 pm-9:00 pm") to show how a
-    // card reads, and that is corpus content, not a leak.
+    const text = ask('anything').stable
     const iso = new Date().toISOString()
+    // A literal clock time is deliberately not checked: the guide and the
+    // shoots article both print example hours ("4:00 pm-9:00 pm"), which is
+    // corpus content, not a leak.
     expect(text).not.toContain(iso.slice(0, 10))
     expect(text).not.toContain(iso.slice(0, 7))
     expect(text).not.toContain(new Date().toDateString())
     expect(text).not.toMatch(/\b20\d{2}-\d{2}-\d{2}\b/)
   })
 
-  it('does not reorder when the knowledge base does', () => {
-    // The KB section is sorted by key, so moving an article in kb.ts must not
-    // change a byte of the prompt.
-    const first = composeHelpContext().text
-    const shuffled = composeHelpContext()
-    expect(shuffled.text).toBe(first)
+  it('does not reorder between builds', () => {
+    expect(ask('x').stable).toBe(ask('y').stable)
   })
 })
 
-describe('the knowledge base is in the corpus', () => {
-  it('has its own section, before the guide', () => {
-    const text = composeHelpContext().text
-    expect(text).toContain('== HOW THE APP WORKS')
-    expect(text.indexOf('== HOW THE APP WORKS')).toBeLessThan(text.indexOf('== THE GUIDE'))
+describe('the selected block', () => {
+  it('carries the article a question is about, with where it is', () => {
+    const ctx = ask('How do I add my team?')
+    expect(ctx.selected).toContain('Where: Team → People')
   })
 
-  it('includes every article, with where it is', () => {
-    const text = composeHelpContext().text
-    for (const a of KB) expect(text, a.key).toContain(a.title)
-    expect(text).toContain('Where: Team → People')
+  it('does not carry the whole knowledge base', () => {
+    const ctx = ask('How do I add my team?')
+    const carried = KB.filter((a) => ctx.selected.includes(`### ${a.title}`)).length
+    expect(carried).toBeGreaterThan(0)
+    expect(carried).toBeLessThan(10)
   })
 
-  it('answers the things the guide never covered', () => {
-    const text = composeHelpContext().text
-    for (const title of ['Tasks and Task Management', 'Reports', 'Profit & Loss', 'Roles & access: who can see what']) {
-      expect(text).toContain(title)
-    }
+  it('says so plainly when nothing matched', () => {
+    // Better than handing over the least-bad article: the model answers from
+    // whatever it is given, confidently, and the studio is sent to the wrong
+    // screen.
+    const ctx = ask('zzzz qqqq xyzzy')
+    expect(ctx.selected).toContain('Nothing in the help matched')
+    expect(ctx.selected).toContain('offer the call')
+  })
+})
+
+describe('links', () => {
+  it('offers every article and chapter as a possible link', () => {
+    // The index names them all, so an answer may name any of them.
+    expect(ask('anything').links).toHaveLength(DOCS.length)
   })
 
-  it('offers a link for a knowledge-base article too', () => {
-    const ctx = composeHelpContext()
-    const roles = ctx.links.find((l) => l.title === 'Roles & access: who can see what')
+  it('offers a link for a knowledge-base article', () => {
+    const roles = ask('anything').links.find((l) => l.title === 'Roles & access: who can see what')
     expect(roles?.to).toBe('/settings/roles')
-  })
-
-  it('strips the bold markers from an article', () => {
-    expect(composeHelpContext().text).not.toContain('**')
   })
 })
 
@@ -192,7 +154,6 @@ describe('linksMentioned does not offer the wrong screen', () => {
     { title: 'Reports', to: '/reports', video: null },
     { title: 'Send the quotation', to: '/projects', video: 'quotation' },
     { title: 'The quotation', to: '/projects', video: null },
-    { title: 'Roles & access: who can see what', to: '/settings/roles', video: null },
   ]
 
   it('ignores a one-word title, however often it appears', () => {
@@ -202,47 +163,36 @@ describe('linksMentioned does not offer the wrong screen', () => {
   })
 
   it('still offers a title said in full', () => {
-    const got = linksMentioned('Run the month on Salaries and payslips.', links)
-    expect(got.map((l) => l.title)).toEqual(['Salaries and payslips'])
+    expect(linksMentioned('Run the month on Salaries and payslips.', links).map((l) => l.title)).toEqual([
+      'Salaries and payslips',
+    ])
   })
 
   it('prefers the most specific title, not the alphabetically first', () => {
-    // The list is built knowledge-base-first and sorted by key, so taking the
-    // first match handed back whatever sorted earliest rather than whatever the
-    // answer was about.
-    const got = linksMentioned('Press Send the quotation when you are happy.', links)
-    expect(got[0]!.title).toBe('Send the quotation')
+    expect(linksMentioned('Press Send the quotation when you are happy.', links)[0]!.title).toBe('Send the quotation')
   })
 
   it('offers one screen once', () => {
-    // A chapter and an article can cover the same ground; two chips to the same
-    // place is noise, and keying them by title used to collide outright.
-    const got = linksMentioned('Use Send the quotation; The quotation is the document.', links)
-    expect(got).toHaveLength(1)
+    expect(linksMentioned('Use Send the quotation; The quotation is the document.', links)).toHaveLength(1)
   })
 
   it('does not match a title inside a longer word', () => {
     expect(linksMentioned('unsalaries and payslipsx', links)).toEqual([])
   })
 
-  it('matches regardless of case, and caps at three', () => {
+  it('caps at three', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({
       title: `Chapter number ${i} of the guide`,
       to: `/p${i}`,
       video: null,
     }))
-    const said = many.map((l) => l.title.toLowerCase()).join(' and ')
-    expect(linksMentioned(said, many)).toHaveLength(3)
+    expect(linksMentioned(many.map((l) => l.title.toLowerCase()).join(' and '), many)).toHaveLength(3)
   })
 })
 
-describe('an editable answer cannot put markup in the prompt', () => {
-  it('strips bold from an FAQ, the way it does from everything else', () => {
-    // The FAQs were the one source not run through plain(), so a platform admin
-    // writing **bold** put literal stars in the prompt and the model copied
-    // them into its answers.
-    const ctx = composeHelpContext([{ question: 'Press **Book**?', answer: 'Yes, press **Book**.' }])
-    expect(ctx.text).toContain('Press Book?')
-    expect(ctx.text).not.toContain('**')
+describe('estimateTokens', () => {
+  it('is in the right order of magnitude', () => {
+    expect(estimateTokens('a'.repeat(400))).toBe(100)
+    expect(estimateTokens('')).toBe(0)
   })
 })

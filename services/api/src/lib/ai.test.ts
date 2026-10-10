@@ -41,7 +41,7 @@ describe('openAiCompatible', () => {
     if (!r.ok) return
     expect(r.text).toBe('Open Team then People.')
     expect(r.model).toBe('llama-3.3-70b-versatile')
-    expect(r.usage).toEqual({ promptTokens: 1200, completionTokens: 60 })
+    expect(r.usage).toEqual({ promptTokens: 1200, completionTokens: 60, cachedTokens: null })
     expect(r.truncated).toBe(false)
     expect(r.calls).toEqual([])
   })
@@ -138,7 +138,7 @@ describe('openAiCompatible', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.text).toBe('')
-    expect(r.usage).toEqual({ promptTokens: null, completionTokens: null })
+    expect(r.usage).toEqual({ promptTokens: null, completionTokens: null, cachedTokens: null })
   })
 
   it('only sends a tools array when there are tools', async () => {
@@ -350,5 +350,47 @@ describe('the whole walk is bounded', () => {
     }).chat({ messages: [] })
     expect(r.ok).toBe(false)
     expect(Date.now() - started).toBeLessThan(1_000)
+  })
+})
+
+describe('what the provider says about its cache', () => {
+  it('reads the cached share back', async () => {
+    // Groq reports it under usage.prompt_tokens_details, and it is the figure
+    // that decides whether a question fits: cached tokens count against neither
+    // the bill nor the 8,000-a-minute rate limit.
+    const r = await askIt(
+      reply({
+        ...ok('hi'),
+        usage: { prompt_tokens: 3_000, completion_tokens: 50, prompt_tokens_details: { cached_tokens: 2_400 } },
+      }) as unknown as typeof fetch,
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.usage.cachedTokens).toBe(2_400)
+  })
+
+  it('reports null, not zero, when the provider says nothing', async () => {
+    // Zero is a real answer and a much worse one than "it did not tell us":
+    // zero means every token was charged and counted against the rate limit.
+    // The console draws them differently, so the driver must not conflate them.
+    const r = await askIt(
+      reply({ ...ok('hi'), usage: { prompt_tokens: 3_000, completion_tokens: 50 } }) as unknown as typeof fetch,
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.usage.cachedTokens).toBeNull()
+    expect(r.usage.promptTokens).toBe(3_000)
+  })
+
+  it('reports a real zero as zero', async () => {
+    const r = await askIt(
+      reply({
+        ...ok('hi'),
+        usage: { prompt_tokens: 3_000, completion_tokens: 50, prompt_tokens_details: { cached_tokens: 0 } },
+      }) as unknown as typeof fetch,
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.usage.cachedTokens).toBe(0)
   })
 })

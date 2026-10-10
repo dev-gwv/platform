@@ -116,6 +116,7 @@ interface AssistantResult {
   model: string | null
   promptTokens: number | null
   completionTokens: number | null
+  cachedTokens: number | null
   error: string | null
 }
 
@@ -133,7 +134,14 @@ const NO_LINK = 'Please write to us and we will come back to you.'
 
 export async function ask(opts: AskOptions): Promise<AssistantResult> {
   const callUrl = opts.callUrl || null
-  const empty = { sources: [] as AssistantSource[], model: null, promptTokens: null, completionTokens: null, error: null }
+  const empty = {
+    sources: [] as AssistantSource[],
+    model: null,
+    promptTokens: null,
+    completionTokens: null,
+    cachedTokens: null,
+    error: null,
+  }
 
   const forced = needsHuman(opts.question, opts.history ?? [])
   if (forced) {
@@ -146,7 +154,14 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
   }
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: `${opts.prompt?.trim() || DEFAULT_PROMPT}\n\n${opts.help.text}` },
+    // Order is load-bearing: instructions and the stable index first, the
+    // articles chosen for this question last. The first two are byte-identical
+    // on every request, so the provider caches them — and cached tokens count
+    // against neither the bill nor Groq's 8,000-a-minute rate limit.
+    {
+      role: 'system',
+      content: `${opts.prompt?.trim() || DEFAULT_PROMPT}\n\n${opts.help.stable}\n\n${opts.help.selected}`,
+    },
     ...(opts.history ?? []).map((h) => ({ role: h.role, content: h.content }) as ChatMessage),
     { role: 'user', content: opts.question },
   ]
@@ -168,7 +183,12 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
     }
   }
 
-  const usage = { model: reply.model, promptTokens: reply.usage.promptTokens, completionTokens: reply.usage.completionTokens }
+  const usage = {
+    model: reply.model,
+    promptTokens: reply.usage.promptTokens,
+    completionTokens: reply.usage.completionTokens,
+    cachedTokens: reply.usage.cachedTokens,
+  }
   const call = reply.calls.find((c) => c.name === BOOK_A_CALL.name)
 
   if (call) {
@@ -222,10 +242,10 @@ export async function logAsk(
   if (!env.DATABASE_URL) return null
   try {
     const rows = await withService(env, (sql) => sql<{ id: string }[]>`
-      insert into assistant_log (company_id, user_id, question, answer, status, model, prompt_tokens, completion_tokens, error)
+      insert into assistant_log (company_id, user_id, question, answer, status, model, prompt_tokens, completion_tokens, cached_tokens, error)
       values (${meta.companyId}, ${meta.userId}, ${meta.question.slice(0, 2000)}, ${r.answer.slice(0, 8000) || null},
               ${r.status}, ${r.model?.slice(0, 120) ?? null}, ${r.promptTokens}, ${r.completionTokens},
-              ${r.error?.slice(0, 500) ?? null})
+              ${r.cachedTokens}, ${r.error?.slice(0, 500) ?? null})
       returning id`)
     return rows[0]?.id ?? null
   } catch (e) {

@@ -8,7 +8,9 @@ import { composeHelpContext } from './help-context'
  * rules are checked and no question is ever sent anywhere.
  */
 
-const HELP = composeHelpContext([{ question: 'Can I change a quotation after sending it?', answer: 'Yes. Edit it and send the link again.' }])
+const HELP = composeHelpContext('How do I add my team?', [
+  { question: 'Can I change a quotation after sending it?', answer: 'Yes. Edit it and send the link again.' },
+])
 
 const CALL = 'https://cal.example.test/studio-autopilot'
 
@@ -34,7 +36,7 @@ const answered = (text: string): ChatReply => ({
   text,
   calls: [],
   model: 'stub-1',
-  usage: { promptTokens: 1300, completionTokens: 40 },
+  usage: { promptTokens: 1300, completionTokens: 40, cachedTokens: 1100 },
   truncated: false,
 })
 
@@ -43,7 +45,7 @@ const toolCall = (reason: string): ChatReply => ({
   text: '',
   calls: [{ id: 'c1', name: BOOK_A_CALL.name, args: { reason } }],
   model: 'stub-1',
-  usage: { promptTokens: 1300, completionTokens: 12 },
+  usage: { promptTokens: 1300, completionTokens: 12, cachedTokens: 1100 },
   truncated: false,
 })
 
@@ -106,7 +108,7 @@ describe('ask', () => {
     const p = stub(answered('ok'))
     await ask({ provider: p, help: HELP, question: 'How do I add my team?' })
     expect(p.seen[0]!.system).toContain(DEFAULT_PROMPT.slice(0, 40))
-    expect(p.seen[0]!.system).toContain('Add your team')
+    expect(p.seen[0]!.system).toContain('Adding your team')
     expect(p.seen[0]!.system).toContain('Can I change a quotation after sending it?')
     expect(p.seen[0]!.last).toBe('How do I add my team?')
   })
@@ -170,7 +172,7 @@ describe('ask', () => {
       text: 'Open the Shoots tab and',
       calls: [],
       model: 'stub-1',
-      usage: { promptTokens: 1300, completionTokens: 800 },
+      usage: { promptTokens: 1300, completionTokens: 800, cachedTokens: 1100 },
       truncated: true,
     })
     const r = await ask({ provider: p, help: HELP, question: 'q' })

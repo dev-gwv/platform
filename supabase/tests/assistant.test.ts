@@ -230,10 +230,37 @@ describe('was the answer any use (0255)', () => {
   })
 })
 
+describe('what the provider cached (0259)', () => {
+  it('records it, and tells "not reported" from zero', async () => {
+    // Zero means every token was charged and counted against the rate limit;
+    // null means the provider did not say. Collapsing them would hide the one
+    // number that says whether we fit inside 8,000 tokens a minute.
+    await db.exec(`insert into assistant_log (company_id, question, status, prompt_tokens, cached_tokens)
+                   values ('${COMPANY}', 'q1', 'answered', 3000, 2400),
+                          ('${COMPANY}', 'q2', 'answered', 3000, 0),
+                          ('${COMPANY}', 'q3', 'answered', 3000, null)`)
+    const r = await q<{ cached_tokens: number | null }>(
+      `select cached_tokens from assistant_log order by question`,
+    )
+    expect(r.map((x) => x.cached_tokens)).toEqual([2400, 0, null])
+  })
+
+  it('can be averaged into a share without dividing by zero', async () => {
+    // The console reads this; a studio with no logged prompt tokens must give
+    // null rather than blow up the whole health query.
+    await db.exec(`insert into assistant_log (company_id, question, status, prompt_tokens, cached_tokens)
+                   values ('${COMPANY}', 'q', 'skipped', null, null)`)
+    const r = await q<{ share: number | null }>(
+      `select (100.0 * sum(cached_tokens) / nullif(sum(prompt_tokens), 0))::int as share from assistant_log`,
+    )
+    expect(r[0]!.share).toBeNull()
+  })
+})
+
 describe('the migrations', () => {
   it('can be applied twice', async () => {
     await db.exec(`insert into assistant_log (company_id, question, status) values ('${COMPANY}', 'keep me', 'answered')`)
-    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql', '0255_assistant_helpful.sql']) {
+    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql', '0255_assistant_helpful.sql', '0259_assistant_cached_tokens.sql']) {
       await db.exec(readFileSync(join(migDir, f), 'utf8'))
     }
     const r = await q<{ n: number }>(`select count(*)::int as n from assistant_log`)

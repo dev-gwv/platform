@@ -56,17 +56,25 @@ export function AssistantHealthCard() {
           <StatusBadge tone={d.unhelpful > 0 ? 'warning' : 'neutral'}>{d.unhelpful} did not</StatusBadge>
           {d.failed > 0 && <StatusBadge tone="danger">{d.failed} failed</StatusBadge>}
           {d.avg_prompt_tokens !== null && (
-            // The tripwire under the no-retrieval decision in help-context.ts.
-            <StatusBadge tone={d.avg_prompt_tokens > 30_000 ? 'warning' : 'neutral'}>
+            // Groq's free tier allows 8,000 tokens a minute for gpt-oss-120b,
+            // so this is the headroom figure, not a curiosity.
+            <StatusBadge tone={d.avg_prompt_tokens > 4_000 ? 'warning' : 'neutral'}>
               {d.avg_prompt_tokens.toLocaleString('en-IN')} tokens a question
+            </StatusBadge>
+          )}
+          {d.cached_share !== null && (
+            // Cached tokens count against neither the bill nor the rate limit,
+            // so a high share here is what keeps questions inside the limit.
+            <StatusBadge tone={d.cached_share >= 50 ? 'success' : 'warning'}>
+              {d.cached_share}% served from cache
             </StatusBadge>
           )}
         </div>
 
-        {d.avg_prompt_tokens !== null && d.avg_prompt_tokens > 30_000 && (
+        {d.avg_prompt_tokens !== null && d.avg_prompt_tokens > 4_000 && (
           <p className="text-xs text-warning">
-            The prompt has passed 30,000 tokens. That is the point at which the help content should start being
-            selected per question instead of sent whole — see buildHelpContext.
+            A question is costing more than 4,000 tokens. Groq allows 8,000 a minute on the free tier, so the
+            selection in help-context.ts has probably stopped selecting — check what is being sent.
           </p>
         )}
 

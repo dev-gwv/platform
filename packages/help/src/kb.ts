@@ -55,6 +55,20 @@ export interface KbArticle {
   to?: string
   /** A tutorial key in TUTORIALS, when a recording shows it. */
   video?: string
+  /**
+   * The words a studio types, where they differ from the words we wrote.
+   *
+   * Scored by the assistant's retrieval, never shown. This is where lexical
+   * search earns or loses: somebody asking "how do I add staff" must reach the
+   * article called "Adding your team", and no amount of ranking gets there
+   * without the synonym. We own the corpus, so we write them in rather than
+   * reaching for embeddings to solve it.
+   *
+   * Include the Hinglish a studio actually uses ("paisa", "shaadi"), the old
+   * app's words, and the plain-English near-misses. Do not repeat words already
+   * in the title -- those are scored anyway.
+   */
+  keywords?: readonly string[]
   /** Short paragraphs or steps. */
   body: readonly string[]
 }
@@ -65,6 +79,7 @@ export const KB: readonly KbArticle[] = [
     key: 'what-it-is',
     title: 'What Studio AutoPilot is',
     area: 'Start',
+    keywords: ['software', 'app', 'crm', 'overview', 'features'],
     body: [
       'Studio AutoPilot runs a photography or wedding studio from the first enquiry to the last payment.',
       'It holds your enquiries and follow-ups, your clients, your projects with their shoot days and deliverables, the crew you book for each day, the editing work and who has it, your invoices and the money in and out, and your team: attendance, leave and pay.',
@@ -77,6 +92,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Start',
     menu: 'Home',
     to: '/dashboard',
+    keywords: ['setup', 'set up', 'start', 'onboarding', 'first time', 'new studio'],
     body: [
       'A new studio starts on step 1: **Add your team**. The button opens the bulk list so you can put everyone in at once.',
       'Then add a client, then create your first project. Those three steps show once, in the setup bar at the top.',
@@ -90,6 +106,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Start',
     menu: 'Help, at the foot of the menu',
     to: '/learn',
+    keywords: ['support', 'contact', 'tutorial', 'video', 'stuck', 'training'],
     body: [
       'Press **Help** at the bottom of the menu. It has **WhatsApp us** and **Email us**, with your studio, your name and the page you are on already written into the message — you only press Send.',
       '**How to use Studio AutoPilot** is the whole app step by step with a short video for each job, in English and Hindi.',
@@ -105,6 +122,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Leads',
     to: '/follow-ups',
     video: 'leads',
+    keywords: ['enquiry', 'enquiries', 'inquiry', 'prospect', 'pipeline', 'funnel', 'board'],
     body: [
       'Every enquiry is a lead, on a board of columns you name yourself — your stages, your colours.',
       'A lead carries as many **labels** as you like, one **quality** (hot, warm, cold — hot ranks your call list), a source, and as many events as the booking has.',
@@ -118,6 +136,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → Add lead',
     to: '/follow-ups',
+    keywords: ['new enquiry', 'create lead', 'capture', 'walk in', 'phone enquiry'],
     body: [
       'Press **Add lead** and fill in what you know — a name or a number is enough.',
       'Leads also arrive on their own: from your enquiry form or vendor QR code, from Facebook lead ads, and from WhatsApp.',
@@ -131,6 +150,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → the column menu, or "+ Add stage"',
     to: '/follow-ups',
+    keywords: ['column', 'pipeline stage', 'status', 'kanban'],
     body: [
       'Stages are yours. Add, rename, recolour, reorder or hide one from the board — use the menu on a column heading, or the **+ Add stage** column at the end.',
       'You can also change a lead\'s stage from the stage picker inside the lead.',
@@ -143,6 +163,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → Call queue',
     to: '/follow-ups/queue',
+    keywords: ['callback', 'remind', 'chase', 'call list', 'pending calls'],
     body: [
       'A follow-up is a task on a lead with a date and a priority. The lead shows the next one due, and turns amber once it is past.',
       '**Call queue** is today\'s calls in the order worth making — hot leads first, then how long someone has been waiting.',
@@ -156,6 +177,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → Send now',
     to: '/follow-ups/send',
+    keywords: ['bulk message', 'broadcast', 'blast', 'mass message'],
     body: [
       'Pick the leads and send one message to all of them, on WhatsApp or email.',
       'Tick leads on the board or the list to get the bulk bar, which also sets labels, stage, owner or quality on all of them at once.',
@@ -168,6 +190,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → Reports',
     to: '/follow-ups/reports',
+    keywords: ['conversion', 'funnel', 'source performance', 'win rate', 'lost reason'],
     body: [
       '**Funnel & sources** — where leads come from, which stage they stop at, and the reasons you lost them.',
       '**Team** — who is carrying what, how fast each person answers a new lead, and who converts.',
@@ -182,6 +205,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Leads → Setup',
     to: '/follow-ups/setup',
+    keywords: ['assignment', 'round robin', 'distribute', 'sla', 'auto assign', 'rotation'],
     body: [
       'Set how long a new lead may wait before first contact and still count as on time.',
       'Choose how new leads are shared out: to one person, or round-robin across your team. The rota counts each person\'s open leads, not every lead they have ever had.',
@@ -195,6 +219,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Settings → Leads → Forms',
     to: '/enquiry-forms',
     video: 'enquiry-form',
+    keywords: ['qr code', 'website form', 'embed', 'vendor', 'landing', 'contact form'],
     body: [
       'Make a form for **your website** or for **a vendor** (a QR code a venue or decorator can show).',
       '**Edit form** opens the builder with the form beside it: the heading, the line under it, each field Off, Ask or Required (name and phone are always asked), the button colour, your logo on or off, and what the client sees after sending.',
@@ -208,6 +233,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Leads',
     menu: 'Settings → Leads → Lead sources',
     to: '/lead-sources',
+    keywords: ['instagram', 'referral source', 'channel', 'utm'],
     body: [
       'The list of places your enquiries come from — Instagram, a venue, a referral, Facebook — so the reports can tell you which ones are worth your money.',
       'Add your own source any time; it joins the list for everyone.',
@@ -220,6 +246,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Settings → Leads → Lead sources',
     to: '/facebook',
     video: 'facebook',
+    keywords: ['meta', 'fb', 'instagram ads', 'lead ads', 'page', 'social'],
     body: [
       'Press **Connect with Facebook** and pick the Pages you want. A new lead from a Facebook lead-ad form then arrives in your CRM by itself.',
       'Only the Pages you tick in Facebook\'s own dialog are listed.',
@@ -236,6 +263,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Clients',
     to: '/clients',
     video: 'client',
+    keywords: ['customer', 'couple', 'bride', 'groom', 'family', 'contact', 'party'],
     body: [
       'A client is the couple or family you are shooting for. Add them with **Add client**, or let a booking make one.',
       'A client holds their projects, their payments, and their dates — birthdays and anniversaries, which the Wishes tab uses.',
@@ -248,6 +276,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Clients',
     menu: 'Project → More → Send details form',
     video: 'details-form',
+    keywords: ['questionnaire', 'details link', 'client info', 'collect details'],
     body: [
       'Instead of typing a client\'s details yourself, send them a form on WhatsApp and let them fill it in.',
       'From a project: **More → Send details form**. For one link and QR you can use with anyone: **Settings → Leads → Client details form**.',
@@ -259,6 +288,7 @@ export const KB: readonly KbArticle[] = [
     title: 'What the client can see',
     area: 'Clients',
     menu: 'Project → More → Share with client',
+    keywords: ['share link', 'client link', 'client view', 'customer portal'],
     body: [
       'Each project has a link you can send the client. It shows their quotation, their invoices, their terms to sign, and the work as it is delivered.',
       'Find it under **More → Share with client** on the project.',
@@ -275,6 +305,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Projects',
     to: '/projects',
     video: 'project',
+    keywords: ['event', 'booking', 'job', 'wedding', 'order'],
     body: [
       'A project is one booking — a wedding, a pre-wedding, an event — with its days, its crew, its deliverables and its money.',
       'Every project page has eight tabs: **Overview**, **Quotation**, **Shoots**, **Post-Production** (Work, Work to review, Task Management), **Terms**, **Finance** (Billing, Expenses, Cost sheet, Payouts), **Data** and **Wishes** (Wishes, Referrals).',
@@ -288,6 +319,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Projects → New project',
     to: '/projects/new',
     video: 'project',
+    keywords: ['create project', 'new booking', 'wizard', 'add event', 'new job'],
     body: [
       'Four steps: who it is for, the event days, what they get, and the price.',
       'Each shoot day needs a date, a **Start time** and a **Duration** — your crew\'s hours are planned from them.',
@@ -299,6 +331,7 @@ export const KB: readonly KbArticle[] = [
     key: 'projects-overview',
     title: 'The project Overview',
     area: 'Projects',
+    keywords: ['summary', 'project home', 'at a glance'],
     body: [
       'Money and work only: what the project is worth, what you have received and what is still to collect, and the editing work with who has each piece.',
       'Received says what share it is ("20% collected"); still to collect says what is promised. With profit access there is a fourth box, **Margin**, after crew and expenses.',
@@ -311,6 +344,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Projects',
     menu: 'Project → Quotation',
     video: 'quotation',
+    keywords: ['quote', 'estimate', 'proposal', 'pricing document', 'package quote'],
     body: [
       'The quotation page shows the document and nothing else: one row of buttons across the top (Back, whether the client can see it, **Send to client**, Print, and ⋯ for terms and display options).',
       'It is compact on your screen and the full page when printed or opened by the client.',
@@ -324,6 +358,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Projects',
     menu: 'Project → Terms',
     video: 'terms',
+    keywords: ['contract', 'agreement', 'signature', 'sign', 'conditions'],
     body: [
       'Send your terms to the client as a link. They read them and sign with their finger before **I agree**, and the signature appears on their copy and on yours.',
       'If the client is sitting with you, use **Sign now with Priya** on the Terms tab — the terms and the signature pad on your own phone or tablet. It is marked as signed in person.',
@@ -336,6 +371,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Projects',
     menu: 'Settings → Projects → Templates',
     to: '/settings/project-templates',
+    keywords: ['preset', 'reuse', 'standard package', 'task bundle', 'blueprint'],
     body: [
       'A template is a project shape you reuse: the deliverables, the tasks and the package line for "a wedding" or "a pre-wedding shoot".',
       'Every studio starts with **Sample — Wedding**, marked Sample until you edit it. A studio that deletes its sample does not get it back.',
@@ -349,6 +385,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Projects',
     menu: 'Projects → Needs attention',
     to: '/project-tracking',
+    keywords: ['needs attention', 'overdue projects', 'pending'],
     body: [
       'The projects with something waiting: a day with no crew, work that is late, an unpaid invoice, data not backed up.',
       'Use it as the morning list rather than reading every project.',
@@ -360,6 +397,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Projects',
     menu: 'Settings → Projects → Documents',
     to: '/project-documents',
+    keywords: ['papers', 'files', 'records'],
     body: [
       'Every quotation, invoice, receipt and terms document you have issued, in one list, so you can find a paper without opening its project.',
     ],
@@ -373,6 +411,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Shoots',
     to: '/team-allocation',
     video: 'assign',
+    keywords: ['event day', 'function', 'assign', 'crew', 'book team', 'roster', 'call sheet'],
     body: [
       'The Shoots tab of a project starts with the days. Each card shows the date, the hours ("4:00 pm–9:00 pm · 5 h") and the roles the day needs.',
       '**Assign team** books people. Each name tells you their day in plain words: "Free all day", "Free at this time · also booked 7–9 PM · Sangeet", "On leave that day", "Busy 3–6 PM". Hover or tap that line to see their whole day.',
@@ -384,6 +423,7 @@ export const KB: readonly KbArticle[] = [
     key: 'shoots-copy-team',
     title: 'Booking the same crew for more days',
     area: 'Shoots',
+    keywords: ['same crew', 'duplicate team', 'repeat team', 'copy crew'],
     body: [
       'Once a day has its crew, the project offers **Book the same people for Wedding and Reception?** — it books them on the project\'s coming days in the same roles at each day\'s hours.',
       'Anyone busy, on leave or not needed is skipped, and the message names who and why.',
@@ -395,6 +435,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Shoots',
     menu: 'Shoots → Calendar',
     to: '/team-allocation/calendar',
+    keywords: ['month view', 'availability', 'clash', 'double booked', 'schedule'],
     body: [
       '**Calendar** is the month, Monday first. A day stays plain until every shoot on it has its team, then reads "Team set"; otherwise a quiet "2 to fill". Tap a shoot to assign.',
       '**Conflicts** lists anyone double-booked.',
@@ -405,6 +446,7 @@ export const KB: readonly KbArticle[] = [
     key: 'shoots-pay',
     title: 'What a shoot day costs you',
     area: 'Shoots',
+    keywords: ['crew cost', 'freelancer rate', 'day rate', 'per shoot', 'wages'],
     body: [
       'Each person booked on a day carries a payout, filled in from their usual rates: a wedding-day rate for a wedding function, a half-day rate for five hours or less, otherwise their day rate.',
       'The day\'s line reads "Crew ₹12,000 · not final" until the money is settled.',
@@ -419,6 +461,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Editing',
     menu: 'Project → Post-Production → Work',
     video: 'give-work',
+    keywords: ['assign editor', 'allot', 'hand over', 'allocate'],
     body: [
       '**Start editing** on a deliverable with nobody on it asks "Who will edit Wedding Teaser?" — your editors first, each with how much they already have ("2 in hand · 1 late"), the due date filled in, and a line of brief.',
       'Then **Start editing with Nitin**. They see it on their own login.',
@@ -432,6 +475,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Post-Production',
     to: '/production-board',
     video: 'board',
+    keywords: ['kanban', 'production', 'workflow', 'progress'],
     body: [
       'Every piece of editing work in the studio, in columns by stage. Drag a card to move it on.',
       'Three views: **Stages** (the columns), **List** (late first, then by due date) and **People** (what each editor is carrying).',
@@ -443,6 +487,7 @@ export const KB: readonly KbArticle[] = [
     title: 'Work to review',
     area: 'Editing',
     menu: 'Project → Post-Production → Work to review',
+    keywords: ['approve', 'check', 'qc', 'feedback', 'revision', 'changes'],
     body: [
       'What your editors have handed in and is waiting for you. Open it, watch it, then approve it or send it back with what to change.',
       'Sent back, the work reopens for its editor with your note.',
@@ -455,6 +500,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Editing',
     menu: 'Settings → Projects → Delivery stages',
     to: '/projects/stages',
+    keywords: ['workflow', 'approval flow', 'review step', 'simple delivery'],
     body: [
       'Two ways to work, and it is the owner\'s choice.',
       '**Check before it goes** — a hand-in waits in Review until someone approves it.',
@@ -468,6 +514,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Editing',
     menu: 'Tasks',
     to: '/tasks',
+    keywords: ['todo', 'to do', 'checklist', 'reminder', 'job list', 'assignments'],
     body: [
       'Tasks are the jobs that are not an edit: book the decorator, order the album, collect the balance.',
       '**Tasks** in the menu is every task in the studio; **My tasks** is your own. A project\'s own tasks are on **Post-Production → Task Management**.',
@@ -484,6 +531,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Data & Backup',
     to: '/data-management',
     video: 'data',
+    keywords: ['backup', 'copy', 'memory card', 'hard disk', 'drive', 'footage', 'rushes', 'dump'],
     body: [
       'After a shoot, record whose cards came in and which disk they went on.',
       'The dialog is short: who copied it and when, then one line per copy — the disk and whether it is done. Folder or link goes under **+ Folder or link**; type, size, cards, label and notes under **More details**.',
@@ -497,6 +545,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Data',
     menu: 'Data & Backup → Locations',
     to: '/data-management/locations',
+    keywords: ['disk', 'drive', 'storage', 'hdd', 'ssd'],
     body: [
       'The register of your disks and drives, so "WD Red 03" means the same thing to everyone.',
       'Name them the way they are labelled on the shelf. The dialog suggests the shape, for example WD-001 or SEA-002.',
@@ -506,6 +555,7 @@ export const KB: readonly KbArticle[] = [
     key: 'data-pay-freelancer',
     title: 'Paying a freelancer when their cards come in',
     area: 'Data',
+    keywords: ['pay crew', 'settle', 'freelancer payment'],
     body: [
       'For anyone on a shoot payout, the data dialog carries "{name}\'s payout ₹__ · Pay later / Paid ₹X / Part paid", filled in from their booking.',
       'So the usual order is: cards in, then paid, in the same place.',
@@ -520,6 +570,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Money',
     menu: 'Money',
     to: '/billing/payments',
+    keywords: ['finance', 'accounts', 'billing', 'cash', 'revenue'],
     body: [
       '**Payments** — money in, and what is due.',
       '**Invoices** — the GST invoices you have raised.',
@@ -535,6 +586,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Money → Payments',
     to: '/billing/payments',
     video: 'payments',
+    keywords: ['received', 'collection', 'advance', 'balance', 'paid', 'receipt', 'due'],
     body: [
       'Four tiles: **Overdue**, **Due in 30 days**, **Later**, and **Received** for the period.',
       'Tap a tile to list its lines, each with the one thing to do: Open invoice, **Mark received**, or Open billing.',
@@ -549,6 +601,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Money → Invoices',
     to: '/billing/invoices',
     video: 'invoices',
+    keywords: ['bill', 'gst invoice', 'tax invoice', 'raise invoice'],
     body: [
       'Make a GST invoice from a project, or from scratch with **New invoice**.',
       'If you have already taken an advance, tick it under "Already received for this project" — it is linked to the invoice so nothing is counted twice.',
@@ -563,6 +616,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Money → Expenses',
     to: '/company-expenses',
     video: 'expenses',
+    keywords: ['spend', 'cost', 'purchase', 'outgoing', 'kharcha'],
     body: [
       'Record money out, against a category and — where it matters — against a project, so a project\'s real cost is true.',
       'An expense can be itemised, carry a tax rate and name the vendor it was paid to.',
@@ -575,6 +629,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Money',
     menu: 'Money → Profit & Loss',
     to: '/financials',
+    keywords: ['profit', 'loss', 'margin', 'earnings', 'income statement'],
     body: [
       'Money in against money out for the period, with your studio costs shared across projects either by income or equally.',
       'It uses the same booked profit as a project\'s Margin and the Finance tab, so the app never shows you two different margins for the same thing.',
@@ -585,6 +640,7 @@ export const KB: readonly KbArticle[] = [
     title: 'A project\'s cost sheet',
     area: 'Money',
     menu: 'Project → Finance → Cost sheet',
+    keywords: ['project cost', 'profitability', 'costing'],
     body: [
       'What one project actually cost: the crew you booked, the expenses against it, and the studio costs shared onto it — against what the client is paying.',
       'This is the screen that answers "did we make anything on that wedding".',
@@ -598,6 +654,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Team → Pay → Team payouts',
     to: '/team-payouts',
     video: 'payouts',
+    keywords: ['crew payment', 'freelancer pay', 'settle crew', 'owed'],
     body: [
       'Crew money is owed once the shoot day has passed. The page opens on **Owed now**, with **Upcoming** and **All** beside it.',
       'Money paid before a shoot shows as "₹X paid in advance" and is never taken off what you owe for days already done.',
@@ -609,6 +666,7 @@ export const KB: readonly KbArticle[] = [
     key: 'money-pay-to',
     title: 'Where someone\'s pay goes',
     area: 'Money',
+    keywords: ['upi', 'bank account', 'account number', 'payment details'],
     body: [
       'Every pay dialog has a **Pay to** card with **Add UPI or bank**, so whoever is paying can fill in the details there and then.',
       'Only the owner and people who handle salaries or payouts can change them.',
@@ -619,6 +677,7 @@ export const KB: readonly KbArticle[] = [
     key: 'money-hide-amounts',
     title: 'Hiding amounts on screen',
     area: 'Money',
+    keywords: ['hide price', 'privacy', 'blur', 'mask'],
     body: [
       'The eye in the top bar turns every rupee on your own screens into ₹ ••••, which is what you want with a client beside you.',
       'It follows you to every device. Tap a hidden headline to show just that one figure.',
@@ -631,6 +690,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Money → Invoicing',
     to: '/settings/invoicing',
+    keywords: ['gst number', 'invoice number', 'numbering', 'tax settings', 'prefix'],
     body: [
       'Your invoice numbering, your GST number and the details printed on every invoice, plus the default terms.',
       'Invoice tax uses the GST slabs. Expense tax is a plain percentage.',
@@ -643,6 +703,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Money → Vendors',
     to: '/settings/vendors',
+    keywords: ['supplier', 'printer', 'decorator', 'payee'],
     body: [
       'The people and firms you pay — the decorator, the album printer, the drone operator — so an expense can name who it went to and you can see what you spend with each.',
     ],
@@ -655,6 +716,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Team',
     menu: 'Team',
     to: '/employees',
+    keywords: ['staff', 'employees', 'people', 'members', 'crew list'],
     body: [
       '**People** — everyone, their roles and their rates.',
       '**Attendance & leave** — who is in, and leave.',
@@ -669,6 +731,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Team → People → Add Team Member',
     to: '/employees',
     video: 'team-bulk',
+    keywords: ['staff', 'employee', 'new member', 'hire', 'add person', 'photographer', 'editor'],
     body: [
       '**All at once** gives you one row per person — name, mobile and the job they get booked for. **One by one** is the full form for a single person.',
       'A freelancer goes on **Per shoot**.',
@@ -680,6 +743,7 @@ export const KB: readonly KbArticle[] = [
     title: 'Giving someone a login',
     area: 'Team',
     menu: 'Team → People → the row menu → Sign-in details',
+    keywords: ['password', 'username', 'sign in', 'access', 'credentials'],
     body: [
       'Your team needs no real email. Any email, even one you make up, is only a username: they sign in with it and the password you set.',
       'Nothing ever asks your team to confirm an email.',
@@ -692,6 +756,7 @@ export const KB: readonly KbArticle[] = [
     title: 'What your team sees on their own login',
     area: 'Team',
     video: 'team-day',
+    keywords: ['employee view', 'staff app', 'permissions view'],
     body: [
       'A team member sees their own work, not the studio\'s: their shoots, their edits, their tasks, their attendance, their leave and their pay.',
       'They never see your money, your margins or a client\'s phone number.',
@@ -705,6 +770,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Team',
     menu: 'Settings → Team → Roles & access',
     to: '/settings/roles',
+    keywords: ['permission', 'rights', 'restrict', 'admin', 'privileges'],
     body: [
       'Access is per module — Leads, Projects, Money, Billing, Salaries, Settings and so on — and per action: view, create, edit, delete.',
       'The money modules are sensitive and off for staff by default. A project manager can run projects and still see no money; the app sends money as zero rather than hiding it on screen only.',
@@ -719,6 +785,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Settings → Studio → Attendance',
     to: '/settings/attendance-location',
     video: 'attendance',
+    keywords: ['present', 'absent', 'check in', 'punch', 'location', 'gps', 'haazri'],
     body: [
       'Attendance is off until you turn it on. While it is off nobody is marked, swept absent, reminded or cut a rupee.',
       'Turning it on takes one place (use your location, or paste a Google Maps link) with a radius, your working hours, a grace period, when a short day becomes a half day, the weekly off, and an optional selfie.',
@@ -734,6 +801,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Team → Attendance & leave → Leave',
     to: '/leave',
     video: 'leave',
+    keywords: ['holiday', 'off', 'chutti', 'casual leave', 'sick', 'balance'],
     body: [
       'Set the days a year for each kind of leave — casual, sick, paid — under **Balances**. Everyone then reads as "9 of 12 casual left".',
       'An approval tells you the balance: "Has 2 days casual left · this is 3 days, 1 over", and offers **Approve, 1 day unpaid** — the covered days stay as asked and the rest becomes approved unpaid leave, which payroll already cuts.',
@@ -748,6 +816,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Team → Pay → Payroll',
     to: '/payroll',
     video: 'salaries',
+    keywords: ['salary', 'payslip', 'wages', 'monthly pay', 'tankhwah'],
     body: [
       'Run the month and the app works out each salaried person\'s pay from their attendance and their approved leave, then gives you a payslip per person.',
       'Unpaid leave and half days are already taken off.',
@@ -760,6 +829,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Team',
     menu: 'Team → People → Performance',
     to: '/team/performance',
+    keywords: ['scorecard', 'rating', 'productivity'],
     body: [
       'How each person is doing: shoots done, edits handed in on time, tasks closed, attendance.',
       'Each person sees their own on **My performance**.',
@@ -771,6 +841,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Team',
     menu: 'Settings → Team → Team terms',
     to: '/settings/team-terms',
+    keywords: ['crew contract', 'freelancer agreement'],
     body: [
       'The terms your crew agrees to — what they are booked for, what they are paid, what happens if they cancel.',
       'Set them once here and a booked person is asked to agree on their own login.',
@@ -784,6 +855,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Reports',
     menu: 'Reports',
     to: '/reports',
+    keywords: ['analytics', 'insights', 'numbers', 'statistics', 'mis'],
     body: [
       'The studio in numbers for a period: bookings and what they are worth, money in and out, which sources bring you work, how your team is carrying it.',
       'Lead-specific reports — the funnel, the team table and the forecast — are on **Leads → Reports**.',
@@ -795,6 +867,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Reports',
     menu: 'The bell in the top bar',
     to: '/notifications',
+    keywords: ['notification', 'bell', 'reminder', 'ping', 'unread'],
     body: [
       'The bell carries your unread count and the latest few; tap one to go where it points.',
       'You are told when a client accepts a quotation, when an editor hands work in, when an invoice goes overdue, when a follow-up is due, and when your payment details are changed.',
@@ -806,6 +879,7 @@ export const KB: readonly KbArticle[] = [
     key: 'morning-email',
     title: 'The morning email',
     area: 'Reports',
+    keywords: ['daily email', 'digest', 'summary email'],
     body: [
       'At 8 am you get the day in an email: today\'s shoots, the calls worth making, invoices gone overdue, and leads going cold.',
       'To stop it, use the link at the bottom of the email.',
@@ -817,6 +891,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Team → Activity',
     to: '/activity',
+    keywords: ['audit', 'log', 'history', 'trail'],
     body: [
       'Every change of consequence, with who made it and when — a price edited, a booking released, someone\'s pay details changed, a lead deleted.',
       'Values that are nobody else\'s business are not recorded, only the fact that the field changed.',
@@ -830,6 +905,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings',
     to: '/settings/company',
+    keywords: ['configuration', 'options', 'preferences'],
     body: [
       'Settings is a list down the side, not a row of tabs: **Studio**, **Team**, **Projects**, **Leads**, **Money**, **Messages & lists**.',
       'Studio holds your company profile, your theme and branding, and attendance. Team holds roles, crew terms and activity. Projects holds templates, documents and delivery stages. Leads holds forms, sources and referrals. Money holds invoicing, vendors and your plan. Messages & lists holds messaging, WhatsApp and your lists.',
@@ -842,6 +918,7 @@ export const KB: readonly KbArticle[] = [
     menu: 'Settings → Studio → Company profile',
     to: '/settings/company',
     video: 'studio',
+    keywords: ['logo', 'company name', 'branding', 'address', 'letterhead', 'package'],
     body: [
       'Your studio name, your logo, your address and the contact details printed on your documents.',
       'The logo is an upload, under 1 MB, saved the moment it lands — there is no link box.',
@@ -855,6 +932,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Messages & lists → Lists',
     to: '/settings/lookups',
+    keywords: ['dropdown', 'options', 'picklist', 'custom field', 'categories', 'master'],
     body: [
       'Every list the app offers you a choice from, in one place: event types, lead stages and sources, qualities, labels, expense categories, deliverable types, crew roles.',
       'You can also add to any of these from the picker where you use it — type your own word and it joins the list for the whole studio.',
@@ -867,6 +945,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Messages & lists → Messaging',
     to: '/settings/messaging',
+    keywords: ['whatsapp', 'sms', 'email', 'templates', 'automation', 'sequence'],
     body: [
       'What the app sends on your behalf, and the wording of each message.',
       'Messages come out of your message credits. Email in your own studio\'s name is part of the top plan — **Plan & billing** says what yours includes.',
@@ -879,6 +958,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Messages & lists → WhatsApp',
     to: '/help/whatsapp',
+    keywords: ['own number', 'business api', 'meta app', 'waba', 'sender'],
     body: [
       'Messages can go out from your studio\'s own WhatsApp number instead of a shared one. It takes about 30 minutes, once. **Plan & billing** says whether your plan includes it.',
       'You need a number that is **not** currently on the WhatsApp or WhatsApp Business app — if it is, delete that account first, or use a fresh number.',
@@ -892,6 +972,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Settings',
     menu: 'Settings → Money → Refer a studio',
     to: '/settings/refer-a-studio',
+    keywords: ['referral', 'invite studio', 'affiliate', 'reward'],
     body: [
       'You get a link to share, with Copy and a WhatsApp share button, and a list of the studios that joined through it: on trial, on a paid plan, rewarded, or not counted.',
       'What a referral earns you is shown on that page.',
@@ -902,6 +983,7 @@ export const KB: readonly KbArticle[] = [
     title: 'Asking a client for a referral',
     area: 'Settings',
     menu: 'Project → Wishes → Referrals',
+    keywords: ['ask for referral', 'word of mouth', 'recommend'],
     body: [
       'Ask a happy client to pass your name on, per project, and see who came from whom.',
       'It is a tab on the project rather than a card on the Overview, so asking is something you choose to do.',
@@ -912,6 +994,7 @@ export const KB: readonly KbArticle[] = [
     title: 'Wishes: birthdays and anniversaries',
     area: 'Settings',
     menu: 'Project → Wishes',
+    keywords: ['birthday', 'anniversary', 'greeting', 'occasion'],
     body: [
       'Your clients\' dates, so you can send a wish on the day. The wedding shoot fills in the anniversary by itself.',
       'If a client\'s dates are missing, the tab offers to ask them to fill them in.',
@@ -924,6 +1007,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Plans',
     menu: 'Plan & billing',
     to: '/settings/subscription',
+    keywords: ['free', 'demo', 'trial period', 'expiry', 'days left'],
     body: [
       'Everything works during the trial — there are no limits on it.',
       'An IPC Diamond member gets 30 days from sign-up; otherwise it is 7 days.',
@@ -937,6 +1021,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Plans',
     menu: 'Plan & billing',
     to: '/settings/subscription',
+    keywords: ['cost', 'price', 'fee', 'charges', 'how much', 'subscription', 'rate'],
     body: [
       'There are three plans: **Starter** ₹17,988 a year (or ₹1,999 a month), **Pro** ₹29,988 a year (or ₹2,999 a month) and **Studio Max** ₹47,988 a year (or ₹4,999 a month).',
       'Every plan has every feature. Starter has number limits (30 projects a year, 3 team logins, 20 crew); Pro and Studio Max are unlimited, and Studio Max sends WhatsApp and email in your own name.',
@@ -951,6 +1036,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Plans',
     menu: 'Plan & billing',
     to: '/settings/subscription',
+    keywords: ['member', 'ipc', 'discount', 'group', 'premium'],
     body: [
       'A member of the "IPC Diamonds - Premium" WhatsApp group gets the member prices and 30 days to try the app.',
       'Prove it with a screenshot of that group on the verify card. It is checked automatically, and a person looks at anything the check cannot read.',
@@ -963,6 +1049,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Plans',
     menu: 'Plan & billing',
     to: '/settings/subscription',
+    keywords: ['change plan', 'renew', 'pro rata', 'switch plan', 'downgrade'],
     body: [
       'Moving up part-way through only costs the difference — what is left of what you paid comes off the price — and the new plan year starts that day.',
       'Moving down waits until the plan you are on ends.',
@@ -976,6 +1063,7 @@ export const KB: readonly KbArticle[] = [
     area: 'Plans',
     menu: 'Plan & billing',
     to: '/settings/subscription',
+    keywords: ['expired', 'access ended', 'locked out', 'payment due'],
     body: [
       'Nothing is deleted. You can still sign in and reach your plan page to pay.',
       'Once you pay, everything is exactly as you left it.',
@@ -987,6 +1075,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-failed-to-fetch',
     title: '"Failed to fetch", or the app will not load',
     area: 'Problems',
+    keywords: ['not loading', 'error', 'blank', 'cannot open', 'network', 'offline'],
     body: [
       'The app cannot reach its server. It is almost never your account.',
       'Try a different connection first — a phone hotspot instead of office Wi-Fi. Some home and office providers block the address the app talks to, and that is the commonest cause.',
@@ -997,6 +1086,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-signed-out',
     title: 'Was I signed out?',
     area: 'Problems',
+    keywords: ['logged out', 'session expired', 'kicked out'],
     body: [
       'You should not be. A session keeps sliding: every time you open the app it is pushed 90 days on.',
       'It ends only if you sign out, your password is changed, you are removed from the studio, or you do not open the app for 90 days.',
@@ -1007,6 +1097,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-team-cannot-sign-in',
     title: 'A team member cannot sign in',
     area: 'Problems',
+    keywords: ['staff login', 'cannot login', 'wrong password', 'access denied'],
     body: [
       'Check it with **Team → People → the row menu → Sign-in details**: the email there is only a username and may be one you made up, so it must be typed exactly.',
       'Set a fresh password there and send it to them.',
@@ -1018,6 +1109,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-logo',
     title: 'My logo is not showing',
     area: 'Problems',
+    keywords: ['logo missing', 'not showing', 'image', 'brand image'],
     body: [
       'Upload it again from **Settings → Studio → Company profile**, and keep it under 1 MB.',
       'It saves the moment it lands — there is no separate Save.',
@@ -1028,6 +1120,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-whatsapp',
     title: 'A WhatsApp message did not go',
     area: 'Problems',
+    keywords: ['message not sent', 'whatsapp failed', 'not delivered', 'credits'],
     body: [
       'Check your message credits first — sending stops when they run out.',
       'If you are on your own WhatsApp number, check **Settings → Messages & lists → WhatsApp**: the card says whether the connection is live and what the last error was.',
@@ -1038,6 +1131,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-facebook-leads',
     title: 'Facebook leads are not arriving',
     area: 'Problems',
+    keywords: ['no leads', 'fb not working', 'meta disconnected', 'not syncing'],
     body: [
       'Open **Settings → Leads → Lead sources** and look at the Facebook card. If it says the connection expired, press Connect with Facebook again.',
       'Check the Page the ad runs on is one you ticked — Facebook only lists the Pages you picked in its dialog.',
@@ -1048,6 +1142,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-email',
     title: 'A client did not get our email',
     area: 'Problems',
+    keywords: ['mail not received', 'spam', 'email failed'],
     body: [
       'Ask them to look in spam first.',
       'Then check the address on the client — a typo is the usual answer.',
@@ -1058,6 +1153,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-amounts-hidden',
     title: 'All my amounts show as ₹ ••••',
     area: 'Problems',
+    keywords: ['rupee dots', 'cannot see price', 'amounts blurred'],
     body: [
       'That is the eye in the top bar — amounts are hidden on purpose, for when a client is beside you.',
       'Press it again to show them. The setting follows you to every device, which is why it is still on after you switch computers.',
@@ -1067,6 +1163,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-attendance',
     title: 'Attendance is not marking',
     area: 'Problems',
+    keywords: ['not marking', 'check in failed', 'location issue', 'gps'],
     body: [
       'Check it is switched on at all: **Settings → Studio → Attendance**. While it is off nobody is marked.',
       'Marking only happens inside the radius of the place you set, so check the place and widen the radius if your office is big.',
@@ -1078,6 +1175,7 @@ export const KB: readonly KbArticle[] = [
     key: 'problem-two-numbers',
     title: 'Two screens show different money',
     area: 'Problems',
+    keywords: ['mismatch', 'different totals', 'numbers wrong', 'not matching'],
     body: [
       'Usually one is counting a promise and the other counting money actually received — only a payment marked **paid** is money.',
       'The other common reason is the period: the money pages share one date range, and Invoices deliberately keep their own.',

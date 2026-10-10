@@ -57,6 +57,15 @@ export interface ChatRequest {
 export interface ChatUsage {
   promptTokens: number | null
   completionTokens: number | null
+  /**
+   * How much of the prompt the provider served from its own cache.
+   *
+   * It matters more than the money: on Groq's free tier gpt-oss-120b allows
+   * 8,000 tokens a minute, and cached tokens do not count toward that at all.
+   * So this is the number that says whether a question fits. Null means the
+   * provider did not report one, which is not the same as zero.
+   */
+  cachedTokens: number | null
 }
 
 /**
@@ -177,7 +186,12 @@ interface WireChoice {
 interface WireReply {
   model?: string
   choices?: WireChoice[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    /** OpenAI-compatible; Groq reports the cache hit here. */
+    prompt_tokens_details?: { cached_tokens?: number }
+  }
 }
 
 /**
@@ -261,6 +275,7 @@ export function openAiCompatible(cfg: {
           usage: {
             promptTokens: json.usage?.prompt_tokens ?? null,
             completionTokens: json.usage?.completion_tokens ?? null,
+            cachedTokens: json.usage?.prompt_tokens_details?.cached_tokens ?? null,
           },
           truncated: choice?.finish_reason === 'length',
         },

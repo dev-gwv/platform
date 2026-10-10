@@ -36,6 +36,9 @@ import { buildHelpContext } from '../../lib/help-context'
 /** Questions one studio may ask in a day when nobody has set a number. */
 const DEFAULT_DAILY_LIMIT = 50
 
+/** The question the console's Test asks. Also the commonest real one. */
+const TEST_QUESTION = 'How do I add my team?'
+
 /**
  * Who the assistant is for.
  *
@@ -132,7 +135,7 @@ export const assistantRouter = new Hono<AppEnv>()
       fail(429, `You have asked the assistant ${limit} questions today. It opens again tomorrow.`)
     }
 
-    const help = await buildHelpContext(c.env)
+    const help = await buildHelpContext(c.env, parsed.data.question)
     const result = await ask({
       provider: openAiCompatible({
         apiKey: c.env.AI_API_KEY,
@@ -226,6 +229,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
             helpful: number
             unhelpful: number
             avg_prompt_tokens: number | null
+            cached_share: number | null
           }[]
         >`
           select
@@ -237,10 +241,14 @@ export const platformAssistantRouter = new Hono<AppEnv>()
             count(*) filter (where created_at >= now() - interval '7 days' and status = 'skipped')::int as skipped,
             count(*) filter (where helpful is true)::int as helpful,
             count(*) filter (where helpful is false)::int as unhelpful,
-            avg(prompt_tokens) filter (where created_at >= now() - interval '7 days')::int as avg_prompt_tokens
+            avg(prompt_tokens) filter (where created_at >= now() - interval '7 days')::int as avg_prompt_tokens,
+            -- What share of the prompt the provider served from its cache. The
+            -- rate limit counts the rest, so this is the headroom figure.
+            (100.0 * sum(cached_tokens) / nullif(sum(prompt_tokens), 0))
+              filter (where created_at >= now() - interval '7 days')::int as cached_share
           from assistant_log`
         const recent = await sql`
-          select id, question, answer, status, helpful, model, prompt_tokens, error,
+          select id, question, answer, status, helpful, model, prompt_tokens, cached_tokens, error,
                  to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
             from assistant_log order by created_at desc limit 50`
         return { ...(n ?? {}), recent }
@@ -262,7 +270,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
   .post('/assistant/test', async (c) => {
     const row = await attempt(c, 'platform.assistant_test', () => readSettings(c.env))
     const started = Date.now()
-    const help = await buildHelpContext(c.env)
+    const help = await buildHelpContext(c.env, TEST_QUESTION)
     const result = await ask({
       provider: openAiCompatible({
         apiKey: c.env.AI_API_KEY,
@@ -272,7 +280,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
       help,
       prompt: row?.assistant_prompt,
       callUrl: callLinkFor(c.env, row ?? null),
-      question: 'How do I add my team?',
+      question: TEST_QUESTION,
     })
     return c.json(
       assistantTestResult.parse({
