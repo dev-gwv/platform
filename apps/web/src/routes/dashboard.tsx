@@ -17,7 +17,7 @@ import { PageHeader } from '@/shared/layout/page-header'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
-import { useProjects } from '@/features/projects/api'
+import { useProjectsPage } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
 import { useBillingDue } from '@/features/billing/api'
@@ -78,7 +78,8 @@ function StudioCommandCenter() {
   const { session } = useAuth()
   const access = useAccess()
 
-  const projects = useProjects()
+  // Only the count is needed, so ask the server for it, not every project.
+  const projects = useProjectsPage({ page: 1, page_size: 1 })
   const clients = useClients()
   const members = useMembers()
 
@@ -173,7 +174,7 @@ function StudioCommandCenter() {
       // The owner is in the directory from registration, so they don't count.
       teammates: (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length,
       clients: clientCount,
-      projects: projects.data?.length ?? 0,
+      projects: projects.data?.total ?? 0,
     },
     (m) => access.hasModule(m),
   )
