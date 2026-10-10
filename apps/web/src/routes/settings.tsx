@@ -524,14 +524,23 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
               />
             </Field>
           </div>
-          <Field label="Invoice logo URL" hint="Separate logo for invoices — falls back to the logo above.">
-            <Input
-              value={(form as unknown as Record<string, unknown>)['invoice_logo_url'] as string ?? ''}
-              onChange={(e) => set({ invoice_logo_url: e.target.value } as UpdateCompanyRequest)}
-              disabled={readOnly}
-              placeholder="https://…/invoice-logo.png"
-            />
-          </Field>
+          {/* No URL box: the logo is an upload. A separate invoice logo set
+              from a web address before still prints, so it can be dropped. */}
+          {!!(form as unknown as Record<string, unknown>)['invoice_logo_url'] && !readOnly && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Invoices print a separate logo from a web address.{' '}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => {
+                  set({ invoice_logo_url: '' } as UpdateCompanyRequest)
+                  save.mutate({ invoice_logo_url: '' } as UpdateCompanyRequest)
+                }}
+              >
+                Use the studio logo instead
+              </button>
+            </p>
+          )}
           <Field label="City">
             <Input
               value={form.city ?? ''}
@@ -567,8 +576,7 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
         <div className="border-t border-border pt-4">
           <p className="text-sm font-medium">Contact details</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Printed on quotations, invoices and receipts — this is how a client reaches you. The
-            invoice templates page edits the same three.
+            Printed on quotations, invoices and receipts — this is how a client reaches you.
           </p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <Field label="Business phone">
