@@ -39,6 +39,7 @@ import { RowMenu } from '@/shared/ui/row-menu'
 import { useDeleteProject, useProject, useUpdateProject } from '@/features/projects/api'
 import { EntityReminders } from '@/features/reminders/EntityReminders'
 import { RemindMe } from '@/features/reminders/RemindMe'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { CompletedWorkTab } from '@/features/projects/tabs/CompletedWorkTab'
 import { TermsTab } from '@/features/projects/tabs/TermsTab'
@@ -396,6 +397,9 @@ function ProjectDetail() {
       <ProjectTabStrip className="mt-4" active={tab} onSelect={setTab} />
       <ProjectSubTabs className="mt-3" active={tab} onSelect={setTab} counts={{ completed_work: waiting }} />
 
+      {/* A tab that fails to draw shows a note with Try again; the header,
+          the journey and the other tabs keep working. */}
+      <PanelBoundary resetKey={tab} label="this tab">
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
           {seesMoney && <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />}
@@ -467,6 +471,7 @@ function ProjectDetail() {
       {tab === 'tasks' && (
         <TasksTab projectId={id} canEdit={canEditTasks} deliverables={data.deliverables} />
       )}
+      </PanelBoundary>
     </>
   )
 }

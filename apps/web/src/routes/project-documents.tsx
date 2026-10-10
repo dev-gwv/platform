@@ -90,7 +90,7 @@ function ProjectDocuments() {
 
   return (
     <>
-      <PageHeader title="Documents" description="Terms & conditions for every project — who has agreed, and who hasn't." />
+      <PageHeader title="Documents" />
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {(['agreed', 'waiting', 'closed', 'not_sent'] as const).map((s) => {

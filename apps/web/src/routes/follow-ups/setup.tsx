@@ -67,7 +67,6 @@ function CrmSetup() {
     <>
       <PageHeader
         title="Lead setup"
-        description="Set these once. The day's work is on the Leads page."
         actions={
           <Button variant="outline" asChild>
             <Link to="/follow-ups">

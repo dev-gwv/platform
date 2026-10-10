@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { DesignPreview } from '@/features/billing/DesignPreview'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { SavedItemsManager } from '@/features/billing/SavedItemsManager'
@@ -85,7 +86,7 @@ function InvoiceSettings() {
   const [tab, setTab] = useUrlParam('tab', 'details')
   return (
     <>
-      <PageHeader title="Invoicing" description="What every invoice says about you, how it looks, and the words at the bottom." />
+      <PageHeader title="Invoicing" />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="details">Your details & bank</TabsTrigger>
@@ -437,16 +438,9 @@ function CompanyInvoiceDefaults() {
   const defaultLayout = templates?.items.find((t) => t.is_default)
 
   const [form, setForm] = useState({
-    avatar_url: '',
-    invoice_address: '',
-    invoice_phone: '',
-    invoice_email: '',
-    invoice_gst_number: '',
     invoice_upi_id: '',
     invoice_sac_code: '',
     invoice_bank_details: '',
-    invoice_number_prefix: '',
-    invoice_next_number: '',
     invoice_default_notes: '',
     invoice_default_terms: '',
   })
@@ -454,16 +448,9 @@ function CompanyInvoiceDefaults() {
   useEffect(() => {
     if (!data) return
     setForm({
-      avatar_url: data.avatar_url ?? '',
-      invoice_address: data.invoice_address ?? '',
-      invoice_phone: data.invoice_phone ?? '',
-      invoice_email: data.invoice_email ?? '',
-      invoice_gst_number: data.invoice_gst_number ?? '',
       invoice_upi_id: data.invoice_upi_id ?? '',
       invoice_sac_code: data.invoice_sac_code ?? '998387',
       invoice_bank_details: data.invoice_bank_details ?? '',
-      invoice_number_prefix: data.invoice_number_prefix ?? '',
-      invoice_next_number: String(data.invoice_next_number ?? 1),
       invoice_default_notes: data.invoice_default_notes ?? '',
       invoice_default_terms: data.invoice_default_terms ?? '',
     })
@@ -485,21 +472,12 @@ function CompanyInvoiceDefaults() {
 
   async function onSave() {
     const body: UpdateCompanyRequest = {
-      avatar_url: form.avatar_url.trim() || undefined,
-      invoice_address: form.invoice_address.trim() || null,
-      invoice_phone: form.invoice_phone.trim() || null,
-      invoice_email: form.invoice_email.trim() || null,
-      invoice_gst_number: form.invoice_gst_number.trim() ? form.invoice_gst_number.trim().toUpperCase() : undefined,
       invoice_upi_id: form.invoice_upi_id.trim() || null,
       invoice_sac_code: form.invoice_sac_code.trim() || null,
       invoice_bank_details: form.invoice_bank_details.trim() || null,
-      invoice_number_prefix: form.invoice_number_prefix.trim() || undefined,
-      invoice_next_number: Number(form.invoice_next_number) || undefined,
       invoice_default_notes: form.invoice_default_notes.trim() || null,
       invoice_default_terms: form.invoice_default_terms.trim() || null,
     }
-    // Drop null-prefixed no-ops so an untouched field never fails validation.
-    if (!form.invoice_number_prefix.trim()) delete body.invoice_number_prefix
     await save.mutateAsync(body)
   }
 
@@ -510,38 +488,18 @@ function CompanyInvoiceDefaults() {
         {defaultLayout && <StatusBadge tone="info">Layout default: {defaultLayout.name}</StatusBadge>}
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* The studio's name, logo, address, phone, email, GSTIN and the
+            numbering are typed once, on Company profile; this page used to
+            ask for the same fields again, and two logo-URL boxes overrode
+            the uploaded logo. */}
         <p className="text-sm text-muted-foreground">
-          Branding and fallbacks applied to every new invoice. A per-invoice value overrides these for that invoice only.
+          Your logo, address, phone, email, GSTIN and invoice numbers are on{' '}
+          <Link to="/settings/company" className="font-medium text-primary hover:underline">
+            Company profile
+          </Link>
+          .
         </p>
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <Label>Logo URL</Label>
-            <Input value={form.avatar_url} onChange={(e) => set('avatar_url', e.target.value)} placeholder="https://…" disabled={!isOwner} />
-            {form.avatar_url && <img src={form.avatar_url} alt="logo preview" className="mt-2 h-14 object-contain" />}
-          </div>
-          <div className="md:col-span-2">
-            <Label>Business address</Label>
-            <textarea
-              value={form.invoice_address}
-              onChange={(e) => set('invoice_address', e.target.value)}
-              rows={2}
-              disabled={!isOwner}
-              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-            />
-          </div>
-          <div>
-            <Label>Phone</Label>
-            <Input value={form.invoice_phone} onChange={(e) => set('invoice_phone', e.target.value)} disabled={!isOwner} />
-          </div>
-          <div>
-            <Label>Email</Label>
-            <Input value={form.invoice_email} onChange={(e) => set('invoice_email', e.target.value)} disabled={!isOwner} />
-          </div>
-          <div>
-            <Label>GSTIN</Label>
-            <Input value={form.invoice_gst_number} onChange={(e) => set('invoice_gst_number', e.target.value.toUpperCase())} placeholder="27ABCDE1234F1Z5" disabled={!isOwner} />
-            <p className="mt-1 text-xs text-muted-foreground">15-char format: 2-digit state + 10-char PAN + entity + Z + checksum.</p>
-          </div>
           <div>
             <Label>UPI ID</Label>
             <Input value={form.invoice_upi_id} onChange={(e) => set('invoice_upi_id', e.target.value)} placeholder="studio@upi" disabled={!isOwner} />
@@ -562,14 +520,6 @@ function CompanyInvoiceDefaults() {
               disabled={!isOwner}
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
             />
-          </div>
-          <div>
-            <Label>Number prefix</Label>
-            <Input value={form.invoice_number_prefix} onChange={(e) => set('invoice_number_prefix', e.target.value)} disabled={!isOwner} />
-          </div>
-          <div>
-            <Label>Next number</Label>
-            <Input inputMode="numeric" value={form.invoice_next_number} onChange={(e) => set('invoice_next_number', e.target.value)} disabled={!isOwner} />
           </div>
           <div className="md:col-span-2">
             <Label>Default notes (fallback)</Label>

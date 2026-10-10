@@ -127,7 +127,6 @@ function TeamBooking({ initialView }: { initialView: View }) {
     <>
       <PageHeader
         title="Team Booking"
-        description="Book your team for upcoming shoots and avoid double-booking."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthSlots.length}>

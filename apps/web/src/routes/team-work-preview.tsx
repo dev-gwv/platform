@@ -74,10 +74,7 @@ function TeamWorkPreview() {
 
   return (
     <>
-      <PageHeader
-        title="Team Work Preview"
-        description="See what a team member's own work view shows them — they're never notified."
-      />
+      <PageHeader title="Team Work Preview" />
 
       <p className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
         <Eye className="size-4 shrink-0" />

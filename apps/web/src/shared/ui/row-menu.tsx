@@ -28,7 +28,20 @@ export interface RowMenuItem {
  * Escape, or any scroll — a menu left floating over a list that has moved
  * out from under it would point at the wrong row.
  */
-export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string }) {
+export function RowMenu({
+  items,
+  label,
+  children,
+  variant = 'ghost',
+  className,
+}: {
+  items: RowMenuItem[]
+  label: string
+  /** The trigger's own words (the top bar's "+ New"); a "⋯" without them. */
+  children?: ReactNode
+  variant?: 'ghost' | 'default' | 'outline'
+  className?: string
+}) {
   const [box, setBox] = useState<{ top: number; right: number } | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -78,15 +91,20 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
       <Button
         ref={trigger}
         size="sm"
-        variant="ghost"
+        variant={variant}
+        className={className}
         title={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={toggle}
       >
-        <Ellipsis />
-        <span className="sr-only">{label}</span>
+        {children ?? (
+          <>
+            <Ellipsis />
+            <span className="sr-only">{label}</span>
+          </>
+        )}
       </Button>
       {open &&
         createPortal(

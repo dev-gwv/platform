@@ -26,7 +26,7 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { e164, placeCall, twilioConfigured } from '../../lib/twilio'
-import { emailProvider, emailSyncConfigured, fetchRecentMessages } from '../../lib/email-sync'
+import { emailProvider, emailSyncConfigured, fetchRecentMessages, planEmailImport } from '../../lib/email-sync'
 import { log } from '../../lib/log'
 
 /**
@@ -354,29 +354,40 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
     }
     const result = await attempt(c, 'crm.email_sync', () =>
       withUser(c.env, auth.userId, async (sql) => {
+        // Every address looked up at once: the open lead first (else the
+        // newest), and a contact only for an address no lead has.
+        const addresses = [...new Set(messages.map((m) => m.counterpart))]
+        const leadRows = addresses.length
+          ? await sql<{ email: string; lead_id: string; contact_id: string | null }[]>`
+              select distinct on (lower(l.email)) lower(l.email) as email, l.id as lead_id, l.contact_id
+              from crm_leads l
+              where lower(l.email) = any(${addresses}::text[]) and l.is_archived = false
+              order by lower(l.email), (l.status not in ('converted', 'lost')) desc, l.created_at desc`
+          : []
+        const leads = new Map(leadRows.map((r) => [r.email, { lead_id: r.lead_id, contact_id: r.contact_id }]))
+        const rest = addresses.filter((a) => !leads.has(a))
+        const contactRows = rest.length
+          ? await sql<{ email: string; id: string }[]>`
+              select distinct on (lower(email)) lower(email) as email, id
+              from crm_contacts
+              where lower(email) = any(${rest}::text[])
+              order by lower(email)`
+          : []
+        const contacts = new Map(contactRows.map((r) => [r.email, r.id]))
+        const { batches, unmatched } = planEmailImport(messages, leads, contacts)
         let imported = 0
-        let unmatched = 0
-        for (const m of messages) {
-          const [target] = await sql<{ lead_id: string | null; contact_id: string | null }[]>`
-            select l.id as lead_id, l.contact_id
-            from crm_leads l
-            where lower(l.email) = ${m.counterpart} and l.is_archived = false
-            order by (l.status not in ('converted', 'lost')) desc, l.created_at desc
-            limit 1`
-          const contact = target
-            ? null
-            : (await sql<{ id: string }[]>`select id from crm_contacts where lower(email) = ${m.counterpart} limit 1`)[0]
-          if (!target && !contact) {
-            unmatched += 1
-            continue
-          }
+        for (const batch of batches) {
           const rows = await sql<{ id: string }[]>`
             insert into crm_activities (company_id, lead_id, contact_id, type, direction, subject, body, provider, external_id, started_at, created_at)
-            values (get_current_company_id(), ${target?.lead_id ?? null}, ${target?.contact_id ?? contact?.id ?? null}, 'email', ${m.direction},
-                    ${m.subject.slice(0, 200)}, ${m.snippet.slice(0, 8000)}, ${provider}, ${m.external_id}, ${m.at}, ${m.at})
+            select get_current_company_id(), v.lead_id, v.contact_id, 'email', v.direction, v.subject, v.body, ${provider}, v.external_id, v.at, v.at
+              from unnest(${batch.map((m) => m.lead_id)}::uuid[], ${batch.map((m) => m.contact_id)}::uuid[], ${batch.map((m) => m.direction)}::text[],
+                          ${batch.map((m) => m.subject.slice(0, 200))}::text[], ${batch.map((m) => m.snippet.slice(0, 8000))}::text[],
+                          ${batch.map((m) => m.external_id)}::text[], ${batch.map((m) => m.at)}::timestamptz[])
+                   with ordinality as v(lead_id, contact_id, direction, subject, body, external_id, at, n)
+             order by v.n
             on conflict (company_id, provider, external_id) where external_id is not null do nothing
             returning id`
-          if (rows.length) imported += 1
+          imported += rows.length
         }
         await sql`
           insert into crm_integrations (company_id, provider, status, last_sync_at, last_error, connected_by)

@@ -25,7 +25,7 @@ export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
     { to: '/follow-ups/queue', label: 'Calls', icon: PhoneCall, show: access.hasModule('crm') },
     { to: '/attendance/my', label: 'Attendance', icon: MapPin, show: !studio && attendanceOn },
     { to: '/follow-ups', label: 'Leads', icon: Inbox, show: access.hasModule('crm') },
-    { to: '/shoots', label: 'Shoots', icon: Camera, show: studio && access.hasModule('projects') },
+    { to: '/team-allocation', label: 'Shoots', icon: Camera, show: studio && access.hasModule('projects') },
   ]
     .filter((t) => t.show)
     .slice(0, 4)

@@ -53,7 +53,7 @@ function CallQueue() {
     <>
       <PageHeader
         title="Today's calls"
-        description={items.length ? `${items.length} ${items.length === 1 ? 'person' : 'people'} to call, most urgent first.` : 'Who to call next, most urgent first.'}
+        description={items.length ? `${items.length} ${items.length === 1 ? 'person' : 'people'} to call, most urgent first.` : undefined}
         actions={
           canSeeAll && (
             <div className="inline-flex rounded-full border border-border bg-muted p-0.5" role="radiogroup" aria-label="Whose calls">

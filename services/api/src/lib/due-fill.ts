@@ -1,6 +1,26 @@
 import type { TransactionSql } from 'postgres'
-import { deliverableDueDate, deliverableTimings, type StudioDeliverableType } from '@ipc/domain'
+import { deliverableDueDate, deliverableTimings, type NamedShootDate, type StudioDeliverableType } from '@ipc/domain'
 import { todayInIndia } from './dates'
+
+/**
+ * The date each open deliverable would get, in the order given; one whose
+ * anchor is still unknown is left out. Pure, so the whole project is worked
+ * out before one update writes it.
+ */
+export function projectDueDates(
+  open: ReadonlyArray<{ id: string; title: string }>,
+  shoots: ReadonlyArray<NamedShootDate>,
+  types: ReadonlyArray<StudioDeliverableType>,
+  today: string,
+): { id: string; due: string }[] {
+  const out: { id: string; due: string }[] = []
+  for (const d of open) {
+    const t = deliverableTimings(d.title, types)
+    const due = deliverableDueDate(t.due_basis, shoots, t.due_days, null, today)
+    if (due) out.push({ id: d.id, due })
+  }
+  return out
+}
 
 /**
  * Give a project's undated deliverables the date the wizard would have given
@@ -23,13 +43,13 @@ export async function fillProjectDueDates(sql: TransactionSql, projectId: string
       from deliverable_templates t
       join projects p on p.company_id = t.company_id
      where p.id = ${projectId}`
-  let filled = 0
-  for (const d of open) {
-    const t = deliverableTimings(d.title, types)
-    const due = deliverableDueDate(t.due_basis, shoots, t.due_days, null, today)
-    if (!due) continue
-    const rows = await sql`update deliverables set estimated_date = ${due} where id = ${d.id} and estimated_date is null returning id`
-    filled += rows.length
-  }
-  return filled
+  const dues = projectDueDates(open, shoots, types, today)
+  if (dues.length === 0) return 0
+  // One update for the lot; still only where no date was set meanwhile.
+  const rows = await sql`
+    update deliverables d set estimated_date = v.due
+      from unnest(${dues.map((x) => x.id)}::uuid[], ${dues.map((x) => x.due)}::date[]) as v(id, due)
+     where d.id = v.id and d.estimated_date is null
+    returning d.id`
+  return rows.length
 }

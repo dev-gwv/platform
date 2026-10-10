@@ -53,10 +53,7 @@ function Stages() {
 
   return (
     <>
-      <PageHeader
-        title="Delivery stages"
-        description="Name the stages your work really goes through. The one-tap button on each deliverable walks them in this order."
-      />
+      <PageHeader title="Delivery stages" />
       {q.isLoading ? (
         <SkeletonList rows={4} />
       ) : q.isError ? (

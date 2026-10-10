@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -221,7 +222,6 @@ function Crm() {
     <>
       <PageHeader
         title="Leads"
-        description="Everyone who got in touch, and who you owe a call."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild>
@@ -372,7 +372,11 @@ function Crm() {
         )}
       </div>
 
-      {selected && <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />}
+      {selected && (
+        <PanelBoundary resetKey={selected.id} label="this lead">
+          <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />
+        </PanelBoundary>
+      )}
     </>
   )
 }

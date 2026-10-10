@@ -35,12 +35,13 @@ async function history(c: Context<AppEnv>, userId: string) {
     'performance.history',
     () =>
       withUser(c.env, auth.userId, async (sql) => {
-        const months = []
-        for (let back = 5; back >= 0; back--) {
-          const r = monthRange(undefined, back)
-          const [row] = await sql<{ c: unknown }[]>`select member_scorecard(${userId}::uuid, ${r.from}::date, ${r.to}::date) as c`
-          months.push(row?.c)
-        }
+        // The last six months, oldest first, in one round trip.
+        const ranges = [5, 4, 3, 2, 1, 0].map((back) => monthRange(undefined, back))
+        const rows = await sql<{ c: unknown }[]>`
+          select member_scorecard(${userId}::uuid, m.f, m.t) as c
+            from unnest(${ranges.map((r) => r.from)}::date[], ${ranges.map((r) => r.to)}::date[]) with ordinality as m(f, t, n)
+           order by m.n`
+        const months = rows.map((row) => row.c)
         const [u] = await sql<{ name: string }[]>`select name from users where user_id = ${userId}`
         return { user_id: userId, name: u?.name ?? '', months }
       }),

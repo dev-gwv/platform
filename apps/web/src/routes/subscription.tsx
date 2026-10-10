@@ -142,7 +142,6 @@ function Subscription() {
       <PlanExpiryBanner />
       <PageHeader
         title="Subscription"
-        description="Manage your studio's plan."
         actions={
           session && (
             <StatusBadge tone={gateTone[session.plan_gate]}>

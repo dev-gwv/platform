@@ -38,7 +38,6 @@ function TeamPerformance() {
     <>
       <PageHeader
         title="Performance"
-        description="Work on time, right first time, on time at shoots, and attendance — for each person, each month."
         actions={
           <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-0.5">
             <Button size="icon" variant="ghost" className="size-8" aria-label="Previous month" onClick={() => shift(-1)}>
@@ -145,7 +144,7 @@ function MyPerformance() {
   const now = h.data?.months[h.data.months.length - 1]
   return (
     <>
-      <PageHeader title="My performance" description="How your month is going, in plain words, and what moves it." />
+      <PageHeader title="My performance" />
       {h.isPending ? (
         <SkeletonList rows={4} />
       ) : h.isError ? (

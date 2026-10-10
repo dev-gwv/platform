@@ -9,7 +9,7 @@ import { SETTINGS_GROUPS, settingsItemFor } from './SettingsNav'
 const items = SETTINGS_GROUPS.flatMap((g) => g.items)
 
 describe('the settings rail', () => {
-  it('keeps every settings page the tab strip had', () => {
+  it('keeps every settings page the tab strip had (but Advanced tools, retired)', () => {
     expect(items.map((i) => i.to).sort()).toEqual(
       [
         '/settings/company',
@@ -27,7 +27,11 @@ describe('the settings rail', () => {
         '/settings/messaging',
         '/settings/whatsapp',
         '/settings/system',
-        '/settings/advanced',
+        // Pages that left the menu's "More" and the CRM group (audit, batch 4).
+        '/activity',
+        '/enquiry-forms',
+        '/lead-sources',
+        '/referrals',
         // The old app's Studio Access, for platform admins only (0218).
         '/platform/studios',
         // The people and shops the studio pays (parties).

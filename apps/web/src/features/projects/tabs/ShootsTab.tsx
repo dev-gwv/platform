@@ -1,7 +1,6 @@
 import { SavePresetButton } from '@/features/shoots/SavePresetButton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import {
   Check,
   Clock,
@@ -567,11 +566,6 @@ function ShootPlanner({
                 disabledHint="Add who this day needs first"
                 payload={{ requirements: asInput(), internal_work: [], duration_hours: hours || null }}
               />
-              <Button size="sm" variant="ghost" asChild>
-                <Link to="/shoots/$shootId" params={{ shootId: shoot.id }}>
-                  Open this shoot
-                </Link>
-              </Button>
               <Button
                 size="sm"
                 variant="ghost"

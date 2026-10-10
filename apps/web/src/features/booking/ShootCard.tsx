@@ -82,7 +82,7 @@ export function ShootCard({
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-2 text-base font-semibold leading-tight">
             <EventTile name={shoot.name} size="sm" />
-            <Link to="/shoots/$shootId" params={{ shootId: shoot.id }} className="hover:text-primary hover:underline">
+            <Link to="/projects/$id" params={{ id: shoot.project_id }} search={{ tab: 'shoots' } as never} className="hover:text-primary hover:underline">
               {shoot.name}
             </Link>
           </h3>
@@ -133,7 +133,7 @@ export function ShootCard({
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
             <span>No requirements yet. Add roles in the shoot first.</span>
             <Button asChild size="sm" variant="outline">
-              <Link to="/shoots/$shootId" params={{ shootId: shoot.id }}>
+              <Link to="/projects/$id" params={{ id: shoot.project_id }} search={{ tab: 'shoots' } as never}>
                 Open shoot
               </Link>
             </Button>

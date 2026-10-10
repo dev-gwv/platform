@@ -26,10 +26,11 @@ export const TEAM_TIME: readonly HubTab[] = [
   { to: '/leave', label: 'Leave & holidays', module: 'attendance' },
 ]
 
+// Team payouts first: most crews are freelancers paid per shoot, so Pay opens
+// there. Monthly salaries is Payroll's history now (its older records).
 export const TEAM_PAY: readonly HubTab[] = [
-  { to: '/payroll', label: 'Payroll', module: 'team_salaries' },
-  { to: '/team/salaries', label: 'Monthly salaries', module: 'team_salaries' },
   { to: '/team-payouts', label: 'Team payouts', module: 'team_payouts' },
+  { to: '/payroll', label: 'Payroll', module: 'team_salaries' },
 ]
 
 /** A team member's own time: their attendance and their leave. */
@@ -44,8 +45,28 @@ export const TEAM_SETUP: readonly HubTab[] = [
   { to: '/settings/team-terms', label: 'Team terms', module: 'team_terms' },
 ]
 
+/**
+ * Every project, and the ones that need you today (Project Tracking was a
+ * menu line of its own and a top-bar pill; it is a tab of Projects now).
+ */
+export const PROJECTS_HUB: readonly HubTab[] = [
+  { to: '/projects', label: 'All projects', module: 'projects' },
+  { to: '/project-tracking', label: 'Needs attention', module: 'projects' },
+]
+
+/**
+ * The studio's money under one menu line. Payments comes first: it is the one
+ * "what is due" page; Invoices is the list of documents.
+ */
+export const MONEY: readonly HubTab[] = [
+  { to: '/billing/payments', label: 'Payments', module: 'billing' },
+  { to: '/billing/invoices', label: 'Invoices', module: 'billing' },
+  { to: '/company-expenses', label: 'Expenses', module: 'company_expenses' },
+  { to: '/financials', label: 'Profit & Loss', module: 'financials' },
+]
+
 /** The hubs that draw their own tab row (not the settings ones). */
-export const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME]
+export const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME, PROJECTS_HUB, MONEY]
 
 /**
  * The hub whose tab row belongs on this exact page, if any. A page in two

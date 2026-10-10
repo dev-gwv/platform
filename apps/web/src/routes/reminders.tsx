@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { AuthedPage } from '@/shared/layout/AuthedPage'
+import { Link, Navigate } from '@tanstack/react-router'
 import { PageHeader } from '@/shared/layout/page-header'
 import { StatCard } from '@/shared/ui/stat-card'
 import { Button } from '@/shared/ui/button'
@@ -101,7 +100,11 @@ function EntityPicker({
   )
 }
 
-function RemindersContent() {
+/**
+ * The reminders list. It is a view of Task Management now (?view=reminders):
+ * one place for the studio's to-dos, and /reminders still opens it.
+ */
+export function RemindersContent({ embedded = false }: { embedded?: boolean }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateReminderRequest>({
@@ -176,15 +179,22 @@ function RemindersContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Reminders"
-        description="Manage your reminders and tasks"
-        actions={
+      {embedded ? (
+        <div className="flex justify-end">
           <Button onClick={openCreate} size="sm">
-            <Plus className="mr-1 h-4 w-4" /> New Reminder
+            <Plus className="mr-1 h-4 w-4" /> New reminder
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Reminders"
+          actions={
+            <Button onClick={openCreate} size="sm">
+              <Plus className="mr-1 h-4 w-4" /> New reminder
+            </Button>
+          }
+        />
+      )}
 
       {/* Narrow the board down to the ones being asked about. */}
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
@@ -454,12 +464,9 @@ function RemindersContent() {
   )
 }
 
+/** Reminders folded into Task Management; an old link still lands on them. */
 export function RemindersPage() {
-  return (
-    <AuthedPage module="dashboard">
-      <RemindersContent />
-    </AuthedPage>
-  )
+  return <Navigate to="/tasks" search={{ view: 'reminders' } as never} replace />
 }
 
 /** A datetime-local value in the viewer's own clock; toISOString() is UTC and showed 5 h 30 min early. */

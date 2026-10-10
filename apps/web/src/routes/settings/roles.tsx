@@ -55,7 +55,6 @@ function RolesAccess() {
     <>
       <PageHeader
         title="Roles & access"
-        description="What each person does on a shoot."
         actions={isOwner ? <RoleDialog /> : undefined}
       />
 

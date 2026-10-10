@@ -91,7 +91,7 @@ function Leave() {
 
   return (
     <section className="flex flex-col gap-4">
-      <PageHeader title="Leave & holidays" description="Ask for days off, fix a missed check-in, and see the studio's holidays." />
+      <PageHeader title="Leave & holidays" />
       <FilterTabs<Tab> tabs={tabs} value={current} onChange={setTab} className="w-fit" />
       {current === 'mine' && <MyLeave />}
       {current === 'approvals' && canDecide && <Approvals />}

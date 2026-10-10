@@ -87,7 +87,6 @@ function ReferralsContent() {
     <div className="space-y-4">
       <PageHeader
         title="Referral Campaigns"
-        description="Manage referral campaigns and track submissions"
         actions={
           <Button onClick={openCreate} size="sm">
             <Plus className="mr-1 h-4 w-4" /> New Campaign

@@ -17,6 +17,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { Money, useINR } from '@/shared/money/MoneyMask'
 import { PayToCard } from '@/features/team/PayToCard'
+import { SalariesTab } from '@/features/team/SalariesTab'
 import {
   fetchPayrollExport,
   useApprovePayroll,
@@ -58,6 +59,8 @@ const MODES = ['UPI', 'Bank transfer', 'Cash', 'Cheque'] as const
 const days = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 
 function Payroll() {
+  // /team/salaries lands here with the older records open.
+  const [showHistory] = useState(() => new URLSearchParams(window.location.search).get('history') === '1')
   const inr = useINR()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -89,7 +92,7 @@ function Payroll() {
 
   return (
     <>
-      <PageHeader title="Payroll" description="Work out, approve and pay the whole team’s salary for a month." />
+      <PageHeader title="Payroll" />
 
       <div className="flex flex-col gap-4">
         {/* Month and what to do next */}
@@ -325,6 +328,14 @@ function Payroll() {
           onClose={() => setPaying(null)}
         />
       )}
+
+      {/* Monthly salaries was a second ledger with its own Generate. It is
+          Payroll's history now: the records made there, still payable, and
+          nothing new is generated outside Payroll. */}
+      <details className="mt-8 rounded-xl border border-border bg-card p-4" open={showHistory}>
+        <summary className="cursor-pointer text-sm font-semibold">Older salary records</summary>
+        <SalariesTab history />
+      </details>
     </>
   )
 }

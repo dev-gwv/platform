@@ -116,6 +116,55 @@ async function fetchO365(env: SyncEnv, sinceDays: number, max: number): Promise<
   })
 }
 
+/** Where a message is filed: the lead (with its contact), else the contact alone. */
+export interface EmailMatch {
+  lead_id: string | null
+  contact_id: string | null
+}
+
+export type EmailImportRow = SyncedMessage & EmailMatch
+
+/**
+ * Match each message to the lead or contact found for its address (both
+ * looked up once for the whole sync) and split the matched ones, in order,
+ * into insert batches. A batch never names the same lead twice: the insert
+ * trigger scores the lead and runs its workflows from the activities already
+ * there, so a second message for that lead waits for the next batch, exactly
+ * as if they were written one at a time. A repeated message id is kept once
+ * (the insert would skip it anyway).
+ */
+export function planEmailImport(
+  messages: ReadonlyArray<SyncedMessage>,
+  leads: ReadonlyMap<string, EmailMatch>,
+  contacts: ReadonlyMap<string, string>,
+): { batches: EmailImportRow[][]; unmatched: number } {
+  const batches: EmailImportRow[][] = []
+  let batch: EmailImportRow[] = []
+  let batchLeads = new Set<string>()
+  const seen = new Set<string>()
+  let unmatched = 0
+  for (const m of messages) {
+    const lead = leads.get(m.counterpart)
+    const contact = lead ? undefined : contacts.get(m.counterpart)
+    if (!lead && !contact) {
+      unmatched += 1
+      continue
+    }
+    if (seen.has(m.external_id)) continue
+    seen.add(m.external_id)
+    const row: EmailImportRow = { ...m, lead_id: lead?.lead_id ?? null, contact_id: lead?.contact_id ?? contact ?? null }
+    if (row.lead_id && batchLeads.has(row.lead_id)) {
+      batches.push(batch)
+      batch = []
+      batchLeads = new Set()
+    }
+    batch.push(row)
+    if (row.lead_id) batchLeads.add(row.lead_id)
+  }
+  if (batch.length) batches.push(batch)
+  return { batches, unmatched }
+}
+
 /** Recent messages from the configured mailbox. Throws on a provider refusal. */
 export async function fetchRecentMessages(env: SyncEnv, opts: { sinceDays?: number; max?: number } = {}): Promise<SyncedMessage[]> {
   const provider = emailProvider(env)

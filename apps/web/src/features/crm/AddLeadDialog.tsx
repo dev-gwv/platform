@@ -39,8 +39,11 @@ export function AddLeadDialog({
   onAdded,
   open: openProp,
   onOpenChange,
+  hideTrigger = false,
 }: {
   onAdded?: (id: string) => void
+  /** Opened from elsewhere (the top bar's + New): no button of its own. */
+  hideTrigger?: boolean
   /** Controlled when given, so the setup checklist can open it. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -179,11 +182,13 @@ export function AddLeadDialog({
         if (!o) reset()
       }}
     >
-      <DialogTrigger asChild>
-        <Button>
-          <Plus /> Add lead
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus /> Add lead
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent
         title="Add a lead"
         description="A number or a name is enough to start. If we already have the number, you'll be taken to that lead instead."

@@ -68,7 +68,7 @@ function Console() {
 
   return (
     <>
-      <PageHeader title="Messaging" description="Studio wallets, recharges, prices and WhatsApp templates." />
+      <PageHeader title="Messaging" />
       <PlatformSwitches />
       {waOn && status.data && (!status.data.whatsapp_live || !status.data.webhook_signed) && (
         <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">

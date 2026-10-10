@@ -23,7 +23,7 @@ function rememberSession(pair: { access_token: string; refresh_token: string }) 
   setTokens(pair)
   markCookieSession(!pair.refresh_token)
 }
-import { MOCK_ENABLED } from '@/shared/dev/mock'
+import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { setupLanding } from '@/features/onboarding/journey'
 import { Button } from '@/shared/ui/button'

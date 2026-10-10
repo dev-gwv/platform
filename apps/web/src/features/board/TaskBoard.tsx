@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCorners, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -214,7 +215,11 @@ export function TaskBoard({
         </div>
       </DndContext>
       {actions.dialogs}
-      {openId && <TaskDrawer taskId={openId} onClose={() => setOpenId(null)} />}
+      {openId && (
+        <PanelBoundary resetKey={openId} label="this task">
+          <TaskDrawer taskId={openId} onClose={() => setOpenId(null)} />
+        </PanelBoundary>
+      )}
     </>
   )
 }

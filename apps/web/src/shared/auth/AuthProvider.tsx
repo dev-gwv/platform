@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { z, authToken, sessionState, type SessionState } from '@ipc/contracts'
 import { callApi, ApiError, markCookieSession, hasStoredSession, rotateTokens, setAuthLostHandler } from '../api/client'
 import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
-import { MOCK_ENABLED, mockSession } from '../dev/mock'
+import { MOCK_ENABLED } from '../dev/mock-flag'
 import { setSentryUser } from '@/shared/error/sentry'
 
 const ok = z.object({ ok: z.boolean() })
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (MOCK_ENABLED) {
+      const { mockSession } = await import('../dev/mock')
       setSession(mockSession)
       return mockSession
     }

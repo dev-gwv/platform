@@ -202,7 +202,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
     <>
       <PageHeader
         title="Invoices"
-        description={pickedProject ? `Invoices for ${pickedProject.name}.` : 'Every invoice, with the project it belongs to.'}
+        description={pickedProject ? `Invoices for ${pickedProject.name}.` : undefined}
         actions={
           canInvoice && (
             <Button onClick={() => setCreating(true)}>

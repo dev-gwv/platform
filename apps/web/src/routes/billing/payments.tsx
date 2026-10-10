@@ -33,7 +33,7 @@ import { shortDate } from '@/features/billing/status'
 export function PaymentsPage() {
   return (
     <AuthedPage module="billing">
-      <PageHeader title="Payments received" description="Every rupee that came in, with its receipt number, project and invoice." />
+      <PageHeader title="Payments received" />
       <PaymentsSection />
     </AuthedPage>
   )

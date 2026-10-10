@@ -136,7 +136,6 @@ function MyProfileForm() {
     <section className="flex flex-col gap-4">
       <PageHeader
         title="My profile"
-        description="Your details for the studio. The personal parts are private to you and the studio owner."
         actions={
           session?.user_id && (
             <Button variant="outline" size="sm" asChild>

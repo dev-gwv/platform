@@ -58,7 +58,7 @@ function EmailHealthPage() {
 
   return (
     <>
-      <PageHeader title="Email" description="Is email set up, and did it go." />
+      <PageHeader title="Email" />
       {health.isLoading ? (
         <SkeletonList rows={4} columns={3} />
       ) : health.isError || !h ? (

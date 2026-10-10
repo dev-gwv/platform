@@ -24,7 +24,9 @@ export function TrialChip() {
   const s = q.data
   if (!owner || !s || s.days_left == null) return null
   const trial = s.plan_source === 'trial'
-  if (!trial && s.days_left > 14) return null
+  // The plan card at the foot of the menu always says the days left; the bar
+  // carries it only in the last week, when it is the one thing to act on.
+  if (s.days_left > 7) return null
   const left = s.days_left
   const days = `${left} day${left === 1 ? '' : 's'} left`
   const text = left < 0 ? (trial ? 'Trial ended' : 'Plan ended') : `${trial ? 'Free trial' : 'Plan'} · ${days}`

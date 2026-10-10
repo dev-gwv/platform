@@ -5,10 +5,9 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { BackButton } from './BackButton'
 import { RefreshButton } from './RefreshButton'
 import { MobileTabBar } from './MobileTabBar'
-import { Menu, Moon, Sun, ChevronDown, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
+import { Menu, ChevronDown, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useAccess } from '../auth/useAccess'
-import { useTheme } from '../theme/ThemeProvider'
 import { Button } from '../ui/button'
 import { cn } from '../ui/cn'
 import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './nav'
@@ -18,6 +17,7 @@ import { AssistantButton } from '@/features/assistant/AssistantButton'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
+import { NewMenu } from './NewMenu'
 import { HideAmountsButton } from '@/shared/money/MoneyMask'
 import { TrialChip } from '@/features/billing/TrialChip'
 import { Wordmark } from '@/shared/ui/wordmark'
@@ -89,7 +89,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { session, signOut } = useAuth()
   useResumeSetup()
   const access = useAccess()
-  const { scheme, toggleScheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(
     () => globalThis.localStorage?.getItem(COLLAPSE_KEY) === '1',
@@ -215,6 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </kbd>
             </button>
 
+            <NewMenu />
             <DueChip />
             <TrialChip />
             <SuggestFeatureButton />
@@ -223,9 +223,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <AssistantButton />
               <NotificationBell />
               <HideAmountsButton />
-              <Button variant="ghost" size="icon" onClick={toggleScheme} aria-label="Toggle theme">
-                {scheme === 'dark' ? <Sun /> : <Moon />}
-              </Button>
               <AccountMenu onSignOut={() => void signOut()} />
             </div>
           </div>

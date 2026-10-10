@@ -118,7 +118,6 @@ function TeamPayoutsContent() {
     <div className="space-y-4">
       <PageHeader
         title="Team Payouts"
-        description="Manage team settlements and payments"
         actions={
           tab === 'manual' && (
             <Button onClick={openCreate} size="sm">

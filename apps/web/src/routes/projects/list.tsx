@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Briefcase, CalendarDays, CircleCheck, Clock, Download, ExternalLink, FileText, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { CalendarDays, Download, ExternalLink, FileText, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { projectListPage, type ProjectListItem, type ProjectStatus } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -9,7 +9,6 @@ import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { callApi } from '@/shared/api/client'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Select } from '@/shared/ui/input'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { SkeletonList } from '@/shared/ui/skeleton'
@@ -129,7 +128,6 @@ function ProjectsList() {
 
       <PageHeader
         title="All Projects"
-        description="Every booked project — what it's worth, what's come in, and what's still due."
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => void exportCsv()} disabled={total === 0 || exporting}>
@@ -144,15 +142,16 @@ function ProjectsList() {
         }
       />
 
+      {/* One sentence, not four boxes (the audit): what these projects are
+          worth, what came in, and what is still to come in. */}
       {seesMoney && (
-        <Card className="mt-4">
-          <CardContent className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
-            <Figure icon={Briefcase} label={filtered ? 'Projects shown' : 'Projects'} value={String(total)} />
-            <Figure icon={Briefcase} label="Total value" value={<Money value={paged?.summary.value ?? 0} />} />
-            <Figure icon={CircleCheck} label="Received" value={<Money value={paged?.summary.received ?? 0} />} tone="success" />
-            <Figure icon={Clock} label="Still to collect" value={<Money value={paged?.summary.due ?? 0} />} tone="warning" />
-          </CardContent>
-        </Card>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {total} {filtered ? 'shown' : total === 1 ? 'project' : 'projects'} · <Money value={paged?.summary.value ?? 0} /> booked,{' '}
+          <span className="text-success">
+            <Money value={paged?.summary.received ?? 0} /> received
+          </span>
+          , <span className="font-medium text-foreground"><Money value={paged?.summary.due ?? 0} /> still to come in</span>
+        </p>
       )}
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -382,22 +381,3 @@ function ProjectMenu({ project }: { project: ProjectListItem }) {
   )
 }
 
-/** One figure in the summary bar. */
-function Figure({ icon: Icon, label, value, tone }: { icon: typeof Briefcase; label: string; value: ReactNode; tone?: 'success' | 'warning' }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        className={cn(
-          'flex size-8 shrink-0 items-center justify-center rounded-lg',
-          tone === 'success' ? 'bg-success/10 text-success' : tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary',
-        )}
-      >
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <div>
-        <p className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="font-semibold tabular-nums">{value}</p>
-      </div>
-    </div>
-  )
-}

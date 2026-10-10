@@ -11,7 +11,6 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
-import { HowToUse } from '@/shared/ui/how-to-use'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv } from '@/shared/ui/csv'
 import { Select } from '@/shared/ui/input'
@@ -56,10 +55,10 @@ function addModeFromUrl(): AddMode | null {
 function TeamPage() {
   const navigate = useNavigate()
   const powers = useTeamPowers()
-  // Salaries moved to Pay > Monthly salaries; an old ?section=salaries link goes there.
+  // Salaries are Payroll's now; an old ?section=salaries link goes to their history.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('section') === 'salaries')
-      void navigate({ to: '/team/salaries', replace: true })
+      void navigate({ to: '/payroll', search: { history: 1 } as never, replace: true })
   }, [navigate])
   // Only someone allowed to add people is ever put into it -- anyone else
   // following an old link lands on the directory, not on a form that would
@@ -138,7 +137,7 @@ function TeamPage() {
 
   return (
     <>
-      <PageHeader title="Team" description="Everyone who works with your studio." />
+      <PageHeader title="Team" />
 
       <Directory onAdd={() => setAdding('choose')} />
     </>
@@ -262,28 +261,8 @@ function Directory({ onAdd }: { onAdd: () => void }) {
     }
   }
 
-  // The how-to panel is for a studio that has nobody yet. Once real people are
-  // on the list it is a block of instructions sitting between the owner and
-  // the list they came to manage. The owner's own row always exists, so a
-  // total of one with no filters narrowing it means "nobody added yet".
-  const teamIsEmpty =
-    paged.isSuccess && total <= 1 && !hasActiveFilters(filters) && tab === 'all'
-
   return (
     <>
-      {teamIsEmpty && (
-        <HowToUse
-          className="mt-6"
-          title="Manage your team"
-          description="Add photographers, editors, managers, and other team members here."
-          steps={[
-            'Create team roles first.',
-            'Add team members with login access.',
-            'Assign them to shoots and tasks.',
-          ]}
-        />
-      )}
-
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold tracking-tight">Team Directory</h2>
         <div className="flex flex-wrap items-center gap-2">

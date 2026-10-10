@@ -60,16 +60,16 @@ describe('the staff menu', () => {
     const staff = labels(filterNav(NAV, 'employee', access(['dashboard', 'projects', 'personal_expenses'], []), false))
     expect(staff.slice(0, 6)).toEqual(['Home', 'My Work', 'My Shoots', 'Attendance & leave', 'My payouts', 'My performance'])
     // My Tasks folded into My work: the same tasks, one place.
-    for (const hidden of ['My Tasks', 'Dashboard', 'All Projects', 'Production Board', 'Team Booking', 'Data & Backup', 'Project Tracking', 'Activity'])
+    for (const hidden of ['My Tasks', 'Projects', 'Post-production', 'Shoots', 'Data & Backup', 'Money', 'Activity'])
       expect(staff).not.toContain(hidden)
   })
 
   it('keeps the studio\'s work for those who run projects', () => {
     const admin = labels(filterNav(NAV, 'admin', access(['dashboard', 'projects']), false))
-    expect(admin).toContain('Dashboard')
-    expect(admin).toContain('All Projects')
-    expect(admin).toContain('Team Booking')
-    expect(admin).not.toContain('Home')
+    expect(admin).toContain('Home')
+    expect(admin).toContain('Projects')
+    expect(admin).toContain('Shoots')
+    expect(admin).toContain('Post-production')
   })
 
   it('puts a person\'s attendance and leave under one tab row', () => {
@@ -77,6 +77,27 @@ describe('the staff menu', () => {
     expect(hubFor('/leave', staffCan)).toBe(MY_TIME)
     expect(hubFor('/attendance/my', staffCan)).toBe(MY_TIME)
     expect(hubFor('/leave', (m) => m === 'attendance' || m === 'dashboard')).toBe(TEAM_TIME)
+  })
+})
+
+describe('the studio menu', () => {
+  it('is twelve lines, one word for each thing', () => {
+    const every = [
+      ...ALL, 'dashboard', 'crm', 'clients', 'projects', 'tasks', 'billing', 'company_expenses', 'financials',
+      'reports', 'settings',
+    ] as ModuleKey[]
+    const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
+    expect(lines).toEqual([
+      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-production', 'Tasks', 'Data & Backup', 'Money',
+      'Team', 'Reports', 'Settings',
+    ])
+  })
+
+  it('opens Money on what is due, and Projects with its Needs attention tab', () => {
+    expect(hubFor('/billing/invoices')?.map((t) => t.label)).toEqual(['Payments', 'Invoices', 'Expenses', 'Profit & Loss'])
+    expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
+    const money = filterNav(NAV, 'admin', access(['company_expenses']), false).find((e) => e.label === 'Money') as NavLeaf
+    expect(money.to).toBe('/company-expenses')
   })
 })
 

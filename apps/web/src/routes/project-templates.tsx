@@ -164,7 +164,6 @@ function ProjectTemplatesContent() {
     <div className="space-y-4">
       <PageHeader
         title="Project Templates"
-        description="Your usual packages, presets and deliverables — ready for every new project."
         actions={
           tab === 'templates' ? (
             <Button onClick={openCreate} size="sm">
