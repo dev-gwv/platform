@@ -78,13 +78,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Add a client', hi: 'क्लाइंट जोड़ें' },
     steps: {
       en: [
-        'Open **CRM & Clients → Clients** and press **New client**.',
+        'Open **Clients** and press **New client**.',
         'Type their name and mobile number. Email is optional.',
         'Address, birthdays and GSTIN wait under **More details**, only if you need them.',
         'Press **Save client**. From now on you can pick them anywhere in the app.',
       ],
       hi: [
-        '**CRM & Clients → Clients** खोलें और **New client** दबाएँ।',
+        '**Clients** खोलें और **New client** दबाएँ।',
         'उनका नाम और मोबाइल नंबर लिखें। ईमेल ज़रूरी नहीं है।',
         'पता, जन्मदिन और GSTIN **More details** में हैं, ज़रूरत हो तभी भरें।',
         '**Save client** दबाएँ। अब ऐप में कहीं भी उन्हें चुन सकते हैं।',
@@ -100,7 +100,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Create a project', hi: 'प्रोजेक्ट बनाएँ' },
     steps: {
       en: [
-        'Open **Projects → Create Project**.',
+        'Open **+ New → Project**.',
         "**Who it's for**: name the project (\"Priya & Rahul's Wedding\") and pick the client, or add a new one.",
         '**Event days**: tap each function (Haldi, Wedding…), then its date, start time and how many hours. Add who that day needs.',
         '**Deliverables**: tap what the client gets. Each due date counts from the wedding day.',
@@ -108,7 +108,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
         'The quotation opens, ready to send.',
       ],
       hi: [
-        '**Projects → Create Project** खोलें।',
+        '**+ New → Project** खोलें।',
         "**Who it's for**: प्रोजेक्ट का नाम लिखें (\"Priya & Rahul's Wedding\") और क्लाइंट चुनें, या नया जोड़ें।",
         '**Event days**: हर फ़ंक्शन पर टैप करें (हल्दी, शादी…), फिर तारीख, शुरू होने का समय और कितने घंटे। उस दिन किसकी ज़रूरत है, वह जोड़ें।',
         '**Deliverables**: क्लाइंट को जो मिलेगा, उस पर टैप करें। हर ड्यू डेट शादी के दिन से गिनी जाती है।',
@@ -188,14 +188,14 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Track enquiries and book them', hi: 'इन्क्वायरी संभालें और बुक करें' },
     steps: {
       en: [
-        'Open **CRM & Clients → Leads** and press **Add lead**.',
+        'Open **Leads** and press **Add lead**.',
         'A name or a phone number is enough to start. Pick the event and its date.',
         'Set the next follow-up, so you are reminded when to call.',
         'Ready? Open the lead and press **Book it** at the top: name the project, set the price, done.',
         'Not happening? Press **Lost** and pick the reason.',
       ],
       hi: [
-        '**CRM & Clients → Leads** खोलें और **Add lead** दबाएँ।',
+        '**Leads** खोलें और **Add lead** दबाएँ।',
         'शुरू करने के लिए नाम या फ़ोन नंबर काफ़ी है। इवेंट और उसकी तारीख चुनें।',
         'अगला फ़ॉलो-अप सेट करें, ताकि कॉल करने का समय याद रहे।',
         'पक्का हो गया? लीड खोलें और ऊपर **Book it** दबाएँ: प्रोजेक्ट का नाम, कीमत, बस।',
@@ -277,13 +277,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
         "Open the project's **Shoots** tab. Each day shows who it needs.",
         'Press **Assign team** on a day, and pick a person for each role.',
         'Each name says if they are free, busy or on leave that day. Their pay fills in from their usual rate.',
-        'Press **Book**, then **Done**. To see every shoot at once, open **Production → Team Booking**.',
+        'Press **Book**, then **Done**. To see every shoot at once, open **Shoots**.',
       ],
       hi: [
         'प्रोजेक्ट का **Shoots** टैब खोलें। हर दिन पर लिखा है किसकी ज़रूरत है।',
         'किसी दिन पर **Assign team** दबाएँ, और हर रोल के लिए एक व्यक्ति चुनें।',
         'हर नाम के साथ लिखा है कि उस दिन वे फ़्री हैं, बिज़ी हैं या छुट्टी पर। पेमेंट उनके रोज़ के रेट से भर जाता है।',
-        '**Book** दबाएँ, फिर **Done**। सारे शूट एक साथ देखने हों तो **Production → Team Booking** खोलें।',
+        '**Book** दबाएँ, फिर **Done**। सारे शूट एक साथ देखने हों तो **Shoots** खोलें।',
       ],
     },
   },
@@ -316,7 +316,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Keep editing on track', hi: 'एडिटिंग समय पर रखें' },
     steps: {
       en: [
-        'Open **Production → Production Board**.',
+        'Open **Post-production**.',
         'The top counts late work, work due today and work with no editor.',
         'When a piece moves on, drag its card to the next stage.',
         '**List** puts late work first. Tick several and use **Give to…** to hand them out together.',
@@ -324,7 +324,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
         'Press **See it as the client** to check what they see. Opening it there is not counted as their visit.',
       ],
       hi: [
-        '**Production → Production Board** खोलें।',
+        '**Post-production** खोलें।',
         'ऊपर गिनती है: लेट काम, आज ड्यू काम, और बिना एडिटर वाला काम।',
         'काम आगे बढ़े तो उसका कार्ड अगले स्टेज पर खींच दें।',
         '**List** में लेट काम सबसे ऊपर है। कई पर टिक करें और **Give to…** से एक साथ सौंप दें।',
@@ -385,13 +385,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Record money in', hi: 'आया पैसा दर्ज करें' },
     steps: {
       en: [
-        'Open **Billing → Payments received**.',
+        'Open **Money → Payments**.',
         'Four boxes: **Overdue**, **Due in 30 days**, **Later**, **Received**. Tap one to see who.',
         'Press **Open invoice**, then **Add payment from client**.',
         'The amount is filled in. Pick how they paid (UPI, cash, bank), add the UTR and save.',
       ],
       hi: [
-        '**Billing → Payments received** खोलें।',
+        '**Money → Payments** खोलें।',
         'चार बॉक्स: **Overdue**, **Due in 30 days**, **Later**, **Received**। किसी पर टैप करके देखें किसका है।',
         '**Open invoice** दबाएँ, फिर **Add payment from client**।',
         'रकम भरी हुई है। कैसे पेमेंट किया (UPI, कैश, बैंक) चुनें, UTR डालें और सेव करें।',
@@ -427,13 +427,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Add an expense', hi: 'खर्च जोड़ें' },
     steps: {
       en: [
-        'Open **Billing → Expenses** and press **Add expense**.',
+        'Open **Money → Expenses** and press **Add expense**.',
         'Type the amount and pick a category.',
         'Who paid? If a team member paid from their own pocket, it waits under **To reimburse** until you pay them back.',
         'Put it on the project it belongs to, and press **Add expense**.',
       ],
       hi: [
-        '**Billing → Expenses** खोलें और **Add expense** दबाएँ।',
+        '**Money → Expenses** खोलें और **Add expense** दबाएँ।',
         'रकम लिखें और कैटेगरी चुनें।',
         'किसने दिया? अगर टीम के किसी ने अपनी जेब से दिया, तो लौटाने तक यह **To reimburse** में रहेगा।',
         'जिस प्रोजेक्ट का खर्च है, उस पर डालें, और **Add expense** दबाएँ।',

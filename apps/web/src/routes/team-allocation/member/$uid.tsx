@@ -69,7 +69,7 @@ function MemberSchedule() {
     <section className="flex flex-col gap-4">
       <Button asChild variant="ghost" size="sm" className="w-fit">
         <Link to="/team-allocation">
-          <ArrowLeft /> Team Booking
+          <ArrowLeft /> Shoots
         </Link>
       </Button>
 

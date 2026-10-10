@@ -126,7 +126,7 @@ function TeamBooking({ initialView }: { initialView: View }) {
   return (
     <>
       <PageHeader
-        title="Team Booking"
+        title="Shoots"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthSlots.length}>

@@ -135,7 +135,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       id: `client:${c.id}`,
       label: c.name,
       ...(c.phone ? { hint: c.phone } : {}),
+      // Opens that client, not the whole list (?client= is the list's deep link).
       to: '/clients',
+      search: { client: c.id },
       group: 'Clients',
     }))
 

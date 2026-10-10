@@ -228,6 +228,8 @@ export function BillingTab({
   onOpenTab,
   invoiceNext = false,
   onInvoiceNextDone,
+  recordNext = false,
+  onRecordNextDone,
   onBookTeam,
 }: {
   project: ProjectDetail
@@ -236,6 +238,9 @@ export function BillingTab({
   /** Open the next instalment's invoice straight away (the journey's "Create the invoice"). */
   invoiceNext?: boolean
   onInvoiceNextDone?: (() => void) | undefined
+  /** Open the payment box straight away (the page's "+ Add payment"). */
+  recordNext?: boolean
+  onRecordNextDone?: (() => void) | undefined
   /** The step after the invoice. */
   onBookTeam?: (() => void) | undefined
 }) {
@@ -290,6 +295,14 @@ export function BillingTab({
       ...(lines.length > 0 ? { lines } : {}),
     })
   }, [invoiceNext, billing.isLoading])
+
+  // "+ Add payment" at the top of the project opens the box itself, not just
+  // this tab (it used to land here and leave the person to find the button).
+  useEffect(() => {
+    if (!recordNext) return
+    onRecordNextDone?.()
+    if (canEdit) setEditing({})
+  }, [recordNext])
 
   // Invoices and payments on one timeline, newest first.
   const rows: Array<{ kind: 'invoice'; at: string; inv: BillingInvoice } | { kind: 'payment'; at: string; p: Payment }> = [

@@ -50,7 +50,7 @@ import { TasksTab } from '@/features/projects/tabs/TasksTab'
 import { DeliverablesTab } from '@/features/projects/tabs/DeliverablesTab'
 import { ClientPortalDialog } from '@/features/client-portal/ClientPortalDialog'
 import { DetailsLinkDialog } from '@/features/wishes/DetailsLinkDialog'
-import { BillingTab, MoneyStory, projectMoney } from '@/features/projects/tabs/BillingTab'
+import { BillingTab, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
@@ -149,6 +149,11 @@ function ProjectDetail() {
   // the first role still to fill.
   const [invoiceNext, setInvoiceNext] = useState(() => new URLSearchParams(window.location.search).get('invoice') === 'next')
   const [focusAssign, setFocusAssign] = useState(() => new URLSearchParams(window.location.search).get('focus') === 'assign')
+  const [recordNext, setRecordNext] = useState(false)
+  const recordPayment = () => {
+    setTab('billing')
+    setRecordNext(true)
+  }
   // The tab is kept in the address, so refresh and Back land where you were.
   const setTab = (t: ProjectTab) => {
     if (t === 'quotation') {
@@ -246,10 +251,14 @@ function ProjectDetail() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">{data.name}</h1>
-            <StatusBadge tone={STATUS_TONE[data.status]}>
-              <StatusIcon className="mr-1 size-3" aria-hidden />
-              {humanize(data.status)}
-            </StatusBadge>
+            {/* Whoever can edit changes it in the select on the right; the badge
+                beside it said the same thing twice. */}
+            {!canEdit && (
+              <StatusBadge tone={STATUS_TONE[data.status]}>
+                <StatusIcon className="mr-1 size-3" aria-hidden />
+                {humanize(data.status)}
+              </StatusBadge>
+            )}
             {/* For everyone on the project, not only those who can edit it. */}
             <RemindMe
               entityType="project"
@@ -367,7 +376,7 @@ function ProjectDetail() {
               canEdit && balance > 0 ? (
                 <button
                   type="button"
-                  onClick={() => setTab('billing')}
+                  onClick={recordPayment}
                   className="text-xs font-semibold text-primary hover:underline"
                 >
                   + Add payment
@@ -402,7 +411,6 @@ function ProjectDetail() {
       <PanelBoundary resetKey={tab} label="this tab">
       {tab === 'overview' && (
         <div className="mt-4 flex flex-col gap-4">
-          {seesMoney && <MoneyStory project={data} onRecord={canEdit ? () => setTab('billing') : undefined} />}
           <DeliverablesSummary deliverables={data.deliverables} onOpen={() => setTab('deliverables')} />
           <ClientActivityCard projectId={id} />
           <EntityReminders entityType="project" entityId={id} title="Reminders" hideWhenEmpty />
@@ -430,6 +438,8 @@ function ProjectDetail() {
           onOpenTab={setTab}
           invoiceNext={invoiceNext}
           onInvoiceNextDone={() => setInvoiceNext(false)}
+          recordNext={recordNext}
+          onRecordNextDone={() => setRecordNext(false)}
           onBookTeam={() => go('team')}
         />
       )}
