@@ -12,6 +12,7 @@ import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
 import { runMorningEmails } from '../../lib/morning-email'
+import { runWeeklyEmails } from '../../lib/weekly-email'
 import { runAccessEmails } from '../../lib/access-email'
 import { runAlertEmails } from '../../lib/alert-email'
 import { pruneIdlePageTokens } from '../../lib/meta'
@@ -122,6 +123,8 @@ export const cronRouter = new Hono<AppEnv>()
         const onboarding = await runOnboardingNudges(c.env, dryRun)
         // Owners and admins get the day in one email, from 8 am.
         const morning = await runMorningEmails(c.env, dryRun)
+        // Owners get the week in one email, Monday from 8 am (0258).
+        const weekly = await runWeeklyEmails(c.env, dryRun)
         // Owners hear 7 days and 1 day before their trial or plan ends, and
         // once when it has ended (0211).
         const accessEmails = await runAccessEmails(c.env, dryRun)
@@ -142,6 +145,7 @@ export const cronRouter = new Hono<AppEnv>()
           onboarding_emails: onboarding,
           invoice_overdue: invoicesOverdue[0]?.summary ?? {},
           morning_emails: morning,
+          weekly_emails: weekly,
           access_emails: accessEmails,
           alert_emails: alertEmails,
           crm_outbox: outbox,

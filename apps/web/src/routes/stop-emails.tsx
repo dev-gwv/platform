@@ -7,25 +7,29 @@ import { Card, CardContent } from '@/shared/ui/card'
 /**
  * "Stop these emails" from an email's footer: the onboarding emails
  * (/stop-emails?c=<studio>&t=<signature>) or the morning email
- * (/stop-emails?m=<person>&t=<signature>). One press already happened in the
+ * (/stop-emails?m=<person>&t=<signature>) or the Monday email
+ * (/stop-emails?w=<person>&t=<signature>). One press already happened in the
  * inbox, so this page just does it and says so.
  */
 export function StopEmailsPage() {
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working')
-  const morning = new URLSearchParams(window.location.search).has('m')
+  const params = new URLSearchParams(window.location.search)
+  const personal = params.has('m') || params.has('w')
+  const which = params.has('w') ? 'Monday emails' : 'morning emails'
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     const c = q.get('c')
     const m = q.get('m')
+    const w = q.get('w')
     const t = q.get('t')
-    if ((!c && !m) || !t) {
+    if ((!c && !m && !w) || !t) {
       setState('failed')
       return
     }
-    callApi(m ? '/public/morning-email/stop' : '/public/onboarding-emails/stop', {
+    callApi(w ? '/public/weekly-email/stop' : m ? '/public/morning-email/stop' : '/public/onboarding-emails/stop', {
       method: 'POST',
-      body: m ? { u: m, t } : { c, t },
+      body: w ? { u: w, t } : m ? { u: m, t } : { c, t },
       responseSchema: z.object({ ok: z.boolean() }),
     })
       .then(() => setState('done'))
@@ -43,14 +47,14 @@ export function StopEmailsPage() {
             {state === 'working'
               ? 'One moment…'
               : state === 'done'
-                ? morning
-                  ? 'Done. No more morning emails.'
+                ? personal
+                  ? `Done. No more ${which}.`
                   : 'Done. No more setup emails.'
                 : 'This link did not work.'}
           </p>
           {state === 'done' && (
             <p className="text-sm text-muted-foreground">
-              {morning ? 'You can turn it back on from your profile.' : 'Your studio and everything in it are untouched.'}
+              {personal ? 'You can turn it back on from your profile.' : 'Your studio and everything in it are untouched.'}
             </p>
           )}
         </CardContent>

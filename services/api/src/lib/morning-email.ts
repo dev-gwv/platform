@@ -11,8 +11,8 @@ import { sendOnboardingMail, signFor, type OnboardingMail } from './onboarding-e
  * leads, tasks, money. Same look as the onboarding emails.
  */
 
-const GOLD = '#f2a618'
-const NAVY = '#1b2a4a'
+export const GOLD = '#f2a618'
+export const NAVY = '#1b2a4a'
 const INK = '#111827'
 const MUTED = '#4b5563'
 
@@ -36,12 +36,12 @@ export interface MorningFacts {
   yesterday?: { name: string | null; calls: number; answered: number; quotes: number; booked: number }[]
 }
 
-const esc = (t: string) =>
+export const esc = (t: string) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const base = (env: Env) => (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
-const firstName = (name: string | null) => (name ?? '').trim().split(/\s+/)[0] || 'there'
-const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+export const base = (env: Env) => (env.APP_URL || 'https://studioautopilot.in').replace(/\/+$/, '')
+export const firstName = (name: string | null) => (name ?? '').trim().split(/\s+/)[0] || 'there'
+export const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
+export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 export function morningStopToken(env: Env, userId: string): Promise<string> {
   return signFor(env, `morning-stop:${userId}`)
@@ -51,7 +51,7 @@ export async function morningStopTokenValid(env: Env, userId: string, token: str
   return timingSafeEqual(await morningStopToken(env, userId), token)
 }
 
-function block(title: string, body: string, button?: { label: string; href: string }): string {
+export function block(title: string, body: string, button?: { label: string; href: string }): string {
   const btn = button
     ? `<p style="margin:12px 0 0;"><a href="${esc(button.href)}" style="display:inline-block;padding:9px 16px;border-radius:8px;background:#ffffff;border:1px solid #d1d5db;color:${NAVY};font-size:13px;font-weight:600;text-decoration:none;">${esc(button.label)} &rarr;</a></p>`
     : ''
@@ -67,7 +67,7 @@ function block(title: string, body: string, button?: { label: string; href: stri
   </td></tr>`
 }
 
-const line = (text: string) => `<p style="margin:2px 0;font-size:15px;line-height:1.55;color:${INK};">${text}</p>`
+export const line = (text: string) => `<p style="margin:2px 0;font-size:15px;line-height:1.55;color:${INK};">${text}</p>`
 
 export async function morningMail(env: Env, f: MorningFacts): Promise<OnboardingMail> {
   const app = base(env)
