@@ -1,6 +1,6 @@
 import { Tutorial, studio, sleep } from './lib.mjs'
 import { withSpot, padEnd, frozen, sayHere } from './helpers.mjs'
-import { seedLeave } from './x3/seed-leave.mjs'
+import { seedLeave } from './seed-leave.mjs'
 // Run with TZ=Asia/Kolkata.
 const t = new Tutorial('leave', { title: 'Approve leave', subtitle: 'See what is left, then say yes in one tap', steps: 6 })
 const s = await studio({ name: 'Kapoor Films Leave', owner: 'Asha Mehta', skipSetup: true })

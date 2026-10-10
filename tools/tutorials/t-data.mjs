@@ -45,7 +45,6 @@ await t.click(dlg.getByRole('button', { name: 'Save', exact: true }), { after: 2
 await t.layer('caption', null); await sleep(1100)
 await t.layer('hidePointer')
 
-await p.screenshot({ path: '/tmp/claude-0/-home-user-platform/ff9d907c-f9f2-5ba2-87d6-2f386115b532/scratchpad/rec2/data-end.png' })
 const head = p.getByText(/Data: 2 of 2 handed in/).first()
 await head.evaluate((e) => e.scrollIntoView({ block: 'center' })); await sleep(600)
 const line = head.locator('xpath=ancestor::div[2]')

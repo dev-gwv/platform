@@ -67,7 +67,7 @@ await h.click(p.getByRole('option', { name: 'Kavya Iyer' }), { after: 200 }); aw
 await t.layer('caption', null); await sleep(1700)
 await t.layer('hidePointer')
 const rows = p.locator('main ul').filter({ has: p.getByText('Highlight Film') }).first()
-await t.say('Both are Kavya’s now, already in Editing', rows, { hold: 2800 })
+await t.say('Both are Kavya’s now, ready for her to start', rows, { hold: 2800 })
 await t.endCard('All your editing work, on one board')
 await t.stop()
 padEnd(t); frozen(t); t.build()

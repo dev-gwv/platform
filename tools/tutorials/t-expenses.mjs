@@ -1,6 +1,6 @@
 import { Tutorial, studio, sleep } from './lib.mjs'
 import { withSpot, padEnd, frozen, sayHere } from './helpers.mjs'
-import { seedExpenses } from './x3/seed-exp.mjs'
+import { seedExpenses } from './seed-expenses.mjs'
 // Run with TZ=Asia/Kolkata.
 const t = new Tutorial('expenses', { title: 'Add an expense', subtitle: 'Every cost on the right project, and who paid it', steps: 6 })
 const s = await studio({ name: 'Kapoor Films Expenses', owner: 'Asha Mehta', skipSetup: true })
@@ -27,9 +27,10 @@ await t.step('Who paid? Ravi paid from his own pocket', combos.nth(1), { hold: 1
 await h.click(combos.nth(1), { after: 400 }); await h.unspot(); await sleep(700)
 await t.click(p.getByRole('option', { name: 'Ravi Kumar' }), { after: 500 })
 await sayHere(t, 'So it shows under “To reimburse” until he is paid back', d.getByText(/From their own pocket/), 2200)
-await t.step('Put it on the project it belongs to', combos.nth(2), { hold: 1000 })
-await h.click(combos.nth(2), { after: 400 }); await h.unspot(); await sleep(700)
-await t.click(p.getByRole('option', { name: 'Priya & Rahul Wedding' }), { after: 600 })
+const project = d.locator('#exp-project')
+await t.step('Put it on the project it belongs to', project, { hold: 1000 })
+await h.click(project, { after: 400 }); await h.unspot(); await sleep(700)
+await t.click(p.getByRole('option', { name: /Priya & Rahul Wedding/ }).first(), { after: 600 })
 const save = d.getByRole('button', { name: 'Add expense' })
 await t.step('Press “Add expense” to save it', save, { hold: 1200 })
 await h.click(save, { after: 200 }); await h.unspot(); await t.layer('caption', null); await sleep(1800)

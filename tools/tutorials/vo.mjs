@@ -139,7 +139,7 @@ export const VO = {
       L('Tick the work that has nobody on it.', 'जिस काम पर कोई नहीं है, उस पर टिक कीजिए।'),
       L('Two selected. Give to Kavya, both at once.', 'दो चुने। Give to से काव्या को, दोनों एक साथ।'),
     ],
-    end: L("Both are Kavya's now, already in Editing.", 'दोनों अब काव्या के पास हैं, Editing में।'),
+    end: L("Both are Kavya's now, ready for her to start.", 'दोनों अब काव्या के पास हैं, शुरू करने के लिए तैयार।'),
   },
   'team-day': {
     title: L('This is what your team sees on their own phone.', 'यह है जो आपकी टीम अपने फ़ोन पर देखती है।'),
@@ -159,7 +159,7 @@ export const VO = {
       L("Tap Overdue to see who owes you. Priya's advance is five days late.", 'Overdue पर टैप कीजिए। प्रिया का एडवांस पाँच दिन लेट है।'),
       L('Open the invoice.', 'इनवॉइस खोलिए।'),
       L('Tap Add payment from client.', 'Add payment from client पर टैप कीजिए।'),
-      L('The amount is filled in. Pick UPI, and add the UTR.', 'रकम भरी हुई है। UPI चुनिए, और UTR डालिए।'),
+      L('The Record payment form opens with the amount filled in. Pick UPI, and add the UTR.', 'Record payment फ़ॉर्म में रकम भरी हुई है। UPI चुनिए, और UTR डालिए।'),
     ],
     end: L('Counted in Received, and nothing is overdue now.', 'Received में गिना गया, अब कुछ भी लेट नहीं।'),
   },

@@ -23,8 +23,10 @@ export async function seedPayments(s) {
   const token = s.token
   const c = must(await api('/clients', { token, method: 'POST', body: { name: 'Priya Sharma', phone: phone() } }), 'client')
   const p = must(await api('/projects', { token, method: 'POST', body: { name: 'Priya & Rohan Wedding', client_id: c.id, package_cost: 150000 } }), 'project')
+  // Due 5 days ago (India's date), so the video can say "5 days late" on any day it is recorded.
+  const istDay = (back) => new Date(Date.now() + 5.5 * 3600e3 - back * 86400e3).toISOString().slice(0, 10)
   const inv = must(await api('/billing/invoices', { token, method: 'POST', body: {
-    client_id: c.id, project_id: p.id, place_of_supply: '27', intra_state: true, invoice_date: '2026-09-20', due_date: '2026-09-28', status: 'sent',
+    client_id: c.id, project_id: p.id, place_of_supply: '27', intra_state: true, invoice_date: istDay(13), due_date: istDay(5), status: 'sent',
     subject: 'Advance for the wedding', lines: [{ description: 'Wedding Photography — advance', quantity: 1, rate: 50000, gst_rate: 0 }] } }), 'invoice')
   return { projectId: p.id, clientId: c.id, invoiceId: inv.id }
 }

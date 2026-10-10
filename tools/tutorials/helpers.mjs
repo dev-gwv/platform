@@ -1,10 +1,11 @@
+import { settledBox } from './lib.mjs'
 // Small per-script helpers: keep the spotlight on whatever is being touched.
 export function withSpot(t) {
   const L = (x) => (typeof x === 'string' ? t.page.locator(x).first() : x)
   const spot = async (loc, pad = 6) => {
     const l = L(loc)
     await l.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
-    const r = await l.boundingBox({ timeout: 3000 }).catch(() => null)
+    const r = await settledBox(l)
     await t.layer('spot', r, pad)
     return l
   }
@@ -29,7 +30,9 @@ export function frozen(t, min = 2.5) {
 }
 /** An uncounted caption with the spotlight on `loc` exactly where it is now (no scrolling). */
 export async function sayHere(t, text, loc, hold = 1800, pad = 6) {
-  const r = loc ? await loc.boundingBox({ timeout: 3000 }).catch(() => null) : null
+  // Measure once the last line is said: the page can move while she speaks.
+  await t.waitVoice()
+  const r = loc ? await settledBox(loc) : null
   await t.layer('spot', r, pad)
   await t.layer('caption', text)
   await new Promise((res) => setTimeout(res, hold))
