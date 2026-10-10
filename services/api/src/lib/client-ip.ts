@@ -15,7 +15,7 @@
  * is in CF-Connecting-IP. Only then is that header trusted -- anyone else
  * sending it is ignored.
  */
-export interface HeaderReader {
+interface HeaderReader {
   get(name: string): string | undefined | null
 }
 

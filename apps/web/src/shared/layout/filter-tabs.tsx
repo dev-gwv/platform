@@ -1,6 +1,6 @@
 import { cn } from '../ui/cn'
 
-export interface FilterTab<T extends string> {
+interface FilterTab<T extends string> {
   value: T
   label: string
   count?: number | undefined

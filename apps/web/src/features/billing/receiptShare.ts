@@ -11,7 +11,7 @@ const emailResult = z.object({
   failed_to: z.array(z.object({ email: z.string(), error: z.string() })).nullish(),
 })
 
-export async function copyToClipboard(text: string): Promise<boolean> {
+async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
     return true
@@ -109,9 +109,4 @@ export function receiptShareText(summary: ReceiptShareSummary, link: string): st
   const who = summary.clientName?.trim() || 'there'
   const proj = summary.projectName?.trim() ? ` for ${summary.projectName}` : ''
   return `Hi ${who}, we have received your payment of ${summary.amountFormatted}${proj} on ${summary.paymentDate}. You can view/download your payment receipt here: ${link}`
-}
-
-export function receiptEmailSubject(summary: ReceiptShareSummary): string {
-  const proj = summary.projectName?.trim() ? ` for ${summary.projectName}` : ''
-  return `Payment Receipt${proj} - ${summary.amountFormatted}`
 }

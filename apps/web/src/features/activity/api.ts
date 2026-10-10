@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -19,8 +19,6 @@ const activityPageSchema = z.object({
   next_cursor: z.string().nullable(),
 })
 
-export type ActivityItem = z.infer<typeof activityItemSchema>
-
 export function useActivityLog(filters?: { entity_type?: string; user_id?: string }) {
   const { session } = useAuth()
   return useInfiniteQuery({
@@ -36,25 +34,5 @@ export function useActivityLog(filters?: { entity_type?: string; user_id?: strin
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!session,
     staleTime: 15_000,
-  })
-}
-
-export function useLogActivity() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: {
-      action: string
-      entity_type: string
-      entity_id?: string
-      metadata?: Record<string, unknown>
-    }) =>
-      callApi('/activity', {
-        method: 'POST',
-        body,
-        responseSchema: z.object({ id: z.string().uuid() }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['activity'] })
-    },
   })
 }

@@ -5,7 +5,7 @@ import { resolveClientIp } from './client-ip'
 import { currentRequestId } from '../middleware/request-id'
 import { describeError, log } from './log'
 
-export interface AuditEntry {
+interface AuditEntry {
   /** Dotted verb: 'company.update', 'member.remove', 'lead.merge'. */
   action: string
   entityType: string

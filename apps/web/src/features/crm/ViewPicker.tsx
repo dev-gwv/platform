@@ -16,11 +16,6 @@ export type ViewChoice =
   | { kind: 'builtin'; key: BuiltinViewKey }
   | { kind: 'saved'; id: string }
 
-export const sameView = (a: ViewChoice, b: ViewChoice): boolean =>
-  a.kind === b.kind &&
-  (a.kind === 'builtin' ? a.key === (b as { key: string }).key : true) &&
-  (a.kind === 'saved' ? a.id === (b as { id: string }).id : true)
-
 /**
  * The whole control strip of the leads page, in one line.
  *

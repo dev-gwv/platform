@@ -25,7 +25,6 @@ import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import {
-  useActivities,
   useBulkPatch,
   useCreateStage,
   useCrmPrefs,
@@ -33,159 +32,16 @@ import {
   useMoveStage,
   usePipelines,
   useReorderStages,
-  useUpdateActivity,
   useUpdateCrmPrefs,
   useUpdateStage,
 } from '../api'
-import { taskDueBy } from '@ipc/domain'
-import { Check, ClipboardList } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LostReasonDialog } from '../LostReasonDialog'
-import { DUE_COLUMNS, boardColumns, isOpen, isUncontacted, type DueBucket } from '../leads'
-import { BoardColumn, DueBadge, LeadCard, LeadTable } from './shared'
+import { DUE_COLUMNS, boardColumns, type DueBucket } from '../leads'
+import { BoardColumn, LeadCard } from './shared'
 import { DealCard } from '../DealCard'
 import { LeadBulkBar } from '../LeadBulkBar'
-
-/** Everything owed today or already late — the list to clear before going home. */
-export function TodayTab({ leads, now, onOpen }: { leads: readonly CrmLead[]; now: Date; onOpen: (id: string) => void }) {
-  const columns = boardColumns(leads, now)
-  const due = [...columns.overdue, ...columns.today]
-  const tasks = useActivities({ openTasks: true })
-  const update = useUpdateActivity()
-  const access = useAccess()
-  const canEdit = access.hasAction('crm', 'edit')
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
-  const dueTasks = (tasks.data ?? []).filter((t) => taskDueBy(t, endOfDay))
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const open = leads.filter(isOpen)
-  const uncontacted = open.filter(isUncontacted)
-  const hot = open.filter((l) => l.is_hot)
-  const fresh = open.filter((l) => new Date(l.created_at).getTime() >= startOfDay.getTime())
-
-  return (
-    <div className="flex flex-col gap-4">
-      {dueTasks.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <p className="flex items-center gap-2 font-medium">
-            <ClipboardList className="size-4 text-muted-foreground" /> Tasks due today
-          </p>
-          <ul className="mt-2 divide-y divide-border">
-            {dueTasks.map((t) => (
-              <li key={t.id} className="flex items-center gap-3 py-2 text-sm">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{t.subject ?? 'Task'}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {t.lead_id ? (
-                      <button type="button" className="hover:underline" onClick={() => onOpen(t.lead_id!)}>
-                        {t.lead_name ?? 'Open deal'}
-                      </button>
-                    ) : (
-                      'Contact'
-                    )}
-                    {t.due_at && new Date(t.due_at).getTime() < now.getTime() ? ' · overdue' : ''}
-                    {t.assignee_name ? ` · ${t.assignee_name}` : ''}
-                  </span>
-                </span>
-                {canEdit && (
-                  <Button size="sm" variant="outline" disabled={update.isPending} onClick={() => update.mutate({ id: t.id, patch: { done: true } })}>
-                    <Check /> Done
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-        {due.length === 0
-          ? 'Nothing is due today and nothing is late. '
-          : `${due.length} lead${due.length === 1 ? '' : 's'} to clear today — ${columns.overdue.length} already late. `}
-        Work top-down; the list is ordered by how long each one has been waiting.
-      </div>
-      <LeadTable leads={due} now={now} total={leads.length} onOpen={onOpen} />
-
-      {/* Chasing what is due is only half of today. These three are the ones
-          that never get a follow-up date put on them in the first place, and
-          so never appear on the board at all. */}
-      <div className="grid gap-3 lg:grid-cols-3">
-        <TodayList
-          title="Uncontacted leads"
-          hint="Nobody has reached them yet."
-          leads={uncontacted}
-          now={now}
-          onOpen={onOpen}
-        />
-        <TodayList
-          title="Hot leads"
-          hint="Scored high enough to be worth a call today."
-          leads={hot}
-          now={now}
-          onOpen={onOpen}
-          tone="warning"
-        />
-        <TodayList
-          title="Arrived today"
-          hint="Came in since midnight."
-          leads={fresh}
-          now={now}
-          onOpen={onOpen}
-        />
-      </div>
-    </div>
-  )
-}
-
-/**
- * One of the three side lists on Today's Work. Capped, because the point is
- * "here are some to pick up now", not a second copy of the inbox.
- */
-function TodayList({
-  title,
-  hint,
-  leads,
-  now,
-  onOpen,
-  tone,
-}: {
-  title: string
-  hint: string
-  leads: readonly CrmLead[]
-  now: Date
-  onOpen: (id: string) => void
-  tone?: 'warning'
-}) {
-  const shown = leads.slice(0, 6)
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="flex items-center gap-2 text-sm font-medium">
-        {title}
-        <StatusBadge tone={tone === 'warning' && leads.length > 0 ? 'warning' : 'neutral'}>{leads.length}</StatusBadge>
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-      {shown.length === 0 ? (
-        <p className="mt-3 text-xs text-muted-foreground">Nothing here.</p>
-      ) : (
-        <ul className="mt-2 divide-y divide-border">
-          {shown.map((l) => (
-            <li key={l.id}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm hover:underline"
-                onClick={() => onOpen(l.id)}
-              >
-                <span className="min-w-0 truncate">{l.name ?? l.phone ?? 'Lead'}</span>
-                <DueBadge lead={l} now={now} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {leads.length > shown.length && (
-        <p className="mt-2 text-xs text-muted-foreground">and {leads.length - shown.length} more</p>
-      )}
-    </div>
-  )
-}
 
 /**
  * What is owed, by when.

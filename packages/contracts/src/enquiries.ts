@@ -15,9 +15,6 @@ import { uuid, isoDateTime } from './shared/primitives'
 export const enquiryStatus = z.enum(['new', 'reviewed', 'contacted', 'converted', 'closed'])
 export type EnquiryStatus = z.infer<typeof enquiryStatus>
 
-/** Statuses that still want someone's attention. */
-export const OPEN_ENQUIRY_STATUSES: readonly EnquiryStatus[] = ['new', 'reviewed', 'contacted']
-
 export const enquiry = z.object({
   id: uuid,
   name: z.string(),

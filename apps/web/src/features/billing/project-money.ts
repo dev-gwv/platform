@@ -9,7 +9,7 @@ import { dueText, isOverdue } from './status'
  * project says ₹50,000 received -- two true numbers that read as a
  * contradiction, with nothing on screen saying why.
  */
-export interface MoneyInvoice {
+interface MoneyInvoice {
   id: string
   invoice_number: string
   status: string
@@ -19,7 +19,7 @@ export interface MoneyInvoice {
   balance_due: number
 }
 
-export interface MoneyPayment {
+interface MoneyPayment {
   id: string
   amount: number
   status?: string | null | undefined

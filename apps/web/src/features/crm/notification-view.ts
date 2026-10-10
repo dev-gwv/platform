@@ -20,7 +20,7 @@ export function timeAgo(iso: string, now: Date = new Date()): string {
 }
 
 /** A place in the app, split the way TanStack Router's `navigate` takes it. */
-export interface LinkTarget {
+interface LinkTarget {
   to: string
   search?: Record<string, string>
 }

@@ -53,7 +53,7 @@ export function getRefreshToken(): string | null {
   return read(local(), REFRESH_KEY)
 }
 
-export function setToken(token: string): void {
+function setToken(token: string): void {
   accessToken = token
   write(session(), KEY, token)
 }

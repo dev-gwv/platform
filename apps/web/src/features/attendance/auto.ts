@@ -15,7 +15,7 @@ import { lateText } from './board'
  *
  * No background tracking: nothing runs while the app is closed.
  */
-export type AutoState =
+type AutoState =
   | { kind: 'idle' }
   | { kind: 'checking' }
   | { kind: 'marked'; at: string }
@@ -43,7 +43,7 @@ export function readPosition(fresh = false): Promise<GeolocationPosition> {
 }
 
 /** Whether today still needs a mark for this person. */
-export function needsMark(me: MyAttendanceToday | undefined): boolean {
+function needsMark(me: MyAttendanceToday | undefined): boolean {
   if (!me) return false
   // Attendance off (0224): no mark, and no location prompt either.
   if (!me.enabled || me.mode === 'off' || me.day_off || me.on_leave) return false
@@ -55,12 +55,12 @@ export function needsMark(me: MyAttendanceToday | undefined): boolean {
  * person takes that), and not on a shoot day (I've reached at the venue is
  * the mark).
  */
-export function canAutoMark(me: MyAttendanceToday | undefined): boolean {
+function canAutoMark(me: MyAttendanceToday | undefined): boolean {
   return needsMark(me) && !me!.selfie_required && !me!.shoot_today
 }
 
 /** "Marked late · 10:22 AM (22 min)" -- the server's verdict, said plainly. */
-export function verdictText(r: { status: string; late_minutes: number }, at = new Date()): string {
+function verdictText(r: { status: string; late_minutes: number }, at = new Date()): string {
   const time = at.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
   if (r.status === 'late') return `Marked late · ${time} (${lateText(r.late_minutes)})`
   return `Marked present · ${time}`

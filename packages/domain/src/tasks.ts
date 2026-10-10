@@ -6,7 +6,7 @@
 export type CanonicalStatus = 'to_do' | 'in_progress' | 'review' | 'blocked' | 'completed' | 'cancelled'
 export type CanonicalPriority = 'low' | 'medium' | 'high' | 'urgent'
 
-export const CANONICAL_STATUSES: readonly CanonicalStatus[] = [
+const CANONICAL_STATUSES: readonly CanonicalStatus[] = [
   'to_do',
   'in_progress',
   'review',
@@ -14,15 +14,9 @@ export const CANONICAL_STATUSES: readonly CanonicalStatus[] = [
   'completed',
   'cancelled',
 ]
-export const CANONICAL_PRIORITIES: readonly CanonicalPriority[] = [
-  'low',
-  'medium',
-  'high',
-  'urgent',
-]
 
 /** Built-in custom statuses that live only in code (no DB row). */
-export const BUILTIN_STATUS_CANONICAL: Readonly<Record<string, CanonicalStatus>> = {
+const BUILTIN_STATUS_CANONICAL: Readonly<Record<string, CanonicalStatus>> = {
   pending_review: 'in_progress',
   revision_required: 'in_progress',
   sent_to_client: 'completed',

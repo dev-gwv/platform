@@ -17,7 +17,7 @@ export interface Lane {
   team_allowed: boolean
 }
 
-export const laneKey = (status: string, code: string | null | undefined) => `${status}:${code ?? ''}`
+const laneKey = (status: string, code: string | null | undefined) => `${status}:${code ?? ''}`
 
 /**
  * One lane per place a deliverable can be, in the studio's order: To do,
@@ -117,7 +117,7 @@ export const FOCI: readonly { key: Focus; label: string; help: string }[] = [
   { key: 'unassigned', label: 'Unassigned', help: 'Open work with no editor on it.' },
 ]
 
-export function inFocus(d: BoardDeliverable, focus: Focus, today = todayIso()): boolean {
+function inFocus(d: BoardDeliverable, focus: Focus, today = todayIso()): boolean {
   switch (focus) {
     case 'late':
       return isOpen(d) && !!d.estimated_date && d.estimated_date < today
@@ -130,7 +130,7 @@ export function inFocus(d: BoardDeliverable, focus: Focus, today = todayIso()): 
   }
 }
 
-export interface BoardFilters {
+interface BoardFilters {
   project?: string | undefined
   /** A user id, or 'none' for work with no editor. */
   person?: string | undefined

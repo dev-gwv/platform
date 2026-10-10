@@ -15,7 +15,7 @@ import { useHelpLang } from './lang'
 import { lengthLabel, posterSrc, titleIn, type Tutorial } from './tutorials'
 
 /** How many of each thing the studio has, for the cards to step back on. */
-export function useLearnSignals() {
+function useLearnSignals() {
   const { session } = useAuth()
   return useQuery({
     queryKey: ['me', 'learn'],
@@ -156,7 +156,7 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
 }
 
 /** The card itself: the video's first frame, one line, and a quiet close. */
-export function LearnCardView({ tutorial, onPlay, onClose, className }: { tutorial: Tutorial; onPlay: () => void; onClose: () => void; className?: string }) {
+function LearnCardView({ tutorial, onPlay, onClose, className }: { tutorial: Tutorial; onPlay: () => void; onClose: () => void; className?: string }) {
   const [lang] = useHelpLang()
   const poster = posterSrc(tutorial, lang)
   return (

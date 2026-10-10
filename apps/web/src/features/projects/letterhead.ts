@@ -4,7 +4,7 @@ import { callApi } from '@/shared/api/client'
 import type { QuotationDocumentData } from './QuotationDocument'
 
 /** The studio's letterhead from its company profile: what invoices and quotations print. */
-export function letterheadFrom(company: CompanyProfile | undefined): QuotationDocumentData['studio'] {
+function letterheadFrom(company: CompanyProfile | undefined): QuotationDocumentData['studio'] {
   return {
     name: company?.display_name || company?.name || 'Studio',
     legalName: company?.legal_name,
@@ -19,7 +19,7 @@ export function letterheadFrom(company: CompanyProfile | undefined): QuotationDo
 }
 
 /** The studio's own colour for the stripe, only when it chose one. */
-export const brandColorFrom = (theme: CompanyTheme | undefined) =>
+const brandColorFrom = (theme: CompanyTheme | undefined) =>
   theme?.is_custom_theme ? (theme.primary_color ?? theme.custom_color ?? null) : null
 
 /** The signed-in studio's letterhead and stripe colour. */

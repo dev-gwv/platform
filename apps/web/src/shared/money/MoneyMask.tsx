@@ -42,7 +42,7 @@ export function Money({ value, className }: { value: number; className?: string 
 }
 
 /** Keeps the page's switch in step with the person's saved choice. */
-export function useSyncHideAmounts() {
+function useSyncHideAmounts() {
   const hints = useHints()
   const saved = hints.data?.hide_amounts?.closed === true
   useEffect(() => {

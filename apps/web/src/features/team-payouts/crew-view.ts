@@ -3,7 +3,7 @@ import type { CrewOwed, CrewPayoutRow } from '@ipc/contracts'
 import { amountsHidden, screenINR } from '@/shared/money/hide'
 
 /** Team payouts' three views: what is owed now, what is promised, everything. */
-export type CrewView = 'owed' | 'upcoming' | 'all'
+type CrewView = 'owed' | 'upcoming' | 'all'
 export const CREW_VIEWS: readonly { key: CrewView; label: string }[] = [
   { key: 'owed', label: 'Owed now' },
   { key: 'upcoming', label: 'Upcoming' },
@@ -13,7 +13,7 @@ export function crewViewOf(v: string | null | undefined): CrewView {
   return v === 'upcoming' || v === 'all' ? v : 'owed'
 }
 
-export interface CrewFilters {
+interface CrewFilters {
   project?: string
   q?: string
   from?: string

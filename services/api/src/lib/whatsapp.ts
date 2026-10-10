@@ -95,7 +95,7 @@ export async function sendWhatsAppTemplate(
   return { message_id: json.messages?.[0]?.id ?? '' }
 }
 
-export interface WhatsAppStatusUpdate {
+interface WhatsAppStatusUpdate {
   id: string
   status: 'sent' | 'delivered' | 'read' | 'failed'
   error: string | null
@@ -175,7 +175,7 @@ export function whatsappOptChanges(body: unknown): Array<{ from: string; out: bo
   return out
 }
 
-export interface WhatsAppInbound {
+interface WhatsAppInbound {
   phoneNumberId: string
   from: string
   name: string | null

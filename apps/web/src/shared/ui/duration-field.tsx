@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cn } from './cn'
 
 /** "5 h", "2.5 h". */
-export function hoursLabelShort(hours: number): string {
+function hoursLabelShort(hours: number): string {
   const n = Math.round(hours * 2) / 2
   return `${Number.isInteger(n) ? n : n.toFixed(1)} h`
 }

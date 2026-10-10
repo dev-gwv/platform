@@ -62,15 +62,6 @@ export function DialogContent({
   )
 }
 
-export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('mb-4 space-y-1', className)} {...props} />
-}
-export function DialogTitle({ className, ...props }: ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn('text-lg font-semibold', className)} {...props} />
-}
-export function DialogDescription({ className, ...props }: ComponentProps<typeof DialogPrimitive.Description>) {
-  return <DialogPrimitive.Description className={cn('text-sm text-muted-foreground', className)} {...props} />
-}
 /**
  * The action row, pinned to the bottom of a scrolling dialog.
  *

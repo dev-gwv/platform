@@ -12,7 +12,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 
 const KEY = ['projects', 'quotation-terms'] as const
 /** Where the presets lived before they belonged to the studio (0227). */
-export const LOCAL_PRESET_KEY = 'ipc.quotation.presets'
+const LOCAL_PRESET_KEY = 'ipc.quotation.presets'
 
 /** The studio's quotation terms presets; the default comes first. */
 export function useTermsPresets(enabled = true) {

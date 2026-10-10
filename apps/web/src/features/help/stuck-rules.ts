@@ -11,8 +11,8 @@
  * The offer is made once per screen per visit.
  */
 export const IDLE_MS = 45_000
-export const REFUSALS = 2
-export const DISMISSALS = 2
+const REFUSALS = 2
+const DISMISSALS = 2
 
 export interface StuckState {
   /** When something last moved: arrived, typed, picked. */

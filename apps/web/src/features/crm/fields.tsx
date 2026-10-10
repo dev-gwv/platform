@@ -145,7 +145,7 @@ export function EventTypeChip({
 }
 
 /** The stages of a pipeline as picker options, inactive ones left out. */
-export function stageOptions(stages: readonly PipelineStage[], keep?: string | null): QuickOption[] {
+function stageOptions(stages: readonly PipelineStage[], keep?: string | null): QuickOption[] {
   return stages
     .filter((s) => s.is_active || s.id === keep)
     .map((s) => ({

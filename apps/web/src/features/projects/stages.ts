@@ -102,7 +102,7 @@ export function stageTone(d: Placed, stages: readonly DeliverableStage[]): Stage
 }
 
 /** A place a deliverable can be: a step, and optionally a named stage in it. */
-export interface StagePoint {
+interface StagePoint {
   status: StepKey
   code: string | null
   label: string

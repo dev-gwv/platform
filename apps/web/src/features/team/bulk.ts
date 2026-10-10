@@ -58,7 +58,7 @@ export interface PickableRole {
 }
 
 export type RowField = 'name' | 'phone' | 'email' | 'password'
-export type RowErrors = Partial<Record<RowField, string>>
+type RowErrors = Partial<Record<RowField, string>>
 
 let seq = 0
 export const newRow = (): BulkRow => ({

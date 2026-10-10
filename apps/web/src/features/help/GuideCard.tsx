@@ -6,7 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 
 /** Shown on this many visits at most, then only Help keeps the way in. */
-export const GUIDE_CARD_VISITS = 8
+const GUIDE_CARD_VISITS = 8
 
 let countedThisLoad = false
 

@@ -190,17 +190,6 @@ const ALIASES: Record<LeadColumn, readonly string[]> = {
   quality: ['quality', 'rating', 'temperature', 'grade', 'priority'],
 }
 
-/** Columns beyond the original five, for a UI that wants to say what it found. */
-export const EXTRA_LEAD_COLUMNS: readonly LeadColumn[] = [
-  'city',
-  'event_type',
-  'event_date',
-  'event_location',
-  'deal_value',
-  'alternate_phone',
-  'quality',
-]
-
 const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 /**

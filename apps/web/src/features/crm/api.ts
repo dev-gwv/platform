@@ -5,10 +5,8 @@ import {
   bulkUndoResponse,
   eraseLeadsResponse,
   cadence,
-  cadenceStartResponse,
   convertLeadRequest,
   convertLeadResponse,
-  createCadenceRequest,
   createLeadRequest,
   createLeadResponse,
   createQuoteRequest,
@@ -43,7 +41,6 @@ import {
   distributionRule,
   duplicateGroup,
   idResponse,
-  leadCadence,
   lostReason,
   mergeLeadsResponse,
   moveStageResponse,
@@ -61,9 +58,6 @@ import {
   type BulkUndoRequest,
   type ConvertLeadRequest,
   type CreateActivityRequest,
-  type CreateCadenceRequest,
-  type CreateContactRequest,
-  type CreateCrmCompanyRequest,
   type CreateDistributionRequest,
   type CreateLeadRequest,
   type CreateLostReasonRequest,
@@ -86,9 +80,6 @@ import {
   type SendTemplateRequest,
   type UpdateCrmUserPrefsRequest,
   type UpdateActivityRequest,
-  type UpdateCadenceRequest,
-  type UpdateContactRequest,
-  type UpdateCrmCompanyRequest,
   type UpdateCrmSettingsRequest,
   type UpdateDistributionRequest,
   type UpdateIntegrationRequest,
@@ -102,7 +93,6 @@ import {
   crmTag,
   type CreateTagRequest,
   type UpdateTagRequest,
-  type TagLeadsRequest,
 } from '@ipc/contracts'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -477,14 +467,6 @@ export function useSetLeadTags() {
   )
 }
 
-export function useTagLeads() {
-  return useCrmMutation(
-    (input: TagLeadsRequest) =>
-      callApi('/crm/leads/tags', { method: 'POST', body: input, responseSchema: z.object({ changed: z.number() }) }),
-    (r) => `${r.changed} ${r.changed === 1 ? 'lead' : 'leads'} updated`,
-  )
-}
-
 /**
  * Put a label on (or take it off) many leads at once, with Undo.
  *
@@ -527,59 +509,6 @@ export function useBulkLabel() {
 // ── cadences ──────────────────────────────────────────────────
 export function useCadences() {
   return useCrmQuery(['cadences'], () => callApi('/crm/cadences', { responseSchema: cadence.array() }), 60_000)
-}
-
-export function useCreateCadence() {
-  return useCrmMutation(
-    (input: CreateCadenceRequest) =>
-      callApi('/crm/cadences', {
-        method: 'POST',
-        body: createCadenceRequest.parse(input),
-        responseSchema: idResponse,
-      }),
-    'Cadence saved',
-  )
-}
-
-export function useUpdateCadence() {
-  return useCrmMutation(({ id, patch }: { id: string; patch: UpdateCadenceRequest }) =>
-    callApi(`/crm/cadences/${id}`, { method: 'PATCH', body: patch, responseSchema: noContent }),
-  )
-}
-
-export function useDeleteCadence() {
-  return useCrmMutation(
-    (id: string) => callApi(`/crm/cadences/${id}`, { method: 'DELETE', responseSchema: noContent }),
-    'Cadence deleted',
-  )
-}
-
-export function useLeadCadence(leadId: string) {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['crm', 'lead-cadence', leadId],
-    queryFn: () => callApi(`/crm/leads/${leadId}/cadence`, { responseSchema: leadCadence.nullable() }),
-    enabled: !!session && !!leadId,
-  })
-}
-
-export function useStartCadence() {
-  return useCrmMutation(
-    ({ leadId, cadence_id }: { leadId: string; cadence_id: string }) =>
-      callApi(`/crm/leads/${leadId}/cadence`, {
-        method: 'POST',
-        body: { cadence_id },
-        responseSchema: cadenceStartResponse,
-      }),
-    'Cadence started',
-  )
-}
-
-export function useStopCadence() {
-  return useCrmMutation(
-    (leadId: string) => callApi(`/crm/leads/${leadId}/cadence`, { method: 'DELETE', responseSchema: noContent }),
-    'Cadence stopped',
-  )
 }
 
 // ── lead → project ────────────────────────────────────────────
@@ -704,70 +633,12 @@ export function useContacts(opts: { q?: string; includeArchived?: boolean; compa
   return useCrmQuery(['contacts', qs], () => callApi(`/crm/contacts${qs ? `?${qs}` : ''}`, { responseSchema: crmContact.array() }), 30_000)
 }
 
-export function useContact(id: string | null) {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['crm', 'contact', id],
-    queryFn: () => callApi(`/crm/contacts/${id}`, { responseSchema: crmContact }),
-    enabled: !!session && !!id,
-  })
-}
-
-export function useCreateContact() {
-  return useCrmMutation(
-    (input: CreateContactRequest) => callApi('/crm/contacts', { method: 'POST', body: input, responseSchema: crmContact }),
-    'Contact added',
-  )
-}
-
-export function useUpdateContact() {
-  return useCrmMutation(
-    ({ id, patch }: { id: string; patch: UpdateContactRequest }) =>
-      callApi(`/crm/contacts/${id}`, { method: 'PATCH', body: patch, responseSchema: noContent }),
-    'Contact updated',
-  )
-}
-
 export function useCrmCompanies(includeArchived = false) {
   return useCrmQuery(
     ['companies', includeArchived ? 'all' : 'active'],
     () => callApi(`/crm/companies${includeArchived ? '?include_archived=1' : ''}`, { responseSchema: crmCompany.array() }),
     30_000,
   )
-}
-
-/** One company by id, for a link that arrives from somewhere else. */
-export function useCrmCompany(id: string | null) {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['crm', 'company', id],
-    queryFn: () => callApi(`/crm/companies/${id}`, { responseSchema: crmCompany }),
-    enabled: !!session && !!id,
-  })
-}
-
-export function useCreateCrmCompany() {
-  return useCrmMutation(
-    (input: CreateCrmCompanyRequest) => callApi('/crm/companies', { method: 'POST', body: input, responseSchema: crmCompany }),
-    'Company added',
-  )
-}
-
-export function useUpdateCrmCompany() {
-  return useCrmMutation(
-    ({ id, patch }: { id: string; patch: UpdateCrmCompanyRequest }) =>
-      callApi(`/crm/companies/${id}`, { method: 'PATCH', body: patch, responseSchema: noContent }),
-    'Company updated',
-  )
-}
-
-/** Deals on one contact or company, archived included so history is complete. */
-export function useDealsFor(filter: { contactId?: string; companyId?: string }) {
-  const params = new URLSearchParams({ include_archived: '1' })
-  if (filter.contactId) params.set('contact_id', filter.contactId)
-  if (filter.companyId) params.set('crm_company_id', filter.companyId)
-  const qs = params.toString()
-  return useCrmQuery(['leads', 'for', qs], () => callApi(`/crm/leads?${qs}`, { responseSchema: leadsList }), 15_000)
 }
 
 // ── forecast ──────────────────────────────────────────────────

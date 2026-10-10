@@ -25,7 +25,7 @@ export interface AccessInput {
  *   - a bare module key ("clients") grants View on that module
  *   - "{module}.{action}" ("clients.edit") grants that specific action
  */
-export function composeEffective(
+function composeEffective(
   profileKey: string | null | undefined,
   overrides: ReadonlyArray<AccessOverride> = [],
 ): Set<string> | null {

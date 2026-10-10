@@ -56,7 +56,7 @@ export const TONE_DOT: Record<Tone, string> = {
 }
 
 /** A fixed rotation, so the nth chip in a list is always the same colour. */
-export const TONE_CYCLE: readonly Tone[] = ['violet', 'blue', 'teal', 'green', 'amber', 'rose']
+const TONE_CYCLE: readonly Tone[] = ['violet', 'blue', 'teal', 'green', 'amber', 'rose']
 export const toneAt = (i: number): Tone => TONE_CYCLE[i % TONE_CYCLE.length]!
 
 /**

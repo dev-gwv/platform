@@ -6,7 +6,7 @@ import type { GettingStarted } from '@ipc/contracts'
  * Setup's own three steps (team, client, first project) are never repeated
  * here.
  */
-export interface StartStep {
+interface StartStep {
   key: 'logo' | 'package' | 'enquiry' | 'booking' | 'quotation'
   title: string
   done: boolean
@@ -15,7 +15,7 @@ export interface StartStep {
   action: string
 }
 
-export const START_DAYS = 60
+const START_DAYS = 60
 
 export function startSteps(g: GettingStarted): StartStep[] {
   return [
@@ -28,7 +28,7 @@ export function startSteps(g: GettingStarted): StartStep[] {
 }
 
 /** Days since the studio started, in whole days. */
-export function daysSince(iso: string, now = new Date()): number {
+function daysSince(iso: string, now = new Date()): number {
   const t = Date.parse(iso)
   if (Number.isNaN(t)) return 0
   return Math.floor((now.getTime() - t) / 86_400_000)

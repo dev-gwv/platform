@@ -57,10 +57,3 @@ export const settleStudioReferralRequest = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reopen') }),
 ])
 export type SettleStudioReferralRequest = z.infer<typeof settleStudioReferralRequest>
-
-/** A code as typed or carried in a link: letters and digits, 6–12. */
-export const studioRefCode = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z0-9]{6,12}$/)

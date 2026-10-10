@@ -42,8 +42,8 @@ const OPEN_LEGACY: readonly LegacyStatus[] = ['new', 'contacted', 'qualified', '
 export const isLegacyStatus = (v: unknown): v is LegacyStatus =>
   typeof v === 'string' && LEGACY_STAGES.some((s) => s.key === v)
 
-export const isOpenStatus = (s: LegacyStatus): boolean => s !== 'converted' && s !== 'lost'
-export const isOpenStage = (s: Pick<StageLike, 'kind'>): boolean => s.kind === 'open'
+const isOpenStatus = (s: LegacyStatus): boolean => s !== 'converted' && s !== 'lost'
+const isOpenStage = (s: Pick<StageLike, 'kind'>): boolean => s.kind === 'open'
 
 /** Stages in board order: by position, then by the order they were given. */
 export function sortStages<T extends Pick<StageLike, 'position'>>(stages: readonly T[]): T[] {

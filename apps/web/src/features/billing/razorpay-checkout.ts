@@ -4,7 +4,7 @@
  */
 const SCRIPT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 
-export interface CheckoutSuccess {
+interface CheckoutSuccess {
   razorpay_payment_id: string
   razorpay_order_id: string
   razorpay_signature: string
@@ -35,7 +35,7 @@ declare global {
 
 let loading: Promise<boolean> | null = null
 
-export function loadRazorpay(): Promise<boolean> {
+function loadRazorpay(): Promise<boolean> {
   if (window.Razorpay) return Promise.resolve(true)
   loading ??= new Promise<boolean>((resolve) => {
     const script = document.createElement('script')
@@ -51,7 +51,7 @@ export function loadRazorpay(): Promise<boolean> {
   return loading
 }
 
-export interface OpenCheckoutInput {
+interface OpenCheckoutInput {
   keyId: string
   razorpayOrderId: string
   amountRupees: number

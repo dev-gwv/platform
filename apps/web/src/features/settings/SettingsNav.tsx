@@ -25,7 +25,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
 
-export interface SettingsItem {
+interface SettingsItem {
   to: string
   label: string
   icon: LucideIcon
@@ -42,7 +42,7 @@ export interface SettingsItem {
   tabs?: readonly { to: string; label: string; module: ModuleKey }[]
 }
 
-export interface SettingsGroup {
+interface SettingsGroup {
   label: string
   items: readonly SettingsItem[]
 }

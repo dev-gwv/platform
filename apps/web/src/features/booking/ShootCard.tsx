@@ -237,7 +237,7 @@ function RoleCardView({
  * A booked person: face, name, hours -- and, for whoever plans crew, the
  * payout and anything else they are booked on that day.
  */
-export function BookedPerson({
+function BookedPerson({
   slot,
   canPlan,
   menu,

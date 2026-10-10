@@ -17,7 +17,7 @@ export interface EventRow {
   guests?: number | null
 }
 
-export const EMPTY_EVENT: EventRow = { event_type: null, event_date: null, location: null }
+const EMPTY_EVENT: EventRow = { event_type: null, event_date: null, location: null }
 
 /** A row the API will take: it has a name or a date. Blank rows are dropped. */
 export const toFunctions = (rows: readonly EventRow[]): LeadFunctionInput[] =>

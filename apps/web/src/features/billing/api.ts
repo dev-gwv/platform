@@ -20,7 +20,6 @@ import {
   type CreateInvoiceNoteTemplateRequest,
   type CreateInvoiceRequest,
   type CreateReceivedPaymentRequest,
-  type InvoiceListQuery,
   type ReceivedPayment,
   type RecordPaymentRequest,
   type UpdateInvoiceRequest,
@@ -36,7 +35,7 @@ const invoicesLegacy = invoiceListItem.array()
 const states = gstState.array()
 const anySchema = z.any()
 
-export interface InvoiceFilters {
+interface InvoiceFilters {
   search?: string | undefined
   status?: string | undefined
   client_id?: string | undefined
@@ -111,8 +110,6 @@ export function useInvoices(filters?: InvoiceFilters, { enabled = true }: { enab
     placeholderData: (prev) => prev,
   })
 }
-
-export type { InvoiceListQuery }
 
 export function useStates() {
   const { session } = useAuth()

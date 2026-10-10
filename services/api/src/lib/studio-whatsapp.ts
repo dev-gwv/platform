@@ -36,7 +36,7 @@ export async function readNumber(token: string, phoneNumberId: string): Promise<
   return { display_phone: r.display_phone_number ?? null, verified_name: r.verified_name ?? null }
 }
 
-export interface StudioTemplate {
+interface StudioTemplate {
   name: string
   language: string
   status: string

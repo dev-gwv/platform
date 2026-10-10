@@ -5,7 +5,7 @@
  *
  * Level comes from LOG_LEVEL (default 'info'); anything below it is dropped.
  */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const LEVELS: Record<LogLevel, number> = { debug: 20, info: 30, warn: 40, error: 50 }
 
@@ -15,7 +15,7 @@ export function setLogLevel(level: string | undefined): void {
   threshold = LEVELS[(level ?? 'info') as LogLevel] ?? LEVELS.info
 }
 
-export interface LogFields {
+interface LogFields {
   [key: string]: unknown
 }
 

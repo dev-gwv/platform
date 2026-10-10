@@ -7,9 +7,9 @@ import { stageOf } from './deliverable-stage'
  * what is late, what is due this week, the rest, what is waiting on a
  * reviewer, and what was delivered lately.
  */
-export type WorkSection = 'changes' | 'late' | 'week' | 'later' | 'review' | 'done'
+type WorkSection = 'changes' | 'late' | 'week' | 'later' | 'review' | 'done'
 
-export const SECTION_ORDER: readonly WorkSection[] = ['changes', 'late', 'week', 'later', 'review', 'done']
+const SECTION_ORDER: readonly WorkSection[] = ['changes', 'late', 'week', 'later', 'review', 'done']
 
 export const SECTION_LABEL: Record<WorkSection, string> = {
   changes: 'Changes asked',

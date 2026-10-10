@@ -1,5 +1,5 @@
 import type { CrmLead } from '@ipc/contracts'
-import { EMPTY_QUERY, applyQuery, dueBucket, isOpen, type LeadQuery, type QuickFilter } from './leads'
+import { EMPTY_QUERY, applyQuery, dueBucket, isOpen, type QuickFilter } from './leads'
 
 /**
  * The views a studio actually works from, as the only thing on screen.
@@ -21,7 +21,7 @@ export type BuiltinViewKey =
   | 'hot'
   | 'all'
 
-export interface BuiltinView {
+interface BuiltinView {
   key: BuiltinViewKey
   name: string
   /** Said under the name when the picker is open; never on the page itself. */
@@ -73,7 +73,3 @@ export function openingView(leads: readonly CrmLead[], now: Date): BuiltinViewKe
 
 export const viewName = (key: BuiltinViewKey): string =>
   BUILTIN_VIEWS.find((v) => v.key === key)?.name ?? 'All leads'
-
-/** A saved view's rows, narrowed the same way the built-ins are. */
-export const savedRows = (leads: readonly CrmLead[], query: LeadQuery, now: Date): CrmLead[] =>
-  applyQuery(leads, query, now)

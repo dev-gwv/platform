@@ -61,7 +61,7 @@ export function parseLegacyCsv(text: string): LegacyParse | null {
   return { rows, skipped }
 }
 
-export type LegacyState = 'active' | 'soon' | 'expired' | 'unknown'
+type LegacyState = 'active' | 'soon' | 'expired' | 'unknown'
 
 /** Same words as the old board: expired, expiring within 7 days, active. */
 export function legacyState(expires: string | null | undefined, today = todayInIndia()): LegacyState {

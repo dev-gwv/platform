@@ -40,14 +40,6 @@ export const pagination = z.object({
 })
 export type Pagination = z.infer<typeof pagination>
 
-/** Standard list envelope — every list endpoint returns this shape. */
-export function paginated<T extends z.ZodTypeAny>(item: T) {
-  return z.object({
-    items: z.array(item),
-    next_cursor: z.string().nullable(),
-  })
-}
-
 /** Uniform error body. Error strings are UI copy; diagnostics stay in logs. */
 export const apiError = z.object({
   error: z.string(),

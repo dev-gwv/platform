@@ -6,7 +6,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
 /** Where a payout stands, in the studio's words. */
-export type PayState = 'no_amount' | 'due' | 'part' | 'paid'
+type PayState = 'no_amount' | 'due' | 'part' | 'paid'
 
 export function payState(amount: number, paid: number): PayState {
   if (paid > 0 && paid + 0.001 >= amount) return 'paid'

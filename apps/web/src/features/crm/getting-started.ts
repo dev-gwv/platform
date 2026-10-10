@@ -8,7 +8,7 @@ import type { CrmLead } from '@ipc/contracts'
  * somebody has to remember to set. A checklist that can go stale is worse than
  * none, because it tells you to do something you did last week.
  */
-export interface StartStep {
+interface StartStep {
   key: string
   title: string
   detail: string
@@ -18,7 +18,7 @@ export interface StartStep {
   search?: Record<string, string>
 }
 
-export interface StartInput {
+interface StartInput {
   leads: readonly CrmLead[]
   /** Lead sources with a live webhook — a form or Meta pointed at us. */
   sourceCount: number

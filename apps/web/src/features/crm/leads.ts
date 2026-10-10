@@ -47,7 +47,7 @@ export function wonThisMonth(l: CrmLead, now: Date): boolean {
   return at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth()
 }
 
-export interface LeadSummary {
+interface LeadSummary {
   total: number
   uncontacted: number
   today: number
@@ -213,7 +213,7 @@ export function applyQuery(
  * Late first, then due today, then everything else — and hot before cold at
  * every level. The desk works top-down, so the order is the priority.
  */
-export function byUrgency(now: Date) {
+function byUrgency(now: Date) {
   const rank = (l: CrmLead): number => {
     const bucket = dueBucket(l, now)
     if (bucket === 'overdue') return 0

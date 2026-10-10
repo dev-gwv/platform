@@ -4,7 +4,7 @@ import { withService } from './db'
 import { verifyToken } from './auth-token'
 import { describeError, log } from './log'
 
-export type ClientViewKind = 'quotation' | 'invoice' | 'terms'
+type ClientViewKind = 'quotation' | 'invoice' | 'terms'
 
 /**
  * Note that the client opened a document link (0235), for the project's

@@ -7,7 +7,7 @@ import type { ShootListItem, TeamMember, TeamSlot } from '@ipc/contracts'
  */
 
 /** Role names match the way a person types them: case and spacing do not count. */
-export const sameRole = (a: string | null | undefined, b: string | null | undefined) =>
+const sameRole = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? '').trim().replace(/\s+/g, ' ').toLowerCase() === (b ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
 const live = (s: TeamSlot) => s.status === 'booked'
@@ -49,7 +49,7 @@ export function roleCards(shoot: Pick<ShootListItem, 'id' | 'requirements'>, slo
   return { cards, extra: mine.filter((s) => !used.has(s.id)) }
 }
 
-export type Staffing = 'none' | 'empty' | 'partial' | 'full'
+type Staffing = 'none' | 'empty' | 'partial' | 'full'
 
 /** Seats needed and filled (capped per role), and what that adds up to. */
 export function staffing(shoot: Pick<ShootListItem, 'id' | 'requirements'>, slots: readonly TeamSlot[]) {
@@ -63,7 +63,7 @@ export function staffing(shoot: Pick<ShootListItem, 'id' | 'requirements'>, slot
 // ── dates ──────────────────────────────────────────────────────────
 const pad = (n: number) => String(n).padStart(2, '0')
 /** The calendar day an instant falls on, where the viewer is. */
-export const localDay = (iso: string) => {
+const localDay = (iso: string) => {
   const d = new Date(iso)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
@@ -75,8 +75,6 @@ export function monthDays(month: string): string[] {
   const last = new Date(y, m, 0).getDate()
   return Array.from({ length: last }, (_, i) => `${y}-${pad(m)}-${pad(i + 1)}`)
 }
-
-export const monthOf = (day: string) => day.slice(0, 7)
 
 export function shiftMonth(month: string, by: number): string {
   const [y, m] = month.split('-').map(Number) as [number, number]

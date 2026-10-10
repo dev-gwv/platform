@@ -8,9 +8,7 @@ import type { CrmLead } from '@ipc/contracts'
  * compared them. The server derives the state; this turns it into the words
  * and the tone a row shows.
  */
-export type DateState = CrmLead['date_status']
-
-export interface DateVerdict {
+interface DateVerdict {
   /** Null only when there is no date to judge. */
   label: string | null
   tone: 'success' | 'warning' | 'danger' | 'neutral'

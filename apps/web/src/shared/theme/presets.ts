@@ -11,7 +11,7 @@ import type { ThemeFontKey } from '@ipc/contracts'
  * per preset would drag its light value into dark mode and wreck the contrast
  * the dark palette was tuned for.
  */
-export interface Swatch {
+interface Swatch {
   /** oklch lightness 0–1. */
   l: number
   /** oklch chroma. */

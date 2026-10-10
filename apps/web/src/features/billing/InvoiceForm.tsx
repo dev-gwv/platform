@@ -11,11 +11,11 @@ import { appliedTotal, type AppliedPayment } from './project-lines'
 import { useInvoiceBankAccounts, useInvoiceNoteTemplates, useCreateInvoiceNoteTemplate } from './api'
 import { todayInIndia } from '@/shared/ui/days-left'
 
-export { toAmount, type InvoiceLineDraft } from './invoice-math'
+export { type InvoiceLineDraft } from './invoice-math'
 
 export const GST_SLABS: GstSlab[] = [0, 5, 12, 18, 28]
 
-export const todayISO = () => todayInIndia()
+const todayISO = () => todayInIndia()
 
 export function addDaysISO(iso: string, days: number): string {
   const d = new Date(iso || todayISO())

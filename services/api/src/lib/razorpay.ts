@@ -23,7 +23,7 @@ export async function verifyRazorpaySignature(
   return timingSafeEqual(toHex(mac), signatureHex)
 }
 
-export interface RazorpayOrder {
+interface RazorpayOrder {
   id: string
   amount: number
   currency: string
@@ -59,7 +59,7 @@ export async function createRazorpayOrder(
   return { id: body.id, amount: body.amount ?? 0, currency: body.currency ?? 'INR' }
 }
 
-export interface RazorpayPayment {
+interface RazorpayPayment {
   id: string
   status: string
   amount: number

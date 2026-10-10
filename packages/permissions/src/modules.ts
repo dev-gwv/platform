@@ -337,33 +337,3 @@ export const MODULES: Readonly<Record<ModuleKey, ModuleDef>> = {
 }
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[]
-
-/** Modules whose direct-URL access is blocked at the frontend route guard. */
-export const ROUTE_GUARDED_MODULES: ReadonlyArray<ModuleKey> = [
-  'money',
-  'billing',
-  'financials',
-  'company_expenses',
-  'lead_sources',
-  'lead_source_integration',
-  'crm',
-  'crm_export',
-  'team_terms',
-  'team_roles',
-  'settings',
-  'settings_subscription',
-  'settings_security',
-  'settings_integrations',
-  'studio_access',
-  'usage_analytics',
-]
-
-/** Resolve a pathname to the first module whose patterns match it. */
-export function moduleForPath(pathname: string): ModuleDef | null {
-  for (const mod of Object.values(MODULES)) {
-    for (const pat of mod.routePatterns) {
-      if (pathname === pat || pathname.startsWith(pat + '/')) return mod
-    }
-  }
-  return null
-}

@@ -122,7 +122,7 @@ export function DirectoryFiltersBar({
  * Contact-completeness badges (Lovable parity): at a glance, who cannot be
  * reached and who cannot sign in.
  */
-export function ContactBadges({ member }: { member: DirectoryMember }) {
+function ContactBadges({ member }: { member: DirectoryMember }) {
   // Owner only (the query is off for everyone else): how complete their profile is.
   const gap = useTeamProfileGaps().data?.find((g) => g.user_id === member.user_id)
   return (

@@ -7,7 +7,7 @@ import { open } from './secret-box'
 import { sendWhatsAppTemplate, sendWhatsAppText } from './whatsapp'
 import { describeError, log } from './log'
 
-export interface SequenceSendSummary {
+interface SequenceSendSummary {
   claimed: number
   sent: number
   failed: number

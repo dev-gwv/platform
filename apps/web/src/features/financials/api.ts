@@ -24,7 +24,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 
 const expenses = expense.array()
 
-export interface ExpenseFilters {
+interface ExpenseFilters {
   search?: string | undefined
   category?: string | undefined
   project_id?: string | undefined
@@ -68,7 +68,6 @@ const expensePage = z.object({
   page: z.number().int(),
   page_size: z.number().int(),
 })
-export type ExpensePage = z.infer<typeof expensePage>
 
 /**
  * A page of expenses, with the real total behind it.
@@ -89,30 +88,6 @@ export function useExpensePage(filters: ExpenseFilters & { page: number; page_si
   return useQuery({
     queryKey: ['expenses', 'page', qs],
     queryFn: () => callApi(`/financials/expenses?${qs}`, { responseSchema: expensePage }),
-    enabled: !!session && access.hasModule('company_expenses'),
-    staleTime: 15_000,
-  })
-}
-
-export function useExpenses(filters: ExpenseFilters = {}) {
-  const { session } = useAuth()
-  const access = useAccess()
-  const params = new URLSearchParams()
-  if (filters.search?.trim()) params.set('search', filters.search.trim())
-  if (filters.category) params.set('category', filters.category)
-  if (filters.project_id) params.set('project_id', filters.project_id)
-  if (filters.date_from) params.set('date_from', filters.date_from)
-  if (filters.date_to) params.set('date_to', filters.date_to)
-  if (filters.min_amount) params.set('min_amount', filters.min_amount)
-  if (filters.max_amount) params.set('max_amount', filters.max_amount)
-  if (filters.sort) params.set('sort', filters.sort)
-  if (filters.dir) params.set('dir', filters.dir)
-  if (filters.page) params.set('page', String(filters.page))
-  if (filters.page_size) params.set('page_size', String(filters.page_size))
-  const qs = params.toString()
-  return useQuery({
-    queryKey: ['expenses', qs],
-    queryFn: () => callApi(`/financials/expenses${qs ? `?${qs}` : ''}`, { responseSchema: expenses }),
     enabled: !!session && access.hasModule('company_expenses'),
     staleTime: 15_000,
   })

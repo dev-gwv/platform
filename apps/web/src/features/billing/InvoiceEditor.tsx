@@ -56,7 +56,7 @@ import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-f
 import { todayInIndia } from '@/shared/ui/days-left'
 
 /** Payment terms as a studio says them, and how many days each allows. */
-export const PAYMENT_TERMS: { label: string; days: number | null }[] = [
+const PAYMENT_TERMS: { label: string; days: number | null }[] = [
   { label: 'Due on receipt', days: 0 },
   { label: 'Net 7', days: 7 },
   { label: 'Net 15', days: 15 },

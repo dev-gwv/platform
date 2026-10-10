@@ -32,7 +32,7 @@ function save(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export const safeFileName = (s: string) =>
+const safeFileName = (s: string) =>
   s.replace(/[^\w-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'qr-code'
 
 /** Splits text into lines that fit the width. */

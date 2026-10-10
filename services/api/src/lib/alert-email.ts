@@ -94,7 +94,7 @@ export function alertEmail(env: Env, rows: readonly AlertRow[]): { subject: stri
   return { subject, html, text }
 }
 
-export interface AlertEmailSummary {
+interface AlertEmailSummary {
   due: number
   people: number
   sent: number

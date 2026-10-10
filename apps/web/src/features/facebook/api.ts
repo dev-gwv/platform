@@ -24,7 +24,6 @@ const importsResponse = z.object({
   items: fbLeadImport.array(),
   summary: fbImportsSummary,
 })
-export type FbImportsResponse = z.infer<typeof importsResponse>
 
 function useMetaQuery<T>(key: readonly unknown[], fn: () => Promise<T>, staleTime = 30_000) {
   const { session } = useAuth()

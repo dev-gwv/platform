@@ -144,7 +144,7 @@ export function ShareTermsPanel({
 }
 
 /** One line on what happened to the email: sent (green), or why not (red), in plain words. */
-export function EmailOutcomeLine({ outcome }: { outcome: EmailOutcome | null }) {
+function EmailOutcomeLine({ outcome }: { outcome: EmailOutcome | null }) {
   if (!outcome || outcome.status === 'not_requested') return null
   if (outcome.status === 'sent') {
     return (

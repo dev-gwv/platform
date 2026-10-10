@@ -3,80 +3,22 @@ import { Check, Copy, Eye, FileText, Mail, MessageCircle, Pencil, RotateCcw, Sen
 import { toast } from 'sonner'
 import type { CrmQuote, QuoteStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent } from '@/shared/ui/card'
-import { Select } from '@/shared/ui/input'
-import { SkeletonList } from '@/shared/ui/skeleton'
-import { StatCard } from '@/shared/ui/stat-card'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { humanize } from '@/shared/ui/format'
-import { Money, useINR } from '@/shared/money/MoneyMask'
+import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useDeleteQuote, useQuotes, useSendQuote, useSetQuoteOutcome } from '../api'
+import { useDeleteQuote, useSendQuote, useSetQuoteOutcome } from '../api'
 import { QuoteViewer } from '../QuoteViewer'
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
 
-export const QUOTE_TONE: Record<QuoteStatus, 'neutral' | 'info' | 'success' | 'danger' | 'warning'> = {
+const QUOTE_TONE: Record<QuoteStatus, 'neutral' | 'info' | 'success' | 'danger' | 'warning'> = {
   draft: 'neutral',
   sent: 'info',
   accepted: 'success',
   declined: 'danger',
   expired: 'warning',
-}
-
-/** Every quote the studio has made, newest first, with what happened to it. */
-export function QuotesTab({ onOpen }: { onOpen: (leadId: string) => void }) {
-  const { data, isLoading, isError, error, refetch } = useQuotes()
-  const [status, setStatus] = useState<QuoteStatus | ''>('')
-  const rows = (data ?? []).filter((q) => !status || q.status === status)
-  const open = (data ?? []).filter((q) => q.status === 'sent')
-  const accepted = (data ?? []).filter((q) => q.status === 'accepted')
-  const sum = (qs: CrmQuote[]) => qs.reduce((s, q) => s + q.total, 0)
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Awaiting answer" value={open.length} />
-        <StatCard label="Out for acceptance" value={<Money value={sum(open)} />} />
-        <StatCard label="Accepted" value={accepted.length} />
-        <StatCard label="Accepted value" value={<Money value={sum(accepted)} />} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={status} onChange={(e) => setStatus(e.target.value as QuoteStatus | '')} className="w-40" aria-label="Status">
-          <option value="">All statuses</option>
-          {(['draft', 'sent', 'accepted', 'declined', 'expired'] as QuoteStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <p className="text-sm text-muted-foreground">Quotes are made from a deal: open one and press “New quote”.</p>
-      </div>
-      {isLoading ? (
-        <SkeletonList rows={5} columns={5} />
-      ) : isError ? (
-        <ErrorState error={error} onRetry={() => void refetch()} />
-      ) : rows.length === 0 ? (
-        <Card>
-          <CardContent className="py-4">
-            <EmptyState title="No quotes yet." description="Open a deal and create one; the client gets a link to accept." />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <ul className="divide-y divide-border">
-              {rows.map((q) => (
-                <QuoteRow key={q.id} quote={q} onOpen={() => onOpen(q.lead_id)} onEdit={q.status === 'draft' ? () => onOpen(q.lead_id) : undefined} />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
 }
 
 /** One quote with its actions; used by the tab and by the drawer's quote panel. */

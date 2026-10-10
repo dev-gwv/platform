@@ -224,7 +224,7 @@ export function navDestinations(role: string, access: Access, isPlatformAdmin: b
 /** The hue a header shortcut wears. Cosmetic only — see --tone-* in styles.css. */
 export type QuickTone = 'blue' | 'green' | 'violet'
 
-export interface QuickLink extends NavLeaf {
+interface QuickLink extends NavLeaf {
   tone: QuickTone
 }
 

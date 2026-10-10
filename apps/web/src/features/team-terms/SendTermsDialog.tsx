@@ -26,7 +26,7 @@ const TONE: Record<TeamTermsStatus, 'neutral' | 'info' | 'success' | 'warning' |
 }
 
 /** Where a send has got to, for a shoot card or a list row. */
-export function TeamTermsStatusBadge({ send }: { send: TeamTermsSend }) {
+function TeamTermsStatusBadge({ send }: { send: TeamTermsSend }) {
   return <StatusBadge tone={TONE[send.status]}>{humanize(send.status)}</StatusBadge>
 }
 

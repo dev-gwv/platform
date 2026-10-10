@@ -11,7 +11,7 @@ import { todayInIndia } from '@/shared/ui/days-left'
  */
 
 /** Anyone whose job role says edit, retouch, design or colour goes first. */
-export const isEditorRole = (roles: readonly string[]) => roles.some((r) => /edit|retouch|design|colou?r/i.test(r))
+const isEditorRole = (roles: readonly string[]) => roles.some((r) => /edit|retouch|design|colou?r/i.test(r))
 
 /** "Free", "2 in hand", "3 in hand · 1 late", "2 in hand · 1 due this week". */
 export function workloadText(w: Pick<DeliverableWorkload, 'open' | 'late' | 'due_week'> | undefined): string {

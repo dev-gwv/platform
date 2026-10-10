@@ -5,7 +5,7 @@ import { issueInvoiceLink } from './api'
 import { shortDate } from './status'
 
 /** What a message about an invoice needs to say. */
-export interface InvoiceForShare {
+interface InvoiceForShare {
   id: string
   invoice_number: string
   total: number

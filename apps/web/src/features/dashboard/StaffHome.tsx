@@ -30,7 +30,7 @@ import { myDay, openWorkLine, type TodayItem } from './today'
  * Everything given to the signed-in person, worked out once: their day in
  * time order, the week after it, and how much else is open.
  */
-export function useMyDay() {
+function useMyDay() {
   const { session } = useAuth()
   const me = session?.user_id ?? null
   // Only their own bookings, from two months back (cards still owed) on --

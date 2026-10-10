@@ -37,7 +37,7 @@ export function documentFilename(name: string): string {
   return (clean || 'Document').slice(0, 120)
 }
 
-export function downloadDocument(name: string): void {
+function downloadDocument(name: string): void {
   const previous = document.title
   let restored = false
   const restore = () => {

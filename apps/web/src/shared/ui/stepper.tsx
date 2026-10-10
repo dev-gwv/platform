@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { cn } from './cn'
 
-export interface StepperStep<T extends string> {
+interface StepperStep<T extends string> {
   value: T
   label: string
 }

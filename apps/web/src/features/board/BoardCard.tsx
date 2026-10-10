@@ -13,7 +13,7 @@ import { TONE_CLASSES, stageName, stageTone } from '@/features/projects/stages'
 const fromControl = (e: { target: EventTarget }) =>
   !!(e.target as HTMLElement).closest('button, a, select, input, label, form, [role="checkbox"]')
 
-export interface CardProps {
+interface CardProps {
   d: BoardDeliverable
   stages: readonly DeliverableStage[]
   /** Show where it stands (the People view); lanes already say it. */

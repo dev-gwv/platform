@@ -9,10 +9,10 @@ import type { LearnNote, LearnSignals } from '@ipc/contracts'
  * studio has three projects or the person has had their login two weeks.
  * After that only the small "Watch how" beside the page title is left.
  */
-export type LearnArea = 'team' | 'client' | 'project'
+type LearnArea = 'team' | 'client' | 'project'
 
 /** Which job each video teaches. A video not listed here never retires by count. */
-export const LEARN_AREA: Record<string, LearnArea> = {
+const LEARN_AREA: Record<string, LearnArea> = {
   team: 'team',
   'team-bulk': 'team',
   client: 'client',
@@ -24,11 +24,11 @@ export const LEARN_AREA: Record<string, LearnArea> = {
 }
 
 /** Done twice: they know the way. */
-export const DONE_ENOUGH = 2
+const DONE_ENOUGH = 2
 /** Every get-started card goes after this many projects... */
-export const PROJECTS_TO_GRADUATE = 3
+const PROJECTS_TO_GRADUATE = 3
 /** ...or this many days on the app. */
-export const DAYS_TO_GRADUATE = 14
+const DAYS_TO_GRADUATE = 14
 
 const DAY = 86_400_000
 
@@ -47,7 +47,7 @@ export function isRetired(key: string, signals: LearnSignals, note: LearnNote | 
 }
 
 /** A video counts as watched once 90% of it has played. */
-export const WATCHED_SHARE = 0.9
+const WATCHED_SHARE = 0.9
 
 export function watchedEnough(played: number, duration: number): boolean {
   return duration > 0 && played / duration >= WATCHED_SHARE

@@ -98,9 +98,9 @@ const normalise = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
-export type AssistantStatus = 'answered' | 'escalated' | 'skipped' | 'failed'
+type AssistantStatus = 'answered' | 'escalated' | 'skipped' | 'failed'
 
-export interface AssistantResult {
+interface AssistantResult {
   status: AssistantStatus
   answer: string
   sources: AssistantSource[]
@@ -112,7 +112,7 @@ export interface AssistantResult {
   error: string | null
 }
 
-export interface AskOptions {
+interface AskOptions {
   provider: ChatProvider
   help: HelpContext
   prompt?: string | null | undefined

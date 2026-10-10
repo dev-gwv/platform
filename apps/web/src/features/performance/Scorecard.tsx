@@ -4,7 +4,7 @@ import { IconTile, type Tone } from '@/shared/ui/icon-tile'
 import { cn } from '@/shared/ui/cn'
 
 /** Green from 85, amber from 60, rose below. The same bands everywhere. */
-export function scoreTone(score: number | null | undefined): Tone {
+function scoreTone(score: number | null | undefined): Tone {
   if (score == null) return 'muted'
   if (score >= 85) return 'green'
   if (score >= 60) return 'amber'
@@ -50,7 +50,7 @@ interface Part {
 }
 
 /** The four parts in plain words, the way the score is built. */
-export function scoreParts(c: MemberScorecard): Part[] {
+function scoreParts(c: MemberScorecard): Part[] {
   const w = c.work
   const q = c.quality
   const s = c.shoots

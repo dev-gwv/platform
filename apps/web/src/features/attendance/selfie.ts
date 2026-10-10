@@ -3,7 +3,7 @@
  * enough to recognise a face, about 30–60 KB, quick to send on a shoot-day
  * connection, and far under the 1 MB every upload is held to.
  */
-export const SELFIE_MAX = 480
+const SELFIE_MAX = 480
 
 /** The size that fits inside `max` on its long side, never larger than the original. */
 export function fitWithin(width: number, height: number, max = SELFIE_MAX): { width: number; height: number } {

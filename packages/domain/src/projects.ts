@@ -150,7 +150,7 @@ export function findWeddingShoot(
 }
 
 /** The day the promised clock starts. Null when that day is not known yet. */
-export function dueBasisAnchor(
+function dueBasisAnchor(
   basis: DueBasis,
   shoots: ReadonlyArray<NamedShootDate>,
   today: string,

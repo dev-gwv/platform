@@ -87,7 +87,7 @@ export interface Reason {
 }
 
 /** Every piece of footage not yet safe: never handed in, not in two places, or with a problem. */
-export const dataProblemsOf = (c: ProjectCounters) => c.data_records_unverified + (c.data_missing ?? 0) + (c.data_issues ?? 0)
+const dataProblemsOf = (c: ProjectCounters) => c.data_records_unverified + (c.data_missing ?? 0) + (c.data_issues ?? 0)
 
 /**
  * Completion counts tasks and deliverables together: a project with every task
@@ -125,7 +125,7 @@ export const lateOf = (c: ProjectCounters) => c.tasks_overdue + (c.deliverables_
  * a shoot short of crew, money overdue, and last whether the work is planned.
  * The next action is simply the first reason's action.
  */
-export function reasonsFor(c: ProjectCounters, completion: number): Reason[] {
+function reasonsFor(c: ProjectCounters, completion: number): Reason[] {
   if (c.status === 'cancelled') return []
   const out: Reason[] = []
   const data = dataProblemsOf(c)

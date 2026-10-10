@@ -90,7 +90,7 @@ const DELIVERABLE_TONE: Record<DeliverableKind, Tone> = {
   other: 'muted',
 }
 
-export const EVENT_ICON: Record<EventKind, LucideIcon> = {
+const EVENT_ICON: Record<EventKind, LucideIcon> = {
   prewedding: MapPin,
   engagement: Gem,
   haldi: Sun,

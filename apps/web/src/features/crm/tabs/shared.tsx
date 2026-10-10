@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Archive, Flame } from 'lucide-react'
-import type { CrmLead, InboxColumn, LeadStatus, StageKind } from '@ipc/contracts'
+import type { CrmLead, InboxColumn, LeadStatus } from '@ipc/contracts'
 import { stageLabel } from '@ipc/domain'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useINR } from '@/shared/money/MoneyMask'
@@ -13,7 +13,7 @@ import { dateVerdict, worthFlagging } from '../availability'
 import { TagChips } from '../TagChip'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
-export const SOURCE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
+const SOURCE_TONE: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
   facebook: 'info',
   webform: 'neutral',
   referral: 'success',
@@ -30,11 +30,8 @@ export const STAGE_TONE: Record<LeadStatus, 'info' | 'success' | 'warning' | 'ne
   lost: 'danger',
 }
 
-/** The badge tone for a stage by what it means, so a custom stage reads like the legacy one. */
-export const stageTone = (kind: StageKind): 'info' | 'success' | 'danger' => (kind === 'won' ? 'success' : kind === 'lost' ? 'danger' : 'info')
-
 /** The stage a deal shows: its own stage name when the pipeline has one, else the status. */
-export const leadStageLabel = (l: CrmLead): string => stageLabel(l.status, l.stage_name)
+const leadStageLabel = (l: CrmLead): string => stageLabel(l.status, l.stage_name)
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
 export const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
@@ -50,7 +47,7 @@ export const isoDay = (d: Date) => d.toISOString().slice(0, 10)
  * apart. Privyr answers it with a label and a dot on the row, which is what
  * this is; `isUncontacted` has computed the state all along.
  */
-export function UncontactedBadge({ lead }: { lead: CrmLead }) {
+function UncontactedBadge({ lead }: { lead: CrmLead }) {
   if (!isUncontacted(lead)) return null
   return (
     <StatusBadge tone="info" className="gap-1.5">

@@ -17,7 +17,7 @@ import {
 } from './delegation'
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
-export const formatDay = (iso: string) => dayFormat.format(new Date(`${iso}T00:00:00`))
+const formatDay = (iso: string) => dayFormat.format(new Date(`${iso}T00:00:00`))
 
 const PRIORITY_TONE: Record<TaskPriority, 'danger' | 'warning' | 'neutral' | 'info'> = {
   urgent: 'danger',

@@ -44,22 +44,6 @@ export function useMembers() {
   })
 }
 
-export function useBookSlot() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: BookSlotRequest) =>
-      callApi('/allocation', {
-        method: 'POST',
-        body: input,
-        responseSchema: z.object({ id: z.string() }),
-      }),
-    onSuccess: () => {
-      toast.success('Crew booked')
-      refreshBookings(qc)
-    },
-  })
-}
-
 /**
  * Book several at once (bulk assign). Resolves with a result per item rather
  * than throwing on the first clash; the caller reports what went in.

@@ -20,7 +20,7 @@ import { describeError, log } from './log'
  * written by the caller either way, which is what keeps a bench with no DSN
  * exactly as debuggable as it was.
  */
-export interface ReportContext {
+interface ReportContext {
   requestId: string
   method: string
   path: string

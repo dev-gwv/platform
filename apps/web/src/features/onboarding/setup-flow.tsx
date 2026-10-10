@@ -10,15 +10,12 @@ import { checkpointsFor, isSetupAudience, nextStep, SETUP_TOTAL, setupLanding, s
 import { SetupCheckpoints } from './SetupCheckpoints'
 
 /**
- * The setup walk-through's thread through the rest of the app.
+ * Whether this page was opened from setup. Reactive to navigation.
  *
  * Every setup step links out with `?from=setup`. That one marker is what lets
  * a page reached from setup behave like a step of it: say which step it is at
  * the top, and, once its job is done, move straight on to the next step.
  */
-export const SETUP_SEARCH = { from: 'setup' } as const
-
-/** Whether this page was opened from setup. Reactive to navigation. */
 export function useFromSetup(): boolean {
   const { search } = useLocation()
   return (search as Record<string, unknown>).from === 'setup'

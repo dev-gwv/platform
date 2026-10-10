@@ -69,7 +69,7 @@ export const PROJECT_GROUPS = [
   // eight across the top; ?tab=referrals opens here as before.
   { value: 'wishes', label: 'Wishes', icon: Cake, views: ['wishes', 'referrals'] },
 ] as const satisfies ReadonlyArray<{ value: string; label: string; icon: LucideIcon; views: readonly ProjectTab[] }>
-export type ProjectGroup = (typeof PROJECT_GROUPS)[number]['value']
+type ProjectGroup = (typeof PROJECT_GROUPS)[number]['value']
 
 /** The group a view sits under. */
 export function groupOf(view: ProjectTab): ProjectGroup {
@@ -101,7 +101,7 @@ export function visibleViews(
 }
 
 /** Tabs for things this person cannot use are not shown at all. */
-export function useVisibleProjectTabs(): ProjectTab[] {
+function useVisibleProjectTabs(): ProjectTab[] {
   const access = useAccess()
   return visibleViews({ module: (m) => access.hasModule(m), action: (m, a) => access.hasAction(m, a) })
 }

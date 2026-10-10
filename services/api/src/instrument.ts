@@ -102,5 +102,3 @@ if (dsn) {
 
   Sentry.setTag('service', 'ipc-api')
 }
-
-export const sentryEnabled = Boolean(dsn)

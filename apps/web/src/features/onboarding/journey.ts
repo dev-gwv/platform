@@ -26,7 +26,7 @@ export interface StudioSignals {
 
 export type JourneyStepState = 'done' | 'current' | 'upcoming'
 
-export interface JourneyStepDef {
+interface JourneyStepDef {
   key: JourneyStepKey
   title: string
   /** One line: why this step matters. */
@@ -47,7 +47,7 @@ export interface JourneyStep extends JourneyStepDef {
   state: JourneyStepState
 }
 
-export interface Journey {
+interface Journey {
   steps: JourneyStep[]
   /** The first step still outstanding, or null when all are done. */
   current: JourneyStep | null

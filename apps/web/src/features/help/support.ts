@@ -2,7 +2,7 @@
  * The message Help opens WhatsApp or email with: who is asking, from where,
  * so support can answer without asking back. The person still presses Send.
  */
-export interface SupportContext {
+interface SupportContext {
   studio: string
   name: string
   role: string

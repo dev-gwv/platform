@@ -11,7 +11,7 @@
  */
 import type { TeamTermsCategory, TeamTermsMode } from '@ipc/contracts'
 
-export type LibraryCategory = TeamTermsCategory
+type LibraryCategory = TeamTermsCategory
 
 export const CATEGORY_LABELS: Record<LibraryCategory, string> = {
   pre_production: 'Pre-production',
@@ -21,17 +21,7 @@ export const CATEGORY_LABELS: Record<LibraryCategory, string> = {
   business_protection: 'Business Protection',
 }
 
-export const CATEGORY_FILTERS: { value: LibraryCategory | 'all' | 'archived'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'pre_production', label: 'Pre-production' },
-  { value: 'production', label: 'Production' },
-  { value: 'post_production', label: 'Post-production' },
-  { value: 'general', label: 'General' },
-  { value: 'business_protection', label: 'Business Protection' },
-  { value: 'archived', label: 'Archived' },
-]
-
-export interface LibraryTemplate {
+interface LibraryTemplate {
   key: string
   title: string
   description: string
@@ -353,11 +343,3 @@ export const TEMPLATE_LIBRARY: LibraryTemplate[] = [
 ]
 
 // Infer a category for an employee role by name when role.category is not set.
-export function inferRoleCategory(name: string): LibraryCategory | 'other' {
-  const n = name.toLowerCase()
-  if (/(photograph|cinemato|videograph|drone|bts|lighting|assistant.*photo)/.test(n))
-    return 'production'
-  if (/(edit|colou?rist|retouch|album|reel|highlight)/.test(n)) return 'post_production'
-  if (/(coordinator|planner|creative director|client servic)/.test(n)) return 'pre_production'
-  return 'other'
-}

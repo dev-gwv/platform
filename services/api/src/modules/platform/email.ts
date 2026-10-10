@@ -9,7 +9,7 @@ import { audit } from '../../lib/audit'
 import { deliver } from '../../lib/email'
 
 /** "Studio AutoPilot <noreply@mail.studioautopilot.in>" → "mail.studioautopilot.in". */
-export function domainOf(from: string | undefined | null): string | null {
+function domainOf(from: string | undefined | null): string | null {
   if (!from) return null
   const address = /<([^>]+)>/.exec(from)?.[1] ?? from.trim()
   const at = address.lastIndexOf('@')

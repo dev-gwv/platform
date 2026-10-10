@@ -6,7 +6,7 @@ import type { HintNote } from '@ipc/contracts'
  * assignments… otherwise they will get irritated", with a way to close it
  * for good.
  */
-export const ASSIGN_NOTE_TIMES = 6
+const ASSIGN_NOTE_TIMES = 6
 
 /** Whether the note still has showings left for this person. */
 export function noteDue(hint: HintNote | undefined, times = ASSIGN_NOTE_TIMES): boolean {

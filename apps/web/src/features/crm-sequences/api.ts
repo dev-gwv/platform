@@ -137,7 +137,7 @@ export function useLeadSequence(leadId: string) {
 }
 
 // ── Higher-tier switches and branding ────────────────────────
-export function useFeatures() {
+function useFeatures() {
   const { session } = useAuth()
   return useQuery({
     queryKey: ['features'],

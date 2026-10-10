@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { party, z, type CreatePartyRequest, type UpdatePartyRequest } from '@ipc/contracts'
+import { party, type CreatePartyRequest, type UpdatePartyRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
@@ -38,18 +38,6 @@ export function useUpdateParty() {
       callApi(`/parties/${id}`, { method: 'PATCH', body: patch, responseSchema: party }),
     onSuccess: () => {
       toast.success('Party updated')
-      void qc.invalidateQueries({ queryKey: ['parties'] })
-    },
-  })
-}
-
-export function useDeleteParty() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) =>
-      callApi(`/parties/${id}`, { method: 'DELETE', responseSchema: z.unknown() }),
-    onSuccess: () => {
-      toast.success('Party removed')
       void qc.invalidateQueries({ queryKey: ['parties'] })
     },
   })

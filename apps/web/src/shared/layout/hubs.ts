@@ -66,7 +66,7 @@ export const MONEY: readonly HubTab[] = [
 ]
 
 /** The hubs that draw their own tab row (not the settings ones). */
-export const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME, PROJECTS_HUB, MONEY]
+const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME, PROJECTS_HUB, MONEY]
 
 /**
  * The hub whose tab row belongs on this exact page, if any. A page in two

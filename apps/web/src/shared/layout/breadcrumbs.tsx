@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { Fragment } from 'react'
 
-export interface Crumb {
+interface Crumb {
   label: string
   to?: string
 }

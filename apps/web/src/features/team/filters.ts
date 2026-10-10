@@ -85,7 +85,7 @@ const csvCell = (v: string | number | null): string => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-export const CSV_HEADERS = [
+const CSV_HEADERS = [
   'Name',
   'Email',
   'Phone',

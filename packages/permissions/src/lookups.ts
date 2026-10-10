@@ -8,7 +8,7 @@ import type { ModuleKey } from './modules'
  * whoever may create records in a module that uses the list may add to it. A
  * category missing here stays owner-only.
  */
-export const LOOKUP_QUICK_ADD: Readonly<Record<string, readonly ModuleKey[]>> = {
+const LOOKUP_QUICK_ADD: Readonly<Record<string, readonly ModuleKey[]>> = {
   expense_category: ['company_expenses', 'projects'],
   payment_type: ['billing', 'projects', 'team_payouts'],
   invoice_line_preset: ['billing'],

@@ -141,7 +141,6 @@ const activeLookupSchema = z.object({
   sort_order: z.number().int(),
   color: z.string().nullable().default(null),
 })
-export type ActiveLookup = z.infer<typeof activeLookupSchema>
 const activeLookupArraySchema = activeLookupSchema.array()
 
 /** The active values of one lookup category — open to any signed-in member, not just the owner. */

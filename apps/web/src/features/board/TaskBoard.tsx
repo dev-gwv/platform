@@ -28,7 +28,7 @@ const LANES = BOARD_LANES
  * Lane tints. Token pairs rather than hex, so a lane stays legible in both
  * schemes — a colour picked against a white panel goes muddy on a dark one.
  */
-export const LANE_COLORS = {
+const LANE_COLORS = {
   default: { label: 'Default', head: 'bg-muted/30 border-border', dot: 'bg-muted-foreground/40' },
   slate: { label: 'Slate', head: 'bg-slate-500/10 border-slate-500/30', dot: 'bg-slate-500' },
   blue: { label: 'Blue', head: 'bg-sky-500/10 border-sky-500/30', dot: 'bg-sky-500' },
@@ -37,7 +37,7 @@ export const LANE_COLORS = {
   rose: { label: 'Rose', head: 'bg-rose-500/10 border-rose-500/30', dot: 'bg-rose-500' },
   violet: { label: 'Violet', head: 'bg-violet-500/10 border-violet-500/30', dot: 'bg-violet-500' },
 } as const
-export type LaneColor = keyof typeof LANE_COLORS
+type LaneColor = keyof typeof LANE_COLORS
 
 type Lanes = Record<TaskStatus, TaskListItem[]>
 

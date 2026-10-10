@@ -11,7 +11,7 @@ export interface Point {
   value: number
 }
 
-export interface Scale {
+interface Scale {
   /** The top of the axis. Never zero, so a flat series still has a chart. */
   max: number
   /** Fraction of `max`, clamped to 0–1. */
@@ -73,7 +73,7 @@ export function trendPercent(values: readonly number[]): number | null {
 }
 
 /** Slices as percentages of the whole, largest first, tiny ones grouped. */
-export interface Slice extends Point {
+interface Slice extends Point {
   percent: number
 }
 
