@@ -124,8 +124,8 @@ function ProjectTracking() {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: 'Projects', to: '/projects' }, { label: 'Project Tracking' }]} />
-      <PageHeader title="Project Tracking" />
+      <Breadcrumbs items={[{ label: 'Projects', to: '/projects' }, { label: 'Needs attention' }]} />
+      <PageHeader title="Needs attention" />
 
       {isLoading ? (
         <SkeletonCards count={4} />

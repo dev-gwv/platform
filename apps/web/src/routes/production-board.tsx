@@ -102,7 +102,7 @@ function Board() {
 
   return (
     <>
-      <PageHeader title="Production Board" />
+      <PageHeader title="Post-production" />
 
       {isLoading ? (
         <SkeletonCards count={4} />
