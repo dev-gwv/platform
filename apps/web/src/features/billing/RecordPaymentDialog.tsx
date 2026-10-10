@@ -249,12 +249,11 @@ function PickedPaymentDialog({ payment, onClose }: { payment?: ReceivedPayment |
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
   const linked = payment?.project_id ? { id: payment.project_id, name: payment.project_name ?? 'This project' } : null
   const projects = useClientProjectOptions(form.clientId, linked)
-  // /billing/payments never moves a payment to another invoice, so a change
-  // shows the invoice it is against instead of offering a list.
-  const lockedInvoice = editing && !!payment.invoice_id
+  // A change can move the payment to another of the client's invoices, or off
+  // one; both invoices' totals follow (0145).
   const invoicesQ = useInvoices(
     form.clientId ? { client_id: form.clientId, page_size: 200 } : undefined,
-    { enabled: !editing && !!form.clientId },
+    { enabled: !!form.clientId },
   )
   const rows = invoicesQ.isPlaceholderData ? [] : (invoicesQ.data?.items ?? [])
   const invoices = invoiceChoices(rows, form.projectId, form.invoiceId)
@@ -298,12 +297,7 @@ function PickedPaymentDialog({ payment, onClose }: { payment?: ReceivedPayment |
   const nudge = (empty: boolean) =>
     cn('[&>button]:transition-colors', empty ? '[&>button]:border-dashed [&>button]:border-tone-amber/60 [&>button]:bg-tone-amber-soft/40' : '[&>button]:border-success/50')
 
-  const place = lockedInvoice ? (
-    <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
-      Against <span className="font-medium">{payment.invoice_number ?? 'its invoice'}</span>
-      {[payment.client_name, payment.project_name].filter(Boolean).map((t) => ` · ${t}`)}
-    </p>
-  ) : (
+  const place = (
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pay-client">Client</Label>
@@ -327,10 +321,7 @@ function PickedPaymentDialog({ payment, onClose }: { payment?: ReceivedPayment |
           disabled={!form.clientId}
           className={form.clientId ? nudge(!form.projectId && !form.invoiceId) : undefined}
         >
-          {/* A payment already on a project cannot be taken off it here, only moved. */}
-          {!(editing && payment.project_id) && (
-            <option value="">{!form.clientId ? 'Choose the client first' : projects.loaded && projects.count > 0 ? 'No project -- pay an invoice' : projects.blank}</option>
-          )}
+          <option value="">{!form.clientId ? 'Choose the client first' : projects.loaded && projects.count > 0 ? 'No project -- pay an invoice' : projects.blank}</option>
           {projects.options.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -348,19 +339,21 @@ function PickedPaymentDialog({ payment, onClose }: { payment?: ReceivedPayment |
       editing={editing}
       place={place}
       invoiceField={
-        !editing && form.clientId && (invoices.length > 0 || form.invoiceId) ? (
+        form.clientId && (invoices.length > 0 || form.invoiceId) ? (
           <InvoiceSelect
             invoices={invoices}
             value={form.invoiceId}
             blank={form.projectId ? 'No invoice -- just the project' : 'Choose an invoice'}
-            fallback="Invoice"
+            fallback={form.invoiceId === payment?.invoice_id ? (payment?.invoice_number ?? 'Invoice') : 'Invoice'}
             onChange={(id, inv) =>
               setForm((f) => ({
                 ...f,
                 invoiceId: id,
                 // The invoice's project comes with it, so the two never disagree.
                 projectId: inv?.project_id && !f.projectId ? inv.project_id : f.projectId,
-                amount: inv && inv.balance_due > 0 ? String(inv.balance_due) : f.amount,
+                // A new payment starts from what the invoice still owes; a
+                // change keeps its own amount when it moves to another invoice.
+                amount: !editing && inv && inv.balance_due > 0 ? String(inv.balance_due) : f.amount,
               }))
             }
           />

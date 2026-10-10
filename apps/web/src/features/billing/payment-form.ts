@@ -63,17 +63,17 @@ export function formFromReceived(p: ReceivedPayment, today: string): PaymentForm
 
 /**
  * The questions each save path can keep. One form, one order; a field is
- * left out only where the endpoint behind it has nowhere to put it:
- * /billing/payments takes no reference, the project's and the invoice's
- * payment routes take no receipt link, and money recorded on an invoice is
- * always received, never GST-flagged here.
+ * left out only where the endpoint behind it has nowhere to put it: the
+ * project's and the invoice's payment routes take no receipt link, and money
+ * recorded on an invoice is always received, never GST-flagged here. Every
+ * path keeps the reference.
  */
 export function paymentQuestions(kind: PaymentFormKind) {
   return {
     place: kind === 'pick',
     status: kind !== 'invoice',
     invoice: kind !== 'invoice',
-    reference: kind !== 'pick',
+    reference: true,
     gst: kind !== 'invoice',
     receiptLink: kind === 'pick',
   }
@@ -112,17 +112,23 @@ export function ledgerCreateBody(form: PaymentForm): CreateReceivedPaymentReques
     file_url: form.fileUrl.trim() || null,
     // A draft saved before the mode chips has no mode at all.
     mode: (form.mode || '').trim() || null,
+    reference: form.reference.trim() || null,
   }
 }
 
 /**
- * PATCH /billing/payments/:id. That route keeps the project and the client
- * when given none (it cannot unlink them) and never moves the invoice, so
- * those are only sent when there is a new one to set.
+ * PATCH /billing/payments/:id. The project and the invoice are sent only when
+ * they changed -- as the new one, or null to take the payment off it (the
+ * route refuses money left on neither). The client is only ever moved, never
+ * cleared.
  */
-export function ledgerPatchBody(form: PaymentForm, was: Pick<ReceivedPayment, 'project_id' | 'client_id'>): UpdateReceivedPaymentRequest {
+export function ledgerPatchBody(
+  form: PaymentForm,
+  was: Pick<ReceivedPayment, 'project_id' | 'client_id' | 'invoice_id'>,
+): UpdateReceivedPaymentRequest {
   return {
-    ...(form.projectId && form.projectId !== was.project_id ? { project_id: form.projectId } : {}),
+    ...((form.projectId || null) !== (was.project_id ?? null) ? { project_id: form.projectId || null } : {}),
+    ...((form.invoiceId || null) !== (was.invoice_id ?? null) ? { invoice_id: form.invoiceId || null } : {}),
     ...(form.clientId && form.clientId !== was.client_id ? { client_id: form.clientId } : {}),
     amount: Number(form.amount),
     description: form.description.trim() || null,
@@ -132,6 +138,7 @@ export function ledgerPatchBody(form: PaymentForm, was: Pick<ReceivedPayment, 'p
     ...(form.paidOn ? { date_received: form.paidOn } : {}),
     file_url: form.fileUrl.trim() || null,
     mode: (form.mode || '').trim() || null,
+    reference: form.reference.trim() || null,
   }
 }
 

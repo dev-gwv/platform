@@ -550,6 +550,56 @@ if (listed) {
   )
 }
 
+// ── A payment can move between invoices, and keeps its reference ──
+// Editing from the Payments list used to drop invoice_id silently, and
+// /billing/payments had no reference at all.
+{
+  const mvClient = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Move Co', phone: randPhone() } })
+  const mvProject = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Move project', client_id: mvClient.json.id, package_cost: 20000 } })
+  const otherProject = await api('/projects', { token: aToken, method: 'POST', body: { name: 'Move other', client_id: mvClient.json.id, package_cost: 5000 } })
+  const raise = (projectId) =>
+    api('/billing/invoices', {
+      token: aToken,
+      method: 'POST',
+      body: { client_id: mvClient.json.id, project_id: projectId, place_of_supply: '27', intra_state: true, discount: 0, discount_type: 'flat', status: 'sent', lines: [{ description: 'Part', quantity: 1, rate: 5000, gst_rate: 0 }] },
+    })
+  const invA = await raise(mvProject.json.id)
+  const invB = await raise(mvProject.json.id)
+  const invX = await raise(otherProject.json.id)
+  const made = await api('/billing/payments', {
+    token: aToken,
+    method: 'POST',
+    body: { project_id: mvProject.json.id, invoice_id: invA.json.id, amount: 5000, reference: 'UTR-778899', mode: 'UPI' },
+  })
+  const got = await api(`/billing/payments/${made.json.id}`, { token: aToken })
+  check('payment move: a payment from the Payments list keeps its reference', made.status === 201 && got.json.reference === 'UTR-778899', { status: made.status, reference: got.json.reference })
+
+  const moved = await api(`/billing/payments/${made.json.id}`, { token: aToken, method: 'PATCH', body: { invoice_id: invB.json.id } })
+  const a1 = await api(`/billing/invoices/${invA.json.id}`, { token: aToken })
+  const b1 = await api(`/billing/invoices/${invB.json.id}`, { token: aToken })
+  const after = await api(`/billing/payments/${made.json.id}`, { token: aToken })
+  check(
+    'payment move: moving it to another invoice settles that one and un-settles the old',
+    moved.status === 200 && after.json.invoice_id === invB.json.id && Number(a1.json.amount_paid) === 0 && Number(b1.json.amount_paid) === 5000,
+    { status: moved.status, invoice: after.json.invoice_id, a: a1.json.amount_paid, b: b1.json.amount_paid },
+  )
+
+  const wrong = await api(`/billing/payments/${made.json.id}`, { token: aToken, method: 'PATCH', body: { invoice_id: invX.json.id, project_id: mvProject.json.id } })
+  check("payment move: an invoice from another project is refused when the project is kept", wrong.status === 422, { status: wrong.status })
+
+  const off = await api(`/billing/payments/${made.json.id}`, { token: aToken, method: 'PATCH', body: { invoice_id: null, reference: 'CHQ-9' } })
+  const b2 = await api(`/billing/invoices/${invB.json.id}`, { token: aToken })
+  const offRow = await api(`/billing/payments/${made.json.id}`, { token: aToken })
+  check(
+    'payment move: taking it off the invoice keeps the project, un-settles the invoice and changes the reference',
+    off.status === 200 && offRow.json.invoice_id === null && offRow.json.project_id === mvProject.json.id && Number(b2.json.amount_paid) === 0 && offRow.json.reference === 'CHQ-9',
+    { status: off.status, row: offRow.json, b: b2.json.amount_paid },
+  )
+
+  const nothing = await api(`/billing/payments/${made.json.id}`, { token: aToken, method: 'PATCH', body: { project_id: null } })
+  check('payment move: money that would belong to nothing is refused', nothing.status === 422, { status: nothing.status })
+}
+
 // ── Billing belongs to the project (0169) ─────────────────────
 // A payment recorded on the project can settle one of its invoices; the
 // project page lists its invoices; the Billing overview gathers what is

@@ -437,6 +437,8 @@ export const createReceivedPaymentRequest = z
     file_url: z.string().trim().max(1000).nullish(),
     /** UPI, Cash, Bank transfer… -- how the money came. */
     mode: z.string().trim().max(40).nullish(),
+    /** The UTR, cheque or transaction number. */
+    reference: z.string().trim().max(120).nullish(),
   })
   .superRefine((v, ctx) => {
     // Money has to belong to something, or it can never be reconciled. The
@@ -461,7 +463,10 @@ export const createReceivedPaymentRequest = z
 export type CreateReceivedPaymentRequest = z.infer<typeof createReceivedPaymentRequest>
 
 export const updateReceivedPaymentRequest = z.object({
-  project_id: uuid.optional(),
+  /** null takes the payment off its project; it must still be against an invoice. */
+  project_id: uuid.nullable().optional(),
+  /** Move the payment to another invoice, or null to take it off one. Both invoices' totals follow (0145). */
+  invoice_id: uuid.nullable().optional(),
   client_id: uuid.nullable().optional(),
   amount: money.refine((v) => v > 0, 'amount must be greater than zero').optional(),
   description: z.string().trim().max(500).nullish(),
@@ -471,6 +476,7 @@ export const updateReceivedPaymentRequest = z.object({
   date_received: isoDate.optional(),
   file_url: z.string().trim().max(1000).nullish(),
   mode: z.string().trim().max(40).nullish(),
+  reference: z.string().trim().max(120).nullish(),
 })
 export type UpdateReceivedPaymentRequest = z.infer<typeof updateReceivedPaymentRequest>
 

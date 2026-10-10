@@ -96,19 +96,31 @@ describe('ledger bodies', () => {
       date_received: TODAY,
       file_url: null,
       mode: 'UPI',
+      reference: null,
     })
     expect(body).not.toHaveProperty('project_id')
   })
   it('sends a promise as pending', () => {
     expect(ledgerCreateBody(blankPaymentForm(TODAY, { projectId: P, amount: '1', received: false })).status).toBe('pending')
   })
-  it('patches without unlinking the project or the client', () => {
+  it('sends the project and the invoice only when they change', () => {
     const same = ledgerPatchBody(formFromReceived(row, TODAY), row)
     expect(same).not.toHaveProperty('project_id')
+    expect(same).not.toHaveProperty('invoice_id')
     expect(same).not.toHaveProperty('client_id')
-    expect(same).toMatchObject({ amount: 40000, status: 'pending', gst_number: '27ABCDE1234F1Z5', file_url: 'https://example.com/r.pdf' })
+    expect(same).toMatchObject({ amount: 40000, status: 'pending', gst_number: '27ABCDE1234F1Z5', file_url: 'https://example.com/r.pdf', reference: 'UTR123' })
     const moved = ledgerPatchBody({ ...formFromReceived(row, TODAY), projectId: P2 }, row)
     expect(moved.project_id).toBe(P2)
+  })
+  it('moves a payment to another invoice, or takes it off one', () => {
+    const onInvoice = { ...row, invoice_id: I }
+    expect(ledgerPatchBody({ ...formFromReceived(onInvoice, TODAY), invoiceId: 'inv-2' }, onInvoice).invoice_id).toBe('inv-2')
+    expect(ledgerPatchBody({ ...formFromReceived(onInvoice, TODAY), invoiceId: '' }, onInvoice).invoice_id).toBeNull()
+    expect(ledgerPatchBody({ ...formFromReceived(row, TODAY), projectId: '' }, row).project_id).toBeNull()
+  })
+  it('keeps the reference, and clears it when emptied', () => {
+    expect(ledgerCreateBody(blankPaymentForm(TODAY, { projectId: P, amount: '1', reference: ' UTR9 ' })).reference).toBe('UTR9')
+    expect(ledgerPatchBody({ ...formFromReceived(row, TODAY), reference: '' }, row).reference).toBeNull()
   })
   it('drops the GST number once GST is unticked', () => {
     expect(ledgerPatchBody({ ...formFromReceived(row, TODAY), isGst: false }, row).gst_number).toBeNull()
@@ -117,12 +129,12 @@ describe('ledger bodies', () => {
 
 describe('paymentQuestions', () => {
   it('asks only what each save path keeps', () => {
-    expect(paymentQuestions('pick')).toEqual({ place: true, status: true, invoice: true, reference: false, gst: true, receiptLink: true })
+    expect(paymentQuestions('pick')).toEqual({ place: true, status: true, invoice: true, reference: true, gst: true, receiptLink: true })
     expect(paymentQuestions('project')).toEqual({ place: false, status: true, invoice: true, reference: true, gst: true, receiptLink: false })
     expect(paymentQuestions('invoice')).toEqual({ place: false, status: false, invoice: false, reference: true, gst: false, receiptLink: false })
   })
   it('names them on the More link', () => {
-    expect(moreLabel(paymentQuestions('pick'))).toBe('+ Note, GST or receipt link')
+    expect(moreLabel(paymentQuestions('pick'))).toBe('+ Reference, note, GST or receipt link')
     expect(moreLabel(paymentQuestions('project'))).toBe('+ Reference, note or GST')
     expect(moreLabel(paymentQuestions('invoice'))).toBe('+ Reference or note')
   })
