@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import {
-  Gift,
   Bell,
   Building2,
   Briefcase,
@@ -12,11 +11,7 @@ import {
   Layers,
   ListTree,
   MapPin,
-  MessageCircle,
-  Package,
-  Palette,
   Receipt,
-  ServerCog,
   ShieldCheck,
   Store,
   Activity,
@@ -39,6 +34,12 @@ export interface SettingsItem {
   also?: readonly string[]
   /** The vendor's own pages: shown only to a platform admin. */
   platformOnly?: boolean
+  /**
+   * Pages folded into this line, switched by a tab row on top of the page.
+   * The first tab is this page. Each keeps its own address (and is listed in
+   * `also` so the rail lights this line on it).
+   */
+  tabs?: readonly { to: string; label: string; module: ModuleKey }[]
 }
 
 export interface SettingsGroup {
@@ -59,8 +60,17 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   {
     label: 'Studio',
     items: [
-      { to: '/settings/company', label: 'Company profile', icon: Building2, module: 'settings' },
-      { to: '/settings/appearance', label: 'Theme & branding', icon: Palette, module: 'settings' },
+      {
+        to: '/settings/company',
+        label: 'Company profile',
+        icon: Building2,
+        module: 'settings',
+        also: ['/settings/appearance'],
+        tabs: [
+          { to: '/settings/company', label: 'Company profile', module: 'settings' },
+          { to: '/settings/appearance', label: 'Theme & branding', module: 'settings' },
+        ],
+      },
       {
         to: '/settings/attendance-location',
         label: 'Attendance',
@@ -90,22 +100,35 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     items: [
       {
         to: '/settings/project-templates',
-        label: 'Project templates',
+        label: 'Templates',
         icon: Briefcase,
         module: 'projects',
+        also: ['/settings/task-bundles'],
+        tabs: [
+          { to: '/settings/project-templates', label: 'Project templates', module: 'projects' },
+          { to: '/settings/task-bundles', label: 'Task bundles', module: 'settings' },
+        ],
       },
       { to: '/project-documents', label: 'Documents', icon: FileText, module: 'projects' },
       { to: '/projects/stages', label: 'Delivery stages', icon: Layers, module: 'projects' },
-      { to: '/settings/task-bundles', label: 'Task bundles', icon: Package, module: 'settings' },
     ],
   },
   {
     // Where enquiries come from: set up once, then they bring leads by themselves.
     label: 'Leads',
     items: [
-      { to: '/enquiry-forms', label: 'Enquiry forms', icon: QrCode, module: 'crm' },
+      {
+        to: '/enquiry-forms',
+        label: 'Forms',
+        icon: QrCode,
+        module: 'crm',
+        also: ['/settings/client-form'],
+        tabs: [
+          { to: '/enquiry-forms', label: 'Enquiry forms', module: 'crm' },
+          { to: '/settings/client-form', label: 'Client details form', module: 'clients' },
+        ],
+      },
       { to: '/lead-sources', label: 'Lead sources', icon: Megaphone, module: 'lead_sources' },
-      { to: '/settings/client-form', label: 'Client details form', icon: ClipboardList, module: 'clients' },
       { to: '/referrals', label: 'Referrals', icon: Target, module: 'referrals' },
     ],
   },
@@ -119,22 +142,38 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: 'Plan & billing',
         icon: CreditCard,
         module: 'settings_subscription',
+        also: ['/settings/refer-a-studio'],
+        tabs: [
+          { to: '/settings/subscription', label: 'Plan & billing', module: 'settings_subscription' },
+          { to: '/settings/refer-a-studio', label: 'Refer a studio', module: 'settings_subscription' },
+        ],
       },
-      { to: '/settings/refer-a-studio', label: 'Refer a studio', icon: Gift, module: 'settings_subscription' },
     ],
   },
   {
     label: 'Messages & lists',
     items: [
-      { to: '/settings/messaging', label: 'Messaging', icon: Bell, module: 'settings' },
-      { to: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle, module: 'settings' },
-      { to: '/settings/lookups', label: 'Lookups', icon: ListTree, module: 'settings' },
       {
-        to: '/settings/system',
-        label: 'System',
-        icon: ServerCog,
+        to: '/settings/messaging',
+        label: 'Messaging',
+        icon: Bell,
         module: 'settings',
-        also: ['/settings/services', '/settings/work-submissions'],
+        also: ['/settings/whatsapp'],
+        tabs: [
+          { to: '/settings/messaging', label: 'Messages', module: 'settings' },
+          { to: '/settings/whatsapp', label: 'WhatsApp', module: 'settings' },
+        ],
+      },
+      {
+        to: '/settings/lookups',
+        label: 'Lists',
+        icon: ListTree,
+        module: 'settings',
+        also: ['/settings/system', '/settings/services', '/settings/work-submissions'],
+        tabs: [
+          { to: '/settings/lookups', label: 'Lists', module: 'settings' },
+          { to: '/settings/system', label: 'System', module: 'settings' },
+        ],
       },
     ],
   },
@@ -160,7 +199,10 @@ function useVisibleGroups() {
   const admin = useAuth().session?.is_platform_admin ?? false
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => access.hasModule(i.module) && (!i.platformOnly || admin)),
+    items: g.items
+      .filter((i) => (!i.platformOnly || admin) && [i, ...(i.tabs ?? [])].some((t) => access.hasModule(t.module)))
+      // A line whose first page this person cannot open goes to one they can.
+      .map((i) => (access.hasModule(i.module) ? i : { ...i, to: i.tabs!.find((t) => access.hasModule(t.module))!.to })),
   })).filter((g) => g.items.length > 0)
 }
 
@@ -182,7 +224,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
       <label className="md:hidden">
         <span className="sr-only">Settings page</span>
         <select
-          value={current?.to ?? ''}
+          value={groups.flatMap((g) => g.items).find((i) => i.label === current?.label)?.to ?? ''}
           onChange={(e) => void navigate({ to: e.target.value })}
           className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm font-medium"
         >
@@ -214,7 +256,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
               {g.label}
             </p>
             {g.items.map((i) => {
-              const on = current?.to === i.to
+              const on = current?.label === i.label
               const Icon = i.icon
               return (
                 <Link
@@ -237,7 +279,39 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <SettingsTabs item={current} />
+        {children}
+      </div>
     </div>
+  )
+}
+
+/** The tab row on a settings line that holds more than one page. */
+function SettingsTabs({ item }: { item: SettingsItem | null }) {
+  const { pathname } = useLocation()
+  const access = useAccess()
+  const tabs = (item?.tabs ?? []).filter((t) => access.hasModule(t.module))
+  if (tabs.length < 2) return null
+  const here = pathname.replace(/\/+$/, '')
+  return (
+    <nav
+      aria-label="Pages in this setting"
+      className="mb-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-border bg-card p-1"
+    >
+      {tabs.map((t) => (
+        <Link
+          key={t.to}
+          to={t.to}
+          aria-current={here === t.to ? 'page' : undefined}
+          className={cn(
+            'whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+            here === t.to ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </nav>
   )
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, ChevronLeft, ChevronRight, Download, Search, UserPlus, X } from 'lucide-react'
 import { shootListItem, type ShootListItem } from '@ipc/contracts'
@@ -11,7 +11,6 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { MetricCard } from '@/shared/ui/metric-card'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
@@ -146,29 +145,42 @@ function TeamBooking({ initialView }: { initialView: View }) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Shoots" value={f.shoots} hint={monthLabel} />
-        <FigureButton active={focus === 'short'} onClick={() => { setView('shoots'); setFocus(focus === 'short' ? '' : 'short') }}>
-          <MetricCard
-            label="Roles to fill"
-            value={f.toFill}
-            tone={f.toFill > 0 ? 'danger' : 'success'}
-            hint={f.needed ? `${f.filled} of ${f.needed} booked · ${f.shortShoots} shoot${f.shortShoots === 1 ? '' : 's'} short` : 'no roles planned'}
-            help="Seats the month's shoots still need. Tap to see only the short-staffed shoots."
-            className="h-full"
-          />
-        </FigureButton>
-        <MetricCard label="People booked" value={f.people} hint={`of ${(members.data ?? []).length} in the team`} />
-        <FigureButton active={view === 'conflicts'} onClick={() => setView(view === 'conflicts' ? 'shoots' : 'conflicts')}>
-          <MetricCard
-            label="Conflicts"
-            value={f.conflicts}
-            tone={conflicts.some((c) => c.severity === 'critical') ? 'danger' : f.conflicts ? 'warning' : 'muted'}
-            hint={f.conflicts ? 'tap to fix' : 'all clear'}
-            className="h-full"
-          />
-        </FigureButton>
-      </div>
+      {/* One sentence, not four boxes: what the month holds and the one thing
+          to do next. Amber for seats to fill (the next job), red only for a
+          true clash. */}
+      <p className="text-sm text-muted-foreground">
+        {f.shoots} shoot{f.shoots === 1 ? '' : 's'} in {monthLabel}
+        {f.needed > 0 && (
+          <>
+            {' · '}
+            {f.toFill > 0 ? (
+              <button
+                type="button"
+                className={cn('font-medium underline-offset-2 hover:underline', focus === 'short' ? 'text-foreground' : 'text-warning')}
+                aria-pressed={focus === 'short'}
+                onClick={() => { setView('shoots'); setFocus(focus === 'short' ? '' : 'short') }}
+              >
+                {f.toFill} seat{f.toFill === 1 ? '' : 's'} to fill on {f.shortShoots} shoot{f.shortShoots === 1 ? '' : 's'}
+              </button>
+            ) : (
+              <span className="font-medium text-success">every seat booked</span>
+            )}
+          </>
+        )}
+        {f.people > 0 && ` · ${f.people} of ${(members.data ?? []).length} people booked`}
+        {f.conflicts > 0 && (
+          <>
+            {' · '}
+            <button
+              type="button"
+              className={cn('font-medium underline-offset-2 hover:underline', conflicts.some((c) => c.severity === 'critical') ? 'text-destructive' : 'text-warning')}
+              onClick={() => setView('conflicts')}
+            >
+              {f.conflicts} clash{f.conflicts === 1 ? '' : 'es'} to fix
+            </button>
+          </>
+        )}
+      </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <FilterTabs<View>
@@ -276,20 +288,4 @@ function shiftDay(day: string, by: number) {
   const d = new Date(`${day}T00:00:00`)
   d.setDate(d.getDate() + by)
   return d.toLocaleDateString('en-CA')
-}
-
-function FigureButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        'h-full rounded-xl text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active ? 'ring-2 ring-primary' : 'hover:-translate-y-0.5',
-      )}
-    >
-      {children}
-    </button>
-  )
 }

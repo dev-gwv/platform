@@ -4,7 +4,7 @@ import { CreatableSelect, type CreatableOption } from '@/shared/ui/creatable-sel
 import { useActiveLookups, useCreateCustomLookup } from './api'
 
 /**
- * A dropdown of one of the studio's own lists (Settings → Lookups) that can
+ * A dropdown of one of the studio's own lists (Settings → Lists) that can
  * grow from wherever it is used: "+ Add new…" types the option, picks it,
  * and saves it to the list so everyone sees it next time.
  *

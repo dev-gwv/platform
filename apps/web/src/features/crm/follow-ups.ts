@@ -85,3 +85,32 @@ export function shouldRemind(due: string | Date, now: Date = new Date()): boolea
   const ms = (typeof due === 'string' ? new Date(due) : due).getTime() - now.getTime()
   return ms <= 10 * 60_000 && ms > -60_000
 }
+
+type FollowUpTask = { id: string; lead_id: string | null; due_at: string | null }
+
+/**
+ * Today's calls is one list (owner's audit: the follow-up board above the
+ * queue showed the same people twice). A promised follow-up rides on its
+ * lead's call row -- the earliest open one -- and only the follow-ups whose
+ * lead is not in the queue (tomorrow, later this week, or someone else's
+ * lead) are listed after it, soonest first. Anything past the week is left
+ * to the Leads page.
+ */
+export function mergeFollowUps<T extends FollowUpTask>(
+  queueLeadIds: Iterable<string>,
+  tasks: readonly T[],
+  now: Date = new Date(),
+): { onRow: Map<string, T>; after: T[] } {
+  const inQueue = new Set(queueLeadIds)
+  const onRow = new Map<string, T>()
+  const after = new Map<string, T>()
+  const soonest = [...tasks]
+    .filter((t) => t.due_at && t.lead_id && followUpBucket(t.due_at, now) !== 'later')
+    .sort((a, b) => Date.parse(a.due_at!) - Date.parse(b.due_at!))
+  for (const t of soonest) {
+    const lead = t.lead_id!
+    const into = inQueue.has(lead) ? onRow : after
+    if (!into.has(lead)) into.set(lead, t)
+  }
+  return { onRow, after: [...after.values()] }
+}

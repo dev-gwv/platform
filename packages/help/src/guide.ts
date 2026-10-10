@@ -127,13 +127,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
       en: [
         'Open **Settings → Company profile**, type your studio name and press **Save changes**.',
         'Under Brand identity, upload your logo (under 1 MB). It saves by itself and shows on every quotation and invoice.',
-        'Open **Settings → Project templates** and press **New template**.',
+        'Open **Settings → Templates** and press **New template**.',
         'Name your usual package, add its days and what the client gets, and press **Save**. Pick it with **Use for a new project**.',
       ],
       hi: [
         '**Settings → Company profile** खोलें, स्टूडियो का नाम लिखें और **Save changes** दबाएँ।',
         'Brand identity में अपना लोगो डालें (1 MB से कम)। यह अपने आप सेव होता है और हर कोटेशन और इनवॉइस पर दिखता है।',
-        '**Settings → Project templates** खोलें और **New template** दबाएँ।',
+        '**Settings → Templates** खोलें और **New template** दबाएँ।',
         'अपने पैकेज का नाम, उसके दिन और क्लाइंट को क्या मिलेगा, लिखें और **Save** दबाएँ। **Use for a new project** से इसे चुनें।',
       ],
     },

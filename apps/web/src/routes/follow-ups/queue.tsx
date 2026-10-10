@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { MessageCircle } from 'lucide-react'
 import { CALL_OUTCOMES } from '@ipc/domain'
-import type { CallQueueItem, CallQueueScope } from '@ipc/contracts'
+import type { CallQueueItem, CallQueueScope, CrmActivity } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -16,7 +16,8 @@ import { useCallQueue } from '@/features/crm-calls/api'
 import { useSendNow } from '@/features/crm-sequences/api'
 import { MyDayStrip } from '@/features/crm-calls/MyDay'
 import { EventTile } from '@/shared/ui/icon-tile'
-import { FollowUpBuckets } from '@/features/crm/FollowUpBuckets'
+import { ComingUpFollowUps, FollowUpActions, FollowUpTag, useOpenFollowUps } from '@/features/crm/FollowUpOnRow'
+import { mergeFollowUps } from '@/features/crm/follow-ups'
 
 export function CallQueuePage() {
   return (
@@ -48,6 +49,13 @@ function CallQueue() {
   const q = useCallQueue(scope)
   const items = q.data?.items ?? []
   const toSend = useSendNow().data?.items.length ?? 0
+  const followUps = useOpenFollowUps(scope)
+  // One list: a promised follow-up rides on its lead's call row, and only
+  // the ones not owed a call today follow under Coming up.
+  const { onRow, after } = useMemo(
+    () => mergeFollowUps(items.map((l) => l.id), followUps.data ?? []),
+    [items, followUps.data],
+  )
 
   return (
     <>
@@ -74,7 +82,6 @@ function CallQueue() {
         }
       />
       <MyDayStrip scope={scope} />
-      <FollowUpBuckets scope={scope} />
       {toSend > 0 && (
         <Link
           to="/follow-ups/send"
@@ -105,16 +112,17 @@ function CallQueue() {
         <Card>
           <ul className="divide-y divide-border">
             {items.map((l) => (
-              <Row key={l.id} lead={l} />
+              <Row key={l.id} lead={l} task={onRow.get(l.id)} showAssignee={scope === 'all'} />
             ))}
           </ul>
         </Card>
       )}
+      {!q.isPending && !q.isError && <ComingUpFollowUps tasks={after} scope={scope} />}
     </>
   )
 }
 
-function Row({ lead }: { lead: CallQueueItem }) {
+function Row({ lead, task, showAssignee }: { lead: CallQueueItem; task?: CrmActivity; showAssignee?: boolean }) {
   const urgent = lead.priority >= 100
   const last = lead.last_call_outcome ? CALL_OUTCOMES.find((o) => o.key === lead.last_call_outcome)?.label : null
   const what = [lead.event_type, lead.event_date ? fmtDate(lead.event_date) : null, lead.city].filter(Boolean).join(' · ')
@@ -125,15 +133,16 @@ function Row({ lead }: { lead: CallQueueItem }) {
         <Link to="/follow-ups" search={{ lead: lead.id } as never} className="block truncate font-medium hover:underline">
           {lead.name || lead.phone || 'No name'}
         </Link>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span className={cn('rounded-full px-2 py-0.5 font-medium', urgent ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary')}>
             {lead.reason}
           </span>
           {what && <span className="truncate">{what}</span>}
           {last && <span>Last call: {last}</span>}
+          {task && <FollowUpTag task={task} showAssignee={showAssignee} />}
         </p>
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         <CallButton lead={lead} variant="default" />
         <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
           {lead.phone ? (
@@ -147,6 +156,7 @@ function Row({ lead }: { lead: CallQueueItem }) {
             </span>
           )}
         </Button>
+        {task && <FollowUpActions task={task} />}
       </div>
     </li>
   )

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueWords, followUpBucket, presetAt, shouldRemind } from './follow-ups'
+import { dueWords, followUpBucket, mergeFollowUps, presetAt, shouldRemind } from './follow-ups'
 
 // Sun 28 Sep 2026, 16:00 local.
 const NOW = new Date(2026, 8, 28, 16, 0)
@@ -41,5 +41,30 @@ describe('shouldRemind', () => {
     expect(shouldRemind(new Date(NOW.getTime() + 9 * 60_000), NOW)).toBe(true)
     expect(shouldRemind(new Date(NOW.getTime() - 30_000), NOW)).toBe(true)
     expect(shouldRemind(new Date(NOW.getTime() - 2 * 60_000), NOW)).toBe(false)
+  })
+})
+
+describe('mergeFollowUps', () => {
+  const now = new Date('2026-10-10T06:00:00Z')
+  const t = (id: string, lead: string | null, due: string | null) => ({ id, lead_id: lead, due_at: due })
+
+  it('puts a lead in the queue on its row, once, with its earliest follow-up', () => {
+    const r = mergeFollowUps(['a'], [t('2', 'a', '2026-10-10T09:00:00Z'), t('1', 'a', '2026-10-09T09:00:00Z')], now)
+    expect(r.onRow.get('a')?.id).toBe('1')
+    expect(r.after).toEqual([])
+  })
+
+  it('lists only the follow-ups whose lead is not in the queue, one per lead, soonest first', () => {
+    const r = mergeFollowUps(
+      ['a'],
+      [t('3', 'c', '2026-10-13T09:00:00Z'), t('2', 'b', '2026-10-11T09:00:00Z'), t('4', 'b', '2026-10-12T09:00:00Z')],
+      now,
+    )
+    expect(r.after.map((x) => x.id)).toEqual(['2', '3'])
+  })
+
+  it('leaves out follow-ups with no lead, no date, or past the week', () => {
+    const r = mergeFollowUps([], [t('1', null, '2026-10-10T09:00:00Z'), t('2', 'b', null), t('3', 'c', '2026-11-30T09:00:00Z')], now)
+    expect(r.after).toEqual([])
   })
 })
