@@ -1,0 +1,2 @@
+-- 0257: a crew member's shoots as a calendar link Google Calendar subscribes to.
+-- Claimed; the body follows in this branch.
