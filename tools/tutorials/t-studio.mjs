@@ -22,11 +22,11 @@ await t.point(up); await t.layer('ripple')
 await logoField.locator('input[type=file]').setInputFiles(logo)
 await sleep(2600)
 
-const nav = p.getByRole('link', { name: 'Project templates' }).first()
+const nav = p.getByRole('link', { name: 'Templates', exact: true }).first()
 await t.layer('spot', null)
 await t.click(nav, { after: 1500 })
 const add = p.getByRole('button', { name: 'New template' }).first()
-await t.step('Project templates: save your usual package', add, { hold: 700 })
+await t.step('Settings → Templates: save your usual package', add, { hold: 700 })
 await t.click(add, { after: 1000 })
 
 const dlg = p.getByRole('dialog')
@@ -46,6 +46,7 @@ await addIn('Deliverables', 'Deliverable name', ['Wedding Film', 'Teaser', 'Albu
 await sleep(400)
 
 const save = dlg.getByRole('button', { name: 'Save', exact: true })
+await save.scrollIntoViewIfNeeded(); await sleep(600)
 await t.step('Save. Pick it when you make a project', save, { hold: 400 })
 await t.click(save, { after: 150 }); await t.layer('spot', null); await sleep(1400)
 await t.layer('hidePointer')

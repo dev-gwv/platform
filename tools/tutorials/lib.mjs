@@ -153,6 +153,19 @@ function layerInit() {
   }
 }
 
+/** A locator's box once it has stopped moving (smooth scrolls, dialogs sliding in), or null. */
+export async function settledBox(loc, { tries = 8, gap = 150 } = {}) {
+  let prev = await loc.boundingBox({ timeout: 3000 }).catch(() => null)
+  for (let i = 0; prev && i < tries; i++) {
+    await sleep(gap)
+    const r = await loc.boundingBox({ timeout: 1000 }).catch(() => null)
+    if (!r) return prev
+    if (Math.abs(r.x - prev.x) < 1 && Math.abs(r.y - prev.y) < 1 && Math.abs(r.width - prev.width) < 1 && Math.abs(r.height - prev.height) < 1) return r
+    prev = r
+  }
+  return prev
+}
+
 export class Tutorial {
   constructor(slug, { title, subtitle, steps }) {
     this.slug = slug
@@ -232,7 +245,9 @@ export class Tutorial {
   }
 
   async layer(fn, ...args) {
-    if (fn === 'caption' && typeof args[0] === 'string') { await this.waitVoice(); args = [tr(args[0]), ...args.slice(1)] }
+    // A caption never changes, or goes, while she is still saying it.
+    if (fn === 'caption') await this.waitVoice()
+    if (fn === 'caption' && typeof args[0] === 'string') args = [tr(args[0]), ...args.slice(1)]
     return this.page.evaluate(([fn, args]) => window.__tut && window.__tut[fn](...args), [fn, args])
   }
 
@@ -262,21 +277,31 @@ export class Tutorial {
 
   /** Next step: caption with its counter, spotlight on the target. */
   async step(text, target, { pad = 8, hold = 1600 } = {}) {
+    // The spotlight moves on only once the last line has been said.
+    await this.waitVoice()
     this.n += 1
     const loc = typeof target === 'string' ? this.page.locator(target).first() : target
     if (loc) {
       await loc.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
-      await sleep(250)
-      const r = await loc.boundingBox({ timeout: 3000 }).catch(() => null)
+      await sleep(100)
+      const r = await settledBox(loc)
+      if (!r) console.log(`WARN step ${this.n} "${text}": nothing to spotlight`)
       await this.layer('spot', r, pad)
       if (r) await this.layer('pointer', r.x + Math.min(r.width * 0.5, 120), r.y + r.height * 0.5)
     } else {
       await this.layer('spot', null)
     }
     await this.layer('caption', text, this.n, this.total)
+    await this.warnToasts(`step ${this.n}`)
     await this.speak(this.vo?.steps[this.n - 1])
     await sleep(hold)
     return loc
+  }
+
+  /** Log any error toast on screen: a tutorial never shows one. */
+  async warnToasts(where) {
+    const bad = await this.page.evaluate(() => [...document.querySelectorAll('[data-sonner-toast][data-type="error"]')].map((e) => e.textContent)).catch(() => [])
+    for (const b of bad) console.log(`WARN ${where}: error toast "${b}"`)
   }
 
   /** Say something without counting a step (an aside, a result). */
@@ -285,10 +310,12 @@ export class Tutorial {
     const loc = typeof target === 'string' ? this.page.locator(target).first() : target
     if (loc) {
       await loc.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
-      const r = await loc.boundingBox({ timeout: 3000 }).catch(() => null)
+      const r = await settledBox(loc)
+      if (!r) console.log(`WARN say "${text}": nothing to spotlight`)
       await this.layer('spot', r, pad)
     } else await this.layer('spot', null)
     await this.layer('caption', text)
+    await this.warnToasts(`say "${text}"`)
     await sleep(hold)
   }
 

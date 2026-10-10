@@ -126,7 +126,7 @@ export const HI = {
   'Switch to List: late work is always on top': '“List” पर जाएँ: लेट काम हमेशा ऊपर',
   'Tick the work that has nobody on it': 'जिस काम पर कोई नहीं, उस पर टिक करें',
   '“2 selected”: Give to… Kavya, both at once': '“2 selected”: “Give to…” काव्या, दोनों एक साथ',
-  'Both are Kavya’s now, already in Editing': 'दोनों अब काव्या के पास, “Editing” में',
+  'Both are Kavya’s now, ready for her to start': 'दोनों अब काव्या के पास, शुरू करने के लिए तैयार',
   'All your editing work, on one board': 'आपका सारा एडिटिंग काम, एक बोर्ड पर',
   // team day
   'Your team’s day': 'आपकी टीम का दिन',
@@ -146,8 +146,8 @@ export const HI = {
   'Priya’s advance is 5 days late': 'प्रिया का एडवांस 5 दिन लेट है',
   'Open the invoice': 'इनवॉइस खोलें',
   'Tap “Add payment from client”': '“Add payment from client” दबाएँ',
-  'The amount is filled in. Pick UPI, add the UTR': 'रकम भरी हुई है। UPI चुनें, UTR डालें',
-  'Paid. Now back to Payments received': 'पेमेंट हो गया। अब “Payments received” पर वापस',
+  'Record payment: the amount is in. Pick UPI, add the UTR': 'Record payment: रकम भरी है। UPI चुनें, UTR डालें',
+  'Paid. Now back to Money → Payments': 'पेमेंट हो गया। अब Money → Payments पर वापस',
   'Counted in Received, and nothing is overdue': '“Received” में गिना गया, अब कुछ लेट नहीं',
   'Know who has paid, and who has not': 'जानें किसने पेमेंट किया, किसने नहीं',
   // payouts
