@@ -8,7 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useCreateExpense, useCreateExpenseTaxRate, useExpenseTaxRates, useUpdateExpense } from '@/features/financials/api'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { useDirectory } from '@/features/team/api'
 import { PartyPicker } from '@/features/parties/PartyPicker'
 import { ExpenseCategoryPicker } from './CategoryManager'
@@ -47,7 +47,6 @@ export function AddExpenseDialog({
   const create = useCreateExpense()
   const update = useUpdateExpense()
   const { session } = useAuth()
-  const { data: projects } = useProjects()
   const { data: people } = useDirectory()
   const [open, setOpenState] = useState(defaultOpen)
   const setOpen = (v: boolean) => {
@@ -237,19 +236,14 @@ export function AddExpenseDialog({
                 so the studio sees which project the cost lands on. */}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="exp-project">Project</Label>
-              <Select
+              <ProjectPicker
                 id="exp-project"
                 value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                onChange={(id) => setProjectId(id)}
+                label={expense?.project_id === projectId ? expense?.project_name : undefined}
+                noneLabel="Studio cost, no project"
                 className={cn(projectId ? 'border-success/50' : '')}
-              >
-                <option value="">Studio cost, no project</option>
-                {(projects ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
           </div>
 

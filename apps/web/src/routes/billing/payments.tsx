@@ -24,7 +24,7 @@ import { DuePanel } from '@/features/billing/DuePanel'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { useClients } from '@/features/clients/api'
 import { useActiveLookups } from '@/features/settings/api'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { SendReceiptDialog } from '@/features/billing/SendReceiptDialog'
@@ -78,7 +78,6 @@ function PaymentsSection() {
   const [emailTarget, setEmailTarget] = useState<ReceivedPayment | null>(null)
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
-  const { data: projects } = useProjects()
   // The built-in modes plus any the studio has added of its own.
   const { data: customModes } = useActiveLookups('payment_type')
   const modes = [...MODES, ...(customModes ?? []).map((m) => m.value).filter((v) => !MODES.some((x) => x.toLowerCase() === v.toLowerCase()))]
@@ -109,7 +108,6 @@ function PaymentsSection() {
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAYMENT_PAGE_SIZE))
 
-  const clientProjects = (projects ?? []).filter((p) => !clientId || p.client_id === clientId)
   const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || period.choice !== 'this_month' || !!mode
 
   function resetFilters() {
@@ -221,12 +219,14 @@ function PaymentsSection() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
-          <Select value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1) }} className="w-full sm:w-52" aria-label="Filter by project">
-            <option value="">All projects</option>
-            {clientProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </Select>
+          <ProjectPicker
+            value={projectId}
+            onChange={(id) => { setProjectId(id); setPage(1) }}
+            clientId={clientId || undefined}
+            noneLabel="All projects"
+            className="sm:w-52"
+            aria-label="Filter by project"
+          />
           <Select value={mode} onChange={(e) => { setMode(e.target.value); setPage(1) }} className="w-full sm:w-36" aria-label="Filter by payment mode">
             <option value="">Any mode</option>
             {modes.map((m) => (

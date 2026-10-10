@@ -38,7 +38,7 @@ const createResponse = z.object({ id: z.string().uuid() })
 
 type ProjectsQuery = { page?: number; page_size?: number; status?: string; search?: string; sort?: string }
 
-export function useProjects(query?: ProjectsQuery) {
+export function useProjects(query?: ProjectsQuery, opts?: { enabled?: boolean }) {
   const { session } = useAuth()
   const access = useAccess()
   const hasParams = !!query && Object.keys(query).length > 0
@@ -55,7 +55,7 @@ export function useProjects(query?: ProjectsQuery) {
       const page = await callApi(`/projects?${params.toString()}`, { responseSchema: projectListPage })
       return page.items
     },
-    enabled: !!session && access.hasModule('projects'),
+    enabled: !!session && access.hasModule('projects') && (opts?.enabled ?? true),
     staleTime: 30_000,
   })
 }

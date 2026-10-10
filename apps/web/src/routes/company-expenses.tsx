@@ -22,7 +22,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useExpensePage, useDeleteExpense, useExpenseSummary, useMarkReimbursed } from '@/features/financials/api'
 import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { useDirectory } from '@/features/team/api'
 import { useActiveLookups } from '@/features/settings/api'
 import { MoneyTile } from '@/features/billing/MoneyTile'
@@ -89,7 +89,6 @@ function Expenses() {
   const canAdd = access.hasAction('company_expenses', 'create')
   const canEdit = access.hasAction('company_expenses', 'edit')
   const canDelete = access.hasAction('company_expenses', 'delete')
-  const { data: projects } = useProjects()
   const { data: people } = useDirectory()
   const { data: categories } = useActiveLookups('expense_category')
   const del = useDeleteExpense()
@@ -254,14 +253,13 @@ function Expenses() {
               </option>
             ))}
           </Select>
-          <Select value={projectId} onChange={(e) => change(() => setProjectId(e.target.value))} className="w-full sm:w-48" aria-label="Filter by project">
-            <option value="">All projects</option>
-            {(projects ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+          <ProjectPicker
+            value={projectId}
+            onChange={(id) => change(() => setProjectId(id))}
+            noneLabel="All projects"
+            className="sm:w-48"
+            aria-label="Filter by project"
+          />
           <Select value={paidBy} onChange={(e) => change(() => setPaidBy(e.target.value))} className="w-full sm:w-40" aria-label="Filter by who paid">
             <option value="">Paid by anyone</option>
             {(people ?? []).map((m) => (
@@ -370,7 +368,7 @@ function Expenses() {
                       <td className="px-3 py-2 text-xs">
                         {e.project_id ? (
                           <Link to="/projects/$id" params={{ id: e.project_id }} search={{ tab: 'expenses' }} className="text-primary hover:underline">
-                            {e.project_name ?? (projects ?? []).find((p) => p.id === e.project_id)?.name ?? 'Project'}
+                            {e.project_name ?? 'Project'}
                           </Link>
                         ) : (
                           <span className="text-muted-foreground">Studio</span>
@@ -414,7 +412,7 @@ function Expenses() {
             <div className="flex flex-col gap-4">
               <dl className="grid gap-2 text-sm">
                 {detail.description && <Row k="What for" v={detail.description} />}
-                <Row k="Project" v={detail.project_id ? ((projects ?? []).find((p) => p.id === detail.project_id)?.name ?? 'Project') : 'Studio cost'} />
+                <Row k="Project" v={detail.project_id ? (detail.project_name ?? 'Project') : 'Studio cost'} />
                 {detail.party_name && <Row k="Vendor" v={detail.party_name} />}
                 <Row k="Paid by" v={detail.paid_by_name ? `${detail.paid_by_name}${detail.reimbursement_status === 'pending' ? ' · to be paid back' : detail.reimbursement_status === 'reimbursed' ? ` · paid back${detail.reimbursed_at ? ` on ${shortDate(detail.reimbursed_at)}` : ''}` : ''}` : 'The studio'} />
                 <Row k="GST" v={`${humanize(detail.gst_treatment)}${detail.gst_rate ? ` · ${detail.gst_rate}%` : ''}${detail.tax_amount ? ` · ${inr(detail.tax_amount)} tax` : ''}${detail.reverse_charge ? ' · reverse charge' : ''}`} />
