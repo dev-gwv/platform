@@ -98,6 +98,24 @@ export const usageTrackRequest = z.object({
 })
 export type UsageTrackRequest = z.infer<typeof usageTrackRequest>
 
+/**
+ * Where people stop (Platform → Usage): for each screen a new studio learns,
+ * how many visits opened it, how many finished it, how often Save or Next
+ * was refused, and how often the how-to video offered itself or was played.
+ */
+export const flowStop = z.object({
+  flow: z.string(),
+  opened: z.coerce.number(),
+  done: z.coerce.number(),
+  left: z.coerce.number(),
+  refused: z.coerce.number(),
+  stuck: z.coerce.number(),
+  videos: z.coerce.number(),
+  studios: z.coerce.number(),
+})
+export type FlowStop = z.infer<typeof flowStop>
+export const flowStopList = z.array(flowStop)
+
 /** A vendor plan action on one tenant. `months` applies only to `extend`. */
 export const platformPlanAction = z
   .object({

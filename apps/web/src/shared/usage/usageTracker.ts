@@ -94,3 +94,30 @@ export function startUsageTracking(getRoute: () => string) {
     sessionId = null
   }
 }
+
+/**
+ * What happened on a screen a new studio learns (Add your team, New client,
+ * each step of Create project), for Platform → Usage → Where people stop:
+ * opened, done (saved or moved on), refused (Save or Next said no), closed
+ * (left without saving), stuck (the video offered itself), video (watched).
+ * The screen's key goes in `route` and nothing typed on it is ever sent.
+ */
+export type FlowEvent = 'opened' | 'done' | 'refused' | 'closed' | 'stuck' | 'video'
+
+export function trackFlow(flow: string, what: FlowEvent) {
+  if (!sessionId) return
+  const id = sessionId
+  void (async () => {
+    try {
+      const { callApi } = await import('@/shared/api/client')
+      const { z } = await import('@ipc/contracts')
+      await callApi('/activity/track', {
+        method: 'POST',
+        body: { route: flow.slice(0, 200), module: 'flow', event_name: `flow_${what}`, session_id: id },
+        responseSchema: z.object({ ok: z.boolean() }),
+      }).catch(() => null)
+    } catch {
+      /* silent */
+    }
+  })()
+}

@@ -90,3 +90,73 @@ jobs:
           done
           API_URL=http://localhost:8787 bun supabase/tests/rls-live.mjs
           kill $API_PID
+
+  # A real browser on the built app: signs a fresh studio in, opens every page
+  # in the menu, adds a client through the form and checks the plan buttons.
+  # Catches what the API checks cannot -- a page that crashes on load, a lazy
+  # chunk that fails to import (e2e/smoke.mjs says what it does).
+  browser:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ipc
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: ipc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Apply bootstrap + migrations
+        run: |
+          set -e
+          psql -v ON_ERROR_STOP=1 -f deploy/db/00_bootstrap.sql
+          psql -v ON_ERROR_STOP=1 -c "alter role authenticator with login password 'authpw_ci'"
+          for f in $(ls supabase/migrations/*.sql | grep -v '/0000_' | sort); do
+            psql -q -v ON_ERROR_STOP=1 -f "$f" > /dev/null
+          done
+
+      - name: Build the web app against the local API
+        env:
+          VITE_API_BASE_URL: http://localhost:8787
+        run: cd apps/web && bunx vite build
+
+      - name: Playwright and Chromium
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw
+          npm init -y > /dev/null
+          npm i --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Boot API + web, run the browser smoke test
+        env:
+          DATABASE_URL: postgres://authenticator:authpw_ci@localhost:5432/ipc
+          JWT_SECRET: ci-test-secret
+          CRON_SECRET: ci-cron
+          ALLOWED_ORIGINS: ''
+          ENVIRONMENT: ci
+          PORT: '8787'
+          # vite preview sends the live site's headers (public/_headers) and
+          # widens connect-src to this address, the API being plain http here.
+          VITE_API_BASE_URL: http://localhost:8787
+        run: |
+          set -e
+          bun run services/api/src/server.ts &
+          (cd apps/web && bunx vite preview --port 4173 --strictPort) &
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/health > /dev/null && break; sleep 1; done
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ > /dev/null && break; sleep 1; done
+          WEB=http://localhost:4173 API=http://localhost:8787 PLAYWRIGHT=/tmp/pw/node_modules/playwright/index.mjs node e2e/smoke.mjs

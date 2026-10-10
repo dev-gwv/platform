@@ -4,6 +4,7 @@
 #   backup.sh daemon    dump now, then once a day at BACKUP_AT_UTC (default)
 #   backup.sh once      one dump, then exit  (docker compose run --rm backup once)
 #   backup.sh health    exit non-zero if the newest backup is stale (healthcheck)
+#   backup.sh drill     restore the newest dump into a scratch database and check it
 #   backup.sh restore … hand off to restore.sh (see there; destructive)
 #
 # Each run: pg_dump -Fc -> /backups, verify the dump is readable, prune local
@@ -21,12 +22,17 @@ OFFSITE_KEEP_DAYS="${BACKUP_OFFSITE_KEEP_DAYS:-30}"
 AT="${BACKUP_AT_UTC:-02:30}"
 LOCAL_MARKER="$DIR/.last-success"
 OFFSITE_MARKER="$DIR/.last-offsite"
+DRILL_MARKER="$DIR/.last-drill"
+DRILL_FAILED="$DIR/.drill-failed"
+# The tables a restore must bring back, counted at dump time and again after.
+DRILL_TABLES="companies users clients projects shoots invoices received_payments crm_leads"
 
 # Stale thresholds (minutes). Local is a hard daily expectation; the off-box copy
 # gets a longer grace so one flaky night at the storage provider doesn't wedge a
 # deploy that waits on this container's health.
 LOCAL_STALE_MIN=1560      # 26h
 OFFSITE_STALE_MIN=4320    # 72h
+DRILL_STALE_MIN=11520     # 8 days: the drill runs weekly
 
 log() { echo "[backup] $*"; }
 
@@ -53,6 +59,10 @@ run_backup() {
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   file="$DIR/${DB}-${stamp}.dump"
 
+  # What the restore drill will expect to find. Counted just before the dump,
+  # so a row added in between can only make the dump hold one more, never less.
+  counts "$DB" > "$file.counts" 2>/dev/null || rm -f "$file.counts"
+
   log "dumping $DB -> $(basename "$file")"
   # -Fc = custom format: compressed, and pg_restore can read a table out of it.
   pg_dump -Fc \
@@ -75,7 +85,7 @@ run_backup() {
 
   # Local retention. -mtime is whole days, which is what we want here.
   find "$DIR" -maxdepth 1 -name "${DB}-*.dump" -mtime "+${KEEP_DAYS}" -print -delete |
-    while read -r old; do log "pruned local $(basename "$old")"; done
+    while read -r old; do log "pruned local $(basename "$old")"; rm -f "$old.counts"; done
 
   if offsite_enabled; then
     copy_offsite "$file"
@@ -102,6 +112,53 @@ copy_offsite() {
   fi
 }
 
+# "table count" per line, for the drill to compare.
+counts() {
+  for t in $DRILL_TABLES; do
+    n=$(psql -h "${PGHOST:-db}" -U "${POSTGRES_USER:-postgres}" -d "$1" -Atc "select count(*) from public.$t" 2>/dev/null || echo missing)
+    echo "$t $n"
+  done
+}
+
+# The restore drill: an untested backup is a hope. Restores the newest dump
+# into a scratch database on the same server, checks every table in
+# DRILL_TABLES came back with at least the rows it had at dump time, and
+# drops the scratch copy. Never touches the live database.
+drill() {
+  export PGPASSWORD="$POSTGRES_PASSWORD"
+  file=$(ls -1t "$DIR"/"${DB}"-*.dump 2>/dev/null | head -1)
+  [ -n "$file" ] || { log "drill: no dump to restore"; return 1; }
+  scratch="${DB}_restore_drill"
+  host="${PGHOST:-db}"
+  user="${POSTGRES_USER:-postgres}"
+  log "drill: restoring $(basename "$file") into $scratch"
+  psql -h "$host" -U "$user" -d postgres -qc "drop database if exists $scratch" &&
+    psql -h "$host" -U "$user" -d postgres -qc "create database $scratch" || { log "drill: could not make $scratch"; return 1; }
+  ok=1
+  pg_restore -h "$host" -U "$user" -d "$scratch" --no-owner --no-privileges --exit-on-error "$file" > /dev/null 2>&1 || {
+    log "drill FAILED: pg_restore did not finish"
+    ok=0
+  }
+  if [ "$ok" = 1 ] && [ -f "$file.counts" ]; then
+    while read -r t want; do
+      got=$(psql -h "$host" -U "$user" -d "$scratch" -Atc "select count(*) from public.$t" 2>/dev/null || echo missing)
+      if [ "$want" = missing ] || [ "$got" = missing ] || [ "$got" -lt "$want" ]; then
+        log "drill FAILED: $t has $got rows, the dump was taken with $want"
+        ok=0
+      fi
+    done < "$file.counts"
+  fi
+  psql -h "$host" -U "$user" -d postgres -qc "drop database if exists $scratch" || true
+  if [ "$ok" = 1 ]; then
+    log "drill ok: $(basename "$file") restores, every checked table came back"
+    date -u +%s > "$DRILL_MARKER"
+    rm -f "$DRILL_FAILED"
+    return 0
+  fi
+  date -u +%s > "$DRILL_FAILED"
+  return 1
+}
+
 # Fresh within N minutes?
 fresh() {
   [ -f "$1" ] || return 1
@@ -113,6 +170,14 @@ health() {
     echo "no successful local backup in the last $((LOCAL_STALE_MIN / 60))h"
     exit 1
   }
+  if [ -f "$DRILL_FAILED" ]; then
+    echo "the last restore drill failed: a backup that does not restore is not a backup"
+    exit 1
+  fi
+  if [ -f "$DRILL_MARKER" ] && ! fresh "$DRILL_MARKER" "$DRILL_STALE_MIN"; then
+    echo "no restore drill in the last $((DRILL_STALE_MIN / 1440)) days"
+    exit 1
+  fi
   if offsite_enabled; then
     fresh "$OFFSITE_MARKER" "$OFFSITE_STALE_MIN" || {
       echo "no successful off-box copy in the last $((OFFSITE_STALE_MIN / 60))h"
@@ -138,6 +203,7 @@ sleep_until_next() {
 case "${1:-daemon}" in
   health) health ;;
   once)   run_backup ;;
+  drill)  drill ;;
   # The image's entrypoint is this script, so restore is reached through it:
   # `docker compose run --rm backup restore list`.
   restore) shift; exec /bin/sh "$(dirname "$0")/restore.sh" "$@" ;;
@@ -148,7 +214,12 @@ case "${1:-daemon}" in
     while true; do
       sleep_until_next
       run_backup || log "scheduled backup failed — will retry tomorrow"
+      # Sundays, and the first night with no drill on record: prove the newest
+      # dump restores.
+      if [ "$(date -u +%u)" = 7 ] || [ ! -f "$DRILL_MARKER" ]; then
+        drill || log "restore drill failed — health reports it until a drill passes"
+      fi
     done
     ;;
-  *) echo "usage: backup.sh [daemon|once|health|restore <args>]" >&2; exit 2 ;;
+  *) echo "usage: backup.sh [daemon|once|health|drill|restore <args>]" >&2; exit 2 ;;
 esac
