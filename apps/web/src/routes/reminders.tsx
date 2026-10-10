@@ -15,7 +15,7 @@ import {
   useDeleteReminder,
 } from '@/features/reminders/api'
 import { useLeads } from '@/features/crm/api'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { useClients } from '@/features/clients/api'
 import { useInvoices } from '@/features/billing/api'
 import { useEnquiries } from '@/features/enquiries/api'
@@ -58,7 +58,6 @@ function EntityPicker({
   onChangeId: (id: string | null) => void
 }) {
   const leads = useLeads()
-  const projects = useProjects()
   const clients = useClients()
   const invoices = useInvoices()
   const enquiries = useEnquiries({})
@@ -69,13 +68,19 @@ function EntityPicker({
   // a list here; that link is kept as it is. Anything without a list of its
   // own used to fall through to the shoots list below.
   if (!entityType || entityType === 'custom' || entityType === 'general' || entityType === 'deliverable') return null
+  // Projects are searched as you type, not loaded whole.
+  if (entityType === 'project')
+    return (
+      <div>
+        <label className="text-sm font-medium">Linked project</label>
+        <ProjectPicker value={entityId ?? ''} onChange={(id) => onChangeId(id || null)} placeholder="Select…" aria-label="Linked project" />
+      </div>
+    )
 
   const options =
     entityType === 'lead'
       ? (leads.data ?? []).map((l) => ({ id: l.id, label: l.name ?? l.phone ?? 'Unnamed deal' }))
-      : entityType === 'project'
-        ? (projects.data ?? []).map((p) => ({ id: p.id, label: p.name }))
-        : entityType === 'client'
+      : entityType === 'client'
           ? (Array.isArray(clients.data) ? clients.data : []).map((c) => ({ id: c.id, label: c.name }))
           : entityType === 'invoice'
             ? (invoices.data?.items ?? []).map((i) => ({ id: i.id, label: i.invoice_number }))

@@ -22,7 +22,7 @@ import { RemindersContent } from '@/routes/reminders'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { useProductionBoard } from '@/features/board/api'
 import { TaskBoard } from '@/features/board/TaskBoard'
 import { useDirectory } from '@/features/team/api'
@@ -573,7 +573,6 @@ function AssigneePicker({ selected, onChange }: { selected: string[]; onChange: 
  */
 function NewTaskDialog({ own = false }: { own?: boolean }) {
   const create = useCreateTask()
-  const { data: projects } = useProjects()
   const { data: customPriorities } = useTaskPriorities()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -694,21 +693,16 @@ function NewTaskDialog({ own = false }: { own?: boolean }) {
             {!own && (<>
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
-              <Select
+              <ProjectPicker
                 value={projectId}
-                onChange={(e) => {
-                  setProjectId(e.target.value)
+                onChange={(id) => {
+                  setProjectId(id)
                   // The old pick belongs to the old project.
                   setDeliverableId('')
                 }}
-              >
-                <option value="">None</option>
-                {(projects ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+                noneLabel="None"
+                aria-label="Project"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Deliverable</Label>
@@ -789,7 +783,6 @@ function NewTaskDialog({ own = false }: { own?: boolean }) {
 /** Everything the create form set, editable afterwards — same fields, plus who's assigned. */
 function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactNode }) {
   const update = useUpdateTask()
-  const { data: projects } = useProjects()
   const { data: customPriorities } = useTaskPriorities()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(task.title)
@@ -868,14 +861,7 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
-              <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">None</option>
-                {(projects ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+              <ProjectPicker value={projectId} onChange={(id) => setProjectId(id)} label={projectId === task.project_id ? task.project_name : undefined} noneLabel="None" aria-label="Project" />
             </div>
             <TagSelect value={tag} onChange={setTag} />
             <div className="flex flex-col gap-1.5">
@@ -932,7 +918,6 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
 /** Build a checklist once; raise it against a project whenever it comes round. */
 function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
   const { data: bundles, isLoading } = useBundles()
-  const { data: projects } = useProjects()
   const createBundle = useCreateBundle()
   const updateBundle = useUpdateBundle()
   const deleteBundle = useDeleteBundle()
@@ -1025,19 +1010,13 @@ function BundlesDialog({ trigger }: { trigger?: ReactNode }) {
                       {b.items.map((i) => i.title).join(' · ')}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Select
+                      <ProjectPicker
                         value={applyTo[b.id] ?? ''}
-                        onChange={(e) => setApplyTo({ ...applyTo, [b.id]: e.target.value })}
+                        onChange={(id) => setApplyTo({ ...applyTo, [b.id]: id })}
+                        noneLabel="No project"
                         className="h-8 w-52"
                         aria-label={`Project for ${b.name}`}
-                      >
-                        <option value="">No project</option>
-                        {(projects ?? []).map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </Select>
+                      />
                       <Button
                         size="sm"
                         disabled={applyBundle.isPending}

@@ -25,7 +25,8 @@ import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { dueText, invoiceBadge, isOverdue, shortDate } from '@/features/billing/status'
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
 import { useClients } from '@/features/clients/api'
-import { useProjects } from '@/features/projects/api'
+import { useProject } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
 
 const PAGE_SIZE = 25
@@ -72,7 +73,6 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const [recording, setRecording] = useState<InvoiceListItem | null>(null)
   const { data: clientsData } = useClients()
   const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
-  const { data: projects } = useProjects()
   const { data: overview } = useBillingOverview()
   const del = useDeleteInvoice()
   const sendInvoice = useSendInvoice()
@@ -104,8 +104,8 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const summary = data?.summary
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const clientProjects = (projects ?? []).filter((p) => !clientId || p.client_id === clientId)
-  const pickedProject = (projects ?? []).find((p) => p.id === projectId)
+  // The one project filtered on, for the heading and a new invoice's client.
+  const pickedProject = useProject(projectId).data
   const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || !!from || !!to
   const change = (fn: () => void) => {
     fn()
@@ -270,14 +270,14 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
             </option>
           ))}
         </Select>
-        <Select value={projectId} onChange={(e) => change(() => setProjectId(e.target.value))} className="w-full sm:w-52" aria-label="Filter by project">
-          <option value="">All projects</option>
-          {clientProjects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
+        <ProjectPicker
+          value={projectId}
+          onChange={(id) => change(() => setProjectId(id))}
+          clientId={clientId || undefined}
+          noneLabel="All projects"
+          className="sm:w-52"
+          aria-label="Filter by project"
+        />
         <Input type="date" value={from} onChange={(e) => change(() => setFrom(e.target.value))} className="w-full sm:w-40" aria-label="From date" />
         <Input type="date" value={to} onChange={(e) => change(() => setTo(e.target.value))} className="w-full sm:w-40" aria-label="To date" />
         {anyFilter && (

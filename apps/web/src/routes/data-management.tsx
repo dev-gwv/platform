@@ -28,7 +28,7 @@ import { HelpersTab } from '@/features/data/HelpersTab'
 import { DATA_TYPES } from '@/features/data/stage'
 import { LocationKindSelect, kindFields, kindLabelOf, kindValueOf } from '@/features/data/LocationKindSelect'
 import { LookupSelect } from '@/features/settings/LookupSelect'
-import { useProjects } from '@/features/projects/api'
+import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -434,7 +434,6 @@ function AddRecordDialog({
   const isEdit = !!record
   const create = useCreateDataRecord()
   const update = useUpdateDataRecord()
-  const { data: projects } = useProjects()
   const { session } = useAuth()
   const [openSelf, setOpenSelf] = useState(false)
   // Opened from a board card, the page holds it open; otherwise its own button does.
@@ -532,20 +531,16 @@ function AddRecordDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Project</Label>
-              <Select
+              <ProjectPicker
                 value={projectId}
-                onChange={(e) => {
-                  setProjectId(e.target.value)
+                onChange={(id) => {
+                  setProjectId(id)
                   setShootId('')
                 }}
-              >
-                <option value="">Not linked</option>
-                {(projects ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+                label={projectId === record?.project_id ? record?.project_name : undefined}
+                noneLabel="Not linked"
+                aria-label="Project"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Shoot</Label>
