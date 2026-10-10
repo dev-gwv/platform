@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -246,6 +246,42 @@ export const platformRouter = new Hono<AppEnv>()
       extra = {}
     }
     return c.json(platformUsage.parse({ ...(row as Record<string, unknown>), ...extra }))
+  })
+
+  /**
+   * Where people stop: per screen, visits that opened it and visits that
+   * finished it (a visit is one browser session), so "left" is the visits
+   * that opened and never finished -- not a count of closes, which a screen
+   * that hands on to another (Add your team → the form) would inflate.
+   */
+  .get('/usage/stuck', async (c) => {
+    const days = Math.min(365, Math.max(1, Number(c.req.query('days') ?? 30) || 30))
+    const rows = await attempt(c, 'platform.usage_stuck', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        with ev as (
+          select route as flow, session_id, company_id, event_name
+            from usage_events
+           where module = 'flow' and occurred_at > now() - make_interval(days => ${days})
+        ), per as (
+          select flow, session_id,
+                 bool_or(event_name = 'flow_opened') as opened,
+                 bool_or(event_name = 'flow_done') as done
+            from ev group by flow, session_id
+        )
+        select f.flow,
+               (select count(*) from per p where p.flow = f.flow and p.opened) as opened,
+               (select count(*) from per p where p.flow = f.flow and p.done) as done,
+               (select count(*) from per p where p.flow = f.flow and p.opened and not p.done) as left,
+               count(*) filter (where f.event_name = 'flow_refused') as refused,
+               count(*) filter (where f.event_name = 'flow_stuck') as stuck,
+               count(*) filter (where f.event_name = 'flow_video') as videos,
+               count(distinct f.company_id) as studios
+          from ev f
+         group by f.flow
+         order by 4 desc`),
+    )
+    if (!rows) fail(400, 'We could not load where people stop.')
+    return c.json(flowStopList.parse(rows))
   })
 
   // Extend / expire / grant-trial on one tenant's plan. Each RPC re-checks the

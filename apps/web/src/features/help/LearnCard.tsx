@@ -10,6 +10,7 @@ import { useHints, useSetHint } from '@/features/team/hints-api'
 import { useTutorials } from './api'
 import { isRetired, remember } from './learning'
 import { startStuck, stuckReason, stuckStep, type StuckEvent, type StuckState } from './stuck-rules'
+import { trackFlow } from '@/shared/usage/usageTracker'
 import { TutorialPlayer } from './TutorialPlayer'
 import { useHelpLang } from './lang'
 import { lengthLabel, posterSrc, titleIn, type Tutorial } from './tutorials'
@@ -82,11 +83,18 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
     const s = visit.get(key)
     if (!s || !stuckReason(s, Date.now())) return
     feed({ type: 'offered' })
+    trackFlow(key, 'stuck')
     toast(`Stuck? Watch how${tutorial.seconds ? ` · ${lengthLabel(tutorial.seconds)}` : ''}`, {
       id: `stuck-${key}`,
       description: tutorial.title,
       duration: 20_000,
-      action: { label: 'Watch', onClick: () => setPlaying(tutorial) },
+      action: {
+        label: 'Watch',
+        onClick: () => {
+          trackFlow(key, 'video')
+          setPlaying(tutorial)
+        },
+      },
     })
   }, [feed, key, tutorial])
 
@@ -115,15 +123,29 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
     }
   }, [show, countClose, key])
 
+  // Where people stop (Platform → Usage): counted for everyone, whether or
+  // not the card still shows, so the numbers do not fall as people learn.
+  const done = useRef(false)
+  useEffect(() => {
+    trackFlow(key, 'opened')
+    done.current = false
+    return () => {
+      if (!done.current) trackFlow(key, 'closed')
+    }
+  }, [key])
+
   const refused = useCallback(() => {
+    trackFlow(key, 'refused')
     if (!show) return
     feed({ type: 'refused', at: Date.now() })
     offer()
-  }, [show, feed, offer])
+  }, [show, feed, offer, key])
   const progress = useCallback(() => {
+    if (!done.current) trackFlow(key, 'done')
+    done.current = true
     moved.current = true
     feed({ type: 'progress', at: Date.now() })
-  }, [feed])
+  }, [feed, key])
 
   const player = (
     <TutorialPlayer
@@ -140,7 +162,10 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
       <>
         <LearnCardView
           tutorial={tutorial}
-          onPlay={() => setPlaying(tutorial)}
+          onPlay={() => {
+            trackFlow(key, 'video')
+            setPlaying(tutorial)
+          }}
           onClose={() => {
             setHidden(true)
             save('closed')

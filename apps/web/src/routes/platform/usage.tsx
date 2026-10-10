@@ -12,7 +12,8 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { formatINR } from '@/shared/ui/format'
-import { usePlatformUsage } from '@/features/platform/api'
+import { useFlowStops, usePlatformUsage } from '@/features/platform/api'
+import { finishRate, flowLabel, rankStops, stuckAdvice } from '@/features/platform/stuck'
 
 function csvEscape(v: unknown): string {
   if (v == null) return ''
@@ -169,6 +170,8 @@ function Usage() {
         {data.inactive_count != null && <span>{data.inactive_count} studios with no heartbeat in this window.</span>}
       </div>
 
+      <WhereTheyStop days={effectiveDays} />
+
       {funnelEntries.length > 0 && (
         <Card className="mt-4">
           <CardHeader><CardTitle>Activation funnel</CardTitle></CardHeader>
@@ -294,5 +297,80 @@ function Usage() {
         </Dialog>
       )}
     </>
+  )
+}
+
+/**
+ * Where people stop (owner, 10 Oct: "if most people are stuck somewhere,
+ * guide me on how to fix it"): each screen a new studio learns, how many
+ * visits finished it, and in a sentence what to look at first. Nothing a
+ * studio typed is recorded, only that the screen was opened, finished,
+ * refused or left.
+ */
+function WhereTheyStop({ days }: { days: string }) {
+  const q = useFlowStops(days)
+  const rows = rankStops(q.data ?? [])
+  const advice = rows.map(stuckAdvice).filter((a): a is string => !!a).slice(0, 3)
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle>Where people stop</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {q.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing yet. Each time a studio opens Add your team, New client or a step of Create project, it is counted here.</p>
+        ) : (
+          <>
+            {advice.length > 0 ? (
+              <ul className="flex flex-col gap-1.5">
+                {advice.map((a) => (
+                  <li key={a} className="rounded-lg border border-tone-amber/35 bg-tone-amber-soft px-3 py-2 text-sm">{a}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No screen stands out: most visits finish what they start.</p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Screen</th>
+                    <th className="px-3 py-2 text-right font-medium">Opened</th>
+                    <th className="px-3 py-2 font-medium">Finished</th>
+                    <th className="px-3 py-2 text-right font-medium">Left</th>
+                    <th className="px-3 py-2 text-right font-medium">Refused</th>
+                    <th className="px-3 py-2 text-right font-medium">Video offered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const rate = finishRate(r)
+                    return (
+                      <tr key={r.flow} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3 font-medium">{flowLabel(r.flow)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.opened}</td>
+                        <td className="px-3 py-2">
+                          <span className="flex items-center gap-2" title={`${r.done} of ${r.opened} visits finished`}>
+                            <span className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                              <span className={`block h-full ${rate != null && rate < 50 ? 'bg-tone-amber' : 'bg-primary'}`} style={{ width: `${rate ?? 0}%` }} />
+                            </span>
+                            <span className="tabular-nums text-muted-foreground">{rate == null ? '—' : `${rate}%`}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.left}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.refused}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.stuck}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

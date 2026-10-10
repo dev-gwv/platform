@@ -3755,6 +3755,13 @@ if (listed) {
     plans.status === 403 && assign.status === 403 && recovery.status === 403,
     { plans: plans.status, assign: assign.status, recovery: recovery.status },
   )
+  const tracked = await api('/activity/track', { token: aToken, method: 'POST', body: { route: 'project-shoots', module: 'flow', event_name: 'flow_opened', session_id: 'rls-live-flow' } })
+  const stops = await api('/platform/usage/stuck', { token: aToken })
+  check(
+    'where people stop: a studio records that a screen was opened, and cannot read anyone\'s drop-offs',
+    tracked.status === 200 && stops.status === 403,
+    { tracked: tracked.status, stops: stops.status },
+  )
   check(
     'plans: a studio owner can neither count studios nor take a plan off sale (0256)',
     counts.status === 403 && sale.status === 403,
