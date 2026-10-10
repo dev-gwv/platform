@@ -39,6 +39,16 @@ export const MY_TIME: readonly HubTab[] = [
   { to: '/leave', label: 'Leave', module: 'dashboard' },
 ]
 
+/**
+ * The studio's plan, its own menu line above Settings for the owner (owner,
+ * 10 Oct: "the plans and the billings should be clearly visible on the left").
+ * Settings pages still: the rail draws their tab row.
+ */
+export const PLAN_BILLING: readonly HubTab[] = [
+  { to: '/settings/subscription', label: 'Plan & billing', module: 'settings_subscription' },
+  { to: '/settings/refer-a-studio', label: 'Refer a studio', module: 'settings_subscription' },
+]
+
 /** Roles and terms are settings pages: the settings rail is their tab row. */
 export const TEAM_SETUP: readonly HubTab[] = [
   { to: '/settings/roles', label: 'Roles & access', module: 'team_roles' },

@@ -1,7 +1,7 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
-import { MONEY, MY_TIME, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
+import { MONEY, MY_TIME, PLAN_BILLING, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
 import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import {
   BarChart3,
@@ -89,8 +89,9 @@ const leaf = (
  */
 export const NAV: NavEntry[] = [
   // Twelve lines for the studio, one word each (the audit, owner's yes):
-  // Home · Leads · Clients · Projects · Shoots · Post-production · Tasks ·
-  // Data & Backup · Money · Team · Reports · Settings. Making something new is
+  // Home · Leads · Clients · Projects · Shoots · Post-Production · Tasks ·
+  // Data & Backup · Money · Team · Reports · Settings, and for the owner a
+  // thirteenth, Plan & billing, just above Settings. Making something new is
   // the top bar's "+ New"; alerts are the bell; the occasional set-up pages
   // (enquiry forms, lead sources, referrals, activity) are in Settings.
   leaf('Home', '/dashboard', LayoutDashboard, { module: 'dashboard' }),
@@ -113,7 +114,7 @@ export const NAV: NavEntry[] = [
   leaf('Projects', '/projects', Briefcase, { module: 'projects', studioWork: true, hub: PROJECTS_HUB }),
   // One shoots page: Team Booking (Shoots · Calendar · People · Conflicts).
   leaf('Shoots', '/team-allocation', CalendarClock, { module: 'projects', studioWork: true }),
-  leaf('Post-production', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
+  leaf('Post-Production', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
   // Reminders are a view of it now (?view=reminders).
   leaf('Tasks', '/tasks', ListChecks, { module: 'tasks' }),
   leaf('Data & Backup', '/data-management', Database, { module: 'projects', studioWork: true }),
@@ -135,9 +136,10 @@ export const NAV: NavEntry[] = [
   // How the studio is doing for a period: sales, money, delivery, team.
   leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
 
-  // The studio's plan is not a menu line any more: it is the card pinned at
-  // the foot of the sidebar (PlanCard), with its days left and an Upgrade
-  // button always in sight. Settings > Plan & billing opens the same page.
+  // The plan in sight (owner, 10 Oct): its own line for the owner, the only
+  // one who can change it (settings_subscription is the owner's), above
+  // Settings. The card at the foot of the sidebar keeps the days left.
+  leaf('Plan & billing', '/settings/subscription', CreditCard, { module: 'settings_subscription', hub: PLAN_BILLING }),
   // Stays lit on every settings page, and search finds each one by name.
   leaf('Settings', '/settings/company', Settings, { module: 'settings', hub: SETTINGS_PAGES }),
 
@@ -149,6 +151,7 @@ export const NAV: NavEntry[] = [
     platformOnly: true,
     children: [
       leaf('Studio Access Manager', '/platform/studios', ShieldCheck, { platformOnly: true }),
+      leaf('Plans', '/platform/plans', CreditCard, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
       leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
       leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),

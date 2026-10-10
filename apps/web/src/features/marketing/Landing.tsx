@@ -170,7 +170,14 @@ function PublicPrice({ fallback }: { fallback: ReactNode }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">Every studio starts with a {TRIAL_DAYS}-day free trial. Prices are before 18% GST.</p>
-      <PlanPicker plans={plans.data} onChoose={() => void navigate({ to: '/login', search: { mode: 'register' } as never })} />
+      <PlanPicker
+        plans={plans.data}
+        action={{ label: `Start ${TRIAL_DAYS}-day free trial` }}
+        onChoose={() => void navigate({ to: '/login', search: { mode: 'register' } as never })}
+      />
+      <p className="text-center text-sm text-muted-foreground">
+        An IPC Diamond member? Start your trial, then verify from your plan page for 30 days and member prices.
+      </p>
     </div>
   )
 }

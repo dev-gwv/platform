@@ -16,7 +16,7 @@ import type { Tone } from '@/shared/ui/tone-chip'
 export const STAGE_LABEL: Record<ProductionStage, string> = {
   pre: 'Pre-production',
   production: 'On production',
-  post: 'Post-production',
+  post: 'Post-Production',
   other: 'Management & other',
 }
 

@@ -60,7 +60,7 @@ describe('the staff menu', () => {
     const staff = labels(filterNav(NAV, 'employee', access(['dashboard', 'projects', 'personal_expenses'], []), false))
     expect(staff.slice(0, 6)).toEqual(['Home', 'My Work', 'My Shoots', 'Attendance & leave', 'My payouts', 'My performance'])
     // My Tasks folded into My work: the same tasks, one place.
-    for (const hidden of ['My Tasks', 'Projects', 'Post-production', 'Shoots', 'Data & Backup', 'Money', 'Activity'])
+    for (const hidden of ['My Tasks', 'Projects', 'Post-Production', 'Shoots', 'Data & Backup', 'Money', 'Activity'])
       expect(staff).not.toContain(hidden)
   })
 
@@ -69,7 +69,7 @@ describe('the staff menu', () => {
     expect(admin).toContain('Home')
     expect(admin).toContain('Projects')
     expect(admin).toContain('Shoots')
-    expect(admin).toContain('Post-production')
+    expect(admin).toContain('Post-Production')
   })
 
   it('puts a person\'s attendance and leave under one tab row', () => {
@@ -88,9 +88,21 @@ describe('the studio menu', () => {
     ] as ModuleKey[]
     const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
     expect(lines).toEqual([
-      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-production', 'Tasks', 'Data & Backup', 'Money',
+      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Tasks', 'Data & Backup', 'Money',
       'Team', 'Reports', 'Settings',
     ])
+  })
+
+  it('gives the owner a Plan & billing line just above Settings', () => {
+    const every = ['dashboard', 'crm', 'settings', 'settings_subscription'] as ModuleKey[]
+    const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
+    expect(lines.slice(-2)).toEqual(['Plan & billing', 'Settings'])
+    const plan = filterNav(NAV, 'admin', access(every), false).find((e) => e.label === 'Plan & billing') as NavLeaf
+    expect(plan.to).toBe('/settings/subscription')
+    expect(plan.hub?.map((t) => t.to)).toEqual(['/settings/subscription', '/settings/refer-a-studio'])
+    // Only one line lights on the plan page.
+    const settings = filterNav(NAV, 'admin', access(every), false).find((e) => e.label === 'Settings') as NavLeaf
+    expect(settings.hub?.some((t) => t.to === '/settings/subscription')).toBe(false)
   })
 
   it('opens Money on what is due, and Projects with its Needs attention tab', () => {

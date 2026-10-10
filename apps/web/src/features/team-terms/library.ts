@@ -16,7 +16,7 @@ type LibraryCategory = TeamTermsCategory
 export const CATEGORY_LABELS: Record<LibraryCategory, string> = {
   pre_production: 'Pre-production',
   production: 'Production / Shoot Day',
-  post_production: 'Post-production',
+  post_production: 'Post-Production',
   general: 'General',
   business_protection: 'Business Protection',
 }

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -108,6 +108,32 @@ export function usePlatformPlans(enabled = true) {
     queryFn: () => callApi('/platform/plans', { responseSchema: platformPlanList }),
     enabled,
     staleTime: 5 * 60_000,
+  })
+}
+
+/** Paying studios and studios on a free trial, for Platform → Plans. */
+export function usePlatformPlanCounts() {
+  return useQuery({
+    queryKey: ['platform', 'plans', 'counts'],
+    queryFn: () => callApi('/platform/plans/counts', { responseSchema: platformPlanCounts }),
+  })
+}
+
+/** On sale or off; a studio already on the plan keeps it. */
+export function useSetPlanOnSale() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ key, onSale }: { key: string; name: string; onSale: boolean }) =>
+      callApi(`/platform/plans/${encodeURIComponent(key)}`, {
+        method: 'PATCH',
+        body: { on_sale: onSale },
+        responseSchema: z.object({ ok: z.boolean() }),
+      }),
+    onSuccess: (_r, v) => {
+      toast.success(v.onSale ? `${v.name} is on sale` : `${v.name} is off sale. Studios on it keep it.`)
+      void qc.invalidateQueries({ queryKey: ['platform', 'plans'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change the plan.'),
   })
 }
 

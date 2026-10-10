@@ -66,15 +66,15 @@ describe('a new studio', () => {
     expect(await trialDays(OLD)).toBe(30)
   })
 
-  it('sees one plan, Rs 1,00,000 a year, and cannot order a member plan', async () => {
-    const outsider = await q<{ key: string; price: string }>(`select key, price::text from plans where audience = 'outsider' and is_active`)
-    expect(outsider).toEqual([{ key: 'studio_yearly', price: '100000.00' }])
+  it('sees Starter, Pro and Studio Max (0256), and cannot order a member plan', async () => {
+    const outsider = await q<{ key: string }>(`select key from plans where audience = 'outsider' and is_active order by sort_order`)
+    expect(outsider.map((p) => p.key)).toEqual(['starter_yearly', 'starter_monthly', 'pro_yearly', 'pro_monthly', 'max_yearly', 'max_monthly'])
     await as(OWNER)
     const member = await one<{ id: string }>(`select id from plans where key = 'ipc_yearly'`)
     await expect(db.query(`select * from create_payment_order('${member.id}')`)).rejects.toThrow(/unknown plan/)
-    const own = await one<{ id: string }>(`select id from plans where key = 'studio_yearly'`)
+    const own = await one<{ id: string }>(`select id from plans where key = 'starter_yearly'`)
     const order = await one<{ amount: string }>(`select amount::text from create_payment_order('${own.id}')`)
-    expect(Number(order.amount)).toBe(118000)
+    expect(Number(order.amount)).toBe(21225.84)
   })
 })
 

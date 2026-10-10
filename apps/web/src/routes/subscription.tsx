@@ -1,16 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
-import {
-  plan,
-  planQuote,
-  createOrderResponse,
-  activateResponse,
-  subscriptionStatus,
-  type ActivateRequest,
-  type Plan,
-} from '@ipc/contracts'
+import { useQuery } from '@tanstack/react-query'
+import { Check, MessageCircle, Mail, Sparkles } from 'lucide-react'
+import { plan, planQuote, subscriptionStatus } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -22,10 +13,9 @@ import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { formatINR, humanize } from '@/shared/ui/format'
-import { openCheckout } from '@/features/billing/razorpay-checkout'
+import { useTalkToUs } from '@/features/billing/talk-to-us'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
 import { DiamondVerifyCard } from '@/features/billing/DiamondVerifyCard'
@@ -43,14 +33,10 @@ export function SubscriptionPage() {
   )
 }
 
-type Outcome = { tone: 'success' | 'error' | 'info'; text: string }
-
 function Subscription() {
-  const { session, refresh } = useAuth()
-  const qc = useQueryClient()
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
-  const [dialog, setDialog] = useState<'success' | 'failed' | null>(null)
-  const [failedMsg, setFailedMsg] = useState('')
+  const { session } = useAuth()
+  const talk = useTalkToUs()
+  const TalkIcon = talk.via === 'whatsapp' ? MessageCircle : Mail
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['subscription', 'plans'],
     queryFn: () => callApi('/subscription/plans', { responseSchema: plans }),
@@ -70,78 +56,13 @@ function Subscription() {
     retry: false,
   })
 
-  const subscribe = useMutation({
-    mutationFn: async (p: Plan) => {
-      const order = await callApi('/subscription/order', {
-        method: 'POST',
-        body: { plan_id: p.id },
-        responseSchema: createOrderResponse,
-      })
-
-      let proof: ActivateRequest
-      if (order.razorpay_order_id && order.key_id) {
-        // Real checkout: the signature Razorpay hands back is the proof the
-        // API verifies before touching the plan.
-        const paid = await openCheckout({
-          keyId: order.key_id,
-          razorpayOrderId: order.razorpay_order_id,
-          amountRupees: order.amount,
-          currency: order.currency,
-          studioName: 'Studio AutoPilot',
-          description: `${p.name} plan`,
-          prefill: { name: session?.display_name ?? '', email: session?.email ?? '' },
-        })
-        if (!paid) return null
-        proof = {
-          order_id: order.order_id,
-          payment_id: paid.razorpay_payment_id,
-          signature: paid.razorpay_signature,
-        }
-      } else {
-        // No provider configured: the API allows this only on a dev bench and
-        // refuses it anywhere else.
-        proof = { order_id: order.order_id, payment_id: 'pay_demo' }
-      }
-      return callApi('/subscription/activate', {
-        method: 'POST',
-        body: proof,
-        responseSchema: activateResponse,
-      })
-    },
-    onSuccess: async (r) => {
-      if (!r) {
-        setOutcome({ tone: 'info', text: 'Checkout was closed before paying. Nothing was charged.' })
-        return
-      }
-      setOutcome({
-        tone: 'success',
-        text: `Plan active until ${new Date(r.expires_at).toLocaleDateString('en-IN')}.`,
-      })
-      setDialog('success')
-      // The plan, its year, the usage bars and what each plan would cost now all moved.
-      void qc.invalidateQueries({ queryKey: ['subscription'] })
-      await refresh()
-    },
-    onError: (e) => {
-      const msg = e instanceof Error ? e.message : 'Could not activate.'
-      setOutcome({ tone: 'error', text: msg })
-      setFailedMsg(msg)
-      setDialog('failed')
-    },
-  })
-
   const gateTone = { active: 'success', grace: 'warning', grandfathered: 'info', expired: 'danger' } as const
-  const outcomeClass = {
-    success: 'bg-success/10 text-success',
-    error: 'bg-destructive/10 text-destructive',
-    info: 'bg-muted text-muted-foreground',
-  }
 
   return (
     <>
       <PlanExpiryBanner />
       <PageHeader
-        title="Subscription"
+        title="Plan & billing"
         actions={
           session && (
             <StatusBadge tone={gateTone[session.plan_gate]}>
@@ -193,11 +114,6 @@ function Subscription() {
       <UsageCard className="mb-4" />
       {/* Outsiders see one price; an IPC Diamond member proves it here (0214). */}
       {status.data && session?.is_owner && <DiamondVerifyCard status={status.data} className="mb-4" />}
-      {outcome && (
-        <p role="status" className={`mb-4 rounded-md px-3 py-2 text-sm ${outcomeClass[outcome.tone]}`}>
-          {outcome.text}
-        </p>
-      )}
 
       {isLoading ? (
         <SkeletonCards count={3} />
@@ -214,8 +130,8 @@ function Subscription() {
         <PlanPicker
           plans={data}
           quotes={quotes.data}
-          onChoose={(p) => subscribe.mutate(p)}
-          busy={subscribe.isPending}
+          onChoose={(p, q) => talk.open(p, q?.kind)}
+          action={{ label: talk.label, icon: TalkIcon, note: "We'll set it up on a short call." }}
           canChoose={!!session?.is_owner}
           chooseHint="Only the studio owner can change the plan."
         />
@@ -227,13 +143,7 @@ function Subscription() {
             const free = p.price <= 0
             const highlight = p.badge === 'Most Popular'
             const saver = p.badge === 'Maximum Savings'
-            const label = free
-              ? 'Free Trial Included'
-              : subscribe.isPending
-                ? 'Processing…'
-                : renewing
-                  ? `Renew · ${p.name.replace(/^IPC\s+/i, '')}`
-                  : `Choose ${p.name.replace(/^IPC\s+/i, '')}`
+            const label = free ? 'Free Trial Included' : talk.label
             return (
               <Card
                 key={p.id}
@@ -304,11 +214,11 @@ function Subscription() {
                   </p>
                   <Button
                     variant={highlight || saver ? 'default' : 'outline'}
-                    onClick={() => subscribe.mutate(p)}
-                    disabled={subscribe.isPending || free || !session?.is_owner}
+                    onClick={() => talk.open(p, renewing ? 'renew' : 'buy')}
+                    disabled={free || !session?.is_owner}
                     title={session?.is_owner ? undefined : 'Only the studio owner can change the plan.'}
                   >
-                    {label}
+                    {!free && <TalkIcon aria-hidden />} {label}
                   </Button>
                 </CardContent>
               </Card>
@@ -319,7 +229,7 @@ function Subscription() {
         </>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
-        Prices exclude 18% GST. Paying means you agree to the{' '}
+        Prices exclude 18% GST. Message us and we'll set your plan up on a short call. Paying means you agree to the{' '}
         <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}
         <Link to="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
       </p>
@@ -341,33 +251,9 @@ function Subscription() {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Charged but plan not active? Re-open checkout — replaying a paid order recovers it without charging again.
-            </p>
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={dialog === 'success'} onOpenChange={(o) => { if (!o) setDialog(null) }}>
-        <DialogContent>
-          <div className="flex flex-col items-center gap-2 p-4 text-center">
-            <CheckCircle2 className="size-10 text-success" />
-            <h2 className="font-semibold">Payment successful</h2>
-            <p className="text-sm text-muted-foreground">{outcome?.text ?? 'Your plan is active.'}</p>
-            <Button onClick={() => setDialog(null)}>Done</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={dialog === 'failed'} onOpenChange={(o) => { if (!o) setDialog(null) }}>
-        <DialogContent>
-          <div className="flex flex-col items-center gap-2 p-4 text-center">
-            <XCircle className="size-10 text-destructive" />
-            <h2 className="font-semibold">Payment failed</h2>
-            <p className="text-sm text-muted-foreground">{failedMsg || 'The payment did not go through. Nothing was charged — try again.'}</p>
-            <Button variant="outline" onClick={() => setDialog(null)}>Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

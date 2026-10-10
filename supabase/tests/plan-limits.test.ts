@@ -252,7 +252,7 @@ describe('plan limits from the billing date (0242)', () => {
     expect(co).toEqual({ plan: 'pro_yearly', anchored: true })
   })
 
-  it('writes Starter, Pro and Studio Max as the owner set them, still switched off', async () => {
+  it('writes Starter, Pro and Studio Max as the owner set them, on sale since 0256', async () => {
     const rows = await q<{ key: string; limits: Record<string, number>; free_emails_month: number | null; is_active: boolean }>(
       `select key, limits, free_emails_month, is_active from plans where tier is not null and key <> 'tight_test' order by key`,
     )
@@ -262,6 +262,6 @@ describe('plan limits from the billing date (0242)', () => {
     expect(by['pro_yearly']!.limits).toEqual({})
     expect(by['max_yearly']!.limits).toEqual({})
     expect(rows.map((r) => r.free_emails_month)).toEqual([null, null, 300, 300, 100, 100])
-    expect(rows.every((r) => !r.is_active)).toBe(true)
+    expect(rows.every((r) => r.is_active)).toBe(true)
   })
 })

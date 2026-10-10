@@ -1,9 +1,11 @@
 # Studio AutoPilot plans
 
-Status: **built, switched off.** The plans below are in the database (0241,
-0242) with `is_active = false`. They go live when the owner says "put the
-plans live"; until then studios see the plans they see today and the home
-page keeps its words.
+Status: **on sale since 0256** (owner, 10 Oct 2026, after the preview). The
+₹1,00,000 yearly plan is off sale; studios already on it keep it. Buying is
+"Talk to us on WhatsApp" for now: the message is written for the studio, and
+the platform owner gives the plan in Studio Access Manager. Platform → Plans
+lists every plan with an On sale switch. The cards no longer say "WhatsApp &
+email from credits" -- credits are not built yet.
 
 ## The plans
 
@@ -11,7 +13,7 @@ page keeps its words.
 |---|---|---|---|
 | Billed yearly | ₹1,499/mo · ₹17,988 a year · ₹49 a day | ₹2,499/mo · ₹29,988 · ₹82 a day | ₹3,999/mo · ₹47,988 · ₹131 a day |
 | Billed monthly | ₹1,999 | ₹2,999 | ₹4,999 |
-| On the card | 30 projects a year · 3 team logins · 20 crew · WhatsApp & email from credits | Unlimited projects, leads and team · WhatsApp & email from credits | Everything unlimited · Your own name and WhatsApp number · Priority help |
+| On the card | 30 projects a year · 3 team logins · 20 crew · Every feature included | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name and WhatsApp number · Priority help |
 
 Prices are before 18% GST.
 
@@ -72,6 +74,6 @@ studio's own usage bars.
 - **Message credits in every plan** (0243): Razorpay recharge packs, ₹100 to
   start, client WhatsApp from our number (credits) or the studio's own
   (Studio Max), emails past the free allowance from credits.
-- **Going live**: switch on the six rows and retire the ₹1,00,000 yearly
-  outsider plan — only on the owner's word.
+- **Online payment for plans**: Razorpay checkout is still in the code; turn
+  the plan buttons back to it when the owner says.
 - **Auto-renew** through Razorpay Subscriptions, once Razorpay approves the domain.

@@ -36,9 +36,9 @@ export function TermsPage() {
       <LegalSection n={3} title="Plans and payment">
         <p>{PLAN_SUMMARY}</p>
         <ul>
-          <li>Prices are in Indian Rupees. GST is added at checkout.</li>
-          <li>Payments are handled by Razorpay. We never see or store your card or bank details.</li>
-          <li>A plan starts when the payment succeeds and runs for its full period. Plans do not renew on their own.</li>
+          <li>Prices are in Indian Rupees. 18% GST is added to every price.</li>
+          <li>Online payments are handled by Razorpay. We never see or store your card or bank details.</li>
+          <li>A plan starts when your payment is received and runs for its full period. Plans do not renew on their own.</li>
           <li>When a plan ends, access pauses until you renew. Your data is kept.</li>
         </ul>
       </LegalSection>

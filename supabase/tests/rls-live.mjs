@@ -2993,14 +2993,24 @@ if (listed) {
   const usage = await api('/subscription/usage', { token: aToken })
   check('plans: a studio on a trial has no limits to show', usage.status === 200 && Object.keys(usage.json.limits ?? {}).length === 0 && typeof usage.json.used?.projects === 'number', usage.json)
   const plans = await api('/subscription/plans', { token: aToken })
-  check('plans: the proposed plans stay hidden until the owner picks', plans.status === 200 && !(plans.json ?? []).some((p) => p.tier), (plans.json ?? []).map((p) => p.key))
+  check(
+    'plans: a studio outside IPC is offered Starter, Pro and Studio Max, each without "credits" on the card (0256)',
+    plans.status === 200 &&
+      ['starter', 'pro', 'max'].every((t) => (plans.json ?? []).some((p) => p.tier === t)) &&
+      !(plans.json ?? []).some((p) => (p.features ?? []).some((f) => /credit/i.test(f))),
+    (plans.json ?? []).map((p) => p.key),
+  )
   // 0242: the plan year follows the billing date; a trial has none yet.
   check('plans: usage counts in the plan year, with no window on a trial', usage.json?.period === 'year' && usage.json?.window_ends == null && typeof usage.json.used?.team_members === 'number', usage.json)
   const quotes = await api('/subscription/quotes', { token: aToken })
   check('plans: every plan on offer says what paying would mean now', quotes.status === 200 && Array.isArray(quotes.json) && quotes.json.every((q) => q.kind === 'buy'), quotes.json)
   const pub = await fetch(`${API}/public/plans`)
   const pubJson = await pub.json().catch(() => null)
-  check('plans: the home page lists no plan until they are switched on', pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 0, pubJson)
+  check(
+    'plans: the home page lists the six plans on sale and nothing else (0256)',
+    pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 6 && pubJson.every((p) => p.tier),
+    (pubJson ?? []).map?.((p) => p.key) ?? pubJson,
+  )
 }
 
 // ── 0243: a client's birthdays and anniversary ───────────────────
@@ -3297,7 +3307,11 @@ if (listed) {
 {
   const plans = await api('/subscription/plans', { token: aToken })
   const keys = Array.isArray(plans.json) ? plans.json.map((p) => p.key) : []
-  check('diamond: a new studio sees only the outsider plan', keys.length === 1 && keys[0] === 'studio_yearly', { keys })
+  check(
+    'diamond: a new studio sees Starter, Pro and Studio Max, not the member plans (0256)',
+    keys.length === 6 && keys.every((k) => /^(starter|pro|max)_(yearly|monthly)$/.test(k)),
+    { keys },
+  )
 
   const status = await api('/subscription/status', { token: aToken })
   check('diamond: a new studio is an outsider', status.status === 200 && status.json.member_tier === 'outsider', status.json)
@@ -3734,10 +3748,17 @@ if (listed) {
   const plans = await api('/platform/plans', { token: aToken })
   const assign = await api(`/platform/studios/${crypto.randomUUID()}/assign-plan`, { token: aToken, method: 'POST', body: { plan_key: 'x' } })
   const recovery = await api('/platform/payments/recovery', { token: aToken })
+  const counts = await api('/platform/plans/counts', { token: aToken })
+  const sale = await api('/platform/plans/starter_yearly', { token: aToken, method: 'PATCH', body: { on_sale: false } })
   check(
     'step 2: plans, assigning one and the payments to check answer 403 to a studio owner',
     plans.status === 403 && assign.status === 403 && recovery.status === 403,
     { plans: plans.status, assign: assign.status, recovery: recovery.status },
+  )
+  check(
+    'plans: a studio owner can neither count studios nor take a plan off sale (0256)',
+    counts.status === 403 && sale.status === 403,
+    { counts: counts.status, sale: sale.status },
   )
 }
 

@@ -52,7 +52,7 @@ export const PROJECT_TABS = [
 export type ProjectTab = (typeof PROJECT_TABS)[number]['value']
 
 /**
- * The row across the top: eight entries, not twelve. Post-production holds
+ * The row across the top: eight entries, not twelve. Post-Production holds
  * the work, what is handed in to review and the tasks; Finance holds
  * billing, expenses and the cost sheet. The owner: twelve tabs were "a lot
  * of chaos... my mind is not able to focus on anything".
@@ -61,7 +61,7 @@ export const PROJECT_GROUPS = [
   { value: 'overview', label: 'Overview', icon: LayoutGrid, views: ['overview'] },
   { value: 'quotation', label: 'Quotation', icon: FileText, views: ['quotation'] },
   { value: 'shoots', label: 'Shoots', icon: Camera, views: ['shoots'] },
-  { value: 'production', label: 'Post-production', icon: Package, views: ['deliverables', 'completed_work', 'tasks'] },
+  { value: 'production', label: 'Post-Production', icon: Package, views: ['deliverables', 'completed_work', 'tasks'] },
   { value: 'terms', label: 'Terms', icon: FileSignature, views: ['terms'] },
   { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs', 'payouts'] },
   { value: 'data', label: 'Data', icon: Database, views: ['data'] },
@@ -154,7 +154,7 @@ export function ProjectTabStrip({
 }
 
 /**
- * The second row inside Post-production and Finance: Work · Work to review ·
+ * The second row inside Post-Production and Finance: Work · Work to review ·
  * Task Management, or Billing · Expenses · Cost sheet · Payouts. Nothing is drawn for a
  * group with a single view this person can see.
  */

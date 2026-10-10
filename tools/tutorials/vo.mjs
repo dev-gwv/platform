@@ -122,7 +122,7 @@ export const VO = {
   'give-work': {
     title: L('Hand a film to an editor in one step.', 'एक स्टेप में फ़िल्म एडिटर को सौंपिए।'),
     steps: [
-      L("Open the project's Post-production tab.", 'प्रोजेक्ट का Post-production टैब खोलिए।'),
+      L("Open the project's Post-Production tab.", 'प्रोजेक्ट का Post-Production टैब खोलिए।'),
       L('Nobody on the teaser yet? Tap Start editing.', 'टीज़र पर अभी कोई नहीं? Start editing पर टैप कीजिए।'),
       L('Each editor shows how much they already have.', 'हर एडिटर के साथ दिखता है कि उनके पास पहले से कितना काम है।'),
       L('The due date is filled in. Add a line of brief.', 'ड्यू डेट भरी हुई है। एक लाइन का ब्रीफ़ लिखिए।'),
