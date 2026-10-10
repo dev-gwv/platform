@@ -1,19 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  askReply,
-  askRequest,
   assistantFeedbackRequest,
   assistantHealth,
   assistantSettings,
   assistantState,
+  assistantTestResult,
   z,
-  type AskReply,
-  type AskRequest,
   type AssistantFeedbackRequest,
   type SaveAssistantSettingsRequest,
 } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
 const STATE = ['assistant', 'state'] as const
@@ -38,27 +35,16 @@ export function useAssistantState() {
 }
 
 /**
- * Ask a question.
+ * The day's count has moved, so the panel's "N left today" is stale.
  *
- * SLOW_TIMEOUT_MS is deliberately not used: a help answer that takes two
- * minutes is no use to someone standing in front of a client, and the ordinary
- * 30 s is already well past what a provider needs for a prompt this size.
- *
- * Nothing is invalidated on success except the day's count, because the
- * conversation lives in the panel's own state. Asking is not a write to
- * anything the rest of the app shows.
+ * Asking itself lives in send.ts, outside React: the panel unmounts on every
+ * navigation and a mutation that unmounts loses its answer.
  */
-export function useAsk() {
+export function useAssistantQuotaRefresh() {
   const qc = useQueryClient()
-  return useMutation<AskReply, Error, AskRequest>({
-    mutationFn: (body) =>
-      callApi('/assistant/ask', { method: 'POST', body: askRequest.parse(body), responseSchema: askReply }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: STATE })
-    },
-    // No toast: the panel shows what went wrong in the conversation itself,
-    // where the question is, and a toast on top of that says it twice.
-  })
+  return () => {
+    void qc.invalidateQueries({ queryKey: STATE })
+  }
 }
 
 export function useAssistantSettings() {
@@ -113,5 +99,22 @@ export function useAssistantHealth() {
     queryFn: () => callApi('/platform/assistant/health', { responseSchema: assistantHealth }),
     enabled: !!session,
     staleTime: 60_000,
+  })
+}
+
+/**
+ * Ask one real question from the console, to prove the key, the model and the
+ * corpus all actually work. Not logged and not counted against anyone's day.
+ */
+export function useTestAssistant() {
+  return useMutation({
+    mutationFn: () =>
+      callApi('/platform/assistant/test', {
+        method: 'POST',
+        body: {},
+        responseSchema: assistantTestResult,
+        timeoutMs: SLOW_TIMEOUT_MS,
+      }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }

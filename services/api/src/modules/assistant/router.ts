@@ -6,6 +6,7 @@ import {
   assistantHealth,
   assistantSettings,
   assistantState,
+  assistantTestResult,
   saveAssistantSettingsRequest,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -34,6 +35,17 @@ import { buildHelpContext } from '../../lib/help-context'
 
 /** Questions one studio may ask in a day when nobody has set a number. */
 const DEFAULT_DAILY_LIMIT = 50
+
+/**
+ * Who the assistant is for.
+ *
+ * It was asked for as "studio owners working in the app", and the prompt says
+ * so in its first line. It also now carries the plans -- what a member pays
+ * against what everyone else pays -- and the way every part of the studio
+ * works, which is not a junior editor's business. They have their own help:
+ * the guide, the tutorials and the Help panel, none of which is gated.
+ */
+const RUNS_THE_STUDIO = new Set(['super_admin', 'admin', 'manager', 'platform_admin'])
 
 interface SettingsRow {
   assistant_enabled: boolean
@@ -67,6 +79,10 @@ export const assistantRouter = new Hono<AppEnv>()
   /** What the header and the panel need before they draw anything. */
   .get('/state', async (c) => {
     const auth = c.get('auth')
+    // Answered rather than refused, so the header simply draws no button.
+    if (!RUNS_THE_STUDIO.has(auth.role)) {
+      return c.json(assistantState.parse({ enabled: false, ready: false, call_url: null, asked_today: 0, daily_limit: 0 }))
+    }
     const data = await attempt(c, 'assistant.state', async () => {
       const row = await readSettings(c.env)
       const limit = row?.assistant_daily_limit ?? DEFAULT_DAILY_LIMIT
@@ -89,6 +105,7 @@ export const assistantRouter = new Hono<AppEnv>()
   /** A question. */
   .post('/ask', async (c) => {
     const auth = c.get('auth')
+    if (!RUNS_THE_STUDIO.has(auth.role)) fail(403, 'The assistant is for whoever runs the studio. Press Help for anything you need.')
     const parsed = askRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the question.')
 
@@ -105,6 +122,12 @@ export const assistantRouter = new Hono<AppEnv>()
         return r?.n ?? 0
       }),
     )
+    if (used === null) {
+      // The count could not be read. Allowed through on purpose -- a database
+      // hiccup should not take help away -- but said out loud, because the
+      // alternative is an unmetered day nobody notices.
+      console.warn('[assistant] could not read the day count; letting the question through')
+    }
     if (used !== null && used >= limit) {
       fail(429, `You have asked the assistant ${limit} questions today. It opens again tomorrow.`)
     }
@@ -225,6 +248,42 @@ export const platformAssistantRouter = new Hono<AppEnv>()
     )
     if (!data) fail(400, 'We could not load how the assistant is doing.')
     return c.json(assistantHealth.parse(data))
+  })
+
+  /**
+   * Ask one real question, as a platform admin, to prove the whole path: the
+   * key is accepted, the model still exists, the corpus loads, and an answer
+   * comes back. `ready` on the settings only says a key is present.
+   *
+   * Deliberately not logged and not counted against anyone's day -- it is our
+   * test, not a studio's question, and putting it in assistant_log would skew
+   * the very figures the console is there to show.
+   */
+  .post('/assistant/test', async (c) => {
+    const row = await attempt(c, 'platform.assistant_test', () => readSettings(c.env))
+    const started = Date.now()
+    const help = await buildHelpContext(c.env)
+    const result = await ask({
+      provider: openAiCompatible({
+        apiKey: c.env.AI_API_KEY,
+        baseUrl: row?.assistant_base_url || c.env.AI_BASE_URL,
+        model: row?.assistant_model || c.env.AI_MODEL,
+      }),
+      help,
+      prompt: row?.assistant_prompt,
+      callUrl: callLinkFor(c.env, row ?? null),
+      question: 'How do I add my team?',
+    })
+    return c.json(
+      assistantTestResult.parse({
+        status: result.status,
+        answer: result.answer,
+        model: result.model,
+        prompt_tokens: result.promptTokens ?? help.tokens,
+        ms: Date.now() - started,
+        error: result.error,
+      }),
+    )
   })
 
   .put('/assistant', async (c) => {
