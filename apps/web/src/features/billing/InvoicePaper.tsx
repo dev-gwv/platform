@@ -8,7 +8,7 @@ import { invoiceBadge, shortDate } from './status'
 import { UpiQr, upiLink } from './UpiQr'
 
 /** Who the invoice is from, as printed at the top. */
-export interface InvoiceFrom {
+interface InvoiceFrom {
   name: string | null
   legal_name?: string | null | undefined
   logo_url?: string | null | undefined

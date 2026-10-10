@@ -27,7 +27,7 @@ const PRESETS: ReadonlyArray<{ label: string; range: () => CrmStatsQuery }> = [
   { label: 'Last 90 days', range: () => daysBack(89) },
 ]
 
-export function daysBack(n: number): CrmStatsQuery {
+function daysBack(n: number): CrmStatsQuery {
   const to = new Date()
   const from = new Date(to)
   from.setDate(from.getDate() - n)

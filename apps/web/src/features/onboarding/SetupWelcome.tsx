@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/shared/ui/card'
 
 /** "Welcome, Asha" — the first name, or nothing when there is none to take. */
-export function firstName(displayName: string | null | undefined): string {
+function firstName(displayName: string | null | undefined): string {
   return (displayName ?? '').trim().split(/\s+/)[0] ?? ''
 }
 

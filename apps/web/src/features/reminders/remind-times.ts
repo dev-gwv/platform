@@ -11,7 +11,7 @@ import { createReminderRequest } from '@ipc/contracts'
  *
  * Everything takes `now`, so the tests can stand at any moment of the week.
  */
-export const IST_OFFSET_MINUTES = 330
+const IST_OFFSET_MINUTES = 330
 
 const OFFSET_MS = IST_OFFSET_MINUTES * 60_000
 const HOUR_MS = 3_600_000
@@ -21,7 +21,7 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
 
 /** The Kolkata wall clock at an instant. `month` counts from 0; `weekday` 0 is Sunday. */
-export interface IstParts {
+interface IstParts {
   year: number
   month: number
   day: number
@@ -72,7 +72,7 @@ export function quickAt(key: QuickKey, now: Date): Date {
   }
 }
 
-export interface QuickChoice {
+interface QuickChoice {
   key: QuickKey
   label: string
   at: Date

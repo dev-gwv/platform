@@ -9,14 +9,6 @@ export function roundINR(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100) / 100
 }
 
-export function toPaise(rupees: number): number {
-  return Math.round((rupees + Number.EPSILON) * 100)
-}
-
-export function fromPaise(paise: number): number {
-  return paise / 100
-}
-
 /** Sum a list of rupee amounts with a single final rounding. */
 export function sumINR(amounts: ReadonlyArray<number>): number {
   return roundINR(amounts.reduce((a, b) => a + b, 0))

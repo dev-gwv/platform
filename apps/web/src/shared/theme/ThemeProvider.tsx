@@ -11,7 +11,7 @@ import { fontOr, fontStack, loadFont } from './fonts'
 
 type Scheme = 'light' | 'dark'
 
-export interface CustomTheme {
+interface CustomTheme {
   enabled: boolean
   colors: CustomThemeColors
   /** rem value as a plain string, e.g. "0.5" — matches the server's border_radius enum. */

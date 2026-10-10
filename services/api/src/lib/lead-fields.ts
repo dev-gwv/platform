@@ -58,7 +58,7 @@ export function normalizeEmail(input: string | null | undefined): string | null 
 }
 
 /** A trimmed name within the contact's limit, or null. */
-export function normalizeName(input: string | null | undefined): string | null {
+function normalizeName(input: string | null | undefined): string | null {
   if (typeof input !== 'string') return null
   const v = input.trim().replace(/\s+/g, ' ')
   if (!v) return null
@@ -72,7 +72,7 @@ export interface RawLead {
   meta?: Record<string, unknown> | undefined
 }
 
-export interface CleanLead {
+interface CleanLead {
   name: string | null
   phone: string | null
   email: string | null

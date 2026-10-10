@@ -10,7 +10,7 @@ import { sendOnboardingMail, type OnboardingMail } from './onboarding-email'
  * AutoPilot wordmark, one heading, one line, the date, one button.
  */
 
-export type AccessEmailKind = 'd7' | 'd1' | 'ended'
+type AccessEmailKind = 'd7' | 'd1' | 'ended'
 
 const GOLD = '#f2a618'
 const NAVY = '#1b2a4a'
@@ -97,7 +97,7 @@ export function accessEmail(env: Env, o: { kind: AccessEmailKind; isTrial: boole
   return { subject: c.subject, html }
 }
 
-export interface AccessEmailSummary {
+interface AccessEmailSummary {
   due: number
   sent: number
 }

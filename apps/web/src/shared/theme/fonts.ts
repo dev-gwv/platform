@@ -8,7 +8,7 @@ import { themeFontKey, type ThemeFontKey } from '@ipc/contracts'
  * `--font-sans` is the only thing that changes — every surface already reads
  * that token, so a face swap needs no component to know about it.
  */
-export interface FontOption {
+interface FontOption {
   key: ThemeFontKey
   /** The family name, as Google serves it and as CSS must spell it. */
   family: string

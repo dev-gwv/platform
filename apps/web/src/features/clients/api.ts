@@ -12,7 +12,7 @@ const clientsList = client.array()
 const clientPage = z.object({ items: clientsList, total: z.number().int(), page: z.number().int(), page_size: z.number().int() })
 type ClientPage = z.infer<typeof clientPage>
 
-export interface ClientDirectoryQuery {
+interface ClientDirectoryQuery {
   search?: string
   sort?: 'recent' | 'name' | 'city'
   /** Client-side filter (free-text tag); the server only filters search/sort. */
@@ -45,22 +45,6 @@ export function useClients(query?: ClientDirectoryQuery) {
       if (q.relation?.trim()) params.set('relation', q.relation.trim())
       if (q.created_from?.trim()) params.set('created_from', q.created_from.trim())
       if (q.created_to?.trim()) params.set('created_to', q.created_to.trim())
-      return callApi(`/clients?${params.toString()}`, { responseSchema: clientPage })
-    },
-    enabled: !!session && access.hasModule('clients'),
-    staleTime: 30_000,
-  })
-}
-
-export function useClientsPage(query: { page: number; page_size: number; search?: string; sort?: string }) {
-  const { session } = useAuth()
-  const access = useAccess()
-  return useQuery({
-    queryKey: ['clients', 'page', query],
-    queryFn: () => {
-      const params = new URLSearchParams({ page: String(query.page), page_size: String(query.page_size) })
-      if (query.search) params.set('search', query.search)
-      if (query.sort) params.set('sort', query.sort)
       return callApi(`/clients?${params.toString()}`, { responseSchema: clientPage })
     },
     enabled: !!session && access.hasModule('clients'),

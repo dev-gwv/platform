@@ -4,7 +4,7 @@
  */
 export type PeriodKey = 'this_month' | 'last_month' | 'this_quarter' | 'last_quarter' | 'this_fy' | 'last_fy' | 'custom'
 
-export interface Period {
+interface Period {
   key: PeriodKey
   from: string
   to: string
@@ -21,7 +21,7 @@ function fyStart(d: Date): { y: number; m: number } {
   return d.getMonth() >= 3 ? { y: d.getFullYear(), m: 3 } : { y: d.getFullYear() - 1, m: 3 }
 }
 
-export const PERIOD_LABEL: Record<Exclude<PeriodKey, 'custom'>, string> = {
+const PERIOD_LABEL: Record<Exclude<PeriodKey, 'custom'>, string> = {
   this_month: 'This month',
   last_month: 'Last month',
   this_quarter: 'This quarter',

@@ -121,7 +121,7 @@ function Lookups() {
   return (
     <>
       <PageHeader
-        title="Lookups"
+        title="Lists"
         actions={<Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>}
       />
       <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5">

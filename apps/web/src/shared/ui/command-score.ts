@@ -53,7 +53,7 @@ function subsequenceGaps(q: string, t: string): number | null {
   return gaps
 }
 
-export interface Ranked<T> {
+interface Ranked<T> {
   item: T
   score: number
 }

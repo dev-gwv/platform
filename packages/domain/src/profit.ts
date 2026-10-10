@@ -21,59 +21,6 @@ export function balancePending(revenue: number, received: number): number {
 
 export type AllocationMethod = 'equal' | 'revenue_weighted' | 'shoot_days_weighted'
 
-export type MonthlyBasis = 'cash' | 'booked'
-
-export interface MonthlyProfitCards {
-  cashReceived: number
-  bookedRevenue: number
-  salaryCost: number
-  officeFixed: number
-  fixedTotal: number
-  variableCost: number
-  totalCost: number
-  netCash: number
-  netBooked: number
-  marginCash: number | null
-  marginBooked: number | null
-}
-
-/** Monthly profit cards from Lovable financials/profit (cash + booked side by side). */
-export function monthlyProfitCards(input: {
-  cashReceived: number
-  bookedRevenue: number
-  salaryCost: number
-  officeFixed: number
-  variableCost: number
-}): MonthlyProfitCards {
-  const fixedTotal = roundINR(input.salaryCost + input.officeFixed)
-  const totalCost = roundINR(fixedTotal + input.variableCost)
-  const netCash = roundINR(input.cashReceived - totalCost)
-  const netBooked = roundINR(input.bookedRevenue - totalCost)
-  return {
-    cashReceived: input.cashReceived,
-    bookedRevenue: input.bookedRevenue,
-    salaryCost: input.salaryCost,
-    officeFixed: input.officeFixed,
-    fixedTotal,
-    variableCost: input.variableCost,
-    totalCost,
-    netCash,
-    netBooked,
-    marginCash: input.cashReceived > 0 ? (netCash / input.cashReceived) * 100 : null,
-    marginBooked: input.bookedRevenue > 0 ? (netBooked / input.bookedRevenue) * 100 : null,
-  }
-}
-
-/** Monthly warnings: margin + salary-heavy signals (Lovable parity). */
-export function monthlyProfitWarnings(cards: MonthlyProfitCards): string[] {
-  const warnings: string[] = []
-  const margin = cards.marginCash ?? cards.marginBooked
-  if (margin != null && margin < 15) warnings.push('Net margin below 15% for this month.')
-  const denom = cards.cashReceived > 0 ? cards.cashReceived : cards.bookedRevenue
-  if (denom > 0 && cards.salaryCost > denom * 0.5) warnings.push('Salary cost exceeds 50% of revenue.')
-  return warnings
-}
-
 export interface AllocationProject {
   id: string
   revenue: number

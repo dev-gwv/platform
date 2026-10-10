@@ -260,23 +260,6 @@ export type ThemeFontKey = z.infer<typeof themeFontKey>
 
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/)
 
-/**
- * A fully custom palette: 8 independently-picked colours instead of a named
- * preset. Every field is optional on both read and write — an unfilled one
- * just falls back to whatever the studio's current preset ships with, so
- * turning "Enable custom theme" on doesn't blank the interface.
- */
-export const customThemeColorFields = [
-  'primary_color',
-  'secondary_color',
-  'accent_color',
-  'background_color',
-  'surface_color',
-  'text_color',
-  'muted_text_color',
-  'border_color',
-] as const
-
 export const companyTheme = z.object({
   // Tolerant on READ: a row written before a preset was renamed or retired must
   // still load — the UI falls back to the default rather than erroring the page.

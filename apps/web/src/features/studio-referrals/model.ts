@@ -1,7 +1,7 @@
 import type { StudioReferralRow, StudioRefTerms } from '@ipc/contracts'
 import { screenINR } from '@/shared/money/hide'
 
-export type RefTone = 'blue' | 'green' | 'violet' | 'amber' | 'rose' | 'teal'
+type RefTone = 'blue' | 'green' | 'violet' | 'amber' | 'rose' | 'teal'
 
 /** Where one referred studio stands, as a coloured chip. */
 export function referralState(r: Pick<StudioReferralRow, 'paid_at' | 'rewarded_at' | 'reward_amount' | 'void_reason'>): {

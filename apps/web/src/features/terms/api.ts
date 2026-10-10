@@ -143,14 +143,13 @@ export function useTermsDocuments() {
   })
 }
 
-export const termsTemplate = z.object({
+const termsTemplate = z.object({
   id: z.string().uuid(),
   name: z.string(),
   body: z.string(),
   version: z.number().int(),
   created_at: z.string(),
 })
-export type TermsTemplate = z.infer<typeof termsTemplate>
 
 /** The studio's saved starting points for a terms document. */
 export function useTermsTemplates() {
@@ -178,7 +177,7 @@ export function useSaveTermsTemplate() {
 }
 
 /** One instalment of the schedule the client is agreeing to. */
-export interface IssueTermsInput {
+interface IssueTermsInput {
   project_id: string | null
   rendered_body: string
   title?: string | undefined
@@ -197,7 +196,7 @@ export interface PaymentTermDraft {
   notes?: string | undefined
 }
 
-export const termsDraft = z.object({
+const termsDraft = z.object({
   id: z.string().uuid(),
   project_id: z.string().uuid().nullable(),
   rendered_body: z.string(),
@@ -210,7 +209,6 @@ export const termsDraft = z.object({
   template_id: z.string().uuid().nullable(),
   updated_at: z.string().nullable(),
 })
-export type TermsDraft = z.infer<typeof termsDraft>
 
 export function useTermsDraft(projectId: string | null) {
   const { session } = useAuth()
@@ -244,14 +242,6 @@ export function useAutosaveTermsDraft() {
   })
 }
 
-export const termsEmailLog = z.object({
-  id: z.string().uuid(),
-  to_email: z.string().nullable(),
-  status: z.string(),
-  error: z.string().nullable(),
-  created_at: z.string(),
-})
-export type TermsEmailLog = z.infer<typeof termsEmailLog>
 export function useEmailTermsLink() {
   const qc = useQueryClient()
   return useMutation({

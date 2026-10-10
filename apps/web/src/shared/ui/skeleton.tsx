@@ -13,7 +13,7 @@ export function Skeleton({ className }: { className?: string }) {
 }
 
 /** Rows shaped like a table body, with the same padding the real rows use. */
-export function SkeletonTable({
+function SkeletonTable({
   rows = 5,
   columns = 4,
   className,

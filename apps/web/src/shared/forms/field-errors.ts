@@ -19,7 +19,7 @@ function isBlank(value: unknown): boolean {
  * message reads the way the form does ("Password must be at least 8 characters."
  * rather than "String must contain at least 8 character(s)").
  */
-export function messageForIssue(issue: z.ZodIssue, label: string): string {
+function messageForIssue(issue: z.ZodIssue, label: string): string {
   switch (issue.code) {
     case 'invalid_type':
       return issue.received === 'undefined' ? `${label} is required.` : `${label} is not valid.`

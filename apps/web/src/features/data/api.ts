@@ -7,7 +7,6 @@ import {
   type UpdateDataRecordRequest,
   type CreateStorageLocationRequest,
   type UpdateStorageLocationRequest,
-  type SetDataTrackRequest,
   dataBoard,
   bulkDataResult,
   dataPerson,
@@ -74,17 +73,6 @@ export function useDeleteStorageLocation() {
   })
 }
 
-export function useDataRecords() {
-  const { session } = useAuth()
-  const access = useAccess()
-  return useQuery({
-    queryKey: ['data'],
-    queryFn: () => callApi('/data', { responseSchema: list }),
-    enabled: !!session && access.hasModule('projects'),
-    staleTime: 15_000,
-  })
-}
-
 /** One project's own data records — its detail page's Data tab. */
 export function useProjectDataRecords(projectId: string) {
   const { session } = useAuth()
@@ -94,18 +82,6 @@ export function useProjectDataRecords(projectId: string) {
     queryFn: () => callApi(`/data?project_id=${projectId}`, { responseSchema: list }),
     enabled: !!session && access.hasModule('projects') && !!projectId,
     staleTime: 15_000,
-  })
-}
-
-export function useVerifyData() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, track }: { id: string; track: 'primary' | 'backup' }) =>
-      callApi(`/data/${id}/verify`, { method: 'POST', body: { track }, responseSchema: anySchema }),
-    onSuccess: () => {
-      toast.success('Verified')
-      void qc.invalidateQueries({ queryKey: ['data'] })
-    },
   })
 }
 
@@ -133,17 +109,6 @@ export function useUpdateDataRecord() {
   })
 }
 
-/** Move one copy along: pending → copied → verified, or issue / not needed. */
-export function useSetDataTrack() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, ...body }: SetDataTrackRequest & { id: string }) =>
-      callApi(`/data/${id}/track`, { method: 'POST', body, responseSchema: dataRecord }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['data'] }),
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
-
 export function useDeleteDataRecord() {
   const qc = useQueryClient()
   return useMutation({
@@ -156,7 +121,7 @@ export function useDeleteDataRecord() {
 }
 
 /** Everything the board shows: a row per booked person whose shoot day has come. */
-export const DATA_BOARD_KEY = ['data', 'board'] as const
+const DATA_BOARD_KEY = ['data', 'board'] as const
 
 export function useDataBoard(projectId?: string) {
   const { session } = useAuth()

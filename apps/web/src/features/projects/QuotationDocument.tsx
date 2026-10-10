@@ -94,7 +94,7 @@ export interface QuotationDocumentData {
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /** A calendar date is read as local midnight, so it never slips a day. */
-export function formatQuotationDate(v: string | null | undefined): string {
+function formatQuotationDate(v: string | null | undefined): string {
   if (!v) return '—'
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v)
   return Number.isNaN(d.getTime()) ? v : dayFormat.format(d)

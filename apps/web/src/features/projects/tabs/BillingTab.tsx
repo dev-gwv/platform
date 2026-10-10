@@ -57,7 +57,7 @@ const firstName = (name: string | null | undefined) => (name ?? '').trim().split
  * still to collect (grey). The page header already carries the three
  * numbers; this says what they mean.
  */
-export function MoneyStory({
+function MoneyStory({
   project,
   onRecord,
 }: {

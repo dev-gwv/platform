@@ -35,7 +35,7 @@ import { STAGE_STYLE, StageStepper } from './StageStepper'
 import { GiveWorkDialog } from './GiveWorkDialog'
 import { useINR } from '@/shared/money/MoneyMask'
 
-export const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
+const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
 
 /** The item's picture: its kind, in its stage's colour; a check once delivered. */
 export function KindTile({ title, status, size = 'md' }: { title: string; status: string; size?: 'md' | 'lg' }) {
@@ -530,7 +530,7 @@ export function EditorName({ name }: { name: string | null | undefined }) {
  * or an amber dashed "Assign editor" while nobody is on it. It opens "Who will
  * edit it?" -- the same dialog Start editing opens.
  */
-export function EditorChip({ d, onOpen }: { d: Deliverable; onOpen: () => void }) {
+function EditorChip({ d, onOpen }: { d: Deliverable; onOpen: () => void }) {
   const needs = !d.assignee_name && (stageOf(d.status) === 'pending' || stageOf(d.status) === 'in_progress')
   return (
     <button

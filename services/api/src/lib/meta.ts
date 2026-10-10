@@ -107,7 +107,7 @@ export function metaLeadgenIds(payload: MetaLeadgenPayload): Array<{ leadgen_id:
   return out
 }
 
-export interface MetaLead {
+interface MetaLead {
   name: string | null
   phone: string | null
   email: string | null

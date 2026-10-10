@@ -106,7 +106,7 @@ export function matchesDue(t: TaskListItem, filter: DueFilter, today: string): b
 }
 
 // ── the stat chips ──────────────────────────────────────────────
-export interface TaskStats {
+interface TaskStats {
   highPriority: number
   inProgress: number
   dueToday: number
@@ -200,7 +200,7 @@ export function reassigned(assignees: readonly string[], from: string | null, to
   return same ? null : next
 }
 
-export interface ScopeFilter {
+interface ScopeFilter {
   /** Only tasks I am on. */
   mine: boolean
   me: string | null

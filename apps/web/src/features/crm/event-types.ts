@@ -1,6 +1,6 @@
 /**
  * The events a wedding studio is asked about most, offered until the studio
- * adds its own (Settings → Lookups, "project_type") -- which it can do from
+ * adds its own (Settings → Lists, "project_type") -- which it can do from
  * the lead form itself.
  */
 export const EVENT_TYPE_DEFAULTS = [

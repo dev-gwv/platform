@@ -39,7 +39,7 @@ const DAY = 86_400_000
 /** When a new-app studio's access ends: the paid plan, else the trial, else grace (0210). */
 export const endsOf = (s: PlatformStudio): string | null => s.access_until ?? s.plan_expiry
 
-export function daysLeftOf(s: PlatformStudio, now = Date.now()): number | null {
+function daysLeftOf(s: PlatformStudio, now = Date.now()): number | null {
   const end = endsOf(s)
   return end ? Math.max(0, Math.ceil((new Date(end).getTime() - now) / DAY)) : (s.days_remaining ?? null)
 }

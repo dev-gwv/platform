@@ -2,7 +2,7 @@ import type { StorageLocation, StorageLocationKind } from '@ipc/contracts'
 import { CreatableSelect, type CreatableOption } from '@/shared/ui/creatable-select'
 import { useStorageLocations } from './api'
 
-export const LOCATION_KINDS: { value: StorageLocationKind; label: string }[] = [
+const LOCATION_KINDS: { value: StorageLocationKind; label: string }[] = [
   { value: 'drive', label: 'Hard disk / SSD' },
   { value: 'nas', label: 'NAS' },
   { value: 'cloud', label: 'Cloud' },

@@ -1,17 +1,6 @@
 import type { ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Button } from './button'
 import { ApiError } from '../api/client'
-
-/** The loading / error / empty triad every list page renders. */
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  )
-}
 
 /**
  * The failure of a page or panel. Pass the caught error and the reference id

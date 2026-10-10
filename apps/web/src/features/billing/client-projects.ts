@@ -11,10 +11,16 @@ import { useClientProjects } from '@/features/clients/api'
  */
 export function useClientProjectOptions(clientId: string, linked?: { id: string; name: string } | null) {
   const q = useClientProjects(clientId)
-  const list = (q.data ?? []).map((p) => ({ id: p.id, name: p.name }))
+  // `due` is what the project still has to collect, so a payment form can
+  // start from it without asking for the whole project.
+  const list: { id: string; name: string; due?: number }[] = (q.data ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    due: Math.max(0, Math.round((p.total_cost - p.received) * 100) / 100),
+  }))
   // A project already on the invoice shows by name even before the list
   // arrives (or if it now belongs to someone else) -- never as "not linked".
-  const options = linked && !list.some((p) => p.id === linked.id) ? [linked, ...list] : list
+  const options: { id: string; name: string; due?: number }[] = linked && !list.some((p) => p.id === linked.id) ? [linked, ...list] : list
   const blank = !clientId
     ? 'Choose the customer first'
     : q.isLoading

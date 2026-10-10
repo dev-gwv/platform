@@ -10,7 +10,7 @@ import type { BulkDataAction, DataBoardRow, DataBoardStage } from '@ipc/contract
  * /data/board); nothing here second-guesses it.
  */
 
-export type LaneKey = 'crew' | 'received' | 'copied' | 'backed_up' | 'verified'
+type LaneKey = 'crew' | 'received' | 'copied' | 'backed_up' | 'verified'
 
 export const LANES: readonly { key: LaneKey; label: string; hint: string }[] = [
   { key: 'crew', label: 'With crew', hint: 'Cards not handed over yet' },
@@ -37,11 +37,11 @@ export function laneOf(stage: DataBoardStage): LaneKey | null {
 }
 
 /** Data that is not yet in two places: what the studio could still lose. */
-export const UNSAFE: ReadonlySet<DataBoardStage> = new Set(['missing', 'with_shooter', 'received', 'copied', 'issue'])
+const UNSAFE: ReadonlySet<DataBoardStage> = new Set(['missing', 'with_shooter', 'received', 'copied', 'issue'])
 
 /** Late after three days, critical after a week -- the old platform's thresholds, kept. */
-export const LATE_DAYS = 3
-export const CRITICAL_DAYS = 7
+const LATE_DAYS = 3
+const CRITICAL_DAYS = 7
 
 export type Level = 'ok' | 'late' | 'critical'
 
@@ -113,7 +113,7 @@ export function figures(rows: readonly DataBoardRow[]) {
   return { crew, received, copied, issues, late, critical }
 }
 
-export interface Holder {
+interface Holder {
   user_id: string
   name: string
   phone: string | null

@@ -4,7 +4,7 @@
  * every due date the team sees -- edits, tasks, the top bar -- with the tone
  * that goes with it: red once late, amber within two days, calm otherwise.
  */
-export type DueTone = 'late' | 'soon' | 'calm'
+type DueTone = 'late' | 'soon' | 'calm'
 
 const dayMs = 86_400_000
 

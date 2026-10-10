@@ -36,7 +36,7 @@ export function hueFor(name: string | null | undefined): number {
   return hash % 360
 }
 
-export interface AvatarColors {
+interface AvatarColors {
   background: string
   color: string
 }

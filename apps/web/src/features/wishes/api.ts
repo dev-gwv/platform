@@ -4,7 +4,6 @@ import {
   detailsLinkIssued,
   projectDetailsStatus,
   projectWishes,
-  upcomingWish,
   z,
   type SaveOccasionRequest,
   type UpdateOccasionRequest,
@@ -25,16 +24,6 @@ export function useClientOccasions(clientId: string | undefined) {
     queryKey: ['wishes', 'client', clientId],
     queryFn: () => callApi(`/wishes/client/${clientId}`, { responseSchema: clientOccasion.array() }),
     enabled: !!clientId,
-  })
-}
-
-/** The studio's dates coming round in the next `days`. */
-export function useUpcomingWishes(days = 30, enabled = true) {
-  return useQuery({
-    queryKey: ['wishes', 'upcoming', days],
-    queryFn: () => callApi(`/wishes/upcoming?days=${days}`, { responseSchema: upcomingWish.array() }),
-    enabled,
-    staleTime: 5 * 60_000,
   })
 }
 

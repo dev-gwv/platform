@@ -9,7 +9,7 @@ import { useAccess } from '@/shared/auth/useAccess'
  * Under 'projects' so every deliverable change anywhere in the app -- the
  * project page, My Work, the drawer -- refreshes the board too.
  */
-export const BOARD_KEY = ['projects', 'board'] as const
+const BOARD_KEY = ['projects', 'board'] as const
 
 export function useProductionBoard() {
   const { session } = useAuth()

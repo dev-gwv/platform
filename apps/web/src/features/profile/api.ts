@@ -14,7 +14,7 @@ import { callApi, fetchFileBlob, postForm } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 
-export const PROFILE_KEY = ['settings', 'profile'] as const
+const PROFILE_KEY = ['settings', 'profile'] as const
 const DOCS_KEY = ['settings', 'profile', 'documents'] as const
 
 export function useMyProfile() {

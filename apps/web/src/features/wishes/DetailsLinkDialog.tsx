@@ -9,7 +9,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { useIssueDetailsLink } from './api'
 
 /** What goes with the link on WhatsApp. */
-export function detailsMessage(clientName: string | null, studio: string | null, projectName: string, url: string): string {
+function detailsMessage(clientName: string | null, studio: string | null, projectName: string, url: string): string {
   const first = clientName?.trim().split(/\s+/)[0]
   return `Hi ${first || 'there'}, ${studio ? `${studio} here. ` : ''}Please fill in your details and dates for ${projectName}: ${url}`
 }

@@ -166,7 +166,7 @@ export interface Names {
 
 const fieldLabel = (key: string) => CONDITION_FIELDS.find((f) => f.key === key)?.label ?? key
 
-export function describeCondition(cond: WorkflowConditionShape, names: Names = {}): string {
+function describeCondition(cond: WorkflowConditionShape, names: Names = {}): string {
   const clauses: string[] = []
   if (cond.source) clauses.push(`from ${cond.source}`)
   if (cond.from_status) clauses.push(`leaving ${cond.from_status}`)

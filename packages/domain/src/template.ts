@@ -18,25 +18,6 @@ export function templateVariables(body: string): string[] {
   return [...set]
 }
 
-/**
- * Lovable parity: every variable a CRM template may reference. Unknown or
- * missing values render as '' (never a raw {{placeholder}} to the client).
- * follow_up_date is the lead's next promised contact, formatted DD Mon YYYY.
- */
-export const CRM_TEMPLATE_VARS = [
-  'name',
-  'phone',
-  'email',
-  'studio',
-  'follow_up_date',
-  'city',
-  'group',
-  'event_type',
-  'event_date',
-  'deal_value',
-] as const
-export type CrmTemplateVar = (typeof CRM_TEMPLATE_VARS)[number]
-
 export function crmTemplateVars(lead: {
   name?: string | null
   phone?: string | null

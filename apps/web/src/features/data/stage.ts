@@ -28,21 +28,21 @@ export function deriveStage(r: StageInput): DataStage {
 }
 
 /** A booking's data: a record's stage, or why there is none. */
-export type SlotStage = DataStage | 'missing' | 'opted_out'
+type SlotStage = DataStage | 'missing' | 'opted_out'
 
 /**
  * The person's row on a shoot day: green once their data is in hand
  * (received, copied or backed up), red when something is wrong with it, and
  * plain until then -- so a day reads at a glance, as the owner asked.
  */
-export type RowTone = 'green' | 'red' | 'plain'
+type RowTone = 'green' | 'red' | 'plain'
 export function dataRowTone(stage: SlotStage): RowTone {
   if (stage === 'issue') return 'red'
   if (stage === 'received' || stage === 'copied' || stage === 'backed_up' || stage === 'verified' || stage === 'archived') return 'green'
   return 'plain'
 }
 
-export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
 export const STAGE_LABEL: Record<SlotStage, string> = {
   missing: 'Data not added',
@@ -76,14 +76,6 @@ export const TRACK_LABEL: Record<CustodyStatus, string> = {
   verified: 'Verified',
   issue: 'Issue',
   not_required: 'Not needed',
-}
-
-export const TRACK_TONE: Record<CustodyStatus, Tone> = {
-  pending: 'neutral',
-  copied: 'warning',
-  verified: 'success',
-  issue: 'danger',
-  not_required: 'neutral',
 }
 
 const key = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()

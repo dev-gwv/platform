@@ -3,7 +3,7 @@
  * studio. A logo or a GST number is nice to have, not a blocker -- a banner
  * asking for them on every visit is one that never goes away.
  */
-export interface BrandingFields {
+interface BrandingFields {
   invoice_address?: string | null | undefined
   invoice_phone?: string | null | undefined
   invoice_email?: string | null | undefined

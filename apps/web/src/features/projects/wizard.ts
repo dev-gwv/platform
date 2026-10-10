@@ -149,8 +149,6 @@ export const newShoot = (): ShootDraft => ({
   requirements: [],
 })
 
-export const newRequirement = (): ShootRequirementDraft => ({ name: '', quantity: '1' })
-
 /**
  * Every shoot day a studio books, alphabetical so a 17-row list can be
  * skimmed rather than read. This is the searchable list behind "Add shoot";
@@ -298,7 +296,7 @@ const forTotal = (d: DeliverableDraft): DeliverableForTotal => ({
   additional_charge_amount: money(d.additional_charge_amount),
 })
 
-export interface DraftTotals {
+interface DraftTotals {
   packageCost: number
   addOns: number
   total: number
@@ -332,7 +330,7 @@ export function draftTotals(draft: ProjectDraft): DraftTotals {
   }
 }
 
-export type StepErrors = Partial<Record<WizardStep, string>>
+type StepErrors = Partial<Record<WizardStep, string>>
 
 /**
  * What still blocks each step. Only the client step is ever truly required —
@@ -376,8 +374,6 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
 
   return errors
 }
-
-export const canLeave = (step: WizardStep, draft: ProjectDraft): boolean => !stepErrors(draft)[step]
 
 /** Ready to create: every step clean, not just the one on screen. */
 export const canSubmit = (draft: ProjectDraft): boolean =>
@@ -812,7 +808,7 @@ export const BUILT_IN_SETS: { name: string; titles: string[] }[] = [
  * has, so moving an item between lists is done by the same toggles that decide
  * what it costs and who sees it — there is no third source of truth to drift.
  */
-export type DeliverableBucket = 'client' | 'add_on' | 'internal'
+type DeliverableBucket = 'client' | 'add_on' | 'internal'
 
 export function bucketOf(d: DeliverableDraft): DeliverableBucket {
   if (d.visibility_scope === 'internal') return 'internal'
@@ -993,7 +989,7 @@ export function isDirty(draft: ProjectDraft): boolean {
   )
 }
 
-export const DRAFT_KEY = 'ipc.project.draft'
+const DRAFT_KEY = 'ipc.project.draft'
 
 interface StoredDraft {
   draft: ProjectDraft

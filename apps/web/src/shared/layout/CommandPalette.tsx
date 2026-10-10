@@ -99,7 +99,6 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   // Only reached while the palette is open, so these are not background work.
   const clients = useClients()
-  const projects = useProjects()
   const team = useDirectory()
 
   /*
@@ -117,6 +116,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t)
   }, [query])
   const leads = useLeadSearch(access.hasModule('crm') ? typed : '')
+  // Projects too: the server matches name, client and phone, eight at a time
+  // (the newest eight before anything is typed), instead of every project.
+  const projects = useProjects({ page: 1, page_size: 8, ...(typed.trim() ? { search: typed.trim() } : {}) })
 
   const commands = useMemo<Command[]>(() => {
     const pages: Command[] = navDestinations(

@@ -20,7 +20,6 @@ import {
   type CreateInvoiceNoteTemplateRequest,
   type CreateInvoiceRequest,
   type CreateReceivedPaymentRequest,
-  type InvoiceListQuery,
   type ReceivedPayment,
   type RecordPaymentRequest,
   type UpdateInvoiceRequest,
@@ -36,7 +35,7 @@ const invoicesLegacy = invoiceListItem.array()
 const states = gstState.array()
 const anySchema = z.any()
 
-export interface InvoiceFilters {
+interface InvoiceFilters {
   search?: string | undefined
   status?: string | undefined
   client_id?: string | undefined
@@ -65,7 +64,7 @@ function toQueryString(f: InvoiceFilters): string {
  * Backward compatible: a legacy array response (no params) is normalised to
  * the envelope shape so older servers keep rendering.
  */
-export function useInvoices(filters?: InvoiceFilters) {
+export function useInvoices(filters?: InvoiceFilters, { enabled = true }: { enabled?: boolean } = {}) {
   const { session } = useAuth()
   const access = useAccess()
   const qs = filters ? toQueryString(filters) : ''
@@ -106,13 +105,11 @@ export function useInvoices(filters?: InvoiceFilters) {
         page_size: filters?.page_size ?? 25,
       }
     },
-    enabled: !!session && access.hasModule('billing'),
+    enabled: enabled && !!session && access.hasModule('billing'),
     staleTime: 15_000,
     placeholderData: (prev) => prev,
   })
 }
-
-export type { InvoiceListQuery }
 
 export function useStates() {
   const { session } = useAuth()

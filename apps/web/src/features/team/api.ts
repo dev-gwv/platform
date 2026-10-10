@@ -65,7 +65,7 @@ export function useDirectory() {
   })
 }
 
-export interface DirectoryPageParams {
+interface DirectoryPageParams {
   page: number
   page_size: number
   search?: string | undefined

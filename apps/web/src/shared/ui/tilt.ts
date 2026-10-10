@@ -11,7 +11,7 @@
  * inverted relative to the raw pointer offset.
  */
 
-export interface Tilt {
+interface Tilt {
   /** Degrees about the horizontal axis. */
   rotateX: number
   /** Degrees about the vertical axis. */

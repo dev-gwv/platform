@@ -7,7 +7,7 @@
 export const TONES = ['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'] as const
 export type ToneName = (typeof TONES)[number]
 
-export const isTone = (v: unknown): v is ToneName => typeof v === 'string' && (TONES as readonly string[]).includes(v)
+const isTone = (v: unknown): v is ToneName => typeof v === 'string' && (TONES as readonly string[]).includes(v)
 
 /** A chip in that colour: tinted fill, coloured text, a border you can see. */
 export const TONE_CHIP: Record<ToneName, string> = {

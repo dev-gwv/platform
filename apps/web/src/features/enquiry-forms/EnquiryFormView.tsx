@@ -7,7 +7,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { toneVar } from '@/shared/ui/tones'
 import { FIELD_LABEL, firstMissing, type EnquiryValues } from './form-fields'
 
-export type FormLook = Pick<
+type FormLook = Pick<
   PublicEnquiryForm,
   | 'studio'
   | 'form_name'

@@ -19,7 +19,7 @@ import { DetailsLinkDialog } from './DetailsLinkDialog'
 const first = (name: string) => name.trim().split(/\s+/)[0] ?? name
 
 /** "Priya's birthday", "Anniversary". */
-export function occasionTitle(o: Pick<ClientOccasion, 'kind' | 'person_name'>): string {
+function occasionTitle(o: Pick<ClientOccasion, 'kind' | 'person_name'>): string {
   return o.kind === 'birthday' ? `${first(o.person_name) || 'Birthday'}'s birthday` : 'Wedding anniversary'
 }
 

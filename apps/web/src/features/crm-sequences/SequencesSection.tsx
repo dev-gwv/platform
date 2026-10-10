@@ -20,7 +20,7 @@ export const CHANNEL: Record<SequenceChannel, { label: string; icon: typeof Bell
 }
 
 /** When it starts, in words. */
-export function startsWhen(s: Pick<Sequence, 'auto_start' | 'stage_filter' | 'source_filter'>): string {
+function startsWhen(s: Pick<Sequence, 'auto_start' | 'stage_filter' | 'source_filter'>): string {
   if (!s.auto_start) return 'Started by hand'
   const from = s.source_filter ? ` from ${s.source_filter.replace(/_/g, ' ')}` : ''
   return s.stage_filter ? `Starts when a lead${from} reaches ${s.stage_filter.replace(/_/g, ' ')}` : `Starts for every new lead${from}`

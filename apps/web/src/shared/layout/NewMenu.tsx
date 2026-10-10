@@ -4,7 +4,7 @@ import { Briefcase, Inbox, IndianRupee, Plus, Wallet } from 'lucide-react'
 import { useAccess } from '../auth/useAccess'
 import { RowMenu, type RowMenuItem } from '../ui/row-menu'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
-import { ReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
 
 type Making = 'lead' | 'payment' | 'expense' | null
@@ -41,7 +41,7 @@ export function NewMenu() {
       {making === 'lead' && (
         <AddLeadDialog hideTrigger open onOpenChange={(o) => !o && setMaking(null)} />
       )}
-      {making === 'payment' && <ReceivedPaymentDialog open onOpenChange={(o) => !o && setMaking(null)} />}
+      {making === 'payment' && <RecordPaymentDialog target={{ kind: 'pick' }} onClose={() => setMaking(null)} />}
       {making === 'expense' && (
         <AddExpenseDialog defaultOpen trigger={<span hidden />} onClosed={() => setMaking(null)} />
       )}

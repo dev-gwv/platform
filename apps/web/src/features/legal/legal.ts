@@ -31,14 +31,7 @@ export const LEGAL = {
  */
 export const PLANS = [{ name: 'Yearly', price: '₹1,00,000', period: 'per year' }] as const
 
-export const MEMBER_PLANS = [
-  { name: 'Monthly', price: '₹1,999', period: 'per month' },
-  { name: 'Yearly', price: '₹18,000', period: 'per year' },
-  { name: '2-Year', price: '₹33,000', period: 'for two years' },
-] as const
-
 export const TRIAL_DAYS = 7
-export const MEMBER_TRIAL_DAYS = 30
 
 export const PLAN_SUMMARY =
   'Studio AutoPilot is ₹1,00,000 a year plus 18% GST, paid online through Razorpay, after a 7-day free trial. ' +

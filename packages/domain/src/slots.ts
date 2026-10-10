@@ -50,7 +50,7 @@ const sameRole = (a: string | null, b: string | null) =>
   (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
 
 /** Roles asked for on this shoot. */
-export function rolesNeeded(requirements: readonly CrewRequirement[]): number {
+function rolesNeeded(requirements: readonly CrewRequirement[]): number {
   return requirements.reduce((n, r) => n + r.quantity, 0)
 }
 

@@ -21,7 +21,7 @@ const WORDS: Record<PlanLimitKey, (n: number, period: 'year' | 'month') => strin
 /** The keys that count in the plan year; the rest count what stands now. */
 export const PER_PERIOD: ReadonlySet<PlanLimitKey> = new Set(['projects', 'leads', 'invoices'])
 
-export interface UsageBar {
+interface UsageBar {
   key: PlanLimitKey
   used: number
   limit: number

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { CalendarDays, Download, ExternalLink, FileText, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { CalendarDays, Download, ExternalLink, FileText, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { projectListPage, type ProjectListItem, type ProjectStatus } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -69,6 +69,7 @@ function ProjectsList() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<ProjectSort>('recent')
   const [page, setPage] = useState(1)
+  const [filtering, setFiltering] = useState(false)
   const [exporting, setExporting] = useState(false)
   const pageSize = 20
   const query = {
@@ -84,6 +85,8 @@ function ProjectsList() {
   const allCount = Object.values(counts).reduce((n, c) => n + c, 0)
   const isMobile = useIsMobile()
   const filtered = filter !== 'all' || !!search.trim()
+  // The Filter button says when a status or an order other than the usual is on.
+  const narrowed = filter !== 'all' || sort !== 'recent'
 
   // Everything the filter matches, a page at a time, then one CSV.
   async function exportCsv() {
@@ -154,42 +157,53 @@ function ProjectsList() {
         </p>
       )}
 
-      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <FilterTabs<Filter>
-          value={filter}
-          onChange={(v) => {
-            setFilter(v)
-            setPage(1)
-          }}
-          tabs={[
-            { value: 'all', label: 'All', count: allCount },
-            { value: 'active', label: 'Active', count: counts.active ?? 0 },
-            { value: 'on_hold', label: 'On hold', count: counts.on_hold ?? 0 },
-            { value: 'completed', label: 'Completed', count: counts.completed ?? 0 },
-            { value: 'cancelled', label: 'Cancelled', count: counts.cancelled ?? 0 },
-          ]}
-        />
-        <div className="flex flex-1 items-center gap-2 lg:justify-end">
-          <label className="relative flex-1 lg:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-              placeholder="Search project, client or phone…"
-              aria-label="Search projects"
-              className="pl-9"
-            />
-          </label>
+      {/* Search stays; status and order wait behind Filter (minimal first). */}
+      <div className="mt-4 flex items-center gap-2">
+        <label className="relative flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            placeholder="Search project, client or phone…"
+            aria-label="Search projects"
+            className="pl-9"
+          />
+        </label>
+        <Button
+          variant="outline"
+          onClick={() => setFiltering((v) => !v)}
+          aria-expanded={filtering}
+          className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}
+        >
+          <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+        </Button>
+      </div>
+      {filtering && (
+        <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+          <FilterTabs<Filter>
+            value={filter}
+            onChange={(v) => {
+              setFilter(v)
+              setPage(1)
+            }}
+            tabs={[
+              { value: 'all', label: 'All', count: allCount },
+              { value: 'active', label: 'Active', count: counts.active ?? 0 },
+              { value: 'on_hold', label: 'On hold', count: counts.on_hold ?? 0 },
+              { value: 'completed', label: 'Completed', count: counts.completed ?? 0 },
+              { value: 'cancelled', label: 'Cancelled', count: counts.cancelled ?? 0 },
+            ]}
+          />
           <Select
             value={sort}
             onChange={(e) => {
               setSort(e.target.value as ProjectSort)
               setPage(1)
             }}
-            className="w-44"
+            className="w-44 lg:ml-auto"
             aria-label="Sort projects"
           >
             {SORT_OPTIONS.map((s) => (
@@ -199,7 +213,7 @@ function ProjectsList() {
             ))}
           </Select>
         </div>
-      </div>
+      )}
 
       <div className="mt-4">
         {isLoading ? (

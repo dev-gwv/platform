@@ -61,7 +61,7 @@ export function matchesSearch(p: Pick<TrackedProject, 'name' | 'client_name'>, q
   return !needle || p.name.toLowerCase().includes(needle) || (p.client_name ?? '').toLowerCase().includes(needle)
 }
 
-export function matchesTab(p: TrackedProject, tab: TrackingTab): boolean {
+function matchesTab(p: TrackedProject, tab: TrackingTab): boolean {
   const f = p.health.flags
   switch (tab) {
     case 'all':

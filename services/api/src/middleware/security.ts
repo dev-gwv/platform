@@ -100,7 +100,7 @@ export class HitStore {
 
 const store = new HitStore()
 
-export interface RateLimitOptions {
+interface RateLimitOptions {
   windowMs: number
   limit: number
   /**

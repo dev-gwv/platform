@@ -44,7 +44,7 @@ export function advanceAndBalance(
   return { advance: format(advance), balance: format(Math.max(0, total - advance)) }
 }
 
-export interface PaymentPreset {
+interface PaymentPreset {
   key: string
   label: string
   parts: ReadonlyArray<{ label: string; percent: number; when: string }>
@@ -89,7 +89,7 @@ export const PAYMENT_PRESETS: readonly PaymentPreset[] = [
 export const presetTerms = (preset: PaymentPreset): PaymentTermDraft[] =>
   preset.parts.map((p) => ({ label: p.label, mode: 'percent', value: p.percent, due_trigger: p.when }))
 
-export interface BuiltInTemplate {
+interface BuiltInTemplate {
   key: string
   name: string
   hint: string

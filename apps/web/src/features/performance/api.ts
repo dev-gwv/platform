@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { memberScorecard, memberScorecardHistory, scorecardTeamRow, z } from '@ipc/contracts'
+import { memberScorecardHistory, scorecardTeamRow, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
@@ -22,17 +22,6 @@ export function usePerformanceHistory(userId: string | null) {
   return useQuery({
     queryKey: ['performance', 'history', userId ?? 'me'],
     queryFn: () => callApi(userId ? `/performance/members/${userId}` : '/performance/me', { responseSchema: memberScorecardHistory }),
-    enabled: !!session,
-    staleTime: 60_000,
-  })
-}
-
-/** This month, for the dashboard. */
-export function useMyMonth() {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['performance', 'me', 'month'],
-    queryFn: () => callApi('/performance/me/month', { responseSchema: memberScorecard }),
     enabled: !!session,
     staleTime: 60_000,
   })

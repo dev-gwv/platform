@@ -25,7 +25,7 @@ function loadCodes(): Promise<HsnData> {
   return cache
 }
 
-export interface HsnPick {
+interface HsnPick {
   code: string
   description: string
   /** A GST rate the code usually carries, when the list knows one. */

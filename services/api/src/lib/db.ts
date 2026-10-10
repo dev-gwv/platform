@@ -63,14 +63,6 @@ export function db(env: Env): Sql {
   return _sql
 }
 
-/** For tests / graceful shutdown. */
-export async function closeDb(): Promise<void> {
-  if (_sql) {
-    await _sql.end({ timeout: 5 })
-    _sql = null
-  }
-}
-
 /**
  * Run `fn` as the `authenticated` role with `auth.uid()` bound to `uid`, inside
  * one transaction. This is the RLS-scoped path — the equivalent of supabase-js's

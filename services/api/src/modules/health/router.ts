@@ -13,7 +13,7 @@ const PROBE_TIMEOUT_MS = 2_000
  * environment or repeats a driver's error text: this is reachable by anyone,
  * and "connection refused to db:5432 as authenticator" is a map for them.
  */
-export interface HealthBody {
+interface HealthBody {
   ok: boolean
   service: 'ipc-api'
   version: string

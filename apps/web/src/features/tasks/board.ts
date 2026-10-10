@@ -41,7 +41,7 @@ export function isOverdue(task: TaskListItem, today: string): boolean {
   return task.due_date < today
 }
 
-export interface TaskSummary {
+interface TaskSummary {
   total: number
   toDo: number
   inProgress: number
@@ -64,7 +64,7 @@ export function summarise(tasks: readonly TaskListItem[], today: string): TaskSu
   }
 }
 
-export function matchesTab(task: TaskListItem, tab: TaskTab, today: string): boolean {
+function matchesTab(task: TaskListItem, tab: TaskTab, today: string): boolean {
   if (task.status === 'cancelled') return false
   switch (tab) {
     case 'all':
@@ -87,7 +87,7 @@ export function tabCounts(
   return counts
 }
 
-export interface TaskFilters {
+interface TaskFilters {
   search: string
   priority: TaskPriority | 'all'
 }

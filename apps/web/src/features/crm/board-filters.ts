@@ -21,7 +21,7 @@ export const UNSET = '__none'
 
 const one = (v: string | null | undefined) => (v && v.length > 0 ? v : UNSET)
 
-export function facetValues(l: CrmLead, f: keyof LeadFacets): string[] {
+function facetValues(l: CrmLead, f: keyof LeadFacets): string[] {
   switch (f) {
     case 'stage':
       return [one(l.stage_id)]

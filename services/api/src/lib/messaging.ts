@@ -5,7 +5,7 @@ import { sendMessageEmail } from './email'
 import { describeError, log } from './log'
 import { sendWhatsAppTemplate, whatsappConfigured } from './whatsapp'
 
-export interface MessagesSummary {
+interface MessagesSummary {
   claimed: number
   sent: number
   failed: number

@@ -27,7 +27,7 @@ import { reportError } from './error-reporter'
  * `onCode` lets a caller claim a code first (e.g. 23505 -> "that role code is
  * taken") by returning a value; returning undefined falls through.
  */
-export interface AttemptOptions<C> {
+interface AttemptOptions<C> {
   /** Return a value to claim the code; return undefined to fall through. */
   onCode?: (code: string, err: unknown) => C | undefined
 }

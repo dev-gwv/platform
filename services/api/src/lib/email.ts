@@ -2,7 +2,7 @@ import type { Env } from '../context'
 import { withService } from './db'
 
 /** What the email service is asked to send. */
-export interface Outgoing {
+interface Outgoing {
   from?: string
   to: string
   subject: string
@@ -11,7 +11,7 @@ export interface Outgoing {
   reply_to?: string
 }
 
-export type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }
+type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }
 
 /**
  * Every email the app sends goes through here (0217): one call to Resend, and
@@ -252,7 +252,7 @@ function brandedHtml({ title, preheader, body, cta, link, footer, brand }: MailC
  * full answer in the server log. "Email failed to send." told nobody that
  * the sending domain was not verified, which is the usual reason.
  */
-export async function providerRefusal(res: Response): Promise<string> {
+async function providerRefusal(res: Response): Promise<string> {
   const raw = await res.text().catch(() => '')
   console.error(`[email] provider refused ${res.status}: ${raw.slice(0, 500)}`)
   let said = ''

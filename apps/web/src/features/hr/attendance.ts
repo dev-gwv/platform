@@ -11,26 +11,8 @@ import { displayStatus as displayStatusOf, matchesRoster, summariseRoster, type 
  * only have to disagree once for a row to carry a badge that contradicts the
  * filter that found it.
  */
-export type { DisplayStatus }
 
 export const displayStatus = (row: AttendanceDayRow): DisplayStatus => displayStatusOf(row)
-
-/**
- * "20m late", or nothing at all.
- *
- * Only ever shown beside a late badge: a zero here means on time, and "0m
- * late" next to a Present badge reads like a fault rather than the absence of
- * one. Over an hour it switches to hours and minutes, because "95m late" is
- * arithmetic the reader should not have to do.
- */
-export function lateBy(row: AttendanceDayRow): string {
-  const m = row.late_minutes
-  if (!m || m <= 0) return ''
-  if (m < 60) return `${m}m late`
-  const h = Math.floor(m / 60)
-  const rem = m % 60
-  return rem === 0 ? `${h}h late` : `${h}h ${rem}m late`
-}
 
 export const STATUS_LABEL: Record<DisplayStatus, string> = {
   present: 'Present',
@@ -52,7 +34,7 @@ export const STATUS_TONE: Record<DisplayStatus, 'success' | 'warning' | 'danger'
   day_off: 'info',
 }
 
-export interface AttendanceSummary {
+interface AttendanceSummary {
   total: number
   present: number
   absent: number
@@ -69,7 +51,7 @@ export interface AttendanceSummary {
 export const summarise = (rows: readonly AttendanceDayRow[]): AttendanceSummary =>
   summariseRoster(rows)
 
-export interface AttendanceFilters {
+interface AttendanceFilters {
   search: string
   status: DisplayStatus | 'all'
   /** Engagement: '', 'in_house' or 'freelancer'. */
@@ -126,7 +108,7 @@ const csvCell = (v: string | number | null): string => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-export const CSV_HEADERS = [
+const CSV_HEADERS = [
   'Name',
   'Email',
   'Phone',

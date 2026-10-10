@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -16,9 +16,8 @@ import {
   X,
   TrendingUp,
 } from 'lucide-react'
-import { shootListItem, type ProjectStatus, type UpdateProjectRequest } from '@ipc/contracts'
+import { shootListItem, type ProjectStatus } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
-import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { QuotationLinkDialog } from '@/features/projects/QuotationLinkDialog'
 import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
@@ -29,8 +28,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
-import { Input, Label, Select } from '@/shared/ui/input'
+import { Select } from '@/shared/ui/input'
 import { humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
 import { useProfitAndLoss } from '@/features/financials/api'
@@ -61,7 +59,7 @@ import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
 import type { JourneyKey } from '@/features/projects/journey'
-import { Money, useAmountsHidden, useINR } from '@/shared/money/MoneyMask'
+import { Money, useAmountsHidden } from '@/shared/money/MoneyMask'
 
 type Tab = Exclude<ProjectTab, 'quotation'>
 
@@ -307,22 +305,16 @@ function ProjectDetail() {
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </Select>
-            <EditProjectDialog
-              id={id}
-              name={data.name}
-              status={data.status}
-              packageCost={data.package_cost}
-              showQuotation={data.show_quotation}
-              received={received}
-            />
+            {/* One editor (the audit found two): name, package, the client's
+                details and dates all live on the edit page. */}
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/projects/$id/edit" params={{ id }}>
+                <Pencil /> Edit
+              </Link>
+            </Button>
             <RowMenu
               label="More actions"
               items={[
-                {
-                  label: 'Full editor',
-                  icon: <Pencil />,
-                  onSelect: () => void navigate({ to: '/projects/$id/edit', params: { id } }),
-                },
                 { label: 'Send quotation link', icon: <Send />, onSelect: () => setQuoting(true) },
                 { label: 'Share with client', icon: <Globe />, onSelect: () => setSharing(true) },
                 { label: 'Send details form', icon: <ClipboardList />, onSelect: () => setAskingDetails(true) },
@@ -530,164 +522,5 @@ function Figure({
         {action && <div className="shrink-0 self-end">{action}</div>}
       </CardContent>
     </Card>
-  )
-}
-
-function EditProjectDialog({
-  id,
-  name,
-  status,
-  packageCost,
-  showQuotation,
-  received,
-}: {
-  id: string
-  name: string
-  status: ProjectStatus
-  packageCost: number
-  showQuotation: boolean
-  received: number
-}) {
-  const inr = useINR()
-  const update = useUpdateProject(id)
-  const confirm = useConfirm()
-  const [open, setOpen] = useState(false)
-  const initial = { name, status, package_cost: packageCost, show_quotation: showQuotation }
-  const [form, setForm] = useState<UpdateProjectRequest>({ ...initial })
-  // Kept separate from `form.package_cost` (a number, for the request body) so
-  // the field displays exactly what was typed instead of fighting a
-  // type="number" input's leading-zero quirks.
-  const [packageCostText, setPackageCostText] = useState(String(packageCost))
-
-  const dirty =
-    (form.name ?? '') !== initial.name ||
-    form.status !== initial.status ||
-    Number(form.package_cost ?? 0) !== initial.package_cost ||
-    (form.show_quotation ?? false) !== initial.show_quotation
-  const belowReceived = Number(form.package_cost ?? 0) < received
-  // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(
-    open ? `project-edit-dialog:${id}` : null,
-    { form, packageCostText },
-    (v) => {
-      setForm(v.form)
-      setPackageCostText(v.packageCostText)
-    },
-    {
-      isBlank: (v) =>
-        JSON.stringify(v) ===
-        JSON.stringify({ form: initial, packageCostText: String(packageCost) }),
-    },
-  )
-
-  function reset() {
-    setForm({ ...initial })
-    setPackageCostText(String(packageCost))
-  }
-
-  async function onOpenChange(next: boolean) {
-    if (!next && dirty && !update.isPending) {
-      const leave = await confirm({
-        title: 'Discard unsaved changes?',
-        description: 'Your edits to this project have not been saved.',
-        confirmLabel: 'Discard',
-      })
-      if (!leave) return
-      draft.clear()
-      reset()
-    }
-    if (next) {
-      setForm({ ...initial })
-      setPackageCostText(String(packageCost))
-    }
-    setOpen(next)
-  }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (belowReceived) {
-      const yes = await confirm({
-        title: `New total is below ${inr(received)} already received?`,
-        description: 'The package no longer covers the money recorded. Continue anyway?',
-        confirmLabel: 'Save anyway',
-      })
-      if (!yes) return
-    }
-    await update.mutateAsync(form)
-    draft.clear()
-    setOpen(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => void onOpenChange(v)}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Pencil /> Edit
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Edit project">
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Name</Label>
-            <Input
-              value={form.name ?? ''}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <Select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
-              >
-                <option value="active">Active</option>
-                <option value="on_hold">On hold</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Package (₹)</Label>
-              <Input
-                inputMode="decimal"
-                value={packageCostText}
-                onChange={(e) => {
-                  setPackageCostText(e.target.value)
-                  setForm({
-                    ...form,
-                    package_cost: e.target.value.trim() ? Number(e.target.value) : 0,
-                  })
-                }}
-              />
-            </div>
-          </div>
-          {belowReceived && (
-            <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-              Received {inr(received)} already exceeds this package. Review the Billing tab
-              after saving.
-            </p>
-          )}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.show_quotation ?? false}
-              onChange={(e) => setForm({ ...form, show_quotation: e.target.checked })}
-            />
-            Show quotation to client
-          </label>
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }

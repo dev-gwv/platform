@@ -4,7 +4,7 @@ import type { Env } from '../context'
 import { sendWhatsAppText, whatsappConfigured } from './whatsapp'
 import { describeError, log } from './log'
 
-export interface OutboxSummary {
+interface OutboxSummary {
   claimed: number
   sent: number
   manual: number

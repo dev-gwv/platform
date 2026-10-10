@@ -5,9 +5,9 @@
  * answers instead, while 0 is a real answer ("no work needed"). Anything else
  * has to be a whole number the API will take, and saying why here beats a 422.
  */
-export type ParsedDays = { ok: true; value: number | null } | { ok: false; message: string }
+type ParsedDays = { ok: true; value: number | null } | { ok: false; message: string }
 
-export const MAX_DAYS = 365
+const MAX_DAYS = 365
 
 export function parseDays(text: string): ParsedDays {
   const t = text.trim()

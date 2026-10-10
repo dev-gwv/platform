@@ -1,5 +1,4 @@
 import type { Deliverable, DeliverableStatus } from '@ipc/contracts'
-import type { Tone } from '@/features/data/stage'
 
 /**
  * Where a deliverable stands, in the studio's words.
@@ -22,21 +21,6 @@ export const STAGE_LABEL: Record<DeliverableStatus, string> = {
   cancelled: 'Dropped',
 }
 
-export const STAGE_TONE: Record<DeliverableStatus, Tone> = {
-  pending: 'neutral',
-  in_progress: 'info',
-  review: 'warning',
-  completed: 'success',
-  cancelled: 'neutral',
-}
-
-/** The words on the one button that moves it forward. */
-export const NEXT_ACTION: Partial<Record<DeliverableStatus, string>> = {
-  pending: 'Start editing',
-  in_progress: 'Sent to client',
-  review: 'Mark delivered',
-}
-
 /** A stored status as one of ours; anything unknown reads as To do. */
 export function stageOf(status: string): DeliverableStatus {
   return (status in STAGE_LABEL ? status : 'pending') as DeliverableStatus
@@ -51,9 +35,6 @@ export function previousStage(status: string): DeliverableStatus | null {
   const i = STAGE_ORDER.indexOf(stageOf(status) as (typeof STAGE_ORDER)[number])
   return i > 0 ? STAGE_ORDER[i - 1]! : null
 }
-
-/** Moving into these asks for the link that went to the client. */
-export const wantsLink = (s: DeliverableStatus) => s === 'review' || s === 'completed'
 
 const isOpen = (status: string) => !['completed', 'cancelled'].includes(stageOf(status))
 
@@ -119,7 +100,7 @@ export interface ShootRef {
   shoot_date?: string | null | undefined
 }
 
-export interface DeliverableGroup {
+interface DeliverableGroup {
   /** null for the whole-project group. */
   shoot: ShootRef | null
   items: Deliverable[]

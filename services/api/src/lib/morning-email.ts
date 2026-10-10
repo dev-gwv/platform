@@ -181,7 +181,7 @@ export async function morningMail(env: Env, f: MorningFacts): Promise<Onboarding
   return { subject: `Today: ${summary.join(' · ')}`, html }
 }
 
-export interface MorningSummary {
+interface MorningSummary {
   due: number
   sent: number
 }

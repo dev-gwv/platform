@@ -6,7 +6,7 @@ import { Avatar } from './avatar'
 import { Button } from './button'
 import { cn } from './cn'
 
-export const PHOTO_MAX_BYTES = 1024 * 1024
+const PHOTO_MAX_BYTES = 1024 * 1024
 
 /**
  * A picture that is uploaded, not linked: a preview, one Upload button, and

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { cn } from '../ui/cn'
 
-export interface SectionTab<T extends string> {
+interface SectionTab<T extends string> {
   value: T
   label: string
   /** Drawn before the label in the 'chips' variant. */

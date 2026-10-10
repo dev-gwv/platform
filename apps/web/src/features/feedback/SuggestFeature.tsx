@@ -62,7 +62,7 @@ function Bi({ en, hi }: { en: string; hi: string }) {
   )
 }
 
-export function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const send = useSendFeatureRequest()
   const [text, setText] = useState('')
   const [voice, setVoice] = useState<{ blob: Blob; seconds: number; url: string } | null>(null)

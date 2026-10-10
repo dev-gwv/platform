@@ -764,7 +764,7 @@ function StepEditor({ step, index, total, onChange }: { step: WorkflowStepInput;
 }
 
 /** Rows of field / operator / value over the lead's facts. */
-export function ConditionsEditor({ value, onChange, label, min = 0 }: { value: FieldCondition[]; onChange: (v: FieldCondition[]) => void; label: string; min?: number }) {
+function ConditionsEditor({ value, onChange, label, min = 0 }: { value: FieldCondition[]; onChange: (v: FieldCondition[]) => void; label: string; min?: number }) {
   const setRow = (i: number, row: FieldCondition) => onChange(value.map((r, j) => (j === i ? row : r)))
   return (
     <div className="flex flex-col gap-2">

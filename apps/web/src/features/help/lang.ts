@@ -23,7 +23,7 @@ function read(): HelpLang {
   return current
 }
 
-export function setHelpLang(lang: HelpLang) {
+function setHelpLang(lang: HelpLang) {
   current = lang
   try {
     window.localStorage.setItem(STORE, lang)

@@ -17,7 +17,6 @@ import { deliver } from './email'
  */
 
 export type SetupStep = 1 | 2 | 3
-export type NudgeKind = 'day1' | 'day3' | 'day7'
 
 const GOLD = '#f2a618'
 const NAVY = '#1b2a4a'
@@ -31,7 +30,7 @@ interface StepCopy {
   path: string
 }
 
-export const STEPS: Record<SetupStep, StepCopy> = {
+const STEPS: Record<SetupStep, StepCopy> = {
   1: {
     key: 'team',
     title: 'Add your team',

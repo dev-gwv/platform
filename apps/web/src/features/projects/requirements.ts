@@ -11,14 +11,14 @@ import type { Tone } from '@/shared/ui/tone-chip'
  * and they used to be two flat lists of twenty-odd chips each, sorted by
  * nothing, so "Drone Operator" sat between "Sales" and "Album Designer".
  */
-export interface RequirementOption {
+interface RequirementOption {
   name: string
   stage: ProductionStage
   /** Something this studio has used before, rather than a library default. */
   saved: boolean
 }
 
-export interface RequirementGroup {
+interface RequirementGroup {
   stage: ProductionStage
   label: string
   tone: Tone

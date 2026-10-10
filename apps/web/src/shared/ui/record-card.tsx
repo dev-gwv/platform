@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from './cn'
 
-export interface RecordField {
+interface RecordField {
   label: string
   value: ReactNode
   /** Pull the eye to the number that matters — a balance, a profit. */

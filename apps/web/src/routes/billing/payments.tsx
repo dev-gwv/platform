@@ -25,7 +25,8 @@ import { todayInIndia } from '@/shared/ui/days-left'
 import { useClients } from '@/features/clients/api'
 import { useActiveLookups } from '@/features/settings/api'
 import { useProjects } from '@/features/projects/api'
-import { ReceivedPaymentDialog, DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
+import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { SendReceiptDialog } from '@/features/billing/SendReceiptDialog'
 import { openReceiptWhatsApp, receiptShareText, issueReceiptLink } from '@/features/billing/receiptShare'
 import { shortDate } from '@/features/billing/status'
@@ -347,13 +348,12 @@ function PaymentsSection() {
         </>
       )}
 
-      <ReceivedPaymentDialog open={addOpen} onOpenChange={setAddOpen} initial={null} />
-      <ReceivedPaymentDialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)} initial={editTarget} />
+      {addOpen && <RecordPaymentDialog target={{ kind: 'pick' }} onClose={() => setAddOpen(false)} />}
+      {editTarget && <RecordPaymentDialog key={editTarget.id} target={{ kind: 'pick', payment: editTarget }} onClose={() => setEditTarget(null)} />}
       {markId && marking.data && (
-        <ReceivedPaymentDialog
-          open
-          onOpenChange={(v) => !v && setMarkId(null)}
-          initial={{ ...marking.data, status: 'paid', date_received: todayInIndia() }}
+        <RecordPaymentDialog
+          target={{ kind: 'pick', payment: { ...marking.data, status: 'paid', date_received: todayInIndia() } }}
+          onClose={() => setMarkId(null)}
         />
       )}
       <DeleteReceivedPaymentDialog payment={deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)} />

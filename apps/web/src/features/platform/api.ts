@@ -49,24 +49,6 @@ export function usePlatformPlanAction() {
   })
 }
 
-/** Lovable parity: custom months + assign paid plan key. */
-export function usePlatformCustomPlanAction() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ studioId, months, planKey }: { studioId: string; months?: number; planKey?: string }) =>
-      callApi(`/platform/studios/${studioId}/plan`, {
-        method: 'POST',
-        body: planKey ? { action: 'assign', plan_key: planKey } : { action: 'custom', months: months ?? 12 },
-        responseSchema: ok,
-      }),
-    onSuccess: () => {
-      toast.success('Plan updated')
-      void qc.invalidateQueries({ queryKey: ['platform'] })
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not update the plan.'),
-  })
-}
-
 /** Lovable parity: vendor-provisioned studio. */
 export function useCreatePlatformStudio() {
   const qc = useQueryClient()
@@ -79,24 +61,6 @@ export function useCreatePlatformStudio() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not create the studio.'),
   })
-}
-
-export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
-  if (rows.length === 0) {
-    toast.info('Nothing to export.')
-    return
-  }
-  const header = Object.keys(rows[0] as Record<string, unknown>)
-  const lines = rows.map((r) =>
-    header.map((h) => `"${String((r as Record<string, unknown>)[h] ?? '').replace(/"/g, '""')}"`).join(','),
-  )
-  const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 /** The old app's subscribers, imported from its Studio Access export (0218). */

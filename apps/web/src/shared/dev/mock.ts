@@ -10,7 +10,6 @@ import { deriveStage } from '@/features/data/stage'
  */
 import { NOT_MOCKED } from './mock-flag'
 
-export { MOCK_ENABLED, NOT_MOCKED } from './mock-flag'
 
 /**
  * DEV knob for previewing the dashboard's setup card, which only

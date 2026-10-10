@@ -72,17 +72,3 @@ export const WORKS_AS_LABEL: Record<'in_house' | 'freelancer', string> = {
   in_house: 'On salary',
   freelancer: 'Per shoot',
 }
-
-const PAY_KEYS = [
-  'salary', 'freelancer_rate', 'rate_wedding_day', 'rate_half_day', 'payout_type', 'commission_pct', 'commission_basis', 'stipend_amount',
-  'pay_effective_from', 'pay_effective_to', 'compensation_notes', 'payment_type',
-] as const
-
-/** The same request with no pay in it -- for someone who does not handle salaries. */
-export function withoutPay<T extends Record<string, unknown>>(body: T): T {
-  const out: Record<string, unknown> = { ...body }
-  for (const k of PAY_KEYS) delete out[k]
-  if ('pay_components' in out) out.pay_components = []
-  if ('payment_status' in out) out.payment_status = 'active'
-  return out as T
-}

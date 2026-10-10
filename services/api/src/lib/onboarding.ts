@@ -24,7 +24,7 @@ export async function sendWelcomeFor(env: Env, uid: string): Promise<void> {
   }
 }
 
-export interface OnboardingNudgeSummary {
+interface OnboardingNudgeSummary {
   due: number
   sent: number
 }

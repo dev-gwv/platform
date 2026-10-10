@@ -70,7 +70,7 @@ export function toBlocks(text: string): Block[] {
 const TOKEN = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g
 
 /** **bold**, *italic*, `code` and [links](...) inside one line or paragraph. */
-export function inline(text: string): ReactNode {
+function inline(text: string): ReactNode {
   const parts = text.split(TOKEN)
   return parts.map((part, i) => {
     if (!part) return null

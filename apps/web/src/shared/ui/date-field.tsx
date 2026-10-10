@@ -59,7 +59,7 @@ export function niceDate(iso: string): string {
   return `${part({ weekday: 'short' })}, ${d.getDate()} ${part({ month: 'short' })} ${d.getFullYear()}`
 }
 
-export interface QuickDate {
+interface QuickDate {
   label: string
   iso: string
   /** False when the date falls outside the field's min/max: shown greyed, not hidden. */

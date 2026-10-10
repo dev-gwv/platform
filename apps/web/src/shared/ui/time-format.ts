@@ -7,7 +7,7 @@
  * written back without the seconds.
  */
 
-export interface Clock {
+interface Clock {
   /** 0–23 */
   h: number
   /** 0–59 */

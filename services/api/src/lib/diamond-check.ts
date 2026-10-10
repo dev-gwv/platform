@@ -13,19 +13,19 @@ import Anthropic from '@anthropic-ai/sdk'
  * in the platform inbox with the image, and the owner can revoke it.
  */
 
-export interface DiamondReading {
+interface DiamondReading {
   is_whatsapp_group_chat: boolean
   group_title: string | null
   confidence: 'high' | 'medium' | 'low'
 }
 
-export type DiamondVerdict =
+type DiamondVerdict =
   | { decision: 'approve'; reading: DiamondReading }
   | { decision: 'reject'; reason: string; reading: DiamondReading | null }
   /** Nothing could be read (no key, a network failure, a refusal): a person decides. */
   | { decision: 'manual'; reason: string }
 
-export const DIAMOND_GROUP = 'IPC Diamonds - Premium'
+const DIAMOND_GROUP = 'IPC Diamonds - Premium'
 const TITLE = /IPC\s*Diamonds?\s*[-–—:|]?\s*Premium/i
 
 type ImageType = 'image/png' | 'image/jpeg' | 'image/webp'

@@ -117,7 +117,7 @@ export const useMarkAllNotificationsRead = () =>
     callApi('/notifications/read-all', { method: 'POST', responseSchema: z.any() }),
   )
 
-export interface RunGeneratorArgs {
+interface RunGeneratorArgs {
   key: NotificationGeneratorKey
   dry_run: boolean
   date_from?: string | undefined

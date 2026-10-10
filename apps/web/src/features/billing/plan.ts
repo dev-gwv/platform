@@ -18,9 +18,9 @@ export { instalmentAmounts, planDueDate }
  * price.
  */
 
-export type PlanState = 'received' | 'part' | 'invoiced' | 'due' | 'upcoming'
+type PlanState = 'received' | 'part' | 'invoiced' | 'due' | 'upcoming'
 
-export interface PlanRow {
+interface PlanRow {
   index: number
   label: string
   due_trigger: string | null

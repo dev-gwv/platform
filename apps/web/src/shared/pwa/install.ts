@@ -30,7 +30,7 @@ export function registerPwa() {
   }
 }
 
-export const isStandalone = () =>
+const isStandalone = () =>
   typeof window !== 'undefined' &&
   (window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true)
 

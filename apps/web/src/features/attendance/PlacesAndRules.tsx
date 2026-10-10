@@ -20,7 +20,7 @@ const MODE_LABEL: Record<AttendanceMode, string> = {
 }
 
 /** "At Studio · 150 m", "Anywhere", "Not tracked". */
-export function ruleText(r: Pick<AttendanceRule, 'mode' | 'place_id' | 'radius_m'>, places: AttendancePlace[]): string {
+function ruleText(r: Pick<AttendanceRule, 'mode' | 'place_id' | 'radius_m'>, places: AttendancePlace[]): string {
   if (r.mode !== 'required') return MODE_LABEL[r.mode]
   const p = places.find((x) => x.id === r.place_id)
   const where = p ? `At ${p.name}` : 'At any studio place'

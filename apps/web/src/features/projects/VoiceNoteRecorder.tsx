@@ -19,7 +19,7 @@ type State =
   | { kind: 'error'; message: string; retry: boolean }
 
 /** Why the microphone did not start, in words a person can act on. */
-export function micProblem(e: unknown): { message: string; retry: boolean } {
+function micProblem(e: unknown): { message: string; retry: boolean } {
   const name = e instanceof DOMException || e instanceof Error ? e.name : ''
   if (name === 'NotAllowedError' || name === 'SecurityError')
     return {

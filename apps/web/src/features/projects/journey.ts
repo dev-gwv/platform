@@ -23,13 +23,13 @@ export interface JourneyInput {
   delivered: number
 }
 
-export interface JourneyStep {
+interface JourneyStep {
   key: JourneyKey
   label: string
   done: boolean
 }
 
-export interface JourneyNext {
+interface JourneyNext {
   key: JourneyKey
   /** The button. */
   action: string

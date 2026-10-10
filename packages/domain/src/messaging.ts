@@ -50,9 +50,6 @@ export function freeEmailsLeft(usedThisMonth: number, freeMonthly: number): numb
   return Math.max(0, freeMonthly - usedThisMonth)
 }
 
-/** Emails a studio may send in a calendar month unless the platform changes it. */
-export const DEFAULT_EMAIL_MONTHLY_CAP = 10000
-
 /**
  * What one more email would do right now: go free inside the monthly
  * allowance, cost `pricePaise` from the wallet, wait for a recharge, or be

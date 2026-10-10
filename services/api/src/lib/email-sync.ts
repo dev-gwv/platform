@@ -10,7 +10,7 @@ import type { Env } from '../context'
  * `not_configured` and imports nothing. Obtaining and refreshing the token
  * (OAuth consent) is a deployment concern; see docs/RUNBOOK.md.
  */
-export type EmailProvider = 'gmail' | 'o365'
+type EmailProvider = 'gmail' | 'o365'
 
 type SyncEnv = Pick<Env, 'EMAIL_SYNC_PROVIDER' | 'EMAIL_SYNC_TOKEN' | 'EMAIL_SYNC_MAILBOX'>
 
@@ -117,12 +117,12 @@ async function fetchO365(env: SyncEnv, sinceDays: number, max: number): Promise<
 }
 
 /** Where a message is filed: the lead (with its contact), else the contact alone. */
-export interface EmailMatch {
+interface EmailMatch {
   lead_id: string | null
   contact_id: string | null
 }
 
-export type EmailImportRow = SyncedMessage & EmailMatch
+type EmailImportRow = SyncedMessage & EmailMatch
 
 /**
  * Match each message to the lead or contact found for its address (both

@@ -36,7 +36,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 const projectsList = projectListItem.array()
 const createResponse = z.object({ id: z.string().uuid() })
 
-export type ProjectsQuery = { page?: number; page_size?: number; status?: string; search?: string; sort?: string }
+type ProjectsQuery = { page?: number; page_size?: number; status?: string; search?: string; sort?: string }
 
 export function useProjects(query?: ProjectsQuery) {
   const { session } = useAuth()

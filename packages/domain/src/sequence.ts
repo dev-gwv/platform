@@ -55,7 +55,7 @@ export function fillSequenceText(body: string, lead: SequenceLead, studio: { nam
 }
 
 /** The number wa.me wants: digits with the country code; a bare Indian number gets 91. */
-export function waNumber(phone: string): string {
+function waNumber(phone: string): string {
   const d = phone.replace(/\D/g, '')
   return d.length === 10 ? `91${d}` : d.replace(/^0+/, '')
 }

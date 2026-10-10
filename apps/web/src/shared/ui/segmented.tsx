@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from './cn'
 
-export interface SegmentOption<T extends string> {
+interface SegmentOption<T extends string> {
   value: T
   label: string
   icon?: LucideIcon

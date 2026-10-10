@@ -13,7 +13,7 @@ import type { AppEnv, Env } from '../context'
  * Off by default so a bench, CI and a split-domain deployment keep working
  * with body tokens; the client handles both shapes.
  */
-export const REFRESH_COOKIE = 'ipc_refresh'
+const REFRESH_COOKIE = 'ipc_refresh'
 // 90 days, renewed on every rotation (0221): it ends after 90 idle days, not 90 of use.
 const MAX_AGE_S = 90 * 24 * 60 * 60
 

@@ -31,7 +31,7 @@ export interface TodayItem {
   heard?: boolean
 }
 
-export interface DayInput {
+interface DayInput {
   me: string | null | undefined
   slots: readonly TeamSlot[]
   tasks: readonly TaskListItem[]
@@ -55,7 +55,7 @@ const addDays = (day: string, n: number) => {
 const daysBetween = (from: string, to: string) =>
   Math.round((new Date(`${to}T12:00:00`).getTime() - new Date(`${from}T12:00:00`).getTime()) / DAY_MS)
 
-export function lateText(days: number): string {
+function lateText(days: number): string {
   return days === 1 ? '1 day late' : `${days} days late`
 }
 
@@ -69,7 +69,7 @@ export function noteLine(n: { kind: 'text' | 'voice'; author_name: string | null
 }
 
 /** "Fri, 23 Oct" for anything after today. */
-export function dayText(day: string): string {
+function dayText(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 

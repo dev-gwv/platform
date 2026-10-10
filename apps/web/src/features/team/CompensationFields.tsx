@@ -20,14 +20,14 @@ import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
  * built-in type ticks its usual components as a starting point; a custom
  * type leaves whatever was already ticked alone.
  */
-export const PAY_COMPONENTS: Array<{ key: PayComponent; label: string; hint: string }> = [
+const PAY_COMPONENTS: Array<{ key: PayComponent; label: string; hint: string }> = [
   { key: 'monthly_salary', label: 'Monthly salary / retainer', hint: 'Fixed amount every month' },
   { key: 'freelancer_rate', label: 'Per shoot / day rate', hint: 'Paid per assignment' },
   { key: 'commission', label: 'Commission %', hint: 'Share of revenue, payment or profit' },
   { key: 'stipend', label: 'Stipend', hint: 'Trainee or intern allowance' },
 ]
 
-export const BUILT_IN_TYPES: Array<{ value: string; label: string; components: PayComponent[] }> = [
+const BUILT_IN_TYPES: Array<{ value: string; label: string; components: PayComponent[] }> = [
   { value: 'salaried', label: 'Monthly Salaried', components: ['monthly_salary'] },
   { value: 'freelancer', label: 'Freelancer', components: ['freelancer_rate'] },
   { value: 'commission', label: 'Commission Based', components: ['commission'] },
@@ -62,52 +62,6 @@ export interface CompensationDraft {
   pay_effective_from: string
   pay_effective_to: string
   compensation_notes: string
-}
-
-/**
- * Port of the Lovable compensation validation: every ticked component needs
- * a valid non-negative figure, commission stays 0–100, and the pay window
- * must make sense. Returns the first problem, or null when valid.
- */
-export function validateCompensation(
-  v: Pick<
-    CompensationDraft,
-    | 'payment_type'
-    | 'pay_components'
-    | 'salary'
-    | 'freelancer_rate'
-    | 'rate_wedding_day'
-    | 'rate_half_day'
-    | 'commission_pct'
-    | 'stipend_amount'
-    | 'pay_effective_from'
-    | 'pay_effective_to'
-  >,
-  opts?: { effectiveFromRequired?: boolean },
-): string | null {
-  if (!v.payment_type) return 'Payment type is required.'
-  if (v.pay_components.length === 0) return 'Select at least one pay component.'
-  const amounts: Array<[string, string]> = [
-    [v.salary, 'Monthly salary'],
-    [v.freelancer_rate, 'Rate'],
-    [v.rate_wedding_day ?? '', 'Wedding day rate'],
-    [v.rate_half_day ?? '', 'Half day rate'],
-    [v.stipend_amount, 'Stipend'],
-  ]
-  for (const [raw, label] of amounts) {
-    if (raw.trim() !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0))
-      return `${label} must be a non-negative number.`
-  }
-  if (v.commission_pct.trim() !== '') {
-    const n = Number(v.commission_pct)
-    if (!Number.isFinite(n) || n < 0 || n > 100)
-      return 'Commission percentage must be between 0 and 100.'
-  }
-  if (opts?.effectiveFromRequired !== false && v.payment_type && !v.pay_effective_from)
-    return 'Effective from date is required.'
-  if (v.pay_effective_to && v.pay_effective_from && v.pay_effective_to < v.pay_effective_from)
-    return 'Effective to must be on or after effective from.'
-  return null
 }
 
 const PAYOUT_TYPES: readonly { value: CompensationDraft['payout_type']; label: string }[] = [
