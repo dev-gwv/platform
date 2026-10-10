@@ -14,6 +14,7 @@ import {
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { PageHeader } from '@/shared/layout/page-header'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { useProjects } from '@/features/projects/api'
@@ -239,8 +240,14 @@ function StudioCommandCenter() {
       )}
 
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
-        {access.hasModule('projects') && <NeedsAttention projects={tracked} />}
-        <WhoYouOwe />
+        {access.hasModule('projects') && (
+          <PanelBoundary label="Needs attention">
+            <NeedsAttention projects={tracked} />
+          </PanelBoundary>
+        )}
+        <PanelBoundary label="Who you owe">
+          <WhoYouOwe />
+        </PanelBoundary>
       </div>
       </>
       )}

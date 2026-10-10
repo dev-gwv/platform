@@ -19,6 +19,7 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { RemindersContent } from '@/routes/reminders'
+import { PanelBoundary } from '@/shared/layout/RouteError'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { useProjects } from '@/features/projects/api'
@@ -270,6 +271,7 @@ function Tasks({ managed }: { managed: boolean }) {
 
       {actions.dialogs}
       {openId && (
+        <PanelBoundary resetKey={openId} label="this task">
         <TaskDrawer
           taskId={openId}
           onClose={() => setOpenId('')}
@@ -288,6 +290,7 @@ function Tasks({ managed }: { managed: boolean }) {
               : undefined
           }
         />
+        </PanelBoundary>
       )}
     </>
   )
