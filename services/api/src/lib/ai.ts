@@ -1,4 +1,4 @@
-import { ASSISTANT_DEFAULT_BASE_URL, ASSISTANT_DEFAULT_MODEL, ASSISTANT_FALLBACK_MODELS } from '@ipc/contracts'
+import { ASSISTANT_DEFAULT_BASE_URL, ASSISTANT_DEFAULT_MODEL, assistantFallbacks } from '@ipc/contracts'
 
 /**
  * The AI engine: one interface, so the provider is a setting and not a rewrite.
@@ -94,8 +94,15 @@ export interface ChatProvider {
   chat(req: ChatRequest): Promise<ChatReply>
 }
 
-/** 30s: well past Groq, and short enough that a studio is not left staring. */
+/** 30s for one call: well past Groq, and short enough that a studio is not left staring. */
 const TIMEOUT_MS = 30_000
+
+/**
+ * 25s for everything, retries and fallbacks included -- inside the browser's own
+ * 30 s, so whatever happens the studio hears the real answer rather than its
+ * own timeout.
+ */
+const TOTAL_MS = 25_000
 
 /**
  * Why the provider said no, as a sentence.
@@ -181,8 +188,10 @@ export function openAiCompatible(cfg: {
   model?: string | undefined
   id?: string | undefined
   timeoutMs?: number | undefined
-  /** Tried in turn if the chosen model is gone. Defaults to ASSISTANT_FALLBACK_MODELS. */
+  /** Tried in turn if the chosen model is gone. Defaults to the address's chain. */
   fallbackModels?: readonly string[] | undefined
+  /** The budget for the whole walk, retries and fallbacks included. */
+  totalMs?: number | undefined
   fetchImpl?: typeof fetch | undefined
 }): ChatProvider {
   const baseUrl = (cfg.baseUrl || ASSISTANT_DEFAULT_BASE_URL).replace(/\/+$/, '')
@@ -191,7 +200,7 @@ export function openAiCompatible(cfg: {
   const id = cfg.id || hostOf(baseUrl)
 
   /** The chosen model first, then the fallbacks, each name only once. */
-  const chain = [...new Set([model, ...(cfg.fallbackModels ?? ASSISTANT_FALLBACK_MODELS)])]
+  const chain = [...new Set([model, ...(cfg.fallbackModels ?? assistantFallbacks(baseUrl))])]
 
   /** One POST. Returns the reply, and the status when the provider refused. */
   async function once(useModel: string, req: ChatRequest): Promise<{ reply: ChatReply; status: number }> {
@@ -279,8 +288,14 @@ export function openAiCompatible(cfg: {
       }
 
       let last: ChatReply | null = null
+      // One budget for the whole walk. Without it the worst case is two models
+      // by two attempts by the per-call timeout, which outlasts the browser's
+      // own 30 s -- so the studio was shown a failure while the server was
+      // still trying, and the log recorded an answer nobody ever saw.
+      const giveUpAt = Date.now() + (cfg.totalMs ?? TOTAL_MS)
 
       for (const useModel of chain) {
+        if (Date.now() >= giveUpAt) break
         let status = -1
         // One retry for a blip. Not more: a studio is waiting, and three
         // attempts at a provider that is down is just a slower failure.
@@ -295,6 +310,7 @@ export function openAiCompatible(cfg: {
           // status 0 is "nothing came back": a dropped connection or a timeout,
           // which is usually worth one more go.
           if (!(status === 0 || transient(status)) || attempt === 1) break
+          if (Date.now() + RETRY_PAUSE_MS >= giveUpAt) break
           await wait(RETRY_PAUSE_MS)
         }
 

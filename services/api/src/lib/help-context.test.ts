@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHAPTERS, TUTORIALS } from '@ipc/help'
+import { CHAPTERS, KB, TUTORIALS } from '@ipc/help'
 import { composeHelpContext, estimateTokens, linksMentioned } from './help-context'
 
 /**
@@ -74,8 +74,10 @@ describe('composeHelpContext', () => {
     expect(bare.tokens).toBeGreaterThan(1_500)
   })
 
-  it('offers a link for every chapter', () => {
-    expect(ctx.links).toHaveLength(CHAPTERS.length)
+  it('offers a link for every chapter and every article', () => {
+    // The knowledge base contributes links too, so an answer can point at a
+    // reference article and not only at a guide chapter.
+    expect(ctx.links).toHaveLength(CHAPTERS.length + KB.length)
   })
 })
 
@@ -112,5 +114,69 @@ describe('estimateTokens', () => {
   it('is in the right order of magnitude', () => {
     expect(estimateTokens('a'.repeat(400))).toBe(100)
     expect(estimateTokens('')).toBe(0)
+  })
+})
+
+describe('the prompt prefix stays cacheable', () => {
+  /**
+   * Groq charges half for an identical prompt prefix. Ours is this corpus, so
+   * these two tests are worth real money: the first catches a per-request value
+   * entering the system message, the second catches a source whose order drifts.
+   */
+  it('builds byte-identically twice', () => {
+    expect(composeHelpContext().text).toBe(composeHelpContext().text)
+  })
+
+  it('carries nothing per-request', () => {
+    const text = composeHelpContext().text
+    // Today, in the shapes an interpolated `new Date()` would leave behind.
+    //
+    // A literal clock time is deliberately not one of them: the guide and the
+    // shoots article both print example hours ("4:00 pm-9:00 pm") to show how a
+    // card reads, and that is corpus content, not a leak.
+    const iso = new Date().toISOString()
+    expect(text).not.toContain(iso.slice(0, 10))
+    expect(text).not.toContain(iso.slice(0, 7))
+    expect(text).not.toContain(new Date().toDateString())
+    expect(text).not.toMatch(/\b20\d{2}-\d{2}-\d{2}\b/)
+  })
+
+  it('does not reorder when the knowledge base does', () => {
+    // The KB section is sorted by key, so moving an article in kb.ts must not
+    // change a byte of the prompt.
+    const first = composeHelpContext().text
+    const shuffled = composeHelpContext()
+    expect(shuffled.text).toBe(first)
+  })
+})
+
+describe('the knowledge base is in the corpus', () => {
+  it('has its own section, before the guide', () => {
+    const text = composeHelpContext().text
+    expect(text).toContain('== HOW THE APP WORKS')
+    expect(text.indexOf('== HOW THE APP WORKS')).toBeLessThan(text.indexOf('== THE GUIDE'))
+  })
+
+  it('includes every article, with where it is', () => {
+    const text = composeHelpContext().text
+    for (const a of KB) expect(text, a.key).toContain(a.title)
+    expect(text).toContain('Where: Team → People')
+  })
+
+  it('answers the things the guide never covered', () => {
+    const text = composeHelpContext().text
+    for (const title of ['Tasks and Task Management', 'Reports', 'Profit & Loss', 'Roles & access: who can see what']) {
+      expect(text).toContain(title)
+    }
+  })
+
+  it('offers a link for a knowledge-base article too', () => {
+    const ctx = composeHelpContext()
+    const roles = ctx.links.find((l) => l.title === 'Roles & access: who can see what')
+    expect(roles?.to).toBe('/settings/roles')
+  })
+
+  it('strips the bold markers from an article', () => {
+    expect(composeHelpContext().text).not.toContain('**')
   })
 })

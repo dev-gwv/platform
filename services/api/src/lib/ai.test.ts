@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ASSISTANT_DEFAULT_MODEL } from '@ipc/contracts'
+import { ASSISTANT_DEFAULT_MODEL, assistantFallbacks } from '@ipc/contracts'
 import { openAiCompatible, refusalSentence } from './ai'
 
 /**
@@ -298,5 +298,57 @@ describe('model-aware tuning', () => {
     await openAiCompatible({ apiKey: 'k', model: 'gpt-4o-mini', fetchImpl: f as unknown as typeof fetch }).chat({ messages: [] })
     expect(bodyOf(f)).not.toHaveProperty('reasoning_effort')
     expect(bodyOf(f)).not.toHaveProperty('include_reasoning')
+  })
+})
+
+describe('assistantFallbacks', () => {
+  it('offers the gpt-oss pair for the providers that serve it', () => {
+    for (const url of [
+      'https://api.groq.com/openai/v1',
+      'https://openrouter.ai/api/v1',
+      'https://api.together.xyz/v1',
+    ]) {
+      expect(assistantFallbacks(url)).toEqual(['openai/gpt-oss-120b', 'openai/gpt-oss-20b'])
+    }
+  })
+
+  it('never offers a model the provider does not have', () => {
+    // A studio on DeepSeek used to fall back to two gpt-oss names, turning one
+    // honest 404 into three.
+    expect(assistantFallbacks('https://api.deepseek.com/v1')).toEqual(['deepseek-chat'])
+    expect(assistantFallbacks('https://api.openai.com/v1')).toEqual(['gpt-4o-mini'])
+  })
+
+  it('offers nothing for an address we do not know', () => {
+    // A local model or a proxy: one clear error beats three slow ones.
+    expect(assistantFallbacks('https://llm.inside.example/v1')).toEqual([])
+  })
+
+  it('treats an empty address as the default provider', () => {
+    expect(assistantFallbacks(null)).toEqual(['openai/gpt-oss-120b', 'openai/gpt-oss-20b'])
+    expect(assistantFallbacks('https://api.groq.com/openai/v1/')).toHaveLength(2)
+  })
+})
+
+describe('the whole walk is bounded', () => {
+  it('stops before the browser would, even with models left to try', async () => {
+    // Two models by two attempts by the per-call timeout outlasts the web
+    // client's own 30 s, so the studio saw a failure while the server was still
+    // working and the log recorded an answer nobody read.
+    const slow = ((_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      })) as unknown as typeof fetch
+    const started = Date.now()
+    const r = await openAiCompatible({
+      apiKey: 'k',
+      model: 'a',
+      fallbackModels: ['b', 'c', 'd'],
+      timeoutMs: 40,
+      totalMs: 150,
+      fetchImpl: slow,
+    }).chat({ messages: [] })
+    expect(r.ok).toBe(false)
+    expect(Date.now() - started).toBeLessThan(1_000)
   })
 })

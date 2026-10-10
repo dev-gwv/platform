@@ -3,11 +3,14 @@ import { toast } from 'sonner'
 import {
   askReply,
   askRequest,
+  assistantFeedbackRequest,
+  assistantHealth,
   assistantSettings,
   assistantState,
   z,
   type AskReply,
   type AskRequest,
+  type AssistantFeedbackRequest,
   type SaveAssistantSettingsRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -80,5 +83,35 @@ export function useSaveAssistantSettings() {
       toast.success('Saved.')
     },
     onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/**
+ * "Did this help?" on one answer.
+ *
+ * Deliberately quiet: no toast, no invalidation, and a failure is swallowed.
+ * The panel has already drawn the thank-you from its own state, and telling
+ * someone their thumb did not reach us is noise about our problem, not theirs.
+ */
+export function useAssistantFeedback() {
+  return useMutation({
+    mutationFn: (body: AssistantFeedbackRequest) =>
+      callApi('/assistant/feedback', {
+        method: 'POST',
+        body: assistantFeedbackRequest.parse(body),
+        responseSchema: z.unknown(),
+      }),
+    onError: () => {},
+  })
+}
+
+/** How the assistant is doing, for the platform console. */
+export function useAssistantHealth() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['assistant', 'health'],
+    queryFn: () => callApi('/platform/assistant/health', { responseSchema: assistantHealth }),
+    enabled: !!session,
+    staleTime: 60_000,
   })
 }

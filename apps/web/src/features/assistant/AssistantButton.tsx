@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { Sparkles } from 'lucide-react'
+import { RotateCcw, Sparkles } from 'lucide-react'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from './AssistantPanel'
+import { clearThread, snapshot, subscribe } from './thread'
 import { useAssistantState } from './api'
 
 /**
@@ -20,6 +21,7 @@ export function AssistantButton() {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
   const { data } = useAssistantState()
+  const { said } = useSyncExternalStore(subscribe, snapshot, snapshot)
 
   // The shell outlives navigation, so nothing else would close the panel when
   // the page changes underneath it.
@@ -56,8 +58,18 @@ export function AssistantButton() {
           <div className="flex items-center gap-2 border-b border-border px-4 py-3 pr-12">
             <Sparkles className="size-4 text-tone-violet" aria-hidden />
             <h2 className="text-sm font-semibold">Ask for help</h2>
+            {/* The thread outlives the panel now, so there has to be a way to
+                put it down and start a fresh one. */}
+            {said.length > 0 && (
+              <button
+                type="button"
+                onClick={clearThread}
+                className="ml-auto flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <RotateCcw className="size-3" aria-hidden /> Start again
+              </button>
+            )}
           </div>
-          {/* Mounted only while open, so a fresh question starts a fresh thread. */}
           <AssistantPanel callUrl={data.call_url} left={left} />
         </SheetContent>
       </Sheet>

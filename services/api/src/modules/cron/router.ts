@@ -101,6 +101,16 @@ export const cronRouter = new Hono<AppEnv>()
         const purged = dryRun
           ? 0
           : ((await sql<{ n: number }[]>`select purge_expired_refresh_tokens() as n`)[0]?.n ?? 0)
+        // The assistant's log is kept six months: long enough to see whether a
+        // prompt change helped, short enough that we are not holding studios'
+        // questions for years. 0247 granted the delete and nothing used it.
+        const assistantLog = dryRun
+          ? 0
+          : ((
+              await sql<{ n: number }[]>`
+                with gone as (delete from assistant_log where created_at < now() - interval '180 days' returning 1)
+                select count(*)::int as n from gone`
+            )[0]?.n ?? 0)
         // Facebook page tokens for pages nobody connected are dropped after half an hour.
         const idleTokens = dryRun ? 0 : await pruneIdlePageTokens(sql)
         // Workflows queue template sends; only the API can deliver them.
@@ -138,6 +148,7 @@ export const cronRouter = new Hono<AppEnv>()
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,
           removed_idle_page_tokens: idleTokens,
+          pruned_assistant_log: assistantLog,
         }
       }),
     ))

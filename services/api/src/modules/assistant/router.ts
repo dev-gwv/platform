@@ -1,5 +1,13 @@
 import { Hono } from 'hono'
-import { askReply, askRequest, assistantSettings, assistantState, saveAssistantSettingsRequest } from '@ipc/contracts'
+import {
+  askReply,
+  askRequest,
+  assistantFeedbackRequest,
+  assistantHealth,
+  assistantSettings,
+  assistantState,
+  saveAssistantSettingsRequest,
+} from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requirePlatformAdmin } from '../../middleware/permissions'
@@ -115,7 +123,7 @@ export const assistantRouter = new Hono<AppEnv>()
       history: parsed.data.history,
     })
 
-    await logAsk(
+    const logId = await logAsk(
       c.env,
       { companyId: auth.companyId, userId: auth.userId, question: parsed.data.question },
       // The prompt's size is the tripwire for the "no retrieval needed"
@@ -130,8 +138,30 @@ export const assistantRouter = new Hono<AppEnv>()
         answer: result.answer,
         sources: result.sources,
         call_url: result.callUrl,
+        log_id: logId,
       }),
     )
+  })
+
+  /**
+   * "Did this help?" -- the only real signal of whether the knowledge base is
+   * working. Status is not quality: an answer can be fluent, sourced, logged as
+   * 'answered' and still wrong.
+   *
+   * Scoped to the studio's own row, so one studio cannot mark another's answer,
+   * and silent about a row that is not theirs: there is nothing useful to say
+   * and nothing to learn from being told.
+   */
+  .post('/feedback', async (c) => {
+    const auth = c.get('auth')
+    const parsed = assistantFeedbackRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'We could not record that.')
+    await attempt(c, 'assistant.feedback', () =>
+      withService(c.env, (sql) => sql`
+        update assistant_log set helpful = ${parsed.data.helpful}
+         where id = ${parsed.data.log_id}::uuid and company_id = ${auth.companyId}::uuid`),
+    )
+    return c.json({ ok: true })
   })
 
 export const platformAssistantRouter = new Hono<AppEnv>()
@@ -151,6 +181,50 @@ export const platformAssistantRouter = new Hono<AppEnv>()
         ready: !!c.env.AI_API_KEY,
       }),
     )
+  })
+
+  /**
+   * How the assistant is actually doing. 0247 wrote a row per question and
+   * nothing ever read it, which is the shape that makes "the assistant is
+   * unhelpful" and "nobody opens the assistant" look identical from outside --
+   * and they want opposite fixes.
+   */
+  .get('/assistant/health', async (c) => {
+    const data = await attempt(c, 'platform.assistant_health', () =>
+      withService(c.env, async (sql) => {
+        const [n] = await sql<
+          {
+            today: number
+            week: number
+            answered: number
+            escalated: number
+            failed: number
+            skipped: number
+            helpful: number
+            unhelpful: number
+            avg_prompt_tokens: number | null
+          }[]
+        >`
+          select
+            count(*) filter (where created_at >= date_trunc('day', now() at time zone 'Asia/Kolkata') at time zone 'Asia/Kolkata')::int as today,
+            count(*) filter (where created_at >= now() - interval '7 days')::int as week,
+            count(*) filter (where created_at >= now() - interval '7 days' and status = 'answered')::int as answered,
+            count(*) filter (where created_at >= now() - interval '7 days' and status = 'escalated')::int as escalated,
+            count(*) filter (where created_at >= now() - interval '7 days' and status = 'failed')::int as failed,
+            count(*) filter (where created_at >= now() - interval '7 days' and status = 'skipped')::int as skipped,
+            count(*) filter (where helpful is true)::int as helpful,
+            count(*) filter (where helpful is false)::int as unhelpful,
+            avg(prompt_tokens) filter (where created_at >= now() - interval '7 days')::int as avg_prompt_tokens
+          from assistant_log`
+        const recent = await sql`
+          select id, question, answer, status, helpful, model, prompt_tokens, error,
+                 to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
+            from assistant_log order by created_at desc limit 50`
+        return { ...(n ?? {}), recent }
+      }),
+    )
+    if (!data) fail(400, 'We could not load how the assistant is doing.')
+    return c.json(assistantHealth.parse(data))
   })
 
   .put('/assistant', async (c) => {

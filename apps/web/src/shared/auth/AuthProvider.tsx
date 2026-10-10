@@ -2,6 +2,7 @@ import { createContext, use, useCallback, useEffect, useState, type ReactNode } 
 import { useQueryClient } from '@tanstack/react-query'
 import { z, authToken, sessionState, type SessionState } from '@ipc/contracts'
 import { callApi, ApiError, markCookieSession, hasStoredSession, rotateTokens, setAuthLostHandler } from '../api/client'
+import { clearThread } from '@/features/assistant/thread'
 import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
 import { MOCK_ENABLED } from '../dev/mock-flag'
 import { setSentryUser } from '@/shared/error/sentry'
@@ -57,6 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
     setNoStudio(false)
     qc.clear()
+    // The help assistant's thread is held at module scope so it survives the
+    // panel closing, which means qc.clear() does not reach it -- and two people
+    // sharing a laptop must not read each other's questions.
+    clearThread()
   }, [qc])
 
   // A refused refresh means the session is gone server-side; drop it here too so

@@ -188,10 +188,52 @@ describe('assistant_asked_today', () => {
   })
 })
 
+describe('was the answer any use (0255)', () => {
+  it('starts as nobody having said', async () => {
+    // null is not "no". Most answers are never marked, and counting them as
+    // unhelpful would make the console read as a disaster from day one.
+    await db.exec(`insert into assistant_log (company_id, question, status) values ('${COMPANY}', 'q', 'answered')`)
+    const r = await q<{ helpful: boolean | null }>(`select helpful from assistant_log`)
+    expect(r[0]!.helpful).toBeNull()
+  })
+
+  it('takes a thumb either way', async () => {
+    await db.exec(`insert into assistant_log (id, company_id, question, status)
+                   values ('d1000000-0000-4000-8000-000000000001', '${COMPANY}', 'q', 'answered')`)
+    await db.exec(`update assistant_log set helpful = true where id = 'd1000000-0000-4000-8000-000000000001'`)
+    expect((await q<{ h: boolean }>(`select helpful as h from assistant_log`))[0]!.h).toBe(true)
+    await db.exec(`update assistant_log set helpful = false where id = 'd1000000-0000-4000-8000-000000000001'`)
+    expect((await q<{ h: boolean }>(`select helpful as h from assistant_log`))[0]!.h).toBe(false)
+  })
+
+  it('lets the service mark one, and a studio none', async () => {
+    await db.exec(`insert into assistant_log (id, company_id, question, status)
+                   values ('d1000000-0000-4000-8000-000000000002', '${COMPANY}', 'q', 'answered')`)
+    await db.exec(`set role service_role`)
+    await db.exec(`update assistant_log set helpful = true where id = 'd1000000-0000-4000-8000-000000000002'`)
+    await db.exec(`reset role`)
+    // A studio marks its answer through the API, never by touching the table.
+    await db.exec(`set role authenticated`)
+    await fails(`update assistant_log set helpful = false`)
+    await db.exec(`reset role`)
+  })
+
+  it('does not let the service rewrite the question or the answer', async () => {
+    // The grant is on the one column. The log is a record of what happened, and
+    // a record that can be edited is not one.
+    await db.exec(`insert into assistant_log (id, company_id, question, status)
+                   values ('d1000000-0000-4000-8000-000000000003', '${COMPANY}', 'as asked', 'answered')`)
+    await db.exec(`set role service_role`)
+    await fails(`update assistant_log set question = 'rewritten'`)
+    await db.exec(`reset role`)
+    expect((await q<{ question: string }>(`select question from assistant_log`))[0]!.question).toBe('as asked')
+  })
+})
+
 describe('the migrations', () => {
   it('can be applied twice', async () => {
     await db.exec(`insert into assistant_log (company_id, question, status) values ('${COMPANY}', 'keep me', 'answered')`)
-    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql']) {
+    for (const f of ['0247_help_assistant.sql', '0248_assistant_quota_grant.sql', '0255_assistant_helpful.sql']) {
       await db.exec(readFileSync(join(migDir, f), 'utf8'))
     }
     const r = await q<{ n: number }>(`select count(*)::int as n from assistant_log`)

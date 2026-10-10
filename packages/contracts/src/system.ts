@@ -60,6 +60,8 @@ export const cronRunResult = z.object({
   sequence_sends: z.object({ claimed: z.number().int(), sent: z.number().int(), failed: z.number().int() }).optional(),
   purged_refresh_tokens: z.number().int(),
   removed_idle_page_tokens: z.number().int().optional(),
+  /** Assistant log rows older than 180 days, swept (0247/0255). */
+  pruned_assistant_log: z.number().int().optional(),
 })
 export type CronRunResult = z.infer<typeof cronRunResult>
 

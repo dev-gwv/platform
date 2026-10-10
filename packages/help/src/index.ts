@@ -9,4 +9,5 @@
  * the DOM, or the API cannot load it.
  */
 export * from './guide'
+export * from './kb'
 export * from './tutorials'

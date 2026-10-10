@@ -37,6 +37,25 @@ export const ASSISTANT_PROVIDERS = [
  */
 export const ASSISTANT_FALLBACK_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'] as const
 
+/**
+ * The fallback chain for a given address.
+ *
+ * It has to depend on the address, because a model name is not portable: a
+ * studio pointed at DeepSeek or OpenAI once fell back to two gpt-oss names
+ * neither of them has, turning one 404 into three. An address we do not
+ * recognise gets no chain at all -- better one honest error than three.
+ */
+export function assistantFallbacks(baseUrl: string | null | undefined): readonly string[] {
+  const url = (baseUrl || ASSISTANT_PROVIDERS[0].baseUrl).replace(/\/+$/, '')
+  const known = ASSISTANT_PROVIDERS.find((p) => p.baseUrl === url)
+  if (!known) return []
+  // gpt-oss runs on all three of these, and the 20b is the sibling to drop to.
+  if (known.key === 'groq' || known.key === 'openrouter' || known.key === 'together') {
+    return ASSISTANT_FALLBACK_MODELS
+  }
+  return [known.suggest]
+}
+
 /** What the driver and the console fall back to when nothing is configured. */
 export const ASSISTANT_DEFAULT_BASE_URL = ASSISTANT_PROVIDERS[0].baseUrl
 export const ASSISTANT_DEFAULT_MODEL = ASSISTANT_PROVIDERS[0].suggest
@@ -93,6 +112,12 @@ export const askReply = z.object({
   answer: z.string(),
   sources: z.array(assistantSource).default([]),
   call_url: z.string().nullable().default(null),
+  /**
+   * The log row this answer was written to, so "did this help?" can mark the
+   * right one. Null when the log could not be written -- the answer still
+   * stands; only the thumb is lost.
+   */
+  log_id: z.string().uuid().nullable().default(null),
 })
 export type AskReply = z.infer<typeof askReply>
 
@@ -103,7 +128,7 @@ export const saveAssistantSettingsRequest = z.object({
   assistant_model: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9._/:-]{1,120}$/, 'A model name, e.g. llama-3.3-70b-versatile.')
+    .regex(/^[A-Za-z0-9._/:-]{1,120}$/, 'A model name, e.g. openai/gpt-oss-120b.')
     .or(z.literal(''))
     .nullable(),
   assistant_base_url: z
@@ -129,3 +154,42 @@ export const assistantSettings = saveAssistantSettingsRequest.extend({
   ready: z.boolean(),
 })
 export type AssistantSettings = z.infer<typeof assistantSettings>
+
+/** "Did this help?" on one answer. */
+export const assistantFeedbackRequest = z.object({
+  log_id: z.string().uuid(),
+  helpful: z.boolean(),
+})
+export type AssistantFeedbackRequest = z.infer<typeof assistantFeedbackRequest>
+
+/** What the platform console reads about how the assistant is doing. */
+export const assistantLogRow = z.object({
+  id: z.string().uuid(),
+  question: z.string(),
+  answer: z.string().nullable(),
+  status: z.enum(['answered', 'escalated', 'skipped', 'failed']),
+  helpful: z.boolean().nullable(),
+  model: z.string().nullable(),
+  prompt_tokens: z.number().int().nullable(),
+  error: z.string().nullable(),
+  created_at: z.string(),
+})
+export type AssistantLogRow = z.infer<typeof assistantLogRow>
+
+export const assistantHealth = z.object({
+  /** Asked today and over the last seven days. */
+  today: z.number().int(),
+  week: z.number().int(),
+  /** The split over the last seven days. */
+  answered: z.number().int(),
+  escalated: z.number().int(),
+  failed: z.number().int(),
+  skipped: z.number().int(),
+  /** Of the answers somebody marked. */
+  helpful: z.number().int(),
+  unhelpful: z.number().int(),
+  /** The retrieval tripwire: average prompt size over the week. */
+  avg_prompt_tokens: z.number().int().nullable(),
+  recent: z.array(assistantLogRow),
+})
+export type AssistantHealth = z.infer<typeof assistantHealth>

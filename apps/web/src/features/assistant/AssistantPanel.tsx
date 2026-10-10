@@ -1,33 +1,25 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useSyncExternalStore, type FormEvent, type KeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, CalendarClock, Loader2, Send, Sparkles } from 'lucide-react'
-import type { AskReply, AssistantSource, AssistantTurn } from '@ipc/contracts'
+import { ArrowRight, CalendarClock, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react'
+import type { AskReply, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { RichText } from './rich-text'
-import { useAsk } from './api'
+import { useAsk, useAssistantFeedback } from './api'
+import { addSaid, markHelpful, setDraft, snapshot, subscribe, type Said } from './thread'
 
 /**
  * The help assistant's conversation.
  *
- * It holds the exchange in component state and sends the last few turns back
- * with each question. Nothing is stored: a help conversation is worth having
- * while the panel is open and worth nothing afterwards, and saving it would
- * mean a table of studios' questions for no one to read.
+ * The exchange lives in `thread.ts`, at module scope, so closing the panel or
+ * walking to another page does not take it -- following the link in an answer
+ * used to destroy the conversation that produced it. Nothing is written to
+ * storage: gone on reload is the intended lifetime.
  *
  * No streaming. Nothing in this app streams -- every call goes through
  * callApi, which owns token rotation and the correlation id -- and a help
  * answer arrives whole in a second or two, which is the better trade.
  */
-
-interface Said {
-  role: 'user' | 'assistant'
-  text: string
-  sources?: readonly AssistantSource[]
-  callUrl?: string | null
-  /** A failure we could not answer through; drawn differently. */
-  broke?: boolean
-}
 
 /** Sent back with each question. Enough for a follow-up, not enough to crowd the prompt. */
 const CARRY = 6
@@ -39,8 +31,7 @@ const OPENERS = [
 ]
 
 export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left: number }) {
-  const [said, setSaid] = useState<Said[]>([])
-  const [draft, setDraft] = useState('')
+  const { said, draft } = useSyncExternalStore(subscribe, snapshot, snapshot)
   const ask = useAsk()
   const thread = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -58,23 +49,24 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
 
     // The history is what was on screen BEFORE this question, which is why it
     // is taken here rather than from `said` inside the callback.
-    const history: AssistantTurn[] = said.slice(-CARRY).map((s) => ({ role: s.role, content: s.text }))
-    setSaid((prev) => [...prev, { role: 'user', text: q }])
+    const history: AssistantTurn[] = said.slice(-CARRY).map((t) => ({ role: t.role, content: t.text }))
+    addSaid({ role: 'user', text: q })
     setDraft('')
 
     ask.mutate(
       { question: q, history },
       {
         onSuccess: (r: AskReply) =>
-          setSaid((prev) => [
-            ...prev,
-            { role: 'assistant', text: r.answer, sources: r.sources, callUrl: r.call_url, broke: r.status === 'failed' },
-          ]),
-        onError: (e: Error) =>
-          setSaid((prev) => [
-            ...prev,
-            { role: 'assistant', text: e.message, callUrl, broke: true },
-          ]),
+          addSaid({
+            role: 'assistant',
+            text: r.answer,
+            sources: r.sources,
+            callUrl: r.call_url,
+            broke: r.status === 'failed',
+            logId: r.log_id,
+            helpful: null,
+          }),
+        onError: (e: Error) => addSaid({ role: 'assistant', text: e.message, callUrl, broke: true }),
       },
     )
   }
@@ -101,7 +93,7 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
         ) : (
           <div className="flex flex-col gap-3">
             {said.map((s, i) => (
-              <Bubble key={i} said={s} />
+              <Bubble key={i} said={s} at={i} />
             ))}
             {ask.isPending && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
@@ -174,7 +166,7 @@ function Opening({ onPick }: { onPick: (q: string) => void }) {
   )
 }
 
-function Bubble({ said }: { said: Said }) {
+function Bubble({ said, at }: { said: Said; at: number }) {
   if (said.role === 'user') {
     return (
       <div className="self-end rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground max-w-[85%]">
@@ -222,6 +214,59 @@ function Bubble({ said }: { said: Said }) {
           </a>
         </Button>
       )}
+
+      {/* Nothing to say about a failure, and nothing to learn from a thumb on
+          one: the answer was ours, not the knowledge base's. */}
+      {!said.broke && said.logId && <Helpful at={at} said={said} />}
+    </div>
+  )
+}
+
+/**
+ * Did this help?
+ *
+ * The status of an answer is not its quality -- one can be fluent, well
+ * sourced, logged as 'answered' and still wrong, and the only person who knows
+ * is the studio owner reading it. This is the whole feedback loop on whether
+ * the knowledge base is any good, so it stays to two taps and never nags: once
+ * they have said, it says thank you and stops asking.
+ */
+function Helpful({ at, said }: { at: number; said: Said }) {
+  const send = useAssistantFeedback()
+
+  if (said.helpful === true) return <p className="text-xs text-success">Thanks — glad that helped.</p>
+  if (said.helpful === false) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Thanks for saying. If you need this now, press Help at the foot of the menu and we will answer.
+      </p>
+    )
+  }
+
+  const say = (helpful: boolean) => {
+    markHelpful(at, helpful)
+    if (said.logId) send.mutate({ log_id: said.logId, helpful })
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">Did this help?</span>
+      <button
+        type="button"
+        onClick={() => say(true)}
+        aria-label="Yes, that helped"
+        className="rounded-sm border border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <ThumbsUp className="size-3.5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => say(false)}
+        aria-label="No, that did not help"
+        className="rounded-sm border border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <ThumbsDown className="size-3.5" aria-hidden />
+      </button>
     </div>
   )
 }
