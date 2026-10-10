@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchFileBlob } from '@/shared/api/client'
-import { MOCK_ENABLED } from '@/shared/dev/mock'
+import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
 
 /**
  * A private file as a URL the browser can play or show.

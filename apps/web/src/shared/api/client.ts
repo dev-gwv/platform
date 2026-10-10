@@ -1,7 +1,7 @@
 import { authToken, storedFile, type StoredFile, type z } from '@ipc/contracts'
 import { config } from '../config'
 import { getToken, getRefreshToken, setTokens, clearToken } from '../auth/token'
-import { MOCK_ENABLED, mockResponse, NOT_MOCKED } from '../dev/mock'
+import { MOCK_ENABLED, NOT_MOCKED } from '../dev/mock-flag'
 
 /**
  * THE api client. Every call to services/api goes through here — never a
@@ -190,6 +190,7 @@ export async function callApi<TOut extends z.ZodTypeAny>(
 
   // DEV UI-preview short-circuit — never reached in production.
   if (MOCK_ENABLED) {
+    const { mockResponse } = await import('../dev/mock')
     const canned = mockResponse(path, method, opts.body)
     if (canned !== NOT_MOCKED) return opts.responseSchema.parse(canned)
   }

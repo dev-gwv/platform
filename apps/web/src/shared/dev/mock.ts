@@ -5,12 +5,12 @@ import { deriveStage } from '@/features/data/stage'
 /**
  * DEV-ONLY UI preview mode. Enabled with VITE_MOCK=1. Supplies a fake session
  * and canned API responses so the whole authed UI is viewable without a live
- * Supabase/DB. Tree-shaken out of production builds (guarded by import.meta.env).
+ * Supabase/DB. Loaded only through import() behind MOCK_ENABLED (./mock-flag),
+ * so production builds never carry it.
  */
-export const MOCK_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MOCK === '1'
+import { NOT_MOCKED } from './mock-flag'
 
-/** Sentinel: this path is not mocked → fall through to the real fetch. */
-export const NOT_MOCKED = Symbol('not-mocked')
+export { MOCK_ENABLED, NOT_MOCKED } from './mock-flag'
 
 /**
  * DEV knob for previewing the dashboard's setup card, which only
