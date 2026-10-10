@@ -5,6 +5,7 @@ import { myShoot, type DataRecord, type MyShoot, type TeamSlot } from '@ipc/cont
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { PageHeader } from '@/shared/layout/page-header'
+import { CalendarLinkButton } from '@/features/booking/CalendarLinkButton'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -77,7 +78,7 @@ function MyShoots() {
 
   return (
     <>
-      <PageHeader title="My shoots" />
+      <PageHeader title="My shoots" actions={<CalendarLinkButton scope="mine" />} />
 
       {owed > 0 && (
         <p className="mt-4 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">

@@ -4,6 +4,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Download, Search, UserPlus, X
 import { shootListItem, type ShootListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
+import { CalendarLinkButton } from '@/features/booking/CalendarLinkButton'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -133,6 +134,7 @@ function TeamBooking({ initialView }: { initialView: View }) {
             </Button>
             {canPlan && (
               <>
+                <CalendarLinkButton scope="studio" />
                 <Button variant="outline" size="sm" onClick={() => setBlockOpen(true)}>
                   <CalendarClock /> Block time
                 </Button>

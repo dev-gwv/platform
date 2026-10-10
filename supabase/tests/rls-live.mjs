@@ -4178,5 +4178,50 @@ if (listed) {
   )
 }
 
+// ── 0257: shoots in Google Calendar ──────────────────────────────
+{
+  const ip = `203.0.113.${1 + Math.floor(Math.random() * 250)}`
+  const email = `cal-${rand()}@madeup.test`
+  const added = await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Cal Crew', phone: randPhone(), email, password: 'Cal-pass-1234', create_login: true } })
+  const crewToken = (await api('/auth/login', { ip, method: 'POST', body: { email, password: 'Cal-pass-1234' } })).json.access_token
+  const day = new Date(Date.now() + 40 * 86_400_000).toISOString().slice(0, 10)
+  await api('/allocation', {
+    token: aToken,
+    method: 'POST',
+    body: { user_id: added.json.user_id, start_at: `${day}T04:00:00.000Z`, end_at: `${day}T08:00:00.000Z`, service_name: 'Calendar Drone', estimated_cost: 4567 },
+  })
+
+  const first = await api('/calendar/link?scope=mine', { token: crewToken })
+  const again = await api('/calendar/link?scope=mine', { token: crewToken })
+  const feed = await fetch(first.json?.url ?? `${API}/public/calendar/x.ics`)
+  const body = await feed.text()
+  check(
+    'calendar: a crew member gets one link, and it reads as a calendar with their booking and no pay',
+    first.status === 200 && /\/public\/calendar\/[A-Za-z0-9_-]+\.ics$/.test(first.json.url) && again.json?.url === first.json.url &&
+      feed.status === 200 && (feed.headers.get('content-type') ?? '').startsWith('text/calendar') &&
+      body.includes('X-WR-CALNAME') && body.includes('Calendar Drone') && body.includes(`DTSTART:${day.replace(/-/g, '')}T040000Z`) && !body.includes('4567'),
+    { first: first.status, url: first.json?.url, same: again.json?.url === first.json?.url, feed: feed.status, body: body.slice(0, 400) },
+  )
+
+  const crewStudio = await api('/calendar/link?scope=studio', { token: crewToken })
+  const ownerStudio = await api('/calendar/link?scope=studio', { token: aToken })
+  const studioFeed = await fetch(ownerStudio.json?.url ?? `${API}/public/calendar/x.ics`)
+  check(
+    'calendar: only those who plan get the studio\'s shoots; the owner\'s link reads as a calendar',
+    crewStudio.status === 403 && ownerStudio.status === 200 && studioFeed.status === 200 && (await studioFeed.text()).startsWith('BEGIN:VCALENDAR'),
+    { crew: crewStudio.status, owner: ownerStudio.status, feed: studioFeed.status },
+  )
+
+  const rotated = await api('/calendar/link/rotate', { token: crewToken, method: 'POST', body: { scope: 'mine' } })
+  const oldFeed = await fetch(first.json.url)
+  const newFeed = await fetch(rotated.json?.url ?? `${API}/public/calendar/x.ics`)
+  const guess = await fetch(`${API}/public/calendar/${'A'.repeat(32)}.ics`)
+  check(
+    'calendar: a new link ends the old one at once; a made-up link is a plain 404',
+    rotated.status === 200 && rotated.json.url !== first.json.url && oldFeed.status === 404 && newFeed.status === 200 && guess.status === 404,
+    { rotated: rotated.status, old: oldFeed.status, fresh: newFeed.status, guess: guess.status },
+  )
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

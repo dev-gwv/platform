@@ -52,6 +52,7 @@ import { featuresRouter, platformFeaturesRouter } from './modules/features/route
 import { studioWhatsappRouter } from './modules/studio-whatsapp/router'
 import { assistantRouter, platformAssistantRouter } from './modules/assistant/router'
 import { platformHelpRouter, publicHelpRouter } from './modules/help/router'
+import { calendarRouter, publicCalendarRouter } from './modules/calendar/router'
 import { platformStudioReferralsRouter, studioReferralsRouter } from './modules/studio-referrals/router'
 import { publicOnboardingRouter } from './modules/onboarding/router'
 import { messagingRouter } from './modules/messaging/router'
@@ -194,6 +195,8 @@ app.route('/public', publicQuotesRouter)
 app.route('/public', publicTeamTermsRouter)
 app.route('/public', publicDocumentsRouter)
 app.route('/public', publicFilesRouter)
+app.route('/public', publicCalendarRouter)
+app.route('/calendar', calendarRouter)
 app.route('/settings', settingsRouter)
 app.route('/platform', platformRouter)
 app.route('/platform', platformFeaturesRouter)

@@ -163,3 +163,12 @@ export const teamMember = z.object({
 export type TeamMember = z.infer<typeof teamMember>
 
 // The directory row, add-member payload and invitations live in ./team.
+
+/**
+ * A calendar link to subscribe to (0257): "mine" is the person's own
+ * bookings, "studio" every shoot with its crew, for those who plan them.
+ */
+export const calendarScope = z.enum(['mine', 'studio'])
+export type CalendarScope = z.infer<typeof calendarScope>
+export const calendarLink = z.object({ scope: calendarScope, url: z.string() })
+export type CalendarLink = z.infer<typeof calendarLink>
