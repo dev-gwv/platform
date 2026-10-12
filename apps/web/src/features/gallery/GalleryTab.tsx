@@ -12,8 +12,8 @@ import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
 
 /**
  * The project's photo gallery, in Frameline (0261). Frameline is its own app
- * and add-on: the photos are uploaded there, and guests find theirs with a
- * selfie. Here the studio makes the gallery once, hands the guests' link and
+ * and add-on: the photos are uploaded there, and guests open them with the
+ * PIN. Here the studio makes the gallery once, hands the guests' link and
  * PIN on, and presses Open gallery to upload -- signed in as themselves.
  */
 export function GalleryTab({ projectId, projectName }: { projectId: string; projectName: string }) {
@@ -54,7 +54,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
             <Images className="size-4 text-tone-violet" aria-hidden /> Photo gallery
           </p>
           <p className="text-sm text-muted-foreground">
-            One link for {projectName}: guests open it, type the PIN and find their own photos with a selfie.
+            One link for {projectName}: guests open it, type the PIN, and see and download the photos.
           </p>
           <Button className="ipc-nudge" onClick={() => create.mutate()} disabled={create.isPending}>
             <Images /> {create.isPending ? 'Making the gallery…' : 'Create gallery'}
@@ -173,7 +173,7 @@ function Field({ icon: Icon, label, children }: { icon: typeof Link2; label: str
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon className="size-3.5" aria-hidden /> {label}
       </span>
-      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5">{children}</div>
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-1.5">{children}</div>
     </div>
   )
 }

@@ -532,6 +532,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
         review_note: d.custom_status_code === 'changes_requested' ? 'Skin tones in the haldi set look too orange. Warm them down a little.' : null,
         last_version: d.custom_status_code === 'changes_requested' ? 1 : null,
       }))
+  // The project's Frameline gallery (0261): made, with photos up.
+  if (method === 'GET' && /^\/projects\/[^/]+\/gallery$/.test(path))
+    return {
+      connected: true,
+      gallery: { gallery_url: 'https://frameline-gallery.pages.dev/7KQ2M9X', short_id: '7KQ2M9X', pin: '4821', created_at: '2026-10-12T10:00:00+05:30' },
+      live: { photo_count: 248, status: 'live' },
+    }
+  if (method === 'POST' && /^\/projects\/[^/]+\/gallery\/open$/.test(path)) return { url: 'https://frameline-admin.pages.dev/events' }
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')

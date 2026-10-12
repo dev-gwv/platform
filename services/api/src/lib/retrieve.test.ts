@@ -68,7 +68,7 @@ describe('the questions studios actually ask', () => {
     finds('how do I make a photo gallery for guests', 'kb:project-gallery')
     finds('गैलरी कैसे बनाएं', 'kb:project-gallery')
     finds('gallery kaise banaye', 'kb:project-gallery')
-    finds('guests find their photos with a selfie', 'kb:project-gallery')
+    finds('share wedding photos with guests with a pin', 'kb:project-gallery')
   })
 
   it('finds them for Hinglish too', () => {
