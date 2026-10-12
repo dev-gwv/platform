@@ -329,6 +329,17 @@ describe('answering in the language the studio picked', () => {
     expect(en.answer).toBe('The help does not cover that. Book a time that suits you.')
   })
 
+  it('answers "how do I delete…" in Hindi rather than calling it lost data', () => {
+    // Hindi puts the verb last, so "lead delete how" looked like "leads deleted"
+    // and an ordinary help question was handed to a person.
+    for (const q of ['लीड डिलीट कैसे करें?', 'प्रोजेक्ट डिलीट कैसे करें', 'क्लाइंट डिलीट करना है', 'lead delete kaise kare']) {
+      expect(needsHuman(q), q).toBeNull()
+    }
+    for (const q of ['मेरी लीड डिलीट हो गई', 'मेरा डेटा खो गया', 'क्लाइंट गायब हो गए', 'सारे प्रोजेक्ट उड़ गए']) {
+      expect(needsHuman(q), q).toBeTruthy()
+    }
+  })
+
   it('leaves the studio\'s own billing alone in Hindi too', () => {
     expect(needsHuman('क्लाइंट का पेमेंट कैसे रिकॉर्ड करें')).toBeNull()
     expect(needsHuman('इनवॉइस कैसे भेजें')).toBeNull()

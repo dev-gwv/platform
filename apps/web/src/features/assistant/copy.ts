@@ -25,6 +25,9 @@ export interface PanelCopy {
   didItHelp: string
   glad: string
   thanks: string
+  /** The help bubble's own header and the line above the people to talk to. */
+  bubbleHello: string
+  ratherPerson: string
 }
 
 export const COPY: Record<AssistantLang, PanelCopy> = {
@@ -50,6 +53,8 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     didItHelp: 'Did this help?',
     glad: '· Glad that helped',
     thanks: '· Thanks for saying. Press Help at the foot of the menu and we will answer.',
+    bubbleHello: 'Hi! How can we help?',
+    ratherPerson: 'Rather talk to a person?',
   },
   hi: {
     intro: 'ऐप में कोई भी काम कैसे करें, यहाँ पूछिए।',
@@ -68,6 +73,8 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     didItHelp: 'क्या इससे मदद मिली?',
     glad: '· अच्छा लगा कि मदद मिली',
     thanks: '· बताने के लिए धन्यवाद। मेन्यू के नीचे Help दबाएँ, हम जवाब देंगे।',
+    bubbleHello: 'नमस्ते! हम कैसे मदद करें?',
+    ratherPerson: 'किसी व्यक्ति से बात करनी है?',
   },
   hinglish: {
     intro: 'App mein koi bhi kaam kaise karein, yahan poochhiye.',
@@ -91,6 +98,8 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     didItHelp: 'Kya isse madad mili?',
     glad: '· Achha laga ki madad mili',
     thanks: '· Batane ke liye shukriya. Menu ke neeche Help dabaiye, hum jawab denge.',
+    bubbleHello: 'Namaste! Hum kaise madad karein?',
+    ratherPerson: 'Kisi person se baat karni hai?',
   },
 }
 

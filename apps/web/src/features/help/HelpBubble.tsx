@@ -5,6 +5,8 @@ import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from '@/features/assistant/AssistantPanel'
 import { useAssistantState } from '@/features/assistant/api'
+import { COPY } from '@/features/assistant/copy'
+import { useAssistantLang } from '@/features/assistant/lang'
 import { SupportButtons } from './HelpPanel'
 
 /**
@@ -20,6 +22,10 @@ export function HelpBubble() {
   const { pathname } = useLocation()
   const ai = useAssistantState().data
   const aiOn = !!(ai?.enabled && ai.ready)
+  // The window speaks the assistant's language once one is picked, so a
+  // Hindi chat is not framed by English lines above and below it.
+  const { lang } = useAssistantLang()
+  const t = COPY[(aiOn && lang) || 'en']
   const left = ai ? Math.max(0, ai.daily_limit - ai.asked_today) : 0
 
   // The shell outlives navigation: a link followed from inside closes it.
@@ -53,7 +59,7 @@ export function HelpBubble() {
           )}
         >
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-            <p className="text-sm font-semibold">Hi! How can we help?</p>
+            <p className="text-sm font-semibold">{t.bubbleHello}</p>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -70,7 +76,7 @@ export function HelpBubble() {
                 <AssistantPanel callUrl={ai?.call_url ?? null} left={left} />
               </div>
               <div className="border-t border-border p-3">
-                <p className="mb-2 text-xs text-muted-foreground">Rather talk to a person?</p>
+                <p className="mb-2 text-xs text-muted-foreground">{t.ratherPerson}</p>
                 <SupportButtons compact />
               </div>
             </>

@@ -166,7 +166,10 @@ const HUMAN_ONLY: readonly { re: RegExp; why: 'charged' | 'plan' | 'data' }[] = 
   // Both word orders: "I lost my leads" and "all my leads are gone". Only the
   // first was matched at first, which let the commoner phrasing through.
   { re: /\b(lost|deleted|missing|gone) (all |my |our |the )?(data|leads|projects|clients|everything)\b|\b(data|leads|projects|clients|everything) (are|is|have|has|were) ?(all )?(gone|missing|disappeared|deleted|lost|vanished)\b|\bhacked\b|\bdata breach\b/i, why: 'data' },
-  { re: /(डेटा|डाटा|लीड|लीड्स|प्रोजेक्ट|क्लाइंट|सब कुछ)( सब)? (गायब|डिलीट|उड़|उड|खो)|हैक|\b(data|leads?|projects?|clients?|sab kuch) (gayab|delete ho|ud gay)|\bhack ho/i, why: 'data' },
+  // Hindi puts the verb after the noun, so "लीड डिलीट कैसे करें" (how do I
+  // delete a lead) reads like "leads deleted". Only the passive -- डिलीट हो
+  // गई, खो गया, उड़ गए -- is something gone; गायब (missing) is gone already.
+  { re: /(डेटा|डाटा|लीड|लीड्स|प्रोजेक्ट|क्लाइंट|सब कुछ)( सब)? (गायब|डिलीट हो|उड़ ग|उड ग|खो ग)|हैक|\b(data|leads?|projects?|clients?|sab kuch) (gayab|delete ho|ud gay)|\bhack ho/i, why: 'data' },
 ]
 
 /**

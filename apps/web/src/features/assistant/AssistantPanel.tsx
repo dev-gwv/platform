@@ -23,10 +23,11 @@ import { useTutorials } from '@/features/help/api'
 import { useHelpLang } from '@/features/help/lang'
 import { TutorialPlayer } from '@/features/help/TutorialPlayer'
 import { lengthLabel, type Tutorial } from '@/features/help/tutorials'
-import { useHints, useSetHint } from '@/features/team/hints-api'
+import { useSetHint } from '@/features/team/hints-api'
 import { RichText } from './rich-text'
 import { useAssistantFeedback, useAssistantQuotaRefresh } from './api'
 import { COPY, LANG_CHOICES, type PanelCopy } from './copy'
+import { useAssistantLang } from './lang'
 import { askAssistant, stopAsking } from './send'
 import {
   addSaid,
@@ -65,15 +66,11 @@ const MAX_Q = 500
 const MIN_Q = 3
 
 export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left: number }) {
-  const { said, draft, pending, lang: picked } = useSyncExternalStore(subscribe, snapshot, snapshot)
-  const hints = useHints()
+  const { said, draft, pending } = useSyncExternalStore(subscribe, snapshot, snapshot)
+  // Asked once per person, not per device: see useAssistantLang.
+  const { lang, waiting } = useAssistantLang()
   const saveHint = useSetHint()
   const [, setHelpLang] = useHelpLang()
-  /**
-   * Picked in this visit, else saved on their row, else not yet: then the
-   * panel asks before anything else. Asked once per person, not per device.
-   */
-  const lang: AssistantLang | null = picked ?? hints.data?.assistant_lang?.lang ?? null
   const t = COPY[lang ?? 'en']
   const refreshQuota = useAssistantQuotaRefresh()
   const thread = useRef<HTMLDivElement>(null)
@@ -111,7 +108,9 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
     // The Watch buttons under an answer open the tutorials, which come in
     // English and Hindi: play them in the language just picked.
     setHelpLang(next === 'en' ? 'en' : 'hi')
-    box.current?.focus()
+    // The box is still disabled in this render -- it waits for a language --
+    // so focus it once the next one has drawn it enabled.
+    requestAnimationFrame(() => box.current?.focus())
   }
 
   function send(question: string) {
@@ -172,7 +171,7 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
         {!lang ? (
           // Wait for their saved choice before asking for it, or someone who
           // already picked would see the question flash past on every load.
-          hints.isPending ? null : <LanguagePicker onPick={pick} />
+          waiting ? null : <LanguagePicker onPick={pick} />
         ) : said.length === 0 ? (
           <Opening t={t} onPick={send} />
         ) : (
