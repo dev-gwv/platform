@@ -52,6 +52,16 @@ straight to the VPS address: a home Wi-Fi provider that could not reach
 72.61.239.209 left the app on "Failed to fetch" while a phone hotspot worked.
 `lib/client-ip.ts` trusts `CF-Connecting-IP` only from Cloudflare's own ranges.
 
+The box is a Hostinger VPS (srv1185214.hstgr.cloud) with Coolify, and other
+projects run on it too (wedding-yantra-*, Coolify apps). Touch only the Compose
+project `platform`, checked out at `/root/ipc/platform`; its `.env` lives there.
+To change a setting: back up `.env`, edit it, then `sh deploy/deploy.sh`, which
+rebuilds what is checked out and never pulls. Frameline's `FRAMELINE_API_URL`
+and `FRAMELINE_SECRET` were added on 12 Oct and must stay equal to Frameline's
+Cloudflare secret `STUDIOAUTOPILOT_SECRET` (rotate both together). An untracked
+deploy key `ci_deploy` sits in that checkout: move it out, and never `git add -A`
+there.
+
 `docs/vps-deploy.md` still describes the Caddy setup; that is the shape for a
 host where IPC owns the ports, not for this one.
 
