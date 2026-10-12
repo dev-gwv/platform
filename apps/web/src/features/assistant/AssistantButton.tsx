@@ -4,7 +4,7 @@ import { RotateCcw, Sparkles } from 'lucide-react'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from './AssistantPanel'
-import { clearThread, snapshot, subscribe } from './thread'
+import { snapshot, startAgain, subscribe } from './thread'
 import { useAssistantState } from './api'
 
 /**
@@ -63,7 +63,7 @@ export function AssistantButton() {
             {said.length > 0 && (
               <button
                 type="button"
-                onClick={clearThread}
+                onClick={startAgain}
                 className="ml-auto flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 <RotateCcw className="size-3" aria-hidden /> Start again

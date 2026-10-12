@@ -1,3 +1,4 @@
+import type { AssistantLang } from '@ipc/contracts'
 import type { Env } from '../context'
 import { withService } from './db'
 
@@ -67,24 +68,37 @@ export type BudgetVerdict =
  * provider refuses: we would rather say "a moment" in our own words than hand
  * someone the vendor's 429.
  */
-export function budgetVerdict(used: BudgetUse, limits: BudgetLimits, cost: number): BudgetVerdict {
+export function budgetVerdict(
+  used: BudgetUse,
+  limits: BudgetLimits,
+  cost: number,
+  lang: AssistantLang = 'en',
+): BudgetVerdict {
   if (used.day + cost > limits.day) {
     return {
       ok: false,
       window: 'day',
       // Said as a fact about us, not about them: they have not done anything
       // wrong, and their own allowance may be untouched.
-      why: 'The assistant has answered as many questions as it can today. It opens again tomorrow, and Help is always here.',
+      why: FULL_TODAY[lang],
     }
   }
   if (used.minute + cost > limits.minute * HEADROOM) {
-    return {
-      ok: false,
-      window: 'minute',
-      why: 'The assistant is busy just now. Please ask again in a minute.',
-    }
+    return { ok: false, window: 'minute', why: BUSY[lang] }
   }
   return { ok: true }
+}
+
+/** In the language the studio picked, like everything else the panel shows. */
+const FULL_TODAY: Record<AssistantLang, string> = {
+  en: 'The assistant has answered as many questions as it can today. It opens again tomorrow, and Help is always here.',
+  hi: 'असिस्टेंट आज जितने सवालों के जवाब दे सकता था, दे चुका है। यह कल फिर खुलेगा, और Help हमेशा यहीं है।',
+  hinglish: 'Assistant aaj jitne sawalon ke jawab de sakta tha, de chuka hai. Yeh kal phir khulega, aur Help hamesha yahin hai.',
+}
+const BUSY: Record<AssistantLang, string> = {
+  en: 'The assistant is busy just now. Please ask again in a minute.',
+  hi: 'असिस्टेंट अभी व्यस्त है। कृपया एक मिनट बाद फिर पूछें।',
+  hinglish: 'Assistant abhi busy hai. Please ek minute baad phir poochhiye.',
 }
 
 /** The platform's spend in the last minute and so far today (0260). */

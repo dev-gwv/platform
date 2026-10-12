@@ -243,3 +243,95 @@ describe('ask', () => {
     expect(req.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
   })
 })
+
+describe('answering in the language the studio picked', () => {
+  it('tells the model the language last, after the help', async () => {
+    const p = stub(answered('ok'))
+    await ask({ provider: p, help: HELP, question: 'टीम कैसे जोड़ें?', language: 'hi' })
+    const system = p.seen[0]!.system
+    expect(system).toMatch(/LANGUAGE: Answer in Hindi, written in Devanagari script/)
+    expect(system.trimEnd().endsWith(system.slice(system.indexOf('LANGUAGE:')).trimEnd())).toBe(true)
+    expect(system.indexOf('LANGUAGE:')).toBeGreaterThan(system.indexOf(HELP.selected))
+  })
+
+  it('keeps the cached part of the prompt the same in every language', async () => {
+    // The provider caches an identical prefix. If the language crept into it,
+    // each language would be its own prefix and pay full price again.
+    const seen: string[] = []
+    for (const language of ['en', 'hi', 'hinglish'] as const) {
+      const p = stub(answered('ok'))
+      await ask({ provider: p, help: HELP, question: 'q', language })
+      seen.push(p.seen[0]!.system)
+    }
+    const prefix = (s: string) => s.slice(0, s.indexOf(HELP.selected))
+    expect(new Set(seen.map(prefix)).size).toBe(1)
+  })
+
+  it('asks for Hinglish in English letters, never Devanagari', async () => {
+    const p = stub(answered('ok'))
+    await ask({ provider: p, help: HELP, question: 'team kaise jodu', language: 'hinglish' })
+    expect(p.seen[0]!.system).toContain('Never use Devanagari')
+  })
+
+  it('answers in English when no language is given, as an older tab would send', async () => {
+    const p = stub(answered('ok'))
+    await ask({ provider: p, help: HELP, question: 'q' })
+    expect(p.seen[0]!.system).toContain('LANGUAGE: Answer in English')
+  })
+
+  it('writes its own sentences in the picked language too', async () => {
+    const skipped = await ask({
+      provider: stub({ ok: false, kind: 'no_key', error: 'no key' }),
+      help: HELP,
+      question: 'q',
+      language: 'hi',
+    })
+    expect(skipped.answer).toBe('असिस्टेंट अभी चालू नहीं है।')
+
+    const failed = await ask({
+      provider: stub({ ok: false, kind: 'refused', error: 'x' }),
+      help: HELP,
+      question: 'q',
+      callUrl: CALL,
+      language: 'hinglish',
+    })
+    expect(failed.answer).toBe('Abhi jawab nahi mil saka. Aap iski jagah call book kar sakte hain.')
+
+    const empty = await ask({ provider: stub(answered('')), help: HELP, question: 'q', callUrl: CALL, language: 'hi' })
+    expect(empty.answer).toBe('हेल्प में इसका जवाब नहीं है। कॉल बुक करें, हम साथ में देख लेंगे।')
+  })
+
+  it('hands money questions to a person in Hindi and Hinglish as well', async () => {
+    for (const q of ['मुझे रिफंड चाहिए', 'मेरे पैसे वापस करो', 'paise wapas chahiye', 'mera plan cancel karna hai', 'प्लान कैंसिल करना है']) {
+      expect(needsHuman(q), q).toBeTruthy()
+    }
+    for (const q of ['मेरा सारा डेटा गायब हो गया', 'meri leads gayab ho gayi', 'हमारा अकाउंट हैक हो गया']) {
+      expect(needsHuman(q), q).toBeTruthy()
+    }
+    const p = stub(answered('आपका पैसा 5-7 दिन में आ जाएगा।'))
+    const r = await ask({ provider: p, help: HELP, question: 'मुझे रिफंड चाहिए', callUrl: CALL, language: 'hi' })
+    expect(r.status).toBe('escalated')
+    expect(p.chat).not.toHaveBeenCalled()
+    expect(r.answer).toBe('यह हमारे लिए गए पैसों के बारे में है, इसलिए कोई व्यक्ति इसे आपके साथ देखेगा। अपनी सुविधा का समय बुक करें।')
+  })
+
+  it('ends the model\'s reason as a sentence before adding ours', async () => {
+    // Seen live: a Hindi reason with no full stop ran straight into our line.
+    const hi = await ask({
+      provider: stub(toolCall('हेल्प में इसकी जानकारी नहीं है')),
+      help: HELP,
+      question: 'q',
+      callUrl: CALL,
+      language: 'hi',
+    })
+    expect(hi.answer).toBe('हेल्प में इसकी जानकारी नहीं है। अपनी सुविधा का समय बुक करें।')
+    const en = await ask({ provider: stub(toolCall('The help does not cover that.')), help: HELP, question: 'q', callUrl: CALL })
+    expect(en.answer).toBe('The help does not cover that. Book a time that suits you.')
+  })
+
+  it('leaves the studio\'s own billing alone in Hindi too', () => {
+    expect(needsHuman('क्लाइंट का पेमेंट कैसे रिकॉर्ड करें')).toBeNull()
+    expect(needsHuman('इनवॉइस कैसे भेजें')).toBeNull()
+    expect(needsHuman('client ka payment kaise record karu')).toBeNull()
+  })
+})

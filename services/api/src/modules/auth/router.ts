@@ -862,7 +862,11 @@ export const authRouter = new Hono<AppEnv>()
     const parsed = setHintRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Invalid note.')
     const v = parsed.data.value
-    if (v !== null && (key.data === 'learn') !== 'watched' in v) fail(422, 'Invalid note.')
+    // Each key takes its own shape: the videos list for 'learn', the language
+    // for 'assistant_lang', and the plain shown/closed note for the rest.
+    if (v !== null && ((key.data === 'learn') !== 'watched' in v || (key.data === 'assistant_lang') !== 'lang' in v)) {
+      fail(422, 'Invalid note.')
+    }
     const a = c.get('auth')
     const rows = await attempt(c, 'auth.hint_set', () =>
       withUser(

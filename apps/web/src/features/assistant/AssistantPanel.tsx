@@ -7,6 +7,7 @@ import {
   Check,
   Copy,
   CornerDownLeft,
+  Languages,
   Play,
   RotateCw,
   Send,
@@ -15,14 +16,17 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from 'lucide-react'
-import type { AssistantTurn } from '@ipc/contracts'
+import type { AssistantLang, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { useTutorials } from '@/features/help/api'
+import { useHelpLang } from '@/features/help/lang'
 import { TutorialPlayer } from '@/features/help/TutorialPlayer'
 import { lengthLabel, type Tutorial } from '@/features/help/tutorials'
+import { useHints, useSetHint } from '@/features/team/hints-api'
 import { RichText } from './rich-text'
 import { useAssistantFeedback, useAssistantQuotaRefresh } from './api'
+import { COPY, LANG_CHOICES, type PanelCopy } from './copy'
 import { askAssistant, stopAsking } from './send'
 import {
   addSaid,
@@ -30,6 +34,7 @@ import {
   lastQuestion,
   markHelpful,
   setDraft,
+  setLang,
   snapshot,
   subscribe,
   type Said,
@@ -59,16 +64,17 @@ const MAX_Q = 500
 /** The contract's floor. Below it the request would be refused anyway. */
 const MIN_Q = 3
 
-/** Real questions, not a blank box: a blank box asks nothing of anybody. */
-const OPENERS = [
-  'How do I add my team?',
-  'How do I send a quotation?',
-  'How do I book crew for a shoot day?',
-  'How do I give someone access to money?',
-]
-
 export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left: number }) {
-  const { said, draft, pending } = useSyncExternalStore(subscribe, snapshot, snapshot)
+  const { said, draft, pending, lang: picked } = useSyncExternalStore(subscribe, snapshot, snapshot)
+  const hints = useHints()
+  const saveHint = useSetHint()
+  const [, setHelpLang] = useHelpLang()
+  /**
+   * Picked in this visit, else saved on their row, else not yet: then the
+   * panel asks before anything else. Asked once per person, not per device.
+   */
+  const lang: AssistantLang | null = picked ?? hints.data?.assistant_lang?.lang ?? null
+  const t = COPY[lang ?? 'en']
   const refreshQuota = useAssistantQuotaRefresh()
   const thread = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -99,13 +105,22 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
 
   const spent = left <= 0
 
+  function pick(next: AssistantLang) {
+    setLang(next)
+    saveHint.mutate({ key: 'assistant_lang', value: { lang: next } })
+    // The Watch buttons under an answer open the tutorials, which come in
+    // English and Hindi: play them in the language just picked.
+    setHelpLang(next === 'en' ? 'en' : 'hi')
+    box.current?.focus()
+  }
+
   function send(question: string) {
     const q = question.trim()
     // The contract wants at least three characters. Stopping here rather than
     // letting the client-side parse throw: it used to put a page of Zod issues
     // in the chat bubble, which is a strange thing for a help assistant to say
     // to somebody who typed "hi".
-    if (q.length < MIN_Q || pending || spent) return
+    if (q.length < MIN_Q || pending || spent || !lang) return
 
     // The history is what was on screen BEFORE this question, which is why it
     // is taken here rather than inside the request.
@@ -116,7 +131,7 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
     // the body; put it where the next question goes.
     box.current?.focus()
 
-    void askAssistant({ question: q, history }, { callUrl, onSettled: refreshQuota })
+    void askAssistant({ question: q, history, language: lang }, { callUrl, onSettled: refreshQuota })
   }
 
   /** Ask the same thing again, in place of the failure. */
@@ -149,30 +164,34 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
   // After a Stop the last turn is the question itself, with no answer under it.
   const unanswered = last?.role === 'user'
   const near = draft.length > MAX_Q - 100
-  const canSend = draft.trim().length >= MIN_Q
+  const canSend = draft.trim().length >= MIN_Q && !!lang
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={thread} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {said.length === 0 ? (
-          <Opening onPick={send} />
+        {!lang ? (
+          // Wait for their saved choice before asking for it, or someone who
+          // already picked would see the question flash past on every load.
+          hints.isPending ? null : <LanguagePicker onPick={pick} />
+        ) : said.length === 0 ? (
+          <Opening t={t} onPick={send} />
         ) : (
           <div className="flex flex-col gap-3">
             {said.map((s, i) => (
-              <Bubble key={i} said={s} at={i} tutorials={tutorials} onWatch={setPlaying} />
+              <Bubble key={i} said={s} at={i} t={t} tutorials={tutorials} onWatch={setPlaying} />
             ))}
 
             {/* So a screen reader hears the answer arrive rather than having to
                 go looking for it. */}
             <div aria-live="polite" className="sr-only">
-              {pending ? 'Looking it up' : last?.role === 'assistant' ? last.text : ''}
+              {pending ? t.lookingUp : last?.role === 'assistant' ? last.text : ''}
             </div>
 
-            {pending && <Thinking />}
+            {pending && <Thinking t={t} />}
 
             {(broke || unanswered) && !pending && (
               <Button variant="outline" size="sm" className="self-start" onClick={retry}>
-                <RotateCw /> Try again
+                <RotateCw /> {t.tryAgain}
               </Button>
             )}
           </div>
@@ -189,9 +208,9 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
               onKeyDown={onKeyDown}
               rows={1}
               maxLength={MAX_Q}
-              disabled={spent}
+              disabled={spent || !lang}
               aria-label="Your question"
-              placeholder={spent ? 'You have used today’s questions.' : 'Ask about anything in the app…'}
+              placeholder={spent ? t.spentPlaceholder : t.placeholder}
               className={cn(
                 // Every control looks like a control: a real border, amber while
                 // it is empty and waiting, calm green once there is a question.
@@ -224,17 +243,18 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
           )}
         </div>
 
-        <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {spent ? (
-            'The assistant opens again tomorrow.'
+            t.opensTomorrow
           ) : (
             <>
-              <CornerDownLeft className="size-3" aria-hidden /> Enter to send
+              <CornerDownLeft className="size-3" aria-hidden /> {t.enterToSend}
               <span className="text-border">·</span>
-              <span className={left <= 5 ? 'text-warning' : undefined}>{left} left today</span>
+              <span className={left <= 5 ? 'text-warning' : undefined}>{t.leftToday(left)}</span>
             </>
           )}
-        </p>
+          {lang && <LanguageSwitch lang={lang} onChange={pick} />}
+        </div>
       </form>
 
       <TutorialPlayer tutorial={playing} onClose={() => setPlaying(null)} />
@@ -242,18 +262,82 @@ export function AssistantPanel({ callUrl, left }: { callUrl: string | null; left
   )
 }
 
+/**
+ * The first thing the assistant asks: which language to answer in. Asked in
+ * both scripts, because whoever needs Hindi should not have to read English
+ * to find it.
+ */
+function LanguagePicker({ onPick }: { onPick: (lang: AssistantLang) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2 rounded-lg border border-tone-violet/30 bg-tone-violet/5 p-3">
+        <Languages className="mt-0.5 size-4 shrink-0 text-tone-violet" aria-hidden />
+        <p className="text-sm text-muted-foreground">
+          Which language should I answer in?
+          <br />
+          किस भाषा में जवाब दूँ?
+        </p>
+      </div>
+      <div className="flex flex-col gap-2" role="group" aria-label="Language">
+        {LANG_CHOICES.map((c) => (
+          <button
+            key={c.lang}
+            type="button"
+            onClick={() => onPick(c.lang)}
+            className="group flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-tone-violet/40 hover:bg-accent hover:text-accent-foreground"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold">{c.label}</span>
+              <span className="text-xs text-muted-foreground">{c.sample}</span>
+            </span>
+            <ArrowUpRight
+              className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-tone-violet"
+              aria-hidden
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The language once picked: three small chips, the open one filled. */
+function LanguageSwitch({ lang, onChange }: { lang: AssistantLang; onChange: (lang: AssistantLang) => void }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Answer language"
+      className="ml-auto inline-flex rounded-full border border-border bg-card p-0.5"
+    >
+      {LANG_CHOICES.map((c) => (
+        <button
+          key={c.lang}
+          type="button"
+          role="radio"
+          aria-checked={lang === c.lang}
+          onClick={() => onChange(c.lang)}
+          className={cn(
+            'rounded-full px-2 py-0.5 text-[0.7rem] font-medium transition-colors',
+            lang === c.lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {c.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** Nothing asked yet. */
-function Opening({ onPick }: { onPick: (q: string) => void }) {
+function Opening({ t, onPick }: { t: PanelCopy; onPick: (q: string) => void }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start gap-2 rounded-lg border border-tone-violet/30 bg-tone-violet/5 p-3">
         <Sparkles className="mt-0.5 size-4 shrink-0 text-tone-violet" aria-hidden />
-        <p className="text-sm text-muted-foreground">
-          Ask how to do something in the app and I will tell you where it is.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.intro}</p>
       </div>
       <div className="flex flex-col gap-2">
-        {OPENERS.map((q) => (
+        {t.openers.map((q) => (
           <button
             key={q}
             type="button"
@@ -273,7 +357,7 @@ function Opening({ onPick }: { onPick: (q: string) => void }) {
 }
 
 /** Three dots: a spinner says "loading", this says "thinking". */
-function Thinking() {
+function Thinking({ t }: { t: PanelCopy }) {
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <span className="flex gap-1" aria-hidden>
@@ -285,7 +369,7 @@ function Thinking() {
           />
         ))}
       </span>
-      Looking it up…
+      {t.lookingUp}
     </div>
   )
 }
@@ -293,11 +377,13 @@ function Thinking() {
 function Bubble({
   said,
   at,
+  t,
   tutorials,
   onWatch,
 }: {
   said: Said
   at: number
+  t: PanelCopy
   tutorials: readonly Tutorial[]
   onWatch: (t: Tutorial) => void
 }) {
@@ -359,20 +445,20 @@ function Bubble({
         <Button variant="outline" size="sm" className="self-start" asChild>
           {/* Opens away from the app, so the conversation is still here afterwards. */}
           <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
-            <CalendarClock /> Book a call
+            <CalendarClock /> {t.bookCall}
           </a>
         </Button>
       )}
 
       {/* Nothing to copy or rate on a failure: that answer was ours, not the
           knowledge base's. */}
-      {!said.broke && <Actions at={at} said={said} />}
+      {!said.broke && <Actions at={at} said={said} t={t} />}
     </div>
   )
 }
 
 /** Copy, and did this help. */
-function Actions({ at, said }: { at: number; said: Said }) {
+function Actions({ at, said, t }: { at: number; said: Said; t: PanelCopy }) {
   const send = useAssistantFeedback()
   const [copied, setCopied] = useState(false)
 
@@ -382,7 +468,7 @@ function Actions({ at, said }: { at: number; said: Said }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      toast.error('Could not copy — select the answer and copy it by hand')
+      toast.error(t.copyFailed)
     }
   }
 
@@ -400,7 +486,7 @@ function Actions({ at, said }: { at: number; said: Said }) {
         className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
         {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t.copied : t.copy}
       </button>
 
       {/* Only where there is a row to mark: without a log id the thumb has
@@ -408,7 +494,7 @@ function Actions({ at, said }: { at: number; said: Said }) {
       {said.logId && said.helpful == null && (
         <>
           <span className="text-border">·</span>
-          <span className="text-xs text-muted-foreground">Did this help?</span>
+          <span className="text-xs text-muted-foreground">{t.didItHelp}</span>
           <button
             type="button"
             onClick={() => say(true)}
@@ -427,12 +513,8 @@ function Actions({ at, said }: { at: number; said: Said }) {
           </button>
         </>
       )}
-      {said.helpful === true && <span className="text-xs text-success">· Glad that helped</span>}
-      {said.helpful === false && (
-        <span className="text-xs text-muted-foreground">
-          · Thanks for saying. Press Help at the foot of the menu and we will answer.
-        </span>
-      )}
+      {said.helpful === true && <span className="text-xs text-success">{t.glad}</span>}
+      {said.helpful === false && <span className="text-xs text-muted-foreground">{t.thanks}</span>}
     </div>
   )
 }

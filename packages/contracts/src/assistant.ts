@@ -109,8 +109,21 @@ export const assistantTurn = z.object({
 })
 export type AssistantTurn = z.infer<typeof assistantTurn>
 
+/**
+ * The language the answer is written in, picked once at the start of the chat.
+ *
+ * 'hi' is Hindi in Devanagari; 'hinglish' is Hindi in English letters, the way
+ * a studio writes on WhatsApp. Button and menu names stay in English in all
+ * three, because that is what is printed on the screen.
+ */
+export const ASSISTANT_LANGS = ['en', 'hi', 'hinglish'] as const
+export const assistantLang = z.enum(ASSISTANT_LANGS)
+export type AssistantLang = z.infer<typeof assistantLang>
+
 export const askRequest = z.object({
   question: z.string().trim().min(3, 'Ask a question of at least a few words.').max(500),
+  /** English unless the panel says otherwise, so an older tab still works. */
+  language: assistantLang.default('en'),
   /**
    * Carried by the panel, not stored: the conversation lives as long as the
    * panel is open. Capped to what the panel actually sends -- the gap between

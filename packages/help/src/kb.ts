@@ -113,6 +113,19 @@ export const KB: readonly KbArticle[] = [
       'Most screens also have **Watch how** beside the page title, which plays the recording for that screen.',
     ],
   },
+  {
+    key: 'assistant-language',
+    title: 'Asking the assistant, in English or Hindi',
+    area: 'Start',
+    menu: 'Ask for help, in the top bar',
+    keywords: ['assistant', 'ai', 'chat', 'language', 'bhasha', 'hindi', 'hinglish', 'english', 'ask'],
+    body: [
+      'Press **Ask for help** (the sparkle in the top bar), or the round help button in the corner, and type your question in your own words.',
+      'The first time, it asks which language to answer in: **English**, **हिन्दी**, or **Hinglish** (Hindi in English letters). It remembers your choice on every device.',
+      'To change it, press **English**, **हिन्दी** or **Hinglish** under the question box. Button and menu names always stay in English, because that is what the screen shows.',
+      'It answers from this help only and cannot see your studio\'s data. When it cannot help, it offers **Book a call**.',
+    ],
+  },
 
   // ── Leads ───────────────────────────────────────────────────
   {

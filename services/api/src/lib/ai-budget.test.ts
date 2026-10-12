@@ -35,6 +35,17 @@ describe('the day', () => {
   })
 })
 
+describe('in the studio\'s language', () => {
+  it('says busy and full in Hindi and Hinglish', () => {
+    const full = { minute: 0, day: DEFAULT_DAY_TOKENS }
+    const busy = { minute: DEFAULT_MINUTE_TOKENS, day: 0 }
+    expect(budgetVerdict(full, limits, 100, 'hi')).toMatchObject({ why: expect.stringContaining('कल फिर खुलेगा') })
+    expect(budgetVerdict(busy, limits, 100, 'hinglish')).toMatchObject({ why: expect.stringContaining('ek minute baad') })
+    // English stays the default, for a tab that sends no language.
+    expect(budgetVerdict(busy, limits, 100)).toMatchObject({ why: expect.stringContaining('in a minute') })
+  })
+})
+
 describe('the minute', () => {
   it('keeps a question back for the ones already in the air', () => {
     // 6,500 of 8,000 is under the limit and over the headroom: a question is

@@ -8,6 +8,7 @@ import {
   assistantState,
   assistantTestResult,
   saveAssistantSettingsRequest,
+  type AssistantLang,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -41,6 +42,13 @@ import { buildHelpContext } from '../../lib/help-context'
 
 /** Questions one studio may ask in a day when nobody has set a number. */
 const DEFAULT_DAILY_LIMIT = 50
+
+/** A studio's day is spent, in the language the panel is in. */
+const ASKED_ENOUGH: Record<AssistantLang, (limit: number) => string> = {
+  en: (n) => `You have asked the assistant ${n} questions today. It opens again tomorrow.`,
+  hi: (n) => `आप आज असिस्टेंट से ${n} सवाल पूछ चुके हैं। यह कल फिर खुलेगा।`,
+  hinglish: (n) => `Aap aaj assistant se ${n} sawal pooch chuke hain. Yeh kal phir khulega.`,
+}
 
 /** The question the console's Test asks. Also the commonest real one. */
 const TEST_QUESTION = 'How do I add my team?'
@@ -187,7 +195,7 @@ export const assistantRouter = new Hono<AppEnv>()
       console.warn('[assistant] could not read the day count; letting the question through')
     }
     if (used !== null && used >= limit) {
-      fail(429, `You have asked the assistant ${limit} questions today. It opens again tomorrow.`)
+      fail(429, ASKED_ENOUGH[parsed.data.language](limit))
     }
 
     const help = await buildHelpContext(c.env, parsed.data.question)
@@ -214,6 +222,7 @@ export const assistantRouter = new Hono<AppEnv>()
         // charging it here would refuse two questions a minute where three
         // fit.
         help.varying,
+        parsed.data.language,
       )
       if (!verdict.ok) {
         console.warn(`[assistant] over the ${verdict.window} budget (${spent.minute}/min, ${spent.day}/day)`)
@@ -228,6 +237,7 @@ export const assistantRouter = new Hono<AppEnv>()
       callUrl: callLinkFor(c.env, row),
       question: parsed.data.question,
       history: parsed.data.history,
+      language: parsed.data.language,
     })
 
     const logId = await logAsk(

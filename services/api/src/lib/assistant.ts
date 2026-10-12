@@ -1,4 +1,4 @@
-import type { AssistantSource, AssistantTurn } from '@ipc/contracts'
+import type { AssistantLang, AssistantSource, AssistantTurn } from '@ipc/contracts'
 import type { ChatMessage, ChatProvider, ToolSpec } from './ai'
 import type { Env } from '../context'
 import { withService } from './db'
@@ -32,7 +32,7 @@ How to answer:
 - Name buttons and menus exactly as the help content writes them, so what you say matches what is on their screen.
 - Say where to go by the menu names (Team → People), never by a page address like /employees or screen/employees.
 - Money is rupees.
-- Answer in the language they asked in. If they write in Hindi or in Hinglish, reply the same way -- but keep every button and menu name in English, because that is what is printed on the screen.
+- Answer in the language named in the LANGUAGE line at the very end of these instructions. Whatever the language, keep every button and menu name in English, exactly as the help content writes it, because that is what is printed on the screen.
 - If the help content covers it, say the steps. If it names the screen, say where to go.
 
 What NOT to do:
@@ -66,6 +66,83 @@ export const BOOK_A_CALL: ToolSpec = {
 }
 
 /**
+ * What the answer is written in, said to the model last.
+ *
+ * Last, after the help chosen for this question, and never in the stable
+ * block: the stable block must be byte-identical for every studio so the
+ * provider can cache it, and three languages would make it three prefixes.
+ *
+ * The reason given to book_a_call is shown to the studio word for word, so it
+ * has to be in their language too.
+ */
+const LANGUAGE_LINE: Record<AssistantLang, string> = {
+  en: 'LANGUAGE: Answer in English, whatever language the question is in. Write the reason you give book_a_call in English too.',
+  hi: 'LANGUAGE: Answer in Hindi, written in Devanagari script, whatever language the question is in. Use the simple everyday Hindi a studio owner speaks; common words like project, invoice, shoot, team and payment may stay as they are. Keep every button, menu and screen name exactly in English as the help content writes it, in bold (for example **Team → People**), because that is what is printed on the screen. Write the reason you give book_a_call in Hindi too.',
+  hinglish:
+    "LANGUAGE: Answer in Hinglish: Hindi written in English (Roman) letters, the way people write on WhatsApp -- for example 'Team → People pe jaiye aur **Add your team** dabaiye.' Never use Devanagari. Keep every button, menu and screen name exactly in English as the help content writes it. Write the reason you give book_a_call in Hinglish too.",
+}
+
+/**
+ * The sentences we write ourselves rather than the model, in each language.
+ *
+ * Neutral in gender on purpose: Hindi verbs carry the speaker's gender ("दे
+ * पाया" / "दे पाई"), and the assistant has none.
+ */
+const SAY: Record<AssistantLang, {
+  bookTime: string
+  noLink: string
+  notOn: string
+  couldNot: string
+  orCall: string
+  person: string
+  noAnswer: string
+  callThrough: string
+  charged: string
+  plan: string
+  data: string
+}> = {
+  en: {
+    bookTime: 'Book a time that suits you.',
+    noLink: 'Please write to us and we will come back to you.',
+    notOn: 'The assistant is not switched on yet.',
+    couldNot: 'I could not answer just now.',
+    orCall: 'You can book a call instead.',
+    person: 'This one is better answered by a person.',
+    noAnswer: 'I do not have an answer for that in the help.',
+    callThrough: 'Book a call and we will go through it.',
+    charged: 'This is about money we have charged you, so a person should look at it with you.',
+    plan: 'Changing or ending your plan is something we should do with you on a call.',
+    data: 'Missing data needs a person to look at your studio directly.',
+  },
+  hi: {
+    bookTime: 'अपनी सुविधा का समय बुक करें।',
+    noLink: 'हमें लिखें, हम आपसे संपर्क करेंगे।',
+    notOn: 'असिस्टेंट अभी चालू नहीं है।',
+    couldNot: 'अभी जवाब नहीं मिल सका।',
+    orCall: 'आप इसकी जगह कॉल बुक कर सकते हैं।',
+    person: 'इसका जवाब कोई व्यक्ति बेहतर देगा।',
+    noAnswer: 'हेल्प में इसका जवाब नहीं है।',
+    callThrough: 'कॉल बुक करें, हम साथ में देख लेंगे।',
+    charged: 'यह हमारे लिए गए पैसों के बारे में है, इसलिए कोई व्यक्ति इसे आपके साथ देखेगा।',
+    plan: 'प्लान बदलना या बंद करना हम आपके साथ कॉल पर करेंगे।',
+    data: 'गायब डेटा के लिए किसी व्यक्ति को सीधे आपका स्टूडियो देखना होगा।',
+  },
+  hinglish: {
+    bookTime: 'Apni suvidha ka time book kar lijiye.',
+    noLink: 'Humein message kijiye, hum aapse contact karenge.',
+    notOn: 'Assistant abhi chalu nahi hai.',
+    couldNot: 'Abhi jawab nahi mil saka.',
+    orCall: 'Aap iski jagah call book kar sakte hain.',
+    person: 'Iska jawab koi person behtar dega.',
+    noAnswer: 'Help mein iska jawab nahi hai.',
+    callThrough: 'Call book kijiye, hum saath mein dekh lenge.',
+    charged: 'Yeh humare charge kiye gaye paison ke baare mein hai, isliye koi person ise aapke saath dekhega.',
+    plan: 'Plan badalna ya band karna hum aapke saath call par karenge.',
+    data: 'Gayab data ke liye kisi person ko seedhe aapka studio dekhna hoga.',
+  },
+}
+
+/**
  * Questions that go to a person whatever the model thinks.
  *
  * The model gets a vote on escalation through the tool, but not the only vote.
@@ -77,13 +154,19 @@ export const BOOK_A_CALL: ToolSpec = {
  * Deliberately narrow, and about OUR billing of them rather than their billing
  * of clients: "how do I send an invoice" is a help question and must stay one,
  * which is why 'invoice', 'payment' and 'gst' are not on this list.
+ *
+ * The Hindi patterns have no \b: JavaScript's word boundary only knows ASCII,
+ * so it never matches beside a Devanagari letter.
  */
-const HUMAN_ONLY: readonly { re: RegExp; why: string }[] = [
-  { re: /\brefund|charge-?back|money back|charged (me )?(twice|two times|double)|double charge/i, why: 'This is about money we have charged you, so a person should look at it with you.' },
-  { re: /\bcancel (my |the )?(plan|subscription|account)|downgrade my plan|stop (my )?(billing|subscription)/i, why: 'Changing or ending your plan is something we should do with you on a call.' },
+const HUMAN_ONLY: readonly { re: RegExp; why: 'charged' | 'plan' | 'data' }[] = [
+  { re: /\brefund|charge-?back|money back|charged (me )?(twice|two times|double)|double charge/i, why: 'charged' },
+  { re: /रिफंड|रिफ़ंड|(पैसे|पैसा) वापस|दो बार (पैसे|चार्ज|कट)|\bpais[ae] (wapas|vapas)|\bdo baar (paise|charge|kat)/i, why: 'charged' },
+  { re: /\bcancel (my |the )?(plan|subscription|account)|downgrade my plan|stop (my )?(billing|subscription)/i, why: 'plan' },
+  { re: /(प्लान|सब्सक्रिप्शन|अकाउंट) (कैंसिल|कैंसल|बंद)|\b(plan|subscription|account) (cancel|band) kar/i, why: 'plan' },
   // Both word orders: "I lost my leads" and "all my leads are gone". Only the
   // first was matched at first, which let the commoner phrasing through.
-  { re: /\b(lost|deleted|missing|gone) (all |my |our |the )?(data|leads|projects|clients|everything)\b|\b(data|leads|projects|clients|everything) (are|is|have|has|were) ?(all )?(gone|missing|disappeared|deleted|lost|vanished)\b|\bhacked\b|\bdata breach\b/i, why: 'Missing data needs a person to look at your studio directly.' },
+  { re: /\b(lost|deleted|missing|gone) (all |my |our |the )?(data|leads|projects|clients|everything)\b|\b(data|leads|projects|clients|everything) (are|is|have|has|were) ?(all )?(gone|missing|disappeared|deleted|lost|vanished)\b|\bhacked\b|\bdata breach\b/i, why: 'data' },
+  { re: /(डेटा|डाटा|लीड|लीड्स|प्रोजेक्ट|क्लाइंट|सब कुछ)( सब)? (गायब|डिलीट|उड़|उड|खो)|हैक|\b(data|leads?|projects?|clients?|sab kuch) (gayab|delete ho|ud gay)|\bhack ho/i, why: 'data' },
 ]
 
 /**
@@ -103,8 +186,12 @@ const HUMAN_ONLY: readonly { re: RegExp; why: string }[] = [
  * The model has the conversation and can rephrase; if it genuinely cannot help
  * it still has the tool.
  */
-export function needsHuman(question: string, _history: readonly AssistantTurn[] = []): string | null {
-  for (const r of HUMAN_ONLY) if (r.re.test(question)) return r.why
+export function needsHuman(
+  question: string,
+  _history: readonly AssistantTurn[] = [],
+  lang: AssistantLang = 'en',
+): string | null {
+  for (const r of HUMAN_ONLY) if (r.re.test(question)) return SAY[lang][r.why]
   return null
 }
 
@@ -130,13 +217,26 @@ interface AskOptions {
   callUrl?: string | null | undefined
   question: string
   history?: readonly AssistantTurn[] | undefined
+  /** What to answer in. English when not given. */
+  language?: AssistantLang | undefined
 }
 
-/** What a studio is told when a call is the answer but nobody has set a link. */
-const NO_LINK = 'Please write to us and we will come back to you.'
+/**
+ * The model's reason, ending as a sentence, because ours follows straight on.
+ * A Hindi reason came back without its full stop and read as one run-on line:
+ * "…जानकारी नहीं है अपनी सुविधा का समय बुक करें।"
+ */
+function finished(reason: string, lang: AssistantLang): string {
+  if (!reason || /[.!?।]$/.test(reason)) return reason
+  return `${reason}${lang === 'hi' ? '।' : '.'}`
+}
 
 export async function ask(opts: AskOptions): Promise<AssistantResult> {
   const callUrl = opts.callUrl || null
+  const lang = opts.language ?? 'en'
+  const say = SAY[lang]
+  /** What a studio is told when a call is the answer but nobody has set a link. */
+  const NO_LINK = say.noLink
   const empty = {
     sources: [] as AssistantSource[],
     model: null,
@@ -146,12 +246,12 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
     error: null,
   }
 
-  const forced = needsHuman(opts.question, opts.history ?? [])
+  const forced = needsHuman(opts.question, opts.history ?? [], lang)
   if (forced) {
     return {
       ...empty,
       status: 'escalated',
-      answer: `${forced} ${callUrl ? 'Book a time that suits you.' : NO_LINK}`.trim(),
+      answer: `${forced} ${callUrl ? say.bookTime : NO_LINK}`.trim(),
       callUrl,
     }
   }
@@ -163,7 +263,7 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
     // against neither the bill nor Groq's 8,000-a-minute rate limit.
     {
       role: 'system',
-      content: `${opts.prompt?.trim() || DEFAULT_PROMPT}\n\n${opts.help.stable}\n\n${opts.help.selected}`,
+      content: `${opts.prompt?.trim() || DEFAULT_PROMPT}\n\n${opts.help.stable}\n\n${opts.help.selected}\n\n${LANGUAGE_LINE[lang]}`,
     },
     ...(opts.history ?? []).map((h) => ({ role: h.role, content: h.content }) as ChatMessage),
     { role: 'user', content: opts.question },
@@ -177,10 +277,7 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
       status: reply.kind === 'no_key' ? 'skipped' : 'failed',
       // A studio should not be shown the provider's words, but they should be
       // told it is us and not them, and offered the way through.
-      answer:
-        reply.kind === 'no_key'
-          ? 'The assistant is not switched on yet.'
-          : `I could not answer just now. ${callUrl ? 'You can book a call instead.' : NO_LINK}`,
+      answer: reply.kind === 'no_key' ? say.notOn : `${say.couldNot} ${callUrl ? say.orCall : NO_LINK}`,
       callUrl: reply.kind === 'no_key' ? null : callUrl,
       error: reply.error,
     }
@@ -200,7 +297,7 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
       ...empty,
       ...usage,
       status: 'escalated',
-      answer: `${reason || 'This one is better answered by a person.'} ${callUrl ? 'Book a time that suits you.' : NO_LINK}`.trim(),
+      answer: `${finished(reason, lang) || say.person} ${callUrl ? say.bookTime : NO_LINK}`.trim(),
       callUrl,
     }
   }
@@ -212,7 +309,7 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
       ...empty,
       ...usage,
       status: 'escalated',
-      answer: `I do not have an answer for that in the help. ${callUrl ? 'Book a call and we will go through it.' : NO_LINK}`,
+      answer: `${say.noAnswer} ${callUrl ? say.callThrough : NO_LINK}`,
       callUrl,
     }
   }

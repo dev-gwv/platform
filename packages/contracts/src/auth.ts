@@ -194,7 +194,14 @@ export const learnNote = z.object({
 })
 export type LearnNote = z.infer<typeof learnNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide'] as const
+/**
+ * The language a person picked for the help assistant. Kept on their row so the
+ * question is asked once, not once per device.
+ */
+export const assistantLangNote = z.object({ lang: z.enum(['en', 'hi', 'hinglish']) })
+export type AssistantLangNote = z.infer<typeof assistantLangNote>
+
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
@@ -207,6 +214,7 @@ export const userHints = z
     learn: learnNote.optional(),
     // The "Learn Studio AutoPilot step by step" note: gone once closed or the guide is opened.
     guide: hintNote.optional(),
+    assistant_lang: assistantLangNote.optional(),
   })
   .passthrough()
 export type UserHints = z.infer<typeof userHints>
@@ -225,5 +233,9 @@ export const learnSignals = z.object({
 export type LearnSignals = z.infer<typeof learnSignals>
 
 /** `learn` takes a LearnNote; every other key a HintNote. */
-export const setHintRequest = z.object({ value: z.union([learnNote.strict(), hintNote]).nullable() })
+// The strict shapes first: hintNote fills its own defaults and drops unknown
+// keys, so { lang: 'hi' } tried against it first would be saved as a blank note.
+export const setHintRequest = z.object({
+  value: z.union([learnNote.strict(), assistantLangNote.strict(), hintNote]).nullable(),
+})
 export type SetHintRequest = z.infer<typeof setHintRequest>

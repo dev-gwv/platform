@@ -1,4 +1,5 @@
 import { CHAPTERS, KB, PARTS, type KbArticle } from '@ipc/help'
+import { asEnglish } from './hindi-words'
 
 /**
  * Which bits of the help a question is about.
@@ -74,12 +75,18 @@ function stem(w: string): string {
 }
 
 export function words(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 1 && !STOP.has(w))
-    .map(stem)
+  return (
+    text
+      .toLowerCase()
+      // \p{M} too: Devanagari's vowel signs are marks, not letters, and without
+      // them "क्लाइंट" fell apart into fragments that matched nothing.
+      .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      // A Hindi or Hinglish word becomes the English the help uses for it.
+      .flatMap((w) => asEnglish(w) ?? [w])
+      .filter((w) => w.length > 1 && !STOP.has(w))
+      .map(stem)
+  )
 }
 
 /** Every article and every guide chapter, as one list. Built once. */

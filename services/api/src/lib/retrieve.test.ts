@@ -51,6 +51,45 @@ describe('the questions studios actually ask', () => {
     finds('where do I approve an edit', 'kb:editing-review')
   })
 
+  it('finds the same articles for a question typed in Hindi', () => {
+    // Before the word table, every one of these matched nothing, and the model
+    // -- handed no article -- answered from memory with buttons that do not
+    // exist ("Book team", "Confirm").
+    finds('शूट के लिए क्रू कैसे बुक करें?', 'kb:shoots-what')
+    finds('क्लाइंट का पेमेंट कैसे रिकॉर्ड करूँ?', 'kb:money-payments')
+    finds('टीम कैसे जोड़ें', 'kb:team-add')
+    finds('कोटेशन क्लाइंट को कैसे भेजूँ', 'kb:quotation')
+    finds('एडिटर को काम कैसे दें', 'kb:editing-give-work')
+    finds('छुट्टी कैसे अप्रूव करें', 'kb:leave')
+    finds('सैलरी कैसे बनाएं', 'kb:payroll')
+  })
+
+  it('finds them for Hinglish too', () => {
+    finds('client ka payment kaise record karu?', 'kb:money-payments')
+    finds('editor ko kaam kaise assign karu?', 'kb:editing-give-work')
+    finds('team kaise jodu', 'kb:team-add')
+    finds('chutti kaise approve karein', 'kb:leave')
+  })
+
+  it('finds the panel\'s own starter questions in every language', () => {
+    // These are offered with one tap, so a starter that matches nothing would
+    // be the assistant failing on its own suggestion.
+    finds('टीम कैसे जोड़ें?', 'kb:team-add')
+    finds('कोटेशन कैसे भेजें?', 'kb:quotation')
+    finds('Team kaise jodein?', 'kb:team-add')
+    finds('Quotation kaise bhejein?', 'kb:quotation')
+    finds('Shoot ke liye crew kaise book karein?', 'kb:shoots-what')
+    for (const q of ['किसी को पैसों का एक्सेस कैसे दें?', 'Kisi ko money ka access kaise dein?']) {
+      expect(selectHelp(q).empty, q).toBe(false)
+    }
+  })
+
+  it('keeps a Devanagari word whole instead of breaking it at its vowel signs', () => {
+    // The vowel signs are marks, not letters; the old pattern cut on them.
+    expect(words('अनजानाशब्द')).toEqual(['अनजानाशब्द'])
+    expect(words('क्लाइंट')).toEqual(['client'])
+  })
+
   it('finds the team-time articles', () => {
     finds('turn on attendance', 'kb:attendance')
     finds('approve leave', 'kb:leave')
@@ -143,7 +182,9 @@ describe('words', () => {
   })
 
   it('handles punctuation and other scripts without falling over', () => {
-    expect(words('अवधि kya hai?')).toContain('kya')
+    // 'kya' and 'hai' hold a Hinglish sentence together and are dropped, the
+    // way 'how' and 'is' are; the Hindi word stays whole.
+    expect(words('अवधि kya hai?')).toEqual(['अवधि'])
     expect(words('₹1,00,000 plan!!')).toContain('plan')
   })
 })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addSaid, clearThread, markHelpful, setDraft, snapshot, subscribe } from './thread'
+import { addSaid, clearThread, markHelpful, setDraft, setLang, snapshot, startAgain, subscribe } from './thread'
 
 /**
  * The conversation store. It exists because the thread used to be component
@@ -68,12 +68,32 @@ describe('the thread', () => {
     expect(snapshot().said[2]!.helpful).toBeNull()
   })
 
-  it('empties on Start again, and on sign-out', () => {
-    // Two people share a laptop; one must not read the other's questions.
+  it('empties on sign-out, the language too', () => {
+    // Two people share a laptop; one must not read the other's questions, and
+    // the next person is asked their own language.
     addSaid({ role: 'user', text: 'what did I ask' })
     setDraft('half a question')
+    setLang('hi')
     clearThread()
     expect(snapshot().said).toEqual([])
     expect(snapshot().draft).toBe('')
+    expect(snapshot().lang).toBeNull()
+  })
+
+  it('starts again in the language already picked', () => {
+    setLang('hinglish')
+    addSaid({ role: 'user', text: 'team kaise jodu' })
+    setDraft('aur')
+    startAgain()
+    expect(snapshot().said).toEqual([])
+    expect(snapshot().draft).toBe('')
+    expect(snapshot().lang).toBe('hinglish')
+  })
+
+  it('ignores picking the language it already has', () => {
+    setLang('en')
+    const a = snapshot()
+    setLang('en')
+    expect(snapshot()).toBe(a)
   })
 })

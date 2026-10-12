@@ -1,4 +1,4 @@
-import type { AssistantSource } from '@ipc/contracts'
+import type { AssistantLang, AssistantSource } from '@ipc/contracts'
 
 /**
  * The open conversation, held outside React.
@@ -38,9 +38,15 @@ export interface Thread {
    * outlives the panel: see send.ts.
    */
   pending: boolean
+  /**
+   * The language picked in this visit. Null until they pick one here; the panel
+   * then falls back to the one saved on their row (users.hints.assistant_lang),
+   * and asks only when there is neither.
+   */
+  lang: AssistantLang | null
 }
 
-const EMPTY: Thread = { said: [], draft: '', pending: false }
+const EMPTY: Thread = { said: [], draft: '', pending: false, lang: null }
 
 let current: Thread = EMPTY
 const listeners = new Set<() => void>()
@@ -78,6 +84,12 @@ export function setPending(pending: boolean): void {
   emit()
 }
 
+export function setLang(lang: AssistantLang): void {
+  if (current.lang === lang) return
+  current = { ...current, lang }
+  emit()
+}
+
 /** Marks the latest answer, for the thumbs. */
 export function markHelpful(index: number, helpful: boolean): void {
   const next = current.said.map((s, i) => (i === index ? { ...s, helpful } : s))
@@ -104,9 +116,16 @@ export function lastQuestion(): string | null {
   return null
 }
 
-/** Start again, and on sign-out. */
+/** On sign-out: everything, the language too, so the next person is asked theirs. */
 export function clearThread(): void {
   if (current === EMPTY) return
   current = EMPTY
+  emit()
+}
+
+/** Start again: a fresh conversation in the language already picked. */
+export function startAgain(): void {
+  if (current.said.length === 0 && !current.draft) return
+  current = { ...EMPTY, lang: current.lang }
   emit()
 }
