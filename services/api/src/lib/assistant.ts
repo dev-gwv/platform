@@ -225,6 +225,18 @@ interface AskOptions {
 }
 
 /**
+ * How much of the conversation goes back to the model: the last two
+ * exchanges. Enough for "and on mobile?" to make sense.
+ *
+ * It was six turns, and the contract still accepts six so an older tab is not
+ * refused. But history is never cached -- it sits after the help -- and Groq
+ * caches our stable prefix only now and then, so a question already costs
+ * ~4,000 of the 8,000 tokens a minute the free tier allows. Six long turns
+ * added ~1,500 more and let one chatty conversation spend a minute on its own.
+ */
+export const CARRIED_TURNS = 4
+
+/**
  * The model's reason, ending as a sentence, because ours follows straight on.
  * A Hindi reason came back without its full stop and read as one run-on line:
  * "…जानकारी नहीं है अपनी सुविधा का समय बुक करें।"
@@ -249,7 +261,9 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
     error: null,
   }
 
-  const forced = needsHuman(opts.question, opts.history ?? [], lang)
+  // The last two exchanges, whatever the caller sent: see CARRIED_TURNS.
+  const history = (opts.history ?? []).slice(-CARRIED_TURNS)
+  const forced = needsHuman(opts.question, history, lang)
   if (forced) {
     return {
       ...empty,
@@ -268,7 +282,7 @@ export async function ask(opts: AskOptions): Promise<AssistantResult> {
       role: 'system',
       content: `${opts.prompt?.trim() || DEFAULT_PROMPT}\n\n${opts.help.stable}\n\n${opts.help.selected}\n\n${LANGUAGE_LINE[lang]}`,
     },
-    ...(opts.history ?? []).map((h) => ({ role: h.role, content: h.content }) as ChatMessage),
+    ...history.map((h) => ({ role: h.role, content: h.content }) as ChatMessage),
     { role: 'user', content: opts.question },
   ]
 

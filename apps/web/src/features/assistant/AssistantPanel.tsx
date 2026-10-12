@@ -56,8 +56,12 @@ import {
  * and Stop are doing that work instead.
  */
 
-/** Sent back with each question. Enough for a follow-up, not enough to crowd the prompt. */
-const CARRY = 6
+/**
+ * Sent back with each question: the last two exchanges. Enough for a follow-up,
+ * not enough to crowd the prompt. The server keeps the same number
+ * (CARRIED_TURNS in lib/assistant.ts) whatever is sent.
+ */
+const CARRY = 4
 
 /** The question box's own cap, matching the contract. */
 const MAX_Q = 500

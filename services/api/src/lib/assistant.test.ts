@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatProvider, ChatReply, ChatRequest } from './ai'
-import { BOOK_A_CALL, DEFAULT_PROMPT, ask, needsHuman } from './assistant'
+import { BOOK_A_CALL, CARRIED_TURNS, DEFAULT_PROMPT, ask, needsHuman } from './assistant'
 import { composeHelpContext } from './help-context'
 
 /**
@@ -241,6 +241,21 @@ describe('ask', () => {
     })
     const req = (p.chat as unknown as { mock: { calls: [{ messages: { role: string }[] }][] } }).mock.calls[0]![0]
     expect(req.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
+  })
+
+  it('carries only the last two exchanges, whatever the tab sent', async () => {
+    // History sits after the help and is never cached, so every turn of it is
+    // paid in full against the per-minute budget.
+    const p = stub(answered('ok'))
+    const turns = Array.from({ length: 6 }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `turn ${i}`,
+    }))
+    await ask({ provider: p, help: HELP, question: 'and then?', history: turns })
+    const req = (p.chat as unknown as { mock: { calls: [{ messages: { content: string }[] }][] } }).mock.calls[0]![0]
+    expect(req.messages).toHaveLength(1 + CARRIED_TURNS + 1)
+    expect(req.messages.map((m) => m.content)).toContain('turn 5')
+    expect(req.messages.map((m) => m.content)).not.toContain('turn 1')
   })
 })
 
