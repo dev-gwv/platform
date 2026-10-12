@@ -9,6 +9,7 @@ import {
   FileSignature,
   FileText,
   Gift,
+  Images,
   LayoutGrid,
   Package,
   Receipt,
@@ -35,6 +36,9 @@ export const PROJECT_TABS = [
   { value: 'deliverables', label: 'Work', icon: Package },
   { value: 'completed_work', label: 'Work to review', icon: FileCheck },
   { value: 'tasks', label: 'Task Management', icon: CheckSquare },
+  // The photo gallery in Frameline, the gallery add-on (0261): the guests'
+  // link, the PIN, and Open gallery to upload.
+  { value: 'gallery', label: 'Gallery', icon: Images },
   { value: 'terms', label: 'Terms', icon: FileSignature },
   { value: 'billing', label: 'Billing', icon: Wallet },
   { value: 'expenses', label: 'Expenses', icon: Receipt },
@@ -61,7 +65,7 @@ export const PROJECT_GROUPS = [
   { value: 'overview', label: 'Overview', icon: LayoutGrid, views: ['overview'] },
   { value: 'quotation', label: 'Quotation', icon: FileText, views: ['quotation'] },
   { value: 'shoots', label: 'Shoots', icon: Camera, views: ['shoots'] },
-  { value: 'production', label: 'Post-Production', icon: Package, views: ['deliverables', 'completed_work', 'tasks'] },
+  { value: 'production', label: 'Post-Production', icon: Package, views: ['deliverables', 'completed_work', 'tasks', 'gallery'] },
   { value: 'terms', label: 'Terms', icon: FileSignature, views: ['terms'] },
   { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs', 'payouts'] },
   { value: 'data', label: 'Data', icon: Database, views: ['data'] },
@@ -93,6 +97,7 @@ export function visibleViews(
       ((v !== 'billing' && v !== 'costs') || can.module('billing') || can.module('money')) &&
       (v !== 'completed_work' || can.module('team_work_preview')) &&
       (v !== 'data' || can.action('projects', 'edit')) &&
+      (v !== 'gallery' || can.action('projects', 'edit')) &&
       (v !== 'costs' || can.action('projects', 'edit')) &&
       (v !== 'payouts' || can.module('team_payouts')) &&
       (v !== 'referrals' || can.module('referrals')) &&

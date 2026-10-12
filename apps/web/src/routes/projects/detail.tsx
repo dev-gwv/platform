@@ -52,6 +52,7 @@ import { BillingTab, projectMoney } from '@/features/projects/tabs/BillingTab'
 import { DeliverablesSummary } from '@/features/projects/DeliverablesSummary'
 import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
+import { GalleryTab } from '@/features/gallery/GalleryTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { WishesTab } from '@/features/wishes/WishesTab'
 import { WatchHow } from '@/features/help/WatchHow'
@@ -460,6 +461,7 @@ function ProjectDetail() {
       {tab === 'costs' && <CostsTab projectId={id} onBookTeam={() => go('team')} />}
       {tab === 'payouts' && <PayoutsTab projectId={id} />}
       {tab === 'data' && <DataTab projectId={id} />}
+      {tab === 'gallery' && <GalleryTab projectId={id} projectName={data.name} />}
       {tab === 'referrals' && (
         <ReferralsTab
           projectId={id}

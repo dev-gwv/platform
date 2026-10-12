@@ -64,6 +64,13 @@ describe('the questions studios actually ask', () => {
     finds('सैलरी कैसे बनाएं', 'kb:payroll')
   })
 
+  it('finds the project gallery in every language', () => {
+    finds('how do I make a photo gallery for guests', 'kb:project-gallery')
+    finds('गैलरी कैसे बनाएं', 'kb:project-gallery')
+    finds('gallery kaise banaye', 'kb:project-gallery')
+    finds('guests find their photos with a selfie', 'kb:project-gallery')
+  })
+
   it('finds them for Hinglish too', () => {
     finds('client ka payment kaise record karu?', 'kb:money-payments')
     finds('editor ko kaam kaise assign karu?', 'kb:editing-give-work')

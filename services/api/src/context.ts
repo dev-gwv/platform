@@ -40,6 +40,16 @@ export interface Env {
    * survives none of those.
    */
   AI_FALLBACK_API_KEY?: string
+  /**
+   * Frameline, the gallery add-on (0261, lib/frameline.ts): its API address
+   * (e.g. https://frameline-api.example.workers.dev) and the secret both
+   * servers share -- Frameline's STUDIOAUTOPILOT_SECRET, the same value. It
+   * signs the single-use links "Open gallery" follows and the calls that make
+   * a project's gallery. Optional: without both, the Gallery tab says the
+   * add-on is not connected yet.
+   */
+  FRAMELINE_API_URL?: string
+  FRAMELINE_SECRET?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
   /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */

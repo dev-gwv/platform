@@ -23,6 +23,7 @@ describe('project tabs', () => {
     expect(groupOf('tasks')).toBe('production')
     expect(groupOf('completed_work')).toBe('production')
     expect(groupOf('deliverables')).toBe('production')
+    expect(groupOf('gallery')).toBe('production')
     expect(groupOf('shoots')).toBe('shoots')
     expect(groupOf('referrals')).toBe('wishes')
     expect(groupOf('wishes')).toBe('wishes')
@@ -46,6 +47,12 @@ describe('project tabs', () => {
     expect(viewsOf('finance').filter((v) => seen.includes(v))).toEqual([])
     expect(seen).toContain('deliverables')
     expect(seen).toContain('data')
+    // Whoever runs projects makes and opens the gallery; it carries no money.
+    expect(seen).toContain('gallery')
+  })
+
+  it('keeps the gallery from someone who cannot edit projects', () => {
+    expect(visibleViews(staff)).not.toContain('gallery')
   })
 
   it('shows everything to an owner', () => {

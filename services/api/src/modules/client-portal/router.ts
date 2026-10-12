@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { TransactionSql } from 'postgres'
 import {
   clientPortalFeedbackItem,
   clientPortalFeedbackRequest,
@@ -183,7 +184,7 @@ export const clientPortalRouter = new Hono<AppEnv>()
           const kept = await svc<{ token: string }[]>`select token from client_portal_link_tokens where link_id = ${links[0]!.id}`
           if (!kept[0]) return { old: true as const }
           const rows = await svc<{ doc: unknown }[]>`select get_client_portal(p_raw => ${kept[0].token}, p_count => false) as doc`
-          return { doc: rows[0]?.doc ?? null }
+          return { doc: rows[0]?.doc ? await withGallery(svc, kept[0].token, rows[0].doc) : null }
         })
       }),
     )
@@ -208,6 +209,24 @@ export const clientPortalRouter = new Hono<AppEnv>()
 
 const GONE = 'This link is not working any more. Please ask the studio for a new one.'
 
+/**
+ * The project's Frameline gallery beside the tracker (0261), through the same
+ * link check as the page itself. Kept out of get_client_portal so that
+ * function is not rebuilt for one link: a gallery that cannot be read is
+ * simply not shown.
+ */
+async function withGallery(sql: TransactionSql, token: string, doc: unknown): Promise<unknown> {
+  try {
+    // A savepoint, so a failure here cannot abort the transaction that just
+    // counted the client's visit.
+    const rows = await sql.savepoint((sp) => sp<{ g: unknown }[]>`select client_portal_gallery(${token}) as g`)
+    return { ...(doc as object), gallery: rows[0]?.g ?? null }
+  } catch (e) {
+    console.error('[client-portal] could not read the gallery', e)
+    return doc
+  }
+}
+
 /** Token shape check before touching the database: 1..200 chars, url-safe. */
 function portalToken(c: Parameters<typeof textParam>[0]): string {
   const token = textParam(c, 'token', 200)
@@ -218,13 +237,16 @@ function portalToken(c: Parameters<typeof textParam>[0]): string {
 export const publicClientPortalRouter = new Hono<AppEnv>()
   .get('/portal/:token', async (c) => {
     const token = portalToken(c)
-    const rows = await attempt(c, 'client_portal.public_get', () =>
-      withService(c.env, (sql) => sql<{ doc: unknown }[]>`select get_client_portal(p_raw => ${token}) as doc`),
+    const doc = await attempt(c, 'client_portal.public_get', () =>
+      withService(c.env, async (sql) => {
+        const rows = await sql<{ doc: unknown }[]>`select get_client_portal(p_raw => ${token}) as doc`
+        return rows[0]?.doc ? { doc: await withGallery(sql, token, rows[0].doc) } : { doc: null }
+      }),
     )
-    if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
-    if (!rows[0]?.doc) fail(404, GONE)
+    if (!doc) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    if (!doc.doc) fail(404, GONE)
     c.header('Cache-Control', 'no-store')
-    return c.json(publicClientPortal.parse(rows[0].doc))
+    return c.json(publicClientPortal.parse(doc.doc))
   })
 
   .get('/portal/:token/invoices/:id', async (c) => {

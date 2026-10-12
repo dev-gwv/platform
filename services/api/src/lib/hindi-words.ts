@@ -68,6 +68,8 @@ const HI: Record<string, readonly string[]> = {
   card: ['कार्ड'],
   disk: ['डिस्क'],
   album: ['एल्बम', 'अल्बम'],
+  gallery: ['गैलरी', 'गेलरी'],
+  selfie: ['सेल्फी'],
   photo: ['फोटो', 'तस्वीर'],
   video: ['वीडियो'],
   teaser: ['टीजर'],

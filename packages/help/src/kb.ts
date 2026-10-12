@@ -535,6 +535,19 @@ export const KB: readonly KbArticle[] = [
       'Add a ready-made set with a task bundle from **Settings → Projects → Templates**.',
     ],
   },
+  {
+    key: 'project-gallery',
+    title: 'A photo gallery for the project',
+    area: 'Editing',
+    menu: 'Projects → a project → Post-Production → Gallery',
+    keywords: ['gallery', 'frameline', 'kamero', 'selfie', 'face', 'guests', 'share photos', 'event photos', 'album', 'pin', 'qr', 'upload photos'],
+    body: [
+      'Open the project, then **Post-Production → Gallery**, and press **Create gallery**. It makes one gallery for the project, with a link and a PIN for the guests.',
+      'Press **Open gallery** to upload the photos. It opens the gallery app already signed in as you, at this project.',
+      'Hand the link and PIN on with **Send on WhatsApp**, or **Download QR** to print. Guests open the link, type the PIN and find their own photos with a selfie.',
+      'The gallery also shows on the client\'s own page, under their progress. The first gallery is made by the studio\'s owner; after that anyone who runs projects can. The gallery is an add-on with its own plan.',
+    ],
+  },
 
   // ── Data ────────────────────────────────────────────────────
   {

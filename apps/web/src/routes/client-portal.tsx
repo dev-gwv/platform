@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Eye,
   FileText,
+  Images,
   Mail,
   MapPin,
   MessageCircle,
@@ -129,6 +130,8 @@ export function PortalView({ data, token }: { data: PublicClientPortal; token: s
 
       <main className="mx-auto -mt-9 flex max-w-2xl flex-col gap-6 px-4 pb-12">
         <Tracker steps={trackerSteps(data, today)} />
+
+        {data.gallery && <GalleryCard gallery={data.gallery} />}
 
         <Section icon={CalendarDays} title="Your shoots" empty={data.shoots.length === 0 ? 'Your shoot dates will show here once they are fixed.' : null}>
           {data.shoots.map((s) => (
@@ -282,6 +285,37 @@ function Section({
         children
       )}
     </section>
+  )
+}
+
+// ── gallery ──────────────────────────────────────────────────────
+/** The photo gallery (Frameline, 0261): one press to the photos, and the PIN it will ask for. */
+function GalleryCard({ gallery }: { gallery: NonNullable<PublicClientPortal['gallery']> }) {
+  return (
+    <Card className="border-primary/30">
+      <CardContent className="flex flex-wrap items-center gap-3 p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Images className="size-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Your photo gallery</p>
+          <p className="text-sm text-muted-foreground">
+            {gallery.pin ? (
+              <>
+                PIN <span className="font-mono font-semibold tracking-widest text-foreground">{gallery.pin}</span> · share it with your guests
+              </>
+            ) : (
+              'Share it with your guests'
+            )}
+          </p>
+        </div>
+        <Button asChild>
+          <a href={gallery.url} target="_blank" rel="noreferrer noopener">
+            <ExternalLink /> Open your gallery
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 

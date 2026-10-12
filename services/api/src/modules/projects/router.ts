@@ -10,6 +10,7 @@ import { deliverableStageRoutes } from './routes-stages'
 import { deliverableRoutes } from './routes-deliverables'
 import { projectRoutes } from './routes-project'
 import { projectMoneyRoutes } from './routes-project-money'
+import { projectGalleryRoutes } from './routes-gallery'
 
 export const projectsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -47,3 +48,6 @@ export const projectsRouter = new Hono<AppEnv>()
   // One project's billing, client activity, cost sheet, payments and
   // quotation settings.
   .route('/', projectMoneyRoutes)
+
+  // One project's photo gallery in Frameline, the gallery add-on (0261).
+  .route('/', projectGalleryRoutes)
