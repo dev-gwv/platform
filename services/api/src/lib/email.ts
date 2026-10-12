@@ -11,7 +11,40 @@ interface Outgoing {
   reply_to?: string
 }
 
-type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string }
+type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string; held?: boolean }
+
+/** Why a mail to anyone but a studio owner is not sent (owner, 12 Oct). */
+export const OWNER_ONLY_NOTE =
+  'Not emailed: for now Studio AutoPilot emails only the studio owner. Share the link on WhatsApp instead.'
+
+/**
+ * Owner only, for now (owner, 12 Oct: "send the mail only to the main admin,
+ * super admin… do not send mails to any of the people"). Mail to the team,
+ * clients and leads was using up the day's Resend allowance. An address goes
+ * out only if it is a studio owner's (role super_admin) or a platform admin's;
+ * everyone else is held and logged as skipped. A studio sending its own
+ * mail through its own Resend account (white label) is what lifts this later.
+ * The platform's own test send is never held. With no database (dev, CI) or
+ * a failed lookup the mail is let through: a lost owner email is the worse
+ * mistake.
+ */
+export async function ownerMayReceive(env: Env, to: string, kind: string): Promise<boolean> {
+  if (kind === 'test' || !env.DATABASE_URL) return true
+  const email = to.trim().toLowerCase()
+  try {
+    const [row] = await withService(env, (sql) => sql<{ ok: boolean }[]>`
+      select exists (
+               select 1 from users u
+                where lower(trim(u.email)) = ${email} and u.role = 'super_admin' and u.deleted_at is null)
+          or exists (
+               select 1 from platform_admins pa join auth.users au on au.id = pa.user_id
+                where lower(trim(au.email)) = ${email}) as ok`)
+    return row?.ok ?? false
+  } catch (e) {
+    console.error('[email] could not check the recipient', e)
+    return true
+  }
+}
 
 /**
  * Every email the app sends goes through here (0217): one call to Resend, and
@@ -21,7 +54,9 @@ type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: str
  */
 export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; companyId?: string | null }): Promise<DeliveryResult> {
   let result: DeliveryResult
-  if (!env.RESEND_API_KEY) {
+  if (!(await ownerMayReceive(env, mail.to, meta.kind))) {
+    result = { status: 'failed', error: OWNER_ONLY_NOTE, held: true }
+  } else if (!env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY unset — skipping "${mail.subject}" to ${mail.to}`)
     result = { status: 'provider_missing', error: 'Email is not set up on the server (RESEND_API_KEY is empty).' }
   } else if (!(mail.from ?? env.EMAIL_FROM)) {
@@ -45,7 +80,8 @@ export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; co
     }
   }
   await logDelivery(env, mail, meta, result)
-  return result
+  const { held: _held, ...out } = result
+  return out
 }
 
 /** One row per send. A log that cannot be written never costs the email. */
@@ -55,7 +91,7 @@ async function logDelivery(env: Env, mail: Outgoing, meta: { kind: string; compa
     await withService(env, (sql) => sql`
       insert into email_log (company_id, kind, to_address, subject, status, provider_message_id, error)
       values (${meta.companyId ?? null}, ${meta.kind.slice(0, 40)}, ${mail.to.slice(0, 320)}, ${mail.subject.slice(0, 300)},
-              ${r.status === 'sent' ? 'sent' : r.status === 'provider_missing' ? 'skipped' : 'failed'},
+              ${r.status === 'sent' ? 'sent' : r.status === 'provider_missing' || r.held ? 'skipped' : 'failed'},
               ${r.id ?? null}, ${r.error?.slice(0, 500) ?? null})`)
   } catch (e) {
     console.error('[email] could not write email_log', e)
