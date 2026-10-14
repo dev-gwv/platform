@@ -30,13 +30,15 @@ export function limitWords(p: Pick<PlatformPlan, 'limits' | 'billing_interval'>)
 
 /**
  * A plan's name where both audiences and both ways of paying sit in one
- * list: "Starter, yearly", "Member Monthly", "₹1,00,000 plan (old)".
+ * list: "Regular Starter, yearly", "Diamond Pro, monthly", "₹1,00,000 plan (old)".
  */
 export function planLabel(p: Pick<PlatformPlan, 'name' | 'billing_interval' | 'audience' | 'tier'>): string {
   const how = p.billing_interval === 'monthly' ? 'monthly' : 'yearly'
   if (!p.tier) return p.audience === 'diamond' ? `Member ${p.name} (old)` : `${p.name} (old)`
-  // Two price lists of the same three plans (0262): say which one.
-  return `${p.audience === 'diamond' ? 'Member' : 'Regular'} ${p.name}, ${how}`
+  // Two price lists of the same three plans (0262): say which one. The member
+  // plans are named "Diamond Starter"… since 0263, so the name says it.
+  if (p.audience === 'diamond') return `${/^diamond /i.test(p.name) ? '' : 'Member '}${p.name}, ${how}`
+  return `Regular ${p.name}, ${how}`
 }
 
 export const AUDIENCES = [

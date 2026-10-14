@@ -93,6 +93,18 @@ describe('plan pricing', () => {
     for (const k of ['ipc_monthly', 'ipc_yearly', 'ipc_2year', 'studio_yearly']) expect((await plan(k))!['is_active']).toBe(false)
   })
 
+  it('names the member plans Diamond Starter, Diamond Pro and Diamond Studio Max, the regular ones plainly (0263)', async () => {
+    const names = async (audience: string) =>
+      (
+        await db.query<{ name: string }>(
+          `select distinct name from plans where is_active and tier is not null and audience = $1 order by name;`,
+          [audience],
+        )
+      ).rows.map((x) => x.name)
+    expect(await names('diamond')).toEqual(['Diamond Pro', 'Diamond Starter', 'Diamond Studio Max'])
+    expect(await names('outsider')).toEqual(['Pro', 'Starter', 'Studio Max'])
+  })
+
   it('offers everyone else the same plans at the regular price, about double (0262)', async () => {
     const r = await db.query<{ key: string; price: string; m: string; s: string | null; limits: unknown; includes: unknown }>(
       `select key, price, monthly_equivalent as m, savings_label as s, limits, includes from plans where is_active and audience = 'outsider' order by sort_order;`,

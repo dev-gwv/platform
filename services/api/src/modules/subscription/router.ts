@@ -43,10 +43,14 @@ function planRow(r: Record<string, unknown>) {
 }
 
 /**
- * The plans anyone can see on the home page: Starter, Pro and Studio Max once
- * they are switched on (0242). Empty until then, and the page keeps its words.
+ * The plans anyone can see: Starter, Pro and Studio Max at the regular price,
+ * and with `?list=member` Diamond Starter, Diamond Pro and Diamond Studio Max
+ * at the IPC Diamond member price (owner, 14 Oct: both lists on Plan & billing
+ * and the home page, one above the other). Seeing a member price is not
+ * buying it: Talk to us on WhatsApp checks the number first (0262).
  */
 export const publicPlansRouter = new Hono<AppEnv>().get('/plans', async (c) => {
+  const audience = c.req.query('list') === 'member' ? 'diamond' : 'outsider'
   const rows = await attempt(c, 'subscription.public_plans', () =>
     withService(
       c.env,
@@ -54,7 +58,7 @@ export const publicPlansRouter = new Hono<AppEnv>().get('/plans', async (c) => {
         select id, key, name, price, billing_interval, description, currency, duration_days, features,
                badge, billing_label, savings_label, monthly_equivalent, sort_order, tier, limits, includes, free_emails_month
           from plans
-         where is_active and audience = 'outsider' and tier is not null
+         where is_active and audience = ${audience} and tier is not null
          order by sort_order, price`,
     ),
   )

@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
+  ArrowDown,
+  BadgeCheck,
   CalendarDays,
   Check,
   ChevronDown,
   Clapperboard,
   FileSignature,
+  Gem,
   HardDrive,
   Inbox,
   Receipt,
@@ -20,7 +23,10 @@ import { IconTile } from '@/shared/ui/icon-tile'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { COMPARE, INCLUDED, quoteWords, tierPlans, type Cell } from './plan-features'
+import { bestSaving, monthlyOf, percentOff, savingWords, sectionOrder, twinOf, withGst } from './price-lists'
 import { perDay } from './usage'
+
+export { withGst } from './price-lists'
 
 const ICONS: Record<(typeof INCLUDED)[number]['icon'], LucideIcon> = {
   inbox: Inbox,
@@ -33,141 +39,212 @@ const ICONS: Record<(typeof INCLUDED)[number]['icon'], LucideIcon> = {
   wallet: Wallet,
 }
 
+/** The brand's own two colours (the Wordmark's): the IPC Diamond panel is drawn in them. */
+const NAVY = '#1b2a4a'
+const GOLD = '#f2a618'
+
+export type PriceList = 'regular' | 'member'
+
+export interface PlanAction {
+  label: string
+  icon?: LucideIcon
+  note?: string
+  className?: string
+}
+
 /**
- * Starter, Pro and Studio Max, kept easy on the eyes (owner, 3 Oct): a
- * yearly/monthly switch, three cards of at most three lines, one row of
- * "every plan has every feature" chips, and "Compare plans" -- closed until
- * pressed -- with only the rows that differ. Our own prices, so formatINR
- * (never masked). Used on Plan & billing and the home page.
+ * Starter, Pro and Studio Max, twice (owner, 14 Oct): the regular price that
+ * everyone pays, and right below it the IPC Diamond members' -- Diamond
+ * Starter, Diamond Pro, Diamond Studio Max -- the same plans and every
+ * feature at about half the price, drawn in the brand's navy and gold so the
+ * saving is the thing the eye lands on. No tabs: one above the other, so the
+ * two prices of a plan sit in the same column.
  *
- * `action` names what the button does when it is not checkout: "Talk to us
- * on WhatsApp" inside the app, "Start 7-day free trial" on the home page.
- * A plan that must wait (a lower one, mid-year) keeps its "From 15 Oct".
+ * One Pay yearly / monthly switch drives both lists, so they are always
+ * compared like for like; "Every plan has every feature" and Compare plans
+ * come once, because the features do not differ. A verified member reads
+ * their own price first and the regular one beneath it, for comparison and
+ * without buttons. Our own prices, so formatINR (never masked). Used on Plan
+ * & billing and the home page.
  */
 export function PlanPicker({
-  plans,
+  regular,
+  member,
+  memberFirst = false,
+  verified = false,
   quotes,
   onChoose,
+  regularAction,
+  memberAction,
+  onCheckNumber,
+  memberNote,
   busy,
   canChoose = true,
   chooseHint,
-  action,
-  regular,
 }: {
-  plans: Plan[]
-  /** The regular price list, shown struck through beside a member's price (0262). */
-  regular?: Plan[] | undefined
+  regular: Plan[]
+  member: Plan[]
+  /** A verified member: their price first, the regular one under it for comparison. */
+  memberFirst?: boolean
+  verified?: boolean
   quotes?: PlanQuote[] | undefined
-  onChoose: (p: Plan, quote: PlanQuote | undefined) => void
-  action?: { label: string; icon?: LucideIcon; note?: string; className?: string } | undefined
+  onChoose: (p: Plan, quote: PlanQuote | undefined, list: PriceList) => void
+  regularAction?: PlanAction | undefined
+  memberAction?: PlanAction | undefined
+  /** "Already a member? Check your number" in the Diamond panel's corner. */
+  onCheckNumber?: (() => void) | undefined
+  /** One line under the Diamond plans (the home page: check your number after signing up). */
+  memberNote?: ReactNode
   busy?: boolean
   canChoose?: boolean
   chooseHint?: string
 }) {
   const [payEvery, setPayEvery] = useState<'yearly' | 'monthly'>('yearly')
-  const shown = tierPlans(plans, payEvery)
-  if (shown.length === 0) return null
-  return (
-    <div className="flex flex-col items-center gap-6">
-      <div className="inline-flex rounded-full border border-border bg-card p-0.5" role="radiogroup" aria-label="How to pay">
-        {(['yearly', 'monthly'] as const).map((i) => (
-          <button
-            key={i}
-            type="button"
-            role="radio"
-            aria-checked={payEvery === i}
-            onClick={() => setPayEvery(i)}
-            className={cn(
-              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-              payEvery === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
-            )}
-          >
-            {i === 'yearly' ? 'Pay yearly · save more' : 'Pay monthly'}
-          </button>
+  const reg = tierPlans(regular, payEvery)
+  const mem = tierPlans(member, payEvery)
+  if (reg.length === 0 && mem.length === 0) return null
+  const order = sectionOrder(memberFirst && mem.length > 0).filter((s) => (s === 'regular' ? reg.length : mem.length) > 0)
+
+  const regularSection = (
+    <section key="regular" id="regular-prices" aria-labelledby="regular-prices-title" className="scroll-mt-24">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Regular price</p>
+          <h2 id="regular-prices-title" className="text-xl font-bold sm:text-2xl">
+            {memberFirst ? 'What every other studio pays' : 'For every studio'}
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground">7-day free trial · every price + 18% GST</p>
+      </div>
+      <div className="grid gap-5 pt-2 md:grid-cols-3">
+        {reg.map((p) => (
+          <PlanCard
+            key={p.id}
+            plan={p}
+            list="regular"
+            quote={quotes?.find((q) => q.plan_id === p.id)}
+            action={memberFirst ? undefined : regularAction}
+            onChoose={onChoose}
+            busy={busy}
+            canChoose={canChoose}
+            chooseHint={chooseHint}
+            buttons={!memberFirst}
+          />
         ))}
       </div>
+    </section>
+  )
 
-      <div className="grid w-full gap-5 pt-2 md:grid-cols-3">
-        {shown.map((p) => {
-          const highlight = p.badge === 'Most Popular'
-          const quote = quotes?.find((q) => q.plan_id === p.id)
-          const words = quoteWords(p, quote, formatINR)
-          const Icon = action?.icon
-          const line = words.line ?? (words.disabled ? null : (action?.note ?? null))
-          const day = perDay(p)
-          const monthly = monthlyOf(p)
-          const was = regular?.find((r) => r.tier === p.tier && r.billing_interval === p.billing_interval)
-          return (
-            <Card key={p.id} className={cn('relative flex flex-col', highlight && 'border-primary ring-2 ring-primary')}>
-              {highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-3 py-0.5 text-xs font-semibold text-primary-foreground">
-                  Most popular
-                </span>
-              )}
-              <CardContent className="flex flex-1 flex-col gap-4 p-5">
-                <div>
-                  <p className="text-lg font-semibold">{p.name}</p>
-                  {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
-                </div>
-                <div>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {formatINR(monthly)}
-                    <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
-                      {' '}/month <span className="font-semibold text-foreground">+ 18% GST</span>
-                    </span>
-                  </p>
-                  {was && monthlyOf(was) > monthly && (
-                    <p className="text-sm text-muted-foreground">
-                      Regular <span className="line-through">{formatINR(monthlyOf(was))}</span>
-                      <span className="ml-1.5 font-medium text-success">· {Math.round((1 - monthly / monthlyOf(was)) * 100)}% off for members</span>
-                    </p>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    {day != null ? (
-                      <>
-                        {formatINR(p.price)} a year · <span className="font-medium text-success">just {formatINR(day)} a day</span>
-                      </>
-                    ) : (
-                      'Billed every month'
-                    )}
-                  </p>
-                  {/* GST is always 18%, on every plan (owner, 14 Oct): the total is said, never left to work out. */}
-                  <p className="text-sm font-medium">
-                    {formatINR(withGst(p.price))} with GST{p.billing_interval === 'monthly' ? ' a month' : ' a year'}
-                  </p>
-                </div>
-                <ul className="flex flex-col gap-2 text-sm">
-                  {(p.features ?? []).map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-auto flex flex-col gap-1.5">
-                  <Button
-                    variant={highlight ? 'default' : 'outline'}
-                    className={action && !words.disabled ? action.className : undefined}
-                    onClick={() => onChoose(p, quote)}
-                    disabled={busy || words.disabled || !canChoose}
-                    title={canChoose ? undefined : chooseHint}
-                  >
-                    {busy ? (
-                      'Processing…'
-                    ) : action && !words.disabled ? (
-                      <>
-                        {Icon && <Icon aria-hidden />} {action.label}
-                      </>
-                    ) : (
-                      words.button
-                    )}
-                  </Button>
-                  {line && <p className="text-center text-xs text-muted-foreground">{line}</p>}
-                </div>
-              </CardContent>
-            </Card>
+  const best = bestSaving(mem, reg)
+  const memberSection = (
+    <section
+      key="member"
+      id="diamond-prices"
+      aria-labelledby="diamond-prices-title"
+      className="relative scroll-mt-24 overflow-hidden rounded-3xl p-4 text-white shadow-xl ring-1 sm:p-7"
+      style={{ backgroundColor: NAVY, ['--tw-ring-color' as string]: `${GOLD}55` }}
+    >
+      {/* A soft gold glow in the corner: the panel reads as the special one. */}
+      <span aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full opacity-25 blur-3xl" style={{ backgroundColor: GOLD }} />
+      <span aria-hidden className="pointer-events-none absolute -bottom-32 -left-24 size-72 rounded-full bg-tone-violet opacity-20 blur-3xl" />
+      <div className="relative mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span
+            className="grid size-12 shrink-0 place-items-center rounded-2xl ring-1"
+            style={{ backgroundColor: `${GOLD}26`, ['--tw-ring-color' as string]: `${GOLD}66` }}
+          >
+            <Gem className="size-6" style={{ color: GOLD }} aria-hidden />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: GOLD }}>
+              IPC Diamond members
+            </p>
+            <h2 id="diamond-prices-title" className="text-xl font-bold sm:text-2xl">
+              The same plans, about half the price
+            </h2>
+            <p className="mt-0.5 text-sm text-white/75">
+              Every feature · 30 days free{best > 0 ? ` · save up to ${formatINR(best)} ${payEvery === 'monthly' ? 'a month' : 'a year'}` : ''}
+            </p>
+          </div>
+        </div>
+        {verified ? (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
+            style={{ backgroundColor: GOLD, color: NAVY }}
+          >
+            <BadgeCheck className="size-4" aria-hidden /> You're a verified member
+          </span>
+        ) : (
+          onCheckNumber && (
+            <button
+              type="button"
+              onClick={onCheckNumber}
+              className="rounded-full border px-3 py-1 text-sm font-medium transition-colors hover:bg-white/10"
+              style={{ borderColor: `${GOLD}99`, color: GOLD }}
+            >
+              Already a member? Check your number
+            </button>
           )
-        })}
+        )}
       </div>
+      <div className="relative grid gap-5 pt-2 md:grid-cols-3">
+        {mem.map((p) => (
+          <PlanCard
+            key={p.id}
+            plan={p}
+            list="member"
+            regular={twinOf(p, reg)}
+            quote={quotes?.find((q) => q.plan_id === p.id)}
+            action={memberAction}
+            onChoose={onChoose}
+            busy={busy}
+            canChoose={canChoose}
+            chooseHint={chooseHint}
+            buttons
+          />
+        ))}
+      </div>
+      {memberNote && <p className="relative mt-5 text-center text-sm text-white/80">{memberNote}</p>}
+    </section>
+  )
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-center">
+        <div className="inline-flex rounded-full border border-border bg-card p-0.5 shadow-sm" role="radiogroup" aria-label="How to pay">
+          {(['yearly', 'monthly'] as const).map((i) => (
+            <button
+              key={i}
+              type="button"
+              role="radio"
+              aria-checked={payEvery === i}
+              onClick={() => setPayEvery(i)}
+              className={cn(
+                'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                payEvery === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {i === 'yearly' ? 'Pay yearly · save more' : 'Pay monthly'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {order.map((s, i) => (
+        <div key={s} className="flex flex-col gap-6">
+          {s === 'regular' ? regularSection : memberSection}
+          {/* The bridge from the regular price down to the members': the one line that says why to look. */}
+          {i === 0 && s === 'regular' && order.length > 1 && (
+            <a
+              href="#diamond-prices"
+              className="mx-auto inline-flex items-center gap-2 rounded-full border border-tone-violet/40 bg-tone-violet-soft px-4 py-1.5 text-sm font-medium text-tone-violet transition-colors hover:bg-tone-violet/15"
+            >
+              <Gem className="size-4" aria-hidden /> IPC Diamond members get the very same plans for about half
+              <ArrowDown className="size-4" aria-hidden />
+            </a>
+          )}
+        </div>
+      ))}
 
       <div className="flex w-full flex-col items-center gap-3">
         <p className="text-sm font-semibold">Every plan has every feature</p>
@@ -181,15 +258,136 @@ export function PlanPicker({
         </ul>
       </div>
 
-      <ComparePlans plans={shown} />
+      <ComparePlans plans={reg.length > 0 ? reg : mem} />
     </div>
   )
 }
 
-/** Every plan carries 18% GST on top, as create_payment_order charges it. */
-export const withGst = (price: number) => Math.round(price * 1.18)
-
-const monthlyOf = (p: Plan) => (p.billing_interval === 'monthly' ? p.price : (p.monthly_equivalent ?? Math.round(p.price / 12)))
+/** One plan: its price a month + GST, the total with GST, what it includes, and its one button. */
+function PlanCard({
+  plan: p,
+  list,
+  regular,
+  quote,
+  action,
+  onChoose,
+  busy,
+  canChoose,
+  chooseHint,
+  buttons,
+}: {
+  plan: Plan
+  list: PriceList
+  /** For a member plan: the same plan at the regular price, struck through beside it. */
+  regular?: Plan | undefined
+  quote: PlanQuote | undefined
+  action: PlanAction | undefined
+  onChoose: (p: Plan, quote: PlanQuote | undefined, list: PriceList) => void
+  busy?: boolean | undefined
+  canChoose: boolean
+  chooseHint?: string | undefined
+  buttons: boolean
+}) {
+  const member = list === 'member'
+  const highlight = p.badge === 'Most Popular'
+  const words = quoteWords(p, quote, formatINR)
+  const Icon = action?.icon
+  const line = words.line ?? (words.disabled ? null : (action?.note ?? null))
+  const day = perDay(p)
+  const monthly = monthlyOf(p)
+  const save = member ? savingWords(p, regular, formatINR) : null
+  const off = member ? percentOff(p, regular) : 0
+  return (
+    <Card
+      className={cn(
+        'relative flex flex-col',
+        member && 'border-0 text-foreground shadow-lg',
+        highlight && !member && 'border-primary ring-2 ring-primary',
+      )}
+      style={member && highlight ? { boxShadow: `0 0 0 3px ${GOLD}, 0 10px 30px -10px ${GOLD}80` } : undefined}
+    >
+      {highlight && (
+        <span
+          className={cn(
+            'absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-0.5 text-xs font-semibold',
+            !member && 'bg-primary text-primary-foreground',
+          )}
+          style={member ? { backgroundColor: GOLD, color: NAVY } : undefined}
+        >
+          Most popular
+        </span>
+      )}
+      <CardContent className="flex flex-1 flex-col gap-4 p-5">
+        <div>
+          <p className="flex items-center gap-1.5 text-lg font-semibold">
+            {member && <Gem className="size-4 shrink-0" style={{ color: GOLD }} aria-hidden />}
+            {p.name}
+          </p>
+          {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">
+            {formatINR(monthly)}
+            <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
+              {' '}/month <span className="font-semibold text-foreground">+ 18% GST</span>
+            </span>
+          </p>
+          {regular && monthlyOf(regular) > monthly && (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span>
+                Regular <span className="line-through">{formatINR(monthlyOf(regular))}</span>
+                {off > 0 && <span className="font-semibold text-success"> · {off}% off</span>}
+              </span>
+              {save && <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">{save}</span>}
+            </p>
+          )}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {day != null ? (
+              <>
+                {formatINR(p.price)} a year · <span className="font-medium text-success">just {formatINR(day)} a day</span>
+              </>
+            ) : (
+              'Billed every month'
+            )}
+          </p>
+          {/* GST is always 18%, on every plan (owner, 14 Oct): the total is said, never left to work out. */}
+          <p className="text-sm font-medium">
+            {formatINR(withGst(p.price))} with GST{p.billing_interval === 'monthly' ? ' a month' : ' a year'}
+          </p>
+        </div>
+        <ul className="flex flex-col gap-2 text-sm">
+          {(p.features ?? []).map((f) => (
+            <li key={f} className="flex items-start gap-2">
+              <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden /> {f}
+            </li>
+          ))}
+        </ul>
+        {buttons && (
+          <div className="mt-auto flex flex-col gap-1.5">
+            <Button
+              variant={highlight ? 'default' : 'outline'}
+              className={action && !words.disabled ? action.className : undefined}
+              onClick={() => onChoose(p, quote, list)}
+              disabled={busy || words.disabled || !canChoose}
+              title={canChoose ? undefined : chooseHint}
+            >
+              {busy ? (
+                'Processing…'
+              ) : action && !words.disabled ? (
+                <>
+                  {Icon && <Icon aria-hidden />} {action.label}
+                </>
+              ) : (
+                words.button
+              )}
+            </Button>
+            {line && <p className="text-center text-xs text-muted-foreground">{line}</p>}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function CellView({ c }: { c: Cell }) {
   if (c.kind === 'yes') return <Check className="mx-auto size-4 text-success" aria-label="Included" />
@@ -221,7 +419,7 @@ function ComparePlans({ plans }: { plans: Plan[] }) {
                   <th className="py-3 pl-3 text-left font-medium text-muted-foreground" />
                   {plans.map((p) => (
                     <th key={p.id} className={cn('w-20 px-1.5 py-3 text-center font-semibold sm:w-28 sm:px-3', p.badge === 'Most Popular' && 'text-primary')}>
-                      {p.name}
+                      {p.name.replace(/^Diamond /, '')}
                     </th>
                   ))}
                 </tr>
@@ -239,6 +437,9 @@ function ComparePlans({ plans }: { plans: Plan[] }) {
                 ))}
               </tbody>
             </table>
+            <p className="border-t border-border px-3 py-2 text-center text-xs text-muted-foreground">
+              The same for the regular and the IPC Diamond plans: only the price differs.
+            </p>
           </CardContent>
         </Card>
       )}
