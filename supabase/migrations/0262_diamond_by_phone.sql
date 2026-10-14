@@ -1,0 +1,1 @@
+-- 0262: two price lists and Diamond by phone number (owner, 14 Oct). Claimed; body follows.
