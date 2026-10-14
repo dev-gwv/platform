@@ -30,9 +30,9 @@ export const LEGAL = {
  * Diamond member sees once their registered mobile number is verified. Prices exclude 18% GST.
  */
 export const PLANS = [
-  { name: 'Starter', price: '₹35,988', period: 'per year, or ₹3,999 a month' },
-  { name: 'Pro', price: '₹59,988', period: 'per year, or ₹5,999 a month' },
-  { name: 'Studio Max', price: '₹95,988', period: 'per year, or ₹9,999 a month' },
+  { name: 'Starter', price: '₹35,988', period: 'per year, or ₹3,999 a month', member: '₹17,988 a year, or ₹1,999 a month' },
+  { name: 'Pro', price: '₹59,988', period: 'per year, or ₹5,999 a month', member: '₹29,988 a year, or ₹2,999 a month' },
+  { name: 'Studio Max', price: '₹95,988', period: 'per year, or ₹9,999 a month', member: '₹47,988 a year, or ₹4,999 a month' },
 ] as const
 
 export const TRIAL_DAYS = 7

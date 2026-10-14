@@ -116,6 +116,7 @@ export function Landing() {
                 <p className="text-sm font-medium text-muted-foreground">{p.name}</p>
                 <p className="mt-1 text-3xl font-bold tabular-nums">{p.price}</p>
                 <p className="text-sm text-muted-foreground">{p.period}, plus 18% GST</p>
+                <p className="mt-2 text-sm font-medium text-tone-violet">IPC Diamond members: {p.member}</p>
                 <p className="mt-2 text-sm">Every studio starts with a {TRIAL_DAYS}-day free trial.</p>
               </div>
             ))}
@@ -154,30 +155,40 @@ export function Landing() {
 }
 
 /**
- * Starter, Pro and Studio Max once they are switched on (0242): the same
- * three short cards the studio sees inside, each leading to sign-up. Until
- * then (or if the API cannot be reached) the page keeps today's words.
+ * Starter, Pro and Studio Max, the same two price lists a studio sees inside
+ * (owner, 14 Oct): the regular price on top and the IPC Diamond members'
+ * right below, each leading to sign-up. A member checks the number they
+ * registered with IPC on Plan & billing once signed in. Until the plans are
+ * live (or if the API cannot be reached) the page keeps today's words.
  */
 function PublicPrice({ fallback }: { fallback: ReactNode }) {
   const navigate = useNavigate()
-  const plans = useQuery({
+  const regular = useQuery({
     queryKey: ['public', 'plans'],
     queryFn: () => callApi('/public/plans', { responseSchema: plan.array() }),
     staleTime: 5 * 60_000,
     retry: false,
   })
-  if (!plans.data || plans.data.length === 0) return <>{fallback}</>
+  const member = useQuery({
+    queryKey: ['public', 'plans', 'member'],
+    queryFn: () => callApi('/public/plans?list=member', { responseSchema: plan.array() }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  if (!regular.data || regular.data.length === 0) return <>{fallback}</>
+  const signUp = () => void navigate({ to: '/login', search: { mode: 'register' } as never })
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">Every studio starts with a {TRIAL_DAYS}-day free trial. Every price is plus 18% GST.</p>
       <PlanPicker
-        plans={plans.data}
-        action={{ label: `Start ${TRIAL_DAYS}-day free trial` }}
-        onChoose={() => void navigate({ to: '/login', search: { mode: 'register' } as never })}
+        regular={regular.data}
+        member={member.data ?? []}
+        regularAction={{ label: `Start ${TRIAL_DAYS}-day free trial` }}
+        memberAction={{ label: 'Start 30-day free trial', className: 'border-0 bg-[#f2a618] text-[#1b2a4a] hover:bg-[#e09a12] hover:text-[#1b2a4a]' }}
+        memberNote="After you sign up, type the mobile number you registered with IPC on Plan & billing to unlock these prices and the 30 days."
+        onChoose={signUp}
       />
       <p className="text-center text-sm text-muted-foreground">
-        An IPC Diamond member? You pay about half and get 30 days free: start your trial, then type the mobile number you
-        registered with IPC on Plan &amp; billing. Prices will go up as we grow, so today's price is the best one.
+        Prices will go up as we add servers and grow our technical team. Buy now and today's price is yours.
       </p>
     </div>
   )

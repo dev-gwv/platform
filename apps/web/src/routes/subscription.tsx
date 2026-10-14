@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Gem, MessageCircle } from 'lucide-react'
-import { plan, planQuote, subscriptionStatus } from '@ipc/contracts'
+import { MessageCircle, TrendingUp } from 'lucide-react'
+import { plan, planQuote, subscriptionStatus, type Plan, type PlanQuote } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -16,9 +17,10 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { useTalkToUs } from '@/features/billing/talk-to-us'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
-import { DiamondPhoneCard } from '@/features/billing/DiamondPhoneCard'
+import { DiamondCheckDialog } from '@/features/billing/DiamondCheckDialog'
 
 const plans = plan.array()
+const WHATSAPP = 'border-0 bg-[#25D366] text-white hover:bg-[#1ebe5b] hover:text-white'
 
 export function SubscriptionPage() {
   // allowExpired: the renewal page stays reachable precisely when lapsed
@@ -34,11 +36,20 @@ export function SubscriptionPage() {
 function Subscription() {
   const { session } = useAuth()
   const talk = useTalkToUs()
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['subscription', 'plans'],
-    queryFn: () => callApi('/subscription/plans', { responseSchema: plans }),
-    enabled: !!session,
+  // Both price lists, for everyone (owner, 14 Oct): the regular one on top and
+  // the IPC Diamond members' below it -- Diamond Starter, Pro and Studio Max.
+  const regular = useQuery({
+    queryKey: ['public', 'plans'],
+    queryFn: () => callApi('/public/plans', { responseSchema: plans }),
+    staleTime: 5 * 60_000,
   })
+  const member = useQuery({
+    queryKey: ['public', 'plans', 'member'],
+    queryFn: () => callApi('/public/plans?list=member', { responseSchema: plans }),
+    staleTime: 5 * 60_000,
+  })
+  // Talk to us on WhatsApp on a member price first checks the number (null = closed).
+  const [checking, setChecking] = useState<{ plan: Plan | null; quote?: PlanQuote | undefined } | null>(null)
   // What paying for each plan would mean now: buy, renew, upgrade for the difference, or later (0242).
   const quotes = useQuery({
     queryKey: ['subscription', 'quotes'],
@@ -52,15 +63,7 @@ function Subscription() {
     enabled: !!session,
     retry: false,
   })
-  // The regular price list, struck through beside a member's price (0262).
-  const regular = useQuery({
-    queryKey: ['public', 'plans'],
-    queryFn: () => callApi('/public/plans', { responseSchema: plans }),
-    enabled: status.data?.member_tier === 'diamond',
-    staleTime: 5 * 60_000,
-  })
   const diamond = status.data?.member_tier === 'diamond'
-  const studio = session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
 
   const gateTone = { active: 'success', grace: 'warning', grandfathered: 'info', expired: 'danger' } as const
 
@@ -117,59 +120,57 @@ function Subscription() {
           </CardContent>
         </Card>
       )}
-      <UsageCard className="mb-4" />
-
-      {isLoading ? (
+      {regular.isLoading || member.isLoading ? (
         <SkeletonCards count={3} />
-      ) : isError ? (
-        <ErrorState onRetry={() => void refetch()} />
-      ) : !data || data.length === 0 ? (
+      ) : regular.isError && member.isError ? (
+        <ErrorState
+          onRetry={() => {
+            void regular.refetch()
+            void member.refetch()
+          }}
+        />
+      ) : (regular.data ?? []).length === 0 && (member.data ?? []).length === 0 ? (
         <EmptyState
           title="No plans are on offer yet"
           description="Plans are published by the platform. Until one is, your studio keeps its current access."
         />
       ) : (
-        <>
-        {/* Two price lists (0262): an IPC Diamond member sees the member prices,
-            with the regular one struck through; everyone else the regular prices
-            and, below, the way to prove membership by phone number. */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {diamond ? (
-            <>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-tone-violet-soft px-3 py-1 text-sm font-semibold text-tone-violet">
-                <Gem className="size-4" aria-hidden /> IPC Diamond member pricing
-              </span>
-              <span className="text-sm text-muted-foreground">These prices are for IPC Diamond members only.</span>
-            </>
-          ) : (
-            <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold">Regular pricing</span>
-          )}
-        </div>
         <PlanPicker
-          plans={data}
+          regular={regular.data ?? []}
+          member={member.data ?? []}
+          memberFirst={diamond}
+          verified={diamond}
           quotes={quotes.data}
-          regular={diamond ? regular.data : undefined}
-          onChoose={(p, q) => talk.open(p, q?.kind, diamond)}
-          action={{
-            label: talk.label,
-            icon: MessageCircle,
-            note: "We'll set it up on a short call.",
-            className: 'border-0 bg-[#25D366] text-white hover:bg-[#1ebe5b] hover:text-white',
+          onChoose={(p, q, list) => {
+            // The member price goes to WhatsApp only once the number is on the IPC list.
+            if (list === 'member' && !diamond) setChecking({ plan: p, quote: q })
+            else talk.open(p, q?.kind, list === 'member')
           }}
+          regularAction={{ label: talk.label, icon: MessageCircle, note: "We'll set it up on a short call.", className: WHATSAPP }}
+          memberAction={{ label: talk.label, icon: MessageCircle, note: diamond ? "We'll set it up on a short call." : 'We check your IPC number first.', className: WHATSAPP }}
+          onCheckNumber={session?.is_owner ? () => setChecking({ plan: null }) : undefined}
           canChoose={!!session?.is_owner}
           chooseHint="Only the studio owner can change the plan."
         />
-        {!diamond && session?.is_owner && <DiamondPhoneCard studio={studio} className="mt-6" />}
-        </>
       )}
-      <p className="mt-6 text-center text-sm font-medium text-muted-foreground">
+      <DiamondCheckDialog
+        open={!!checking}
+        plan={checking?.plan ?? null}
+        onClose={() => setChecking(null)}
+        onWhatsApp={(p) => talk.open(p, checking?.quote?.kind, true)}
+        onSeeRegular={() => document.getElementById('regular-prices')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      />
+      {/* Never a timer (owner, 14 Oct): one honest sentence. */}
+      <p className="mx-auto mt-6 flex max-w-2xl items-start justify-center gap-2 rounded-xl border border-tone-amber/40 bg-tone-amber-soft px-4 py-3 text-center text-sm font-medium">
+        <TrendingUp className="mt-0.5 size-4 shrink-0 text-tone-amber" aria-hidden />
         Prices will go up as we add servers and grow our technical team. Buy now and today's price is yours.
       </p>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-center text-xs text-muted-foreground">
         Every price is plus 18% GST. Message us and we'll set your plan up on a short call. Paying means you agree to the{' '}
         <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}
         <Link to="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
       </p>
+      <UsageCard className="mt-6" />
 
       {status.data?.history && status.data.history.length > 0 && (
         <Card className="mt-6">

@@ -1272,8 +1272,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (path.startsWith('/client-details/studio')) return { url: 'http://localhost:5173/details/mockstudio01' }
   // A trial studio: every plan is a plain purchase (0242).
   if (method === 'GET' && path === '/subscription/quotes') return []
-  // The tiered plans are switched off until the owner puts them live; the home page keeps its words.
-  if (method === 'GET' && path === '/public/plans') return []
+  // Both price lists (0262/0263): regular for everyone, and the IPC Diamond members' one below it.
+  if (method === 'GET' && path === '/public/plans') return tierPlansFx('regular')
+  if (method === 'GET' && path === '/public/plans?list=member') return tierPlansFx('member')
   if (method === 'GET' && path === '/subscription/usage')
     return {
       plan_key: null,
@@ -1487,6 +1488,46 @@ const plansFx = [
     billing_interval: 'yearly',
   },
 ]
+
+/** Starter, Pro and Studio Max yearly and monthly, at the regular price or the IPC Diamond member price. */
+function tierPlansFx(list: 'regular' | 'member') {
+  const member = list === 'member'
+  const rows = [
+    { tier: 'starter', name: 'Starter', y: member ? 1499 : 2999, m: member ? 1999 : 3999, limits: { projects: 30, leads: 600, invoices: 60, team_logins: 3 } },
+    { tier: 'pro', name: 'Pro', y: member ? 2499 : 4999, m: member ? 2999 : 5999, limits: {} },
+    { tier: 'max', name: 'Studio Max', y: member ? 3999 : 7999, m: member ? 4999 : 9999, limits: {} },
+  ] as const
+  return rows.flatMap((r, i) => [
+    {
+      id: uid(0xa00 + i * 2 + (member ? 0x10 : 0)),
+      key: `${r.tier}_yearly${member ? '' : '_regular'}`,
+      name: member ? `Diamond ${r.name}` : r.name,
+      price: r.y * 12,
+      billing_interval: 'yearly',
+      monthly_equivalent: r.y,
+      sort_order: i * 2 + 1,
+      badge: r.tier === 'pro' ? 'Most Popular' : null,
+      tier: r.tier,
+      limits: r.limits,
+      includes: r.tier === 'max' ? ['white_label'] : [],
+      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name and logo (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+    },
+    {
+      id: uid(0xa01 + i * 2 + (member ? 0x10 : 0)),
+      key: `${r.tier}_monthly${member ? '' : '_regular'}`,
+      name: member ? `Diamond ${r.name}` : r.name,
+      price: r.m,
+      billing_interval: 'monthly',
+      monthly_equivalent: r.m,
+      sort_order: i * 2 + 2,
+      badge: r.tier === 'pro' ? 'Most Popular' : null,
+      tier: r.tier,
+      limits: r.limits,
+      includes: r.tier === 'max' ? ['white_label'] : [],
+      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name and logo (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+    },
+  ])
+}
 
 /** An ISO time this long before the preview was opened, so the bell reads "25m ago", not a date. */
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()

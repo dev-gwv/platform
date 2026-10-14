@@ -7,7 +7,7 @@
  * It signs a fresh studio up, signs in through the login page, opens every
  * page in the menu and fails on a page error, a route error boundary, or a
  * page with no heading. Then it adds a client through the form, and checks
- * the plan page's Talk to us button.
+ * the plan page's Talk to us buttons, and the number check on a Diamond price.
  *
  *   WEB=http://localhost:4173 API=http://localhost:8787 PLAYWRIGHT=<path to playwright/index.mjs> node e2e/smoke.mjs
  */
@@ -100,8 +100,18 @@ try {
   await page.goto(`${WEB}/settings/subscription`)
   await page.getByRole('button', { name: /Talk to us on WhatsApp/ }).first().waitFor({ timeout: 20_000 }).catch(() => undefined)
   const talk = await page.getByRole('button', { name: /Talk to us on WhatsApp/ }).count()
-  if (talk >= 3) ok('the plan page offers Talk to us on every plan')
-  else bad('plan page', `expected 3 plan buttons, saw ${talk}`)
+  if (talk >= 6) ok('the plan page offers Talk to us on every regular and IPC Diamond plan')
+  else bad('plan page', `expected 6 plan buttons (3 regular, 3 Diamond), saw ${talk}`)
+  // A member price goes to WhatsApp only after the number checks: the button asks first.
+  await page.locator('#diamond-prices').getByRole('button', { name: /Talk to us on WhatsApp/ }).first().click()
+  const gate = await page
+    .getByRole('dialog')
+    .getByText('Only for IPC Diamond members')
+    .waitFor({ timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (gate) ok('a Diamond price asks for the IPC number before WhatsApp')
+  else bad('plan page', 'the Diamond button did not ask for the number')
 } catch (e) {
   bad('smoke', e.message.split('\n')[0])
 } finally {

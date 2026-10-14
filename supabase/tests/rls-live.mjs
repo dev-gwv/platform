@@ -3011,6 +3011,21 @@ if (listed) {
     pub.status === 200 && Array.isArray(pubJson) && pubJson.length === 6 && pubJson.every((p) => p.tier),
     (pubJson ?? []).map?.((p) => p.key) ?? pubJson,
   )
+  // Both price lists are public (owner, 14 Oct): the IPC Diamond one is shown under the regular one.
+  const mem = await fetch(`${API}/public/plans?list=member`)
+  const memJson = await mem.json().catch(() => null)
+  check(
+    'plans: the members\' list is Diamond Starter, Pro and Studio Max, about half the regular price (0263)',
+    mem.status === 200 &&
+      Array.isArray(memJson) &&
+      memJson.length === 6 &&
+      memJson.every((p) => p.tier && /^Diamond /.test(p.name)) &&
+      memJson.every((p) => {
+        const r = (pubJson ?? []).find((x) => x.tier === p.tier && x.billing_interval === p.billing_interval)
+        return r && p.price < r.price
+      }),
+    (memJson ?? []).map?.((p) => [p.name, p.billing_interval, p.price]) ?? memJson,
+  )
 }
 
 // ── 0243: a client's birthdays and anniversary ───────────────────
