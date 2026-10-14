@@ -3,27 +3,27 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { formatINR } from '@/shared/ui/format'
 import { useHelp } from '@/features/help/api'
 import { whatsappLink } from '@/features/help/support'
-import { LEGAL } from '@/features/legal/legal'
 import { planEnquiryMessage } from './plan-features'
 
+/** Our sales WhatsApp (owner, 14 Oct), used until /platform/help says otherwise. */
+export const SALES_WHATSAPP = '919109192065'
+
 /**
- * How a studio buys a plan for now: a message, then a call (owner, 10 Oct).
- * WhatsApp when the Help console has a support number, else email -- to the
- * console's address or, failing that, the one on the legal pages, so the
- * button always goes somewhere. The platform owner then gives the plan in
- * Studio Access Manager. Online checkout stays in the code for later.
+ * How a studio buys a plan for now: a WhatsApp message, then a call (owner,
+ * 10 Oct). Always WhatsApp, never email (owner, 14 Oct: "put the WhatsApp
+ * button, don't put the email button"): the Help console's support number, or
+ * ours. The platform owner then gives the plan in Studio Access Manager.
+ * Online checkout stays in the code for later.
  */
 export function useTalkToUs() {
   const { session } = useAuth()
   const help = useHelp().data
   const studio = session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
-  const whatsapp = help?.support_whatsapp || null
-  const email = help?.support_email || LEGAL.supportEmail
+  const whatsapp = help?.support_whatsapp || SALES_WHATSAPP
 
   return {
-    via: whatsapp ? ('whatsapp' as const) : ('email' as const),
-    label: whatsapp ? 'Talk to us on WhatsApp' : 'Email us',
-    open(plan: Plan, kind?: PlanQuote['kind']) {
+    label: 'Talk to us on WhatsApp',
+    open(plan: Plan, kind?: PlanQuote['kind'], diamond?: boolean) {
       const text = planEnquiryMessage({
         plan,
         kind,
@@ -31,12 +31,9 @@ export function useTalkToUs() {
         name: session?.display_name ?? '',
         email: session?.email,
         inr: formatINR,
+        diamond,
       })
-      if (whatsapp) {
-        window.open(whatsappLink(whatsapp, text), '_blank', 'noopener,noreferrer')
-        return
-      }
-      window.location.href = `mailto:${email}?subject=${encodeURIComponent(`${plan.name} plan for ${studio}`)}&body=${encodeURIComponent(text)}`
+      window.open(whatsappLink(whatsapp, text), '_blank', 'noopener,noreferrer')
     },
   }
 }

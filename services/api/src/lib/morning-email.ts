@@ -236,7 +236,7 @@ export async function runMorningEmails(env: Env, dryRun: boolean): Promise<Morni
         coldStuck: d.cold_stuck,
         yesterday: d.yesterday,
       })
-      if (await sendOnboardingMail(env, d.email, mail)) sent += 1
+      if (await sendOnboardingMail(env, d.email, mail, 'morning')) sent += 1
     } catch (e) {
       log.error({ err: describeError(e) }, 'morning email failed')
     }

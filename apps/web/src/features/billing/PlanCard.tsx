@@ -82,7 +82,7 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
       >
         {cta}
       </Link>
-      {/* The other door: an IPC Diamond member proves it and gets 30 days and member prices (0214). */}
+      {/* The other door: an IPC Diamond member checks their number and gets 30 days and member prices (0262). */}
       {s?.member_tier === 'outsider' && trial && (
         <Link
           to="/settings/subscription"

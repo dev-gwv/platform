@@ -132,6 +132,36 @@ export const diamondClaimResult = z.object({
 })
 export type DiamondClaimResult = z.infer<typeof diamondClaimResult>
 
+/** "I am an IPC Diamond member": the mobile number on the member list (0262). */
+export const diamondPhoneRequest = z.object({ phone: z.string().trim().min(6).max(30) })
+export type DiamondPhoneRequest = z.infer<typeof diamondPhoneRequest>
+
+export const diamondPhoneResult = z.object({
+  outcome: z.enum(['verified', 'already', 'not_found', 'taken', 'too_many']),
+  /** When access now ends, after a match. */
+  access_until: z.string().nullable(),
+})
+export type DiamondPhoneResult = z.infer<typeof diamondPhoneResult>
+
+/** Where the member list lives, and how its last copy went (Platform → Diamond, 0262). */
+export const diamondSheetStatus = z.object({
+  url: z.string().nullable(),
+  synced_at: z.string().nullable(),
+  rows: z.number().int().nullable(),
+  error: z.string().nullable(),
+  verified: z.array(
+    z.object({
+      company_id: z.string(),
+      studio: z.string(),
+      phone: z.string().nullable(),
+      verified_at: z.string().nullable(),
+    }),
+  ),
+})
+export type DiamondSheetStatus = z.infer<typeof diamondSheetStatus>
+
+export const diamondSheetRequest = z.object({ url: z.string().trim().max(500).nullable() })
+
 export const createOrderRequest = z.object({ plan_id: uuid })
 export type CreateOrderRequest = z.infer<typeof createOrderRequest>
 

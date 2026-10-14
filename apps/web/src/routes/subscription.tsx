@@ -1,15 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Check, MessageCircle, Mail, Sparkles } from 'lucide-react'
+import { Gem, MessageCircle } from 'lucide-react'
 import { plan, planQuote, subscriptionStatus } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { UsageCard } from '@/features/billing/UsageCard'
-import { perDay } from '@/features/billing/usage'
 import { PlanPicker } from '@/features/billing/PlanPicker'
-import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -18,7 +16,7 @@ import { formatINR, humanize } from '@/shared/ui/format'
 import { useTalkToUs } from '@/features/billing/talk-to-us'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
-import { DiamondVerifyCard } from '@/features/billing/DiamondVerifyCard'
+import { DiamondPhoneCard } from '@/features/billing/DiamondPhoneCard'
 
 const plans = plan.array()
 
@@ -36,7 +34,6 @@ export function SubscriptionPage() {
 function Subscription() {
   const { session } = useAuth()
   const talk = useTalkToUs()
-  const TalkIcon = talk.via === 'whatsapp' ? MessageCircle : Mail
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['subscription', 'plans'],
     queryFn: () => callApi('/subscription/plans', { responseSchema: plans }),
@@ -55,6 +52,15 @@ function Subscription() {
     enabled: !!session,
     retry: false,
   })
+  // The regular price list, struck through beside a member's price (0262).
+  const regular = useQuery({
+    queryKey: ['public', 'plans'],
+    queryFn: () => callApi('/public/plans', { responseSchema: plans }),
+    enabled: status.data?.member_tier === 'diamond',
+    staleTime: 5 * 60_000,
+  })
+  const diamond = status.data?.member_tier === 'diamond'
+  const studio = session?.studios.find((s) => s.company_id === session.company_id)?.company_name ?? 'my studio'
 
   const gateTone = { active: 'success', grace: 'warning', grandfathered: 'info', expired: 'danger' } as const
 
@@ -112,8 +118,6 @@ function Subscription() {
         </Card>
       )}
       <UsageCard className="mb-4" />
-      {/* Outsiders see one price; an IPC Diamond member proves it here (0214). */}
-      {status.data && session?.is_owner && <DiamondVerifyCard status={status.data} className="mb-4" />}
 
       {isLoading ? (
         <SkeletonCards count={3} />
@@ -126,110 +130,43 @@ function Subscription() {
         />
       ) : (
         <>
-        {/* Starter, Pro and Studio Max (0242): three short cards, the chips, Compare plans. */}
+        {/* Two price lists (0262): an IPC Diamond member sees the member prices,
+            with the regular one struck through; everyone else the regular prices
+            and, below, the way to prove membership by phone number. */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {diamond ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-tone-violet-soft px-3 py-1 text-sm font-semibold text-tone-violet">
+                <Gem className="size-4" aria-hidden /> IPC Diamond member pricing
+              </span>
+              <span className="text-sm text-muted-foreground">These prices are for IPC Diamond members only.</span>
+            </>
+          ) : (
+            <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold">Regular pricing</span>
+          )}
+        </div>
         <PlanPicker
           plans={data}
           quotes={quotes.data}
-          onChoose={(p, q) => talk.open(p, q?.kind)}
-          action={{ label: talk.label, icon: TalkIcon, note: "We'll set it up on a short call." }}
+          regular={diamond ? regular.data : undefined}
+          onChoose={(p, q) => talk.open(p, q?.kind, diamond)}
+          action={{
+            label: talk.label,
+            icon: MessageCircle,
+            note: "We'll set it up on a short call.",
+            className: 'border-0 bg-[#25D366] text-white hover:bg-[#1ebe5b] hover:text-white',
+          }}
           canChoose={!!session?.is_owner}
           chooseHint="Only the studio owner can change the plan."
         />
-        {data.some((p) => !p.tier) && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {data.filter((p) => !p.tier).map((p) => {
-            // A studio already inside its plan is renewing, not choosing.
-            const renewing = !status.data?.can_purchase
-            const free = p.price <= 0
-            const highlight = p.badge === 'Most Popular'
-            const saver = p.badge === 'Maximum Savings'
-            const label = free ? 'Free Trial Included' : talk.label
-            return (
-              <Card
-                key={p.id}
-                className={
-                  highlight
-                    ? 'border-primary ring-2 ring-primary'
-                    : saver
-                      ? 'border-success ring-2 ring-success/60'
-                      : undefined
-                }
-              >
-                <CardHeader>
-                  {p.badge && (
-                    <StatusBadge tone={saver ? 'success' : 'info'} className="w-fit">
-                      {p.badge}
-                    </StatusBadge>
-                  )}
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-primary" />
-                    {p.name}
-                  </CardTitle>
-                  <p className="text-xl font-semibold">
-                    {formatINR(p.price)}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {' '}
-                      / {p.billing_interval === 'biennial' ? '2 years' : p.billing_interval === 'yearly' ? 'year' : 'month'}
-                    </span>
-                  </p>
-                  {/* The figure people actually compare plans on. */}
-                  {p.monthly_equivalent != null && p.billing_interval !== 'monthly' && (
-                    <p className="text-sm text-muted-foreground">
-                      {formatINR(p.monthly_equivalent)}/month, paid up front
-                    </p>
-                  )}
-                  {perDay(p) != null && <p className="text-sm font-medium text-success">Just {formatINR(perDay(p)!)} a day</p>}
-                  <p className="text-xs text-muted-foreground">
-                    {p.billing_label ?? ''}
-                    {p.billing_label ? ' · ' : ''}+ GST (18%)
-                  </p>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {p.savings_label && (
-                    <p className="rounded-md bg-success/10 px-2.5 py-1.5 text-sm font-medium text-success">
-                      {p.savings_label}
-                    </p>
-                  )}
-                  {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
-                  {p.features && p.features.length > 0 ? (
-                    <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                      {p.features.map((f) => (
-                        <li key={f} className="flex items-center gap-2">
-                          <Check className="size-4 shrink-0 text-success" /> {f}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2">
-                        <Check className="size-4 text-success" /> All studio features
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="size-4 text-success" /> GST invoicing
-                      </li>
-                    </ul>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {p.currency ?? 'INR'}{p.duration_days ? ` · ${p.duration_days} days` : ''}
-                  </p>
-                  <Button
-                    variant={highlight || saver ? 'default' : 'outline'}
-                    onClick={() => talk.open(p, renewing ? 'renew' : 'buy')}
-                    disabled={free || !session?.is_owner}
-                    title={session?.is_owner ? undefined : 'Only the studio owner can change the plan.'}
-                  >
-                    {!free && <TalkIcon aria-hidden />} {label}
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-        )}
+        {!diamond && session?.is_owner && <DiamondPhoneCard studio={studio} className="mt-6" />}
         </>
       )}
+      <p className="mt-6 text-center text-sm font-medium text-muted-foreground">
+        Prices will go up as we add servers and grow our technical team. Buy now and today's price is yours.
+      </p>
       <p className="mt-3 text-xs text-muted-foreground">
-        Prices exclude 18% GST. Message us and we'll set your plan up on a short call. Paying means you agree to the{' '}
+        Every price is plus 18% GST. Message us and we'll set your plan up on a short call. Paying means you agree to the{' '}
         <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}
         <Link to="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
       </p>

@@ -185,7 +185,7 @@ export async function runWeeklyEmails(env: Env, dryRun: boolean): Promise<{ due:
         leadsNew: d.leads_new,
         leadsBooked: d.leads_booked,
       })
-      if (await sendOnboardingMail(env, d.email, mail)) sent += 1
+      if (await sendOnboardingMail(env, d.email, mail, 'weekly')) sent += 1
     } catch (e) {
       log.error({ err: describeError(e) }, 'weekly email failed')
     }

@@ -16,7 +16,7 @@ vi.mock('./db', () => ({
     }),
 }))
 
-const { deliver, OWNER_ONLY_NOTE } = await import('./email')
+const { deliver, OWNER_ONLY_NOTE, ONE_A_DAY_NOTE } = await import('./email')
 
 const env = { RESEND_API_KEY: 'k', EMAIL_FROM: 'Studio AutoPilot <noreply@studioautopilot.in>', DATABASE_URL: 'postgres://x' } as unknown as Env
 const mail = (to: string) => ({ to, subject: 'Hello', html: '<p>Hi</p>' })
@@ -29,7 +29,7 @@ afterEach(() => {
 describe('email goes to studio owners only, for now', () => {
   it('sends to the owner', async () => {
     const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id: 're_1' }), { status: 200 }))
-    const r = await deliver(env, mail(' Asha@MehtaStudios.in '), { kind: 'onboarding' })
+    const r = await deliver(env, mail(' Asha@MehtaStudios.in '), { kind: 'morning' })
     expect(r).toEqual({ status: 'sent', id: 're_1' })
     expect(f).toHaveBeenCalledOnce()
     expect(logged).toEqual(['sent'])
@@ -39,10 +39,19 @@ describe('email goes to studio owners only, for now', () => {
     const f = vi.spyOn(globalThis, 'fetch')
     for (const [to, kind] of [['nitin@example.com', 'staff_alert'], ['priya@example.com', 'client_doc'], ['lead@example.com', 'sequence']]) {
       const r = await deliver(env, mail(to!), { kind: kind! })
-      expect(r).toEqual({ status: 'failed', error: OWNER_ONLY_NOTE })
+      expect(r.status).toBe('failed')
+    }
+    expect((await deliver(env, mail('nitin@example.com'), { kind: 'morning' })).error).toBe(OWNER_ONLY_NOTE)
+    expect(f).not.toHaveBeenCalled()
+    expect(logged).toEqual(['skipped', 'skipped', 'skipped', 'skipped'])
+  })
+
+  it('sends the owner one email a day: the morning email, never the hourly copies or nudges (14 Oct)', async () => {
+    const f = vi.spyOn(globalThis, 'fetch')
+    for (const kind of ['staff_alert', 'onboarding', 'weekly', 'terms_agreed', 'invitation']) {
+      expect(await deliver(env, mail(OWNER), { kind })).toEqual({ status: 'failed', error: ONE_A_DAY_NOTE })
     }
     expect(f).not.toHaveBeenCalled()
-    expect(logged).toEqual(['skipped', 'skipped', 'skipped'])
   })
 
   it("never holds the platform's own test send", async () => {

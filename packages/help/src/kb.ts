@@ -1049,9 +1049,9 @@ export const KB: readonly KbArticle[] = [
     to: '/settings/subscription',
     keywords: ['cost', 'price', 'fee', 'charges', 'how much', 'subscription', 'rate'],
     body: [
-      'There are three plans: **Starter** ₹17,988 a year (or ₹1,999 a month), **Pro** ₹29,988 a year (or ₹2,999 a month) and **Studio Max** ₹47,988 a year (or ₹4,999 a month).',
-      'Every plan has every feature. Starter has number limits (30 projects a year, 3 team logins, 20 crew); Pro and Studio Max are unlimited, and Studio Max sends WhatsApp and email in your own name.',
-      'An IPC Diamond member pays ₹1,999 a month, ₹18,000 a year, or ₹33,000 for two years.',
+      'There are three plans: **Starter** ₹35,988 a year (or ₹3,999 a month), **Pro** ₹59,988 a year (or ₹5,999 a month) and **Studio Max** ₹95,988 a year (or ₹9,999 a month).',
+      'Every plan has every feature. Starter has number limits (30 projects a year, 3 team logins, 20 crew); Pro and Studio Max are unlimited, and Studio Max puts your own name and logo on the app, with priority help.',
+      'An IPC Diamond member pays about half: **Starter** ₹17,988 a year (₹1,999 a month), **Pro** ₹29,988 (₹2,999) and **Studio Max** ₹47,988 (₹4,999).',
       'All of those are before 18% GST.',
       'To buy or change a plan, press **Talk to us on WhatsApp** on **Plan & billing**: the message is already written, and we set it up on a short call.',
     ],
@@ -1064,9 +1064,9 @@ export const KB: readonly KbArticle[] = [
     to: '/settings/subscription',
     keywords: ['member', 'ipc', 'discount', 'group', 'premium'],
     body: [
-      'A member of the "IPC Diamonds - Premium" WhatsApp group gets the member prices and 30 days to try the app.',
-      'Prove it with a screenshot of that group on the verify card. It is checked automatically, and a person looks at anything the check cannot read.',
-      'Until a claim is approved you see the ordinary price.',
+      'An IPC Diamond member gets the member prices (about half) and 30 days to try the app.',
+      'On **Plan & billing**, type the mobile number you registered with IPC under **IPC Diamond member?** and press **Check my number**. If it is on the member list, the member prices show at once.',
+      'One number opens one studio. If your number is not found, press **Talk to us on WhatsApp** and we will check it.',
     ],
   },
   {

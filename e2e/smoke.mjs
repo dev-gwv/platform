@@ -98,8 +98,8 @@ try {
   ok('adds a client through the form')
 
   await page.goto(`${WEB}/settings/subscription`)
-  await page.getByRole('button', { name: /Talk to us on WhatsApp|Email us/ }).first().waitFor({ timeout: 20_000 }).catch(() => undefined)
-  const talk = await page.getByRole('button', { name: /Talk to us on WhatsApp|Email us/ }).count()
+  await page.getByRole('button', { name: /Talk to us on WhatsApp/ }).first().waitFor({ timeout: 20_000 }).catch(() => undefined)
+  const talk = await page.getByRole('button', { name: /Talk to us on WhatsApp/ }).count()
   if (talk >= 3) ok('the plan page offers Talk to us on every plan')
   else bad('plan page', `expected 3 plan buttons, saw ${talk}`)
 } catch (e) {

@@ -154,7 +154,7 @@ export const NAV: NavEntry[] = [
       leaf('Plans', '/platform/plans', CreditCard, { platformOnly: true }),
       leaf('Usage', '/platform/usage', TrendingUp, { platformOnly: true }),
       leaf('Suggestions', '/platform/feedback', Lightbulb, { platformOnly: true }),
-      leaf('Diamond claims', '/platform/diamond', Gem, { platformOnly: true }),
+      leaf('Diamond members', '/platform/diamond', Gem, { platformOnly: true }),
       leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
       leaf('Email', '/platform/email', Mail, { platformOnly: true }),
       leaf('Help', '/platform/help', LifeBuoy, { platformOnly: true }),

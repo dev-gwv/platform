@@ -28,6 +28,7 @@ import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
 import { HelpBubble } from '@/features/help/HelpBubble'
+import { useBranding } from '@/features/crm-sequences/api'
 import { HubTabs } from './HubTabs'
 import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
@@ -79,7 +80,27 @@ function groupHolding(entries: NavEntry[], pathname: string): string | null {
   return null
 }
 
+/**
+ * Top left of the menu. A Studio Max studio (white label, 0202) sees its own
+ * logo and name there instead of Studio AutoPilot (owner, 14 Oct: "there will
+ * be their name coming up").
+ */
 function Brand({ compact }: { compact?: boolean }) {
+  const own = useBranding().data
+  if (own?.enabled) {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        {own.logo_url ? (
+          <img src={own.logo_url} alt="" className="size-8 shrink-0 rounded-md object-contain" />
+        ) : (
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+            {own.studio_name.trim().charAt(0).toUpperCase() || 'S'}
+          </span>
+        )}
+        {!compact && <span className="truncate text-lg font-bold">{own.studio_name}</span>}
+      </span>
+    )
+  }
   return (
     <Wordmark compact={!!compact} className="text-lg" />
   )

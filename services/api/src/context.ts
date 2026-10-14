@@ -126,6 +126,15 @@ export interface Env {
    * checks their old password against it (lib/legacy-login.ts). Optional.
    */
   FIREBASE_WEB_API_KEY: string
+  /**
+   * A Google service account that can read the IPC Diamond member sheet
+   * (lib/diamond-sheet.ts, 0262). Optional: without it the sheet is read as
+   * a public "anyone with the link" CSV.
+   */
+  GOOGLE_SA_EMAIL?: string
+  /** 'on' lifts "one email a day" (lib/email.ts emailOneADay). Unset in production for now. */
+  EMAIL_EVERY_KIND?: string
+  GOOGLE_SA_PRIVATE_KEY?: string
 }
 
 /**

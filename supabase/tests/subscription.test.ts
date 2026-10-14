@@ -114,12 +114,14 @@ describe('subscription screen queries', () => {
     expect(own!.currency).toBe('INR')
     expect(own!.description).toBe('Everything a working studio needs.')
     // Sold in the order a studio should read them, cheapest commitment first.
-    expect(res.rows.filter((r) => r.key.startsWith('ipc_')).map((r) => r.key)).toEqual([
-      'ipc_monthly',
-      'ipc_yearly',
-      'ipc_2year',
+    // The old member plans are off sale since 0262; Starter, Pro and Studio Max are on.
+    expect(res.rows.some((r) => r.key.startsWith('ipc_'))).toBe(false)
+    expect(res.rows.filter((r) => /^(starter|pro|max)_yearly$/.test(r.key)).map((r) => r.key)).toEqual([
+      'starter_yearly',
+      'pro_yearly',
+      'max_yearly',
     ])
-    expect(res.rows.find((r) => r.key === 'ipc_yearly')!.badge).toBe('Most Popular')
+    expect(res.rows.find((r) => r.key === 'pro_yearly')!.badge).toBe('Most Popular')
   })
 
   it('the status query runs and names the plan the company is on', async () => {

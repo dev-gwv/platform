@@ -13,6 +13,19 @@ interface Outgoing {
 
 type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string; held?: boolean }
 
+/**
+ * One email a day for now (owner, 14 Oct: "just give them one reminder a
+ * day"): the owner's morning email. Beside it only what a person needs to get
+ * in or to keep their studio running: confirming the email, a password reset,
+ * "your plan is ending", and the platform's own test send. Everything else
+ * (hourly alert copies, setup nudges, the Monday email, "client agreed") is
+ * held and logged as skipped. The cron also stops running the held ones.
+ * EMAIL_EVERY_KIND=on on the server lifts it (the senders' own tests use it).
+ */
+export const emailOneADay = (env: Env): boolean => env.EMAIL_EVERY_KIND !== 'on'
+export const OWNER_MAIL_KINDS: ReadonlySet<string> = new Set(['verification', 'password_reset', 'morning', 'access', 'test'])
+export const ONE_A_DAY_NOTE = 'Not emailed: for now Studio AutoPilot sends one email a day, the morning summary.'
+
 /** Why a mail to anyone but a studio owner is not sent (owner, 12 Oct). */
 export const OWNER_ONLY_NOTE =
   'Not emailed: for now Studio AutoPilot emails only the studio owner. Share the link on WhatsApp instead.'
@@ -54,7 +67,9 @@ export async function ownerMayReceive(env: Env, to: string, kind: string): Promi
  */
 export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; companyId?: string | null }): Promise<DeliveryResult> {
   let result: DeliveryResult
-  if (!(await ownerMayReceive(env, mail.to, meta.kind))) {
+  if (emailOneADay(env) && !OWNER_MAIL_KINDS.has(meta.kind)) {
+    result = { status: 'failed', error: ONE_A_DAY_NOTE, held: true }
+  } else if (!(await ownerMayReceive(env, mail.to, meta.kind))) {
     result = { status: 'failed', error: OWNER_ONLY_NOTE, held: true }
   } else if (!env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY unset — skipping "${mail.subject}" to ${mail.to}`)

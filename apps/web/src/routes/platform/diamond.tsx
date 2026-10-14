@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Bot, Gem, UserCheck } from 'lucide-react'
-import { platformDiamondClaim, z, type DiamondClaimStatus, type PlatformDiamondClaim } from '@ipc/contracts'
+import { diamondSheetStatus, platformDiamondClaim, z, type DiamondClaimStatus, type DiamondSheetStatus, type PlatformDiamondClaim } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
@@ -20,8 +20,8 @@ import { useFileBlobUrl } from '@/shared/hooks/use-file-blob-url'
 export function PlatformDiamondPage() {
   return (
     <PlatformPage>
+      <MemberSheet />
       <Claims />
-      <GroupLinkSetting />
     </PlatformPage>
   )
 }
@@ -53,7 +53,7 @@ function Claims() {
 
   return (
     <>
-      <PageHeader title="IPC Diamond claims" />
+      <h2 className="mb-2 mt-8 text-base font-semibold">Older screenshot claims</h2>
       <FilterTabs
         value={status}
         onChange={(v) => setStatus(v)}
@@ -189,58 +189,106 @@ function ClaimCard({ claim: r }: { claim: PlatformDiamondClaim }) {
   )
 }
 
-const groupLink = z.object({ group_link: z.string().nullable() })
-
 /**
- * The link on every studio's "Are you an IPC Diamond member?" card. Anyone
- * who opens that card sees it, members or not.
+ * The IPC Diamond member list (0262): the platform owner's Google Sheet. Paste
+ * its link once; the app copies the phone numbers in now and every hour, and an
+ * owner who types a listed number gets member prices and 30 days. Below, the
+ * studios verified that way, newest first.
  */
-function GroupLinkSetting() {
+function MemberSheet() {
   const { session } = useAuth()
   const qc = useQueryClient()
-  const current = useQuery({
-    queryKey: ['platform', 'diamond', 'settings'],
-    queryFn: () => callApi('/platform/diamond/settings', { responseSchema: groupLink }),
-    enabled: !!session,
+  const key = ['platform', 'diamond', 'sheet'] as const
+  const status = useQuery({
+    queryKey: key,
+    queryFn: () => callApi('/platform/diamond/sheet', { responseSchema: diamondSheetStatus }),
+    enabled: !!session?.is_platform_admin,
   })
   const [value, setValue] = useState<string | null>(null)
-  const shown = value ?? current.data?.group_link ?? ''
+  const shown = value ?? status.data?.url ?? ''
+  const done = (r: DiamondSheetStatus) => {
+    qc.setQueryData(key, r)
+    setValue(null)
+    if (r.error) toast.error(r.error)
+    else if (r.url) toast.success(`Member list copied: ${r.rows ?? 0} numbers.`)
+  }
   const save = useMutation({
-    mutationFn: () => callApi('/platform/diamond/settings', { method: 'PUT', body: { group_link: shown.trim() || null }, responseSchema: groupLink }),
-    onSuccess: () => {
-      toast.success('Link saved.')
-      setValue(null)
-      void qc.invalidateQueries({ queryKey: ['platform', 'diamond', 'settings'] })
-    },
+    mutationFn: () => callApi('/platform/diamond/sheet', { method: 'PUT', body: { url: shown.trim() || null }, responseSchema: diamondSheetStatus }),
+    onSuccess: done,
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not save.'),
   })
+  const refresh = useMutation({
+    mutationFn: () => callApi('/platform/diamond/sheet/refresh', { method: 'POST', responseSchema: diamondSheetStatus }),
+    onSuccess: done,
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not refresh.'),
+  })
+  const s = status.data
   return (
-    <Card className="mt-4">
-      <CardContent className="flex flex-col gap-2 p-4">
-        <p className="text-sm font-semibold">Group link on the member card</p>
-        <p className="text-xs text-muted-foreground">
-          Shown as "Open the group" to every studio that sees the card, members or not. An invite link would let anyone join and
-          claim member prices, so a link to IPC support is the safer choice.
-        </p>
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            save.mutate()
-          }}
-        >
-          <Input
-            value={shown}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="https://wa.me/91…"
-            className={shown ? 'max-w-md border-success/50' : 'max-w-md border-warning/60'}
-            aria-label="Group link"
-          />
-          <Button type="submit" disabled={save.isPending || value === null}>
-            Save
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <>
+      <PageHeader title="IPC Diamond members" />
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4">
+          <div>
+            <p className="text-sm font-semibold">Member list (Google Sheet)</p>
+            <p className="text-xs text-muted-foreground">
+              Keep the members' mobile numbers in a column headed Phone or Mobile. Share the sheet as "Anyone with the link can
+              view". It is read again every hour.
+            </p>
+          </div>
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              save.mutate()
+            }}
+          >
+            <Input
+              value={shown}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/…"
+              className={shown ? 'max-w-xl border-success/50' : 'max-w-xl border-tone-amber/60'}
+              aria-label="Google Sheet link"
+            />
+            <Button type="submit" disabled={save.isPending || value === null}>
+              {save.isPending ? 'Reading the sheet…' : 'Save and read'}
+            </Button>
+            {s?.url && (
+              <Button type="button" variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+                {refresh.isPending ? 'Reading…' : 'Refresh now'}
+              </Button>
+            )}
+          </form>
+          {s?.url && (
+            <p className={s.error ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+              {s.error
+                ? s.error
+                : s.synced_at
+                  ? `${s.rows ?? 0} member numbers, last read ${when(s.synced_at)}.`
+                  : 'Not read yet.'}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+      <Card className="mt-4">
+        <CardContent className="p-4">
+          <p className="text-sm font-semibold">Verified by number</p>
+          {!s || s.verified.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No studio has checked a number yet.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-border text-sm">
+              {s.verified.map((v) => (
+                <li key={v.company_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="font-medium">{v.studio}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {v.phone ? `•••••${v.phone.slice(-5)}` : ''}
+                    {v.verified_at ? ` · ${when(v.verified_at)}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </>
   )
 }
