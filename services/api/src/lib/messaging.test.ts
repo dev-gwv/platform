@@ -17,7 +17,7 @@ const row = {
   link: '/leave',
   studio_name: 'Sharma Studio',
 }
-const env = (over: Partial<Env> = {}) => ({ WHATSAPP_PHONE_NUMBER_ID: '', WHATSAPP_ACCESS_TOKEN: '', RESEND_API_KEY: '', EMAIL_FROM: 'x@y.in', APP_URL: 'https://app.test', ...over }) as Env
+const env = (over: Partial<Env> = {}) => ({ EMAIL_EVERY_KIND: 'on', WHATSAPP_PHONE_NUMBER_ID: '', WHATSAPP_ACCESS_TOKEN: '', RESEND_API_KEY: '', EMAIL_FROM: 'x@y.in', APP_URL: 'https://app.test', ...over }) as Env
 
 describe('deliver', () => {
   afterEach(() => vi.unstubAllGlobals())

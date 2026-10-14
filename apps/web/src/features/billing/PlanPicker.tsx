@@ -52,11 +52,14 @@ export function PlanPicker({
   canChoose = true,
   chooseHint,
   action,
+  regular,
 }: {
   plans: Plan[]
+  /** The regular price list, shown struck through beside a member's price (0262). */
+  regular?: Plan[] | undefined
   quotes?: PlanQuote[] | undefined
   onChoose: (p: Plan, quote: PlanQuote | undefined) => void
-  action?: { label: string; icon?: LucideIcon; note?: string } | undefined
+  action?: { label: string; icon?: LucideIcon; note?: string; className?: string } | undefined
   busy?: boolean
   canChoose?: boolean
   chooseHint?: string
@@ -92,7 +95,8 @@ export function PlanPicker({
           const Icon = action?.icon
           const line = words.line ?? (words.disabled ? null : (action?.note ?? null))
           const day = perDay(p)
-          const monthly = p.billing_interval === 'monthly' ? p.price : (p.monthly_equivalent ?? Math.round(p.price / 12))
+          const monthly = monthlyOf(p)
+          const was = regular?.find((r) => r.tier === p.tier && r.billing_interval === p.billing_interval)
           return (
             <Card key={p.id} className={cn('relative flex flex-col', highlight && 'border-primary ring-2 ring-primary')}>
               {highlight && (
@@ -108,8 +112,16 @@ export function PlanPicker({
                 <div>
                   <p className="text-3xl font-bold tabular-nums">
                     {formatINR(monthly)}
-                    <span className="text-sm font-normal text-muted-foreground"> /month</span>
+                    <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
+                      {' '}/month <span className="font-semibold text-foreground">+ 18% GST</span>
+                    </span>
                   </p>
+                  {was && monthlyOf(was) > monthly && (
+                    <p className="text-sm text-muted-foreground">
+                      Regular <span className="line-through">{formatINR(monthlyOf(was))}</span>
+                      <span className="ml-1.5 font-medium text-success">· {Math.round((1 - monthly / monthlyOf(was)) * 100)}% off for members</span>
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground">
                     {day != null ? (
                       <>
@@ -118,6 +130,10 @@ export function PlanPicker({
                     ) : (
                       'Billed every month'
                     )}
+                  </p>
+                  {/* GST is always 18%, on every plan (owner, 14 Oct): the total is said, never left to work out. */}
+                  <p className="text-sm font-medium">
+                    {formatINR(withGst(p.price))} with GST{p.billing_interval === 'monthly' ? ' a month' : ' a year'}
                   </p>
                 </div>
                 <ul className="flex flex-col gap-2 text-sm">
@@ -130,6 +146,7 @@ export function PlanPicker({
                 <div className="mt-auto flex flex-col gap-1.5">
                   <Button
                     variant={highlight ? 'default' : 'outline'}
+                    className={action && !words.disabled ? action.className : undefined}
                     onClick={() => onChoose(p, quote)}
                     disabled={busy || words.disabled || !canChoose}
                     title={canChoose ? undefined : chooseHint}
@@ -169,6 +186,11 @@ export function PlanPicker({
   )
 }
 
+/** Every plan carries 18% GST on top, as create_payment_order charges it. */
+export const withGst = (price: number) => Math.round(price * 1.18)
+
+const monthlyOf = (p: Plan) => (p.billing_interval === 'monthly' ? p.price : (p.monthly_equivalent ?? Math.round(p.price / 12)))
+
 function CellView({ c }: { c: Cell }) {
   if (c.kind === 'yes') return <Check className="mx-auto size-4 text-success" aria-label="Included" />
   if (c.kind === 'no') return <X className="mx-auto size-4 text-muted-foreground/60" aria-label="Not included" />
@@ -180,8 +202,14 @@ function ComparePlans({ plans }: { plans: Plan[] }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="flex w-full flex-col items-center gap-3">
-      <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        Compare plans
+      {/* A real button, easy to see (owner, 14 Oct: "the Compare plans button should be clearly visible"). */}
+      <Button
+        variant="outline"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="border-2 border-primary px-6 font-semibold text-primary hover:bg-primary/10 hover:text-primary"
+      >
+        {open ? 'Hide the comparison' : 'Compare plans'}
         <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} aria-hidden />
       </Button>
       {open && (

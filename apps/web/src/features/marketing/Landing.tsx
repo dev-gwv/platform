@@ -122,8 +122,8 @@ export function Landing() {
             <div className="rounded-2xl border border-tone-violet/30 bg-tone-violet-soft/40 p-5">
               <p className="text-sm font-semibold text-tone-violet">IPC Diamond member?</p>
               <p className="mt-1 text-sm">
-                Start your trial, then verify from your plan with a screenshot of the IPC Diamonds - Premium group. Members get 30 days
-                and member prices.
+                Members pay about half and get 30 days free. Start your trial, then type the mobile number you registered with IPC on
+                Plan &amp; billing.
               </p>
             </div>
           </div>
@@ -169,14 +169,15 @@ function PublicPrice({ fallback }: { fallback: ReactNode }) {
   if (!plans.data || plans.data.length === 0) return <>{fallback}</>
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">Every studio starts with a {TRIAL_DAYS}-day free trial. Prices are before 18% GST.</p>
+      <p className="text-sm text-muted-foreground">Every studio starts with a {TRIAL_DAYS}-day free trial. Every price is plus 18% GST.</p>
       <PlanPicker
         plans={plans.data}
         action={{ label: `Start ${TRIAL_DAYS}-day free trial` }}
         onChoose={() => void navigate({ to: '/login', search: { mode: 'register' } as never })}
       />
       <p className="text-center text-sm text-muted-foreground">
-        An IPC Diamond member? Start your trial, then verify from your plan page for 30 days and member prices.
+        An IPC Diamond member? You pay about half and get 30 days free: start your trial, then type the mobile number you
+        registered with IPC on Plan &amp; billing. Prices will go up as we grow, so today's price is the best one.
       </p>
     </div>
   )

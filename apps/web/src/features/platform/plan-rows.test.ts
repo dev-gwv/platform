@@ -33,9 +33,10 @@ describe('Platform → Plans in words', () => {
   })
 
   it('names a plan so both audiences and both ways of paying read apart', () => {
-    expect(planLabel(row({ name: 'Starter', tier: 'starter' }))).toBe('Starter, yearly')
-    expect(planLabel(row({ name: 'Starter', tier: 'starter', billing_interval: 'monthly' }))).toBe('Starter, monthly')
-    expect(planLabel(row({ name: 'Monthly', audience: 'diamond' }))).toBe('Member Monthly')
+    expect(planLabel(row({ name: 'Starter', tier: 'starter' }))).toBe('Regular Starter, yearly')
+    expect(planLabel(row({ name: 'Starter', tier: 'starter', billing_interval: 'monthly' }))).toBe('Regular Starter, monthly')
+    expect(planLabel(row({ name: 'Starter', tier: 'starter', audience: 'diamond' }))).toBe('Member Starter, yearly')
+    expect(planLabel(row({ name: 'Monthly', audience: 'diamond', tier: null }))).toBe('Member Monthly (old)')
     expect(planLabel(row({ name: 'Yearly', tier: null }))).toBe('Yearly (old)')
   })
 

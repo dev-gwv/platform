@@ -1,5 +1,5 @@
-import { Hono } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, z } from '@ipc/contracts'
+import { Hono, type Context } from 'hono'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -12,6 +12,7 @@ import { audit } from '../../lib/audit'
 import { platformMessagingRouter } from './messaging'
 import { platformEmailRouter } from './email'
 import { fetchOrderPayments } from '../../lib/razorpay'
+import { sheetRef, syncDiamondSheet } from '../../lib/diamond-sheet'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -477,6 +478,33 @@ export const platformRouter = new Hono<AppEnv>()
     return c.json({ group_link: parsed.data.group_link || null })
   })
 
+  /** The member list's sheet, how its last copy went, and the studios verified by number (0262). */
+  .get('/diamond/sheet', async (c) => c.json(await sheetStatus(c)))
+
+  /** Save the sheet link and copy it in at once, so a wrong link shows its problem now. */
+  .put('/diamond/sheet', async (c) => {
+    const parsed = diamondSheetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Paste the Google Sheet link.')
+    const url = parsed.data.url?.trim() || null
+    if (url && !sheetRef(url) && !/^https:\/\/docs\.google\.com\/.*output=csv/.test(url)) {
+      fail(422, 'That is not a Google Sheet link. Copy it from the sheet’s address bar.')
+    }
+    const ok = await attempt(c, 'platform.diamond_sheet_save', () =>
+      withService(c.env, (sql) => sql`
+        update platform_settings
+           set diamond_sheet_url = ${url}, diamond_sheet_error = null, updated_at = now()`),
+    )
+    if (!ok) fail(400, 'We could not save the link.')
+    await audit(c, { action: 'platform.diamond_sheet', entityType: 'platform_settings', entityId: null, after: { set: !!url } })
+    if (url) await syncDiamondSheet(c.env)
+    return c.json(await sheetStatus(c))
+  })
+
+  .post('/diamond/sheet/refresh', async (c) => {
+    await syncDiamondSheet(c.env)
+    return c.json(await sheetStatus(c))
+  })
+
   .get('/diamond', async (c) => {
     const want = c.req.query('status')
     const status = want ? diamondClaimStatus.safeParse(want) : null
@@ -528,3 +556,24 @@ export const platformRouter = new Hono<AppEnv>()
   // Messaging wallets, recharge requests, prices, templates, outbox, margin.
   .route('/messaging', platformMessagingRouter)
   .route('/email', platformEmailRouter)
+
+/** Platform → Diamond's sheet card: the link, the last copy, and who verified by number. */
+async function sheetStatus(c: Context<AppEnv>) {
+  const row = await attempt(c, 'platform.diamond_sheet', () =>
+    withService(c.env, async (sql) => {
+      const [s] = await sql<{ url: string | null; synced_at: string | null; rows: number | null; error: string | null }[]>`
+        select diamond_sheet_url as url, diamond_sheet_synced_at::text as synced_at,
+               diamond_sheet_rows as rows, diamond_sheet_error as error
+          from platform_settings limit 1`
+      const verified = await sql<{ company_id: string; studio: string; phone: string | null; verified_at: string | null }[]>`
+        select id as company_id, name as studio, diamond_phone as phone, diamond_verified_at::text as verified_at
+          from companies
+         where member_tier = 'diamond' and diamond_phone is not null
+         order by diamond_verified_at desc nulls last
+         limit 200`
+      return { ...(s ?? { url: null, synced_at: null, rows: null, error: null }), verified }
+    }),
+  )
+  if (!row) fail(400, 'We could not load the member list.')
+  return diamondSheetStatus.parse(row)
+}

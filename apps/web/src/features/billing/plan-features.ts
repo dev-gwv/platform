@@ -47,7 +47,7 @@ export const COMPARE: CompareRow[] = [
   { label: 'Enquiry forms', cell: limitCell('enquiry_forms') },
   { label: 'Facebook Pages', cell: limitCell('facebook_pages') },
   {
-    label: 'WhatsApp & email in your own name',
+    label: 'Your own name and logo (white label)',
     cell: (p) => (p.includes?.includes('white_label') ? { kind: 'yes' } : { kind: 'no' }),
   },
   { label: 'Priority help', cell: tierIs('max') },
@@ -100,6 +100,8 @@ export function planEnquiryMessage(c: {
   name: string
   email: string | null | undefined
   inr: (n: number) => string
+  /** A verified IPC Diamond member: the message says so, so we price it right on the call. */
+  diamond?: boolean | undefined
 }): string {
   const how =
     c.plan.billing_interval === 'monthly' ? 'paid monthly' : c.plan.billing_interval === 'biennial' ? 'for 2 years' : 'paid yearly'
@@ -107,7 +109,7 @@ export function planEnquiryMessage(c: {
     c.kind === 'upgrade' ? `to upgrade to the ${c.plan.name} plan` : c.kind === 'renew' ? `to renew the ${c.plan.name} plan` : `the ${c.plan.name} plan`
   return [
     `Hi Studio AutoPilot team, I'm ${c.name || 'the owner'} from ${c.studio}.`,
-    `I'd like ${want}, ${how} (${c.inr(c.plan.price)} + 18% GST).`,
+    `I'd like ${want}, ${how} (${c.inr(c.plan.price)} + 18% GST)${c.diamond ? ', at the IPC Diamond member price' : ''}.`,
     ...(c.email ? [`Login: ${c.email}`] : []),
     'Please call me to set it up.',
   ].join('\n')

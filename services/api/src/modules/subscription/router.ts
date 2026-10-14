@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { planQuote, planUsage,
+import { planQuote, planUsage, diamondPhoneRequest, diamondPhoneResult,
   activateRequest,
   activateResponse,
   createOrderRequest,
@@ -281,6 +281,36 @@ export const subscriptionRouter = new Hono<AppEnv>()
   // group name off it and a match approves at once; anything else is either
   // rejected with the reason or, when it could not be read, left for the
   // platform team. Every claim is in the platform inbox, revocable (0214).
+  /**
+   * "I am an IPC Diamond member": the owner's registered mobile number,
+   * checked against the member list copied from the platform owner's sheet
+   * (0262). A match gives member prices and 30 days from sign-up. Ten tries a
+   * day, and one number opens one studio, so the list cannot be guessed.
+   */
+  .post('/diamond/verify', requireOwner(), async (c) => {
+    const parsed = diamondPhoneRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Type the mobile number you registered with IPC.')
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'subscription.diamond_verify', () =>
+      withService(c.env, (sql) => sql<{ r: string; u: string | null }[]>`
+        select diamond_verify_phone(${auth.companyId}, ${parsed.data.phone}) as r,
+               (select company_access_until(plan_expiry, grandfathered_until, grace_until)::text
+                  from companies where id = ${auth.companyId}) as u`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not check that number. Please try again.')
+    const outcome = rows[0].r as 'verified' | 'already' | 'not_found' | 'taken' | 'too_many'
+    await audit(c, { action: `subscription.diamond_phone_${outcome}`, entityType: 'company', entityId: auth.companyId })
+    // The trial line is read after the update, so a match shows its 30 days.
+    const after = outcome === 'verified'
+      ? await attempt(c, 'subscription.diamond_until', () =>
+          withService(c.env, (sql) => sql<{ u: string | null }[]>`
+            select company_access_until(plan_expiry, grandfathered_until, grace_until)::text as u
+              from companies where id = ${auth.companyId}`),
+        )
+      : null
+    return c.json(diamondPhoneResult.parse({ outcome, access_until: after?.[0]?.u ?? rows[0].u }))
+  })
+
   .post('/diamond/claim', requireOwner(), async (c) => {
     const parsed = diamondClaimRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Upload a screenshot first.')

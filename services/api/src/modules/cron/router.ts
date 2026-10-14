@@ -15,6 +15,8 @@ import { runMorningEmails } from '../../lib/morning-email'
 import { runWeeklyEmails } from '../../lib/weekly-email'
 import { runAccessEmails } from '../../lib/access-email'
 import { runAlertEmails } from '../../lib/alert-email'
+import { syncDiamondSheet } from '../../lib/diamond-sheet'
+import { emailOneADay } from '../../lib/email'
 import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
 
@@ -119,17 +121,20 @@ export const cronRouter = new Hono<AppEnv>()
         // The quote sweep runs inside run_crm_followup_cron now, so its count
         // comes out of that summary. Calling it again here would expire a
         // second batch outside the dry run and double-report the first.
-        // New studio owners hear about the next setup step on day 1, 3 and 7.
-        const onboarding = await runOnboardingNudges(c.env, dryRun)
-        // Owners and admins get the day in one email, from 8 am.
+        // Email is one a day for now (owner, 14 Oct): the owner's morning email,
+        // and the "your plan is ending" notes. The setup nudges, the Monday
+        // email and the hourly alert copies stay switched off; the code waits
+        // for a studio's own email account (white label). See OWNER_MAIL_KINDS.
+        const onboarding = emailOneADay(c.env) ? { due: 0, sent: 0 } : await runOnboardingNudges(c.env, dryRun)
+        // Owners get the day in one email, from 8 am.
         const morning = await runMorningEmails(c.env, dryRun)
-        // Owners get the week in one email, Monday from 8 am (0258).
-        const weekly = await runWeeklyEmails(c.env, dryRun)
+        const weekly = emailOneADay(c.env) ? { due: 0, sent: 0 } : await runWeeklyEmails(c.env, dryRun)
         // Owners hear 7 days and 1 day before their trial or plan ends, and
         // once when it has ended (0211).
         const accessEmails = await runAccessEmails(c.env, dryRun)
-        // A team member's alerts still unread after 15 minutes go by email too (0227).
-        const alertEmails = await runAlertEmails(c.env, dryRun)
+        const alertEmails = emailOneADay(c.env) ? { due: 0, people: 0, sent: 0 } : await runAlertEmails(c.env, dryRun)
+        // The IPC Diamond member list, copied from the owner's sheet (0262).
+        const diamondSheet = dryRun ? null : await syncDiamondSheet(c.env).catch(() => null)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
@@ -148,6 +153,7 @@ export const cronRouter = new Hono<AppEnv>()
           weekly_emails: weekly,
           access_emails: accessEmails,
           alert_emails: alertEmails,
+          diamond_sheet: diamondSheet,
           crm_outbox: outbox,
           crm_expired_quotes: expiredQuotes,
           purged_refresh_tokens: purged,

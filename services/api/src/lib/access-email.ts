@@ -120,7 +120,7 @@ export async function runAccessEmails(env: Env, dryRun: boolean): Promise<Access
       )
       if (!m?.ok) continue
       const mail = accessEmail(env, { kind: d.kind, isTrial: d.is_trial, endsAt: d.ends_at, name: d.name })
-      if (await sendOnboardingMail(env, d.email, mail)) sent += 1
+      if (await sendOnboardingMail(env, d.email, mail, 'access')) sent += 1
     }
     return { due: due.length, sent }
   } catch (e) {

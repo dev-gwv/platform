@@ -77,26 +77,42 @@ const plan = async (key: string) => {
 }
 
 describe('plan pricing', () => {
-  it('offers members exactly the three plans, in the order they should be read', async () => {
-    const r = await db.query<{ key: string }>(
-      `select key from plans where is_active and audience = 'diamond' order by sort_order, price;`,
+  it('offers IPC Diamond members Starter, Pro and Studio Max at member prices (0262)', async () => {
+    const r = await db.query<{ key: string; price: string; m: string }>(
+      `select key, price, monthly_equivalent as m from plans where is_active and audience = 'diamond' order by sort_order, price;`,
     )
-    expect(r.rows.map((x) => x.key)).toEqual(['ipc_monthly', 'ipc_yearly', 'ipc_2year'])
+    expect(r.rows.map((x) => [x.key, Number(x.price), Number(x.m)])).toEqual([
+      ['starter_yearly', 17988, 1499],
+      ['starter_monthly', 1999, 1999],
+      ['pro_yearly', 29988, 2499],
+      ['pro_monthly', 2999, 2999],
+      ['max_yearly', 47988, 3999],
+      ['max_monthly', 4999, 4999],
+    ])
+    // The old member plans and the ₹1,00,000 plan are off sale.
+    for (const k of ['ipc_monthly', 'ipc_yearly', 'ipc_2year', 'studio_yearly']) expect((await plan(k))!['is_active']).toBe(false)
   })
 
-  it('offers outsiders Starter, Pro and Studio Max; the ₹1,00,000 plan is off sale (0256)', async () => {
-    const r = await db.query<{ key: string; price: string }>(
-      `select key, price from plans where is_active and audience = 'outsider' order by sort_order;`,
+  it('offers everyone else the same plans at the regular price, about double (0262)', async () => {
+    const r = await db.query<{ key: string; price: string; m: string; s: string | null; limits: unknown; includes: unknown }>(
+      `select key, price, monthly_equivalent as m, savings_label as s, limits, includes from plans where is_active and audience = 'outsider' order by sort_order;`,
     )
-    expect(r.rows.map((x) => [x.key, Number(x.price)])).toEqual([
-      ['starter_yearly', 17988],
-      ['starter_monthly', 1999],
-      ['pro_yearly', 29988],
-      ['pro_monthly', 2999],
-      ['max_yearly', 47988],
-      ['max_monthly', 4999],
+    expect(r.rows.map((x) => [x.key, Number(x.price), Number(x.m)])).toEqual([
+      ['starter_yearly_regular', 35988, 2999],
+      ['starter_monthly_regular', 3999, 3999],
+      ['pro_yearly_regular', 59988, 4999],
+      ['pro_monthly_regular', 5999, 5999],
+      ['max_yearly_regular', 95988, 7999],
+      ['max_monthly_regular', 9999, 9999],
     ])
-    expect((await plan('studio_yearly'))!['is_active']).toBe(false)
+    // A saving that matches the arithmetic, and the same limits as the member plan.
+    for (const t of ['starter', 'pro', 'max']) {
+      const y = r.rows.find((x) => x.key === `${t}_yearly_regular`)!
+      const m = r.rows.find((x) => x.key === `${t}_monthly_regular`)!
+      expect(y.s).toBe(`Save ₹${(Number(m.price) * 12 - Number(y.price)).toLocaleString('en-IN')}`)
+      expect(y.limits).toEqual((await plan(`${t}_yearly`))!['limits'])
+      expect(y.includes).toEqual((await plan(`${t}_yearly`))!['includes'])
+    }
   })
 
   it('carries the old app’s prices', async () => {
@@ -152,16 +168,17 @@ describe('plan pricing', () => {
     // which is the state this whole change set out to fix.
     const r = await asUser<{ key: string }>(OWNER, `select key from plans where is_active;`)
     expect(r.rows.map((x) => x.key).sort()).toEqual([
-      'ipc_2year', 'ipc_monthly', 'ipc_yearly',
-      'max_monthly', 'max_yearly', 'pro_monthly', 'pro_yearly', 'starter_monthly', 'starter_yearly',
+      'max_monthly', 'max_monthly_regular', 'max_yearly', 'max_yearly_regular',
+      'pro_monthly', 'pro_monthly_regular', 'pro_yearly', 'pro_yearly_regular',
+      'starter_monthly', 'starter_monthly_regular', 'starter_yearly', 'starter_yearly_regular',
     ])
   })
 
   it('hides a plan the platform has withdrawn', async () => {
-    await db.exec(`update plans set is_active = false where key = 'ipc_2year';`)
+    await db.exec(`update plans set is_active = false where key = 'max_monthly';`)
     const r = await asUser<{ key: string }>(OWNER, `select key from plans;`)
-    expect(r.rows.map((x) => x.key)).not.toContain('ipc_2year')
-    await db.exec(`update plans set is_active = true where key = 'ipc_2year';`)
+    expect(r.rows.map((x) => x.key)).not.toContain('max_monthly')
+    await db.exec(`update plans set is_active = true where key = 'max_monthly';`)
   })
 
   it('Platform → Plans is the platform admin\'s alone, and counts the studios on each plan (0256)', async () => {

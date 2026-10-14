@@ -3308,8 +3308,8 @@ if (listed) {
   const plans = await api('/subscription/plans', { token: aToken })
   const keys = Array.isArray(plans.json) ? plans.json.map((p) => p.key) : []
   check(
-    'diamond: a new studio sees Starter, Pro and Studio Max, not the member plans (0256)',
-    keys.length === 6 && keys.every((k) => /^(starter|pro|max)_(yearly|monthly)$/.test(k)),
+    'diamond: a new studio sees the regular Starter, Pro and Studio Max, not the member prices (0262)',
+    keys.length === 6 && keys.every((k) => /^(starter|pro|max)_(yearly|monthly)_regular$/.test(k)),
     { keys },
   )
 
@@ -3334,6 +3334,17 @@ if (listed) {
 
   const inbox = await api('/platform/diamond', { token: aToken })
   check('diamond: a studio cannot open the platform inbox', inbox.status === 403, { status: inbox.status })
+
+  // 0262: membership by phone number, against the member list copied from the sheet.
+  const miss = await api('/subscription/diamond/verify', { token: aToken, method: 'POST', body: { phone: '+91 90000 00001' } })
+  check('diamond: a number not on the member list changes nothing', miss.status === 200 && miss.json.outcome === 'not_found', miss.json)
+  const still = await api('/subscription/status', { token: aToken })
+  check('diamond: …and the studio stays outside', still.json.member_tier === 'outsider', still.json.member_tier)
+  const short = await api('/subscription/diamond/verify', { token: aToken, method: 'POST', body: { phone: '1' } })
+  check('diamond: a number too short to be one is refused (422)', short.status === 422, short.status)
+  const sheet = await api('/platform/diamond/sheet', { token: aToken })
+  const setSheet = await api('/platform/diamond/sheet', { token: aToken, method: 'PUT', body: { url: 'https://docs.google.com/spreadsheets/d/x' } })
+  check('diamond: the member sheet is the platform admin\'s alone', sheet.status === 403 && setSheet.status === 403, { get: sheet.status, put: setSheet.status })
 }
 
 // ── A project's own referral campaign (its Referrals tab) ──

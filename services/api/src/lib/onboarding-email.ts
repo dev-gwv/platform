@@ -220,7 +220,7 @@ export async function nudgeMail(
 }
 
 /** Send through Resend. Never throws: a mail hiccup must not fail sign-in or the cron. */
-export async function sendOnboardingMail(env: Env, to: string, mail: OnboardingMail): Promise<boolean> {
-  const r = await deliver(env, { to, subject: mail.subject, html: mail.html }, { kind: 'onboarding' })
+export async function sendOnboardingMail(env: Env, to: string, mail: OnboardingMail, kind = 'onboarding'): Promise<boolean> {
+  const r = await deliver(env, { to, subject: mail.subject, html: mail.html }, { kind })
   return r.status === 'sent'
 }

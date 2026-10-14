@@ -33,13 +33,14 @@ export function limitWords(p: Pick<PlatformPlan, 'limits' | 'billing_interval'>)
  * list: "Starter, yearly", "Member Monthly", "₹1,00,000 plan (old)".
  */
 export function planLabel(p: Pick<PlatformPlan, 'name' | 'billing_interval' | 'audience' | 'tier'>): string {
-  if (p.audience === 'diamond') return `Member ${p.name}`
-  if (!p.tier) return `${p.name} (old)`
-  return `${p.name}, ${p.billing_interval === 'monthly' ? 'monthly' : 'yearly'}`
+  const how = p.billing_interval === 'monthly' ? 'monthly' : 'yearly'
+  if (!p.tier) return p.audience === 'diamond' ? `Member ${p.name} (old)` : `${p.name} (old)`
+  // Two price lists of the same three plans (0262): say which one.
+  return `${p.audience === 'diamond' ? 'Member' : 'Regular'} ${p.name}, ${how}`
 }
 
 export const AUDIENCES = [
-  { key: 'outsider', label: 'For studios outside IPC' },
+  { key: 'outsider', label: 'Regular price (everyone)' },
   { key: 'diamond', label: 'For IPC Diamond members' },
 ] as const
 

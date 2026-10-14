@@ -17,6 +17,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
+import { planLabel } from '@/features/platform/plan-rows'
 import { usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
 import { DateField, toIso } from '@/shared/ui/date-field'
 import { inviteMessage, legacyState, parseLegacyCsv, type LegacyParse } from '@/features/platform/legacy'
@@ -492,7 +493,7 @@ function AssignPlanForm({ studio }: { studio: PlatformStudio }) {
             .filter((p) => p.is_active)
             .map((p) => (
               <option key={p.id} value={p.key}>
-                {p.name} · ₹{p.price.toLocaleString('en-IN')} · {length(p)}{p.audience ? ` · ${p.audience === 'diamond' ? 'Diamond' : 'outsider'}` : ''}
+                {planLabel(p)} · ₹{p.price.toLocaleString('en-IN')} + GST · {length(p)}
               </option>
             ))}
         </Select>

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../context'
 import { sendClientDocEmail } from './email'
 
-const env = { RESEND_API_KEY: 'k', EMAIL_FROM: 'Studio AutoPilot <noreply@studioautopilot.in>' } as unknown as Env
+const env = { EMAIL_EVERY_KIND: 'on', RESEND_API_KEY: 'k', EMAIL_FROM: 'Studio AutoPilot <noreply@studioautopilot.in>' } as unknown as Env
 const LINK = 'https://studioautopilot.in/terms/acknowledge?token=abc'
 
 const answer = (status: number, body: unknown) =>

@@ -25,22 +25,23 @@ export const LEGAL = {
 } as const
 
 /**
- * What a studio pays, kept in step with the plans table. Since 0214 there are
- * two audiences: the public price, and the member prices an IPC Diamond member
- * sees once verified. Prices exclude 18% GST.
+ * What a studio pays, kept in step with the plans table. Two audiences
+ * (0262): the regular price, and the member prices (about half) an IPC
+ * Diamond member sees once their registered mobile number is verified. Prices exclude 18% GST.
  */
 export const PLANS = [
-  { name: 'Starter', price: '₹17,988', period: 'per year, or ₹1,999 a month' },
-  { name: 'Pro', price: '₹29,988', period: 'per year, or ₹2,999 a month' },
-  { name: 'Studio Max', price: '₹47,988', period: 'per year, or ₹4,999 a month' },
+  { name: 'Starter', price: '₹35,988', period: 'per year, or ₹3,999 a month' },
+  { name: 'Pro', price: '₹59,988', period: 'per year, or ₹5,999 a month' },
+  { name: 'Studio Max', price: '₹95,988', period: 'per year, or ₹9,999 a month' },
 ] as const
 
 export const TRIAL_DAYS = 7
 
 export const PLAN_SUMMARY =
-  'Studio AutoPilot has three plans after a 7-day free trial: Starter ₹17,988, Pro ₹29,988 and Studio Max ₹47,988 a year ' +
-  '(or ₹1,999, ₹2,999 and ₹4,999 a month), plus 18% GST, paid by UPI, bank transfer or online through Razorpay. ' +
-  'IPC Diamond members get a 30-day trial and member prices: ₹1,999 a month, ₹18,000 a year or ₹33,000 for two years, plus GST.'
+  'Studio AutoPilot has three plans after a 7-day free trial: Starter ₹35,988, Pro ₹59,988 and Studio Max ₹95,988 a year ' +
+  '(or ₹3,999, ₹5,999 and ₹9,999 a month), plus 18% GST, paid by UPI, bank transfer or online through Razorpay. ' +
+  'IPC Diamond members, verified by the mobile number registered with IPC, get a 30-day trial and member prices: ' +
+  'Starter ₹17,988, Pro ₹29,988 and Studio Max ₹47,988 a year (or ₹1,999, ₹2,999 and ₹4,999 a month), plus GST.'
 
 export const LEGAL_LINKS = [
   { to: '/terms-and-conditions', label: 'Terms and Conditions' },

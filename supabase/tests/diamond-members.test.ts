@@ -66,15 +66,17 @@ describe('a new studio', () => {
     expect(await trialDays(OLD)).toBe(30)
   })
 
-  it('sees Starter, Pro and Studio Max (0256), and cannot order a member plan', async () => {
+  it('sees the regular Starter, Pro and Studio Max (0262), and cannot order a member plan', async () => {
     const outsider = await q<{ key: string }>(`select key from plans where audience = 'outsider' and is_active order by sort_order`)
-    expect(outsider.map((p) => p.key)).toEqual(['starter_yearly', 'starter_monthly', 'pro_yearly', 'pro_monthly', 'max_yearly', 'max_monthly'])
+    expect(outsider.map((p) => p.key)).toEqual([
+      'starter_yearly_regular', 'starter_monthly_regular', 'pro_yearly_regular', 'pro_monthly_regular', 'max_yearly_regular', 'max_monthly_regular',
+    ])
     await as(OWNER)
-    const member = await one<{ id: string }>(`select id from plans where key = 'ipc_yearly'`)
+    const member = await one<{ id: string }>(`select id from plans where key = 'starter_yearly'`)
     await expect(db.query(`select * from create_payment_order('${member.id}')`)).rejects.toThrow(/unknown plan/)
-    const own = await one<{ id: string }>(`select id from plans where key = 'starter_yearly'`)
+    const own = await one<{ id: string }>(`select id from plans where key = 'starter_yearly_regular'`)
     const order = await one<{ amount: string }>(`select amount::text from create_payment_order('${own.id}')`)
-    expect(Number(order.amount)).toBe(21225.84)
+    expect(Number(order.amount)).toBe(42465.84)
   })
 })
 
@@ -99,7 +101,7 @@ describe('claiming Diamond', () => {
     expect(await tier(STUDIO)).toBe('diamond')
     expect(await trialDays(STUDIO)).toBe(30)
     await as(OWNER)
-    const member = await one<{ id: string }>(`select id from plans where key = 'ipc_monthly'`)
+    const member = await one<{ id: string }>(`select id from plans where key = 'starter_monthly'`)
     const order = await one<{ amount: string }>(`select amount::text from create_payment_order('${member.id}')`)
     expect(Number(order.amount)).toBeCloseTo(1999 * 1.18, 2)
     await expect(db.query(`select diamond_submit_claim('${IMG}')`)).rejects.toThrow(/already verified/)
