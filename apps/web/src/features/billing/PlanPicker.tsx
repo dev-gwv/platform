@@ -60,8 +60,8 @@ export interface PlanAction {
  * saving is the thing the eye lands on. No tabs: one above the other, so the
  * two prices of a plan sit in the same column.
  *
- * One Pay yearly / monthly switch drives both lists, so they are always
- * compared like for like; "Every plan has every feature" and Compare plans
+ * Each list carries its own Pay yearly / monthly switch, kept in step, so
+ * they are always compared like for like; "Every plan has every feature" and Compare plans
  * come once, because the features do not differ. A verified member reads
  * their own price first and the regular one beneath it, for comparison and
  * without buttons. Our own prices, so formatINR (never masked). Used on Plan
@@ -113,8 +113,9 @@ export function PlanPicker({
           <h2 id="regular-prices-title" className="text-xl font-bold sm:text-2xl">
             {memberFirst ? 'What every other studio pays' : 'For every studio'}
           </h2>
+          <p className="text-sm text-muted-foreground">7-day free trial · every price + 18% GST</p>
         </div>
-        <p className="text-sm text-muted-foreground">7-day free trial · every price + 18% GST</p>
+        <PaySwitch value={payEvery} onChange={setPayEvery} label="How to pay, regular prices" />
       </div>
       <div className="grid gap-5 pt-2 md:grid-cols-3">
         {reg.map((p) => (
@@ -167,25 +168,29 @@ export function PlanPicker({
             </p>
           </div>
         </div>
-        {verified ? (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
-            style={{ backgroundColor: GOLD, color: NAVY }}
-          >
-            <BadgeCheck className="size-4" aria-hidden /> You're a verified member
-          </span>
-        ) : (
-          onCheckNumber && (
-            <button
-              type="button"
-              onClick={onCheckNumber}
-              className="rounded-full border px-3 py-1 text-sm font-medium transition-colors hover:bg-white/10"
-              style={{ borderColor: `${GOLD}99`, color: GOLD }}
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          {/* Its own switch, so nobody scrolls back up to change how they pay (owner, 15 Oct). */}
+          <PaySwitch value={payEvery} onChange={setPayEvery} label="How to pay, IPC Diamond prices" tone="diamond" />
+          {verified ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
+              style={{ backgroundColor: GOLD, color: NAVY }}
             >
-              Already a member? Check your number
-            </button>
-          )
-        )}
+              <BadgeCheck className="size-4" aria-hidden /> You're a verified member
+            </span>
+          ) : (
+            onCheckNumber && (
+              <button
+                type="button"
+                onClick={onCheckNumber}
+                className="rounded-full border px-3 py-1 text-sm font-medium transition-colors hover:bg-white/10"
+                style={{ borderColor: `${GOLD}99`, color: GOLD }}
+              >
+                Already a member? Check your number
+              </button>
+            )
+          )}
+        </div>
       </div>
       <div className="relative grid gap-5 pt-2 md:grid-cols-3">
         {mem.map((p) => (
@@ -210,26 +215,6 @@ export function PlanPicker({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-center">
-        <div className="inline-flex rounded-full border border-border bg-card p-0.5 shadow-sm" role="radiogroup" aria-label="How to pay">
-          {(['yearly', 'monthly'] as const).map((i) => (
-            <button
-              key={i}
-              type="button"
-              role="radio"
-              aria-checked={payEvery === i}
-              onClick={() => setPayEvery(i)}
-              className={cn(
-                'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                payEvery === i ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
-              )}
-            >
-              {i === 'yearly' ? 'Pay yearly · save more' : 'Pay monthly'}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {order.map((s, i) => (
         <div key={s} className="flex flex-col gap-6">
           {s === 'regular' ? regularSection : memberSection}
@@ -259,6 +244,61 @@ export function PlanPicker({
       </div>
 
       <ComparePlans plans={reg.length > 0 ? reg : mem} />
+    </div>
+  )
+}
+
+/**
+ * Pay yearly / Pay monthly. Each price list carries one (owner, 15 Oct: the
+ * Diamond prices are a scroll away from the regular ones), and both drive the
+ * same setting, so the two prices of a plan are always compared like for like.
+ */
+function PaySwitch({
+  value,
+  onChange,
+  label,
+  tone = 'regular',
+}: {
+  value: 'yearly' | 'monthly'
+  onChange: (v: 'yearly' | 'monthly') => void
+  label: string
+  tone?: 'regular' | 'diamond'
+}) {
+  const diamond = tone === 'diamond'
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cn(
+        'inline-flex rounded-full border p-0.5',
+        diamond ? 'border-white/30 bg-white/10' : 'border-border bg-card shadow-sm',
+      )}
+    >
+      {(['yearly', 'monthly'] as const).map((i) => {
+        const on = value === i
+        return (
+          <button
+            key={i}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(i)}
+            className={cn(
+              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+              diamond
+                ? on
+                  ? 'font-semibold'
+                  : 'text-white/80 hover:bg-white/10'
+                : on
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent',
+            )}
+            style={diamond && on ? { backgroundColor: GOLD, color: NAVY } : undefined}
+          >
+            {i === 'yearly' ? 'Pay yearly · save more' : 'Pay monthly'}
+          </button>
+        )
+      })}
     </div>
   )
 }
