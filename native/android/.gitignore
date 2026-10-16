@@ -1,0 +1,5 @@
+build/
+*.jks
+*.p12
+*.keystore
+keystore-password.txt
