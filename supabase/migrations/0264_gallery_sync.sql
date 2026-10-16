@@ -1,0 +1,4 @@
+-- 0264: Frameline gallery sync (claimed; body follows in the next commit).
+-- project_galleries keeps what Frameline last said about a project's gallery
+-- (count, expiry, the full-access PIN), refreshed on read and on Frameline's
+-- gallery-changed notice (POST /webhooks/frameline).
