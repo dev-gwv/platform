@@ -1,4 +1,4 @@
-import { sign } from 'hono/jwt'
+import { sign, verify } from 'hono/jwt'
 import type { AuthContext, Env } from '../context'
 
 /**
@@ -90,8 +90,28 @@ export interface FramelineGallery {
   photoCount: number
   galleryUrl: string
   pin: string | null
+  /** The couple-and-family PIN; only when guests see just their own photos and the studio set one. */
+  fullAccessPin?: string | null
+  facePrivacy?: boolean
+  expiresAt?: string
+  visits?: number
+  /** Signed-up guests; only on the single-gallery read. */
+  guests?: number
   adminPath: string
   createdAt: string
+}
+
+/** The Frameline studio joined to this company, for Settings. */
+export interface FramelineStudio {
+  linked: boolean
+  studioName: string | null
+  plan: string | null
+  validTill: string | null
+  walletRupees: number | null
+  photosUsed: number | null
+  photosLimit: number | null
+  galleries: number
+  adminUrl: string
 }
 
 /**
@@ -144,4 +164,33 @@ export function createFramelineGallery(
 /** How the project's gallery is doing: photos so far, live or not. */
 export function readFramelineGallery(env: Env, p: FramelinePerson, projectId: string, fetchImpl?: FetchLike): Promise<FramelineResult<FramelineGallery>> {
   return call(env, p, 'GET', `/events/${encodeURIComponent(projectId)}`, undefined, fetchImpl)
+}
+
+/** Every gallery made for this company, newest first. */
+export function listFramelineGalleries(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<{ items: FramelineGallery[] }>> {
+  return call(env, p, 'GET', '/events', undefined, fetchImpl)
+}
+
+/** The Frameline studio behind this company: linked yet, plan, wallet, photos used. */
+export function readFramelineStudio(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<FramelineStudio>> {
+  return call(env, p, 'GET', '/studio', undefined, fetchImpl)
+}
+
+/**
+ * A gallery-changed notice from Frameline (POST /webhooks/frameline), checked:
+ * signed with the same shared secret, issued by Frameline for us, still fresh,
+ * and naming the company it is about. The notice only says "go and look" --
+ * the caller re-reads the gallery through the signed API -- so a replay does
+ * nothing a fresh read would not.
+ */
+export async function verifyFramelineNotice(env: Env, token: string | undefined): Promise<{ companyId: string } | null> {
+  if (!framelineConnected(env) || !token) return null
+  try {
+    const claims = (await verify(token, env.FRAMELINE_SECRET!, 'HS256')) as Record<string, unknown>
+    if (claims.iss !== 'frameline' || claims.aud !== ISSUER || claims.purpose !== 'notice') return null
+    if (typeof claims.iat !== 'number' || typeof claims.exp !== 'number' || claims.exp - claims.iat > 300) return null
+    return typeof claims.cid === 'string' && claims.cid.length > 0 ? { companyId: claims.cid } : null
+  } catch {
+    return null
+  }
 }

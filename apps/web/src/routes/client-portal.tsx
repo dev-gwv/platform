@@ -308,6 +308,11 @@ function GalleryCard({ gallery }: { gallery: NonNullable<PublicClientPortal['gal
               'Share it with your guests'
             )}
           </p>
+          {gallery.full_access_pin && (
+            <p className="text-sm text-muted-foreground">
+              Your own PIN <span className="font-mono font-semibold tracking-widest text-foreground">{gallery.full_access_pin}</span> · shows every photo, keep it for family
+            </p>
+          )}
         </div>
         <Button asChild>
           <a href={gallery.url} target="_blank" rel="noreferrer noopener">

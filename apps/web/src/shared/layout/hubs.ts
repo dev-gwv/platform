@@ -62,6 +62,8 @@ export const TEAM_SETUP: readonly HubTab[] = [
 export const PROJECTS_HUB: readonly HubTab[] = [
   { to: '/projects', label: 'All projects', module: 'projects' },
   { to: '/project-tracking', label: 'Needs attention', module: 'projects' },
+  // Every project's Frameline gallery in one list (0264).
+  { to: '/galleries', label: 'Galleries', module: 'projects' },
 ]
 
 /**

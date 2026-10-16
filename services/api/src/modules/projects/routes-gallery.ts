@@ -13,8 +13,10 @@ import {
   framelineConnected,
   framelineSignInUrl,
   readFramelineGallery,
+  type FramelineGallery,
   type FramelinePerson,
 } from '../../lib/frameline'
+import { saveGallerySnapshot } from '../../lib/gallery-sync'
 
 /**
  * A project's photo gallery in Frameline, the gallery add-on (0261).
@@ -29,11 +31,51 @@ interface GalleryRow {
   short_id: string
   gallery_url: string
   pin: string | null
+  full_access_pin: string | null
+  photo_count: number
+  visits: number
+  guests: number | null
+  expires_at: string | null
   created_at: string
 }
 
+interface ClientRow {
+  name: string
+  phone: string | null
+}
+
+const galleryOut = (row: GalleryRow) => ({
+  gallery_url: row.gallery_url,
+  short_id: row.short_id,
+  pin: row.pin,
+  full_access_pin: row.full_access_pin,
+  photo_count: row.photo_count,
+  visits: row.visits,
+  guests: row.guests,
+  expires_at: row.expires_at,
+  created_at: row.created_at,
+})
+
+/** Frameline's answer in the row's shape, for the reply straight after a refresh. */
+const fromFrameline = (row: Pick<GalleryRow, 'created_at'>, g: FramelineGallery): GalleryRow => ({
+  event_id: g.eventId,
+  short_id: g.shortId,
+  gallery_url: g.galleryUrl,
+  pin: g.pin,
+  full_access_pin: g.fullAccessPin ?? null,
+  photo_count: g.photoCount,
+  visits: g.visits ?? 0,
+  guests: g.guests ?? null,
+  expires_at: g.expiresAt ?? null,
+  created_at: row.created_at,
+})
+
+/** Keeps the row in step with Frameline (and rings the bell for new photos). Never fails the page. */
+const refresh = (c: Context<AppEnv>, projectId: string, g: FramelineGallery) =>
+  attempt(c, 'gallery.sync', () => withService(c.env, (sql) => saveGallerySnapshot(sql, c.get('auth').companyId, projectId, g)))
+
 /** Who the person is, for Frameline. A failed read means "not confirmed": never the other way round. */
-async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
+export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
   const auth = c.get('auth')
   const facts = await attempt(c, 'gallery.person', () =>
     withService(c.env, async (sql) => {
@@ -52,10 +94,14 @@ const readRow = (c: Context<AppEnv>, projectId: string) =>
   attempt(c, 'gallery.read', () =>
     withUser(c.env, c.get('auth').userId, async (sql) => {
       const rows = await sql<GalleryRow[]>`
-        select event_id, short_id, gallery_url, pin,
+        select event_id, short_id, gallery_url, pin, full_access_pin, photo_count, visits, guests,
+               to_char(expires_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as expires_at,
                to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
           from project_galleries where project_id = ${projectId}`
-      return { row: rows[0] ?? null }
+      const [client] = await sql<ClientRow[]>`
+        select cl.name, nullif(cl.phone, '') as phone
+          from projects p join clients cl on cl.id = p.client_id where p.id = ${projectId}`
+      return { row: rows[0] ?? null, client: client ?? null }
     }),
   )
 
@@ -65,18 +111,24 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     const projectId = uuidParam(c)
     const read = await readRow(c, projectId)
     if (!read) fail(400, 'We could not load the gallery.')
-    const { row } = read
+    let { row } = read
     const connected = framelineConnected(c.env)
     let live = null
     if (connected && row) {
       const r = await readFramelineGallery(c.env, await personOf(c), projectId)
-      if (r.ok) live = { photo_count: r.data.photoCount, status: r.data.status }
+      if (r.ok) {
+        live = { photo_count: r.data.photoCount, status: r.data.status }
+        // A PIN changed in Frameline shows here (and on the client's page) from this read on.
+        await refresh(c, projectId, r.data)
+        row = fromFrameline(row, r.data)
+      }
     }
     return c.json(
       projectGallery.parse({
         connected,
-        gallery: row ? { gallery_url: row.gallery_url, short_id: row.short_id, pin: row.pin, created_at: row.created_at } : null,
+        gallery: row ? galleryOut(row) : null,
         live,
+        client: read.client,
       }),
     )
   })
@@ -125,6 +177,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
               gallery_url = excluded.gallery_url, pin = excluded.pin`),
     )
     if (!saved) fail(400, 'The gallery was made but we could not save its link. Press Create gallery again.')
+    await refresh(c, projectId, r.data)
     await audit(c, {
       action: 'project.gallery_create',
       entityType: 'project',
@@ -134,7 +187,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     return c.json(
       projectGallery.parse({
         connected: true,
-        gallery: { gallery_url: r.data.galleryUrl, short_id: r.data.shortId, pin: r.data.pin, created_at: r.data.createdAt },
+        gallery: galleryOut(fromFrameline({ created_at: r.data.createdAt }, r.data)),
         live: { photo_count: r.data.photoCount, status: r.data.status },
       }),
     )

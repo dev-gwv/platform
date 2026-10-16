@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { galleryOpenLink, projectGallery } from '@ipc/contracts'
+import { framelineAccount, galleryList, galleryOpenLink, projectGallery } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 
 /** A project's gallery in Frameline, the gallery add-on (0261). */
@@ -35,11 +35,38 @@ export function useCreateGallery(projectId: string) {
  * and once, so it is never fetched ahead of the press.
  */
 export function useOpenGallery(projectId: string) {
+  return useOpenFrameline(`/projects/${projectId}/gallery/open`)
+}
+
+/** Projects → Galleries: every project with a gallery. */
+export function useGalleries() {
+  return useQuery({
+    queryKey: ['galleries'],
+    queryFn: () => callApi('/galleries', { responseSchema: galleryList }),
+    staleTime: 30_000,
+  })
+}
+
+/** Settings → Messaging → Gallery: the Frameline studio, the owner's. */
+export function useFramelineAccount() {
+  return useQuery({
+    queryKey: ['galleries', 'account'],
+    queryFn: () => callApi('/galleries/account', { responseSchema: framelineAccount }),
+    staleTime: 60_000,
+  })
+}
+
+/** "Open Frameline": the owner signed in, on Frameline's home. */
+export function useOpenFramelineHome() {
+  return useOpenFrameline('/galleries/account/open')
+}
+
+function useOpenFrameline(path: string) {
   return useMutation({
     mutationFn: async () => {
       const w = window.open('', '_blank')
       try {
-        const { url } = await callApi(`/projects/${projectId}/gallery/open`, { method: 'POST', body: {}, responseSchema: galleryOpenLink })
+        const { url } = await callApi(path, { method: 'POST', body: {}, responseSchema: galleryOpenLink })
         if (w) {
           w.opener = null
           w.location.href = url

@@ -28,6 +28,7 @@ describe('the settings rail', () => {
         '/settings/subscription',
         '/settings/messaging',
         '/settings/whatsapp',
+        '/settings/gallery',
         '/settings/system',
         // Pages that left the menu's "More" and the CRM group (audit, batch 4).
         '/activity',

@@ -8,6 +8,8 @@ import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { downloadQrPng, qrSvg } from '@/shared/ui/qr-download'
 import { SupportButtons } from '@/features/help/HelpPanel'
+import { daysUntil } from '@/shared/ui/days-left'
+import type { ProjectGallery } from '@ipc/contracts'
 import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
 
 /**
@@ -30,7 +32,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
     )
   }
 
-  const { connected, gallery, live } = q.data
+  const { connected, gallery, live, client } = q.data
 
   if (!connected) {
     return (
@@ -64,24 +66,27 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
     )
   }
 
-  return <GalleryReady projectName={projectName} gallery={gallery} live={live} onOpen={() => open.mutate()} opening={open.isPending} />
+  return <GalleryReady projectName={projectName} gallery={gallery} live={live} client={client} onOpen={() => open.mutate()} opening={open.isPending} />
 }
 
 function GalleryReady({
   projectName,
   gallery,
   live,
+  client,
   onOpen,
   opening,
 }: {
   projectName: string
-  gallery: { gallery_url: string; short_id: string; pin: string | null }
-  live: { photo_count: number; status: string } | null
+  gallery: NonNullable<ProjectGallery['gallery']>
+  live: ProjectGallery['live']
+  client: ProjectGallery['client']
   onOpen: () => void
   opening: boolean
 }) {
   const svg = useMemo(() => qrSvg(gallery.gallery_url), [gallery.gallery_url])
   const photos = live?.photo_count ?? null
+  const figures = galleryFigures(gallery)
   // Green once there are photos to see; amber while the next thing is uploading them.
   const done = photos !== null && photos > 0
 
@@ -95,6 +100,7 @@ function GalleryReady({
   }
 
   const message = `Your photos from ${projectName} are here: ${gallery.gallery_url}${gallery.pin ? `\nPIN: ${gallery.pin}` : ''}`
+  const clientWa = client ? clientWhatsapp(client, projectName, gallery) : null
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -107,6 +113,7 @@ function GalleryReady({
             ) : done ? (
               <span>
                 <b>{photos}</b> {photos === 1 ? 'photo' : 'photos'} in the gallery
+                {figures && <span className="text-muted-foreground"> · {figures}</span>}
               </span>
             ) : (
               <span>No photos yet. Open the gallery to upload them.</span>
@@ -135,7 +142,23 @@ function GalleryReady({
                 </Button>
               </Field>
             )}
+            {gallery.full_access_pin && (
+              <Field icon={KeyRound} label="Couple's PIN · shows every photo">
+                <span className="font-mono text-base font-semibold tracking-widest">{gallery.full_access_pin}</span>
+                <Button variant="outline" size="sm" onClick={() => void copy(gallery.full_access_pin!, 'PIN')}>
+                  <Copy /> Copy
+                </Button>
+              </Field>
+            )}
+            <ExpiryLine expiresAt={gallery.expires_at} onRenew={onOpen} />
             <div className="flex flex-wrap gap-2">
+              {clientWa && done && (
+                <Button size="sm" asChild>
+                  <a href={clientWa.href} target="_blank" rel="noreferrer noopener">
+                    <MessageCircle /> Send to {clientWa.firstName}
+                  </a>
+                </Button>
+              )}
               <Button variant="outline" size="sm" asChild>
                 <a href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer noopener">
                   <MessageCircle /> Send on WhatsApp
@@ -164,6 +187,45 @@ function GalleryReady({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/** "140 visits · 12 guests signed up", or null before anyone has opened it. */
+function galleryFigures(g: NonNullable<ProjectGallery['gallery']>): string | null {
+  const parts = [
+    g.visits > 0 ? `${g.visits} ${g.visits === 1 ? 'visit' : 'visits'}` : null,
+    g.guests ? `${g.guests} ${g.guests === 1 ? 'guest' : 'guests'} signed up` : null,
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : null
+}
+
+/** The client's own message: the link, the guests' PIN and their own full-access PIN. */
+function clientWhatsapp(client: NonNullable<ProjectGallery['client']>, projectName: string, g: NonNullable<ProjectGallery['gallery']>) {
+  const digits = (client.phone ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  const firstName = client.name.trim().split(/\s+/)[0] || 'client'
+  const lines = [
+    `Hi ${firstName}! Your photos from ${projectName} are ready: ${g.gallery_url}`,
+    g.pin ? `PIN for your guests: ${g.pin}` : null,
+    g.full_access_pin ? `Your own PIN (shows every photo): ${g.full_access_pin}` : null,
+  ].filter(Boolean)
+  const to = digits.length === 10 ? `91${digits}` : digits
+  return { firstName, href: `https://wa.me/${to}?text=${encodeURIComponent(lines.join('\n'))}` }
+}
+
+/** "Open till 12 Oct 2027"; amber with Renew in the last 30 days, red once it has closed. */
+function ExpiryLine({ expiresAt, onRenew }: { expiresAt: string | null; onRenew: () => void }) {
+  if (!expiresAt) return null
+  const days = daysUntil(expiresAt.slice(0, 10))
+  const date = new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  if (days > 30) return <p className="text-xs text-muted-foreground">Open till {date}</p>
+  return (
+    <p className={cn('flex flex-wrap items-center gap-2 text-sm', days < 0 ? 'text-destructive' : 'text-warning')}>
+      {days < 0 ? `Closed on ${date}: guests can't open it.` : `Closes on ${date} (${days === 0 ? 'today' : `${days} ${days === 1 ? 'day' : 'days'}`}).`}
+      <Button variant="outline" size="sm" onClick={onRenew}>
+        Renew in Frameline
+      </Button>
+    </p>
   )
 }
 

@@ -107,7 +107,7 @@ describe('the studio menu', () => {
 
   it('opens Money on what is due, and Projects with its Needs attention tab', () => {
     expect(hubFor('/billing/invoices')?.map((t) => t.label)).toEqual(['Payments', 'Invoices', 'Expenses', 'Profit & Loss'])
-    expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
+    expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking', '/galleries'])
     const money = filterNav(NAV, 'admin', access(['company_expenses']), false).find((e) => e.label === 'Money') as NavLeaf
     expect(money.to).toBe('/company-expenses')
   })
