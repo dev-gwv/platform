@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 /**
  * Plans with limits (0241, 0242). A studio's plan year starts the day it
- * pays; a monthly plan carries the yearly numbers pro rata; leads that arrive
+ * pays; a monthly plan counts the same yearly numbers (0267); leads that arrive
  * by themselves are never refused; a trial and an unlimited plan are never
  * stopped; upgrading part-way costs only the difference.
  */
@@ -102,9 +102,11 @@ describe('plan limits from the billing date (0242)', () => {
     await q(`update companies set plan_period_start = now() - interval '165 days' where id = $1`, [COMPANY])
   })
 
-  it('gives a monthly plan its share: 3 projects a pass', async () => {
-    for (let i = 1; i <= 3; i++) await project(MONTHLY, MONTHLY_CLIENT, `Shoot ${i}`)
-    await expect(project(MONTHLY, MONTHLY_CLIENT, 'Shoot 4')).rejects.toThrow(/makes 3 projects a month/)
+  it('gives a monthly plan the whole year of 30, usable in one month (0267)', async () => {
+    for (let i = 1; i <= 30; i++) await project(MONTHLY, MONTHLY_CLIENT, `Shoot ${i}`)
+    await expect(project(MONTHLY, MONTHLY_CLIENT, 'Shoot 31')).rejects.toThrow(/makes 30 projects a year/)
+    const [w] = await q<{ days: number }>(`select period_days as days from plan_window($1)`, [MONTHLY])
+    expect(w!.days).toBe(365)
   })
 
   it('never stops a studio on a trial, or on Pro', async () => {
@@ -257,8 +259,9 @@ describe('plan limits from the billing date (0242)', () => {
       `select key, limits, free_emails_month, is_active from plans where tier is not null and key <> 'tight_test' order by key`,
     )
     const by = Object.fromEntries(rows.map((r) => [r.key, r]))
-    expect(by['starter_yearly']!.limits).toMatchObject({ projects: 30, invoices: 60, leads: 300, team_logins: 3, team_members: 20 })
-    expect(by['starter_monthly']!.limits).toMatchObject({ projects: 3, invoices: 5, leads: 25, team_logins: 3 })
+    // One set of Starter numbers, counted by the year, monthly or yearly (0267).
+    expect(by['starter_yearly']!.limits).toMatchObject({ projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10 })
+    expect(by['starter_monthly']!.limits).toEqual(by['starter_yearly']!.limits)
     expect(by['pro_yearly']!.limits).toEqual({})
     expect(by['max_yearly']!.limits).toEqual({})
     // The regular list (0262) carries the same limits as the member list.

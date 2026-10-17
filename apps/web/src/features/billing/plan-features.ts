@@ -31,8 +31,8 @@ interface CompareRow {
 const limitCell = (key: PlanLimitKey) => (p: Plan): Cell => {
   const n = p.limits?.[key]
   if (n == null) return { kind: 'text', text: 'Unlimited' }
-  if (!PER_PERIOD.has(key)) return { kind: 'text', text: String(n) }
-  return { kind: 'text', text: `${n} a ${p.billing_interval === 'monthly' ? 'month' : 'year'}` }
+  // Counted by the plan year on a monthly plan too (0267): never "3 a month".
+  return { kind: 'text', text: PER_PERIOD.has(key) ? `${n} a year` : String(n) }
 }
 
 const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: 'yes' } : { kind: 'no' })
@@ -43,7 +43,7 @@ export const COMPARE: CompareRow[] = [
   { label: 'Leads (enquiries always come in)', cell: limitCell('leads') },
   { label: 'GST invoices', cell: limitCell('invoices') },
   { label: 'Team logins', cell: limitCell('team_logins') },
-  { label: 'Team without a login', cell: limitCell('team_members') },
+  { label: 'Crew (no login)', cell: limitCell('team_members') },
   { label: 'Enquiry forms', cell: limitCell('enquiry_forms') },
   { label: 'Facebook Pages', cell: limitCell('facebook_pages') },
   {
