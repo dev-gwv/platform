@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:" />
+    <title>Studio AutoPilot · Offline</title>
+    <style>
+      :root {
+        --navy: #1b2a4a;
+        --gold: #f2a618;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --bg: #f7f8fb;
+        --card: #ffffff;
+        --line: #e5e7eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f3f4f6;
+          --muted: #9ca3af;
+          --bg: #0f172a;
+          --card: #111c33;
+          --line: #1f2a44;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        padding: 16px;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 32px 28px;
+        text-align: center;
+        box-shadow: 0 20px 40px -24px rgba(27, 42, 74, 0.35);
+      }
+      .mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: var(--navy);
+        font-weight: 800;
+        font-size: 26px;
+        letter-spacing: -0.02em;
+        margin-bottom: 18px;
+      }
+      .mark .s { color: #fff; }
+      .mark .a { color: var(--gold); }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 22px; color: var(--muted); line-height: 1.5; font-size: 15px; }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        background: var(--navy);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        padding: 11px 26px;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.15); }
+      button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+      .small { margin: 16px 0 0; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="mark" aria-hidden="true"><span class="s">S</span><span class="a">A</span></div>
+      <h1>You're offline</h1>
+      <p>Studio AutoPilot needs the internet. Check your Wi-Fi or mobile data, then try again.</p>
+      <button id="retry" type="button">Try again</button>
+      <p class="small" id="auto">We'll try again by ourselves as soon as you're back online.</p>
+    </main>
+    <script>
+      const retry = () => window.studioAutopilotDesktop && window.studioAutopilotDesktop.retry()
+      document.getElementById('retry').addEventListener('click', retry)
+      window.addEventListener('online', retry)
+      // Some networks come back without an "online" event (a captive Wi-Fi page, a VPN).
+      setInterval(() => { if (navigator.onLine) retry() }, 15000)
+    </script>
+  </body>
+</html>

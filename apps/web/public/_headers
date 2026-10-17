@@ -25,3 +25,10 @@
 # take a day to reach anyone.
 /sw.js
   Cache-Control: no-cache
+
+# The Android app (native/android) runs full screen only while this file names
+# it and its signing key. Android and Chrome want it served as JSON.
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=3600
+  Access-Control-Allow-Origin: *

@@ -31,6 +31,29 @@ export default tseslint.config(
     },
   },
   {
+    // The desktop app (Electron's main process and preload): CommonJS on Node.
+    files: ['native/desktop/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        exports: 'writable',
+        __dirname: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        setImmediate: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
     // Standalone Node scripts (run manually via bun), not part of the app build.
     files: ['**/*.mjs'],
     languageOptions: {

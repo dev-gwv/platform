@@ -1,0 +1,122 @@
+{
+  "name": "studio-autopilot-desktop",
+  "productName": "Studio AutoPilot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Studio AutoPilot for Windows, Mac and Linux: leads, shoots, team and money for photography studios.",
+  "author": {
+    "name": "Grateful World Ventures (OPC) Private Limited",
+    "email": "help@studioautopilot.in"
+  },
+  "homepage": "https://studioautopilot.in",
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "desktopName": "studio-autopilot.desktop",
+  "scripts": {
+    "start": "electron .",
+    "start:local": "STUDIO_AUTOPILOT_URL=http://localhost:5199 electron .",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.7"
+  },
+  "build": {
+    "appId": "in.studioautopilot.desktop",
+    "productName": "Studio AutoPilot",
+    "copyright": "© Grateful World Ventures (OPC) Private Limited",
+    "artifactName": "Studio-AutoPilot-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "src/**/*",
+      "resources/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": null,
+    "afterPack": "scripts/after-pack.cjs",
+    "protocols": [
+      {
+        "name": "Studio AutoPilot",
+        "schemes": [
+          "studioautopilot"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png",
+      "executableName": "Studio AutoPilot"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Studio AutoPilot",
+      "artifactName": "Studio-AutoPilot-Setup-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.business",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Studio AutoPilot uses the microphone for voice notes to your team.",
+        "NSCameraUsageDescription": "Studio AutoPilot uses the camera for the attendance selfie, when your studio asks for one.",
+        "NSLocationUsageDescription": "Studio AutoPilot uses your location to mark attendance at the studio.",
+        "NSLocationWhenInUseUsageDescription": "Studio AutoPilot uses your location to mark attendance at the studio."
+      }
+    },
+    "dmg": {
+      "title": "Studio AutoPilot",
+      "artifactName": "Studio-AutoPilot-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png",
+      "category": "Office",
+      "executableName": "studio-autopilot",
+      "synopsis": "Leads, shoots, team and money for photography studios",
+      "maintainer": "Grateful World Ventures (OPC) Private Limited <help@studioautopilot.in>",
+      "syncDesktopName": true
+    }
+  }
+}

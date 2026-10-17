@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown for the moment it takes Chrome to open the site: white, the logo in the middle. -->
+    <style name="Theme.Launcher" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/navy</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowDisablePreview">false</item>
+    </style>
+</resources>
