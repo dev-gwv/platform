@@ -13,7 +13,7 @@ email from credits" -- credits are not built yet.
 |---|---|---|---|
 | Billed yearly | ₹1,499/mo · ₹17,988 a year · ₹49 a day | ₹2,499/mo · ₹29,988 · ₹82 a day | ₹3,999/mo · ₹47,988 · ₹131 a day |
 | Billed monthly | ₹1,999 | ₹2,999 | ₹4,999 |
-| On the card | 30 projects a year · 3 team logins · 20 crew · Every feature included | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name and WhatsApp number · Priority help |
+| On the card | 30 projects a year · 30 invoices a year · 3 team logins · 10 crew | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name and WhatsApp number · Priority help |
 
 Prices are before 18% GST.
 
@@ -27,8 +27,10 @@ WhatsApp number).
 
 A studio's plan year starts the day it pays (`companies.plan_period_start`),
 never the calendar or the financial year: pay on 15 Oct, and Starter's 30
-projects run to 14 Oct, then start again. A monthly plan carries the yearly
-numbers **pro rata** for each 30-day pass (30 projects a year → 3 a month).
+projects run to 14 Oct, then start again. A monthly plan counts the same yearly
+numbers **for the whole year** (0267, owner 17 Oct: "you cannot bar that by
+month"): its plan year runs from the first payment, renewing a month keeps it,
+and all 30 projects can be made in one month.
 Upgrading part-way costs only the difference (`plan_quote`): what is left of
 the current plan comes off the new one, and the new plan year starts that day.
 A lower plan waits until the current one ends.
@@ -37,11 +39,11 @@ A lower plan waits until the current one ends.
 
 | Limit | Yearly | Monthly | Why |
 |---|---|---|---|
-| Projects | 30 | 3 | 2–3 bookings a month; a working studio passes it in its first season, which is the move to Pro |
-| Leads | 300 | 25 | ~10 enquiries a booking. **Enquiries from forms, Facebook and WhatsApp always come in**; only adding by hand or import stops |
-| GST invoices | 60 | 5 | An advance and a final per project; recording money received is never stopped |
+| Projects | 30 | 30 (by the year) | 2–3 bookings a month; a working studio passes it in its first season, which is the move to Pro |
+| Leads | 300 | 300 (by the year) | ~10 enquiries a booking. **Enquiries from forms, Facebook and WhatsApp always come in**; only adding by hand or import stops |
+| GST invoices | 30 | 30 (by the year) | An advance and a final per project; recording money received is never stopped |
 | Team logins (besides the owner) | 3 | 3 | An editor, a manager, one shooter |
-| Team without a login | 20 | 20 | A wedding crew of 6–10 plus a regular bench |
+| Crew (team without a login) | 10 | 10 | A wedding crew of 6–10 (owner, 17 Oct) |
 | Enquiry forms | 2 | 2 | The website and one vendor |
 | Facebook Pages | 1 | 1 | |
 | Saved packages | 3 | 3 | The sample is not counted |

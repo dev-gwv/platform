@@ -10,7 +10,7 @@ const starter: Plan = {
   name: 'Starter',
   price: 17988,
   tier: 'starter',
-  limits: { projects: 30, invoices: 60, leads: 300, team_logins: 3, team_members: 20, enquiry_forms: 2, facebook_pages: 1 },
+  limits: { projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10, enquiry_forms: 2, facebook_pages: 1 },
 }
 const pro: Plan = { ...base, id: '00000000-0000-4000-8000-000000000002', key: 'pro_yearly', name: 'Pro', price: 29988, tier: 'pro', limits: {} }
 const max: Plan = {
@@ -33,13 +33,13 @@ describe('the pricing page stays short', () => {
   })
 
   it('reads Starter numbers from the plan, and Unlimited on Pro and Studio Max', () => {
-    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '300 a year', '60 a year', '3', '20', '2', '1', 'no', 'no'])
+    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '300 a year', '30 a year', '3', '10', '2', '1', 'no', 'no'])
     expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(7).fill('Unlimited'), 'no', 'no'])
     expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(7).fill('Unlimited'), 'yes', 'yes'])
   })
 
-  it('says "a month" on the monthly plans', () => {
-    expect(text(COMPARE[0]!.cell({ ...starter, billing_interval: 'monthly', limits: { projects: 3 } }))).toBe('3 a month')
+  it('counts by the year on the monthly plans too, never "a month" (0267)', () => {
+    expect(text(COMPARE[0]!.cell({ ...starter, billing_interval: 'monthly' }))).toBe('30 a year')
   })
 
   it('puts the three plans for one way of paying in order', () => {

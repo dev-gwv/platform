@@ -1050,7 +1050,7 @@ export const KB: readonly KbArticle[] = [
     keywords: ['cost', 'price', 'fee', 'charges', 'how much', 'subscription', 'rate'],
     body: [
       'There are three plans: **Starter** ₹35,988 a year (or ₹3,999 a month), **Pro** ₹59,988 a year (or ₹5,999 a month) and **Studio Max** ₹95,988 a year (or ₹9,999 a month).',
-      'Every plan has every feature. Starter has number limits (30 projects a year, 3 team logins, 20 crew); Pro and Studio Max are unlimited, and Studio Max puts your own name and logo on the app, with priority help.',
+      'Every plan has every feature. Starter has number limits (30 projects and 30 invoices a year -- all of them can be used in one month, on a monthly plan too -- 3 team logins and 10 crew); Pro and Studio Max are unlimited, and Studio Max puts your own name and logo on the app, with priority help.',
       'An IPC Diamond member pays about half for the very same plans: **Diamond Starter** ₹17,988 a year (₹1,999 a month), **Diamond Pro** ₹29,988 (₹2,999) and **Diamond Studio Max** ₹47,988 (₹4,999). **Plan & billing** shows both prices, the regular one on top and the members\' below it.',
       'All of those are before 18% GST.',
       'To buy or change a plan, press **Talk to us on WhatsApp** on **Plan & billing**: the message is already written, and we set it up on a short call.',
