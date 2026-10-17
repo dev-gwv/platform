@@ -24,6 +24,7 @@ import { STATUS_LABEL, accessMessage, endsOf, extendFrom, toRows, type AccessRow
 import { ACTIVITY, activityLevel, lastActiveWords, madeLine, type ActivityLevel } from '@/features/platform/activity'
 import { OfferDialog } from '@/features/platform/OfferDialog'
 import { OffersList } from '@/features/platform/OffersList'
+import { FindLoginDialog } from '@/features/platform/FindLoginDialog'
 import { Segmented } from '@/shared/ui/segmented'
 import { TONE_CHIP } from '@/shared/ui/tones'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
@@ -281,6 +282,7 @@ function StudioList() {
         <Button size="sm" variant="outline" onClick={() => downloadAccessCsv(rows, act)}>
           <Download className="size-4" /> Export CSV
         </Button>
+        <FindLoginDialog />
         <ImportOldAppButton />
         <CreateStudioDialog />
       </div>

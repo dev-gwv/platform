@@ -354,3 +354,18 @@ export const platformOffer = z.object({
   cancelled_at: z.string().nullable(),
 })
 export type PlatformOffer = z.infer<typeof platformOffer>
+
+/** One studio a login opens, for Find a login (0269). */
+export const loginStudio = z.object({
+  profile_id: uuid,
+  company_id: uuid,
+  company_name: z.string(),
+  role: z.string(),
+  is_owner: z.boolean(),
+  plan_gate: planGate,
+  access_until: z.string().nullable(),
+  opens_first: z.boolean(),
+  last_in: z.boolean(),
+})
+export type LoginStudio = z.infer<typeof loginStudio>
+export const openFirstRequest = z.object({ email: z.string().trim().min(3).max(320), company_id: uuid })

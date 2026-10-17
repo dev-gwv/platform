@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, loginStudio, makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -236,5 +236,31 @@ export function useCancelOffer() {
       void qc.invalidateQueries({ queryKey: ['platform', 'offers'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not end the offer.'),
+  })
+}
+
+/** Every studio the login with this email opens (0269), only once an email is typed. */
+export function useLoginLookup(email: string) {
+  const { session } = useAuth()
+  const e = email.trim()
+  return useQuery({
+    queryKey: ['platform', 'login', e.toLowerCase()],
+    queryFn: () => callApi(`/platform/logins?email=${encodeURIComponent(e)}`, { responseSchema: loginStudio.array() }),
+    enabled: !!session?.is_platform_admin && e.length >= 3,
+    retry: false,
+  })
+}
+
+/** The studio a login opens next time it signs in. */
+export function useOpenFirst() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { email: string; company_id: string }) =>
+      callApi('/platform/logins/open-first', { method: 'POST', body, responseSchema: ok }),
+    onSuccess: () => {
+      toast.success('Done. Their next sign-in opens that studio.')
+      void qc.invalidateQueries({ queryKey: ['platform', 'login'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change it.'),
   })
 }
