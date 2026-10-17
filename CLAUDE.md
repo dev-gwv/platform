@@ -27,6 +27,13 @@ Then take the next number **and push something that claims it within the
 hour** — an unpushed migration number is not claimed. If your work is not
 ready, push the migration file alone, empty but for its comment header.
 
+**A deploy can run your empty claim.** `deploy/db/migrate.sh` marks each file
+done by its name, so if anyone deploys between your claim and your body, the
+header-only file is recorded as applied and the body that follows never runs
+(0265: every quote failed until 0266 ran the body again). Once your claim has
+been pushed for a while, or you are not sure nobody has deployed since, put the
+body in the next free number, written so it is safe to run twice.
+
 Renumbering after the fact is cheap but easy to get half-right: the number
 appears in the filename, in the test that reads the file by name, and in the
 comments of every file that cites it. Grep for it.
@@ -197,7 +204,7 @@ Keep this short and current. Delete a line when it lands.
 
 | Area | Session | Notes |
 | --- | --- | --- |
-| Quote and invoice lines: Unit and Days (LED screens by sq ft per day) | Claude (desktop, owner's PC) | **0265 taken** (`crm_quote_items` and `invoice_items` gain `unit`, `days`; amount = qty × rate × days in `computeInvoice`; the API writes both by sort_order after the RPCs; `get_quote_for_token`, `get_invoice_for_token`, `client_portal_invoice` copied from 0049/0171/0184 with the two keys -- copy them from 0265). `features/crm/QuoteBuilder.tsx`, `features/billing/InvoiceEditor.tsx`, `LineUnitFields.tsx`, `InvoicePaper.tsx`, `QuotePaper.tsx` -- pull first. |
+| Quote and invoice lines: Unit and Days (LED screens by sq ft per day) | Claude (desktop, owner's PC) | **0265, 0266 taken** (0266 is 0265's body again: the server marked the empty claim applied) (`crm_quote_items` and `invoice_items` gain `unit`, `days`; amount = qty × rate × days in `computeInvoice`; the API writes both by sort_order after the RPCs; `get_quote_for_token`, `get_invoice_for_token`, `client_portal_invoice` copied from 0049/0171/0184 with the two keys -- copy them from 0265). `features/crm/QuoteBuilder.tsx`, `features/billing/InvoiceEditor.tsx`, `LineUnitFields.tsx`, `InvoicePaper.tsx`, `QuotePaper.tsx` -- pull first. |
 | Desktop and Android apps | Claude (client's session) | No migration. `native/desktop/*` (Electron 44, electron-builder 26, `npm ci` there, not a bun workspace), `native/android/*`, `.github/workflows/apps.yml`, `apps/web/public/.well-known/assetlinks.json` and its `_headers` block, `docs/apps.md` -- pull first. |
 | Frameline gallery add-on | Claude (terminal, owner's PC) | **0261, 0264 taken** (0264: `project_galleries` keeps Frameline's last answer -- full-access PIN, photos, visits, guests, expiry, `photos_announced` -- and `client_portal_gallery` adds `full_access_pin`; copy it from 0264). `lib/gallery-sync.ts`, `modules/galleries/router.ts`, `modules/webhooks/frameline.ts`, `routes/galleries.tsx`, `routes/settings/gallery.tsx`. (`project_galleries`: a project's Frameline event, link and PIN, company RLS; `client_portal_gallery(raw)`, service-only). `lib/frameline.ts`, `modules/projects/routes-gallery.ts`, `features/gallery/*`, the Gallery view in `ProjectTabs.tsx`, `GalleryCard` in `routes/client-portal.tsx` -- pull first. Needs `FRAMELINE_API_URL` + `FRAMELINE_SECRET` on the VPS and the matching secret on Frameline. |
 | Pricing page: both lists one above the other, Diamond check before WhatsApp | Claude (client's session) | **0263 taken** (the member plans are named Diamond Starter / Pro / Studio Max). `features/billing/PlanPicker.tsx`, `price-lists.ts`, `DiamondCheckDialog.tsx`, `routes/subscription.tsx`, `features/marketing/Landing.tsx`, `/public/plans?list=member` -- pull first. |
