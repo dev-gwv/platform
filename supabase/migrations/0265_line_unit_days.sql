@@ -1,0 +1,3 @@
+-- Claimed: a quote or invoice line can carry a unit ("sq ft") and a number
+-- of days, so an LED screen reads "96 sq ft × ₹60 × 3 days" instead of a
+-- bare quantity of 288. Body follows.
