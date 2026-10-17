@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { CreditCard } from 'lucide-react'
+import { CreditCard, Store } from 'lucide-react'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -7,16 +8,52 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { humanize } from '@/shared/ui/format'
 
+/** How often the page asks again whether access is back (a platform admin may extend it meanwhile). */
+const RECHECK_MS = 30_000
+
 /**
  * Lovable parity (/plan-expired): standalone expired-plan page with
  * Status/Role, owner Renew CTA, and sign out. Mounted behind
  * RequireAuth allowExpired so it stays reachable precisely when lapsed.
+ *
+ * Two ways out besides paying. A login can belong to several studios
+ * (0159) and opens the one it was last in, so the studio someone extended
+ * may not be the one on screen: every other studio of the login is listed
+ * here with Open. And the page re-reads the session on focus and every 30 s,
+ * leaving for Home the moment access is back -- an extension in Studio
+ * Access Manager reaches a phone that was left on this page without a
+ * sign-out.
  */
 export function PlanExpiredPage() {
-  const { session, signOut } = useAuth()
+  const { session, signOut, refresh, switchStudio } = useAuth()
   const navigate = useNavigate()
   const isOwner = session?.is_owner ?? false
   const gate = session?.plan_gate ?? 'expired'
+  const others = (session?.studios ?? []).filter((s) => s.company_id !== session?.company_id)
+  const [opening, setOpening] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (gate !== 'expired') {
+      void navigate({ to: '/dashboard' })
+      return
+    }
+    const recheck = () => void refresh()
+    const timer = window.setInterval(recheck, RECHECK_MS)
+    window.addEventListener('focus', recheck)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', recheck)
+    }
+  }, [gate, navigate, refresh])
+
+  async function open(profileId: string) {
+    setOpening(profileId)
+    try {
+      await switchStudio(profileId)
+    } finally {
+      setOpening(null)
+    }
+  }
 
   async function onSignOut() {
     await signOut()
@@ -72,8 +109,25 @@ export function PlanExpiredPage() {
             )}
             {isOwner && (
               <p className="text-xs text-muted-foreground">
-                IPC Diamond member? Verify on the billing page with a screenshot of the IPC Diamonds - Premium group to get 30 days.
+                IPC Diamond member? On the billing page, check the mobile number registered with IPC to get 30 days.
               </p>
+            )}
+            {others.length > 0 && (
+              <div className="flex w-full flex-col gap-2 border-t pt-3 text-left">
+                <p className="text-sm font-medium">Your other {others.length === 1 ? 'studio' : 'studios'}</p>
+                {others.map((s) => (
+                  <Button
+                    key={s.profile_id}
+                    variant="outline"
+                    className="w-full justify-start"
+                    disabled={opening !== null}
+                    onClick={() => void open(s.profile_id)}
+                  >
+                    <Store className="mr-2 size-4" />
+                    <span className="truncate">{opening === s.profile_id ? 'Opening…' : `Open ${s.company_name}`}</span>
+                  </Button>
+                ))}
+              </div>
             )}
             <Button variant="outline" className="w-full" onClick={() => void onSignOut()}>
               Sign out
