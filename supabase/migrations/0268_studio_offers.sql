@@ -1,0 +1,2 @@
+-- 0268: studio activity for the platform owner, and personal offers
+-- (owner, 17 Oct). Claimed; body follows on this branch.
