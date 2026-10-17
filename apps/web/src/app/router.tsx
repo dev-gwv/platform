@@ -44,6 +44,7 @@ const ProjectDetailPage = lazyRouteComponent(() => import('@/routes/projects/det
 const ProjectEditPage = lazyRouteComponent(() => import('@/routes/projects/$id.edit'), 'ProjectEditPage')
 const ProjectQuotationPage = lazyRouteComponent(() => import('@/routes/projects/$id.quotation'), 'ProjectQuotationPage')
 const ProjectTrackingPage = lazyRouteComponent(() => import('@/routes/project-tracking'), 'ProjectTrackingPage')
+const GalleriesPage = lazyRouteComponent(() => import('@/routes/galleries'), 'GalleriesPage')
 const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
 const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
 const ProductionBoardPage = lazyRouteComponent(() => import('@/routes/production-board'), 'ProductionBoardPage')
@@ -105,6 +106,7 @@ const PlatformDiamondPage = lazyRouteComponent(() => import('@/routes/platform/d
 const SystemPage = lazyRouteComponent(() => import('@/routes/settings/system'), 'SystemPage')
 const MessagingSettingsPage = lazyRouteComponent(() => import('@/routes/settings/messaging'), 'MessagingSettingsPage')
 const WhatsappSettingsPage = lazyRouteComponent(() => import('@/routes/settings/whatsapp'), 'WhatsappSettingsPage')
+const GallerySettingsPage = lazyRouteComponent(() => import('@/routes/settings/gallery'), 'GallerySettingsPage')
 const PlatformMessagingPage = lazyRouteComponent(() => import('@/routes/platform/messaging'), 'PlatformMessagingPage')
 const PlatformEmailPage = lazyRouteComponent(() => import('@/routes/platform/email'), 'PlatformEmailPage')
 const PlatformPaymentsPage = lazyRouteComponent(() => import('@/routes/platform/payments'), 'PlatformPaymentsPage')
@@ -266,6 +268,7 @@ const routeTree = rootRoute.addChildren([
   route('/projects/$id/edit', ProjectEditPage),
   route('/projects/$id/quotation', ProjectQuotationPage),
   route('/project-tracking', ProjectTrackingPage),
+  route('/galleries', GalleriesPage),
   route('/project-documents', ProjectDocumentsPage),
   route('/team/work-preview', TeamWorkPreviewPage),
   route('/team/performance', TeamPerformancePage),
@@ -372,6 +375,7 @@ const routeTree = rootRoute.addChildren([
   route('/platform/studio-referrals', PlatformStudioReferralsPage),
   route('/settings/messaging', MessagingSettingsPage),
   route('/settings/whatsapp', WhatsappSettingsPage),
+  route('/settings/gallery', GallerySettingsPage),
   ]),
 ])
 

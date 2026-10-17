@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { verify } from 'hono/jwt'
+import { sign, verify } from 'hono/jwt'
 import type { Env } from '../context'
-import { createFramelineGallery, framelineClaims, framelineConnected, framelineSignInUrl, readFramelineGallery, type FramelinePerson } from './frameline'
+import { createFramelineGallery, framelineClaims, framelineConnected, framelineSignInUrl, readFramelineGallery, verifyFramelineNotice, type FramelinePerson } from './frameline'
 
 /**
  * Frameline, the gallery add-on (0261). Its own suite checks the other half
@@ -98,5 +98,29 @@ describe('talking to Frameline', () => {
         throw new Error('ECONNREFUSED')
       }),
     ).toMatchObject({ ok: false, kind: 'unreachable' })
+  })
+})
+
+describe('Frameline\'s gallery-changed notice', () => {
+  const notice = (over: Record<string, unknown> = {}, secret = SECRET) => {
+    const now = Math.floor(Date.now() / 1000)
+    return sign({ iss: 'frameline', aud: 'studioautopilot', purpose: 'notice', cid: 'c-1', jti: 'j-1', iat: now, exp: now + 60, ...over }, secret, 'HS256')
+  }
+
+  it('takes a fresh notice Frameline signed for us, and names its company', async () => {
+    expect(await verifyFramelineNotice(env, await notice())).toEqual({ companyId: 'c-1' })
+  })
+
+  it('refuses anything else: another secret, issuer, audience or purpose, an old or long-lived token, or none', async () => {
+    expect(await verifyFramelineNotice(env, await notice({}, 'another-secret-0123456789-0123456789-xx'))).toBeNull()
+    expect(await verifyFramelineNotice(env, await notice({ iss: 'studioautopilot' }))).toBeNull()
+    expect(await verifyFramelineNotice(env, await notice({ aud: 'frameline' }))).toBeNull()
+    expect(await verifyFramelineNotice(env, await notice({ purpose: 'api' }))).toBeNull()
+    const now = Math.floor(Date.now() / 1000)
+    expect(await verifyFramelineNotice(env, await notice({ iat: now - 600, exp: now - 300 }))).toBeNull()
+    expect(await verifyFramelineNotice(env, await notice({ exp: now + 3600 }))).toBeNull()
+    expect(await verifyFramelineNotice(env, await notice({ cid: '' }))).toBeNull()
+    expect(await verifyFramelineNotice(env, undefined)).toBeNull()
+    expect(await verifyFramelineNotice({} as Env, await notice())).toBeNull()
   })
 })

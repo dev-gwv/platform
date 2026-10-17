@@ -158,10 +158,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: 'Messaging',
         icon: Bell,
         module: 'settings',
-        also: ['/settings/whatsapp'],
+        also: ['/settings/whatsapp', '/settings/gallery'],
         tabs: [
           { to: '/settings/messaging', label: 'Messages', module: 'settings' },
           { to: '/settings/whatsapp', label: 'WhatsApp', module: 'settings' },
+          // Frameline, the photo gallery add-on: plan, wallet, Open Frameline.
+          { to: '/settings/gallery', label: 'Gallery', module: 'settings' },
         ],
       },
       {

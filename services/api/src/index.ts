@@ -23,6 +23,8 @@ import { billingRouter } from './modules/billing/router'
 import { financialsRouter } from './modules/financials/router'
 import { crmRouter } from './modules/crm/router'
 import { webhooksRouter, metaRouter } from './modules/webhooks/router'
+import { framelineWebhookRouter } from './modules/webhooks/frameline'
+import { galleriesRouter } from './modules/galleries/router'
 import { hrRouter } from './modules/hr/router'
 import { performanceRouter } from './modules/performance/router'
 import { meRouter } from './modules/me/router'
@@ -177,6 +179,8 @@ app.route('/crm', crmCallsRouter)
 app.route('/crm', crmSequencesRouter)
 app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)
+app.route('/webhooks', framelineWebhookRouter)
+app.route('/galleries', galleriesRouter)
 app.route('/meta', metaRouter)
 app.route('/hr', hrRouter)
 app.route('/performance', performanceRouter)

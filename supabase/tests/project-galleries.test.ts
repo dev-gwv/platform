@@ -3,6 +3,9 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
+import type { TransactionSql } from 'postgres'
+import type { FramelineGallery } from '../../services/api/src/lib/frameline'
+import { saveGallerySnapshot } from '../../services/api/src/lib/gallery-sync'
 
 /**
  * A project's Frameline gallery (0261): one studio never sees or writes
@@ -95,7 +98,7 @@ describe('project galleries', () => {
   })
 
   it('shows the client the gallery and its PIN through their live link only', async () => {
-    expect(await galleryFor(TOKEN)).toEqual({ url: 'https://gallery.example/AB12CD3', pin: '4821' })
+    expect(await galleryFor(TOKEN)).toEqual({ url: 'https://gallery.example/AB12CD3', pin: '4821', full_access_pin: null })
     expect(await galleryFor('not-the-token')).toBeNull()
     await q(`update client_portal_links set revoked_at = now() where project_id = $1`, [WEDDING])
     expect(await galleryFor(TOKEN)).toBeNull()
@@ -103,5 +106,58 @@ describe('project galleries', () => {
 
   it('is not something a signed-in studio member can call for any token', async () => {
     await asUser(A_OWNER, () => expect(q(`select client_portal_gallery($1)`, [TOKEN])).rejects.toThrow())
+  })
+})
+
+/**
+ * 0264: what Frameline last said is kept on the row (saveGallerySnapshot, run
+ * here for real), so a PIN changed in Frameline reaches the client's page, and
+ * new photos ring the bell once per batch.
+ */
+describe('keeping the gallery in step with Frameline', () => {
+  // postgres.js's tagged template over PGlite: the same SQL text and parameters the server sends.
+  const sql = Object.assign(
+    async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const text = strings.reduce((t, s, i) => t + (i ? `$${i}` : '') + s, '')
+      const params = values.map((v) => (v && typeof v === 'object' && 'json' in v ? JSON.stringify((v as { json: unknown }).json) : v))
+      return (await db.query(text, params)).rows
+    },
+    { json: (v: unknown) => ({ json: v }) },
+  ) as unknown as TransactionSql
+
+  const frameline = (over: Partial<FramelineGallery> = {}): FramelineGallery => ({
+    projectId: WEDDING, eventId: 'ev_abc', shortId: 'AB12CD3', name: 'Priya & Rahul Wedding', status: 'live', photoCount: 0,
+    galleryUrl: 'https://gallery.example/AB12CD3', pin: '4821', fullAccessPin: null, facePrivacy: false,
+    expiresAt: '2027-10-16T00:00:00.000Z', visits: 0, adminPath: '/events/ev_abc', createdAt: '2026-10-16T00:00:00.000Z', ...over,
+  })
+  const bells = async () => q<{ title: string; deep_link: string }>(`select title, deep_link from notifications where type = 'gallery_photos' order by created_at, title`)
+
+  it('keeps the new PIN, the couple\'s PIN and the figures, and the client sees them', async () => {
+    await q(`update client_portal_links set revoked_at = null where project_id = $1`, [WEDDING])
+    expect(await saveGallerySnapshot(sql, A, WEDDING, frameline({ pin: '7311', fullAccessPin: '2378', visits: 40, guests: 6 }))).toBe(true)
+    const [row] = await q<Record<string, unknown>>(`select pin, full_access_pin, visits, guests, photo_count, status from project_galleries where project_id = $1`, [WEDDING])
+    expect(row).toEqual({ pin: '7311', full_access_pin: '2378', visits: 40, guests: 6, photo_count: 0, status: 'live' })
+    expect(await galleryFor(TOKEN)).toEqual({ url: 'https://gallery.example/AB12CD3', pin: '7311', full_access_pin: '2378' })
+    expect(await bells()).toEqual([]) // no photos yet, nothing to tell
+  })
+
+  it('rings once per new batch of photos, never again on a re-read', async () => {
+    await saveGallerySnapshot(sql, A, WEDDING, frameline({ photoCount: 23 }))
+    await saveGallerySnapshot(sql, A, WEDDING, frameline({ photoCount: 23 }))
+    expect(await bells()).toEqual([{ title: '23 photos are in the Priya & Rahul Wedding gallery', deep_link: `/projects/${WEDDING}?tab=gallery` }])
+    await saveGallerySnapshot(sql, A, WEDDING, frameline({ photoCount: 20 })) // some deleted: no bell
+    await saveGallerySnapshot(sql, A, WEDDING, frameline({ photoCount: 41 }))
+    expect((await bells()).map((b) => b.title)).toEqual([
+      '23 photos are in the Priya & Rahul Wedding gallery',
+      '41 photos are in the Priya & Rahul Wedding gallery',
+    ])
+  })
+
+  it('never writes another studio\'s row, nor a project with no gallery', async () => {
+    const pin = async () => (await q<{ pin: string }>(`select pin from project_galleries where project_id = $1`, [WEDDING]))[0]!.pin
+    const before = await pin()
+    expect(await saveGallerySnapshot(sql, B, WEDDING, frameline({ pin: '0000' }))).toBe(false)
+    expect(await saveGallerySnapshot(sql, A, OTHER, frameline({ projectId: OTHER }))).toBe(false)
+    expect(await pin()).toBe(before)
   })
 })

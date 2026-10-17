@@ -166,7 +166,15 @@ export const publicClientPortal = z.object({
    * The project's photo gallery in Frameline (0261): where the client and
    * their guests see the photos, and its PIN. Null until the studio makes one.
    */
-  gallery: z.object({ url: z.string(), pin: z.string().nullable() }).nullable().default(null),
+  gallery: z
+    .object({
+      url: z.string(),
+      pin: z.string().nullable(),
+      // The couple's own PIN (0264): it shows every photo; guests use `pin`.
+      full_access_pin: z.string().nullable().default(null),
+    })
+    .nullable()
+    .default(null),
   terms: z.array(
     z.object({
       id: uuid,
