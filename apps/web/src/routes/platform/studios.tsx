@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Building2, CalendarClock, CalendarPlus, Copy, Download, Eye, Gem, History, Plus, RefreshCw, Search, ShieldOff, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, Building2, CalendarClock, CalendarPlus, Copy, Download, Eye, Gem, Gift, History, RefreshCw, Search, ShieldOff, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { PlatformStudio } from '@ipc/contracts'
+import type { PlatformStudio, StudioActivity } from '@ipc/contracts'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -9,19 +9,24 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
+import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
-import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
 import { planLabel } from '@/features/platform/plan-rows'
-import { usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, useCreatePlatformStudio, useLegacyStudios, useImportLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
-import { DateField, toIso } from '@/shared/ui/date-field'
-import { inviteMessage, legacyState, parseLegacyCsv, type LegacyParse } from '@/features/platform/legacy'
+import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
+import { inviteMessage } from '@/features/platform/legacy'
+import { CreateStudioDialog, GiveAccessDialog, ImportOldAppButton } from '@/features/platform/access-dialogs'
 import { STATUS_LABEL, accessMessage, endsOf, extendFrom, toRows, type AccessRow, type AccessStatus } from '@/features/platform/access-rows'
+import { ACTIVITY, activityLevel, lastActiveWords, madeLine, type ActivityLevel } from '@/features/platform/activity'
+import { OfferDialog } from '@/features/platform/OfferDialog'
+import { OffersList } from '@/features/platform/OffersList'
+import { Segmented } from '@/shared/ui/segmented'
+import { TONE_CHIP } from '@/shared/ui/tones'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 
 const STATUS_TONE: Record<AccessStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   active: 'success',
@@ -43,16 +48,17 @@ function csvEscape(v: unknown): string {
 }
 
 /** The old board's export: one line per studio, new app and old app alike. */
-function downloadAccessCsv(rows: AccessRow[]) {
+function downloadAccessCsv(rows: AccessRow[], act: Map<string, StudioActivity>, name = 'studio-access-report') {
   if (rows.length === 0) {
     toast.info('Nothing to export.')
     return
   }
-  const header = ['Studio Name', 'Owner Name', 'Email', 'Phone', 'Created Date', 'Status', 'Expiry Date', 'Days Left', 'Plan', 'App']
+  const header = ['Studio Name', 'Owner Name', 'Email', 'Phone', 'Created Date', 'Status', 'Expiry Date', 'Days Left', 'Plan', 'App', 'Activity', 'Made', 'Last in', 'Bought before']
   const lines = [header.join(',')]
   for (const r of rows) {
     lines.push(
-      [r.name, r.owner ?? '', r.email ?? '', r.phone ?? '', fmtIso(r.created), STATUS_LABEL[r.status], fmtIso(r.expires), r.daysLeft ?? '', r.plan ?? '', r.kind === 'new' ? 'New' : 'Old, not joined']
+      [r.name, r.owner ?? '', r.email ?? '', r.phone ?? '', fmtIso(r.created), STATUS_LABEL[r.status], fmtIso(r.expires), r.daysLeft ?? '', r.plan ?? '', r.kind === 'new' ? 'New' : 'Old, not joined',
+        ...activityCells(r.studio ? act.get(r.studio.id) : undefined, r.kind === 'old')]
         .map(csvEscape)
         .join(','),
     )
@@ -61,12 +67,17 @@ function downloadAccessCsv(rows: AccessRow[]) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `studio-access-report-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
   toast.success(`Exported ${rows.length} studio${rows.length === 1 ? '' : 's'}.`)
+}
+
+function activityCells(a: StudioActivity | undefined, old: boolean): string[] {
+  if (old) return ['', '', '', '']
+  return [ACTIVITY[activityLevel(a)].label, madeLine(a), lastActiveWords(a?.last_active), a?.bought ? 'Yes' : 'No']
 }
 
 export function PlatformStudiosPage() {
@@ -77,7 +88,7 @@ export function PlatformStudiosPage() {
   )
 }
 
-type SortKey = 'name' | 'created' | 'expires' | 'days'
+type SortKey = 'name' | 'created' | 'expires' | 'days' | 'activity' | 'last'
 type Dialogs =
   | { kind: 'details'; studio: PlatformStudio }
   | { kind: 'plan'; studio: PlatformStudio }
@@ -104,7 +115,33 @@ function SortHead({ k, sort, dir, onSort, children, className }: { k: SortKey; s
  * days, a custom date, or revoke.
  */
 function Studios() {
+  const [view, setView] = useUrlParam('view', 'studios')
+  return (
+    <>
+      <PageHeader
+        title="Studio Access Manager"
+        actions={
+          <Segmented
+            label="Studios or offers"
+            value={view === 'offers' ? 'offers' : 'studios'}
+            onChange={setView}
+            options={[{ value: 'studios', label: 'Studios' }, { value: 'offers', label: 'Offers', icon: Gift }]}
+          />
+        }
+      />
+      {view === 'offers' ? <OffersList /> : <StudioList />}
+    </>
+  )
+}
+
+/**
+ * The list itself. Beside each studio, what it has made and how often it is
+ * in (0268), so the platform owner can sort out who to call; tick studios to
+ * make them a personal offer or take a call list.
+ */
+function StudioList() {
   const studios = usePlatformStudios()
+  const activity = useStudioActivity()
   const legacy = useLegacyStudios()
   const planAction = usePlatformPlanAction()
   const setUntil = useSetAccessUntil()
@@ -119,7 +156,11 @@ function Studios() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [dialog, setDialog] = useState<Dialogs>(null)
+  const [busy, setBusy] = useState<'' | ActivityLevel | 'not_bought'>('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [offering, setOffering] = useState(false)
 
+  const act = useMemo(() => new Map((activity.data ?? []).map((a) => [a.company_id, a])), [activity.data])
   const all = useMemo(() => toRows(studios.data ?? [], legacy.data ?? []), [studios.data, legacy.data])
   const planOptions = useMemo(() => [...new Set(all.map((r) => r.plan).filter((p): p is string => !!p))].sort(), [all])
 
@@ -134,6 +175,11 @@ function Studios() {
   const q = search.trim().toLowerCase()
   let rows = all.filter((r) => {
     if (q && !`${r.name} ${r.owner ?? ''} ${r.email ?? ''} ${r.phone ?? ''}`.toLowerCase().includes(q)) return false
+    if (busy) {
+      if (!r.studio) return false
+      const a = act.get(r.studio.id)
+      if (busy === 'not_bought' ? a?.bought : activityLevel(a) !== busy) return false
+    }
     if (status && r.status !== status) return false
     if (plan === 'old' && r.kind !== 'old') return false
     if (plan !== 'all' && plan !== 'old' && r.plan !== plan) return false
@@ -149,17 +195,32 @@ function Studios() {
     return true
   })
   const mul = dir === 'asc' ? 1 : -1
+  const actOf = (r: AccessRow) => (r.studio ? act.get(r.studio.id) : undefined)
+  const rankOf = (r: AccessRow) => (r.studio ? ACTIVITY[activityLevel(actOf(r))].rank * 100 + (actOf(r)?.active_days_30 ?? 0) : -1)
+  const lastOf = (r: AccessRow) => actOf(r)?.last_active ?? null
   rows = [...rows].sort((a, b) => {
     switch (sort) {
       case 'name': return a.name.localeCompare(b.name) * mul
       case 'expires': return String(a.expires ?? '').localeCompare(String(b.expires ?? '')) * mul
       case 'days': return ((a.daysLeft ?? -1) - (b.daysLeft ?? -1)) * mul
+      case 'activity': return (rankOf(a) - rankOf(b)) * mul
+      case 'last': return String(lastOf(a) ?? '').localeCompare(String(lastOf(b) ?? '')) * mul
       default: return String(a.created ?? '').localeCompare(String(b.created ?? '')) * mul
     }
   })
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const safePage = Math.min(page, totalPages)
   const paged = rows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const pickable = rows.filter((r) => r.studio).map((r) => r.studio!.id)
+  const allPicked = pickable.length > 0 && pickable.every((id) => picked.has(id))
+  const togglePick = (id: string) =>
+    setPicked((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const pickedRows = all.filter((r) => r.studio && picked.has(r.studio.id))
 
   const copy = (text: string, done: string) =>
     void navigator.clipboard?.writeText(text).then(() => toast.success(done), () => toast.error('Could not copy.'))
@@ -213,21 +274,16 @@ function Studios() {
 
   return (
     <>
-      <PageHeader
-        title="Studio Access Manager"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => { void studios.refetch(); void legacy.refetch() }} disabled={studios.isFetching}>
-              <RefreshCw className={cn('size-4', studios.isFetching && 'animate-spin')} /> Refresh
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => downloadAccessCsv(rows)}>
-              <Download className="size-4" /> Export CSV
-            </Button>
-            <ImportOldAppButton />
-            <CreateStudioDialog />
-          </div>
-        }
-      />
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={() => { void studios.refetch(); void legacy.refetch(); void activity.refetch() }} disabled={studios.isFetching}>
+          <RefreshCw className={cn('size-4', studios.isFetching && 'animate-spin')} /> Refresh
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => downloadAccessCsv(rows, act)}>
+          <Download className="size-4" /> Export CSV
+        </Button>
+        <ImportOldAppButton />
+        <CreateStudioDialog />
+      </div>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Total studios" value={all.length} hint="All studios" />
         <StatCard label="Active" value={count(['active', 'trial', 'soon'])} hint="Currently accessible" tone="text-success" />
@@ -242,7 +298,7 @@ function Studios() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input value={search} onChange={(e) => { setSearch(e.target.value); reset() }} placeholder="Search studio, owner, email, phone…" aria-label="Search studios" className="pl-9" />
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {filter('sa-status', 'Status', (
               <Select id="sa-status" value={status} onChange={(e) => { setStatus(e.target.value as '' | AccessStatus); reset() }}>
                 <option value="">All statuses</option>
@@ -270,6 +326,13 @@ function Studios() {
                 <option value="month">This month</option>
               </Select>
             ))}
+            {filter('sa-activity', 'Activity', (
+              <Select id="sa-activity" value={busy} onChange={(e) => { setBusy(e.target.value as typeof busy); reset() }}>
+                <option value="">Any activity</option>
+                {(Object.keys(ACTIVITY) as ActivityLevel[]).map((k) => (<option key={k} value={k}>{ACTIVITY[k].label}</option>))}
+                <option value="not_bought">Never bought a plan</option>
+              </Select>
+            ))}
             {filter('sa-plan', 'Plan', (
               <Select id="sa-plan" value={plan} onChange={(e) => { setPlan(e.target.value); reset() }}>
                 <option value="all">All plans</option>
@@ -281,6 +344,20 @@ function Studios() {
         </CardContent>
       </Card>
 
+      {picked.size > 0 && (
+        <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-card p-2 shadow-md">
+          <span className="px-2 text-sm font-medium">{picked.size} studio{picked.size === 1 ? '' : 's'} ticked</span>
+          <Button size="sm" onClick={() => setOffering(true)}>
+            <Gift className="size-4" /> Make an offer
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => downloadAccessCsv(pickedRows, act, 'call-list')}>
+            <Download className="size-4" /> Call list
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
+            <X className="size-4" /> Clear
+          </Button>
+        </div>
+      )}
       {all.length === 0 ? (
         <EmptyState title="No studios yet" description="Studios appear here as they sign up, or bring the old app's list in with Import from old app." />
       ) : (
@@ -289,10 +366,19 @@ function Studios() {
             <table className="table-sticky w-full text-sm">
               <thead className="bg-muted/50 text-left text-muted-foreground">
                 <tr>
+                  <th className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      aria-label="Tick every studio in this list"
+                      checked={allPicked}
+                      onChange={() => setPicked(allPicked ? new Set() : new Set(pickable))}
+                    />
+                  </th>
                   <SortHead k="name" {...sortProps}>Studio</SortHead>
                   <th className="px-4 py-3 font-medium">Owner</th>
-                  <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Phone</th>
+                  <SortHead k="activity" {...sortProps}>Activity</SortHead>
+                  <SortHead k="last" {...sortProps}>Last in</SortHead>
                   <SortHead k="created" {...sortProps}>Created</SortHead>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <SortHead k="expires" {...sortProps}>Expires</SortHead>
@@ -307,6 +393,17 @@ function Studios() {
                     className={cn('border-t border-border', r.studio && 'cursor-pointer hover:bg-muted/30')}
                     onClick={() => r.studio && setDialog({ kind: 'details', studio: r.studio })}
                   >
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                      {r.studio && (
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-primary"
+                          aria-label={`Tick ${r.name}`}
+                          checked={picked.has(r.studio.id)}
+                          onChange={() => togglePick(r.studio!.id)}
+                        />
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <p className="flex items-center gap-1.5 font-medium">
                         {r.kind === 'old' ? <History className="size-4 text-muted-foreground" aria-label="On the old app" /> : <Building2 className="size-4 text-muted-foreground" aria-hidden />}
@@ -319,9 +416,14 @@ function Studios() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3">{r.owner ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{r.email ?? '—'}</td>
-                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{r.phone ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      <p>{r.owner ?? '—'}</p>
+                      <p className="text-xs text-muted-foreground">{[r.email, r.phone].filter(Boolean).join(' · ') || '—'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.studio && <ActivityCell a={act.get(r.studio.id)} />}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{r.studio ? lastActiveWords(act.get(r.studio.id)?.last_active) : '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{fmtDate(r.created)}</td>
                     <td className="px-4 py-3"><StatusBadge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</StatusBadge></td>
                     <td className="px-4 py-3 text-muted-foreground">{fmtDate(r.expires)}</td>
@@ -351,7 +453,7 @@ function Studios() {
         </>
       )}
       {dialog?.kind === 'details' && (
-        <StudioDetailsDialog studio={dialog.studio} onClose={() => setDialog(null)} onExpire={() => void revoke(dialog.studio)} />
+        <StudioDetailsDialog studio={dialog.studio} activity={act.get(dialog.studio.id)} onClose={() => setDialog(null)} onExpire={() => void revoke(dialog.studio)} />
       )}
       {dialog?.kind === 'plan' && (
         <Dialog open onOpenChange={(o) => { if (!o) setDialog(null) }}>
@@ -361,58 +463,8 @@ function Studios() {
         </Dialog>
       )}
       {dialog?.kind === 'custom' && <GiveAccessDialog studio={dialog.studio} onClose={() => setDialog(null)} />}
+      {offering && <OfferDialog ids={[...picked]} onClose={() => setOffering(false)} onDone={() => setPicked(new Set())} />}
     </>
-  )
-}
-
-/**
- * Give a studio access, as the old Studio Access board did: 30, 90 or 180
- * days or a year on from when its access ends now (or from today, once it
- * has ended), or to a date picked on the calendar. Each line says the date
- * it lands on before anything is saved.
- */
-function GiveAccessDialog({ studio, onClose }: { studio: PlatformStudio; onClose: () => void }) {
-  const setUntil = useSetAccessUntil()
-  const [picked, setPicked] = useState('')
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const end = endsOf(studio)
-  const base = end && new Date(end).getTime() > Date.now() ? new Date(end) : today
-  const plus = (days: number) => {
-    const d = new Date(base)
-    d.setDate(d.getDate() + days)
-    return toIso(d)
-  }
-  const give = (until: string) => setUntil.mutate({ studioId: studio.id, until }, { onSuccess: onClose })
-  const options = [
-    { label: '30 days', until: plus(30) },
-    { label: '90 days', until: plus(90) },
-    { label: '180 days', until: plus(180) },
-    { label: '1 year', until: plus(365) },
-  ]
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent
-        title={`Give ${studio.name} access`}
-        description={end && new Date(end).getTime() > Date.now() ? `Access now ends on ${fmtDate(end)}.` : 'Access has ended; these count from today.'}
-      >
-        <div className="flex flex-col gap-2 text-sm">
-          {options.map((o) => (
-            <div key={o.label} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
-              <span><span className="font-medium">+{o.label}</span> <span className="text-muted-foreground">→ until {fmtDate(o.until)}</span></span>
-              <Button size="sm" disabled={setUntil.isPending} onClick={() => give(o.until)}>Give</Button>
-            </div>
-          ))}
-          <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-2 ${picked ? 'border-success/50 bg-success/5' : 'border-warning/60 bg-warning/5'}`}>
-            <span className="font-medium">Until a date</span>
-            <div className="flex items-center gap-2">
-              <DateField aria-label="Access until" value={picked} min={toIso(today)} onChange={(e) => setPicked(e.target.value)} />
-              <Button size="sm" disabled={!picked || setUntil.isPending} onClick={() => give(picked)}>Set</Button>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -425,56 +477,6 @@ function StatCard({ label, value, hint, tone }: { label: string; value: number; 
         {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
-  )
-}
-
-function CreateStudioDialog() {
-  const create = useCreatePlatformStudio()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [planKey, setPlanKey] = useState('')
-  const [open, setOpen] = useState(false)
-  // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(open ? 'platform-studio:new' : null, { name, email, phone, planKey }, (v) => {
-    setName(v.name)
-    setEmail(v.email)
-    setPhone(v.phone)
-    setPlanKey(v.planKey)
-  })
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm"><Plus className="size-4" /> Create Studio Access</Button></DialogTrigger>
-      <DialogContent
-        title="Create studio"
-        description="Creates the tenant and records the owner invite. The studio has no owner until that person registers against it."
-      >
-        <div className="mt-3 flex flex-col gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Studio name *" />
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Owner email *" />
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Owner phone (optional)" />
-          <Input value={planKey} onChange={(e) => setPlanKey(e.target.value)} placeholder="Plan key (optional — grants trial)" />
-          <Button disabled={create.isPending || !name.trim() || !email.trim()} onClick={() =>
-              create.mutate(
-                { name: name.trim(), owner_email: email.trim(), owner_phone: phone.trim() || undefined, plan_key: planKey.trim() || undefined },
-                {
-                  onSuccess: () => {
-                    draft.clear()
-                    setName('')
-                    setEmail('')
-                    setPhone('')
-                    setPlanKey('')
-                    setOpen(false)
-                  },
-                },
-              )
-            }
-          >
-            {create.isPending ? 'Creating…' : 'Create'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -506,7 +508,18 @@ function AssignPlanForm({ studio }: { studio: PlatformStudio }) {
   )
 }
 
-function StudioDetailsDialog({ studio, onClose, onExpire }: { studio: PlatformStudio; onClose: () => void; onExpire: () => void }) {
+/** One studio's activity: the word in its colour, and what it has made. */
+function ActivityCell({ a }: { a: StudioActivity | undefined }) {
+  const level = ACTIVITY[activityLevel(a)]
+  return (
+    <div className="min-w-0">
+      <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium', TONE_CHIP[level.tone])}>{level.label}</span>
+      <p className="mt-0.5 text-xs text-muted-foreground">{madeLine(a)}</p>
+    </div>
+  )
+}
+
+function StudioDetailsDialog({ studio, activity, onClose, onExpire }: { studio: PlatformStudio; activity: StudioActivity | undefined; onClose: () => void; onExpire: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent title={studio.name} description="Studio access details">
@@ -520,60 +533,18 @@ function StudioDetailsDialog({ studio, onClose, onExpire }: { studio: PlatformSt
           <div><dt className="text-muted-foreground">Users</dt><dd>{studio.user_count}</dd></div>
           <div><dt className="text-muted-foreground">Projects</dt><dd>{studio.project_count}</dd></div>
         </dl>
+        <div className="mt-3 rounded-lg border border-border p-3 text-sm">
+          <ActivityCell a={activity} />
+          <p className="mt-1 text-muted-foreground">
+            In on {activity?.active_days_7 ?? 0} of the last 7 days and {activity?.active_days_30 ?? 0} of the last 30 ·{' '}
+            {activity?.last_active ? `last in ${lastActiveWords(activity.last_active).toLowerCase()}` : 'not in for 30 days'}
+            {activity?.bought ? ' · has bought a plan' : ' · has never bought a plan'}
+          </p>
+        </div>
         <StudioFeatures studioId={studio.id} />
         <div className="mt-4 flex flex-col gap-2">
           <AssignPlanForm studio={studio} />
           <Button size="sm" variant="ghost" className="text-destructive" onClick={onExpire}>Revoke access</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** Bring the old app's Studio Access export in: pick the file, check the counts, import. */
-function ImportOldAppButton() {
-  const [open, setOpen] = useState(false)
-  const [parsed, setParsed] = useState<LegacyParse | null>(null)
-  const [bad, setBad] = useState(false)
-  const imp = useImportLegacyStudios()
-  const today = new Date().toISOString().slice(0, 10)
-  const live = parsed?.rows.filter((r) => legacyState(r.expires_at, today) !== 'expired').length ?? 0
-  return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setParsed(null); setBad(false) } }}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline"><Upload className="mr-1 size-4" /> Import from old app</Button>
-      </DialogTrigger>
-      <DialogContent title="Import from the old app" description="On the old app open Studio Access, press Export CSV, then pick that file here.">
-        <div className="flex flex-col gap-3">
-          <Input
-            type="file"
-            accept=".csv,text/csv"
-            aria-label="The old app's Studio Access export"
-            onChange={async (e) => {
-              const f = e.target.files?.[0]
-              if (!f) return
-              const r = parseLegacyCsv(await f.text())
-              setParsed(r)
-              setBad(!r || r.rows.length === 0)
-            }}
-          />
-          {bad && <p className="text-sm text-destructive">That file is not the old app's Studio Access export.</p>}
-          {parsed && parsed.rows.length > 0 && (
-            <p className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-              <b>{parsed.rows.length}</b> studios · <b>{live}</b> still have access
-              {parsed.skipped > 0 && <span className="text-muted-foreground"> · {parsed.skipped} lines skipped</span>}. Anyone already on the new
-              app with the same email gets their remaining time now; the rest get it when they sign up.
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              disabled={!parsed || parsed.rows.length === 0 || imp.isPending}
-              onClick={() => parsed && imp.mutate(parsed.rows, { onSuccess: () => { setOpen(false); setParsed(null) } })}
-            >
-              {imp.isPending ? 'Importing…' : `Import ${parsed?.rows.length ?? ''} studios`}
-            </Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

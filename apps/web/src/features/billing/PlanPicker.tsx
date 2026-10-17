@@ -8,6 +8,7 @@ import {
   Clapperboard,
   FileSignature,
   Gem,
+  Gift,
   HardDrive,
   Inbox,
   Receipt,
@@ -16,7 +17,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import type { Plan, PlanQuote } from '@ipc/contracts'
+import type { MyOffer, Plan, PlanQuote } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { IconTile } from '@/shared/ui/icon-tile'
@@ -25,6 +26,7 @@ import { formatINR } from '@/shared/ui/format'
 import { COMPARE, INCLUDED, quoteWords, tierPlans, type Cell } from './plan-features'
 import { bestSaving, monthlyOf, percentOff, savingWords, sectionOrder, twinOf, withGst } from './price-lists'
 import { perDay } from './usage'
+import { offerFor, offerPrice } from './offer'
 
 export { withGst } from './price-lists'
 
@@ -81,6 +83,7 @@ export function PlanPicker({
   busy,
   canChoose = true,
   chooseHint,
+  offer,
 }: {
   regular: Plan[]
   member: Plan[]
@@ -98,6 +101,8 @@ export function PlanPicker({
   busy?: boolean
   canChoose?: boolean
   chooseHint?: string
+  /** The studio's own offer from the platform (0268): its price on the plans it covers. */
+  offer?: MyOffer | undefined
 }) {
   const [payEvery, setPayEvery] = useState<'yearly' | 'monthly'>('yearly')
   const reg = tierPlans(regular, payEvery)
@@ -130,6 +135,7 @@ export function PlanPicker({
             canChoose={canChoose}
             chooseHint={chooseHint}
             buttons={!memberFirst}
+            offer={offerFor(offer, p, 'regular')}
           />
         ))}
       </div>
@@ -206,6 +212,7 @@ export function PlanPicker({
             canChoose={canChoose}
             chooseHint={chooseHint}
             buttons
+            offer={offerFor(offer, p, 'member')}
           />
         ))}
       </div>
@@ -315,6 +322,7 @@ function PlanCard({
   canChoose,
   chooseHint,
   buttons,
+  offer,
 }: {
   plan: Plan
   list: PriceList
@@ -327,14 +335,18 @@ function PlanCard({
   canChoose: boolean
   chooseHint?: string | undefined
   buttons: boolean
+  offer?: NonNullable<MyOffer> | null
 }) {
   const member = list === 'member'
   const highlight = p.badge === 'Most Popular'
   const words = quoteWords(p, quote, formatINR)
   const Icon = action?.icon
   const line = words.line ?? (words.disabled ? null : (action?.note ?? null))
-  const day = perDay(p)
-  const monthly = monthlyOf(p)
+  // With a personal offer (0268) every figure on the card is the offer price.
+  const cut = (n: number) => (offer ? offerPrice(n, offer.percent) : n)
+  const price = cut(p.price)
+  const day = perDay({ ...p, price }) ?? (p.billing_interval === 'yearly' ? Math.round(price / 365) : null)
+  const monthly = cut(monthlyOf(p))
   const save = member ? savingWords(p, regular, formatINR) : null
   const off = member ? percentOff(p, regular) : 0
   return (
@@ -366,33 +378,47 @@ function PlanCard({
           {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
         </div>
         <div>
-          <p className="text-3xl font-bold tabular-nums">
-            {formatINR(monthly)}
-            <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
-              {' '}/month <span className="font-semibold text-foreground">+ 18% GST</span>
-            </span>
-          </p>
-          {regular && monthlyOf(regular) > monthly && (
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          {offer && (
+            <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-tone-amber-soft px-2.5 py-0.5 text-xs font-semibold text-tone-amber">
+              <Gift className="size-3.5" aria-hidden /> Your offer: {offer.percent}% off · was {formatINR(day != null ? Math.round(p.price / (p.duration_days ?? 365)) : monthlyOf(p))}
+              {day != null ? ' a day' : ' a month'}
+            </p>
+          )}
+          {/* Paid yearly, the price a day leads, in big type (owner, 17 Oct); the month under it. */}
+          {day != null ? (
+            <>
+              <p className="text-3xl font-bold tabular-nums">
+                {formatINR(day)}
+                <span className="whitespace-nowrap text-base font-semibold text-muted-foreground"> a day</span>
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">{formatINR(monthly)}</span>/month · {formatINR(price)} a year{' '}
+                <span className="font-semibold text-foreground">+ 18% GST</span>
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-bold tabular-nums">
+                {formatINR(monthly)}
+                <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
+                  {' '}/month <span className="font-semibold text-foreground">+ 18% GST</span>
+                </span>
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">Billed every month</p>
+            </>
+          )}
+          {regular && monthlyOf(regular) > monthlyOf(p) && (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               <span>
-                Regular <span className="line-through">{formatINR(monthlyOf(regular))}</span>
+                Regular <span className="line-through">{formatINR(monthlyOf(regular))}</span>/month
                 {off > 0 && <span className="font-semibold text-success"> · {off}% off</span>}
               </span>
               {save && <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">{save}</span>}
             </p>
           )}
-          <p className="mt-1 text-sm text-muted-foreground">
-            {day != null ? (
-              <>
-                {formatINR(p.price)} a year · <span className="font-medium text-success">just {formatINR(day)} a day</span>
-              </>
-            ) : (
-              'Billed every month'
-            )}
-          </p>
           {/* GST is always 18%, on every plan (owner, 14 Oct): the total is said, never left to work out. */}
-          <p className="text-sm font-medium">
-            {formatINR(withGst(p.price))} with GST{p.billing_interval === 'monthly' ? ' a month' : ' a year'}
+          <p className="mt-1 text-sm font-medium">
+            {formatINR(withGst(price))} with GST{p.billing_interval === 'monthly' ? ' a month' : ' a year'}
           </p>
         </div>
         <ul className="flex flex-col gap-2 text-sm">

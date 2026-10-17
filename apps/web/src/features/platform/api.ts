@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -182,5 +182,59 @@ export function useCreditPayment() {
       void qc.invalidateQueries({ queryKey: ['platform'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not credit the order.'),
+  })
+}
+
+/** What each studio has made and how often it is in (0268), beside the Studio Access Manager list. */
+export function useStudioActivity() {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['platform', 'activity'],
+    queryFn: () => callApi('/platform/activity', { responseSchema: studioActivity.array() }),
+    enabled: !!session?.is_platform_admin,
+    staleTime: 60_000,
+  })
+}
+
+/** Every personal offer made, newest first, with where each stands. */
+export function usePlatformOffers(enabled = true) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['platform', 'offers'],
+    queryFn: () => callApi('/platform/offers', { responseSchema: platformOffer.array() }),
+    enabled: enabled && !!session?.is_platform_admin,
+    staleTime: 30_000,
+  })
+}
+
+/** Make an offer for the studios ticked; the toast says who was skipped and why. */
+export function useMakeOffers() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: MakeOffersRequest) =>
+      callApi('/platform/offers', { method: 'POST', body, responseSchema: makeOffersResult }),
+    onSuccess: (r) => {
+      const made = `Offer sent to ${r.made} studio${r.made === 1 ? '' : 's'}`
+      if (r.skipped.length === 0) toast.success(made)
+      else {
+        const why = r.skipped.slice(0, 3).map((s) => `${s.name} (${s.reason})`).join(', ')
+        const more = r.skipped.length > 3 ? ` and ${r.skipped.length - 3} more` : ''
+        toast[r.made > 0 ? 'success' : 'warning'](`${made} · skipped ${why}${more}`)
+      }
+      void qc.invalidateQueries({ queryKey: ['platform', 'offers'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not make the offer.'),
+  })
+}
+
+export function useCancelOffer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/platform/offers/${id}/cancel`, { method: 'POST', responseSchema: ok }),
+    onSuccess: () => {
+      toast.success('Offer ended. The studio no longer sees it.')
+      void qc.invalidateQueries({ queryKey: ['platform', 'offers'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not end the offer.'),
   })
 }

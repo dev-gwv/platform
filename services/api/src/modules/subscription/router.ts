@@ -21,6 +21,7 @@ import { isDevLike, razorpayConfigured } from '../../lib/env'
 import { createRazorpayOrder, verifyRazorpaySignature } from '../../lib/razorpay'
 import { checkDiamondScreenshot } from '../../lib/diamond-check'
 import { sendDiamondClaimNotice, sendDiamondResultEmail } from '../../lib/email'
+import { subscriptionOfferRouter } from './offer'
 
 /** One plans row as the contract reads it; numerics arrive as strings from the driver. */
 function planRow(r: Record<string, unknown>) {
@@ -75,6 +76,7 @@ export const publicPlansRouter = new Hono<AppEnv>().get('/plans', async (c) => {
  */
 export const subscriptionRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+  .route('/offer', subscriptionOfferRouter)
 
   .get('/plans', async (c) => {
     const rows = await attempt(c, 'subscription.plans', () =>

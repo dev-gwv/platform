@@ -13,7 +13,7 @@ email from credits" -- credits are not built yet.
 |---|---|---|---|
 | Billed yearly | ₹1,499/mo · ₹17,988 a year · ₹49 a day | ₹2,499/mo · ₹29,988 · ₹82 a day | ₹3,999/mo · ₹47,988 · ₹131 a day |
 | Billed monthly | ₹1,999 | ₹2,999 | ₹4,999 |
-| On the card | 30 projects a year · 30 invoices a year · 3 team logins · 10 crew | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name and WhatsApp number · Priority help |
+| On the card | 30 projects a year · 30 invoices a year · 3 team logins · 10 crew | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name, logo and WhatsApp number (white label) · Priority help |
 
 Prices are before 18% GST.
 
@@ -79,3 +79,13 @@ studio's own usage bars.
 - **Online payment for plans**: Razorpay checkout is still in the code; turn
   the plan buttons back to it when the owner says.
 - **Auto-renew** through Razorpay Subscriptions, once Razorpay approves the domain.
+
+## Personal offers (0268)
+
+The platform owner can tick studios in Studio Access Manager and make them an
+offer: a percent off the **first** plan they buy (never a renewal), on the
+plans picked, until the end of a day. It is for the regular price; Diamond
+members only when the offer says so. The studio sees it on Home and Plan &
+billing, and the cards show the offer price. Buying is still a WhatsApp
+conversation; the owner gives the plan at the offer price, which marks the
+offer used.

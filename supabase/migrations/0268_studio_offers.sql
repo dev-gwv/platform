@@ -281,3 +281,10 @@ end;
 $$;
 revoke all on function offer_mark(uuid, text) from public, anon;
 grant execute on function offer_mark(uuid, text) to authenticated;
+
+-- ── Studio Max says what white label means (owner, 17 Oct) ──────────
+-- Its own name, logo and WhatsApp number, on the regular and Diamond cards alike.
+update plans
+   set features = jsonb_build_array('Everything unlimited', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'),
+       updated_at = now()
+ where key in ('max_yearly', 'max_monthly', 'max_yearly_regular', 'max_monthly_regular');
