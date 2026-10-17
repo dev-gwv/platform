@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeInvoice } from './invoice'
+import { computeInvoice, lineMeasure, rateUnit } from './invoice'
 import { amountInWords } from './amount-in-words'
 
 describe('computeInvoice', () => {
@@ -68,5 +68,31 @@ describe('amountInWords (Indian)', () => {
     expect(amountInWords(10000000)).toBe('One Crore Rupees')
     expect(amountInWords(0)).toBe('Zero Rupees')
     expect(amountInWords(140400)).toBe('One Lakh Forty Thousand Four Hundred Rupees')
+  })
+})
+
+describe('a line counted in a unit, for some days', () => {
+  it('multiplies by the days: an LED screen of 96 sq ft at ₹60 for 3 days is ₹17,280', () => {
+    const inv = computeInvoice([{ description: 'LED Screen', quantity: 96, unit: 'sq ft', rate: 60, days: 3, gst_rate: 18 }], { intraState: true })
+    expect(inv.subtotal).toBe(17280)
+    expect(inv.tax).toBe(3110.4)
+    expect(inv.total).toBe(20390.4)
+  })
+
+  it('treats empty or zero days as one', () => {
+    const one = computeInvoice([{ description: 'x', quantity: 2, rate: 100, gst_rate: 0 }], { intraState: true })
+    const zero = computeInvoice([{ description: 'x', quantity: 2, rate: 100, days: 0, gst_rate: 0 }], { intraState: true })
+    expect(one.subtotal).toBe(200)
+    expect(zero.subtotal).toBe(200)
+  })
+
+  it('says how the line is counted', () => {
+    expect(lineMeasure({ quantity: 96, unit: 'sq ft', days: 3 })).toBe('96 sq ft × 3 days')
+    expect(lineMeasure({ quantity: 1, days: 1 })).toBe('1 × 1 day')
+    expect(lineMeasure({ quantity: 2.5, unit: 'hours' })).toBe('2.5 hours')
+    expect(lineMeasure({ quantity: 1 })).toBe('1')
+    expect(rateUnit({ unit: 'sq ft', days: 3 })).toBe('per sq ft per day')
+    expect(rateUnit({ days: 2 })).toBe('per day')
+    expect(rateUnit({})).toBe('')
   })
 })

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { QuoteItem } from '@ipc/contracts'
+import { lineMeasure, rateUnit } from '@ipc/domain'
 import { formatINR } from '@/shared/ui/format'
 import { QuotationLetterhead, TotalsRow, type QuotationDocumentData } from '@/features/projects/QuotationDocument'
 
@@ -12,7 +13,7 @@ export interface QuotePaperData {
   preparedFor: string | null
   issuedAt: string | null | undefined
   validUntil: string | null | undefined
-  items: Pick<QuoteItem, 'description' | 'quantity' | 'rate' | 'amount'>[]
+  items: (Pick<QuoteItem, 'description' | 'quantity' | 'rate' | 'amount'> & Partial<Pick<QuoteItem, 'unit' | 'days'>>)[]
   subtotal: number
   discount: number
   tax: number
@@ -69,8 +70,11 @@ export function QuotePaper({ data }: { data: QuotePaperData }) {
                 data.items.map((i, n) => (
                   <tr key={n} className="border-t border-border align-top">
                     <td className="px-3 py-2 font-medium">{i.description}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{i.quantity}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatINR(i.rate)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{lineMeasure(i)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatINR(i.rate)}
+                      {rateUnit(i) && <span className="block text-xs text-muted-foreground">{rateUnit(i)}</span>}
+                    </td>
                     <td className="px-3 py-2 text-right font-medium tabular-nums">{formatINR(i.amount)}</td>
                   </tr>
                 ))

@@ -24,8 +24,8 @@ const list = invoiceListItem.array()
 /**
  * What an invoice carries beyond its totals, written after create_invoice /
  * update_invoice so those atomic RPCs stay as they are: draft or sent, the
- * GSTIN, CGST+SGST versus IGST, subject and terms, each line's HSN/SAC (by
- * the order the lines were typed in) and the files sent with it.
+ * GSTIN, CGST+SGST versus IGST, subject and terms, each line's HSN/SAC, unit
+ * and days (by the order the lines were typed in) and the files sent with it.
  */
 async function writeInvoiceExtras(
   sql: TransactionSql,
@@ -36,7 +36,7 @@ async function writeInvoiceExtras(
     subject?: string | undefined
     payment_terms?: string | undefined
     attachment_file_ids?: string[] | undefined
-    lines: { hsn_sac?: string | undefined }[]
+    lines: { hsn_sac?: string | undefined; unit?: string | undefined; days?: number | undefined }[]
   },
   gstNumber: string,
 ): Promise<'bad_file' | true> {
@@ -47,9 +47,9 @@ async function writeInvoiceExtras(
       subject = ${req.subject?.trim() || null},
       payment_terms = ${req.payment_terms?.trim() || null}
     where id = ${id}`
-  const codes = req.lines.map((l, i) => ({ i, hsn: l.hsn_sac?.trim() || null }))
-  await sql`update invoice_items it set hsn_sac = x.hsn
-      from jsonb_to_recordset(${sql.json(codes)}::jsonb) as x(i int, hsn text)
+  const codes = req.lines.map((l, i) => ({ i, hsn: l.hsn_sac?.trim() || null, unit: l.unit?.trim() || null, days: l.days ?? null }))
+  await sql`update invoice_items it set hsn_sac = x.hsn, unit = x.unit, days = x.days
+      from jsonb_to_recordset(${sql.json(codes)}::jsonb) as x(i int, hsn text, unit text, days numeric)
      where it.invoice_id = ${id} and it.sort_order = x.i`
   if (req.attachment_file_ids) {
     const ids = [...new Set(req.attachment_file_ids)]
@@ -323,7 +323,8 @@ export const invoiceRoutes = new Hono<AppEnv>()
                    select jsonb_agg(jsonb_build_object(
                      'id', it.id, 'description', it.description, 'subtext', it.subtext, 'quantity', it.quantity,
                      'rate', it.rate, 'amount', it.amount, 'gst_rate', it.gst_rate,
-                     'cgst', it.cgst, 'sgst', it.sgst, 'igst', it.igst, 'hsn_sac', it.hsn_sac)
+                     'cgst', it.cgst, 'sgst', it.sgst, 'igst', it.igst, 'hsn_sac', it.hsn_sac,
+                     'unit', it.unit, 'days', it.days)
                      order by it.sort_order, it.id)
                    from invoice_items it where it.invoice_id = i.id
                  ), '[]'::jsonb) as items,

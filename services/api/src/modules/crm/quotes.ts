@@ -35,6 +35,17 @@ import { claimRule } from './rules'
 const edit = requireAction('crm', 'edit')
 const remove = requireAction('crm', 'delete')
 
+/**
+ * Each line's unit and days, written by line order straight after
+ * create_quote / update_quote (0265) so those RPCs stay as they are.
+ */
+const writeLineMeasures = (sql: TransactionSql, quoteId: string, lines: { unit?: string | undefined; days?: number | undefined }[]) => {
+  const rows = lines.map((l, i) => ({ i, unit: l.unit?.trim() || null, days: l.days ?? null }))
+  return sql`update crm_quote_items it set unit = x.unit, days = x.days
+      from jsonb_to_recordset(${sql.json(rows)}::jsonb) as x(i int, unit text, days numeric)
+     where it.quote_id = ${quoteId} and it.sort_order = x.i`
+}
+
 const selectQuotes = (sql: TransactionSql) => sql`
   select q.id, q.lead_id, l.name as lead_name, q.quote_number, q.title, q.status, q.valid_until, q.place_of_supply, q.intra_state,
          q.subtotal, q.discount, q.taxable, q.tax, q.total, q.notes, q.terms, q.sent_at, q.accepted_at, q.accepted_by_name,
@@ -42,7 +53,8 @@ const selectQuotes = (sql: TransactionSql) => sql`
          coalesce((
            select jsonb_agg(jsonb_build_object(
              'id', i.id, 'description', i.description, 'quantity', i.quantity, 'rate', i.rate, 'amount', i.amount,
-             'gst_rate', i.gst_rate, 'taxable', i.taxable, 'cgst', i.cgst, 'sgst', i.sgst, 'igst', i.igst) order by i.sort_order)
+             'gst_rate', i.gst_rate, 'taxable', i.taxable, 'cgst', i.cgst, 'sgst', i.sgst, 'igst', i.igst,
+             'unit', i.unit, 'days', i.days) order by i.sort_order)
            from crm_quote_items i where i.quote_id = q.id
          ), '[]'::jsonb) as items
   from crm_quotes q
@@ -101,6 +113,7 @@ export const crmQuotesRouter = new Hono<AppEnv>()
             ${totals.subtotal}, ${totals.discount}, ${totals.taxable}, ${totals.tax}, ${totals.total},
             ${sql.json(items)}, ${v.notes ?? null}, ${v.terms ?? null})`
         if (!r) return null
+        await writeLineMeasures(sql, r.id, v.lines)
         const [full] = await sql`${selectQuotes(sql)} where q.id = ${r.id}`
         return full ?? null
       }),
@@ -142,6 +155,7 @@ export const crmQuotesRouter = new Hono<AppEnv>()
             ${id}, ${v.title ?? null}, ${v.valid_until ?? null}, ${v.place_of_supply || null}, ${v.intra_state},
             ${totals.subtotal}, ${totals.discount}, ${totals.taxable}, ${totals.tax}, ${totals.total},
             ${sql.json(items)}, ${v.notes ?? null}, ${v.terms ?? null})`
+          await writeLineMeasures(sql, id, v.lines)
           const [full] = await sql`${selectQuotes(sql)} where q.id = ${id}`
           return full ?? null
         }),

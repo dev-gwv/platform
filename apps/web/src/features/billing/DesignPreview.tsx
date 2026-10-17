@@ -41,8 +41,8 @@ const SAMPLE: InvoiceDetail = {
   balance_due: 94700,
   created_at: new Date().toISOString(),
   items: [
-    { id: '00000000-0000-4000-8000-000000000011', description: 'Candid photography · 3 days', subtext: 'Two photographers, all events', quantity: 1, rate: 120000, amount: 120000, gst_rate: 18, cgst: 0, sgst: 0, igst: 21600, hsn_sac: '998387' },
-    { id: '00000000-0000-4000-8000-000000000012', description: 'Wedding film', subtext: '4-minute teaser and full film', quantity: 1, rate: 45000, amount: 45000, gst_rate: 18, cgst: 0, sgst: 0, igst: 8100, hsn_sac: '998387' },
+    { id: '00000000-0000-4000-8000-000000000011', description: 'Candid photography · 3 days', subtext: 'Two photographers, all events', quantity: 1, rate: 120000, amount: 120000, gst_rate: 18, cgst: 0, sgst: 0, igst: 21600, hsn_sac: '998387', unit: null, days: null },
+    { id: '00000000-0000-4000-8000-000000000012', description: 'Wedding film', subtext: '4-minute teaser and full film', quantity: 1, rate: 45000, amount: 45000, gst_rate: 18, cgst: 0, sgst: 0, igst: 8100, hsn_sac: '998387', unit: null, days: null },
   ],
   attachments: [],
   payments: [],

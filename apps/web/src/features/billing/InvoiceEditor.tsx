@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { GstSlab } from '@ipc/domain'
+import { lineAmount, rateUnit, type GstSlab } from '@ipc/domain'
 import {
   GSTIN_REGEX,
   companyProfile,
@@ -51,6 +51,7 @@ import {
 import { matchStudioState, deriveIntraState, toAmount, type InvoiceLineDraft } from './invoice-math'
 import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } from './api'
 import { HsnSearchDialog } from './HsnSearchDialog'
+import { DaysInput, UnitInput } from './LineUnitFields'
 import { DESIGN_INFO } from './InvoicePaper'
 import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { todayInIndia } from '@/shared/ui/days-left'
@@ -321,8 +322,8 @@ export function InvoiceEditor({
   }
 
   const colTemplate = gst
-    ? 'md:grid-cols-[minmax(0,1fr)_9.5rem_5rem_7.5rem_6.5rem_7rem_2.5rem]'
-    : 'md:grid-cols-[minmax(0,1fr)_5.5rem_8rem_7.5rem_2.5rem]'
+    ? 'md:grid-cols-[minmax(0,1fr)_9.5rem_6rem_7.5rem_4.5rem_6.5rem_7rem_2.5rem]'
+    : 'md:grid-cols-[minmax(0,1fr)_6.5rem_8rem_4.5rem_7.5rem_2.5rem]'
 
   return (
     <form onSubmit={(e) => void submit('sent', e)} className="flex min-h-full flex-col bg-background">
@@ -500,15 +501,17 @@ export function InvoiceEditor({
           <div className={cn('hidden gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:grid', colTemplate)}>
             <span>Item details</span>
             {gst && <span>HSN / SAC</span>}
-            <span className="text-right">Quantity</span>
+            <span className="text-right">Quantity · unit</span>
             <span className="text-right">Rate</span>
+            <span className="text-right">Days</span>
             {gst && <span>Tax</span>}
             <span className="text-right">Amount</span>
             <span />
           </div>
           <ul>
             {values.lines.map((l, i) => {
-              const amount = toAmount(l.quantity) * toAmount(l.rate)
+              const amount = lineAmount({ quantity: toAmount(l.quantity), rate: toAmount(l.rate), days: toAmount(l.days ?? '') })
+              const per = rateUnit({ unit: l.unit, days: toAmount(l.days ?? '') })
               const saved = (savedItems ?? []).some((p) => p.name.toLowerCase() === l.description.trim().toLowerCase())
               return (
                 <li key={i} className={cn('grid gap-3 border-b border-border px-4 py-3 last:border-0', colTemplate)}>
@@ -545,8 +548,20 @@ export function InvoiceEditor({
                       </Button>
                     </div>
                   )}
-                  <Input inputMode="decimal" value={l.quantity} onChange={(e) => patchLine(i, { quantity: e.target.value })} className="text-right" aria-label={`Quantity for line ${i + 1}`} />
-                  <Input inputMode="decimal" value={l.rate} onChange={(e) => patchLine(i, { rate: e.target.value })} className="text-right" placeholder="0.00" aria-label={`Rate for line ${i + 1}`} />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-medium text-muted-foreground md:hidden">Quantity · unit</span>
+                    <Input inputMode="decimal" value={l.quantity} onChange={(e) => patchLine(i, { quantity: e.target.value })} className="text-right" aria-label={`Quantity for line ${i + 1}`} />
+                    <UnitInput value={l.unit ?? ''} onChange={(v) => patchLine(i, { unit: v || undefined })} className="text-right" label={`Unit for line ${i + 1}`} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-medium text-muted-foreground md:hidden">Rate</span>
+                    <Input inputMode="decimal" value={l.rate} onChange={(e) => patchLine(i, { rate: e.target.value })} className="text-right" placeholder="0.00" aria-label={`Rate for line ${i + 1}`} />
+                    {per && <span className="text-right text-[11px] text-muted-foreground">{per}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-medium text-muted-foreground md:hidden">Days</span>
+                    <DaysInput value={l.days ?? ''} onChange={(v) => patchLine(i, { days: v || undefined })} label={`Days for line ${i + 1}`} />
+                  </div>
                   {gst && (
                     <Select value={l.gst_rate} onChange={(e) => patchLine(i, { gst_rate: Number(e.target.value) as GstSlab })} aria-label={`Tax for line ${i + 1}`}>
                       {GST_SLABS.map((g) => (

@@ -16,7 +16,11 @@ export interface InvoiceLineDraft {
   description: string
   subtext?: string | undefined
   quantity: string
+  /** What the quantity is counted in -- "sq ft", "hours". Empty = a plain count. */
+  unit?: string | undefined
   rate: string
+  /** How many days the line runs; empty = not per day. */
+  days?: string | undefined
   gst_rate: number
   /** HSN (goods) or SAC (services), digits only. */
   hsn_sac?: string | undefined

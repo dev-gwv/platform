@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Paperclip } from 'lucide-react'
-import { amountInWords } from '@ipc/domain'
+import { amountInWords, lineMeasure, rateUnit } from '@ipc/domain'
 import { placeOfSupplyLabel, type InvoiceDesign, type InvoiceDetail, type InvoiceTemplateLayout } from '@ipc/contracts'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
@@ -236,8 +236,11 @@ export function InvoicePaper({
                     {it.subtext && <p className="mt-0.5 text-xs text-slate-500">{it.subtext}</p>}
                   </td>
                   {showHsn && <td className="px-3 py-3 tabular-nums text-slate-700">{it.hsn_sac ?? '—'}</td>}
-                  <td className="px-3 py-3 text-right tabular-nums">{it.quantity}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatINR(it.rate)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{lineMeasure(it)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {formatINR(it.rate)}
+                    {rateUnit(it) && <span className="block text-xs text-slate-500">{rateUnit(it)}</span>}
+                  </td>
                   {layout.show_gst &&
                     (intraState ? (
                       <>

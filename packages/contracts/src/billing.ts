@@ -30,7 +30,11 @@ export const invoiceLineInput = z.object({
   /** The subtext line underneath it -- e.g. "Haldi + Wedding + Reception coverage". Optional. */
   subtext: z.string().trim().max(200).optional(),
   quantity: z.number().positive(),
+  /** What the quantity is counted in -- "sq ft", "hours". The studio's own word. */
+  unit: z.string().trim().max(20).optional(),
   rate: money,
+  /** How many days the line runs; the amount is quantity × rate × days. Empty = not per day. */
+  days: z.number().positive().max(366).optional(),
   gst_rate: gstRate,
   /** HSN (goods) or SAC (services) code printed on a tax invoice. */
   hsn_sac: z.string().trim().max(12).regex(/^[0-9]*$/, 'HSN/SAC is digits only').optional(),
@@ -156,6 +160,8 @@ export const invoiceDetail = z.object({
       sgst: money,
       igst: money,
       hsn_sac: z.string().nullable().default(null),
+      unit: z.string().nullable().default(null),
+      days: z.coerce.number().nullable().default(null),
     }),
   ),
   /** Files sent with the invoice. */

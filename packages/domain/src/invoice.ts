@@ -8,10 +8,14 @@ export interface InvoiceLineInput {
   quantity: number
   rate: number
   gst_rate: GstSlab
+  /** What the quantity is counted in -- "sq ft", "hours". Shown beside it; no effect on the sum. */
+  unit?: string | null | undefined
+  /** How many days the line runs (an LED screen for 3 days). Multiplies the amount; empty = 1. */
+  days?: number | null | undefined
 }
 
 export interface InvoiceLine extends InvoiceLineInput {
-  amount: number // quantity * rate
+  amount: number // quantity * rate * days
   taxable: number // amount after proportional discount
   cgst: number
   sgst: number
@@ -40,7 +44,7 @@ export function computeInvoice(
   lines: ReadonlyArray<InvoiceLineInput>,
   opts: { intraState: boolean; discount?: number; discountType?: 'flat' | 'percent' },
 ): InvoiceTotals {
-  const amounts = lines.map((l) => roundINR(l.quantity * l.rate))
+  const amounts = lines.map((l) => lineAmount(l))
   const subtotal = sumINR(amounts)
   const rawDiscount = opts.discount ?? 0
   const flatDiscount =
@@ -58,4 +62,33 @@ export function computeInvoice(
   const taxable = sumINR(computed.map((l) => l.taxable))
   const tax = sumINR(computed.map((l) => l.cgst + l.sgst + l.igst))
   return { lines: computed, subtotal, discount, taxable, tax, total: roundINR(taxable + tax) }
+}
+
+/** quantity × rate × days (days empty or 0 counts as 1), rounded to the rupee's paise. */
+export function lineAmount(l: Pick<InvoiceLineInput, 'quantity' | 'rate' | 'days'>): number {
+  const days = l.days && l.days > 0 ? l.days : 1
+  return roundINR(l.quantity * l.rate * days)
+}
+
+const plainNumber = (n: number) => (Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2))))
+
+/**
+ * How a line is counted, in words, for the Qty column of a quote or invoice:
+ * "96 sq ft × 3 days", "2 hours", "1". The rate column says "per sq ft per
+ * day" with `rateUnit`, so the client can check the sum themselves.
+ */
+export function lineMeasure(l: { quantity: number; unit?: string | null | undefined; days?: number | null | undefined }): string {
+  const unit = l.unit?.trim()
+  const qty = unit ? `${plainNumber(l.quantity)} ${unit}` : plainNumber(l.quantity)
+  if (!l.days || l.days <= 0) return qty
+  return `${qty} × ${plainNumber(l.days)} ${l.days === 1 ? 'day' : 'days'}`
+}
+
+/** "per sq ft per day", "per day", "per hour", or "" when the line has neither. */
+export function rateUnit(l: { unit?: string | null | undefined; days?: number | null | undefined }): string {
+  const parts = []
+  const unit = l.unit?.trim()
+  if (unit) parts.push(`per ${unit}`)
+  if (l.days && l.days > 0) parts.push('per day')
+  return parts.join(' ')
 }

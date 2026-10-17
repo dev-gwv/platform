@@ -1,23 +1,32 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { createQuoteRequest, updateQuoteRequest, type CreateQuoteRequest, type CrmLead, type CrmQuote } from '@ipc/contracts'
-import { computeInvoice, type GstSlab } from '@ipc/domain'
+import { computeInvoice, lineAmount, lineMeasure, type GstSlab } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { formatINR } from '@/shared/ui/format'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
+import { DaysInput, UnitInput } from '@/features/billing/LineUnitFields'
 import { useCreateQuote, useUpdateQuote } from './api'
 
 interface Line {
   description: string
   quantity: string
+  /** "sq ft", "hours" -- empty for a plain count. */
+  unit?: string
   rate: string
+  /** Empty = not charged per day. */
+  days?: string
   gst_rate: GstSlab
 }
 
 const SLABS: GstSlab[] = [0, 5, 12, 18, 28]
-const blank = (): Line => ({ description: '', quantity: '1', rate: '', gst_rate: 18 })
+const blank = (): Line => ({ description: '', quantity: '1', unit: '', rate: '', days: '', gst_rate: 18 })
+const num = (v: string | undefined) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
 
 function iso(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -45,8 +54,15 @@ export function QuoteBuilder({
   const [title, setTitle] = useState(quote?.title ?? lead.title ?? `${lead.name ?? 'Wedding'} package`)
   const [lines, setLines] = useState<Line[]>(
     quote
-      ? quote.items.map((i) => ({ description: i.description, quantity: String(i.quantity), rate: String(i.rate), gst_rate: i.gst_rate as GstSlab }))
-      : [{ description: 'Photography coverage', quantity: '1', rate: lead.deal_value ? String(lead.deal_value) : '', gst_rate: 18 }],
+      ? quote.items.map((i) => ({
+          description: i.description,
+          quantity: String(i.quantity),
+          unit: i.unit ?? '',
+          rate: String(i.rate),
+          days: i.days ? String(i.days) : '',
+          gst_rate: i.gst_rate as GstSlab,
+        }))
+      : [{ ...blank(), description: 'Photography coverage', rate: lead.deal_value ? String(lead.deal_value) : '' }],
   )
   const [discount, setDiscount] = useState(quote ? String(quote.discount) : '0')
   const [intra, setIntra] = useState(quote?.intra_state ?? true)
@@ -78,8 +94,15 @@ export function QuoteBuilder({
   const parsedLines = useMemo(
     () =>
       lines
-        .filter((l) => l.description.trim() && Number(l.rate) >= 0 && Number(l.quantity) > 0)
-        .map((l) => ({ description: l.description.trim(), quantity: Number(l.quantity), rate: Number(l.rate) || 0, gst_rate: l.gst_rate })),
+        .filter((l) => l.description.trim() && num(l.rate) >= 0 && num(l.quantity) > 0)
+        .map((l) => ({
+          description: l.description.trim(),
+          quantity: num(l.quantity),
+          ...(l.unit?.trim() ? { unit: l.unit.trim() } : {}),
+          rate: num(l.rate),
+          ...(num(l.days) > 0 ? { days: num(l.days) } : {}),
+          gst_rate: l.gst_rate,
+        })),
     [lines],
   )
   const totals = useMemo(() => computeInvoice(parsedLines, { intraState: intra, discount: Number(discount) || 0 }), [parsedLines, intra, discount])
@@ -146,7 +169,7 @@ export function QuoteBuilder({
       <DialogContent
         title={isEdit ? `Edit quote ${quote.quote_number}` : `Quote for ${lead.name ?? lead.phone ?? 'this deal'}`}
         description="Lines, discount and GST. The client gets a link to accept or decline."
-        className="max-w-2xl"
+        className="max-w-3xl"
       >
         <div className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <DraftRestoredBanner
@@ -170,31 +193,76 @@ export function QuoteBuilder({
 
           <div className="flex flex-col gap-2">
             <Label>Lines</Label>
-            {lines.map((l, i) => (
-              <div key={i} className="grid gap-2 sm:grid-cols-12">
-                <Input className="sm:col-span-6" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Description" aria-label="Description" />
-                <Input className="sm:col-span-1" type="number" min={0.01} step="0.01" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} aria-label="Quantity" />
-                <Input className="sm:col-span-2" type="number" min={0} value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} placeholder="Rate" aria-label="Rate" />
-                <Select className="sm:col-span-2" value={l.gst_rate} onChange={(e) => setLine(i, { gst_rate: Number(e.target.value) as GstSlab })} aria-label="GST">
-                  {SLABS.map((s) => (
-                    <option key={s} value={s}>
-                      GST {s}%
-                    </option>
-                  ))}
-                </Select>
-                <span className="flex sm:col-span-1">
-                  <Button size="icon" variant="ghost" className="size-7" disabled={i === 0} onClick={() => moveLine(i, -1)} aria-label={`Move line ${i + 1} up`}>
-                    <ArrowUp className="size-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="size-7" disabled={i === lines.length - 1} onClick={() => moveLine(i, 1)} aria-label={`Move line ${i + 1} down`}>
-                    <ArrowDown className="size-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="size-7" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label={`Remove line ${i + 1}`}>
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </span>
-              </div>
-            ))}
+            {lines.map((l, i) => {
+              const days = num(l.days)
+              const amount = lineAmount({ quantity: num(l.quantity), rate: num(l.rate), days })
+              const counted = !!l.unit?.trim() || days > 0
+              return (
+                <div key={i} className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex items-center gap-1">
+                    <Input
+                      className="flex-1"
+                      value={l.description}
+                      onChange={(e) => setLine(i, { description: e.target.value })}
+                      placeholder="What is it? e.g. LED Screen 12 × 8 ft"
+                      aria-label={`Item for line ${i + 1}`}
+                    />
+                    <Button size="icon" variant="ghost" className="size-7" disabled={i === 0} onClick={() => moveLine(i, -1)} aria-label={`Move line ${i + 1} up`}>
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="size-7" disabled={i === lines.length - 1} onClick={() => moveLine(i, 1)} aria-label={`Move line ${i + 1} down`}>
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7 hover:text-destructive"
+                      disabled={lines.length === 1}
+                      onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                      aria-label={`Remove line ${i + 1}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)_5rem_7rem]">
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Qty
+                      <Input inputMode="decimal" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} className="text-right" aria-label={`Quantity for line ${i + 1}`} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Unit
+                      <UnitInput value={l.unit ?? ''} onChange={(v) => setLine(i, { unit: v })} className="h-9 text-sm" label={`Unit for line ${i + 1}`} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Rate (₹){l.unit?.trim() ? ` per ${l.unit.trim()}` : ''}{days > 0 ? ' per day' : ''}
+                      <Input inputMode="decimal" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} className="text-right" placeholder="0" aria-label={`Rate for line ${i + 1}`} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Days
+                      <DaysInput value={l.days ?? ''} onChange={(v) => setLine(i, { days: v })} label={`Days for line ${i + 1}`} />
+                    </label>
+                    <label className="col-span-2 flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-1">
+                      GST
+                      <Select value={l.gst_rate} onChange={(e) => setLine(i, { gst_rate: Number(e.target.value) as GstSlab })} aria-label={`GST for line ${i + 1}`}>
+                        {SLABS.map((s) => (
+                          <option key={s} value={s}>
+                            {s === 0 ? 'No GST' : `${s}%`}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  </div>
+                  <p className="text-right text-sm tabular-nums">
+                    {counted && (
+                      <span className="text-muted-foreground">
+                        {lineMeasure({ quantity: num(l.quantity), unit: l.unit, days })} × {formatINR(num(l.rate))} ={' '}
+                      </span>
+                    )}
+                    <span className="font-semibold">{formatINR(amount)}</span>
+                  </p>
+                </div>
+              )
+            })}
             <div>
               <Button size="sm" variant="outline" onClick={() => setLines((ls) => [...ls, blank()])}>
                 <Plus /> Add line

@@ -1693,6 +1693,8 @@ export const quoteItem = z.object({
   cgst: z.coerce.number(),
   sgst: z.coerce.number(),
   igst: z.coerce.number(),
+  unit: z.string().nullable().default(null),
+  days: z.coerce.number().nullable().default(null),
 })
 export type QuoteItem = z.infer<typeof quoteItem>
 
