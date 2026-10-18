@@ -89,7 +89,7 @@ create table if not exists studio_offers (
   id           uuid primary key default gen_random_uuid(),
   company_id   uuid not null references companies (id) on delete cascade,
   percent      int not null check (percent between 1 and 90),
-  tiers        text[] not null default '{starter,pro,max}'
+  tiers        text[] not null default (array['starter', 'pro', 'max'])
                  check (tiers <@ array['starter', 'pro', 'max'] and cardinality(tiers) > 0),
   for_diamond  boolean not null default false,
   ends_at      timestamptz not null,
