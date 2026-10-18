@@ -11,6 +11,8 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { platformMessagingRouter } from './messaging'
 import { platformEmailRouter } from './email'
+import { platformOffersRouter } from './offers'
+import { platformLoginsRouter } from './logins'
 import { fetchOrderPayments } from '../../lib/razorpay'
 import { sheetRef, syncDiamondSheet } from '../../lib/diamond-sheet'
 
@@ -390,6 +392,10 @@ export const platformRouter = new Hono<AppEnv>()
       { onCode: (code) => (code === '22023' ? fail(422, 'That plan is not in the catalogue.') : undefined) },
     )
     if (!row) fail(400, 'We could not assign the plan.')
+    // A live offer (0268) for this plan is now used. Best effort: the plan is given either way.
+    await attempt(c, 'platform.offer_used', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_offer_used(${id}, ${parsed.data.plan_key})`),
+    )
     await audit(c, { action: 'platform.plan_assign', entityType: 'company', entityId: id, after: { plan_key: parsed.data.plan_key, until: row } })
     return c.json({ ok: true, until: row })
   })
@@ -556,6 +562,8 @@ export const platformRouter = new Hono<AppEnv>()
   // Messaging wallets, recharge requests, prices, templates, outbox, margin.
   .route('/messaging', platformMessagingRouter)
   .route('/email', platformEmailRouter)
+  .route('/', platformOffersRouter)
+  .route('/', platformLoginsRouter)
 
 /** Platform → Diamond's sheet card: the link, the last copy, and who verified by number. */
 async function sheetStatus(c: Context<AppEnv>) {

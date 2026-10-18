@@ -1315,6 +1315,19 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   if (method === 'POST' && path.includes('/terms/') && path.endsWith('/ack')) return { ok: true }
   if (method === 'GET' && path === '/platform/studios') return platformStudiosFx
+  // 0268: activity beside each studio, the offers list, and making one.
+  if (method === 'GET' && path === '/platform/activity')
+    return platformStudiosFx.map((st, i) => ({
+      company_id: st.id, projects: [12, 3, 0][i % 3], invoices: [6, 1, 0][i % 3], leads: [40, 8, 0][i % 3], shoots: [20, 2, 0][i % 3],
+      team: [5, 1, 0][i % 3], active_days_7: [5, 1, 0][i % 3], active_days_30: [22, 6, 0][i % 3],
+      last_active: [new Date().toISOString(), new Date(Date.now() - 4 * 86_400_000).toISOString(), null][i % 3],
+      last_made: null, bought: i % 3 === 0 && i > 0,
+    }))
+  if (method === 'GET' && path === '/platform/offers') return []
+  if (method === 'POST' && path === '/platform/offers') return { made: 1, skipped: [] }
+  if (method === 'GET' && path === '/subscription/offer')
+    return { id: uid(0x0ff), percent: 20, tiers: ['starter', 'pro', 'max'], for_diamond: false, ends_at: new Date(Date.now() + 3 * 86_400_000).toISOString(), note: 'For being one of our busiest studios' }
+  if (method === 'POST' && path.startsWith('/subscription/offer/')) return { ok: true }
   if (method === 'GET' && path === '/platform/plans')
     return [
       { id: uid(0x7c1), key: 'diamond-annual', name: 'Diamond Annual', price: 18000, billing_interval: 'yearly', duration_days: 365, audience: 'diamond', is_active: true },
@@ -1528,7 +1541,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name and logo (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
     },
     {
       id: uid(0xa01 + i * 2 + (member ? 0x10 : 0)),
@@ -1542,7 +1555,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name and logo (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
     },
   ])
 }

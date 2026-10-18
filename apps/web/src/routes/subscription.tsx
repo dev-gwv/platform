@@ -18,6 +18,9 @@ import { useTalkToUs } from '@/features/billing/talk-to-us'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
 import { DiamondCheckDialog } from '@/features/billing/DiamondCheckDialog'
+import { OfferStrip } from '@/features/billing/OfferStrip'
+import { markOffer, useMyOffer } from '@/features/billing/offer-api'
+import { offerFor, offerLastDay } from '@/features/billing/offer'
 
 const plans = plan.array()
 const WHATSAPP = 'border-0 bg-[#25D366] text-white hover:bg-[#1ebe5b] hover:text-white'
@@ -64,6 +67,13 @@ function Subscription() {
     retry: false,
   })
   const diamond = status.data?.member_tier === 'diamond'
+  // A personal offer (0268): on the cards it covers, and named in the WhatsApp message.
+  const offer = useMyOffer().data
+  const ask = (p: Plan, kind: PlanQuote['kind'] | undefined, member: boolean) => {
+    const o = offerFor(offer, p, member ? 'member' : 'regular')
+    if (o) markOffer(o.id, 'asked')
+    talk.open(p, kind, member, o ? { percent: o.percent, lastDay: offerLastDay(o.ends_at) } : undefined)
+  }
 
   const gateTone = { active: 'success', grace: 'warning', grandfathered: 'info', expired: 'danger' } as const
 
@@ -80,6 +90,7 @@ function Subscription() {
           )
         }
       />
+      <OfferStrip />
       {/* One line only when a payment is in flight; the card below says the rest. */}
       {status.data?.latest_order_status && status.data.latest_order_status !== 'paid' && (
         <p className="mb-2 text-sm text-muted-foreground">Latest payment: {humanize(status.data.latest_order_status)}</p>
@@ -144,20 +155,21 @@ function Subscription() {
           onChoose={(p, q, list) => {
             // The member price goes to WhatsApp only once the number is on the IPC list.
             if (list === 'member' && !diamond) setChecking({ plan: p, quote: q })
-            else talk.open(p, q?.kind, list === 'member')
+            else ask(p, q?.kind, list === 'member')
           }}
           regularAction={{ label: talk.label, icon: MessageCircle, note: "We'll set it up on a short call.", className: WHATSAPP }}
           memberAction={{ label: talk.label, icon: MessageCircle, note: diamond ? "We'll set it up on a short call." : 'We check your IPC number first.', className: WHATSAPP }}
           onCheckNumber={session?.is_owner ? () => setChecking({ plan: null }) : undefined}
           canChoose={!!session?.is_owner}
           chooseHint="Only the studio owner can change the plan."
+          offer={offer}
         />
       )}
       <DiamondCheckDialog
         open={!!checking}
         plan={checking?.plan ?? null}
         onClose={() => setChecking(null)}
-        onWhatsApp={(p) => talk.open(p, checking?.quote?.kind, true)}
+        onWhatsApp={(p) => ask(p, checking?.quote?.kind, true)}
         onSeeRegular={() => document.getElementById('regular-prices')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
       />
       {/* Never a timer (owner, 14 Oct): one honest sentence. */}

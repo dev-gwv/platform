@@ -23,7 +23,7 @@ export function useTalkToUs() {
 
   return {
     label: 'Talk to us on WhatsApp',
-    open(plan: Plan, kind?: PlanQuote['kind'], diamond?: boolean) {
+    open(plan: Plan, kind?: PlanQuote['kind'], diamond?: boolean, offer?: { percent: number; lastDay: string }) {
       const text = planEnquiryMessage({
         plan,
         kind,
@@ -32,6 +32,7 @@ export function useTalkToUs() {
         email: session?.email,
         inr: formatINR,
         diamond,
+        offer,
       })
       window.open(whatsappLink(whatsapp, text), '_blank', 'noopener,noreferrer')
     },

@@ -192,3 +192,17 @@ export const activateResponse = z.object({
   expires_at: z.string(),
 })
 export type ActivateResponse = z.infer<typeof activateResponse>
+
+/** The studio's own live offer from the platform (0268), or null. */
+export const myOffer = z
+  .object({
+    id: uuid,
+    percent: z.coerce.number().int(),
+    tiers: z.array(z.enum(['starter', 'pro', 'max'])),
+    for_diamond: z.boolean(),
+    ends_at: z.string(),
+    note: z.string().nullable(),
+  })
+  .nullable()
+export type MyOffer = z.infer<typeof myOffer>
+export const offerMarkRequest = z.object({ kind: z.enum(['seen', 'asked']) })

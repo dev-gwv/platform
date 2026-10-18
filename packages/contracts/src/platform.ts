@@ -301,3 +301,71 @@ export const paymentRecovery = z.object({
 })
 export type PaymentRecovery = z.infer<typeof paymentRecovery>
 export const paymentCreditResult = z.object({ expires_at: z.string().nullable(), duplicate: z.boolean(), payment_id: z.string() })
+
+/** What a studio has made and how often it opens the app (0268): counts only, never contents. */
+export const studioActivity = z.object({
+  company_id: uuid,
+  projects: z.coerce.number().int(),
+  invoices: z.coerce.number().int(),
+  leads: z.coerce.number().int(),
+  shoots: z.coerce.number().int(),
+  team: z.coerce.number().int(),
+  active_days_7: z.coerce.number().int(),
+  active_days_30: z.coerce.number().int(),
+  last_active: z.string().nullable(),
+  last_made: z.string().nullable(),
+  bought: z.boolean(),
+})
+export type StudioActivity = z.infer<typeof studioActivity>
+
+export const offerTier = z.enum(['starter', 'pro', 'max'])
+export type OfferTier = z.infer<typeof offerTier>
+
+/** A personal offer (0268): a percent off the first plan, for studios that never bought. */
+export const makeOffersRequest = z.object({
+  company_ids: z.array(uuid).min(1).max(1000),
+  percent: z.number().int().min(1).max(90),
+  tiers: z.array(offerTier).min(1),
+  until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().trim().max(200).optional(),
+  for_diamond: z.boolean().default(false),
+})
+export type MakeOffersRequest = z.input<typeof makeOffersRequest>
+export const makeOffersResult = z.object({
+  made: z.coerce.number().int(),
+  skipped: z.array(z.object({ company_id: uuid, name: z.string(), reason: z.string() })),
+})
+export type MakeOffersResult = z.infer<typeof makeOffersResult>
+
+export const platformOffer = z.object({
+  id: uuid,
+  company_id: uuid,
+  studio: z.string(),
+  percent: z.coerce.number().int(),
+  tiers: z.array(offerTier),
+  for_diamond: z.boolean(),
+  ends_at: z.string(),
+  note: z.string().nullable(),
+  created_at: z.string(),
+  seen_at: z.string().nullable(),
+  asked_at: z.string().nullable(),
+  used_at: z.string().nullable(),
+  used_plan: z.string().nullable(),
+  cancelled_at: z.string().nullable(),
+})
+export type PlatformOffer = z.infer<typeof platformOffer>
+
+/** One studio a login opens, for Find a login (0269). */
+export const loginStudio = z.object({
+  profile_id: uuid,
+  company_id: uuid,
+  company_name: z.string(),
+  role: z.string(),
+  is_owner: z.boolean(),
+  plan_gate: planGate,
+  access_until: z.string().nullable(),
+  opens_first: z.boolean(),
+  last_in: z.boolean(),
+})
+export type LoginStudio = z.infer<typeof loginStudio>
+export const openFirstRequest = z.object({ email: z.string().trim().min(3).max(320), company_id: uuid })
