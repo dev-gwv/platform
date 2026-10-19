@@ -19,6 +19,8 @@ export interface PanelCopy {
   lookingUp: string
   tryAgain: string
   bookCall: string
+  /** Opens Report a problem with this conversation (support requests, 0271). */
+  tellTeam: string
   copy: string
   copied: string
   copyFailed: string
@@ -47,6 +49,7 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     lookingUp: 'Looking it up…',
     tryAgain: 'Try again',
     bookCall: 'Book a call',
+    tellTeam: 'Tell the team',
     copy: 'Copy',
     copied: 'Copied',
     copyFailed: 'Could not copy — select the answer and copy it by hand',
@@ -67,6 +70,7 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     lookingUp: 'देख रहे हैं…',
     tryAgain: 'फिर से पूछें',
     bookCall: 'कॉल बुक करें',
+    tellTeam: 'टीम को बताएं',
     copy: 'कॉपी',
     copied: 'कॉपी हो गया',
     copyFailed: 'कॉपी नहीं हो सका — जवाब चुनकर खुद कॉपी करें',
@@ -92,6 +96,7 @@ export const COPY: Record<AssistantLang, PanelCopy> = {
     lookingUp: 'Dekh rahe hain…',
     tryAgain: 'Phir se poochhiye',
     bookCall: 'Call book karein',
+    tellTeam: 'Team ko batayein',
     copy: 'Copy',
     copied: 'Copy ho gaya',
     copyFailed: 'Copy nahi ho saka — answer select karke khud copy kariye',

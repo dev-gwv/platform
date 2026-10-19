@@ -24,6 +24,7 @@ import { financialsRouter } from './modules/financials/router'
 import { crmRouter } from './modules/crm/router'
 import { webhooksRouter, metaRouter } from './modules/webhooks/router'
 import { framelineWebhookRouter } from './modules/webhooks/frameline'
+import { supportFilesPublic, supportRouter, supportSheetWebhook } from './modules/support/router'
 import { galleriesRouter } from './modules/galleries/router'
 import { hrRouter } from './modules/hr/router'
 import { performanceRouter } from './modules/performance/router'
@@ -180,6 +181,9 @@ app.route('/crm', crmSequencesRouter)
 app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)
 app.route('/webhooks', framelineWebhookRouter)
+app.route('/webhooks', supportSheetWebhook)
+app.route('/support', supportRouter)
+app.route('/public', supportFilesPublic)
 app.route('/galleries', galleriesRouter)
 app.route('/meta', metaRouter)
 app.route('/hr', hrRouter)

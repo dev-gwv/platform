@@ -24,6 +24,8 @@ export interface Said {
   callUrl?: string | null
   /** A failure we could not answer through; drawn differently. */
   broke?: boolean
+  /** The assistant handed over to a person: the answer offers Tell the team (support requests, 0271). */
+  handedOver?: boolean
   /** The log row, so "did this help?" can mark the right answer. */
   logId?: string | null
   /** What they said about it, once they have. */

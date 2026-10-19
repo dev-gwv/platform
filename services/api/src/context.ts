@@ -50,6 +50,9 @@ export interface Env {
    */
   FRAMELINE_API_URL?: string
   FRAMELINE_SECRET?: string
+  /** The shared support Google Sheet (Apps Script web app) and the secret it and POST /webhooks/support-sheet share (0271, lib/support-desk.ts). */
+  SUPPORT_SHEET_URL?: string
+  SUPPORT_SHEET_SECRET?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
   /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */

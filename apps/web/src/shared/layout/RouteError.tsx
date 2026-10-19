@@ -1,9 +1,10 @@
 import { Component, useState, type ErrorInfo, type ReactNode } from 'react'
 import { useRouter } from '@tanstack/react-router'
 import * as Sentry from '@sentry/react'
-import { AlertTriangle, ArrowLeft, Copy, RotateCcw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Copy, LifeBuoy, RotateCcw } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { reportClientError } from '@/shared/error/report'
+import { openReportProblem } from '@/features/support/ReportProblem'
 
 /**
  * What a screen shows when it breaks, instead of the router's bare "Something
@@ -97,9 +98,25 @@ export class PanelBoundary extends Component<
       <div className="m-4 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-5 text-center">
         <p className="text-sm font-medium">Couldn’t show {this.props.label ?? 'this'} · कुछ गड़बड़ हुई</p>
         <p className="max-w-sm break-words text-xs text-muted-foreground">{describe(this.state.error).split('\n')[0]}</p>
-        <Button size="sm" onClick={() => this.setState({ error: null })}>
-          <RotateCcw /> Try again
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" onClick={() => this.setState({ error: null })}>
+            <RotateCcw /> Try again
+          </Button>
+          {/* Straight to the team with what broke (support requests, 0271); the page goes with it. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              openReportProblem({
+                kind: 'problem',
+                body: `“Couldn’t show ${this.props.label ?? 'this'}” came up. `,
+                context: `Error on the page: ${describe(this.state.error).split('\n')[0]?.slice(0, 500) ?? ''}`,
+              })
+            }
+          >
+            <LifeBuoy /> Tell the team
+          </Button>
+        </div>
       </div>
     )
   }

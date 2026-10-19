@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   ArrowUpRight,
   CalendarClock,
+  LifeBuoy,
   Check,
   Copy,
   CornerDownLeft,
@@ -29,6 +30,7 @@ import { useAssistantFeedback, useAssistantQuotaRefresh } from './api'
 import { COPY, LANG_CHOICES, type PanelCopy } from './copy'
 import { useAssistantLang } from './lang'
 import { askAssistant, stopAsking } from './send'
+import { openReportProblem } from '@/features/support/ReportProblem'
 import {
   addSaid,
   dropLastSaid,
@@ -377,6 +379,14 @@ function Thinking({ t }: { t: PanelCopy }) {
   )
 }
 
+/** The last few turns, for the team: what was asked and what the assistant said. */
+function transcript(): string {
+  return snapshot()
+    .said.slice(-8)
+    .map((s) => `${s.role === 'user' ? 'Asked' : 'Assistant'}: ${s.text}`)
+    .join('\n\n')
+}
+
 function Bubble({
   said,
   at,
@@ -442,6 +452,12 @@ function Bubble({
             )
           })}
         </div>
+      )}
+
+      {said.handedOver && (
+        <Button size="sm" className="self-start" onClick={() => openReportProblem({ context: transcript() })}>
+          <LifeBuoy /> {t.tellTeam}
+        </Button>
       )}
 
       {said.callUrl && (

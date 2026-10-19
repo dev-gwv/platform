@@ -9,6 +9,7 @@ import { useHelp, useTutorials } from './api'
 import { TutorialPlayer } from './TutorialPlayer'
 import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
+import { openReportProblem } from '@/features/support/ReportProblem'
 
 const ROLE: Record<string, string> = {
   super_admin: 'Owner',
@@ -62,17 +63,31 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
       <GuideLink onNavigate={onNavigate} />
 
-      {(help?.support_whatsapp || help?.support_email) && (
-        <>
-          <div>
-            <p className="text-lg font-semibold">We're one message away</p>
-            <p className="text-sm text-muted-foreground">
-              Tell us what you need. Your studio and this page are already in the message.
-            </p>
-          </div>
-          <SupportButtons />
-        </>
-      )}
+      <div className="flex flex-col gap-3">
+        <div>
+          <p className="text-lg font-semibold">We're one message away</p>
+          <p className="text-sm text-muted-foreground">
+            Something not working, or a question? Tell the team and we answer in Your requests within a working day.
+          </p>
+        </div>
+        {/* Support requests (0271): always here, whatever contacts are set. */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => {
+              onNavigate?.()
+              openReportProblem()
+            }}
+          >
+            <LifeBuoy /> Tell the team
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/support-requests" onClick={onNavigate}>
+              Your requests
+            </Link>
+          </Button>
+        </div>
+        {(help?.support_whatsapp || help?.support_email) && <SupportButtons />}
+      </div>
 
       {here && (
         <button

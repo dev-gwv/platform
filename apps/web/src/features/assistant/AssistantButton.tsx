@@ -1,6 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { RotateCcw, Sparkles } from 'lucide-react'
+import { LifeBuoy, RotateCcw, Sparkles } from 'lucide-react'
+import { Button } from '@/shared/ui/button'
+import { SupportButtons } from '@/features/help/HelpPanel'
+import { openReportProblem } from '@/features/support/ReportProblem'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from './AssistantPanel'
@@ -71,6 +74,16 @@ export function AssistantButton() {
             )}
           </div>
           <AssistantPanel callUrl={data.call_url} left={left} />
+          {/* Never a dead end: a person is one press away here too (support requests, 0271). */}
+          <div className="flex flex-col gap-2 border-t border-border p-3">
+            <p className="text-xs text-muted-foreground">Rather tell a person?</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => { setOpen(false); openReportProblem() }}>
+                <LifeBuoy /> Tell the team
+              </Button>
+            </div>
+            <SupportButtons compact />
+          </div>
         </SheetContent>
       </Sheet>
     </>

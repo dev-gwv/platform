@@ -28,6 +28,7 @@ import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
 import { HelpBubble } from '@/features/help/HelpBubble'
+import { ReportProblemHost } from '@/features/support/ReportProblem'
 import { useBranding } from '@/features/crm-sequences/api'
 import { HubTabs } from './HubTabs'
 import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
@@ -270,6 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
         <MobileTabBar onMenu={() => setMobileOpen(true)} />
         <HelpBubble />
+        <ReportProblemHost />
       </div>
     </div>
   )
