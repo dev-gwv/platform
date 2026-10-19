@@ -48,7 +48,6 @@ export const LEAD_EXPORT_COLUMNS: readonly { title: string; kind: Kind; width: n
 ]
 
 const IST = 'Asia/Kolkata'
-const pad = (n: number) => String(n).padStart(2, '0')
 
 /** DD-MM-YYYY HH:MM in India time. */
 export function istDateTime(iso: string | null): string {
@@ -114,7 +113,7 @@ const csvCell = (v: string | number | null): string => {
 export function leadsCsv(rows: readonly LeadExportRow[]): string {
   const lines = [LEAD_EXPORT_COLUMNS.map((c) => csvCell(c.title)).join(',')]
   for (const r of rows) lines.push(leadExportCells(r).map(csvCell).join(','))
-  return `﻿${lines.join('\r\n')}\r\n`
+  return `\uFEFF${lines.join('\r\n')}\r\n`
 }
 
 // ── XLSX ────────────────────────────────────────────────────────────

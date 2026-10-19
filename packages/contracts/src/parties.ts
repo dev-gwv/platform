@@ -13,6 +13,8 @@ export const party = z.object({
   address: z.string().nullable().nullish(),
   state: z.string().nullable().nullish(),
   is_active: z.boolean().nullish(),
+  /** What they do (0270): every kind of work, the first the main one. */
+  categories: z.array(z.string()).default([]),
 })
 export type Party = z.infer<typeof party>
 
@@ -25,6 +27,7 @@ export const createPartyRequest = z.object({
   address: z.string().trim().max(400).nullish(),
   state: z.string().trim().max(80).nullish(),
   is_active: z.boolean().nullish(),
+  categories: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
 })
 export type CreatePartyRequest = z.infer<typeof createPartyRequest>
 
@@ -37,5 +40,6 @@ export const updatePartyRequest = z.object({
   address: z.string().trim().max(400).nullable().optional(),
   state: z.string().trim().max(80).nullable().optional(),
   is_active: z.boolean().optional(),
+  categories: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
 })
 export type UpdatePartyRequest = z.infer<typeof updatePartyRequest>

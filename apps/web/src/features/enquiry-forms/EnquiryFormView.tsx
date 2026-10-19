@@ -1,24 +1,17 @@
-import { useState, type FormEvent } from 'react'
-import { CheckCircle2 } from 'lucide-react'
-import { enquiryEventTypes, type PublicEnquiryForm } from '@ipc/contracts'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Check, CircleCheck, ExternalLink, Handshake, MessageCircle } from 'lucide-react'
+import { enquiryEventTypes, type PublicEnquiryFormV2 } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
-import { StatusBadge } from '@/shared/ui/status-badge'
+import { cn } from '@/shared/ui/cn'
 import { toneVar } from '@/shared/ui/tones'
-import { FIELD_LABEL, firstMissing, type EnquiryValues } from './form-fields'
+import { FIELD_LABEL, checkEnquiry, type EnquiryValues, type FieldErrors } from './form-fields'
 
 type FormLook = Pick<
-  PublicEnquiryForm,
-  | 'studio'
-  | 'form_name'
-  | 'purpose'
-  | 'title'
-  | 'intro'
-  | 'thank_you'
-  | 'accent'
-  | 'logo_url'
-  | 'fields'
->
+  PublicEnquiryFormV2,
+  'studio' | 'form_name' | 'purpose' | 'title' | 'intro' | 'thank_you' | 'accent' | 'logo_url' | 'fields'
+> &
+  Partial<Pick<PublicEnquiryFormV2, 'city' | 'services' | 'event_types' | 'partner' | 'goes_to'>>
 
 export interface EnquirySend {
   name: string
@@ -27,65 +20,88 @@ export interface EnquirySend {
   event_type: string | null
   event_date: string | null
   city: string | null
+  services: string[] | null
+  guests: number | null
   budget: number | null
   message: string | null
   website: string
 }
 
+/** What the server says about a send it refused: one message, and a word per field. */
+export class EnquirySendError extends Error {
+  constructor(
+    message: string,
+    readonly fields: FieldErrors = {},
+  ) {
+    super(message)
+  }
+}
+
+const num = (s: string | undefined) => {
+  const n = s ? Number(s.replace(/[^\d.]/g, '')) : NaN
+  return Number.isFinite(n) && s ? n : null
+}
+
 /**
- * The form itself, as the person filling it sees it: the studio's logo and
- * words, the fields the studio chose, its colour on the button. The public
- * page, the website embed and the studio's own preview all draw this one.
- * In preview nothing is sent.
+ * The form itself, as the client sees it (spec 3.9, 3.10): the studio's name
+ * and logo, "Sent via <partner>" through a partner's QR, the questions the
+ * studio chose, then a thank-you that takes them straight into a WhatsApp
+ * chat with the studio. The public page, the website embed and the studio's
+ * own preview all draw this one; in preview nothing is sent.
  */
 export function EnquiryFormView({
   look,
   preview = false,
+  embed = false,
   onSend,
 }: {
   look: FormLook
   preview?: boolean
-  onSend?: (body: EnquirySend) => Promise<void>
+  embed?: boolean
+  onSend?: (body: EnquirySend) => Promise<{ redirect_url: string | null }>
 }) {
   const f = look.fields
+  const services = look.services ?? []
+  const events = look.event_types?.length ? look.event_types : [...enquiryEventTypes]
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [values, setValues] = useState<EnquiryValues>({})
   // Hidden from people; a bot fills it and the server quietly drops the send.
   const [website, setWebsite] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [notice, setNotice] = useState<string | null>(null)
+  const [done, setDone] = useState<{ redirect: string | null } | null>(null)
   const accent = look.accent && look.accent !== 'slate' ? toneVar(look.accent) : undefined
-  const set = (k: keyof EnquiryValues) => (v: string) => setValues((x) => ({ ...x, [k]: v }))
-  const mark = (k: keyof typeof f) =>
-    f[k] === 'required' ? <span className="text-destructive"> *</span> : null
+  const set = (k: Exclude<keyof EnquiryValues, 'services'>) => (v: string) => setValues((x) => ({ ...x, [k]: v }))
+  const label = (k: keyof typeof f, text = FIELD_LABEL[k]) => (f[k] === 'required' ? text : `${text} (optional)`)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (preview) return
-    setError(null)
-    if (name.trim().length < 2) return setError('Please tell us your name.')
-    if (phone.replace(/\D/g, '').length < 10) return setError('Please enter a valid mobile number.')
-    const missing = firstMissing(f, values)
-    if (missing) return setError(`Please add ${missing.toLowerCase()}.`)
-    const budget = values.budget ? Number(values.budget.replace(/[^\d.]/g, '')) : null
+    setNotice(null)
+    const found = checkEnquiry(f, name, phone, values)
+    setErrors(found)
+    if (Object.keys(found).length) return
     setBusy(true)
     try {
-      await onSend?.({
+      const res = await onSend?.({
         name: name.trim(),
         phone: phone.trim(),
         email: values.email?.trim() || null,
         event_type: values.event_type || null,
         event_date: values.event_date || null,
         city: values.city?.trim() || null,
-        budget: budget !== null && Number.isFinite(budget) ? budget : null,
+        services: values.services?.length ? values.services : null,
+        guests: num(values.guests),
+        budget: num(values.budget),
         message: values.message?.trim() || null,
         website,
       })
-      setDone(true)
+      setDone({ redirect: res?.redirect_url ?? null })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not send this. Please try again.')
+      if (err instanceof EnquirySendError && Object.keys(err.fields).length) setErrors(err.fields)
+      else setNotice(err instanceof Error ? err.message : 'We could not send this. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -93,186 +109,296 @@ export function EnquiryFormView({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start gap-3">
+      <header className="flex flex-col items-center gap-2 text-center">
         {look.logo_url && (
           <img
             src={look.logo_url}
             alt=""
-            className="size-12 shrink-0 rounded-lg border border-border bg-white object-contain p-1"
+            className="size-16 rounded-2xl border border-border bg-white object-contain p-1.5 shadow-sm"
           />
         )}
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">{look.studio}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {look.title || 'Tell us about your event and we will call you back.'}
-          </p>
-          {look.intro && <p className="mt-1 text-sm text-muted-foreground">{look.intro}</p>}
-          {look.purpose === 'vendor' && (
-            <StatusBadge tone="info" className="mt-2">
-              via {look.form_name}
-            </StatusBadge>
-          )}
-        </div>
-      </div>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{look.studio}</h1>
+        {look.city && <p className="text-sm text-muted-foreground">{look.city}</p>}
+        {look.partner && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-card/80 px-3 py-1 text-sm font-semibold text-primary ring-1 ring-brand/50">
+            <Handshake className="size-4" aria-hidden /> Sent via {look.partner}
+          </span>
+        )}
+      </header>
 
-      {done ? (
-        <div className="flex flex-col items-center gap-2 py-6 text-center">
-          <CheckCircle2 className="size-10 text-success" aria-hidden />
-          <p className="font-medium">{look.thank_you || 'Thank you, we have your enquiry.'}</p>
-          {!look.thank_you && (
-            <p className="text-sm text-muted-foreground">{look.studio} will call you soon.</p>
-          )}
-        </div>
-      ) : (
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="enq-name">
-              Your name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="enq-name"
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="enq-phone">
-              Mobile number <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="enq-phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
-          {f.email !== 'off' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="enq-email">
-                {FIELD_LABEL.email}
-                {mark('email')}
-              </Label>
+      <section className={cn('rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7', embed && 'shadow-none')}>
+        {done ? (
+          <ThankYou look={look} redirect={done.redirect} embed={embed} />
+        ) : (
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            <div>
+              <h2 className="text-xl font-extrabold tracking-tight">{look.title || 'Tell us about your event'}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{look.intro || 'We usually reply the same day.'}</p>
+            </div>
+
+            <Field id="enq-name" label="Your name" error={errors.name}>
               <Input
-                id="enq-email"
-                type="email"
-                autoComplete="email"
-                value={values.email ?? ''}
-                onChange={(e) => set('email')(e.target.value)}
+                id="enq-name"
+                autoComplete="name"
+                className="h-12"
+                value={name}
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? 'enq-name-note' : undefined}
+                onChange={(e) => setName(e.target.value)}
               />
-            </div>
-          )}
-          {(f.event_type !== 'off' || f.event_date !== 'off') && (
-            <div className="grid grid-cols-2 gap-3">
-              {f.event_type !== 'off' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="enq-event">
-                    {FIELD_LABEL.event_type}
-                    {mark('event_type')}
-                  </Label>
-                  <Select
-                    id="enq-event"
-                    value={values.event_type ?? ''}
-                    onChange={(e) => set('event_type')(e.target.value)}
-                  >
-                    <option value="">Choose</option>
-                    {enquiryEventTypes.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </Select>
+            </Field>
+            <Field id="enq-phone" label="Mobile number" hint="We'll reach you on WhatsApp or a call." error={errors.phone}>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-base text-muted-foreground">
+                  +91
+                </span>
+                <Input
+                  id="enq-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  placeholder="98765 43210"
+                  className="h-12 pl-12 tabular-nums"
+                  value={phone}
+                  aria-invalid={!!errors.phone}
+                  aria-describedby="enq-phone-note"
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+            </Field>
+
+            {f.email !== 'off' && (
+              <Field id="enq-email" label={label('email')} error={errors.email}>
+                <Input
+                  id="enq-email"
+                  type="email"
+                  autoComplete="email"
+                  className="h-12"
+                  value={values.email ?? ''}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'enq-email-note' : undefined}
+                  onChange={(e) => set('email')(e.target.value)}
+                />
+              </Field>
+            )}
+
+            {(f.event_type !== 'off' || f.event_date !== 'off') && (
+              <div className={cn('grid gap-3', f.event_type !== 'off' && f.event_date !== 'off' && 'grid-cols-2')}>
+                {f.event_type !== 'off' && (
+                  <Field id="enq-event" label={label('event_type')} error={errors.event_type}>
+                    <Select
+                      id="enq-event"
+                      className="[&_button]:h-12"
+                      value={values.event_type ?? ''}
+                      aria-invalid={!!errors.event_type}
+                      onChange={(e) => set('event_type')(e.target.value)}
+                    >
+                      <option value="">Choose</option>
+                      {events.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
+                {f.event_date !== 'off' && (
+                  <Field id="enq-date" label={label('event_date')} error={errors.event_date}>
+                    <Input
+                      id="enq-date"
+                      type="date"
+                      className="h-12"
+                      value={values.event_date ?? ''}
+                      onChange={(e) => set('event_date')(e.target.value)}
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {f.city !== 'off' && (
+              <Field id="enq-city" label={label('city')} error={errors.city}>
+                <Input
+                  id="enq-city"
+                  maxLength={60}
+                  autoComplete="address-level2"
+                  className="h-12"
+                  value={values.city ?? ''}
+                  aria-invalid={!!errors.city}
+                  onChange={(e) => set('city')(e.target.value)}
+                />
+              </Field>
+            )}
+
+            {f.services !== 'off' && services.length > 0 && (
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-semibold">{label('services')}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {services.map((s) => {
+                    const on = (values.services ?? []).includes(s)
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          setValues((x) => ({
+                            ...x,
+                            services: on ? (x.services ?? []).filter((v) => v !== s) : [...(x.services ?? []), s],
+                          }))
+                        }
+                        className={cn(
+                          'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors',
+                          on
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input bg-card hover:border-brand',
+                        )}
+                      >
+                        {on && <Check className="size-4" aria-hidden />}
+                        {s}
+                      </button>
+                    )
+                  })}
                 </div>
-              )}
-              {f.event_date !== 'off' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="enq-date">
-                    {FIELD_LABEL.event_date}
-                    {mark('event_date')}
-                  </Label>
-                  <Input
-                    id="enq-date"
-                    type="date"
-                    value={values.event_date ?? ''}
-                    onChange={(e) => set('event_date')(e.target.value)}
-                  />
-                </div>
-              )}
+                <p className={cn('text-xs', errors.services ? 'text-destructive' : 'text-muted-foreground')}>
+                  {errors.services ?? 'Tick all that apply.'}
+                </p>
+              </fieldset>
+            )}
+
+            {(f.guests !== 'off' || f.budget !== 'off') && (
+              <div className={cn('grid gap-3', f.guests !== 'off' && f.budget !== 'off' && 'grid-cols-2')}>
+                {f.guests !== 'off' && (
+                  <Field id="enq-guests" label={label('guests')} error={errors.guests}>
+                    <Input
+                      id="enq-guests"
+                      inputMode="numeric"
+                      placeholder="300"
+                      className="h-12 tabular-nums"
+                      value={values.guests ?? ''}
+                      aria-invalid={!!errors.guests}
+                      onChange={(e) => set('guests')(e.target.value.replace(/[^\d]/g, ''))}
+                    />
+                  </Field>
+                )}
+                {f.budget !== 'off' && (
+                  <Field id="enq-budget" label={label('budget')} error={errors.budget}>
+                    <Input
+                      id="enq-budget"
+                      inputMode="numeric"
+                      placeholder="5,00,000"
+                      className="h-12 tabular-nums"
+                      value={values.budget ?? ''}
+                      aria-invalid={!!errors.budget}
+                      onChange={(e) => set('budget')(e.target.value)}
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {f.message !== 'off' && (
+              <Field id="enq-msg" label={label('message')} error={errors.message}>
+                <Textarea
+                  id="enq-msg"
+                  rows={3}
+                  maxLength={1000}
+                  placeholder="Venue, number of people, what you're looking for"
+                  value={values.message ?? ''}
+                  aria-invalid={!!errors.message}
+                  onChange={(e) => set('message')(e.target.value)}
+                />
+              </Field>
+            )}
+
+            <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+              <label>
+                Website
+                <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+              </label>
             </div>
-          )}
-          {(f.city !== 'off' || f.budget !== 'off') && (
-            <div className="grid grid-cols-2 gap-3">
-              {f.city !== 'off' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="enq-city">
-                    {FIELD_LABEL.city}
-                    {mark('city')}
-                  </Label>
-                  <Input
-                    id="enq-city"
-                    value={values.city ?? ''}
-                    onChange={(e) => set('city')(e.target.value)}
-                  />
-                </div>
-              )}
-              {f.budget !== 'off' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="enq-budget">
-                    {FIELD_LABEL.budget} (₹){mark('budget')}
-                  </Label>
-                  <Input
-                    id="enq-budget"
-                    inputMode="numeric"
-                    placeholder="e.g. 1,50,000"
-                    value={values.budget ?? ''}
-                    onChange={(e) => set('budget')(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          {f.message !== 'off' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="enq-msg">
-                {FIELD_LABEL.message}
-                {mark('message')}
-              </Label>
-              <Textarea
-                id="enq-msg"
-                rows={3}
-                value={values.message ?? ''}
-                onChange={(e) => set('message')(e.target.value)}
-              />
-            </div>
-          )}
-          <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
-            <label>
-              Website
-              <input
-                tabIndex={-1}
-                autoComplete="off"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-              />
-            </label>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            size="lg"
-            disabled={busy || preview}
-            style={accent ? { backgroundColor: accent, borderColor: accent } : undefined}
-          >
-            {busy ? 'Sending…' : 'Send enquiry'}
+            {notice && (
+              <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {notice}
+              </p>
+            )}
+            <Button
+              type="submit"
+              size="lg"
+              className="h-13 w-full text-base font-bold"
+              disabled={busy || preview}
+              aria-busy={busy}
+              style={accent ? { backgroundColor: accent, borderColor: accent } : undefined}
+            >
+              {busy ? 'Sending…' : 'Send enquiry'}
+            </Button>
+          </form>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string | undefined; error?: string | undefined; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="font-semibold">
+        {label}
+      </Label>
+      {children}
+      {(error || hint) && (
+        <p id={`${id}-note`} className={cn('text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
+          {error ?? hint}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * "Thank you!", then straight into the chat: a same-tab jump after 1.5 s,
+ * with the button as the fallback when a phone blocks it (spec 3.10). In a
+ * website's frame the jump takes the whole page, not just the frame.
+ */
+function ThankYou({ look, redirect, embed }: { look: FormLook; redirect: string | null; embed: boolean }) {
+  const toWhatsApp = !!redirect && /^https:\/\/wa\.me\//.test(redirect)
+  useEffect(() => {
+    if (!redirect) return
+    const t = window.setTimeout(() => {
+      try {
+        if (embed && window.top) window.top.location.assign(redirect)
+        else window.location.assign(redirect)
+      } catch {
+        // A frame may not be allowed to move the page; the button still works.
+      }
+    }, 1500)
+    return () => window.clearTimeout(t)
+  }, [redirect, embed])
+
+  return (
+    <div className="flex flex-col items-center gap-3 py-8 text-center">
+      <span className="grid size-14 place-items-center rounded-2xl bg-success/15">
+        <CircleCheck className="size-7 text-success" aria-hidden />
+      </span>
+      <p className="text-xl font-extrabold tracking-tight">Thank you!</p>
+      {redirect ? (
+        <>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {toWhatsApp
+              ? `Opening WhatsApp, so you can chat with ${look.studio} right away…`
+              : `Taking you to ${look.studio}…`}
+          </p>
+          <Button size="lg" className="mt-2 w-full text-base font-bold" asChild>
+            <a href={redirect} target={embed ? '_top' : undefined} rel="noreferrer">
+              {toWhatsApp ? <MessageCircle /> : <ExternalLink />}
+              {toWhatsApp ? 'Chat on WhatsApp' : 'Continue'}
+            </a>
           </Button>
-        </form>
+        </>
+      ) : (
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {look.thank_you || `${look.studio} has your details and will get in touch with you soon.`}
+        </p>
       )}
     </div>
   )
