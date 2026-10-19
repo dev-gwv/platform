@@ -15,11 +15,18 @@ import { audit } from '../../lib/audit'
  */
 async function readHelp(env: AppEnv['Bindings']) {
   return withService(env, async (sql) => {
-    const [s] = await sql<{ support_whatsapp: string | null; support_email: string | null }[]>`
-      select support_whatsapp, support_email from platform_settings limit 1`
+    const [s] = await sql<{ support_whatsapp: string | null; support_email: string | null; support_call_url: string | null }[]>`
+      select support_whatsapp, support_email, support_call_url from platform_settings limit 1`
     const faqs = await sql`select id, question, answer, sort_order from help_faqs order by sort_order, created_at`
     const videos = await sql`select page_key, title, url from help_videos order by page_key`
-    return { support_whatsapp: s?.support_whatsapp ?? null, support_email: s?.support_email ?? null, faqs, videos }
+    return {
+      support_whatsapp: s?.support_whatsapp ?? null,
+      support_email: s?.support_email ?? null,
+      // Book a call, for everyone signed in (owner, 19 Oct): the same link the assistant hands over to.
+      support_call_url: s?.support_call_url || env.ONBOARDING_CALL_URL || null,
+      faqs,
+      videos,
+    }
   })
 }
 

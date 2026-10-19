@@ -14,6 +14,7 @@ import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './na
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
 import { AssistantButton } from '@/features/assistant/AssistantButton'
+import { HeaderBookCall } from '@/features/help/BookCall'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
@@ -240,6 +241,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <DueChip />
             <TrialChip />
             <SuggestFeatureButton />
+            <HeaderBookCall />
 
             <div className="flex items-center gap-1">
               <AssistantButton />

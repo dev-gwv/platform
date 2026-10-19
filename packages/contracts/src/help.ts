@@ -21,6 +21,8 @@ export type HelpVideo = z.infer<typeof helpVideo>
 export const helpContent = z.object({
   support_whatsapp: z.string().nullable(),
   support_email: z.string().nullable(),
+  /** Book a call: the Help console's call link, else the server's ONBOARDING_CALL_URL. */
+  support_call_url: z.string().nullable().default(null),
   faqs: z.array(helpFaq),
   videos: z.array(helpVideo),
 })

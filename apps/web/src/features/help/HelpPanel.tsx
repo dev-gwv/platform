@@ -21,8 +21,8 @@ const ROLE: Record<string, string> = {
 }
 
 /**
- * Help, at the foot of the sidebar: "We're one message away" -- Book a call
- * (owners, admins, managers), WhatsApp us and Email us, opened with who is asking and from which page already
+ * Help, at the foot of the sidebar: "We're one message away" -- Book a call,
+ * WhatsApp us and Email us, opened with who is asking and from which page already
  * written -- this page's tutorial if it has one, every tutorial, and the
  * questions studios ask first.
  */
