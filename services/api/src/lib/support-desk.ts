@@ -84,7 +84,7 @@ interface Facts {
 
 async function factsOf(sql: TransactionSql, id: string): Promise<Facts | null> {
   const [f] = await sql<Facts[]>`
-    select r.id, r.subject, r.kind, r.urgency, to_char(r.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at, r.page_url, r.context,
+    select r.id, r.subject, r.kind, r.urgency, to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at, r.page_url, r.context,
            coalesce(co.display_name, co.name) as studio, co.plan, u.name as person, u.email as person_email, u.role as person_role,
            (select m.body from support_messages m where m.request_id = r.id order by m.created_at limit 1) as first,
            (select coalesce(sum(cardinality(m.file_ids)), 0)::int from support_messages m where m.request_id = r.id) as files

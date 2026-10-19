@@ -350,7 +350,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
           from assistant_log`
         const recent = await sql`
           select id, question, answer, status, helpful, model, prompt_tokens, cached_tokens, error,
-                 to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
+                 to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
             from assistant_log order by created_at desc limit 50`
         const [b] = await sql<{ minute_tokens: number; day_tokens: number }[]>`
           select minute_tokens, day_tokens from assistant_budget_used()`

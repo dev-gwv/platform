@@ -115,6 +115,15 @@ describe('support requests', () => {
     expect(supportFilesUrl({ APP_URL: 'x' } as unknown as Env, 'https://api.test', 'id')).toBeNull()
   })
 
+  it('sends dates a browser can read, whatever the server time zone (the live one is UTC)', async () => {
+    await db.exec("set timezone to 'UTC'")
+    const [r] = await q<{ d: string }>("select to_char(timestamptz '2026-10-19 17:50:40+05:30' at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') as d")
+    expect(r!.d).toBe('2026-10-19T12:20:40Z')
+    expect(Number.isNaN(Date.parse(r!.d))).toBe(false)
+    // What the old format gave on the live server, which crashed Your requests:
+    expect(Number.isNaN(new Date('2026-10-19T12:20:40+00').getTime())).toBe(true)
+  })
+
   it('takes the first sentence as the subject', () => {
     expect(subjectFrom('Payment failed! Tried twice.')).toBe('Payment failed!')
     expect(subjectFrom('   ')).toBe('Help request')

@@ -44,8 +44,8 @@ async function listFor(c: Context<AppEnv>, only?: string) {
     withService(c.env, async (sql) => {
       const rows = await sql<Row[]>`
         select r.id, r.subject, r.kind, r.urgency, r.status, r.created_by, u.name as created_by_name,
-               to_char(r.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at,
-               to_char(r.updated_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as updated_at
+               to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at,
+               to_char(r.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as updated_at
           from support_requests r
           left join users u on u.user_id = r.created_by and u.company_id = r.company_id
          where r.company_id = ${a.companyId} and (r.created_by = ${a.userId} or ${all})
@@ -55,7 +55,7 @@ async function listFor(c: Context<AppEnv>, only?: string) {
       const ids = rows.map((r) => r.id)
       const msgs = ids.length
         ? await sql<MsgRow[]>`
-            select id, request_id, sender, author_name, body, file_ids, to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
+            select id, request_id, sender, author_name, body, file_ids, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
               from support_messages where request_id = any(${ids}::uuid[]) order by created_at`
         : []
       const fileIds = [...new Set(msgs.flatMap((m) => m.file_ids))]

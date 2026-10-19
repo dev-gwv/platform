@@ -35,7 +35,9 @@ const STATUS: Record<SupportRequest['status'], { word: string; tone: string }> =
   answered: { word: 'Answered', tone: 'bg-success/15 text-success' },
   closed: { word: 'Closed', tone: 'bg-muted text-muted-foreground' },
 }
-const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+const whenFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+/** A date the server sent, or nothing: an unreadable one must never take the page down (it did once). */
+const when = { format: (d: Date) => (Number.isNaN(d.getTime()) ? '' : whenFmt.format(d)) }
 
 /** Support requests (0271): each one with its replies; ?r=<id> opens one. */
 function Requests() {

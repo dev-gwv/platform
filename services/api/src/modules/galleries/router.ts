@@ -54,7 +54,7 @@ export const galleriesRouter = new Hono<AppEnv>()
       withUser(c.env, auth.userId, (sql) => sql<ListRow[]>`
         select g.project_id, p.name as project_name, cl.name as client_name, g.gallery_url, g.pin, g.full_access_pin,
                g.photo_count, g.visits, g.status,
-               to_char(g.expires_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as expires_at
+               to_char(g.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as expires_at
           from project_galleries g
           join projects p on p.id = g.project_id
           left join clients cl on cl.id = p.client_id
