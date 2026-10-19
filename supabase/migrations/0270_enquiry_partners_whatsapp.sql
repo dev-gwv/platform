@@ -1,0 +1,4 @@
+-- 0270: claimed for the enquiry form spec (Wedding Yantra hand-off, 19 Oct):
+-- WhatsApp after sending, services and guests questions, partner QR codes
+-- linked to vendors, the same number twice in a day, leads download.
+-- Body follows in this file or the next free number.
