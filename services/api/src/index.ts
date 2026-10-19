@@ -152,7 +152,7 @@ app.use('/public/portal/:token/feedback', rateLimit({ windowMs: 60_000, limit: 1
 // A QR enquiry makes a lead and pings the studio: same low ceiling per address.
 app.use('/public/enquiry/:code', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
 app.use('/public/details/:token', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
-// The enquiry form (0270, spec 4.3): at most 10 sends an hour from one address,
+// The enquiry form (0274, spec 4.3): at most 10 sends an hour from one address,
 // whatever form or partner code it goes through.
 const formSendLimiter = rateLimit({
   windowMs: 60 * 60_000,

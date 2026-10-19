@@ -1,5 +1,5 @@
 /**
- * Leads as a file a studio opens in Excel or Google Sheets (0270; spec 3.12):
+ * Leads as a file a studio opens in Excel or Google Sheets (0274; spec 3.12):
  * sixteen columns in a fixed order, an .xlsx with a bold frozen heading row
  * and a filter on every column, or a CSV that Excel reads as UTF-8. Text is
  * always text: a name like "=HYPERLINK(...)" can never run as a formula.

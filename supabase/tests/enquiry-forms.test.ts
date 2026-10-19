@@ -62,7 +62,7 @@ beforeAll(async () => {
   `)
   form = await asUser(OWNER, async () => {
     const [row] = await q<Form>(`select * from create_enquiry_form('Riya Boutique', 'Boutique', '9876500000')`)
-    // 0270's default asks no city; this form does.
+    // 0274's default asks no city; this form does.
     await q(`update enquiry_forms set fields = fields || '{"city":"optional"}' where id = $1`, [row!.id])
     return row!
   })

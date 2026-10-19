@@ -20,7 +20,7 @@ import { newRawToken } from '../../lib/auth-token'
 import { appBase, canManageLeads, mainFormRow } from './shared'
 
 /**
- * Partner QR codes (0270): a boutique, jeweller, venue or one of the studio's
+ * Partner QR codes (0274): a boutique, jeweller, venue or one of the studio's
  * vendors keeps the studio's QR at their counter -- the main form with
  * ?p=<code>. Enquiries through it are credited to them, and they can be sent
  * a private page of those enquiries. Owners and managers only.

@@ -65,9 +65,9 @@ function Unavailable({ title, text, embed = false }: { title: string; text: stri
 const fieldErrors = z.object({ fields: z.record(z.string(), z.string()) })
 
 /**
- * PUBLIC: the studio's enquiry form (0195, 0240, 0270). /f/<link> is the
+ * PUBLIC: the studio's enquiry form (0195, 0240, 0274). /f/<link> is the
  * studio's readable link, /enquire/<code> the older one (and every QR printed
- * before 0270); ?p=<code> is a partner's QR. What is sent lands in Leads, due
+ * before 0274); ?p=<code> is a partner's QR. What is sent lands in Leads, due
  * now, and the person goes on into a WhatsApp chat with the studio.
  * `?embed=1` is the version framed on a website.
  */

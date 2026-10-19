@@ -13,7 +13,7 @@ export const party = z.object({
   address: z.string().nullable().nullish(),
   state: z.string().nullable().nullish(),
   is_active: z.boolean().nullish(),
-  /** What they do (0270): every kind of work, the first the main one. */
+  /** What they do (0274): every kind of work, the first the main one. */
   categories: z.array(z.string()).default([]),
 })
 export type Party = z.infer<typeof party>

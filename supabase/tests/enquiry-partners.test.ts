@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 /**
- * 0270: the main form with WhatsApp after sending, services and guests,
+ * 0274: the main form with WhatsApp after sending, services and guests,
  * partner QR codes (0195's vendor forms moved over), and the same number
  * twice making one lead with a note.
  */
@@ -47,7 +47,7 @@ beforeAll(async () => {
   )
   for (const r of ['authenticated', 'anon', 'service_role', 'authenticator']) await db.exec(`create role ${r};`)
   const files = readdirSync(migDir).filter((x) => x.endsWith('.sql') && !x.startsWith('0000_')).sort()
-  const at = files.findIndex((f) => f.startsWith('0270_'))
+  const at = files.findIndex((f) => f.startsWith('0274_'))
   for (const f of files.slice(0, at)) await db.exec(readFileSync(join(migDir, f), 'utf8'))
 
   await db.exec(`
@@ -58,7 +58,7 @@ beforeAll(async () => {
       ('${STAFF}', '${COMPANY}', 'employee', 'Ravi', 'ravi@studio.test', null);
     grant select on crm_webhook_sources, crm_leads to authenticated;
   `)
-  // A vendor QR made before 0270, with a lead and a page link.
+  // A vendor QR made before 0274, with a lead and a page link.
   vendorCode = await asUser(OWNER, async () => {
     const [f] = await q<{ id: string; code: string }>(`select id, code from create_enquiry_form('Riya Boutique', 'Boutique', '9812345670')`)
     await q(`select enquiry_form_set_page($1, 'oldpagetoken_abcdefghijkl')`, [f!.id])
@@ -70,7 +70,7 @@ beforeAll(async () => {
   main = (await q<Form>(`select id, code, slug, is_main from enquiry_forms where company_id = $1 and is_main`, [COMPANY]))[0]!
 })
 
-describe('vendor forms become partners (0270)', () => {
+describe('vendor forms become partners (0274)', () => {
   it('keeps the code, the page link and the lead credit', async () => {
     const [p] = await q<{ id: string; name: string; label: string; view_token: string }>(
       `select id, name, label, view_token from enquiry_partners where code = $1`,
@@ -100,7 +100,7 @@ describe('vendor forms become partners (0270)', () => {
   })
 })
 
-describe('the main form (0270)', () => {
+describe('the main form (0274)', () => {
   it('asks email, event, date and anything else by default', async () => {
     const [f] = await q<{ fields: Record<string, string> }>(`select fields from enquiry_forms where id = $1`, [main.id])
     // This studio had only a vendor form, so its main form is new and takes the spec's questions.

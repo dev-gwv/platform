@@ -291,7 +291,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ok: true }
   if (method === 'POST' && /^\/team\/members\/[^/]+\/reset-password$/.test(path))
     return { ok: true }
-  // Enquiry form & QR codes (0270).
+  // Enquiry form & QR codes (0274).
   if (method === 'GET' && path === '/enquiry-forms/hub') return enquiryHubFx
   if (method === 'GET' && path === '/enquiry-forms') return [enquiryHubFx.form]
   if (method === 'GET' && path.startsWith('/enquiry-partners/vendors')) return enquiryVendorsFx
@@ -3890,7 +3890,7 @@ function messagingMock(method: string, path: string, body: unknown): unknown {
   return NOT_MOCKED
 }
 
-// ── enquiry form & QR codes (0270) ────────────────────────────────
+// ── enquiry form & QR codes (0274) ────────────────────────────────
 const enquiryFieldsFx = {
   email: 'optional', event_type: 'optional', event_date: 'optional', city: 'optional',
   services: 'optional', guests: 'off', budget: 'off', message: 'optional',

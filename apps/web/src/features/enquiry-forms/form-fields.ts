@@ -1,7 +1,7 @@
 import { ENQUIRY_FIELD_KEYS, type EnquiryFieldKey, type EnquiryFields, type EnquiryFieldSetting } from '@ipc/contracts'
 
 /**
- * What an enquiry form asks (0240, 0270), in the words the person filling it
+ * What an enquiry form asks (0240, 0274), in the words the person filling it
  * sees. Name and mobile are always asked; the rest are the studio's choice.
  */
 export const FIELD_LABEL: Record<EnquiryFieldKey, string> = {

@@ -154,7 +154,7 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const [made] = await sql<{ id: string }[]>`
           select (create_enquiry_form(${d.name}, ${d.kind ?? null}, ${d.phone ?? null}, ${d.notes ?? null})).id`
-        // Vendors get a partner QR now (0270); a new form is a website form.
+        // Vendors get a partner QR now (0274); a new form is a website form.
         await sql`update enquiry_forms set purpose = 'website' where id = ${made!.id}`
         return sql<FormRow[]>`${selectForms(sql)} where f.id = ${made!.id}`
       }),
@@ -172,7 +172,7 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
     const { archived, ...fields } = parsed.data
     const patch: Record<string, unknown> = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))
     if (archived !== undefined) patch.archived_at = archived ? new Date().toISOString() : null
-    // After sending (0270): a number to chat with, or an https:// link to open.
+    // After sending (0274): a number to chat with, or an https:// link to open.
     if (patch.whatsapp_phone !== undefined) {
       const raw = (patch.whatsapp_phone as string | null) ?? ''
       if (raw.trim() === '') patch.whatsapp_phone = null
@@ -324,7 +324,7 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
-  /** A partner's page (0270), else an older vendor form's (0195). */
+  /** A partner's page (0274), else an older vendor form's (0195). */
   .get('/enquiry-view/:token', async (c) => {
     const token = textParam(c, 'token', 100)
     if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) fail(404, GONE)
@@ -339,7 +339,7 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
   })
 
   /**
-   * The form (0270), by its code or readable link, through a partner's QR
+   * The form (0274), by its code or readable link, through a partner's QR
    * with ?p=. Counts one scan; 404 when it is off or the link is wrong.
    */
   .get('/forms/:key', async (c) => {

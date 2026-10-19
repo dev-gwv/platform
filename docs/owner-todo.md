@@ -20,7 +20,7 @@ What is waiting, and on whom. Update this file when an item is done.
 5. **Claude GitHub app** on the repository (https://github.com/apps/claude/installations/select_target),
    so Claude hears CI results and review comments on its pull requests.
 6. **Decide**: WhatsApp from our own number through Meta directly (no reseller) -- yes or no.
-7. **Enquiry form (0270), once live**: Leads → **Form & QR**. Check the WhatsApp number the
+7. **Enquiry form (0274), once live**: Leads → **Form & QR**. Check the WhatsApp number the
    chats open with (it falls back to the invoice phone, then the owner's), send yourself one
    enquiry from a phone, and tell studios their old vendor QR codes are now partners -- same
    printed code, same page link.

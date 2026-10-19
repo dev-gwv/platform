@@ -1,4 +1,4 @@
--- 0270: the enquiry form, brought in line with the hand-off spec (Wedding
+-- 0274: the enquiry form, brought in line with the hand-off spec (Wedding
 -- Yantra, 19 Oct; docs/handoff/enquiry-form-qr-whatsapp-spec.md). The owner:
 -- "where their version differs from this file, this file wins".
 --

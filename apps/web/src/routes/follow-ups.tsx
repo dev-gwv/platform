@@ -230,7 +230,7 @@ function Crm() {
               </Link>
             </Button>
             <ImportLeadsButton />
-            {/* The enquiry form and its QR codes, one tap from Leads (0270). */}
+            {/* The enquiry form and its QR codes, one tap from Leads (0274). */}
             <Button variant="outline" asChild>
               <Link to="/follow-ups/form">
                 <QrCode /> Form & QR

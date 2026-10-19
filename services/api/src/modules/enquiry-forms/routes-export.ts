@@ -11,7 +11,7 @@ import { audit } from '../../lib/audit'
 import { todayInIndia } from '../../lib/dates'
 
 /**
- * Leads as Excel or CSV (0270; spec 3.12): one partner's, the main form's
+ * Leads as Excel or CSV (0274; spec 3.12): one partner's, the main form's
  * own, every partner's, or whatever the Leads list shows. CRM Export is the
  * gate (a sensitive module the owner grants), and what a person can read is
  * still what the database lets them read.

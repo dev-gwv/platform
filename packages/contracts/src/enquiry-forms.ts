@@ -14,7 +14,7 @@ export const ENQUIRY_FIELD_KEYS = ['email', 'event_type', 'event_date', 'city', 
 export type EnquiryFieldKey = (typeof ENQUIRY_FIELD_KEYS)[number]
 export const enquiryFieldSetting = z.enum(['off', 'optional', 'required'])
 export type EnquiryFieldSetting = z.infer<typeof enquiryFieldSetting>
-// The defaults are a new form's (0270): email, event, date and "Anything else?".
+// The defaults are a new form's (0274): email, event, date and "Anything else?".
 export const enquiryFields = z.object({
   email: enquiryFieldSetting.default('optional'),
   event_type: enquiryFieldSetting.default('optional'),
@@ -28,7 +28,7 @@ export const enquiryFields = z.object({
 export type EnquiryFields = z.infer<typeof enquiryFields>
 export const enquiryPurpose = z.enum(['vendor', 'website'])
 export const enquiryAccent = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'])
-/** Where a client lands after sending (0270). */
+/** Where a client lands after sending (0274). */
 export const enquiryAfterSubmit = z.enum(['whatsapp', 'thanks', 'link'])
 export type EnquiryAfterSubmit = z.infer<typeof enquiryAfterSubmit>
 
@@ -176,7 +176,7 @@ export const publicEnquiryView = z.object({
 })
 export type PublicEnquiryView = z.infer<typeof publicEnquiryView>
 
-// ── the main form and its partners (0270) ─────────────────────────
+// ── the main form and its partners (0274) ─────────────────────────
 /** The hub: the studio's main form, the numbers chats fall back to, and its lists. */
 export const enquiryHub = z.object({
   form: enquiryForm,
@@ -253,7 +253,7 @@ export const enquiryVendor = z.object({
 })
 export type EnquiryVendor = z.infer<typeof enquiryVendor>
 
-// ── public, 0270 ──────────────────────────────────────────────────
+// ── public, 0274 ──────────────────────────────────────────────────
 export const publicEnquiryFormV2 = publicEnquiryForm.extend({
   city: z.string().nullable().default(null),
   services: z.array(z.string()).default([]),
