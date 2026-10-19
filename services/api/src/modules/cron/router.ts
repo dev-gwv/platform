@@ -18,7 +18,6 @@ import { runAlertEmails } from '../../lib/alert-email'
 import { syncDiamondSheet } from '../../lib/diamond-sheet'
 import { emailOneADay } from '../../lib/email'
 import { pruneIdlePageTokens } from '../../lib/meta'
-import { runSupportDigest } from '../../lib/support-desk'
 import { runSequenceSends } from '../../lib/sequence-sender'
 
 /**
@@ -176,12 +175,7 @@ export const cronRouter = new Hono<AppEnv>()
       log.error({ err: String(err) }, 'sequence sends failed')
       return { claimed: 0, sent: 0, failed: 0 }
     })
-    // Support requests still waiting: one email to our team a day, from 9 am India time (0271).
-    const supportDigest = dryRun ? null : await withService(c.env, (sql) => runSupportDigest(c.env, sql)).catch((err: unknown) => {
-      log.error({ err: String(err) }, 'support digest failed')
-      return null
-    })
-    log.info({ path: c.req.path, dryRun, ...result, sequenceSends, supportDigest }, 'cron reminders ran')
+    log.info({ path: c.req.path, dryRun, ...result, sequenceSends }, 'cron reminders ran')
     return c.json(cronRunResult.parse({ ok: true, ...result, sequence_sends: sequenceSends }))
   })
 

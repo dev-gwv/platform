@@ -9,7 +9,7 @@ import { useHelp, useTutorials } from './api'
 import { TutorialPlayer } from './TutorialPlayer'
 import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
-import { openReportProblem } from '@/features/support/ReportProblem'
+import { BookCallButton } from './BookCall'
 
 const ROLE: Record<string, string> = {
   super_admin: 'Owner',
@@ -21,8 +21,8 @@ const ROLE: Record<string, string> = {
 }
 
 /**
- * Help, at the foot of the sidebar: "We're one message away" -- WhatsApp us
- * and Email us, opened with who is asking and from which page already
+ * Help, at the foot of the sidebar: "We're one message away" -- Book a call
+ * (owners, admins, managers), WhatsApp us and Email us, opened with who is asking and from which page already
  * written -- this page's tutorial if it has one, every tutorial, and the
  * questions studios ask first.
  */
@@ -67,25 +67,10 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
         <div>
           <p className="text-lg font-semibold">We're one message away</p>
           <p className="text-sm text-muted-foreground">
-            Something not working, or a question? Tell the team and we answer in Your requests within a working day.
+            Something not working, or a question? Book a 15-minute call, or message us.
           </p>
         </div>
-        {/* Support requests (0271): always here, whatever contacts are set. */}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => {
-              onNavigate?.()
-              openReportProblem()
-            }}
-          >
-            <LifeBuoy /> Tell the team
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to="/support-requests" onClick={onNavigate}>
-              Your requests
-            </Link>
-          </Button>
-        </div>
+        <BookCallButton variant="default" />
         {(help?.support_whatsapp || help?.support_email) && <SupportButtons />}
       </div>
 

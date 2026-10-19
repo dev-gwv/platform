@@ -23,7 +23,7 @@ type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: str
  * EMAIL_EVERY_KIND=on on the server lifts it (the senders' own tests use it).
  */
 export const emailOneADay = (env: Env): boolean => env.EMAIL_EVERY_KIND !== 'on'
-export const OWNER_MAIL_KINDS: ReadonlySet<string> = new Set(['verification', 'password_reset', 'morning', 'access', 'test', 'support_request', 'support_reply'])
+export const OWNER_MAIL_KINDS: ReadonlySet<string> = new Set(['verification', 'password_reset', 'morning', 'access', 'test'])
 export const ONE_A_DAY_NOTE = 'Not emailed: for now Studio AutoPilot sends one email a day, the morning summary.'
 
 /** Why a mail to anyone but a studio owner is not sent (owner, 12 Oct). */

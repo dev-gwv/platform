@@ -1,10 +1,10 @@
 import { Component, useState, type ErrorInfo, type ReactNode } from 'react'
 import { useRouter } from '@tanstack/react-router'
 import * as Sentry from '@sentry/react'
-import { AlertTriangle, ArrowLeft, Copy, LifeBuoy, RotateCcw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Copy, RotateCcw } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { reportClientError } from '@/shared/error/report'
-import { openReportProblem } from '@/features/support/ReportProblem'
+import { BookCallButton } from '@/features/help/BookCall'
 
 /**
  * What a screen shows when it breaks, instead of the router's bare "Something
@@ -102,20 +102,8 @@ export class PanelBoundary extends Component<
           <Button size="sm" onClick={() => this.setState({ error: null })}>
             <RotateCcw /> Try again
           </Button>
-          {/* Straight to the team with what broke (support requests, 0271); the page goes with it. */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              openReportProblem({
-                kind: 'problem',
-                body: `“Couldn’t show ${this.props.label ?? 'this'}” came up. `,
-                context: `Error on the page: ${describe(this.state.error).split('\n')[0]?.slice(0, 500) ?? ''}`,
-              })
-            }
-          >
-            <LifeBuoy /> Tell the team
-          </Button>
+          {/* A person is one call away when a screen breaks (owners, admins, managers). */}
+          <BookCallButton size="sm" />
         </div>
       </div>
     )

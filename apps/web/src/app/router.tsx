@@ -21,7 +21,6 @@ import { AppShell } from '@/shared/layout/AppShell'
 const LoginPage = lazyRouteComponent(() => import('@/routes/login'), 'LoginPage')
 const HomePage = lazyRouteComponent(() => import('@/routes/home'), 'HomePage')
 const MyProfilePage = lazyRouteComponent(() => import('@/routes/my-profile'), 'MyProfilePage')
-const SupportRequestsPage = lazyRouteComponent(() => import('@/routes/support-requests'), 'SupportRequestsPage')
 const LeavePage = lazyRouteComponent(() => import('@/routes/leave'), 'LeavePage')
 const ContactPage = lazyRouteComponent(() => import('@/routes/legal'), 'ContactPage')
 const DataDeletionPage = lazyRouteComponent(() => import('@/routes/legal'), 'DataDeletionPage')
@@ -335,7 +334,6 @@ const routeTree = rootRoute.addChildren([
   route('/financials/reconciliation', () => <Navigate to="/billing/payments" replace />),
   route('/financials/calculated-expenses', () => <Navigate to="/financials" replace />),
   route('/notifications', NotificationsPage),
-  route('/support-requests', SupportRequestsPage),
   route('/notifications/generate', () => <NotificationsPage generate />),
   route('/projects/stages', DeliveryStagesPage),
   route('/settings/company', SettingsPage),

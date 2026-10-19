@@ -544,21 +544,6 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       client: { name: 'Priya Sharma', phone: '9845055012' },
     }
   if (method === 'POST' && /^\/projects\/[^/]+\/gallery\/open$/.test(path)) return { url: 'https://frameline-admin.pages.dev/events' }
-  // Support requests (0271): one answered, one waiting.
-  if (method === 'GET' && path === '/support/requests')
-    return {
-      open: 1,
-      items: [
-        { id: 'sr-1', subject: 'The quotation will not save.', kind: 'problem', urgency: 'high', status: 'answered', created_by_name: 'Asha', mine: true, created_at: '2026-10-18T10:00:00+05:30', updated_at: '2026-10-18T13:20:00+05:30',
-          messages: [
-            { id: 'm1', sender: 'me', author_name: 'Asha', body: 'The quotation will not save. I pressed Save twice and nothing happened.', files: [{ id: 'f1', name: 'problem-1.png', url: '#' }], created_at: '2026-10-18T10:00:00+05:30' },
-            { id: 'm2', sender: 'support', author_name: 'Harsh', body: 'Found it: a line with 0 days. Fixed now, please try again.', files: [], created_at: '2026-10-18T13:20:00+05:30' },
-          ] },
-        { id: 'sr-2', subject: 'How do I add a second WhatsApp number?', kind: 'question', urgency: 'normal', status: 'open', created_by_name: 'Asha', mine: true, created_at: '2026-10-19T09:00:00+05:30', updated_at: '2026-10-19T09:00:00+05:30',
-          messages: [{ id: 'm3', sender: 'me', author_name: 'Asha', body: 'How do I add a second WhatsApp number?', files: [], created_at: '2026-10-19T09:00:00+05:30' }] },
-      ],
-    }
-  if (method === 'POST' && path === '/support/requests') return { open: 2, items: [{ id: 'sr-3', subject: 'New request', kind: 'problem', urgency: 'normal', status: 'open', created_by_name: 'Asha', mine: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), messages: [] }] }
   // Projects → Galleries and Settings → Gallery (0264).
   if (method === 'GET' && path === '/galleries')
     return {

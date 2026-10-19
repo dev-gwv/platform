@@ -74,7 +74,6 @@ export async function askAssistant(
       sources: r.sources,
       callUrl: r.call_url,
       broke: r.status === 'failed',
-      handedOver: r.status === 'escalated' || r.status === 'failed',
       logId: r.log_id,
       helpful: null,
     })
@@ -87,7 +86,6 @@ export async function askAssistant(
         text: e instanceof Error ? e.message : 'We could not answer just now.',
         callUrl: opts.callUrl,
         broke: true,
-        handedOver: true,
       })
     }
   } finally {
