@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { registerRequest, loginRequest, forgotPasswordRequest } from '@ipc/contracts'
+import { registerRequest, loginRequest, forgotPasswordRequest, createLeadRequest } from '@ipc/contracts'
 import { fieldErrors } from './field-errors'
 
 /**
@@ -136,5 +136,13 @@ describe('fieldErrors — forgot password', () => {
     expect(fieldErrors(forgotPasswordRequest, { email: 'bad' }, { labels }).email).toBe(
       'Enter a valid email address, like you@studio.in.',
     )
+  })
+})
+
+describe('a cross-field rule on a blank field', () => {
+  it('keeps the rule’s own words: a lead needs a name or a phone, not a phone', () => {
+    const labels = { name: 'Name', phone: 'Phone', email: 'Email' }
+    expect(fieldErrors(createLeadRequest, {}, { labels }).phone).toBe('Add a name or a phone number.')
+    expect(fieldErrors(createLeadRequest, { name: 'Aanya' }, { labels })).toEqual({})
   })
 })

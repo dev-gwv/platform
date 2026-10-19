@@ -39,6 +39,7 @@ import {
   saveDraft,
   stepErrors,
   stepIndex,
+  toNewClientRequest,
   toProjectRequest,
   shootDeliverables,
   toShootRequests,
@@ -200,7 +201,6 @@ function NewProject() {
     try {
       let clientId = draft.client_id
       if (!clientId) {
-        const { toNewClientRequest } = await import('@/features/projects/wizard')
         const created = await createClient.mutateAsync(toNewClientRequest(draft))
         clientId = created.id
         // Remember the client now: if the project call below fails and the
@@ -281,7 +281,6 @@ function NewProject() {
     try {
       let clientId = draft.client_id
       if (!clientId) {
-        const { toNewClientRequest } = await import('@/features/projects/wizard')
         const created = await createClient.mutateAsync(toNewClientRequest(draft))
         clientId = created.id
         patch({ client_id: created.id })

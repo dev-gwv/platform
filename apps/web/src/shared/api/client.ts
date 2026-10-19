@@ -49,6 +49,13 @@ const REFRESH_TIMEOUT_MS = 15_000
 const DEFAULT_TIMEOUT_MS = 30_000
 export const SLOW_TIMEOUT_MS = 120_000
 export const TIMEOUT_MESSAGE = 'The server is taking too long to answer. Try again in a moment.'
+/**
+ * The browser could not reach the API at all (offline, a Wi-Fi provider that
+ * cannot reach the server). fetch() rejects with a bare TypeError -- "Failed to
+ * fetch" in Chrome, "Load failed" in Safari -- which used to land in the toast
+ * word for word and in Sentry as a bug.
+ */
+export const NETWORK_MESSAGE = 'Could not reach Studio AutoPilot. Check your internet and try again.'
 const TIMED_OUT = 'timed-out'
 
 /**
@@ -214,6 +221,8 @@ export async function callApi<TOut extends z.ZodTypeAny>(
     init.signal = limit
     return fetch(`${config.apiBaseUrl}${path}`, init).catch((e: unknown) => {
       if (limit.aborted && limit.reason === TIMED_OUT) throw new ApiError(0, TIMEOUT_MESSAGE)
+      // A caller's own cancel stays an AbortError, which callers already ignore.
+      if (e instanceof TypeError) throw new ApiError(0, NETWORK_MESSAGE)
       throw e
     })
   }

@@ -166,10 +166,17 @@ export function SupportButtons({ compact = false }: { compact?: boolean }) {
     page: path,
     at: new Date(),
   })
+  // A button on its own takes the whole row, the same width as Book a call
+  // above it, never half of an empty pair.
+  const alone = compact ? 'col-span-2' : 'sm:col-span-2'
   return (
     <div className={cn('grid gap-2', compact ? 'grid-cols-2' : 'sm:grid-cols-2')}>
       {help.support_whatsapp && (
-        <Button asChild size={compact ? 'sm' : 'default'} className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
+        <Button
+          asChild
+          size={compact ? 'sm' : 'default'}
+          className={cn('bg-[#25D366] text-white hover:bg-[#1ebe5b]', !help.support_email && alone)}
+        >
           <a href={whatsappLink(help.support_whatsapp, message)} target="_blank" rel="noreferrer">
             <MessageCircle /> WhatsApp us
           </a>
@@ -180,7 +187,7 @@ export function SupportButtons({ compact = false }: { compact?: boolean }) {
           asChild
           size={compact ? 'sm' : 'default'}
           variant="outline"
-          className={cn(!help.support_whatsapp && (compact ? 'col-span-2' : 'sm:col-span-2'))}
+          className={cn(!help.support_whatsapp && alone)}
         >
           <a href={mailLink(help.support_email, studio, message)}>
             <Mail /> Email us

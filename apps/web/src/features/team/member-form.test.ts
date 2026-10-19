@@ -71,8 +71,8 @@ describe('formErrors', () => {
     const errors = formErrors(EMPTY_MEMBER_FORM)
     expect(errors.name).toBe('Name is required.')
     expect(errors.phone).toBe('Phone is required.')
-    expect(errors.email).toBe('Email is required.')
-    expect(errors.password).toBe('Password is required.')
+    expect(errors.email).toBe('Add an email to give them a login.')
+    expect(errors.password).toBe('Set a password to give them a login.')
 
     expect(formErrors(form({ create_login: false, name: 'Imran', phone: '9844444444' }))).toEqual({})
   })

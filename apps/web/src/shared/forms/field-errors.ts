@@ -79,8 +79,11 @@ export function fieldErrors<K extends string>(
     // A whole-object issue (e.g. a cross-field refine) has no field to sit under.
     if (field === undefined || field in errors) continue
     const label = labels[field] ?? 'This field'
+    // A cross-field rule on a blank field says what it wants in its own words
+    // ("Add a name or a phone number."); "Phone is required." would be wrong
+    // when a name alone is enough.
     errors[field] = isBlank(value[field])
-      ? `${label} is required.`
+      ? issue.code === 'custom' ? issue.message : `${label} is required.`
       : (overrides[field] ?? messageForIssue(issue, label))
   }
   return errors

@@ -34,8 +34,20 @@ const queryClient = new QueryClient({
         })
         return
       }
-      Sentry.captureException(error)
-      toast.error(error instanceof Error ? error.message : 'Something went wrong.')
+      // Only a fault of ours goes to Sentry. An ApiError is the API's answer:
+      // a 4xx is the user being told no (a missing phone, a taken name), a 5xx
+      // is already filed by httpClientIntegration with the request beside it,
+      // and status 0 is the user's own connection. Filing them buried the
+      // real crashes under hundreds of "Add a phone number first".
+      if (!(error instanceof ApiError)) Sentry.captureException(error)
+      // Many hooks toast their own error too, and theirs runs just after this
+      // one, so the same words showed twice ("Add a phone number to this lead
+      // before booking it." on Book it). Wait a tick and say it only once.
+      const message = error instanceof Error ? error.message : 'Something went wrong.'
+      setTimeout(() => {
+        if (toast.getToasts().some((t) => 'title' in t && t.title === message)) return
+        toast.error(message)
+      }, 0)
     },
   }),
   defaultOptions: {
@@ -53,6 +65,29 @@ const sentryOn = MOCK_ENABLED ? false : initSentry(router)
 // crash would be filed twice, once as a Sentry issue and once as a log line.
 // The mock preview has no backend to receive reports either way.
 if (!MOCK_ENABLED && !sentryOn) installClientErrorReporting()
+
+// After a deploy, a tab opened before it asks for chunk files that are gone,
+// and the host answers with index.html, so the import fails ("Failed to fetch
+// dynamically imported module"). The router reloads once for a page's own
+// file; this covers every other late-loaded file. One reload per minute at
+// most, so a host that is really down shows the error instead of looping.
+window.addEventListener('vite:preloadError', (event) => {
+  const KEY = 'chunk-reload-at'
+  let last = 0
+  try {
+    last = Number(sessionStorage.getItem(KEY) ?? 0)
+  } catch {
+    /* storage blocked: fall through and reload once */
+  }
+  if (Date.now() - last < 60_000) return
+  try {
+    sessionStorage.setItem(KEY, String(Date.now()))
+  } catch {
+    /* reload anyway */
+  }
+  event.preventDefault()
+  window.location.reload()
+})
 
 // Home-screen install (no caching; see public/sw.js).
 if (!MOCK_ENABLED) registerPwa()

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 
 /**
  * Migration + function regression tests, run against an in-process Postgres
@@ -61,6 +61,20 @@ async function freshDb() {
   return db
 }
 
+/**
+ * Frees a database once its describe is done. This file boots ~60 of them, one
+ * per describe, and used to keep every one until the file ended: about 10 GB in
+ * one worker, enough to stall the PC running the suite. A closed PGlite still
+ * holds its WebAssembly heap in `mod`, so that is dropped too.
+ */
+async function releaseDb(db: PGlite | undefined) {
+  if (!db) return
+  if (!db.closed) await db.close().catch(() => {})
+  const internals = db as unknown as Record<string, unknown>
+  internals['mod'] = undefined
+  internals['fs'] = undefined
+}
+
 async function asUser(db: PGlite, uid: string) {
   await db.exec(`set request.jwt.claim.sub = '${uid}';`)
 }
@@ -92,6 +106,7 @@ async function workflow(
 
 describe('tenancy migrations + functions', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@studio.test');`)
@@ -153,6 +168,7 @@ describe('tenancy migrations + functions', () => {
 
 describe('access control (Phase 2)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = OWNER
   const member = '33333333-3333-3333-3333-333333333333'
 
@@ -211,6 +227,7 @@ describe('access control (Phase 2)', () => {
 
 describe('projects core (Phase 4)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let clientId: string
 
   beforeAll(async () => {
@@ -329,6 +346,7 @@ describe('projects core (Phase 4)', () => {
 
 describe('tasks & production board (Phase 5)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let projectId: string
 
   beforeAll(async () => {
@@ -422,6 +440,7 @@ describe('tasks & production board (Phase 5)', () => {
 
 describe('team allocation — no double booking (Phase 6)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const member = '66666666-6666-6666-6666-666666666666'
 
   beforeAll(async () => {
@@ -473,6 +492,7 @@ describe('team allocation — no double booking (Phase 6)', () => {
 
 describe('data custody (Phase 7)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -516,6 +536,7 @@ describe('data custody (Phase 7)', () => {
 
 describe('work submission -> review -> tokenised delivery (Phase 8)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -599,6 +620,7 @@ describe('work submission -> review -> tokenised delivery (Phase 8)', () => {
 
 describe('billing & invoicing (Phase 9)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let clientId: string
   beforeAll(async () => {
     db = await freshDb()
@@ -895,6 +917,7 @@ describe('billing & invoicing (Phase 9)', () => {
 
 describe('financials — profit view (Phase 10)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let projectId: string
   const member = '77777777-7777-7777-7777-777777777777'
 
@@ -959,6 +982,7 @@ describe('financials — profit view (Phase 10)', () => {
 
 describe('CRM — capture, dedupe, auto-assign (Phase 11)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const a = '88888888-8888-8888-8888-888888888888'
   const b = '99999999-9999-9999-9999-999999999999'
 
@@ -1024,6 +1048,7 @@ describe('CRM — capture, dedupe, auto-assign (Phase 11)', () => {
 
 describe('HR — geo-fenced attendance + payout ledger (Phase 12)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const emp = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
   // Studio at Mumbai; a point ~50m away and one ~15km away.
   const STUDIO = { lat: 19.076, lng: 72.8777 }
@@ -1106,6 +1131,7 @@ describe('HR — geo-fenced attendance + payout ledger (Phase 12)', () => {
 
 describe('notifications & idempotent cron (Phase 13)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -1159,6 +1185,7 @@ describe('notifications & idempotent cron (Phase 13)', () => {
 
 describe('subscription — activation + replay safety (Phase 14)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let planId: string
   beforeAll(async () => {
     db = await freshDb()
@@ -1219,6 +1246,7 @@ describe('subscription — activation + replay safety (Phase 14)', () => {
 
 describe('terms acknowledgement via public link (Phase 15)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -1280,6 +1308,7 @@ describe('terms acknowledgement via public link (Phase 15)', () => {
 
 describe('platform console (Phase 14 follow-up)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = OWNER
   const vendor = '44444444-4444-4444-4444-444444444444'
 
@@ -1328,6 +1357,7 @@ describe('platform console (Phase 14 follow-up)', () => {
 
 describe('platform ops — plan mutations (Phase 14 follow-up)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const vendor = '44444444-4444-4444-4444-444444444444'
   const owner = OWNER
   let studioB: string
@@ -1394,6 +1424,7 @@ describe('platform ops — plan mutations (Phase 14 follow-up)', () => {
 
 describe('email verification (0021)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const uid = '55555555-5555-5555-5555-555555555555'
 
   beforeAll(async () => {
@@ -1441,6 +1472,7 @@ describe('email verification (0021)', () => {
 
 describe('password reset (0022)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const uid = '66666666-6666-6666-6666-666666666666'
 
   const issue = async () =>
@@ -1549,6 +1581,7 @@ describe('password reset (0022)', () => {
 
 describe('refresh tokens (0024)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const uid = '88888888-8888-8888-8888-888888888888'
 
   const issue = async () =>
@@ -1681,6 +1714,7 @@ describe('refresh tokens (0024)', () => {
 
 describe('team directory + invitations (0026)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '77777777-7777-7777-7777-777777777777'
   let companyId: string
   let roleId: string
@@ -1839,6 +1873,7 @@ describe('team directory + invitations (0026)', () => {
 
 describe('theme presets renamed (0027)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '99999999-9999-9999-9999-999999999999'
 
   beforeAll(async () => {
@@ -1882,6 +1917,7 @@ describe('theme presets renamed (0027)', () => {
 
 describe('CRM manual lead entry (0028)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
   const add = async (name: string, phone: string) =>
@@ -1957,6 +1993,7 @@ describe('CRM manual lead entry (0028)', () => {
 
 describe('lead sources (0029)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
 
   beforeAll(async () => {
@@ -2018,6 +2055,7 @@ describe('lead sources (0029)', () => {
 
 describe('attendance check-out and fence (0030)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
 
   beforeAll(async () => {
@@ -2099,6 +2137,7 @@ describe('attendance check-out and fence (0030)', () => {
 
 describe('task bundles (0031)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
   let bundle: string
 
@@ -2182,6 +2221,7 @@ describe('task bundles (0031)', () => {
 
 describe('shoot details (0038)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@studio.test');`)
@@ -2266,6 +2306,7 @@ describe('shoot details (0038)', () => {
 
 describe('deliverable sets (0039)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@studio.test');`)
@@ -2309,6 +2350,7 @@ describe('deliverable sets (0039)', () => {
 
 describe('plan gate sits on feature access, not identity (0034)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
   const member = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
   let planId: string
@@ -2432,6 +2474,7 @@ describe('plan gate sits on feature access, not identity (0034)', () => {
 
 describe('CRM v2 — events, archive, merge, stats (0032 + 0034)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
 
   const add = async (name: string, phone: string) =>
@@ -2531,6 +2574,7 @@ describe('CRM v2 — events, archive, merge, stats (0032 + 0034)', () => {
 
 describe('CRM v3 — merge/unmerge, import, bulk undo, ranged stats, automations (0035)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
   const member = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
 
@@ -2769,6 +2813,7 @@ describe('CRM v3 — merge/unmerge, import, bulk undo, ranged stats, automations
 
 describe('CRM v4 — saved views, SLA, cadences, conversion (0036)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '12121212-1212-1212-1212-121212121212'
   const member = '34343434-3434-3434-3434-343434343434'
 
@@ -3002,6 +3047,7 @@ describe('CRM v4 — saved views, SLA, cadences, conversion (0036)', () => {
 
 describe('CRM objects — pipelines, stages, contacts, forecast, SLA sweep (0038)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '56565656-5656-5656-5656-565656565656'
   const member = '78787878-7878-7878-7878-787878787878'
   const stages: Record<string, string> = {}
@@ -3260,6 +3306,7 @@ describe('CRM objects — pipelines, stages, contacts, forecast, SLA sweep (0038
 
 describe('CRM activities — timeline, replies, tasks, integrations (0039)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a'
   const member = '8b8b8b8b-8b8b-4b8b-8b8b-8b8b8b8b8b8b'
 
@@ -3370,6 +3417,7 @@ describe('CRM activities — timeline, replies, tasks, integrations (0039)', () 
 
 describe('CRM workflows — delays, branches, replies, scoring, outbox (0040)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '7c7c7c7c-7c7c-4c7c-8c7c-7c7c7c7c7c7c'
   const member = '6d6d6d6d-6d6d-4d6d-8d6d-6d6d6d6d6d6d'
 
@@ -3536,6 +3584,7 @@ describe('CRM workflows — delays, branches, replies, scoring, outbox (0040)', 
 
 describe('CRM quotes, preferences, lost analysis (0041)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '5e5e5e5e-5e5e-4e5e-8e5e-5e5e5e5e5e5e'
 
   const add = async (name: string, phone: string) =>
@@ -3697,6 +3746,7 @@ describe('CRM quotes, preferences, lost analysis (0041)', () => {
 
 describe('CRM guards — execute privileges and cross-studio calls', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const ownerA = '1a1a1a1a-1a1a-4a1a-8a1a-1a1a1a1a1a1a'
   const ownerB = '2b2b2b2b-2b2b-4b2b-8b2b-2b2b2b2b2b2b'
   let leadB = ''
@@ -3815,6 +3865,7 @@ describe('CRM guards — execute privileges and cross-studio calls', () => {
 
 describe('role library (0040)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@studio.test');`)
@@ -3878,6 +3929,7 @@ describe('role library (0040)', () => {
 
 describe('team terms (0041)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let company: string
   let shoot: string
   let template: string
@@ -4038,6 +4090,7 @@ describe('team terms (0041)', () => {
 
 describe('client documents (0042)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let company: string
   let project: string
   let payment: string
@@ -4223,6 +4276,7 @@ describe('client documents (0042)', () => {
 
 describe('enquiries (0043)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let company: string
 
   beforeAll(async () => {
@@ -4364,6 +4418,7 @@ describe('enquiries (0043)', () => {
 describe('migrations re-apply cleanly (idempotency)', () => {
   it('policies and triggers survive a second run of their files', async () => {
     const db = await freshDb()
+    onTestFinished(() => releaseDb(db))
     // These files used to create policies/triggers unconditionally, so a
     // manual re-run died halfway with "already exists".
     for (const f of [
@@ -4388,6 +4443,7 @@ describe('migrations re-apply cleanly (idempotency)', () => {
 
 describe('CRM quote answered off the link (0049)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '3f3f3f3f-3f3f-4f3f-8f3f-3f3f3f3f3f3f'
   let lead = ''
 
@@ -4489,6 +4545,7 @@ describe('CRM quote answered off the link (0049)', () => {
  */
 describe('dashboard RPCs run and return contract-shaped data (0064)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -4567,6 +4624,7 @@ describe('dashboard RPCs run and return contract-shaped data (0064)', () => {
  */
 describe('registration defers to a live invitation', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const live = 'joiner@studio.test'
   beforeAll(async () => {
     db = await freshDb()
@@ -4610,6 +4668,7 @@ describe('registration defers to a live invitation', () => {
  */
 describe('Lovable parity: client, lead and referral fields (0065-0067)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -4750,6 +4809,7 @@ describe('Lovable parity: client, lead and referral fields (0065-0067)', () => {
  */
 describe('Lovable parity: project documents and per-assignee filters', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let projectId: string
 
   beforeAll(async () => {
@@ -4804,6 +4864,7 @@ describe('Lovable parity: project documents and per-assignee filters', () => {
  */
 describe('Lovable parity: custom task priorities', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -4848,6 +4909,7 @@ describe('Lovable parity: custom task priorities', () => {
  */
 describe('Lovable parity: work submission reminders', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -4921,6 +4983,7 @@ describe('Lovable parity: work submission reminders', () => {
  */
 describe('Lovable parity: employee compensation structure', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -4968,6 +5031,7 @@ describe('Lovable parity: employee compensation structure', () => {
  */
 describe('Lovable parity round 2: overhead allocation and company settings', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -5009,6 +5073,7 @@ describe('Lovable parity round 2: overhead allocation and company settings', () 
 
   it('a company with no fixed-overhead expenses allocates nothing extra', async () => {
     const db2 = await freshDb()
+    onTestFinished(() => releaseDb(db2))
     await db2.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner2@s.test');`)
     await asUser(db2, OWNER)
     await db2.query(`select register_company_and_admin('Studio 2','Owner');`)
@@ -5062,6 +5127,7 @@ describe('Lovable parity round 2: overhead allocation and company settings', () 
  */
 describe('project profitability report (0086)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let co: string
   let p1: string
   let p2: string
@@ -5193,6 +5259,7 @@ describe('project profitability report (0086)', () => {
  */
 describe('Lovable parity round 3: parties and expense form completeness', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   beforeAll(async () => {
     db = await freshDb()
     await db.exec(`insert into auth.users (id, email) values ('${OWNER}', 'owner@s.test');`)
@@ -5251,6 +5318,7 @@ describe('Lovable parity round 3: parties and expense form completeness', () => 
  */
 describe('Lovable parity round 4: data custody linkage, work location note', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let projectId: string
 
   beforeAll(async () => {
@@ -5307,6 +5375,7 @@ describe('Lovable parity round 4: data custody linkage, work location note', () 
  */
 describe('Lovable parity round 5: editing a team member and a company expense', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let companyId: string
   const MEMBER = '99999999-9999-9999-9999-999999999999'
 
@@ -5458,6 +5527,7 @@ describe('Lovable parity round 5: editing a team member and a company expense', 
  */
 describe('Lovable parity round 6: editing and deleting a task', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let taskId: string
   const EMP_A = '77777777-7777-7777-7777-777777777771'
   const EMP_B = '77777777-7777-7777-7777-777777777772'
@@ -5512,6 +5582,7 @@ describe('Lovable parity round 6: editing and deleting a task', () => {
 
 describe('Lovable parity round 7: editing a project deliverable', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let projectId: string
   let deliverableId: string
 
@@ -5552,6 +5623,7 @@ describe('Lovable parity round 7: editing a project deliverable', () => {
  */
 describe('Lovable parity round 8: editing settings, invitations, payouts, and work submissions', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let companyId: string
   const MEMBER = '88888888-8888-8888-8888-888888888881'
 
@@ -5783,6 +5855,7 @@ describe('Lovable parity round 8: editing settings, invitations, payouts, and wo
  */
 describe('team members picker excludes deactivated staff, not just removed staff', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   const owner = '99999999-1111-1111-1111-999999999999'
   const active = '99999999-1111-1111-1111-999999999901'
   const inactive = '99999999-1111-1111-1111-999999999902'
@@ -5818,6 +5891,7 @@ describe('team members picker excludes deactivated staff, not just removed staff
  */
 describe('reminders resolve a display name for whatever they are linked to', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let companyId: string
 
   beforeAll(async () => {
@@ -5868,6 +5942,7 @@ describe('reminders resolve a display name for whatever they are linked to', () 
  */
 describe('team payout settlements (0090)', () => {
   let db: PGlite
+  afterAll(() => releaseDb(db))
   let companyId: string
   const member = '55555555-5555-5555-5555-555555555555'
   let slotId: string

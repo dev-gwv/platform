@@ -150,20 +150,20 @@ export const addMemberRequest = z
   .superRefine((v, ctx) => {
     if (v.create_login) {
       if (!v.email) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'email is required for a login' })
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Add an email to give them a login.' })
       }
       if (!v.password) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['password'],
-          message: 'password is required for a login',
+          message: 'Set a password to give them a login.',
         })
       }
     }
     // A pay arrangement needs a start date once one is set up at all -- the
     // date the studio agreed to pay this, not an afterthought.
     if (v.payment_type && !v.pay_effective_from) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pay_effective_from'], message: 'effective from is required' })
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pay_effective_from'], message: 'Say from which date the new pay starts.' })
     }
   })
 export type AddMemberRequest = z.infer<typeof addMemberRequest>
