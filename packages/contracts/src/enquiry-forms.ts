@@ -10,21 +10,27 @@ import { uuid, isoDate, isoDateTime } from './shared/primitives'
 
 // ── what a form asks (0240) ──────────────────────────────────────
 /** Name and phone are always asked. Each of these is off, optional or required. */
-export const ENQUIRY_FIELD_KEYS = ['email', 'event_type', 'event_date', 'city', 'budget', 'message'] as const
+export const ENQUIRY_FIELD_KEYS = ['email', 'event_type', 'event_date', 'city', 'services', 'guests', 'budget', 'message'] as const
 export type EnquiryFieldKey = (typeof ENQUIRY_FIELD_KEYS)[number]
 export const enquiryFieldSetting = z.enum(['off', 'optional', 'required'])
 export type EnquiryFieldSetting = z.infer<typeof enquiryFieldSetting>
+// The defaults are a new form's (0270): email, event, date and "Anything else?".
 export const enquiryFields = z.object({
-  email: enquiryFieldSetting.default('off'),
+  email: enquiryFieldSetting.default('optional'),
   event_type: enquiryFieldSetting.default('optional'),
   event_date: enquiryFieldSetting.default('optional'),
-  city: enquiryFieldSetting.default('optional'),
+  city: enquiryFieldSetting.default('off'),
+  services: enquiryFieldSetting.default('off'),
+  guests: enquiryFieldSetting.default('off'),
   budget: enquiryFieldSetting.default('off'),
   message: enquiryFieldSetting.default('optional'),
 })
 export type EnquiryFields = z.infer<typeof enquiryFields>
 export const enquiryPurpose = z.enum(['vendor', 'website'])
 export const enquiryAccent = z.enum(['blue', 'green', 'violet', 'amber', 'rose', 'teal', 'slate'])
+/** Where a client lands after sending (0270). */
+export const enquiryAfterSubmit = z.enum(['whatsapp', 'thanks', 'link'])
+export type EnquiryAfterSubmit = z.infer<typeof enquiryAfterSubmit>
 
 // ── studio side ──────────────────────────────────────────────────
 export const enquiryForm = z.object({
@@ -58,6 +64,12 @@ export const enquiryForm = z.object({
   fields: enquiryFields.default({}),
   /** What a studio pastes into its own website. */
   embed_code: z.string(),
+  is_main: z.boolean().default(false),
+  slug: z.string().nullable().default(null),
+  after_submit: enquiryAfterSubmit.default('whatsapp'),
+  whatsapp_phone: z.string().nullable().default(null),
+  whatsapp_text: z.string().nullable().default(null),
+  redirect_url: z.string().nullable().default(null),
 })
 export type EnquiryForm = z.infer<typeof enquiryForm>
 
@@ -88,6 +100,11 @@ export const updateEnquiryFormRequest = z
     accent: enquiryAccent.nullable(),
     show_logo: z.boolean(),
     fields: enquiryFields,
+    after_submit: enquiryAfterSubmit,
+    /** "" clears it, so the studio's own number is used. */
+    whatsapp_phone: z.string().trim().max(20).nullable(),
+    whatsapp_text: text(300).nullable(),
+    redirect_url: z.string().trim().max(500).nullable(),
   })
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')
@@ -158,3 +175,139 @@ export const publicEnquiryView = z.object({
   leads: z.array(enquiryViewLead),
 })
 export type PublicEnquiryView = z.infer<typeof publicEnquiryView>
+
+// ── the main form and its partners (0270) ─────────────────────────
+/** The hub: the studio's main form, the numbers chats fall back to, and its lists. */
+export const enquiryHub = z.object({
+  form: enquiryForm,
+  /** The studio's own number when the form has none (+91…), or null. */
+  default_whatsapp_phone: z.string().nullable(),
+  studio: z.string(),
+  /** The readable link anyone opens: /f/<slug>. */
+  share_url: z.string(),
+  services: z.array(z.string()),
+  /** Owners and managers change the form, partners and downloads; staff only share. */
+  can_manage: z.boolean(),
+})
+export type EnquiryHub = z.infer<typeof enquiryHub>
+
+export const setEnquiryServicesRequest = z.object({
+  values: z.array(z.string().trim().min(1).max(60)).max(30),
+})
+
+export const enquiryPartner = z.object({
+  id: uuid,
+  name: z.string(),
+  label: z.string().nullable(),
+  party_id: uuid.nullable(),
+  vendor_name: z.string().nullable(),
+  phone: z.string().nullable(),
+  notes: z.string().nullable(),
+  code: z.string(),
+  show_phone: z.boolean(),
+  scans: z.number().int(),
+  enquiries: z.number().int(),
+  booked: z.number().int(),
+  last_enquiry_at: isoDateTime.nullable(),
+  archived_at: isoDateTime.nullable(),
+  created_at: isoDateTime,
+  /** The main form with ?p=<code>: what their QR opens. */
+  form_url: z.string(),
+  /** Their private page, or null while sharing is stopped. */
+  page_url: z.string().nullable(),
+})
+export type EnquiryPartner = z.infer<typeof enquiryPartner>
+
+const partnerName = z.string().trim().min(2, 'Give the partner a name.').max(80)
+export const createEnquiryPartnerRequest = z.object({
+  name: partnerName,
+  label: text(120).nullish(),
+  phone: text(30).nullish(),
+  party_id: uuid.nullish(),
+  notes: text(1000).nullish(),
+})
+export type CreateEnquiryPartnerRequest = z.input<typeof createEnquiryPartnerRequest>
+
+export const updateEnquiryPartnerRequest = z
+  .object({
+    name: partnerName,
+    label: text(120).nullable(),
+    phone: text(30).nullable(),
+    party_id: uuid.nullable(),
+    notes: text(1000).nullable(),
+    show_phone: z.boolean(),
+    archived: z.boolean(),
+  })
+  .partial()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')
+export type UpdateEnquiryPartnerRequest = z.infer<typeof updateEnquiryPartnerRequest>
+
+/** A vendor (parties) that has no partner QR yet. */
+export const enquiryVendor = z.object({
+  id: uuid,
+  name: z.string(),
+  phone: z.string().nullable(),
+  categories: z.array(z.string()),
+  state: z.string().nullable(),
+  partner_id: uuid.nullable(),
+})
+export type EnquiryVendor = z.infer<typeof enquiryVendor>
+
+// ── public, 0270 ──────────────────────────────────────────────────
+export const publicEnquiryFormV2 = publicEnquiryForm.extend({
+  city: z.string().nullable().default(null),
+  services: z.array(z.string()).default([]),
+  event_types: z.array(z.string()).default([]),
+  /** "Sent via <partner>" on the form. */
+  partner: z.string().nullable().default(null),
+  /** So the thank-you screen says the right words before sending. */
+  goes_to: z.enum(['whatsapp', 'link']).nullable().default(null),
+})
+export type PublicEnquiryFormV2 = z.infer<typeof publicEnquiryFormV2>
+
+export const submitEnquiryRequestV2 = z.object({
+  name: z.string().max(200).default(''),
+  phone: z.string().max(40).default(''),
+  email: z.string().max(300).nullish(),
+  event_type: z.string().max(120).nullish(),
+  event_date: z.string().max(20).nullish(),
+  city: z.string().max(200).nullish(),
+  services: z.array(z.string().max(100)).max(40).nullish(),
+  guests: z.union([z.number(), z.string()]).nullish(),
+  budget: z.union([z.number(), z.string()]).nullish(),
+  message: z.string().max(4000).nullish(),
+  /** Left empty by people; bots fill every field they see. */
+  website: z.string().max(500).optional(),
+  /** A partner's code, from ?p=. */
+  p: z.string().max(20).nullish(),
+})
+export type SubmitEnquiryRequestV2 = z.input<typeof submitEnquiryRequestV2>
+
+/** 201 after a send: where the client goes next, if anywhere. */
+export const submitEnquiryResponse = z.object({
+  received: z.literal(true),
+  redirect_url: z.string().nullable(),
+})
+
+export const publicPartnerView = publicEnquiryView.extend({
+  city: z.string().nullable().default(null),
+  logo_url: z.string().nullable().default(null),
+})
+
+// ── leads download ────────────────────────────────────────────────
+export const leadsExportQuery = z.object({
+  format: z.enum(['xlsx', 'csv']),
+  partner_id: uuid.optional(),
+  /** form = the main form's own leads; partner = every partner's. */
+  from: z.enum(['form', 'partner']).optional(),
+  source: z.string().max(60).optional(),
+  q: z.string().max(100).optional(),
+})
+export const leadsExportResponse = z.object({
+  filename: z.string(),
+  content_type: z.string(),
+  /** base64 */
+  data: z.string(),
+  rows: z.number().int(),
+})
+export type LeadsExportResponse = z.infer<typeof leadsExportResponse>
