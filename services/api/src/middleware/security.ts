@@ -108,6 +108,8 @@ interface RateLimitOptions {
    * under this limiter (sign-in surfaces); 'ip+path' gives each path its own.
    */
   scope?: 'ip' | 'ip+path'
+  /** What a person is told when they hit the limit. */
+  message?: string
   /** Test seam. */
   store?: HitStore
 }
@@ -125,7 +127,7 @@ export function rateLimit(opts: RateLimitOptions) {
     if (!allowed) {
       c.header('Retry-After', String(Math.ceil(opts.windowMs / 1000)))
       c.header('RateLimit-Remaining', '0')
-      return c.json({ error: 'Too many requests. Please slow down.' }, 429)
+      return c.json({ error: opts.message ?? 'Too many requests. Please slow down.' }, 429)
     }
     c.header('RateLimit-Remaining', String(Math.max(0, opts.limit - updated.length)))
     await next()

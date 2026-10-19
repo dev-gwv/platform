@@ -291,6 +291,18 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ok: true }
   if (method === 'POST' && /^\/team\/members\/[^/]+\/reset-password$/.test(path))
     return { ok: true }
+  // Enquiry form & QR codes (0274).
+  if (method === 'GET' && path === '/enquiry-forms/hub') return enquiryHubFx
+  if (method === 'GET' && path === '/enquiry-forms') return [enquiryHubFx.form]
+  if (method === 'GET' && path.startsWith('/enquiry-partners/vendors')) return enquiryVendorsFx
+  if (method === 'GET' && /^\/enquiry-partners\/[^/]+\/leads$/.test(path)) return enquiryLeadsFx
+  if (method === 'GET' && /^\/enquiry-partners\/[0-9a-f-]{36}$/.test(path)) return enquiryPartnersFx[0]
+  if (method === 'GET' && path.startsWith('/enquiry-partners')) return path.includes('archived') ? [] : enquiryPartnersFx
+  if (method === 'GET' && path.startsWith('/public/forms/'))
+    return { ...publicEnquiryFx, partner: path.includes('?p=') ? 'Riya Boutique' : null }
+  if (method === 'POST' && path.startsWith('/public/forms/'))
+    return { received: true, redirect_url: 'https://wa.me/919876921126?text=Hi%20Asha%20Studio!' }
+  if (method === 'GET' && path.startsWith('/public/enquiry-view/')) return publicPartnerFx
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
   if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
@@ -3876,4 +3888,62 @@ function messagingMock(method: string, path: string, body: unknown): unknown {
       { month: '2026-08', channel: 'whatsapp', messages: 1380, charged_paise: 27600, cost_paise: 16560, margin_paise: 11040 },
     ]
   return NOT_MOCKED
+}
+
+// ── enquiry form & QR codes (0274) ────────────────────────────────
+const enquiryFieldsFx = {
+  email: 'optional', event_type: 'optional', event_date: 'optional', city: 'optional',
+  services: 'optional', guests: 'off', budget: 'off', message: 'optional',
+} as const
+const enquiryHubFx = {
+  form: {
+    id: uid(0x8e1), name: 'Enquiry form', kind: null, phone: null, notes: null, code: 'k7m2qab', source_id: uid(0x8e2),
+    show_phone: false, is_active: true, archived_at: null, created_at: '2026-09-01T10:00:00Z', scans: 42, enquiries: 9,
+    booked: 2, last_enquiry_at: '2026-10-18T09:00:00Z', page_views: 0, page_viewed_at: null,
+    form_url: 'https://studioautopilot.in/enquire/k7m2qab', page_url: null, purpose: 'website', title: null, intro: null,
+    thank_you: null, accent: null, show_logo: true, fields: enquiryFieldsFx,
+    embed_code: '<iframe src="https://studioautopilot.in/enquire/k7m2qab?embed=1"></iframe>',
+    is_main: true, slug: 'asha-studio-649a72', after_submit: 'whatsapp', whatsapp_phone: null, whatsapp_text: null, redirect_url: null,
+  },
+  default_whatsapp_phone: '+919876921126',
+  studio: 'Asha Studio',
+  share_url: 'https://studioautopilot.in/f/asha-studio-649a72',
+  services: ['Photography', 'Cinematography', 'Pre-wedding shoot', 'Drone', 'Album'],
+  can_manage: true,
+}
+const enquiryPartnersFx = [
+  {
+    id: '00000000-0000-4000-8000-0000000008f1', name: 'Riya Boutique', label: 'Boutique, Salon', party_id: null, vendor_name: null,
+    phone: '+919812345670', notes: 'QR at the trial room mirror. 5% on bookings.', code: 'r1y2a3', show_phone: false, scans: 12,
+    enquiries: 4, booked: 1, last_enquiry_at: '2026-10-17T09:00:00Z', archived_at: null, created_at: '2026-09-10T10:00:00Z',
+    form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=r1y2a3',
+    page_url: 'https://studioautopilot.in/enquiry-view/riyatoken_abcdefghijklmnop',
+  },
+  {
+    id: '00000000-0000-4000-8000-0000000008f2', name: 'Kiran Florist', label: 'Decorator', party_id: uid(0x8f3), vendor_name: 'Kiran Flowers',
+    phone: null, notes: null, code: 'k1r2n3', show_phone: false, scans: 1, enquiries: 1, booked: 0, last_enquiry_at: null,
+    archived_at: null, created_at: '2026-10-01T10:00:00Z', form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=k1r2n3', page_url: null,
+  },
+]
+const enquiryVendorsFx = [
+  { id: uid(0x8f3), name: 'Kiran Flowers', phone: null, categories: ['Decorator'], state: 'Rajasthan', partner_id: '00000000-0000-4000-8000-0000000008f2' },
+  { id: uid(0x8f4), name: 'Lens Lab Album Printers', phone: '9812300000', categories: ['Album printer'], state: 'Rajasthan', partner_id: null },
+]
+const enquiryLeadsFx = [
+  { id: uid(0x8f5), name: 'Meera Joshi', phone: '+919810000001', status: 'new', event_type: 'Wedding', event_date: '2027-02-14', created_at: '2026-10-18T09:00:00Z' },
+  { id: uid(0x8f6), name: 'Neha Gupta', phone: '+919822200011', status: 'converted', event_type: 'Engagement / Roka', event_date: '2026-12-02', created_at: '2026-10-02T09:00:00Z' },
+]
+const publicEnquiryFx = {
+  studio: 'Asha Studio', form_name: 'Enquiry form', is_open: true, purpose: 'website', title: null, intro: null, thank_you: null,
+  accent: null, logo_url: null, fields: enquiryFieldsFx, city: 'Jaipur',
+  services: ['Photography', 'Cinematography', 'Pre-wedding shoot', 'Drone', 'Album'],
+  event_types: ['Wedding', 'Engagement / Roka', 'Pre-wedding', 'Haldi', 'Mehendi', 'Sangeet', 'Reception'],
+  partner: null, goes_to: 'whatsapp',
+}
+const publicPartnerFx = {
+  studio: 'Asha Studio', form_name: 'Riya Boutique', city: 'Jaipur', logo_url: null, scans: 12, enquiries: 2, booked: 1,
+  leads: [
+    { name: 'Meera Joshi', phone: '98xxxxx001', enquired_on: '2026-10-18T09:00:00Z', event_type: 'Wedding', event_date: '2027-02-14', status: 'New' },
+    { name: 'Neha Gupta', phone: '98xxxxx011', enquired_on: '2026-10-02T09:00:00Z', event_type: 'Engagement / Roka', event_date: '2026-12-02', status: 'Booked' },
+  ],
 }

@@ -96,7 +96,9 @@ const EnquirePage = lazyRouteComponent(() => import('@/routes/enquire'), 'Enquir
 const EnquiryViewPage = lazyRouteComponent(() => import('@/routes/enquire'), 'EnquiryViewPage')
 const ClientDetailsPage = lazyRouteComponent(() => import('@/routes/client-details'), 'ClientDetailsPage')
 const EnquiryFormDetailPage = lazyRouteComponent(() => import('@/routes/enquiry-forms'), 'EnquiryFormDetailPage')
-const EnquiryFormsPage = lazyRouteComponent(() => import('@/routes/enquiry-forms'), 'EnquiryFormsPage')
+const EnquiryHubPage = lazyRouteComponent(() => import('@/routes/enquiry-hub'), 'EnquiryHubPage')
+const PartnersPage = lazyRouteComponent(() => import('@/routes/partners'), 'PartnersPage')
+const PartnerPage = lazyRouteComponent(() => import('@/routes/partners'), 'PartnerPage')
 const ProjectDocumentsPage = lazyRouteComponent(() => import('@/routes/project-documents'), 'ProjectDocumentsPage')
 const TeamWorkPreviewPage = lazyRouteComponent(() => import('@/routes/team-work-preview'), 'TeamWorkPreviewPage')
 const PlatformStudiosPage = lazyRouteComponent(() => import('@/routes/platform/studios'), 'PlatformStudiosPage')
@@ -222,6 +224,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/delivery', DeliveryPage),
   publicRoute('/refer/$slug', ReferPage),
   publicRoute('/enquire/$code', EnquirePage),
+  // The studio's readable form link (0274): /f/<studio-name-abc123>.
+  publicRoute('/f/$slug', EnquirePage),
   publicRoute('/enquiry-view/$token', EnquiryViewPage),
   // The client portal: one private link per project (0184).
   publicRoute('/p/$token', ClientPortalPage),
@@ -305,7 +309,11 @@ const routeTree = rootRoute.addChildren([
   // until now -- no route pointed at them while the API kept computing them.
   route('/follow-ups/reports', CrmReportsPage),
   route('/lead-sources', LeadSourcesPage),
-  route('/enquiry-forms', EnquiryFormsPage),
+  // Enquiry form & QR codes (0274): one tap from Leads. The old list keeps working.
+  route('/follow-ups/form', EnquiryHubPage),
+  route('/follow-ups/partners', PartnersPage),
+  route('/follow-ups/partners/$id', PartnerPage),
+  route('/enquiry-forms', () => <Navigate to="/follow-ups/form" replace />),
   route('/enquiry-forms/$id', EnquiryFormDetailPage),
   // The permissions matrix has declared /facebook as this module's path since
   // Phase 2; keep it working rather than breaking anyone's bookmark.

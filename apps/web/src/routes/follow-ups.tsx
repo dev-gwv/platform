@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { LeadLimitLine } from '@/features/billing/LeadLimitLine'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -230,6 +230,12 @@ function Crm() {
               </Link>
             </Button>
             <ImportLeadsButton />
+            {/* The enquiry form and its QR codes, one tap from Leads (0274). */}
+            <Button variant="outline" asChild>
+              <Link to="/follow-ups/form">
+                <QrCode /> Form & QR
+              </Link>
+            </Button>
             <AddLeadDialog onAdded={(id) => setOpenLead(id)} />
           </div>
         }

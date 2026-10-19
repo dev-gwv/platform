@@ -124,7 +124,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         module: 'crm',
         also: ['/settings/client-form'],
         tabs: [
-          { to: '/enquiry-forms', label: 'Enquiry forms', module: 'crm' },
+          { to: '/enquiry-forms', label: 'Enquiry form & QR codes', module: 'crm' },
           { to: '/settings/client-form', label: 'Client details form', module: 'clients' },
         ],
       },

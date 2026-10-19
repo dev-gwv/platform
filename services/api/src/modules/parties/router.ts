@@ -27,7 +27,7 @@ export const partiesRouter = new Hono<AppEnv>()
     const rows = await attempt(c, 'parties.list', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         try {
-          return await sql`select id, name, kind, phone, email, gstin, address, state, is_active from parties
+          return await sql`select id, name, kind, phone, email, gstin, address, state, is_active, categories from parties
            where (${search}::text is null or name ilike '%' || ${search} || '%')
              and (${kind}::text is null or kind = ${kind})
              and (${active}::text is null or (${active} = 'true' and is_active = true) or (${active} = 'false' and is_active = false))
@@ -58,7 +58,7 @@ export const partiesRouter = new Hono<AppEnv>()
         try {
           const rows = await sql`
             insert into parties ${sql({ company_id: auth.companyId, ...parsed.data })}
-            returning id, name, kind, phone, email, gstin, address, state, is_active`
+            returning id, name, kind, phone, email, gstin, address, state, is_active, categories`
           return rows[0] ?? null
         } catch {
           const rows = await sql`
@@ -82,7 +82,7 @@ export const partiesRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const rows = await sql`
           update parties set ${sql(parsed.data)} where id = ${id}
-          returning id, name, kind, phone, email, gstin, address, state, is_active`
+          returning id, name, kind, phone, email, gstin, address, state, is_active, categories`
         return rows[0] ?? null
       }),
     )

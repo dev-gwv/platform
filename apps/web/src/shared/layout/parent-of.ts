@@ -10,6 +10,7 @@ const LIST_PAGES = new Set([
   '/follow-ups',
   '/clients',
   '/enquiry-forms',
+  '/follow-ups/partners',
   '/lead-sources',
   '/projects',
   '/tasks',

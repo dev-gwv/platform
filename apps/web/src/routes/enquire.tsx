@@ -1,32 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from '@tanstack/react-router'
+import { Handshake, Inbox } from 'lucide-react'
 import { ENQUIRY_HEIGHT_MESSAGE } from '@ipc/domain'
 import {
-  publicEnquiryForm,
-  publicEnquiryView,
+  publicEnquiryFormV2,
+  publicPartnerView,
+  submitEnquiryResponse,
   z,
-  type PublicEnquiryForm,
-  type PublicEnquiryView,
+  type PublicEnquiryFormV2,
 } from '@ipc/contracts'
 import { callApi, ApiError } from '@/shared/api/client'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
-import { Card, CardContent } from '@/shared/ui/card'
 import { Skeleton } from '@/shared/ui/skeleton'
-import { EnquiryFormView, type EnquirySend } from '@/features/enquiry-forms/EnquiryFormView'
-import { StatusBadge } from '@/shared/ui/status-badge'
+import { Wordmark } from '@/shared/ui/wordmark'
+import { cn } from '@/shared/ui/cn'
+import { EnquiryFormView, EnquirySendError, type EnquirySend } from '@/features/enquiry-forms/EnquiryFormView'
+import type { FieldErrors } from '@/features/enquiry-forms/form-fields'
 
-const ok = z.object({ ok: z.boolean() })
+type PartnerView = z.infer<typeof publicPartnerView>
 
-function Shell({ children, embed = false }: { children: React.ReactNode; embed?: boolean }) {
+function Shell({ children, embed = false, wide = false }: { children: ReactNode; embed?: boolean; wide?: boolean }) {
   // On a studio's own website the form sits in their page: no backdrop, and
   // the frame is told how tall it is so it never scrolls inside itself.
   useEffect(() => {
     if (!embed || window.parent === window) return
     const send = () =>
-      window.parent.postMessage(
-        { type: ENQUIRY_HEIGHT_MESSAGE, height: Math.ceil(document.documentElement.scrollHeight) },
-        '*',
-      )
+      window.parent.postMessage({ type: ENQUIRY_HEIGHT_MESSAGE, height: Math.ceil(document.documentElement.scrollHeight) }, '*')
     send()
     const ro = new ResizeObserver(send)
     ro.observe(document.body)
@@ -34,164 +33,197 @@ function Shell({ children, embed = false }: { children: React.ReactNode; embed?:
   }, [embed])
   if (embed) return <div className="bg-background p-1 font-sans">{children}</div>
   return (
-    <div className="relative flex min-h-screen items-start justify-center bg-background p-4 font-sans sm:items-center">
+    <div className="relative min-h-screen bg-background px-4 py-10 font-sans sm:px-6">
       <PageBackdrop />
-      <Card className="relative z-10 w-full max-w-md">
-        <CardContent className="flex flex-col gap-5 p-5">{children}</CardContent>
-      </Card>
+      <div className={cn('relative z-10 mx-auto flex w-full flex-col gap-6', wide ? 'max-w-2xl' : 'max-w-md')}>
+        {children}
+        <a
+          href="/"
+          className="mx-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Powered by <Wordmark className="text-xs" />
+        </a>
+      </div>
     </div>
   )
 }
 
+function Unavailable({ title, text, embed = false }: { title: string; text: string; embed?: boolean }) {
+  return (
+    <Shell embed={embed}>
+      <div className="rounded-2xl border border-border bg-card px-6 py-14 text-center shadow-sm">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-muted">
+          <Inbox className="size-6 text-muted-foreground" aria-hidden />
+        </span>
+        <p className="mt-5 text-xl font-extrabold tracking-tight">{title}</p>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{text}</p>
+      </div>
+    </Shell>
+  )
+}
+
+const fieldErrors = z.object({ fields: z.record(z.string(), z.string()) })
+
 /**
- * PUBLIC: an enquiry form (0195, built by the studio since 0240). A vendor's
- * QR or the studio's own website opens it; what is sent lands in Leads,
- * credited to the form. `?embed=1` is the version framed on a website.
+ * PUBLIC: the studio's enquiry form (0195, 0240, 0274). /f/<link> is the
+ * studio's readable link, /enquire/<code> the older one (and every QR printed
+ * before 0274); ?p=<code> is a partner's QR. What is sent lands in Leads, due
+ * now, and the person goes on into a WhatsApp chat with the studio.
+ * `?embed=1` is the version framed on a website.
  */
 export function EnquirePage() {
-  const { code } = useParams({ from: '/enquire/$code' })
-  const embed = new URLSearchParams(window.location.search).get('embed') === '1'
-  const [form, setForm] = useState<PublicEnquiryForm | null>(null)
+  const params = useParams({ strict: false }) as { code?: string; slug?: string }
+  const key = params.slug ?? params.code ?? ''
+  const search = new URLSearchParams(window.location.search)
+  const embed = search.get('embed') === '1'
+  const partner = search.get('p')
+  const [form, setForm] = useState<PublicEnquiryFormV2 | null>(null)
   const [missing, setMissing] = useState(false)
 
+  // Fetched once per visit: each open counts one scan.
   useEffect(() => {
-    callApi(`/public/enquiry/${encodeURIComponent(code)}`, { responseSchema: publicEnquiryForm })
+    const q = partner ? `?p=${encodeURIComponent(partner)}` : ''
+    callApi(`/public/forms/${encodeURIComponent(key)}${q}`, { responseSchema: publicEnquiryFormV2 })
       .then(setForm)
       .catch(() => setMissing(true))
-  }, [code])
+  }, [key, partner])
 
   async function send(body: EnquirySend) {
     try {
-      await callApi(`/public/enquiry/${encodeURIComponent(code)}`, {
+      return await callApi(`/public/forms/${encodeURIComponent(key)}`, {
         method: 'POST',
-        body,
-        responseSchema: ok,
+        body: { ...body, p: partner },
+        responseSchema: submitEnquiryResponse,
       })
     } catch (err) {
-      throw new Error(
-        err instanceof ApiError ? err.message : 'We could not send this. Please try again.',
-      )
+      if (err instanceof ApiError) {
+        const parsed = fieldErrors.safeParse(err.body)
+        throw new EnquirySendError(err.message, parsed.success ? (parsed.data.fields as FieldErrors) : {})
+      }
+      throw new EnquirySendError('We could not send this. Please try again.')
     }
   }
 
-  if (missing || (form && !form.is_open)) {
+  if (missing) {
     return (
-      <Shell embed={embed}>
-        <div className="py-6 text-center">
-          <p className="font-medium">This form isn't available</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {form
-              ? `${form.studio} is not taking enquiries on this form right now.`
-              : 'The link may be wrong or no longer in use.'}
-          </p>
-        </div>
-      </Shell>
+      <Unavailable
+        embed={embed}
+        title="This form isn't available"
+        text="The link may be old or switched off. Please contact the business directly."
+      />
     )
   }
   if (!form) {
     return (
       <Shell embed={embed}>
-        <Skeleton className="h-72" />
+        <Skeleton className="h-96 rounded-2xl" />
       </Shell>
     )
   }
-
   return (
     <Shell embed={embed}>
-      <EnquiryFormView look={form} onSend={send} />
+      <EnquiryFormView look={form} embed={embed} onSend={send} />
     </Shell>
   )
 }
 
-const TONE: Record<
-  PublicEnquiryView['leads'][number]['status'],
-  'neutral' | 'info' | 'success' | 'danger'
-> = {
-  New: 'neutral',
-  'In talks': 'info',
-  Booked: 'success',
-  'Not booked': 'danger',
+const STATUS: Record<PartnerView['leads'][number]['status'], string> = {
+  New: 'bg-brand/15 text-foreground',
+  'In talks': 'bg-muted text-foreground',
+  Booked: 'bg-success/15 text-success',
+  'Not booked': 'bg-border text-muted-foreground',
 }
 
+const day = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+
 /**
- * PUBLIC: the vendor's own page. What their QR brought in and where each
- * enquiry stands, so neither side has to take the other's word for it.
+ * PUBLIC: a partner's own page (spec 3.11). Every enquiry their QR brought in
+ * and where it stands -- never prices, budgets, notes or who handles it.
  */
 export function EnquiryViewPage() {
   const { token } = useParams({ from: '/enquiry-view/$token' })
-  const [view, setView] = useState<PublicEnquiryView | null>(null)
+  const [view, setView] = useState<PartnerView | null>(null)
   const [missing, setMissing] = useState(false)
 
   useEffect(() => {
-    callApi(`/public/enquiry-view/${encodeURIComponent(token)}`, {
-      responseSchema: publicEnquiryView,
-    })
+    callApi(`/public/enquiry-view/${encodeURIComponent(token)}`, { responseSchema: publicPartnerView })
       .then(setView)
       .catch(() => setMissing(true))
   }, [token])
 
   if (missing) {
     return (
-      <Shell>
-        <div className="py-6 text-center">
-          <p className="font-medium">This page isn't available</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Please ask the studio for a new link.
-          </p>
-        </div>
-      </Shell>
+      <Unavailable
+        title="This page isn't available"
+        text="The link may be old or sharing was stopped. Please ask the business for a new link."
+      />
     )
   }
   if (!view) {
     return (
-      <Shell>
-        <Skeleton className="h-72" />
+      <Shell wide>
+        <Skeleton className="h-96 rounded-2xl" />
       </Shell>
     )
   }
 
-  const fmt = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-
   return (
-    <Shell>
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">{view.studio}</p>
-        <h1 className="text-xl font-semibold tracking-tight">Enquiries via {view.form_name}</h1>
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        {[
-          [view.scans, 'Scans'],
-          [view.enquiries, 'Enquiries'],
-          [view.booked, 'Booked'],
-        ].map(([v, l]) => (
-          <div key={l} className="rounded-lg bg-muted/40 p-3">
-            <p className="text-xl font-semibold tabular-nums">{v}</p>
-            <p className="text-xs text-muted-foreground">{l}</p>
+    <Shell wide>
+      <header className="flex flex-col items-center gap-2 text-center">
+        {view.logo_url && (
+          <img src={view.logo_url} alt="" className="size-16 rounded-2xl border border-border bg-white object-contain p-1.5 shadow-sm" />
+        )}
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{view.studio}</h1>
+        {view.city && <p className="text-sm text-muted-foreground">{view.city}</p>}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-card/80 px-3 py-1 text-sm font-semibold text-primary ring-1 ring-brand/50">
+          <Handshake className="size-4" aria-hidden /> Enquiries via {view.form_name}
+        </span>
+      </header>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        {(
+          [
+            [view.scans, 'Scans'],
+            [view.enquiries, 'Enquiries'],
+            [view.booked, 'Booked'],
+          ] as const
+        ).map(([v, l]) => (
+          <div key={l} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-3xl font-extrabold tabular-nums">{v}</p>
+            <p className="text-sm text-muted-foreground">{l}</p>
           </div>
         ))}
       </div>
-      {view.leads.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
-          No enquiries yet. They will show here as they come in.
-        </p>
-      ) : (
-        <ul className="-mx-1 flex flex-col divide-y divide-border">
-          {view.leads.map((l, i) => (
-            <li key={i} className="flex items-center gap-3 px-1 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{l.name ?? 'No name'}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {[l.phone, l.event_type, l.event_date ? fmt(l.event_date) : null]
-                    .filter(Boolean)
-                    .join(' · ') || `Enquired ${fmt(l.enquired_on)}`}
-                </p>
-              </div>
-              <StatusBadge tone={TONE[l.status]}>{l.status}</StatusBadge>
-            </li>
-          ))}
-        </ul>
-      )}
+
+      <section className="rounded-2xl border border-border bg-card shadow-sm">
+        {view.leads.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <p className="text-xl font-extrabold tracking-tight">No enquiries yet</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+              Every enquiry from your QR code shows here as soon as it comes in.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {view.leads.map((l, i) => (
+              <li key={i} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{l.name ?? 'No name'}</p>
+                  <p className="truncate text-sm tabular-nums text-muted-foreground">
+                    {[l.phone, `Enquired ${day(l.enquired_on)}`].filter(Boolean).join(' · ')}
+                  </p>
+                  {(l.event_type || l.event_date) && (
+                    <p className="truncate text-sm text-muted-foreground">
+                      {[l.event_type, l.event_date ? day(l.event_date) : null].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-bold', STATUS[l.status])}>{l.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </Shell>
   )
 }

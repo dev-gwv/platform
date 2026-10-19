@@ -13,6 +13,8 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public correlationId?: string | null,
+    /** The whole error reply, for a screen that reads more than the message (a word per field). */
+    public body?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -245,7 +247,7 @@ export async function callApi<TOut extends z.ZodTypeAny>(
       typeof json === 'object' && json && 'error' in json
         ? String((json as { error: unknown }).error)
         : 'Request failed.'
-    throw new ApiError(res.status, msg, correlationId)
+    throw new ApiError(res.status, msg, correlationId, json)
   }
 
   return opts.responseSchema.parse(json)

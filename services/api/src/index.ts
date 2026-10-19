@@ -48,6 +48,8 @@ import { remindersRouter } from './modules/reminders/router'
 import { activityRouter } from './modules/activity/router'
 import { clientPortalRouter, publicClientPortalRouter } from './modules/client-portal/router'
 import { enquiryFormsRouter, publicEnquiryFormsRouter } from './modules/enquiry-forms/router'
+import { enquiryPartnersRouter } from './modules/enquiry-forms/routes-partners'
+import { leadsExportRouter } from './modules/enquiry-forms/routes-export'
 import { crmCallsRouter } from './modules/crm-calls/router'
 import { crmSequencesRouter } from './modules/crm-sequences/router'
 import { featuresRouter, platformFeaturesRouter } from './modules/features/router'
@@ -150,6 +152,15 @@ app.use('/public/portal/:token/feedback', rateLimit({ windowMs: 60_000, limit: 1
 // A QR enquiry makes a lead and pings the studio: same low ceiling per address.
 app.use('/public/enquiry/:code', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
 app.use('/public/details/:token', async (c, next) => (c.req.method === 'POST' ? enquiryLimiter(c, next) : next()))
+// The enquiry form (0274, spec 4.3): at most 10 sends an hour from one address,
+// whatever form or partner code it goes through.
+const formSendLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: 10,
+  scope: 'ip',
+  message: 'Too many enquiries from this device. Please try again later.',
+})
+app.use('/public/forms/:key', async (c, next) => (c.req.method === 'POST' ? formSendLimiter(c, next) : next()))
 app.use('/webhooks/*', rateLimit({ windowMs: 60_000, limit: 60 }))
 app.use('/health', rateLimit({ windowMs: 60_000, limit: 60 }))
 // Crash reports are public by necessity; keep the abuse ceiling low and explicit.
@@ -222,6 +233,8 @@ app.route('/reminders', remindersRouter)
 app.route('/activity', activityRouter)
 app.route('/client-portal', clientPortalRouter)
 app.route('/enquiry-forms', enquiryFormsRouter)
+app.route('/enquiry-partners', enquiryPartnersRouter)
+app.route('/leads-export', leadsExportRouter)
 app.route('/public', publicEnquiryFormsRouter)
 app.route('/public', publicClientPortalRouter)
 app.route('/public', publicClientDetailsRouter)

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Archive, ArchiveRestore, Pencil, Plus, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, Check, Pencil, Plus, Search } from 'lucide-react'
 import type { Party } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -11,6 +11,8 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { TONE_CHIP } from '@/shared/ui/tones'
 import { useCreateParty, useParties, useUpdateParty } from '@/features/parties/api'
+import { VendorQrCard } from '@/features/enquiry-forms/VendorQrCard'
+import { PARTNER_KINDS } from '@ipc/domain'
 
 type Kind = Party['kind']
 const KINDS: Array<{ value: Kind; label: string; tone: string }> = [
@@ -116,7 +118,7 @@ function VendorRow({ party, onEdit }: { party: Party; onEdit: () => void }) {
   const update = useUpdateParty()
   const k = kindOf(party.kind)
   const active = party.is_active !== false
-  const details = [party.phone, party.email, party.gstin ? `GSTIN ${party.gstin}` : null, party.state].filter(Boolean)
+  const details = [party.categories.join(', '), party.phone, party.email, party.gstin ? `GSTIN ${party.gstin}` : null, party.state].filter(Boolean)
   return (
     <li className={cn('flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-3 py-2', !active && 'opacity-70')}>
       <div className="min-w-0 flex-1">
@@ -159,6 +161,19 @@ function VendorRow({ party, onEdit }: { party: Party; onEdit: () => void }) {
 function VendorDialog({ party, onClose }: { party: Party | null; onClose: () => void }) {
   const create = useCreateParty()
   const update = useUpdateParty()
+  const everyone = useParties()
+  const [cats, setCats] = useState<string[]>(party?.categories ?? [])
+  const [newCat, setNewCat] = useState('')
+  // The studio's own words join the list for every vendor (no closed field).
+  const catOptions = [
+    ...new Set([...PARTNER_KINDS, ...(everyone.data ?? []).flatMap((x) => x.categories), ...cats]),
+  ]
+  const tickCat = (c: string) => setCats((x) => (x.includes(c) ? x.filter((v) => v !== c) : [...x, c]))
+  const addCat = () => {
+    const w = newCat.trim()
+    if (w && !cats.includes(w)) setCats((x) => [...x, w])
+    setNewCat('')
+  }
   const [f, setF] = useState({
     name: party?.name ?? '',
     kind: party?.kind ?? ('vendor' as Kind),
@@ -183,6 +198,7 @@ function VendorDialog({ party, onClose }: { party: Party | null; onClose: () => 
       gstin: opt(f.gstin.toUpperCase()),
       state: opt(f.state),
       address: opt(f.address),
+      categories: cats,
     }
     if (party) await update.mutateAsync({ id: party.id, patch: body })
     else await create.mutateAsync(body)
@@ -210,6 +226,49 @@ function VendorDialog({ party, onClose }: { party: Party | null; onClose: () => 
               </button>
             ))}
           </div>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1 text-sm font-medium">What they do (tick all that apply)</legend>
+            <div className="flex flex-wrap gap-1">
+              {catOptions.map((c) => {
+                const on = cats.includes(c)
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => tickCat(c)}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium',
+                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-brand',
+                    )}
+                  >
+                    {on && <Check className="size-3" aria-hidden />}
+                    {c}
+                    {on && cats[0] === c && cats.length > 1 && <span className="ml-1 text-[10px] opacity-80">Main</span>}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                aria-label="Add a category"
+                placeholder="Album printer"
+                maxLength={60}
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addCat()
+                  }
+                }}
+                className="h-8 max-w-56 text-sm"
+              />
+              <Button type="button" size="sm" onClick={addCat} disabled={!newCat.trim()}>
+                <Plus /> Add a category
+              </Button>
+            </div>
+          </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-phone">Phone</Label>
@@ -232,6 +291,7 @@ function VendorDialog({ party, onClose }: { party: Party | null; onClose: () => 
             <Label htmlFor="v-address">Address</Label>
             <Textarea id="v-address" value={f.address} onChange={set('address')} maxLength={400} rows={2} />
           </div>
+          {party && party.is_active !== false && party.kind === 'vendor' && <VendorQrCard vendorId={party.id} name={party.name} />}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
