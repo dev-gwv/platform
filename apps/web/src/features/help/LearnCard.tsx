@@ -8,6 +8,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { cn } from '@/shared/ui/cn'
 import { useHints, useSetHint } from '@/features/team/hints-api'
 import { useTutorials } from './api'
+import { useCallUrl } from './BookCall'
 import { isRetired, remember } from './learning'
 import { startStuck, stuckReason, stuckStep, type StuckEvent, type StuckState } from './stuck-rules'
 import { trackFlow } from '@/shared/usage/usageTracker'
@@ -53,6 +54,8 @@ export interface Learn {
 export function useLearn(key: string, { countClose = false }: { countClose?: boolean } = {}): Learn {
   const tutorials = useTutorials()
   const tutorial = useMemo(() => tutorials.find((t) => t.key === key) ?? null, [tutorials, key])
+  // Whoever runs the studio can also talk it through with us.
+  const callUrl = useCallUrl()
   const signals = useLearnSignals()
   const hints = useHints()
   const setHint = useSetHint()
@@ -95,8 +98,16 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
           setPlaying(tutorial)
         },
       },
+      ...(callUrl && {
+        cancel: {
+          label: 'Book a call',
+          onClick: () => {
+            window.open(callUrl, '_blank', 'noopener')
+          },
+        },
+      }),
     })
-  }, [feed, key, tutorial])
+  }, [callUrl, feed, key, tutorial])
 
   // The listeners live as long as the screen does; they read the latest
   // feed/offer through refs, so a re-render never counts as closing it.

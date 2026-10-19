@@ -9,6 +9,7 @@ import { useHelp, useTutorials } from './api'
 import { TutorialPlayer } from './TutorialPlayer'
 import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
+import { BookCallButton } from './BookCall'
 
 const ROLE: Record<string, string> = {
   super_admin: 'Owner',
@@ -20,8 +21,8 @@ const ROLE: Record<string, string> = {
 }
 
 /**
- * Help, at the foot of the sidebar: "We're one message away" -- WhatsApp us
- * and Email us, opened with who is asking and from which page already
+ * Help, at the foot of the sidebar: "We're one message away" -- Book a call,
+ * WhatsApp us and Email us, opened with who is asking and from which page already
  * written -- this page's tutorial if it has one, every tutorial, and the
  * questions studios ask first.
  */
@@ -62,17 +63,16 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
       <GuideLink onNavigate={onNavigate} />
 
-      {(help?.support_whatsapp || help?.support_email) && (
-        <>
-          <div>
-            <p className="text-lg font-semibold">We're one message away</p>
-            <p className="text-sm text-muted-foreground">
-              Tell us what you need. Your studio and this page are already in the message.
-            </p>
-          </div>
-          <SupportButtons />
-        </>
-      )}
+      <div className="flex flex-col gap-3">
+        <div>
+          <p className="text-lg font-semibold">We're one message away</p>
+          <p className="text-sm text-muted-foreground">
+            Something not working, or a question? Book a 15-minute call, or message us.
+          </p>
+        </div>
+        <BookCallButton variant="default" />
+        {(help?.support_whatsapp || help?.support_email) && <SupportButtons />}
+      </div>
 
       {here && (
         <button

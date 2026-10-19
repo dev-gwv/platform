@@ -106,9 +106,10 @@ export const KB: readonly KbArticle[] = [
     area: 'Start',
     menu: 'Help, at the foot of the menu',
     to: '/learn',
-    keywords: ['support', 'contact', 'tutorial', 'video', 'stuck', 'training'],
+    keywords: ['support', 'contact', 'tutorial', 'video', 'stuck', 'training', 'call', 'person', 'demo', 'setup call'],
     body: [
-      'Press **Help** at the bottom of the menu. It has **WhatsApp us** and **Email us**, with your studio, your name and the page you are on already written into the message — you only press Send.',
+      'To talk to a person, press **Book a call** and pick a time that suits you. It is in **Help** at the bottom of the menu, in the round help button in the corner, on **Plan & billing** and on **Getting started**. The studio owner, admins and managers see it.',
+      'Press **Help** at the bottom of the menu. It also has **WhatsApp us** and **Email us**, with your studio, your name and the page you are on already written into the message — you only press Send.',
       '**How to use Studio AutoPilot** is the whole app step by step with a short video for each job, in English and Hindi.',
       'Most screens also have **Watch how** beside the page title, which plays the recording for that screen.',
     ],

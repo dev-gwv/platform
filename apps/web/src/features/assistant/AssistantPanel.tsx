@@ -445,7 +445,7 @@ function Bubble({
       )}
 
       {said.callUrl && (
-        <Button variant="outline" size="sm" className="self-start" asChild>
+        <Button size="sm" className="self-start" asChild>
           {/* Opens away from the app, so the conversation is still here afterwards. */}
           <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
             <CalendarClock /> {t.bookCall}

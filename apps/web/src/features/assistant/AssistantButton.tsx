@@ -1,6 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { RotateCcw, Sparkles } from 'lucide-react'
+import { SupportButtons } from '@/features/help/HelpPanel'
+import { BookCallButton } from '@/features/help/BookCall'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from './AssistantPanel'
@@ -71,6 +73,12 @@ export function AssistantButton() {
             )}
           </div>
           <AssistantPanel callUrl={data.call_url} left={left} />
+          {/* Never a dead end: a person is one press away here too. */}
+          <div className="flex flex-col gap-2 border-t border-border p-3">
+            <p className="text-xs text-muted-foreground">Rather talk to a person?</p>
+            <BookCallButton size="sm" variant="default" />
+            <SupportButtons compact />
+          </div>
         </SheetContent>
       </Sheet>
     </>

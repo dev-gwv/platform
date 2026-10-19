@@ -68,6 +68,8 @@ function declaredTables(raw: string): { table: string; columns: string[] }[] {
 
 let applied: Map<string, Set<string>>
 let declared: { file: string; table: string; columns: string[] }[]
+// Tables a later migration drops on purpose (0273 dropped 0271's support requests).
+let dropped: Set<string>
 
 beforeAll(async () => {
   const db = new PGlite()
@@ -85,10 +87,12 @@ beforeAll(async () => {
     .sort()
 
   declared = []
+  dropped = new Set()
   for (const f of files) {
     const sql = readFileSync(join(migDir, f), 'utf8')
     await db.exec(sql)
     for (const d of declaredTables(sql)) declared.push({ file: f, ...d })
+    for (const m of sql.matchAll(/^\s*drop table if exists\s+(?:public\.)?(\w+)/gim)) dropped.add(m[1]!.toLowerCase())
   }
 
   const rows = await db.query<{ table_name: string; column_name: string }>(
@@ -110,6 +114,7 @@ describe('create table if not exists', () => {
   it('every column a migration declares actually exists on the applied table', () => {
     const drift: string[] = []
     for (const d of declared) {
+      if (dropped.has(d.table)) continue
       const have = applied.get(d.table)
       if (!have) {
         drift.push(`${d.file}: ${d.table} was never created`)

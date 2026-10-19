@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import { AlertTriangle, ArrowLeft, Copy, RotateCcw } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { reportClientError } from '@/shared/error/report'
+import { BookCallButton } from '@/features/help/BookCall'
 
 /**
  * What a screen shows when it breaks, instead of the router's bare "Something
@@ -97,9 +98,13 @@ export class PanelBoundary extends Component<
       <div className="m-4 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-5 text-center">
         <p className="text-sm font-medium">Couldn’t show {this.props.label ?? 'this'} · कुछ गड़बड़ हुई</p>
         <p className="max-w-sm break-words text-xs text-muted-foreground">{describe(this.state.error).split('\n')[0]}</p>
-        <Button size="sm" onClick={() => this.setState({ error: null })}>
-          <RotateCcw /> Try again
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" onClick={() => this.setState({ error: null })}>
+            <RotateCcw /> Try again
+          </Button>
+          {/* A person is one call away when a screen breaks (owners, admins, managers). */}
+          <BookCallButton size="sm" />
+        </div>
       </div>
     )
   }

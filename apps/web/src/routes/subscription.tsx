@@ -18,6 +18,7 @@ import { useTalkToUs } from '@/features/billing/talk-to-us'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
 import { DiamondCheckDialog } from '@/features/billing/DiamondCheckDialog'
+import { BookCallButton, useCallUrl } from '@/features/help/BookCall'
 import { OfferStrip } from '@/features/billing/OfferStrip'
 import { markOffer, useMyOffer } from '@/features/billing/offer-api'
 import { offerFor, offerLastDay } from '@/features/billing/offer'
@@ -39,6 +40,7 @@ export function SubscriptionPage() {
 function Subscription() {
   const { session } = useAuth()
   const talk = useTalkToUs()
+  const callUrl = useCallUrl()
   // Both price lists, for everyone (owner, 14 Oct): the regular one on top and
   // the IPC Diamond members' below it -- Diamond Starter, Pro and Studio Max.
   const regular = useQuery({
@@ -172,6 +174,13 @@ function Subscription() {
         onWhatsApp={(p) => ask(p, checking?.quote?.kind, true)}
         onSeeRegular={() => document.getElementById('regular-prices')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
       />
+      {/* Beside Talk to us on WhatsApp: a person on a call, for whoever runs the studio. */}
+      {callUrl && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
+          Rather talk it through first?
+          <BookCallButton size="sm" label="Book a 15-minute call" />
+        </div>
+      )}
       {/* Never a timer (owner, 14 Oct): one honest sentence. */}
       <p className="mx-auto mt-6 flex max-w-2xl items-start justify-center gap-2 rounded-xl border border-tone-amber/40 bg-tone-amber-soft px-4 py-3 text-center text-sm font-medium">
         <TrendingUp className="mt-0.5 size-4 shrink-0 text-tone-amber" aria-hidden />

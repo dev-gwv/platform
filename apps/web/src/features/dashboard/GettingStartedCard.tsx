@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { useHints, useSetHint } from '@/features/team/hints-api'
 import { showGettingStarted, startCountLine, startSteps } from './getting-started'
+import { BookCallButton, useCallUrl } from '@/features/help/BookCall'
 
 /**
  * Getting started: a new studio's first five things after setup. Each step
@@ -39,6 +40,7 @@ export function GettingStartedCard() {
   })
   const hints = useHints()
   const setHint = useSetHint()
+  const callUrl = useCallUrl()
   const closed = !!hints.data?.getting_started?.closed
   if (hints.isPending || !showGettingStarted(q.data, closed)) return null
 
@@ -103,6 +105,12 @@ export function GettingStartedCard() {
             )
           })}
         </ol>
+        {callUrl && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm text-muted-foreground">
+            Want us to set it up with you?
+            <BookCallButton size="sm" label="Book a 15-minute call" />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

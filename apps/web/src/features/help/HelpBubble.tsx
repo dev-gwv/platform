@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { CalendarClock, MessageCircle, PlayCircle, X } from 'lucide-react'
+import { MessageCircle, PlayCircle, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { AssistantPanel } from '@/features/assistant/AssistantPanel'
@@ -8,6 +8,7 @@ import { useAssistantState } from '@/features/assistant/api'
 import { COPY } from '@/features/assistant/copy'
 import { useAssistantLang } from '@/features/assistant/lang'
 import { SupportButtons } from './HelpPanel'
+import { BookCallButton } from './BookCall'
 
 /**
  * Help in the bottom-right corner, where people look for it on every other
@@ -27,7 +28,6 @@ export function HelpBubble() {
   const { lang } = useAssistantLang()
   const t = COPY[(aiOn && lang) || 'en']
   const left = ai ? Math.max(0, ai.daily_limit - ai.asked_today) : 0
-
   // The shell outlives navigation: a link followed from inside closes it.
   useEffect(() => {
     setOpen(false)
@@ -77,22 +77,19 @@ export function HelpBubble() {
               </div>
               <div className="border-t border-border p-3">
                 <p className="mb-2 text-xs text-muted-foreground">{t.ratherPerson}</p>
-                <SupportButtons compact />
+                <div className="flex flex-col gap-2">
+                  <BookCallButton size="sm" variant="default" />
+                  <SupportButtons compact />
+                </div>
               </div>
             </>
           ) : (
             <div className="flex flex-col gap-3 overflow-y-auto p-4">
               <p className="text-sm text-muted-foreground">
-                We're one message away. Your studio and this page are already in the message.
+                Something not working, or a question? Book a call with us, or message us.
               </p>
+              <BookCallButton variant="default" />
               <SupportButtons />
-              {ai?.call_url && (
-                <Button asChild variant="outline">
-                  <a href={ai.call_url} target="_blank" rel="noreferrer">
-                    <CalendarClock /> Book a call
-                  </a>
-                </Button>
-              )}
               <Button asChild variant="ghost" className="justify-start">
                 <Link to="/learn">
                   <PlayCircle /> How to use Studio AutoPilot, step by step

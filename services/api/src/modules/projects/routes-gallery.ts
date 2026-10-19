@@ -95,8 +95,8 @@ const readRow = (c: Context<AppEnv>, projectId: string) =>
     withUser(c.env, c.get('auth').userId, async (sql) => {
       const rows = await sql<GalleryRow[]>`
         select event_id, short_id, gallery_url, pin, full_access_pin, photo_count, visits, guests,
-               to_char(expires_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as expires_at,
-               to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as created_at
+               to_char(expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as expires_at,
+               to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
           from project_galleries where project_id = ${projectId}`
       const [client] = await sql<ClientRow[]>`
         select cl.name, nullif(cl.phone, '') as phone
