@@ -48,7 +48,8 @@ export function BookCallButton({
 
 /**
  * Book a call in the top bar, on every page. The label shows from 1360px like
- * the shortcut pills; below that it rides compact as the icon alone.
+ * the shortcut pills; below that it rides compact as the icon alone. Not on a
+ * phone, where the bar is already full: the round help button has it there.
  */
 export function HeaderBookCall() {
   const url = useCallUrl()
@@ -61,8 +62,8 @@ export function HeaderBookCall() {
       aria-label="Book a call with us"
       title="Book a call with us"
       className={cn(
-        'flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-tone-teal/40 bg-tone-teal-soft px-2.5 text-sm font-medium text-tone-teal transition-colors',
-        'hover:border-tone-teal hover:bg-tone-teal/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'hidden h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-tone-teal/40 bg-tone-teal-soft px-2.5 text-sm font-medium text-tone-teal transition-colors',
+        'md:flex hover:border-tone-teal hover:bg-tone-teal/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
     >
       <CalendarClock className="size-4" aria-hidden />
