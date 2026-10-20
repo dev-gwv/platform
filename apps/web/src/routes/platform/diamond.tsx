@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Bot, Gem, UserCheck } from 'lucide-react'
-import { diamondSheetStatus, platformDiamondClaim, z, type DiamondClaimStatus, type DiamondSheetStatus, type PlatformDiamondClaim } from '@ipc/contracts'
+import { diamondLookup, diamondMiss, diamondSheetStatus, platformDiamondClaim, z, type DiamondClaimStatus, type DiamondLookup, type DiamondMiss, type DiamondSheetStatus, type PlatformDiamondClaim } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
@@ -21,6 +21,7 @@ export function PlatformDiamondPage() {
   return (
     <PlatformPage>
       <MemberSheet />
+      <Misses />
       <Claims />
     </PlatformPage>
   )
@@ -292,3 +293,121 @@ function MemberSheet() {
     </>
   )
 }
+
+/**
+ * Members said the check refused their number (owner, 20 Oct). Here the
+ * platform owner looks any number up against the copied list, sees every
+ * number studios typed that did not match in the last 30 days and why, and
+ * makes a studio a member by hand when the list was wrong (0277).
+ */
+function Misses() {
+  const { session } = useAuth()
+  const qc = useQueryClient()
+  const confirm = useConfirm()
+  const misses = useQuery({
+    queryKey: ['platform', 'diamond', 'misses'],
+    queryFn: () => callApi('/platform/diamond/misses', { responseSchema: diamondMiss.array() }),
+    enabled: !!session?.is_platform_admin,
+  })
+  const [phone, setPhone] = useState('')
+  const [found, setFound] = useState<DiamondLookup | null>(null)
+  const lookup = useMutation({
+    mutationFn: () =>
+      callApi(`/platform/diamond/lookup?phone=${encodeURIComponent(phone)}`, { responseSchema: diamondLookup }),
+    onSuccess: setFound,
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not look that up.'),
+  })
+  const grant = useMutation({
+    mutationFn: (m: DiamondMiss) =>
+      callApi(`/platform/studios/${m.company_id}/diamond/grant`, { method: 'POST', body: { phone: m.phone }, responseSchema: z.object({ ok: z.boolean() }) }),
+    onSuccess: (_r, m) => {
+      toast.success(`${m.studio} is an IPC Diamond member now.`)
+      void qc.invalidateQueries({ queryKey: ['platform', 'diamond'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not do that.'),
+  })
+  const onGrant = async (m: DiamondMiss) => {
+    const ok = await confirm({
+      title: `Make ${m.studio} a Diamond member?`,
+      description: 'They get the member prices and 30 days from sign-up, the same as a number that matches.',
+      confirmLabel: 'Make member',
+    })
+    if (ok) grant.mutate(m)
+  }
+  const digits = phone.replace(/[^0-9]/g, '').length
+  const rows = misses.data ?? []
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="flex flex-col gap-4 p-4">
+        <div>
+          <p className="text-sm font-semibold">Check a number</p>
+          <form
+            className="mt-2 flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (digits >= 10) lookup.mutate()
+            }}
+          >
+            <Input
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value)
+                setFound(null)
+              }}
+              inputMode="tel"
+              placeholder="98765 43210"
+              aria-label="Mobile number to check"
+              className={digits >= 10 ? 'max-w-xs border-success/50' : 'max-w-xs border-tone-amber/60'}
+            />
+            <Button type="submit" variant="outline" disabled={digits < 10 || lookup.isPending}>
+              {lookup.isPending ? 'Checking…' : 'Check'}
+            </Button>
+          </form>
+          {found && (
+            <p className={found.on_list ? 'mt-2 text-sm text-success' : 'mt-2 text-sm text-destructive'}>
+              {found.on_list
+                ? `On the list${found.name ? ` as ${found.name}` : ''}. ${found.studio ? `It opened ${found.studio}.` : 'No studio has used it yet.'}`
+                : 'Not on the copied list. Add it to the sheet, then press Refresh now above.'}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold">Numbers that did not match</p>
+          {misses.isLoading ? (
+            <SkeletonList rows={2} />
+          ) : misses.isError ? (
+            <ErrorState onRetry={() => void misses.refetch()} />
+          ) : rows.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No studio has been refused in the last 30 days.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-border text-sm">
+              {rows.map((m) => (
+                <li key={`${m.company_id}-${m.phone}`} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="min-w-0">
+                    <span className="block font-medium">{m.studio}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {m.phone ?? 'no number'} · {missWhy(m)} · {m.tries === 1 ? 'once' : `${m.tries} times`}, last {when(m.last_at)}
+                      {m.owner_email ? ` · ${m.owner_email}` : ''}
+                    </span>
+                  </span>
+                  <Button size="sm" variant="outline" disabled={grant.isPending} onClick={() => void onGrant(m)}>
+                    <Gem aria-hidden /> Make member
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Why a typed number missed, in a few words; the list may have changed since. */
+function missWhy(m: DiamondMiss): string {
+  if (m.why === 'taken') return m.used_by ? `already opened ${m.used_by}` : 'already used by another studio'
+  return m.on_list ? 'on the list now (was not then)' : 'not on the list'
+}
+

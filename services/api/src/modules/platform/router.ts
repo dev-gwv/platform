@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, diamondMiss, diamondLookup, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -511,6 +511,26 @@ export const platformRouter = new Hono<AppEnv>()
     return c.json(await sheetStatus(c))
   })
 
+  // Numbers studios typed that did not match, the owner's own look-up, and
+  // making a studio Diamond by hand (0277, owner 20 Oct).
+  .get('/diamond/misses', async (c) => {
+    const rows = await attempt(c, 'platform.diamond_misses', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select company_id, studio, owner_email, phone, why, tries, last_at::text as last_at, used_by, on_list
+          from platform_diamond_misses()`),
+    )
+    return c.json(diamondMiss.array().parse(rows ?? []))
+  })
+
+  .get('/diamond/lookup', async (c) => {
+    const phone = (c.req.query('phone') ?? '').slice(0, 30)
+    const rows = await attempt(c, 'platform.diamond_lookup', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ r: unknown }[]>`select platform_diamond_lookup(${phone}) as r`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not look that number up.')
+    return c.json(diamondLookup.parse(rows[0].r))
+  })
+
   .get('/diamond', async (c) => {
     const want = c.req.query('status')
     const status = want ? diamondClaimStatus.safeParse(want) : null
@@ -545,6 +565,18 @@ export const platformRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not save that.')
     await audit(c, { action: parsed.data.approve ? 'platform.diamond_approve' : 'platform.diamond_reject', entityType: 'diamond_claim', entityId: id })
     return c.json({ ok: true, status: rows[0]?.s ?? null })
+  })
+
+  .post('/studios/:id/diamond/grant', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { phone?: unknown }
+    const phone = typeof body.phone === 'string' ? body.phone.slice(0, 30) : null
+    const id = uuidParam(c)
+    const ok = await attempt(c, 'platform.diamond_grant', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_diamond_grant(${id}, ${phone})`),
+    )
+    if (!ok) fail(400, 'We could not make that studio a member.')
+    await audit(c, { action: 'platform.diamond_grant', entityType: 'company', entityId: id })
+    return c.json({ ok: true })
   })
 
   .post('/studios/:id/diamond/revoke', async (c) => {

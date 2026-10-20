@@ -81,6 +81,28 @@ describe('Diamond by phone number', () => {
     expect((await one<{ p: string | null }>(`select diamond_phone as p from companies where id = '${A}'`)).p).toBeNull()
   })
 
+  it('keeps every miss for the platform owner, who can look up and grant (0277)', async () => {
+    await db.exec(`select set_config('request.jwt.claim.sub', '${ADMIN}', false)`)
+    const misses = (await db.query<{ studio: string; phone: string; why: string; tries: number; on_list: boolean }>(
+      `select studio, phone, why, tries, on_list from platform_diamond_misses()`,
+    )).rows
+    expect(misses.find((m) => m.phone === '9876543210')).toMatchObject({ studio: 'B', why: 'taken', tries: 1, on_list: true })
+    expect(misses.find((m) => m.phone === '9000000000')).toMatchObject({ why: 'not_found', on_list: false })
+
+    expect((await one<{ r: { on_list: boolean; name: string } }>(`select platform_diamond_lookup('+91 91234 56780') as r`)).r)
+      .toMatchObject({ on_list: true, name: 'Ravi', studio: null })
+    await expect(db.query(`select platform_diamond_lookup('123')`)).rejects.toThrow(/ten-digit/)
+
+    await db.query(`select platform_diamond_grant('${B}', '9123456780')`)
+    expect(await tier(B)).toBe('diamond')
+    expect(await trialDays(B)).toBe(30)
+    expect((await db.query(`select 1 from platform_diamond_misses() where company_id = '${B}'`)).rows).toHaveLength(0)
+
+    await db.exec(`select set_config('request.jwt.claim.sub', '${B_OWNER}', false)`)
+    await expect(db.query(`select * from platform_diamond_misses()`)).rejects.toThrow(/platform access only/)
+    await expect(db.query(`select platform_diamond_grant('${B}', null)`)).rejects.toThrow(/platform access only/)
+  })
+
   it('the list and the check are the service’s alone', async () => {
     await db.exec(`set role authenticated`)
     try {
