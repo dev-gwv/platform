@@ -22,12 +22,24 @@ const SETTINGS: EnquiryFieldSetting[] = ['off', 'optional', 'required']
 /**
  * Build the form: its words, what it asks, its colour -- with the form
  * itself beside it, changing as you go. Name and phone are always asked.
+ * The hub passes the studio's name and services, so the preview shows "What
+ * do you need?" with the studio's own words, as the public form does.
  */
-export function FormBuilderDialog({ form, onClose }: { form: EnquiryForm; onClose: () => void }) {
+export function FormBuilderDialog({
+  form,
+  onClose,
+  studio: studioName,
+  services,
+}: {
+  form: EnquiryForm
+  onClose: () => void
+  studio?: string
+  services?: string[]
+}) {
   const { session } = useAuth()
   const update = useUpdateEnquiryForm(form.id)
   const studio =
-    session?.studios.find((m) => m.company_id === session.company_id)?.company_name ?? 'Your studio'
+    studioName ?? session?.studios.find((m) => m.company_id === session.company_id)?.company_name ?? 'Your studio'
   const [title, setTitle] = useState(form.title ?? '')
   const [intro, setIntro] = useState(form.intro ?? '')
   const [thanks, setThanks] = useState(form.thank_you ?? '')
@@ -172,6 +184,7 @@ export function FormBuilderDialog({ form, onClose }: { form: EnquiryForm; onClos
                   accent,
                   logo_url: null,
                   fields,
+                  services: services ?? [],
                 }}
               />
             </div>

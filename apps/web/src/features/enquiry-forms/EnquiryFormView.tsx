@@ -82,7 +82,10 @@ export function EnquiryFormView({
     setNotice(null)
     const found = checkEnquiry(f, name, phone, values)
     setErrors(found)
-    if (Object.keys(found).length) return
+    if (Object.keys(found).length) {
+      focusFirstError(found)
+      return
+    }
     setBusy(true)
     try {
       const res = await onSend?.({
@@ -100,7 +103,10 @@ export function EnquiryFormView({
       })
       setDone({ redirect: res?.redirect_url ?? null })
     } catch (err) {
-      if (err instanceof EnquirySendError && Object.keys(err.fields).length) setErrors(err.fields)
+      if (err instanceof EnquirySendError && Object.keys(err.fields).length) {
+        setErrors(err.fields)
+        focusFirstError(err.fields)
+      }
       else setNotice(err instanceof Error ? err.message : 'We could not send this. Please try again.')
     } finally {
       setBusy(false)
@@ -191,6 +197,7 @@ export function EnquiryFormView({
                       className="[&_button]:h-12"
                       value={values.event_type ?? ''}
                       aria-invalid={!!errors.event_type}
+                      aria-describedby={errors.event_type ? 'enq-event-note' : undefined}
                       onChange={(e) => set('event_type')(e.target.value)}
                     >
                       <option value="">Choose</option>
@@ -209,6 +216,8 @@ export function EnquiryFormView({
                       type="date"
                       className="h-12"
                       value={values.event_date ?? ''}
+                      aria-invalid={!!errors.event_date}
+                      aria-describedby={errors.event_date ? 'enq-date-note' : undefined}
                       onChange={(e) => set('event_date')(e.target.value)}
                     />
                   </Field>
@@ -225,13 +234,20 @@ export function EnquiryFormView({
                   className="h-12"
                   value={values.city ?? ''}
                   aria-invalid={!!errors.city}
+                  aria-describedby={errors.city ? 'enq-city-note' : undefined}
                   onChange={(e) => set('city')(e.target.value)}
                 />
               </Field>
             )}
 
             {f.services !== 'off' && services.length > 0 && (
-              <fieldset className="flex flex-col gap-1.5">
+              <fieldset
+                id="enq-services"
+                tabIndex={-1}
+                aria-describedby="enq-services-note"
+                aria-invalid={!!errors.services}
+                className="flex flex-col gap-1.5 outline-none"
+              >
                 <legend className="mb-1.5 text-sm font-semibold">{label('services')}</legend>
                 <div className="flex flex-wrap gap-2">
                   {services.map((s) => {
@@ -260,7 +276,7 @@ export function EnquiryFormView({
                     )
                   })}
                 </div>
-                <p className={cn('text-xs', errors.services ? 'text-destructive' : 'text-muted-foreground')}>
+                <p id="enq-services-note" className={cn('text-xs', errors.services ? 'text-destructive' : 'text-muted-foreground')}>
                   {errors.services ?? 'Tick all that apply.'}
                 </p>
               </fieldset>
@@ -277,6 +293,7 @@ export function EnquiryFormView({
                       className="h-12 tabular-nums"
                       value={values.guests ?? ''}
                       aria-invalid={!!errors.guests}
+                      aria-describedby={errors.guests ? 'enq-guests-note' : undefined}
                       onChange={(e) => set('guests')(e.target.value.replace(/[^\d]/g, ''))}
                     />
                   </Field>
@@ -290,6 +307,7 @@ export function EnquiryFormView({
                       className="h-12 tabular-nums"
                       value={values.budget ?? ''}
                       aria-invalid={!!errors.budget}
+                      aria-describedby={errors.budget ? 'enq-budget-note' : undefined}
                       onChange={(e) => set('budget')(e.target.value)}
                     />
                   </Field>
@@ -306,6 +324,7 @@ export function EnquiryFormView({
                   placeholder="Venue, number of people, what you're looking for"
                   value={values.message ?? ''}
                   aria-invalid={!!errors.message}
+                  aria-describedby={errors.message ? 'enq-msg-note' : undefined}
                   onChange={(e) => set('message')(e.target.value)}
                 />
               </Field>
@@ -337,6 +356,28 @@ export function EnquiryFormView({
       </section>
     </div>
   )
+}
+
+/** Each answer's box, in the order the form shows them. */
+const FIELD_IDS: [keyof FieldErrors, string][] = [
+  ['name', 'enq-name'],
+  ['phone', 'enq-phone'],
+  ['email', 'enq-email'],
+  ['event_type', 'enq-event'],
+  ['event_date', 'enq-date'],
+  ['city', 'enq-city'],
+  ['services', 'enq-services'],
+  ['guests', 'enq-guests'],
+  ['budget', 'enq-budget'],
+  ['message', 'enq-msg'],
+]
+
+/** Send refused: the cursor goes to the first answer to fix, so a phone scrolls to it. */
+function focusFirstError(errors: FieldErrors) {
+  const first = FIELD_IDS.find(([k]) => errors[k])
+  if (!first) return
+  // After the error text has been drawn, so the box is where it will stay.
+  window.requestAnimationFrame(() => document.getElementById(first[1])?.focus())
 }
 
 function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string | undefined; error?: string | undefined; children: ReactNode }) {

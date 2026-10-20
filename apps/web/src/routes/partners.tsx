@@ -3,7 +3,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { Archive, ArchiveRestore, ArrowLeft, Copy, Eye, Handshake, Link2Off, MessageCircle, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryPartner } from '@ipc/contracts'
-import { firstWord, formatIndianPhone, partnerPageText, splitKinds, whatsappUrl } from '@ipc/domain'
+import { firstWord, formatIndianPhone, partnerPageText, partnerQrText, splitKinds, topPartnerId, whatsappUrl } from '@ipc/domain'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -51,6 +51,7 @@ export function PartnersPage() {
     (t, p) => ({ scans: t.scans + p.scans, enquiries: t.enquiries + p.enquiries, booked: t.booked + p.booked }),
     { scans: 0, enquiries: 0, booked: 0 },
   )
+  const top = topPartnerId(rows)
 
   return (
     <>
@@ -127,7 +128,7 @@ export function PartnersPage() {
               <Card>
                 <ul className="divide-y divide-border">
                   {rows.map((p) => (
-                    <PartnerRow key={p.id} partner={p} studio={studio} />
+                    <PartnerRow key={p.id} partner={p} studio={studio} top={tab === 'live' && p.id === top} />
                   ))}
                 </ul>
               </Card>
@@ -155,6 +156,7 @@ export function PartnerPage() {
 function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner; studio: string; formOn: boolean }) {
   const [editing, setEditing] = useState(false)
   const update = useUpdatePartner(p.id)
+  const confirm = useConfirm()
   const ended = !!p.archived_at
   const kinds = splitKinds(p.label).join(', ')
   const vendor = p.vendor_name && p.vendor_name.toLowerCase() !== p.name.toLowerCase() ? `Vendor: ${p.vendor_name}` : null
@@ -214,8 +216,13 @@ function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner
                     enquiry is marked as theirs.
                   </p>
                   <QrDownloadButtons url={p.form_url} studio={studio} partner={p.name} />
-                  <div className="flex items-center gap-2">
-                    <p className="min-w-0 flex-1 break-all rounded-xl bg-muted/60 px-3 py-2 text-xs font-bold">{p.form_url}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 basis-56 break-all rounded-xl bg-muted/60 px-3 py-2 text-xs font-bold">{p.form_url}</p>
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={whatsappUrl(p.phone, partnerQrText(p.name, studio, p.form_url))} target="_blank" rel="noreferrer">
+                        <MessageCircle /> Send on WhatsApp
+                      </a>
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => void copyText(p.form_url)}>
                       <Copy /> Copy
                     </Button>
@@ -232,16 +239,25 @@ function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner
           variant="ghost"
           className="self-start"
           disabled={update.isPending}
-          onClick={() =>
+          onClick={async () => {
+            if (!ended) {
+              const ok = await confirm({
+                title: `End the partnership with ${p.name}?`,
+                description: 'Their QR still opens your form, but new enquiries are not marked as theirs, and their page stops working.',
+                confirmLabel: 'End partnership',
+                destructive: true,
+              })
+              if (!ok) return
+            }
             update.mutate(
               { archived: !ended },
               {
                 onSuccess: () =>
-                  toast.success(ended ? `${p.name} is back` : 'Partnership ended. Their QR still opens your form, uncredited.'),
+                  toast.success(ended ? `${p.name} is back` : 'Partnership ended. Their page is off and their QR is no longer credited.'),
                 onError: (e) => toast.error(e.message || 'We could not save that.'),
               },
             )
-          }
+          }}
         >
           {ended ? <ArchiveRestore /> : <Archive />} {ended ? 'Bring back' : 'End partnership'}
         </Button>
@@ -305,7 +321,15 @@ function TheirPageCard({ partner: p, studio }: { partner: EnquiryPartner; studio
                 variant="ghost"
                 className="hover:text-destructive"
                 disabled={sharing.isPending}
-                onClick={() => sharing.mutate(false, { onSuccess: () => toast.success('Sharing stopped. Their link no longer works.') })}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Stop sharing with ${first}?`,
+                    description: 'Their page link stops working at once. You can make a new one later.',
+                    confirmLabel: 'Stop sharing',
+                    destructive: true,
+                  })
+                  if (ok) sharing.mutate(false, { onSuccess: () => toast.success('Sharing stopped. Their link no longer works.') })
+                }}
               >
                 <Link2Off /> Stop sharing
               </Button>
@@ -324,7 +348,12 @@ function TheirPageCard({ partner: p, studio }: { partner: EnquiryPartner; studio
           <Switch
             checked={p.show_phone}
             disabled={update.isPending}
-            onChange={(v) => update.mutate({ show_phone: v })}
+            onChange={(v) =>
+              update.mutate(
+                { show_phone: v },
+                { onError: (e) => toast.error(e.message || 'We could not save that. Please try again.') },
+              )
+            }
             label="Show full contact details"
             description={
               p.show_phone

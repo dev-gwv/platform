@@ -97,3 +97,49 @@ export const splitKinds = (label: string | null | undefined): string[] =>
     .split(',')
     .map((k) => k.trim())
     .filter(Boolean)
+
+/** The studio sending a partner their own QR link, to share or print. */
+export const partnerQrText = (partner: string, studio: string, link: string): string =>
+  `Hi ${firstWord(partner)}, here is ${studio}'s enquiry link for your counter. ` +
+  `Every enquiry through it is marked as yours: ${link}`
+
+/** "today", "yesterday", "4 days ago", "3 weeks ago", "5 months ago". */
+export function agoWords(iso: string, now: Date = new Date()): string {
+  const days = Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 14) return `${days} days ago`
+  if (days < 60) return `${Math.round(days / 7)} weeks ago`
+  return `${Math.round(days / 30)} months ago`
+}
+
+type PartnerFigures = {
+  scans: number
+  enquiries: number
+  booked: number
+  last_enquiry_at?: string | null | undefined
+  page_viewed_at?: string | null | undefined
+}
+
+/**
+ * One partner as a sentence (owner, 20 Oct audit): "12 scans · 4 enquiries ·
+ * 1 booked (25%) · last one 4 days ago · saw their page yesterday".
+ */
+export function partnerLine(p: PartnerFigures, now: Date = new Date()): string {
+  const parts = [`${p.scans} ${p.scans === 1 ? 'scan' : 'scans'}`, `${p.enquiries} ${p.enquiries === 1 ? 'enquiry' : 'enquiries'}`]
+  if (p.booked > 0) parts.push(`${p.booked} booked${p.enquiries > 0 ? ` (${Math.round((p.booked / p.enquiries) * 100)}%)` : ''}`)
+  if (p.last_enquiry_at) parts.push(`last one ${agoWords(p.last_enquiry_at, now)}`)
+  if (p.page_viewed_at) parts.push(`saw their page ${agoWords(p.page_viewed_at, now)}`)
+  return parts.join(' · ')
+}
+
+/** The partner who brought the most bookings (then enquiries), when anyone has booked at all. */
+export function topPartnerId<T extends { id: string; booked: number; enquiries: number }>(rows: readonly T[]): string | null {
+  let top: T | null = null
+  for (const r of rows) {
+    if (r.booked <= 0) continue
+    if (!top || r.booked > top.booked || (r.booked === top.booked && r.enquiries > top.enquiries)) top = r
+  }
+  return rows.length > 1 && top ? top.id : null
+}
+
