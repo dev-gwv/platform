@@ -16,6 +16,7 @@ import { ConfirmProvider } from '@/shared/ui/confirm'
 import { router } from '@/app/router'
 import { ApiError } from '@/shared/api/client'
 import { registerPwa } from '@/shared/pwa/install'
+import { watchForNewRelease } from '@/shared/pwa/update'
 
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
@@ -91,6 +92,10 @@ window.addEventListener('vite:preloadError', (event) => {
 
 // Home-screen install (no caching; see public/sw.js).
 if (!MOCK_ENABLED) registerPwa()
+
+// A tab left open for days moves to the newest release on its next link tap
+// (see shared/pwa/update.ts).
+if (!MOCK_ENABLED) watchForNewRelease((cb) => router.subscribe('onBeforeNavigate', (e) => cb(e.toLocation.href)))
 
 // A referral link (?studio_ref=) on any page is remembered for sign-up.
 captureStudioRef()
