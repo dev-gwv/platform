@@ -12,6 +12,7 @@ import {
   type RouteComponent,
 } from '@tanstack/react-router'
 import { RouteError } from '@/shared/layout/RouteError'
+import { PagePending } from '@/shared/layout/PagePending'
 import { LEGACY_AUTHED_PATHS, LEGACY_PUBLIC_PATHS, legacyTarget } from './legacy-links'
 import { RequireAuth } from '@/shared/auth/guards'
 import { AppShell } from '@/shared/layout/AppShell'
@@ -392,6 +393,9 @@ export const router = createRouter({
   // A screen that breaks says so in plain words, with a way on, and keeps the
   // menu around it -- never the bare "Something went wrong!".
   defaultErrorComponent: RouteError,
+  // A page whose file is slow to arrive shows a spinner, then Reload -- never
+  // a blank white screen.
+  defaultPendingComponent: PagePending,
 })
 
 function NotFound() {

@@ -77,9 +77,31 @@ export function initSentry(router: unknown): boolean {
       /^ResizeObserver loop/,
       /extension:\/\//,
     ],
+
+    beforeSend(event) {
+      // A tab open across a deploy asks for page files the deploy removed.
+      // Each missing file used to file its own issue, named after the file
+      // ("…follow-ups-Ia-SCERZ.js"), so one deploy looked like a dozen new
+      // bugs. They are one thing, and the app reloads itself onto the new
+      // release, so they become one warning.
+      if (isStaleChunk(event)) {
+        event.fingerprint = ['stale-chunk-after-deploy']
+        event.level = 'warning'
+        event.tags = { ...event.tags, stale_chunk: 'yes' }
+      }
+      return event
+    },
   })
 
   return true
+}
+
+/** What each browser says when a page file is gone (Chrome, Safari, Firefox, a CSS preload). */
+export const STALE_CHUNK =
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|is not a valid JavaScript MIME type/i
+
+function isStaleChunk(event: Sentry.ErrorEvent): boolean {
+  return (event.exception?.values ?? []).some((v) => STALE_CHUNK.test(`${v.type ?? ''}: ${v.value ?? ''}`))
 }
 
 /**
