@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { PartnerChip } from '../PartnerChip'
 import { Archive, Flame } from 'lucide-react'
 import type { CrmLead, InboxColumn, LeadStatus } from '@ipc/contracts'
 import { stageLabel } from '@ipc/domain'
@@ -249,6 +250,7 @@ export function LeadTable({
               {l.phone ?? '—'}
               {l.crm_company_name ? ` · ${l.crm_company_name}` : ''}
             </span>
+            {l.partner_name && <PartnerChip name={l.partner_name} className="mt-1" />}
             {/*
               * What Privyr's row carries and ours did not: a line of the notes.
               * A list of names answers "who"; the question a studio actually

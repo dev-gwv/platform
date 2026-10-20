@@ -12,9 +12,11 @@ export interface LeadFacets {
   quality: string[]
   tag: string[]
   source: string[]
+  /** The partner whose QR code brought the lead in (0274). */
+  partner: string[]
 }
 
-export const NO_FACETS: LeadFacets = { stage: [], owner: [], event: [], quality: [], tag: [], source: [] }
+export const NO_FACETS: LeadFacets = { stage: [], owner: [], event: [], quality: [], tag: [], source: [], partner: [] }
 
 /** The value a lead carries for a facet; '' stands for "none". */
 export const UNSET = '__none'
@@ -37,6 +39,8 @@ function facetValues(l: CrmLead, f: keyof LeadFacets): string[] {
       return [one(l.quality)]
     case 'source':
       return [one(l.source)]
+    case 'partner':
+      return [one(l.partner_id)]
     case 'tag':
       return l.tags.length ? l.tags.map((t) => t.id) : [UNSET]
   }

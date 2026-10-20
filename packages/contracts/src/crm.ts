@@ -125,6 +125,9 @@ export const crmLead = z.object({
   assignee_name: z.string().nullable(),
   /** The lead source it arrived through, e.g. the vendor whose QR was scanned. */
   source_label: z.string().nullable().default(null),
+  /** The partner or vendor whose QR code brought this lead in (0274), and their name. */
+  partner_id: uuid.nullable().default(null),
+  partner_name: z.string().nullable().default(null),
   notes: z.string().nullable(),
   /** The next promised contact. Null means nobody has agreed to call back. */
   follow_up_at: isoDateTime.nullable(),

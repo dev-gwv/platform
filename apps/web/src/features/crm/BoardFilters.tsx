@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { CalendarHeart, Flame, Layers, Megaphone, Tag, User, X } from 'lucide-react'
+import { CalendarHeart, Flame, Handshake, Layers, Megaphone, Tag, User, X } from 'lucide-react'
 import type { CrmLead } from '@ipc/contracts'
 import { MultiSelectFilter, type FilterOption } from '@/shared/ui/multi-select-filter'
 import { toneVar, type ToneName } from '@/shared/ui/tones'
@@ -19,6 +19,7 @@ const LABEL: Record<keyof LeadFacets, string> = {
   quality: 'qualities',
   tag: 'labels',
   source: 'sources',
+  partner: 'partners',
 }
 
 /** Colours handed round new values, so five new qualities are not five blues. */
@@ -109,6 +110,14 @@ export function BoardFilters({
       quality: withNone('quality', qualities.map((q) => ({ value: q.value, label: q.label, color: toneVar(q.color) })), 'Not rated'),
       tag: withNone('tag', (tags.data ?? []).map((t) => ({ value: t.id, label: t.name, color: toneVar(t.color) })), 'No labels'),
       source: withNone('source', sources.map((q) => ({ value: q.value, label: q.label, color: q.color ? toneVar(q.color) : undefined })), 'No source'),
+      // Partners as the leads name them; "Not from a partner" for the rest.
+      partner: withNone(
+        'partner',
+        [...new Map(leads.filter((l) => l.partner_id && l.partner_name).map((l) => [l.partner_id!, l.partner_name!])).entries()]
+          .map(([value, label]) => ({ value, label, color: toneVar('teal') }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+        'Not from a partner',
+      ),
     } satisfies Record<keyof LeadFacets, FilterOption[]>
   }, [leads, pipelines.data, members.data, tags.data, qualities, sources, events])
 
@@ -126,6 +135,9 @@ export function BoardFilters({
         <MultiSelectFilter label={LABEL.owner} icon={User} options={options.owner} selected={value.owner} onChange={set('owner')} />
         <MultiSelectFilter label={LABEL.tag} icon={Tag} options={options.tag} selected={value.tag} onChange={set('tag')} onCreate={create.tag} noun="label" />
         <MultiSelectFilter label={LABEL.source} icon={Megaphone} options={options.source} selected={value.source} onChange={set('source')} onCreate={create.source} noun="source" />
+        {options.partner.some((o) => o.value !== UNSET) && (
+          <MultiSelectFilter label={LABEL.partner} icon={Handshake} options={options.partner} selected={value.partner} onChange={set('partner')} />
+        )}
       </div>
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -144,7 +156,7 @@ export function BoardFilters({
           {activeFacetCount(value) > 0 && (
             <button
               type="button"
-              onClick={() => onChange({ stage: [], owner: [], event: [], quality: [], tag: [], source: [] })}
+              onClick={() => onChange({ stage: [], owner: [], event: [], quality: [], tag: [], source: [], partner: [] })}
               className="text-xs font-medium text-primary hover:underline"
             >
               Clear all

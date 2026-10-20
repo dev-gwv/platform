@@ -35,6 +35,9 @@ const selectLead = (sql: TransactionSql) => sql`
          (select p.name from projects p where p.id = l.converted_project_id) as converted_project_name,
          -- Which lead source (a vendor's QR, say) brought this lead in.
          (select ws.label from crm_webhook_sources ws where ws.source_key = l.source_key) as source_label,
+         -- The partner whose QR code it came through (0274), named on the card.
+         l.partner_id,
+         (select pt.name from enquiry_partners pt where pt.id = l.partner_id) as partner_name,
          -- Is the studio free on this lead's date? Derived in one pass by
          -- 0193 rather than per row, and joined here so the list and the
          -- single-lead read can never disagree about it.
