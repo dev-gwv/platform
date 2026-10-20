@@ -162,6 +162,11 @@ describe('plan limits from the billing date (0242)', () => {
     await expect(q(`update enquiry_forms set archived_at = null where id = $1`, [a!.id])).rejects.toThrow(/1 enquiry forms/)
   })
 
+  it('still makes the main enquiry form for a studio at its form limit (0275)', async () => {
+    const [m] = await q<{ is_main: boolean }>(`select is_main from enquiry_main_form_for($1)`, [TIGHT])
+    expect(m!.is_main).toBe(true)
+  })
+
   it('connects one Facebook Page, keeps one package (the sample is free) and 1 MB of uploads', async () => {
     await q(`insert into fb_pages (company_id, page_id, page_name) values ($1, 'p1', 'Main'), ($1, 'p2', 'Second')`, [TIGHT])
     await q(`update fb_pages set is_connected = true where company_id = $1 and page_id = 'p1'`, [TIGHT])
