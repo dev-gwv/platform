@@ -1892,6 +1892,10 @@ const rawLeads = [
     phone: '9876500002',
     email: null,
     source: 'webform',
+    // Came through a partner's QR code (0274): the card says "via Riya Boutique".
+    source_label: 'Enquiry form',
+    partner_id: '00000000-0000-4000-8000-0000000008f1',
+    partner_name: 'Riya Boutique',
     status: 'contacted',
     assigned_to: uid(0xe3),
     assignee_name: 'Sana',

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { PartnerChip } from './PartnerChip'
 import { useDraggable } from '@dnd-kit/core'
 import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
 import type { CrmLead } from '@ipc/contracts'
@@ -131,7 +132,11 @@ export function DealCard({
         }}
         className="block w-full text-left"
       >
-        {origin && <span className="micro-label mb-1 block truncate">{origin}</span>}
+        {lead.partner_name ? (
+          <PartnerChip name={lead.partner_name} className="mb-1" />
+        ) : (
+          origin && <span className="micro-label mb-1 block truncate">{origin}</span>
+        )}
 
         <span className="flex items-center gap-2">
           {/* What kind of shoot, at a glance: the haldi sun, the wedding heart. */}

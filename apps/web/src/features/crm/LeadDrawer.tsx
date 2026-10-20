@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PartnerChip } from './PartnerChip'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
@@ -197,7 +198,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
         */}
       <SheetContent
         title={lead.name ?? 'Unnamed lead'}
-        description={`${prettyWord(lead.source)}${lead.source_label ? ` via ${lead.source_label}` : ''} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
+        description={`${prettyWord(lead.source)}${lead.partner_name ? ` via ${lead.partner_name}` : lead.source_label ? ` via ${lead.source_label}` : ''} · added ${new Date(lead.created_at).toLocaleDateString('en-IN')}`}
       >
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6">
           {/*
@@ -211,6 +212,12 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 to be drawn here -- without it the drawer opened on a bare
                 phone number. */}
             <h2 className="text-xl font-semibold leading-tight tracking-tight">{lead.name ?? 'Unnamed lead'}</h2>
+            {/* Whose QR code brought them in, one tap to that partner's page (0274). */}
+            {lead.partner_id && lead.partner_name && (
+              <Link to="/follow-ups/partners/$id" params={{ id: lead.partner_id }} className="w-fit hover:opacity-80">
+                <PartnerChip name={lead.partner_name} />
+              </Link>
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
               {lead.phone ? (
                 <button
