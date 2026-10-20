@@ -170,7 +170,7 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
     const id = uuidParam(c)
     const rows = await attempt(c, 'enquiry_partners.leads', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select l.id, l.name, l.phone, l.status, l.event_type, l.event_date, l.created_at
+        select l.id, l.name, l.phone, l.email, l.status, l.event_type, l.event_date, l.created_at
           from crm_leads l
          where l.partner_id = ${id} and l.merged_into is null
          order by l.created_at desc

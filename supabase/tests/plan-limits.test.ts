@@ -267,7 +267,8 @@ describe('plan limits from the billing date (0242)', () => {
     // One set of Starter numbers, counted by the year, monthly or yearly (0267).
     expect(by['starter_yearly']!.limits).toMatchObject({ projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10 })
     expect(by['starter_monthly']!.limits).toEqual(by['starter_yearly']!.limits)
-    expect(by['pro_yearly']!.limits).toEqual({})
+    // Pro has every limit lifted but brands (0276): three studios on one login.
+    expect(by['pro_yearly']!.limits).toEqual({ brands: 3 })
     expect(by['max_yearly']!.limits).toEqual({})
     // The regular list (0262) carries the same limits as the member list.
     expect(by['starter_yearly_regular']!.limits).toEqual(by['starter_yearly']!.limits)

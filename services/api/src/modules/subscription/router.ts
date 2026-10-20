@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { planQuote, planUsage, diamondPhoneRequest, diamondPhoneResult,
+import { planQuote, planUsage, diamondPhoneRequest, diamondPhoneResult, brandsState, createBrandRequest, createBrandResponse,
   activateRequest,
   activateResponse,
   createOrderRequest,
@@ -117,6 +117,28 @@ export const subscriptionRouter = new Hono<AppEnv>()
         rows.map((r) => ({ ...r, credit: Number(r['credit'] ?? 0), amount: Number(r['amount'] ?? 0) })),
       ),
     )
+  })
+
+  /** Brands on one login (0276): how many there are and whether another may be added. */
+  .get('/brands', async (c) => {
+    const rows = await attempt(c, 'subscription.brands', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ v: unknown }[]>`select my_brands() as v`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not load your brands.')
+    return c.json(brandsState.parse(rows[0].v))
+  })
+
+  /** A new brand: a studio of its own on this login and this plan. The app switches to it. */
+  .post('/brands', requireOwner(), async (c) => {
+    const parsed = createBrandRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Give the brand a name of 2 to 80 letters.')
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'subscription.brands.create', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ id: string }[]>`select create_brand(${parsed.data.name}) as id`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not add the brand. Please try again.')
+    await audit(c, { action: 'company.brand_added', entityType: 'company', entityId: auth.companyId, after: { name: parsed.data.name } })
+    return c.json(createBrandResponse.parse({ profile_id: rows[0].id }))
   })
 
   /** The studio's plan, its limits and this month's use, for the bars on its Subscription page. */

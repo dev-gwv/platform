@@ -45,9 +45,13 @@ export const PLAN_LIMIT_KEYS = [
   'storage_mb',
 ] as const
 export type PlanLimitKey = (typeof PLAN_LIMIT_KEYS)[number]
-export const planLimits = z.object(
-  Object.fromEntries(PLAN_LIMIT_KEYS.map((k) => [k, z.number().int().optional()])) as Record<PlanLimitKey, z.ZodOptional<z.ZodNumber>>,
-)
+export const planLimits = z
+  .object(
+    Object.fromEntries(PLAN_LIMIT_KEYS.map((k) => [k, z.number().int().optional()])) as Record<PlanLimitKey, z.ZodOptional<z.ZodNumber>>,
+  )
+  // Studios (brands) on one login (0276): Starter 1, Pro 3, Studio Max no key = unlimited.
+  // Not a usage bar: it is counted across the login's studios, not in one.
+  .extend({ brands: z.number().int().optional() })
 export type PlanLimits = z.infer<typeof planLimits>
 
 /** The studio's plan, its limits, what it has used and its plan year (my_plan_usage, 0242). */
@@ -206,3 +210,23 @@ export const myOffer = z
   .nullable()
 export type MyOffer = z.infer<typeof myOffer>
 export const offerMarkRequest = z.object({ kind: z.enum(['seen', 'asked']) })
+
+// ── brands on one login (0276) ────────────────────────────────────
+/** How many studios (brands) the login runs and the plan allows; limit null is no limit. */
+export const brandsState = z.object({
+  used: z.number().int(),
+  limit: z.number().int().nullable(),
+  is_owner: z.boolean(),
+  can_add: z.boolean(),
+  plan_name: z.string().nullable().default(null),
+  plan_tier: z.string().nullable().default(null),
+})
+export type BrandsState = z.infer<typeof brandsState>
+
+export const createBrandRequest = z.object({
+  name: z.string().trim().min(2, 'Give the brand a name.').max(80),
+})
+export type CreateBrandRequest = z.infer<typeof createBrandRequest>
+
+/** The new brand's owner profile; the app switches to it. */
+export const createBrandResponse = z.object({ profile_id: z.string().uuid() })

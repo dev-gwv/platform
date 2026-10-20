@@ -1066,6 +1066,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { status: String((body as { status?: string }).status ?? 'accepted') }
   if (method === 'DELETE' && path.startsWith('/crm/quotes/')) return {}
   if (method === 'GET' && path === '/crm/prefs') return crmPrefsFx
+  if (method === 'GET' && path === '/subscription/brands') return { used: 1, limit: 3, is_owner: true, can_add: true, plan_name: 'Diamond Pro', plan_tier: 'pro' }
   if (method === 'PUT' && path === '/crm/prefs') return { ...crmPrefsFx, ...(body as Record<string, unknown>) }
   if (method === 'GET' && path.startsWith('/public/quote/')) return publicQuoteFx
   if (method === 'POST' && path.includes('/public/quote/')) return { ok: true }
@@ -1554,7 +1555,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Every feature, no limits', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
     },
     {
       id: uid(0xa01 + i * 2 + (member ? 0x10 : 0)),
@@ -1568,7 +1569,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Everything unlimited'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Every feature, no limits', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
     },
   ])
 }
@@ -3945,9 +3946,9 @@ const publicEnquiryFx = {
   partner: null, goes_to: 'whatsapp',
 }
 const publicPartnerFx = {
-  studio: 'Asha Studio', form_name: 'Riya Boutique', city: 'Jaipur', logo_url: null, scans: 12, enquiries: 2, booked: 1,
+  studio: 'Asha Studio', form_name: 'Riya Boutique', city: 'Jaipur', logo_url: null, scans: 12, enquiries: 2, booked: 1, full_details: true,
   leads: [
-    { name: 'Meera Joshi', phone: '98xxxxx001', enquired_on: '2026-10-18T09:00:00Z', event_type: 'Wedding', event_date: '2027-02-14', status: 'New' },
-    { name: 'Neha Gupta', phone: '98xxxxx011', enquired_on: '2026-10-02T09:00:00Z', event_type: 'Engagement / Roka', event_date: '2026-12-02', status: 'Booked' },
+    { name: 'Meera Joshi', phone: '+919810000001', email: 'meera@example.com', city: 'Jaipur', enquired_on: '2026-10-18T09:00:00Z', event_type: 'Wedding', event_date: '2027-02-14', status: 'New' },
+    { name: 'Neha Gupta', phone: '+919822200011', email: null, city: 'Udaipur', enquired_on: '2026-10-02T09:00:00Z', event_type: 'Engagement / Roka', event_date: '2026-12-02', status: 'Booked' },
   ],
 }

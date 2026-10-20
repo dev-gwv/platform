@@ -12,6 +12,7 @@ import { cn } from '../ui/cn'
 import { humanize } from '../ui/format'
 import { useInstall } from '../pwa/install'
 import { useTheme } from '../theme/ThemeProvider'
+import { AddBrandDialog, BrandsMenuItem } from '@/features/billing/brands'
 
 /**
  * Who you are signed in as, and the two or three things you do about it.
@@ -29,6 +30,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   const access = useAccess()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  const [addingBrand, setAddingBrand] = useState(false)
   const install = useInstall()
   const { scheme, toggleScheme } = useTheme()
   const root = useRef<HTMLDivElement>(null)
@@ -69,6 +71,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <div ref={root} className="relative">
+      {addingBrand && <AddBrandDialog onClose={() => setAddingBrand(false)} />}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -102,6 +105,15 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
           {session.studios.length > 1 && (
             <StudioSwitcher studios={session.studios} current={session.user_id} />
           )}
+
+          {/* More than one brand on this login, by plan (0276). */}
+          <BrandsMenuItem
+            onPicked={() => setOpen(false)}
+            onAdd={() => {
+              setOpen(false)
+              setAddingBrand(true)
+            }}
+          />
 
           <div className="border-t border-border p-1.5">
             <Item to="/profile" icon={UserRound} label="My profile" />

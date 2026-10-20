@@ -242,7 +242,7 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
     const id = uuidParam(c)
     const rows = await attempt(c, 'enquiry_forms.leads', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`
-        select l.id, l.name, l.phone, l.status, l.event_type, l.event_date, l.created_at
+        select l.id, l.name, l.phone, l.email, l.status, l.event_type, l.event_date, l.created_at
           from enquiry_forms f
           join crm_webhook_sources s on s.id = f.source_id
           join crm_leads l on l.company_id = f.company_id and l.source_key = s.source_key

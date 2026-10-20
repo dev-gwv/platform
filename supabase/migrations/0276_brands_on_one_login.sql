@@ -30,6 +30,16 @@ update plans set limits = coalesce(limits, '{}'::jsonb) || '{"brands": 1}'::json
 update plans set limits = coalesce(limits, '{}'::jsonb) || '{"brands": 3}'::jsonb where tier = 'pro';
 update plans set limits = coalesce(limits, '{}'::jsonb) - 'brands' where tier = 'max';
 
+-- And on the cards, Diamond and regular alike (a card keeps at most three lines).
+update plans
+   set features = jsonb_build_array('Unlimited projects, leads and team', 'Every feature, no limits', 'Up to 3 brands on one login'),
+       updated_at = now()
+ where tier = 'pro';
+update plans
+   set features = jsonb_build_array('Everything unlimited, as many brands as you like', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'),
+       updated_at = now()
+ where tier = 'max';
+
 /** The studio whose plan a brand rides on: itself, unless it is a brand. */
 create or replace function brand_root(p_company uuid)
 returns uuid

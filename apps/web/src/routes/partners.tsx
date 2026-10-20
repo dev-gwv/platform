@@ -325,11 +325,11 @@ function TheirPageCard({ partner: p, studio }: { partner: EnquiryPartner; studio
             checked={p.show_phone}
             disabled={update.isPending}
             onChange={(v) => update.mutate({ show_phone: v })}
-            label="Show full phone numbers"
+            label="Show full contact details"
             description={
               p.show_phone
-                ? "They see each client's number in full."
-                : 'Numbers show as 98xxxxx123, enough to recognise, not to call.'
+                ? "They see each client's number and email in full."
+                : 'Numbers show as 98xxxxx123 and no email, enough to recognise, not to call.'
             }
           />
         </div>

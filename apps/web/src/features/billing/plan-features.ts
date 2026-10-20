@@ -37,12 +37,14 @@ const limitCell = (key: PlanLimitKey) => (p: Plan): Cell => {
 
 const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: 'yes' } : { kind: 'no' })
 
-/** Only the rows that differ between plans, at most nine. */
+/** Only the rows that differ between plans, at most ten. */
 export const COMPARE: CompareRow[] = [
   { label: 'Projects', cell: limitCell('projects') },
   { label: 'Leads (enquiries always come in)', cell: limitCell('leads') },
   { label: 'GST invoices', cell: limitCell('invoices') },
   { label: 'Team logins', cell: limitCell('team_logins') },
+  // 0276: more than one studio (a maternity brand beside the wedding one) on one login.
+  { label: 'Brands on one login', cell: (p) => ({ kind: 'text', text: p.limits?.brands == null ? 'Unlimited' : String(p.limits.brands) }) },
   { label: 'Crew (no login)', cell: limitCell('team_members') },
   { label: 'Enquiry forms', cell: limitCell('enquiry_forms') },
   { label: 'Facebook Pages', cell: limitCell('facebook_pages') },
