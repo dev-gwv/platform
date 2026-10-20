@@ -44,6 +44,7 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
     phone: tenOf(form.whatsapp_phone),
     text: form.whatsapp_text ?? '',
     link: form.redirect_url ?? '',
+    thanks: form.thank_you ?? '',
   }
   const [v, setV] = useState(start)
   const [error, setError] = useState<{ field: string; text: string } | null>(null)
@@ -58,6 +59,7 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
         whatsapp_phone: v.phone.trim() ? v.phone : null,
         whatsapp_text: v.text.trim() || null,
         redirect_url: v.link.trim() || null,
+        thank_you: v.thanks.trim() || null,
       },
       {
         onSuccess: () =>
@@ -193,9 +195,20 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
         )}
 
         {v.after === 'thanks' && (
-          <p className="text-sm text-muted-foreground">
-            They see "Thank you! {studio} has your details and will get in touch with you soon."
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="thanks-text" className="font-semibold">
+              What they see
+            </Label>
+            {/* The same words the form shows after Send (EnquiryFormView), editable here. */}
+            <Textarea
+              id="thanks-text"
+              rows={2}
+              maxLength={300}
+              placeholder={`${studio} has your details and will get in touch with you soon.`}
+              value={v.thanks}
+              onChange={(e) => setV((x) => ({ ...x, thanks: e.target.value }))}
+            />
+          </div>
         )}
 
         {changed && (

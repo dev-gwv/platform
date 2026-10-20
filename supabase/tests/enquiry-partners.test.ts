@@ -193,6 +193,48 @@ describe('the main form (0274)', () => {
     expect(gone!.doc).toBeNull()
   })
 
+  it('credits a partner on a repeat enquiry, and leaves archived leads out of every count (0278)', async () => {
+    const partner = await asUser(OWNER, async () => {
+      const [p] = await q<{ id: string; code: string }>(
+        `select id, code from create_enquiry_partner('Sona Decor', 'Decorator', '9812300011', null, null, 'sonatoken_abcdefghijklmnopq')`,
+      )
+      return p!
+    })
+    const page = async () =>
+      (await q<{ doc: { enquiries: number; leads: { name: string }[] } }>(`select enquiry_partner_page('sonatoken_abcdefghijklmnopq') as doc`))[0]!.doc
+    const stats = async () =>
+      (await q<{ enquiries: number }>(`select enquiries from enquiry_partner_stats where partner_id = $1`, [partner.id]))[0]!.enquiries
+    const formCount = async () =>
+      (await q<{ enquiries: number }>(`select enquiries from enquiry_form_stats where form_id = $1`, [main.id]))[0]!.enquiries
+    const before = await formCount()
+
+    // Priya's lead is open and came in without a partner: one lead, now Sona's.
+    const again = await send(main.slug, { name: 'Priya S', phone: '9811122233', email: 'p@test.in' }, partner.code)
+    expect(again.created).toBe(false)
+    const [lead] = await q<{ partner_id: string }>(`select partner_id from crm_leads where id = $1`, [again.lead_id])
+    expect(lead!.partner_id).toBe(partner.id)
+    expect((await page()).enquiries).toBe(1)
+    expect(await stats()).toBe(1)
+    // A partner's lead is the partner's, not the main form's.
+    expect(await formCount()).toBe(before - 1)
+
+    // A new number through the same QR, then archived: gone from every count.
+    const fresh = await send(main.slug, { name: 'Isha', phone: '9822211100', email: 'i@test.in' }, partner.code)
+    expect((await page()).enquiries).toBe(2)
+    await q(`update crm_leads set is_archived = true where id = $1`, [fresh.lead_id])
+    expect((await page()).enquiries).toBe(1)
+    expect((await page()).leads.map((l) => l.name)).toEqual(['Priya Sharma'])
+    expect(await stats()).toBe(1)
+
+    // A refresh in the same visit is not another scan; the partner still shows.
+    const scans = async () => (await q<{ scans: number }>(`select scans from enquiry_partners where id = $1`, [partner.id]))[0]!.scans
+    await q(`select enquiry_public($1, $2) as doc`, [main.slug, partner.code])
+    const once = await scans()
+    const [again2] = await q<{ doc: { partner: string } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, partner.code])
+    expect(again2!.doc.partner).toBe('Sona Decor')
+    expect(await scans()).toBe(once)
+  })
+
   it('shows nothing when the form is switched off', async () => {
     await q(`update enquiry_forms set is_active = false where id = $1`, [main.id])
     const [r] = await q<{ doc: unknown }>(`select enquiry_public($1) as doc`, [main.slug])

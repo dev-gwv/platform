@@ -213,6 +213,8 @@ export const enquiryPartner = z.object({
   enquiries: z.number().int(),
   booked: z.number().int(),
   last_enquiry_at: isoDateTime.nullable(),
+  /** When the partner last opened their private page (0274). */
+  page_viewed_at: isoDateTime.nullish(),
   archived_at: isoDateTime.nullable(),
   created_at: isoDateTime,
   /** The main form with ?p=<code>: what their QR opens. */

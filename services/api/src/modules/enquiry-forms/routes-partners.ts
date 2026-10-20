@@ -29,7 +29,7 @@ import { appBase, canManageLeads, mainFormRow } from './shared'
 const selectPartners = (sql: TransactionSql) => sql`
   select p.id, p.name, p.label, p.party_id, v.name as vendor_name, p.phone, p.notes, p.code, p.view_token,
          p.show_phone, p.scans, coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
-         st.last_enquiry_at, p.archived_at, p.created_at
+         st.last_enquiry_at, p.page_viewed_at, p.archived_at, p.created_at
     from enquiry_partners p
     left join parties v on v.id = p.party_id
     left join enquiry_partner_stats st on st.partner_id = p.id`
@@ -172,7 +172,7 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, (sql) => sql`
         select l.id, l.name, l.phone, l.email, l.status, l.event_type, l.event_date, l.created_at
           from crm_leads l
-         where l.partner_id = ${id} and l.merged_into is null
+         where l.partner_id = ${id} and l.merged_into is null and coalesce(l.is_archived, false) = false
          order by l.created_at desc
          limit 500`),
     )

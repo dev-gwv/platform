@@ -340,13 +340,15 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
 
   /**
    * The form (0274), by its code or readable link, through a partner's QR
-   * with ?p=. Counts one scan; 404 when it is off or the link is wrong.
+   * with ?p=. Counts one scan, unless the page says it already counted this
+   * visit (?seen=1, 0278); 404 when it is off or the link is wrong.
    */
   .get('/forms/:key', async (c) => {
     const key = formKey(c)
     const p = partnerCode(c.req.query('p'))
+    const count = c.req.query('seen') !== '1'
     const rows = await attempt(c, 'enquiry_forms.public_get_v2', () =>
-      withService(c.env, (sql) => sql<{ doc: unknown }[]>`select enquiry_public(${key}, ${p}) as doc`),
+      withService(c.env, (sql) => sql<{ doc: unknown }[]>`select enquiry_public(${key}, ${p}, ${count}) as doc`),
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]?.doc) fail(404, NOT_OPEN)

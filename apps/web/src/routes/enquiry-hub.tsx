@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ChevronRight, Code2, Copy, ExternalLink, Handshake, ListChecks, MessageCircle, Pencil, Plus, QrCode, Send, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryForm, EnquiryHub } from '@ipc/contracts'
-import { formShareText, whatsappUrl } from '@ipc/domain'
+import { formShareText, partnerCounts, topPartnerId, whatsappUrl } from '@ipc/domain'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
@@ -14,6 +14,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { Switch } from '@/shared/ui/switch'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useConfirm } from '@/shared/ui/confirm'
 import {
   useEnquiryForms,
   useEnquiryHub,
@@ -55,7 +56,8 @@ const TABS: Tab[] = ['qr', 'partners', 'after', 'questions']
 
 function Hub({ hub }: { hub: EnquiryHub }) {
   const { form, studio, can_manage: canManage } = hub
-  const partners = usePartners()
+  // Staff see the QR only, and the partners list is not theirs to read.
+  const partners = usePartners(false, canManage)
   const [raw, setTab] = useUrlParam('tab', 'qr')
   const tab: Tab = canManage && TABS.includes(raw as Tab) ? (raw as Tab) : 'qr'
   const [adding, setAdding] = useState(false)
@@ -117,7 +119,20 @@ function Hub({ hub }: { hub: EnquiryHub }) {
 /** Is the form taking enquiries? A switch in the header for those who run it, a dot for staff. */
 function OnOff({ form, canManage }: { form: EnquiryForm; canManage: boolean }) {
   const update = useUpdateEnquiryForm(form.id)
+  const confirm = useConfirm()
   const on = form.is_active
+  const flip = async (v: boolean) => {
+    if (!v) {
+      const ok = await confirm({
+        title: 'Switch the form off?',
+        description: 'Your link and every partner QR code will show a "not available" page until you switch it on again.',
+        confirmLabel: 'Switch off',
+        destructive: true,
+      })
+      if (!ok) return
+    }
+    update.mutate({ is_active: v }, { onSuccess: () => toast.success(v ? 'Form switched on' : 'Form switched off') })
+  }
   if (!canManage)
     return (
       <span className="inline-flex items-center gap-2 text-sm font-medium">
@@ -131,7 +146,7 @@ function OnOff({ form, canManage }: { form: EnquiryForm; canManage: boolean }) {
       disabled={update.isPending}
       label={on ? 'Taking enquiries' : 'Switched off'}
       className="h-10 w-auto rounded-md border border-input bg-card px-3"
-      onChange={(v) => update.mutate({ is_active: v }, { onSuccess: () => toast.success(v ? 'Form switched on' : 'Form switched off') })}
+      onChange={(v) => void flip(v)}
     />
   )
 }
@@ -147,6 +162,12 @@ function YourQrCard({ hub }: { hub: EnquiryHub }) {
         <PrintCardPreview url={url} studio={hub.studio} line="Scan to send us your enquiry" />
         <div className="flex min-w-0 flex-col gap-5">
           <QrDownloadButtons url={url} studio={hub.studio} />
+          {hub.form.scans + hub.form.enquiries > 0 && (
+            <p className="text-sm font-semibold">
+              {partnerCounts(hub.form.scans, hub.form.enquiries, hub.form.booked)}
+              <span className="font-normal text-muted-foreground"> from this QR and link</span>
+            </p>
+          )}
           <div className="flex flex-col gap-2">
             <p className="break-all rounded-xl bg-muted/60 px-3 py-2 text-sm font-bold">{url}</p>
             <div className="flex flex-wrap gap-2">
@@ -185,7 +206,9 @@ function YourQrCard({ hub }: { hub: EnquiryHub }) {
           )}
         </div>
       </CardContent>
-      {editing && <FormBuilderDialog form={hub.form} onClose={() => setEditing(false)} />}
+      {editing && (
+        <FormBuilderDialog form={hub.form} studio={hub.studio} services={hub.services} onClose={() => setEditing(false)} />
+      )}
     </Card>
   )
 }
@@ -210,7 +233,9 @@ function OtherWebsiteForms() {
         <li key={f.id}>
           <Link to="/enquiry-forms/$id" params={{ id: f.id }} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent/50">
             <span className="min-w-0 flex-1 truncate">{f.name}</span>
-            <span className="text-xs text-muted-foreground">{f.enquiries} enquiries</span>
+            <span className="text-xs text-muted-foreground">
+              {f.enquiries} {f.enquiries === 1 ? 'enquiry' : 'enquiries'}
+            </span>
             <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
           </Link>
         </li>
@@ -228,7 +253,9 @@ function PartnersSection({ hub, onAdd }: { hub: EnquiryHub; onAdd: () => void })
     (t, p) => ({ scans: t.scans + p.scans, enquiries: t.enquiries + p.enquiries, booked: t.booked + p.booked }),
     { scans: 0, enquiries: 0, booked: 0 },
   )
+  const top = topPartnerId(rows)
   if (partners.isPending) return <Skeleton className="h-32" />
+  if (partners.isError) return <ErrorState message="We could not load your partners." onRetry={() => void partners.refetch()} />
   if (!rows.length)
     return (
       <Card>
@@ -251,7 +278,7 @@ function PartnersSection({ hub, onAdd }: { hub: EnquiryHub; onAdd: () => void })
       <Card>
         <ul className="divide-y divide-border">
           {rows.slice(0, 8).map((p) => (
-            <PartnerRow key={p.id} partner={p} studio={hub.studio} />
+            <PartnerRow key={p.id} partner={p} studio={hub.studio} top={p.id === top} />
           ))}
           <li className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
             <Link to="/follow-ups/partners" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">

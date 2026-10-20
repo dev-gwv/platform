@@ -3920,7 +3920,7 @@ const enquiryPartnersFx = [
   {
     id: '00000000-0000-4000-8000-0000000008f1', name: 'Riya Boutique', label: 'Boutique, Salon', party_id: null, vendor_name: null,
     phone: '+919812345670', notes: 'QR at the trial room mirror. 5% on bookings.', code: 'r1y2a3', show_phone: false, scans: 12,
-    enquiries: 4, booked: 1, last_enquiry_at: '2026-10-17T09:00:00Z', archived_at: null, created_at: '2026-09-10T10:00:00Z',
+    enquiries: 4, booked: 1, last_enquiry_at: '2026-10-17T09:00:00Z', page_viewed_at: '2026-10-19T09:00:00Z', archived_at: null, created_at: '2026-09-10T10:00:00Z',
     form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=r1y2a3',
     page_url: 'https://studioautopilot.in/enquiry-view/riyatoken_abcdefghijklmnop',
   },

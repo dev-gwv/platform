@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Download, Eye, FileSpreadsheet } from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryFormLead, EnquiryPartner } from '@ipc/contracts'
-import { partnerCounts, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
+import { partnerLine, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
@@ -156,10 +156,10 @@ export function QrDownloadButtons({
 /** The code itself, drawn from our own link. */
 export function QrImage({ url, label, className }: { url: string; label: string; className?: string }) {
   const svg = useMemo(() => qrSvg(url, 1), [url])
+  // No label: a thumbnail beside the partner's name, so screen readers skip it.
   return (
     <span
-      role="img"
-      aria-label={label}
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
       className={cn('block aspect-square bg-white [&_svg]:size-full', className)}
       // The generator's own SVG of our link, not user input.
       dangerouslySetInnerHTML={{ __html: svg }}
@@ -178,10 +178,13 @@ export function PrintCardPreview({ url, studio, line }: { url: string; studio: s
   )
 }
 
-/** One partner in a list (spec 3.4): thumbnail, name and counts, then send-their-page and download. */
-export function PartnerRow({ partner, studio }: { partner: EnquiryPartner; studio: string }) {
+/**
+ * One partner in a list (spec 3.4): thumbnail, name and how they are doing in
+ * one sentence, the best one marked Top, then send-their-page and download.
+ */
+export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryPartner; studio: string; top?: boolean }) {
   const kinds = splitKinds(partner.label).join(', ')
-  const counts = partnerCounts(partner.scans, partner.enquiries, partner.booked)
+  const counts = partnerLine(partner)
   return (
     <li className="flex items-center gap-3 px-3 py-3 sm:px-4">
       <Link
@@ -193,7 +196,12 @@ export function PartnerRow({ partner, studio }: { partner: EnquiryPartner; studi
           <QrImage url={partner.form_url} label="" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold">{partner.name}</span>
+          <span className="flex items-center gap-2">
+            <span className="truncate font-semibold">{partner.name}</span>
+            {top && (
+              <span className="shrink-0 rounded-full bg-brand/20 px-2 py-0.5 text-[0.7rem] font-bold ring-1 ring-brand/50">Top</span>
+            )}
+          </span>
           <span className="block truncate text-sm text-muted-foreground">{[kinds, counts].filter(Boolean).join(' · ')}</span>
         </span>
         <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
@@ -207,31 +215,34 @@ export function PartnerRow({ partner, studio }: { partner: EnquiryPartner; studi
             aria-label={`Send ${partner.name} their page on WhatsApp`}
             title={`Send ${partner.name} their page on WhatsApp`}
           >
-            <Eye />
+            <MessageCircle />
           </a>
         </Button>
       )}
-      <Button
-        size="icon"
-        variant="outline"
-        aria-label={`Download ${partner.name}'s QR code`}
-        title={`Download ${partner.name}'s QR code`}
-        onClick={async () => {
-          try {
-            await downloadQrPng(
-              partner.form_url,
-              `${slugify(studio)}-x-${slugify(partner.name)}-qr`,
-              studio,
-              `Scan to enquire · via ${partner.name}`,
-            )
-            toast.success(`${partner.name}'s QR code downloaded, ready to print`)
-          } catch {
-            toast.error('Could not download the QR. Please try again.')
-          }
-        }}
-      >
-        <Download />
-      </Button>
+      {/* An ended partner's QR no longer credits them: nothing to print. */}
+      {!partner.archived_at && (
+        <Button
+          size="icon"
+          variant="outline"
+          aria-label={`Download ${partner.name}'s QR code`}
+          title={`Download ${partner.name}'s QR code`}
+          onClick={async () => {
+            try {
+              await downloadQrPng(
+                partner.form_url,
+                `${slugify(studio)}-x-${slugify(partner.name)}-qr`,
+                studio,
+                `Scan to enquire · via ${partner.name}`,
+              )
+              toast.success(`${partner.name}'s QR code downloaded, ready to print`)
+            } catch {
+              toast.error('Could not download the QR. Please try again.')
+            }
+          }}
+        >
+          <Download />
+        </Button>
+      )}
     </li>
   )
 }

@@ -64,6 +64,31 @@ function Unavailable({ title, text, embed = false }: { title: string; text: stri
 
 const fieldErrors = z.object({ fields: z.record(z.string(), z.string()) })
 
+/** A 404 is a form that is off or a wrong link; 429 is too many opens; anything else is our side. */
+function formFailure(err: unknown): 'missing' | 'busy' | 'down' {
+  if (err instanceof ApiError) {
+    if (err.status === 404) return 'missing'
+    if (err.status === 429) return 'busy'
+  }
+  return 'down'
+}
+
+// Private windows and blocked storage throw: then every open counts, as before.
+function readSession(key: string): boolean {
+  try {
+    return sessionStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+function writeSession(key: string) {
+  try {
+    sessionStorage.setItem(key, '1')
+  } catch {
+    // nothing to remember
+  }
+}
+
 /**
  * PUBLIC: the studio's enquiry form (0195, 0240, 0274). /f/<link> is the
  * studio's readable link, /enquire/<code> the older one (and every QR printed
@@ -78,14 +103,22 @@ export function EnquirePage() {
   const embed = search.get('embed') === '1'
   const partner = search.get('p')
   const [form, setForm] = useState<PublicEnquiryFormV2 | null>(null)
-  const [missing, setMissing] = useState(false)
+  const [failed, setFailed] = useState<'missing' | 'busy' | 'down' | null>(null)
 
-  // Fetched once per visit: each open counts one scan.
+  // Each visit counts one scan; a refresh in the same tab says it was seen (0278).
   useEffect(() => {
-    const q = partner ? `?p=${encodeURIComponent(partner)}` : ''
-    callApi(`/public/forms/${encodeURIComponent(key)}${q}`, { responseSchema: publicEnquiryFormV2 })
-      .then(setForm)
-      .catch(() => setMissing(true))
+    const seenKey = `enquiry-seen:${key}:${partner ?? ''}`
+    const seen = readSession(seenKey)
+    const q = new URLSearchParams()
+    if (partner) q.set('p', partner)
+    if (seen) q.set('seen', '1')
+    const qs = q.toString()
+    callApi(`/public/forms/${encodeURIComponent(key)}${qs ? `?${qs}` : ''}`, { responseSchema: publicEnquiryFormV2 })
+      .then((f) => {
+        writeSession(seenKey)
+        setForm(f)
+      })
+      .catch((err) => setFailed(formFailure(err)))
   }, [key, partner])
 
   async function send(body: EnquirySend) {
@@ -104,12 +137,21 @@ export function EnquirePage() {
     }
   }
 
-  if (missing) {
+  if (failed === 'missing') {
     return (
       <Unavailable
         embed={embed}
         title="This form isn't available"
         text="The link may be old or switched off. Please contact the business directly."
+      />
+    )
+  }
+  if (failed) {
+    return (
+      <Unavailable
+        embed={embed}
+        title={failed === 'busy' ? 'Too many tries' : 'Something went wrong'}
+        text={failed === 'busy' ? 'Please wait a minute, then open the link again.' : 'Please try again in a moment.'}
       />
     )
   }
@@ -145,8 +187,8 @@ function downloadPartnerLeads(view: PartnerView) {
   const cell = (v: string | null | undefined) => `"${defuse(v ?? '').replace(/"/g, '""')}"`
   const head = ['Name', 'Mobile', 'Email', 'City', 'Event', 'Event date', 'Enquired on', 'Where it stands']
   const rows = view.leads.map((l) =>
-    // The mobile as ten digits, like the studio's own download.
-    [l.name, l.phone ? l.phone.replace(/\D/g, '').slice(-10) : null, l.email, l.city, l.event_type, l.event_date ? day(l.event_date) : null, day(l.enquired_on), l.status]
+    // The mobile as ten digits, like the studio's own download; a hidden one as shown.
+    [l.name, l.phone ? (view.full_details ? l.phone.replace(/\D/g, '').slice(-10) : l.phone) : null, l.email, l.city, l.event_type, l.event_date ? day(l.event_date) : null, day(l.enquired_on), l.status]
       .map(cell)
       .join(','),
   )
@@ -155,8 +197,11 @@ function downloadPartnerLeads(view: PartnerView) {
   const a = document.createElement('a')
   a.href = url
   a.download = `${view.form_name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-leads.csv`
+  // In the page while it is clicked, and the file let go a moment after, or some phones save nothing.
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /**
@@ -238,8 +283,8 @@ export function EnquiryViewPage() {
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {view.leads.map((l, i) => (
-              <li key={i} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+            {view.leads.map((l) => (
+              <li key={`${l.enquired_on}-${l.name ?? ''}-${l.phone ?? ''}`} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{l.name ?? 'No name'}</p>
                   {/* Their real details, tap to call or write (0276). */}
