@@ -232,8 +232,8 @@ function MemberSheet() {
           <div>
             <p className="text-sm font-semibold">Member list (Google Sheet)</p>
             <p className="text-xs text-muted-foreground">
-              Keep the members' mobile numbers in a column headed Phone or Mobile. Share the sheet as "Anyone with the link can
-              view". It is read again every hour.
+              Paste the sheet's link (shared as "Anyone with the link can view") or its "Publish to the web" link. Any
+              column of mobile numbers is read, again every hour.
             </p>
           </div>
           <form

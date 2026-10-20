@@ -14,7 +14,7 @@ import { platformEmailRouter } from './email'
 import { platformOffersRouter } from './offers'
 import { platformLoginsRouter } from './logins'
 import { fetchOrderPayments } from '../../lib/razorpay'
-import { sheetRef, syncDiamondSheet } from '../../lib/diamond-sheet'
+import { publishedCsvUrl, sheetRef, syncDiamondSheet } from '../../lib/diamond-sheet'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -492,7 +492,8 @@ export const platformRouter = new Hono<AppEnv>()
     const parsed = diamondSheetRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Paste the Google Sheet link.')
     const url = parsed.data.url?.trim() || null
-    if (url && !sheetRef(url) && !/^https:\/\/docs\.google\.com\/.*output=csv/.test(url)) {
+    // The sheet's own link, a "Publish to the web" link (pubhtml) or a published CSV link.
+    if (url && !sheetRef(url) && !publishedCsvUrl(url) && !/^https:\/\/docs\.google\.com\/.*output=csv/.test(url)) {
       fail(422, 'That is not a Google Sheet link. Copy it from the sheet’s address bar.')
     }
     const ok = await attempt(c, 'platform.diamond_sheet_save', () =>
