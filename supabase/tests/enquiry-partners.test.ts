@@ -178,9 +178,11 @@ describe('the main form (0274)', () => {
     const [lead] = await q<{ partner_id: string }>(`select partner_id from crm_leads where id = $1`, [r.lead_id])
     expect(lead!.partner_id).toBe(partner.id)
 
-    const page = (await q<{ doc: { leads: { phone: string; status: string }[]; enquiries: number } }>(`select enquiry_partner_page('kirantoken_abcdefghijklmnop') as doc`))[0]!.doc
+    const page = (await q<{ doc: { leads: { phone: string; email: string | null; status: string }[]; enquiries: number } }>(`select enquiry_partner_page('kirantoken_abcdefghijklmnop') as doc`))[0]!.doc
     expect(page.enquiries).toBe(1)
-    expect(page.leads[0]!.phone).toBe('98xxxxx011')
+    // 0276: partners see each lead's real number and email unless the studio hides them.
+    expect(page.leads[0]!.phone).toBe('+919822200011')
+    expect(page.leads[0]!.email).toBe('n@test.in')
     expect(page.leads[0]!.status).toBe('New')
 
     await q(`update enquiry_partners set archived_at = now() where id = $1`, [partner.id])
