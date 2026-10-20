@@ -11,10 +11,13 @@ export function diamondOutcomeWords(o: DiamondPhoneResult['outcome']): { ok: boo
     case 'already':
       return { ok: true, line: "You're an IPC Diamond member. The member prices are yours, and your free trial runs 30 days from sign-up." }
     case 'taken':
-      return { ok: false, line: 'This number is already used by another studio on Studio AutoPilot.' }
+      return { ok: false, line: 'This number already opened another studio on Studio AutoPilot. We have noted it and will sort it out with you.' }
     case 'too_many':
       return { ok: false, line: 'That was too many tries for today. Please try again tomorrow.' }
     default:
-      return { ok: false, line: "We couldn't find this number on the IPC Diamond list. Check the number, or take a regular plan." }
+      return {
+        ok: false,
+        line: "We couldn't find this number on the IPC Diamond list. Try the number you registered with IPC. We have noted this one and will check it, or you can take a regular plan.",
+      }
   }
 }

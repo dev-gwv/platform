@@ -164,6 +164,29 @@ export const diamondSheetStatus = z.object({
 })
 export type DiamondSheetStatus = z.infer<typeof diamondSheetStatus>
 
+/** A number a studio typed that did not match (0277), for Platform → IPC Diamond members. */
+export const diamondMiss = z.object({
+  company_id: z.string(),
+  studio: z.string(),
+  owner_email: z.string().nullable(),
+  phone: z.string().nullable(),
+  why: z.enum(['not_found', 'taken']).nullable(),
+  tries: z.number().int(),
+  last_at: z.string(),
+  used_by: z.string().nullable(),
+  on_list: z.boolean(),
+})
+export type DiamondMiss = z.infer<typeof diamondMiss>
+
+/** The platform owner's own look-up of a number against the copied list. */
+export const diamondLookup = z.object({
+  phone: z.string(),
+  on_list: z.boolean(),
+  name: z.string().nullable(),
+  studio: z.string().nullable(),
+})
+export type DiamondLookup = z.infer<typeof diamondLookup>
+
 export const diamondSheetRequest = z.object({ url: z.string().trim().max(500).nullable() })
 
 export const createOrderRequest = z.object({ plan_id: uuid })

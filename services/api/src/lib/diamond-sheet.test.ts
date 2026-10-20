@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCsv, phonesIn, rosterFromRows, sheetRef } from './diamond-sheet'
+import { parseCsv, phonesIn, rosterFromRows, rosterFromTabs, sheetRef } from './diamond-sheet'
 
 describe('the IPC Diamond member sheet', () => {
   it('finds the spreadsheet and tab in a pasted link', () => {
@@ -45,5 +45,50 @@ describe('the IPC Diamond member sheet', () => {
   it('gives nothing for a sheet with no numbers', () => {
     expect(rosterFromRows([['Name'], ['Asha']])).toEqual([])
     expect(rosterFromRows([])).toEqual([])
+  })
+
+  // Owner, 20 Oct: members on the list were told their number was not found.
+  it('reads numbers however the sheet wrote them', () => {
+    expect(phonesIn('98,765,43,210')).toEqual(['9876543210'])
+    expect(phonesIn('9.87654321E+09')).toEqual(['9876543210'])
+    expect(phonesIn('9876543210 9123456780')).toEqual(['9876543210', '9123456780'])
+    expect(phonesIn('9876543210,9123456780')).toEqual(['9876543210', '9123456780'])
+    expect(phonesIn('+919876543210 and 09123456780')).toEqual(['9876543210', '9123456780'])
+    expect(phonesIn('9876543210 & 9123456780')).toEqual(['9876543210', '9123456780'])
+  })
+
+  it('reads every column that holds numbers, whatever its heading', () => {
+    const rows = [
+      ['Contact Name', 'Mob.', 'City', 'Alternate'],
+      ['Asha', '98765 43210', 'Pune', ''],
+      ['Ravi', '9123456780', 'Delhi', '9000012345'],
+      ['Meena', '', 'Agra', '8000012345'],
+    ]
+    expect(rosterFromRows(rows)).toEqual([
+      { phone: '9876543210', name: 'Asha' },
+      { phone: '9123456780', name: 'Ravi' },
+      { phone: '9000012345', name: 'Ravi' },
+      { phone: '8000012345', name: 'Meena' },
+    ])
+  })
+
+  it('does not take a number-looking ID or amount column', () => {
+    const rows = [
+      ['Name', 'Phone', 'Paid'],
+      ['Asha', '9876543210', '25000'],
+      ['Ravi', '9123456780', '25000'],
+    ]
+    expect(rosterFromRows(rows).map((r) => r.phone)).toEqual(['9876543210', '9123456780'])
+  })
+
+  it('reads every tab, each with its own heading', () => {
+    const tabs = [
+      [['Name', 'Phone'], ['Asha', '9876543210']],
+      [['Mobile', 'Full name'], ['9123456780', 'Ravi'], ['9876543210', 'Asha again']],
+    ]
+    expect(rosterFromTabs(tabs)).toEqual([
+      { phone: '9876543210', name: 'Asha' },
+      { phone: '9123456780', name: 'Ravi' },
+    ])
   })
 })

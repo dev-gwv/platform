@@ -61,47 +61,79 @@ export function parseCsv(text: string): string[][] {
   return rows
 }
 
-/** Every Indian mobile number in one cell ("98765 43210 / +91-91234-56780"), as its last ten digits. */
-export function phonesIn(cell: string): string[] {
-  const out: string[] = []
-  for (const part of cell.split(/[/,;|]|\s{2,}|\bor\b/i)) {
-    const d = part.replace(/[^0-9]/g, '')
-    if (d.length >= 10 && d.length <= 13) out.push(d.slice(-10))
-  }
-  return out
-}
-
-const PHONE_HEAD = /phone|mobile|whats ?app|contact|number|cell/i
-const NAME_HEAD = /name/i
+/** An Indian mobile at the head of a run of digits: an optional 91 or 0, then ten digits from 6 to 9. */
+const MOBILE_AT_HEAD = /^(?:91|0)?([6-9]\d{9})/
 
 /**
- * The member list out of a sheet's rows. The phone column is the one whose
- * heading says phone / mobile / WhatsApp / number; failing that, the column
- * where most cells hold a number. The name column, if any, says "name".
+ * Every Indian mobile number in one cell, as its last ten digits. Forgiving
+ * on purpose (owner, 20 Oct: members on the list were refused): "98765 43210 /
+ * +91-91234-56780", two numbers with one space or a comma between them,
+ * "98,765,43,210" from a number-formatted cell, and "9.87654321E+09".
+ */
+export function phonesIn(cell: string): string[] {
+  let text = cell.trim()
+  // A cell Google wrote out in scientific notation.
+  if (/^\d(?:\.\d+)?e\+?\d{1,2}$/i.test(text)) {
+    const n = Number(text)
+    if (Number.isFinite(n)) text = n.toFixed(0)
+  }
+  // Grouping marks inside one number ("98,765,43,210", "9.876.543.210").
+  text = text.replace(/(\d)[,.](?=\d)/g, '$1')
+  const out: string[] = []
+  for (const part of text.split(/[/,;|]|\s{2,}|\bor\b|\band\b|&/i)) {
+    let d = part.replace(/[^0-9]/g, '')
+    if (d.length >= 10 && d.length <= 13) {
+      out.push(d.slice(-10))
+      continue
+    }
+    // Two or more numbers run together: take each mobile from the front.
+    while (d.length >= 10) {
+      const m = MOBILE_AT_HEAD.exec(d)
+      if (m) {
+        out.push(m[1]!)
+        d = d.slice(m[0].length)
+      } else d = d.slice(1)
+    }
+  }
+  return [...new Set(out)]
+}
+
+const PHONE_HEAD = /phone|mobile|mob\b|mob\.|whats ?app|contact|number|no\.|cell/i
+const NAME_HEAD = /name/i
+
+/** A column is a phone column when at least half of its filled cells hold a number. */
+function mostlyPhones(rows: string[][], col: number): boolean {
+  let filled = 0
+  let hits = 0
+  for (const r of rows) {
+    const v = (r[col] ?? '').trim()
+    if (!v) continue
+    filled++
+    if (phonesIn(v).length > 0) hits++
+  }
+  return filled > 0 && hits * 2 >= filled
+}
+
+/**
+ * The member list out of a sheet's rows. Every column whose heading says
+ * phone / mobile / WhatsApp / number, and every other column that is mostly
+ * phone numbers (an "Alternate" or "Mob." column), is read. The first row is
+ * data, not a heading, when it already holds a number. The name column, if
+ * any, says "name".
  */
 export function rosterFromRows(rows: string[][]): RosterRow[] {
   if (rows.length === 0) return []
   const head = rows[0]!.map((h) => h.trim())
   const width = Math.max(...rows.map((r) => r.length))
-  let phoneCols = head.map((h, i) => (PHONE_HEAD.test(h) ? i : -1)).filter((i) => i >= 0)
-  let body = rows.slice(1)
-  if (phoneCols.length === 0) {
-    // No heading names it: the column that is most often a phone number.
-    let best = -1
-    let bestHits = 0
-    for (let i = 0; i < width; i++) {
-      const hits = rows.filter((r) => phonesIn(r[i] ?? '').length > 0).length
-      if (hits > bestHits) {
-        best = i
-        bestHits = hits
-      }
-    }
-    if (best < 0) return []
-    phoneCols = [best]
-    // The first row is data, not a heading, when it already holds a number.
-    if (phonesIn(rows[0]![best] ?? '').length > 0) body = rows
+  const headed = head.map((h, i) => (PHONE_HEAD.test(h) && !NAME_HEAD.test(h) ? i : -1)).filter((i) => i >= 0)
+  const firstIsData = head.some((h) => phonesIn(h).length > 0)
+  const body = firstIsData ? rows : rows.slice(1)
+  const phoneCols: number[] = []
+  for (let i = 0; i < width; i++) {
+    if (headed.includes(i) || mostlyPhones(body, i)) phoneCols.push(i)
   }
-  const nameCol = head.findIndex((h, i) => NAME_HEAD.test(h) && !phoneCols.includes(i))
+  if (phoneCols.length === 0) return []
+  const nameCol = firstIsData ? -1 : head.findIndex((h, i) => NAME_HEAD.test(h) && !phoneCols.includes(i))
   const seen = new Map<string, RosterRow>()
   for (const r of body) {
     const name = nameCol >= 0 ? (r[nameCol] ?? '').trim().slice(0, 120) || null : null
@@ -111,6 +143,13 @@ export function rosterFromRows(rows: string[][]): RosterRow[] {
       }
     }
   }
+  return [...seen.values()]
+}
+
+/** Every tab's members together, each number once (the first tab's name wins). */
+export function rosterFromTabs(tabs: string[][][]): RosterRow[] {
+  const seen = new Map<string, RosterRow>()
+  for (const tab of tabs) for (const r of rosterFromRows(tab)) if (!seen.has(r.phone)) seen.set(r.phone, r)
   return [...seen.values()]
 }
 
@@ -138,34 +177,43 @@ async function serviceToken(env: Env): Promise<string | null> {
 }
 
 /** The sheet's cells, by the service account when the server has one, else as a public CSV. */
-async function readSheet(env: Env, url: string): Promise<string[][]> {
+async function readSheet(env: Env, url: string): Promise<string[][][]> {
   const ref = sheetRef(url)
   if (!ref) {
     // A "Publish to the web" CSV link is read as it is.
     if (!/^https:\/\/docs\.google\.com\//.test(url) || !/output=csv/.test(url)) {
       throw new Error('That is not a Google Sheet link. Copy the link from the sheet’s address bar.')
     }
-    return parseCsv(await fetchCsv(url))
+    return [parseCsv(await fetchCsv(url))]
   }
   const token = await serviceToken(env).catch(() => null)
   if (token) {
     const auth = { Authorization: `Bearer ${token}` }
-    let range = 'A1:Z10000'
-    if (ref.gid) {
-      const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ref.id}?fields=sheets.properties`, { headers: auth })
-      const m = (await meta.json().catch(() => ({}))) as { sheets?: { properties?: { sheetId?: number; title?: string } }[] }
-      const title = m.sheets?.find((s) => String(s.properties?.sheetId) === ref.gid)?.properties?.title
-      if (title) range = `'${title.replace(/'/g, "''")}'!A1:Z10000`
-    }
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ref.id}/values/${encodeURIComponent(range)}`, { headers: auth })
-    if (res.ok) {
+    const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ref.id}?fields=sheets.properties`, { headers: auth })
+    const m = (await meta.json().catch(() => ({}))) as { sheets?: { properties?: { sheetId?: number; title?: string } }[] }
+    // The linked tab only, or every tab when the link names none (members kept on several tabs).
+    const titles = (m.sheets ?? [])
+      .filter((t) => !ref.gid || String(t.properties?.sheetId) === ref.gid)
+      .map((t) => t.properties?.title)
+      .filter((t): t is string => !!t)
+    const ranges = titles.length > 0 ? titles.map((t) => `'${t.replace(/'/g, "''")}'!A1:Z10000`) : ['A1:Z10000']
+    const tabs: string[][][] = []
+    for (const range of ranges) {
+      // Unformatted, so a number cell is 9876543210, never "9.88E+09" or "98,765,43,210".
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${ref.id}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`,
+        { headers: auth },
+      )
+      if (!res.ok) continue
       const j = (await res.json()) as { values?: unknown[][] }
-      return (j.values ?? []).map((r) => r.map((v) => String(v ?? '')))
+      // Each tab keeps its own heading row, so each is read on its own.
+      tabs.push((j.values ?? []).map((r) => r.map((v) => (typeof v === 'number' ? v.toFixed(0) : String(v ?? '')))))
     }
+    if (tabs.length > 0) return tabs
     // Not shared with the service account: try the public way before giving up.
   }
   const csv = `https://docs.google.com/spreadsheets/d/${ref.id}/export?format=csv${ref.gid ? `&gid=${ref.gid}` : ''}`
-  return parseCsv(await fetchCsv(csv))
+  return [parseCsv(await fetchCsv(csv))]
 }
 
 async function fetchCsv(url: string): Promise<string> {
@@ -196,7 +244,7 @@ export async function syncDiamondSheet(env: Env): Promise<SheetSync> {
   if (!url) return { ok: false, rows: 0, error: null }
   let roster: RosterRow[]
   try {
-    roster = rosterFromRows(await readSheet(env, url))
+    roster = rosterFromTabs(await readSheet(env, url))
   } catch (e) {
     const error = e instanceof Error ? e.message.slice(0, 300) : 'The sheet could not be read.'
     log.warn({ err: describeError(e) }, 'diamond sheet read failed')
