@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { ListChecks, Plus, X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ENQUIRY_FIELD_KEYS, type EnquiryFieldKey, type EnquiryForm } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { Switch } from '@/shared/ui/switch'
 import { cn } from '@/shared/ui/cn'
@@ -25,13 +25,7 @@ export function QuestionsCard({ form, services }: { form: EnquiryForm; services:
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg font-extrabold">
-          <ListChecks className="size-5 text-primary" aria-hidden /> Questions on your form
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">Keep it short: fewer questions, more enquiries. Name and mobile are always asked.</p>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-4 p-4 sm:p-6">
         <ul className="divide-y divide-border rounded-2xl border border-border">
           {['Name', 'Mobile number'].map((l) => (
             <li key={l} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -97,9 +91,6 @@ function ServicesEditor({ services }: { services: string[] }) {
   }
   return (
     <div className="flex flex-col gap-2 pl-14">
-      <p className="text-xs text-muted-foreground">
-        The choices are your <b>service categories</b>. They show on the form in this order.
-      </p>
       <div className="flex flex-wrap gap-1.5">
         {services.map((s) => (
           <span key={s} className="inline-flex items-center gap-1 rounded-full border border-border bg-card py-1 pl-3 pr-1 text-xs font-medium">

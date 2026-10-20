@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { CircleCheck, ExternalLink, Link2, MessageCircle, Send } from 'lucide-react'
+import { CircleCheck, ExternalLink, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryAfterSubmit, EnquiryForm } from '@ipc/contracts'
 import { formatIndianPhone, waDigits, whatsappPreview } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { fieldOf, useUpdateEnquiryForm } from './api'
@@ -72,12 +72,7 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg font-extrabold">
-          <Send className="size-5 text-primary" aria-hidden /> After they send the form
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-4 p-4 sm:p-6">
         <div role="radiogroup" aria-label="After they send the form" className="grid gap-2 sm:grid-cols-3">
           {CHOICES.map((c) => {
             const on = v.after === c.key
@@ -156,7 +151,6 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
                 value={v.text}
                 onChange={(e) => setV((x) => ({ ...x, text: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">Their name and event are added under it, so you know who it is.</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <p className="text-sm font-semibold text-muted-foreground">What they'll send you</p>
@@ -213,11 +207,6 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
               Undo
             </Button>
           </div>
-        )}
-        {!form.is_active && (
-          <p className="rounded-xl bg-warning/15 px-4 py-3 text-sm text-warning">
-            The form is switched off, so nobody can send it right now.
-          </p>
         )}
       </CardContent>
     </Card>
