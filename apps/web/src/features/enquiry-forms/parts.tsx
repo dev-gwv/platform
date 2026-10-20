@@ -66,6 +66,9 @@ export function LeadLine({ lead }: { lead: EnquiryFormLead }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{lead.name ?? 'No name'}</p>
           <p className="truncate text-xs text-muted-foreground">
+            {[lead.phone, lead.email].filter(Boolean).join(' · ')}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
             {[`Enquired ${shortDay(lead.created_at, false)}`, event].filter(Boolean).join(' · ')}
           </p>
         </div>

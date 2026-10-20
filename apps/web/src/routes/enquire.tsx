@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from '@tanstack/react-router'
-import { Handshake, Inbox } from 'lucide-react'
-import { ENQUIRY_HEIGHT_MESSAGE } from '@ipc/domain'
+import { Download, Handshake, Inbox, Mail, Phone } from 'lucide-react'
+import { ENQUIRY_HEIGHT_MESSAGE, defuse } from '@ipc/domain'
 import {
   publicEnquiryFormV2,
   publicPartnerView,
@@ -137,6 +137,29 @@ const STATUS: Record<PartnerView['leads'][number]['status'], string> = {
 const day = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /**
+ * The partner's own copy of their leads (owner, 20 Oct): a CSV that opens in
+ * Excel, made in the browser from what the page already shows. No cell is
+ * allowed to run as a formula.
+ */
+function downloadPartnerLeads(view: PartnerView) {
+  const cell = (v: string | null | undefined) => `"${defuse(v ?? '').replace(/"/g, '""')}"`
+  const head = ['Name', 'Mobile', 'Email', 'City', 'Event', 'Event date', 'Enquired on', 'Where it stands']
+  const rows = view.leads.map((l) =>
+    // The mobile as ten digits, like the studio's own download.
+    [l.name, l.phone ? l.phone.replace(/\D/g, '').slice(-10) : null, l.email, l.city, l.event_type, l.event_date ? day(l.event_date) : null, day(l.enquired_on), l.status]
+      .map(cell)
+      .join(','),
+  )
+  const csv = '\uFEFF' + [head.map(cell).join(','), ...rows].join('\r\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${view.form_name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-leads.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
  * PUBLIC: a partner's own page (spec 3.11). Every enquiry their QR brought in
  * and where it stands -- never prices, budgets, notes or who handles it.
  */
@@ -195,6 +218,16 @@ export function EnquiryViewPage() {
         ))}
       </div>
 
+      {view.leads.length > 0 && (
+        <button
+          type="button"
+          onClick={() => downloadPartnerLeads(view)}
+          className="inline-flex items-center justify-center gap-2 self-center rounded-xl border border-input bg-card px-4 py-2.5 text-sm font-semibold shadow-sm hover:bg-muted"
+        >
+          <Download className="size-4" aria-hidden /> Download all {view.leads.length} leads (Excel / CSV)
+        </button>
+      )}
+
       <section className="rounded-2xl border border-border bg-card shadow-sm">
         {view.leads.length === 0 ? (
           <div className="px-6 py-14 text-center">
@@ -209,8 +242,27 @@ export function EnquiryViewPage() {
               <li key={i} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{l.name ?? 'No name'}</p>
-                  <p className="truncate text-sm tabular-nums text-muted-foreground">
-                    {[l.phone, `Enquired ${day(l.enquired_on)}`].filter(Boolean).join(' · ')}
+                  {/* Their real details, tap to call or write (0276). */}
+                  {(l.phone || l.email) && (
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
+                      {l.phone && (
+                        view.full_details ? (
+                          <a href={`tel:${l.phone}`} className="inline-flex items-center gap-1 font-medium tabular-nums text-primary hover:underline">
+                            <Phone className="size-3.5" aria-hidden /> {l.phone}
+                          </a>
+                        ) : (
+                          <span className="tabular-nums text-muted-foreground">{l.phone}</span>
+                        )
+                      )}
+                      {l.email && (
+                        <a href={`mailto:${l.email}`} className="inline-flex min-w-0 items-center gap-1 truncate font-medium text-primary hover:underline">
+                          <Mail className="size-3.5 shrink-0" aria-hidden /> {l.email}
+                        </a>
+                      )}
+                    </p>
+                  )}
+                  <p className="truncate text-sm text-muted-foreground">
+                    {[l.city, `Enquired ${day(l.enquired_on)}`].filter(Boolean).join(' · ')}
                   </p>
                   {(l.event_type || l.event_date) && (
                     <p className="truncate text-sm text-muted-foreground">

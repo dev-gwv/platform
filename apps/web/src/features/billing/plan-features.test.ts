@@ -10,9 +10,9 @@ const starter: Plan = {
   name: 'Starter',
   price: 17988,
   tier: 'starter',
-  limits: { projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10, enquiry_forms: 2, facebook_pages: 1 },
+  limits: { projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10, enquiry_forms: 2, facebook_pages: 1, brands: 1 },
 }
-const pro: Plan = { ...base, id: '00000000-0000-4000-8000-000000000002', key: 'pro_yearly', name: 'Pro', price: 29988, tier: 'pro', limits: {} }
+const pro: Plan = { ...base, id: '00000000-0000-4000-8000-000000000002', key: 'pro_yearly', name: 'Pro', price: 29988, tier: 'pro', limits: { brands: 3 } }
 const max: Plan = {
   ...base,
   id: '00000000-0000-4000-8000-000000000003',
@@ -29,13 +29,13 @@ const text = (c: ReturnType<(typeof COMPARE)[number]['cell']>) => (c.kind === 't
 describe('the pricing page stays short', () => {
   it('shows every feature once as eight chips, and compares only what differs', () => {
     expect(INCLUDED).toHaveLength(8)
-    expect(COMPARE.length).toBeLessThanOrEqual(9)
+    expect(COMPARE.length).toBeLessThanOrEqual(10)
   })
 
   it('reads Starter numbers from the plan, and Unlimited on Pro and Studio Max', () => {
-    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '300 a year', '30 a year', '3', '10', '2', '1', 'no', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(7).fill('Unlimited'), 'no', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(7).fill('Unlimited'), 'yes', 'yes'])
+    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '300 a year', '30 a year', '3', '1', '10', '2', '1', 'no', 'no'])
+    expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(4).fill('Unlimited'), '3', ...Array(3).fill('Unlimited'), 'no', 'no'])
+    expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(8).fill('Unlimited'), 'yes', 'yes'])
   })
 
   it('counts by the year on the monthly plans too, never "a month" (0267)', () => {

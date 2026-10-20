@@ -116,6 +116,7 @@ export const enquiryFormLead = z.object({
   id: uuid,
   name: z.string().nullable(),
   phone: z.string().nullable(),
+  email: z.string().nullable().default(null),
   status: z.string(),
   event_type: z.string().nullable(),
   event_date: isoDate.nullable(),
@@ -160,6 +161,9 @@ export type SubmitEnquiryRequest = z.input<typeof submitEnquiryRequest>
 export const enquiryViewLead = z.object({
   name: z.string().nullable(),
   phone: z.string().nullable(),
+  /** 0276: with the full number, unless the studio hides a partner's details. */
+  email: z.string().nullable().default(null),
+  city: z.string().nullable().default(null),
   enquired_on: isoDateTime,
   event_type: z.string().nullable(),
   event_date: isoDate.nullable(),
@@ -290,6 +294,8 @@ export const submitEnquiryResponse = z.object({
 })
 
 export const publicPartnerView = publicEnquiryView.extend({
+  /** 0276: the partner sees each lead's real number and email. */
+  full_details: z.boolean().default(false),
   city: z.string().nullable().default(null),
   logo_url: z.string().nullable().default(null),
 })
