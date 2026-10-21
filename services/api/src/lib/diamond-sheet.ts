@@ -22,10 +22,22 @@ export interface RosterRow {
 
 /** Where a pasted sheet link points: the spreadsheet, and the tab when the link names one. */
 export function sheetRef(url: string): { id: string; gid: string | null } | null {
-  const m = /\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/.exec(url)
+  const m = /\/spreadsheets\/d\/(?!e\/)([A-Za-z0-9_-]{20,})/.exec(url)
   if (!m) return null
   const gid = /[#?&]gid=([0-9]+)/.exec(url)
   return { id: m[1]!, gid: gid ? gid[1]! : null }
+}
+
+/**
+ * A "Publish to the web" link (/spreadsheets/d/e/2PACX-…/pubhtml or /pub) as
+ * the CSV of the same tab. The owner pasted one on 20 Oct and it was refused,
+ * because it is not a /d/<id> link and does not say output=csv.
+ */
+export function publishedCsvUrl(url: string): string | null {
+  const m = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/e\/([A-Za-z0-9_-]{20,})\/pub(?:html)?(?:[?#].*)?$/.exec(url.trim())
+  if (!m) return null
+  const gid = /[?&#]gid=([0-9]+)/.exec(url)
+  return `https://docs.google.com/spreadsheets/d/e/${m[1]}/pub?${gid ? `gid=${gid[1]}&single=true&` : ''}output=csv`
 }
 
 /** RFC 4180 CSV: quoted cells, doubled quotes, commas and newlines inside quotes. */
@@ -178,6 +190,8 @@ async function serviceToken(env: Env): Promise<string | null> {
 
 /** The sheet's cells, by the service account when the server has one, else as a public CSV. */
 async function readSheet(env: Env, url: string): Promise<string[][][]> {
+  const published = publishedCsvUrl(url)
+  if (published) return [parseCsv(await fetchCsv(published))]
   const ref = sheetRef(url)
   if (!ref) {
     // A "Publish to the web" CSV link is read as it is.

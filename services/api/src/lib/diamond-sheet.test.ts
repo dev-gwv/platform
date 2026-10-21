@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCsv, phonesIn, rosterFromRows, rosterFromTabs, sheetRef } from './diamond-sheet'
+import { parseCsv, phonesIn, publishedCsvUrl, rosterFromRows, rosterFromTabs, sheetRef } from './diamond-sheet'
 
 describe('the IPC Diamond member sheet', () => {
   it('finds the spreadsheet and tab in a pasted link', () => {
@@ -90,5 +90,13 @@ describe('the IPC Diamond member sheet', () => {
       { phone: '9876543210', name: 'Asha' },
       { phone: '9123456780', name: 'Ravi' },
     ])
+  })
+
+  it('reads a "Publish to the web" link as that tab\'s CSV', () => {
+    const pub = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv8jEjX6EyndWvqcJ3A6L3lck17q46mPajtl8TAHYQ2-aB3sdrIhq1PDSUHQNbSMTw07GJFcO1b_bw'
+    expect(publishedCsvUrl(`${pub}/pubhtml?gid=1507599502&single=true`)).toBe(`${pub}/pub?gid=1507599502&single=true&output=csv`)
+    expect(publishedCsvUrl(`${pub}/pubhtml`)).toBe(`${pub}/pub?output=csv`)
+    expect(publishedCsvUrl('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit')).toBeNull()
+    expect(sheetRef(`${pub}/pubhtml`)).toBeNull()
   })
 })
