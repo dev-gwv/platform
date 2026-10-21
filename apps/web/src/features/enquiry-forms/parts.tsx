@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Download, FileSpreadsheet, MessageCircle } from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, MessageCircle, QrCode } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryFormLead, EnquiryPartner } from '@ipc/contracts'
 import { partnerLine, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
+import { useAccess } from '@/shared/auth/useAccess'
 import { downloadQrPng, downloadQrSvg, qrSvg } from '@/shared/ui/qr-download'
 import { downloadLeads, type LeadsDownload } from './api'
 
@@ -79,7 +80,15 @@ export function LeadLine({ lead }: { lead: EnquiryFormLead }) {
 }
 
 /** "Excel" and "CSV", the same pair everywhere leads can be downloaded (spec 3.12). */
-export function DownloadButtons({ query, className }: { query: Omit<LeadsDownload, 'format'>; className?: string }) {
+export function DownloadButtons({
+  query,
+  className,
+  solid = false,
+}: {
+  query: Omit<LeadsDownload, 'format'>
+  className?: string
+  solid?: boolean
+}) {
   const [busy, setBusy] = useState<'xlsx' | 'csv' | null>(null)
   const run = async (format: 'xlsx' | 'csv') => {
     setBusy(format)
@@ -95,13 +104,59 @@ export function DownloadButtons({ query, className }: { query: Omit<LeadsDownloa
   }
   return (
     <div className={cn('flex gap-2', className)}>
-      <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('xlsx')}>
+      <Button size="sm" variant={solid ? 'default' : 'outline'} disabled={!!busy} onClick={() => void run('xlsx')}>
         <FileSpreadsheet /> {busy === 'xlsx' ? 'Making…' : 'Excel'}
       </Button>
       <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('csv')}>
         {busy === 'csv' ? 'Making…' : 'CSV'}
       </Button>
     </div>
+  )
+}
+
+/**
+ * The leads download, on top where it is seen (owner, 21 Oct: "it has to come
+ * in the All Partners section ... shown on top"): one sentence and Excel / CSV.
+ * Excel opens in Google Sheets too (File → Import).
+ */
+export function LeadsDownloadStrip({ title, query, className }: { title: string; query: Omit<LeadsDownload, 'format'>; className?: string }) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-3 rounded-xl border border-success/40 bg-success/10 px-4 py-3', className)}>
+      <Download className="size-5 shrink-0 text-success" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground">Excel opens in Google Sheets too: File → Import.</p>
+      </div>
+      <DownloadButtons query={query} solid />
+    </div>
+  )
+}
+
+/** "Leads" on a partner's row: their leads as Excel in one tap. */
+function PartnerLeadsButton({ partner }: { partner: EnquiryPartner }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={busy}
+      aria-label={`Download ${partner.name}'s leads as Excel`}
+      title={`Download ${partner.name}'s leads as Excel`}
+      onClick={async () => {
+        setBusy(true)
+        try {
+          const n = await downloadLeads({ partner_id: partner.id, format: 'xlsx' })
+          if (n === 0) toast.info(`No leads from ${partner.name} yet`)
+          else toast.success(`${n} ${n === 1 ? 'lead' : 'leads'} from ${partner.name} downloaded`)
+        } catch (e) {
+          toast.error(e instanceof Error && e.message ? e.message : 'We could not make the file. Please try again.')
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      <FileSpreadsheet /> <span className="hidden sm:inline">{busy ? 'Making…' : 'Leads'}</span>
+    </Button>
   )
 }
 
@@ -185,6 +240,7 @@ export function PrintCardPreview({ url, studio, line }: { url: string; studio: s
 export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryPartner; studio: string; top?: boolean }) {
   const kinds = splitKinds(partner.label).join(', ')
   const counts = partnerLine(partner)
+  const canExport = useAccess().hasModule('crm_export')
   return (
     <li className="flex items-center gap-3 px-3 py-3 sm:px-4">
       <Link
@@ -206,6 +262,8 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
         </span>
         <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
       </Link>
+      {/* This partner's leads as Excel, on the row itself (owner, 21 Oct). */}
+      {canExport && partner.enquiries > 0 && <PartnerLeadsButton partner={partner} />}
       {partner.page_url && !partner.archived_at && (
         <Button size="icon" variant="outline" asChild>
           <a
@@ -240,7 +298,7 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
             }
           }}
         >
-          <Download />
+          <QrCode />
         </Button>
       )}
     </li>

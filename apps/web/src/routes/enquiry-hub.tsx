@@ -29,6 +29,7 @@ import { FormBuilderDialog } from '@/features/enquiry-forms/FormBuilderDialog'
 import { PartnerDialog } from '@/features/enquiry-forms/PartnerDialog'
 import {
   DownloadButtons,
+  LeadsDownloadStrip,
   PartnerRow,
   PrintCardPreview,
   QrDownloadButtons,
@@ -274,6 +275,7 @@ function PartnersSection({ hub, onAdd }: { hub: EnquiryHub; onAdd: () => void })
     )
   return (
     <section className="flex flex-col gap-3">
+      {access.hasModule('crm_export') && <LeadsDownloadStrip title="Download every lead from all your partners" query={{ from: 'partner' }} />}
       {total.scans + total.enquiries > 0 && <StatTiles {...total} />}
       <Card>
         <ul className="divide-y divide-border">
@@ -284,7 +286,6 @@ function PartnersSection({ hub, onAdd }: { hub: EnquiryHub; onAdd: () => void })
             <Link to="/follow-ups/partners" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
               All partners <ChevronRight className="size-4" aria-hidden />
             </Link>
-            {total.enquiries > 0 && access.hasModule('crm_export') && <DownloadButtons query={{ from: 'partner' }} />}
           </li>
         </ul>
       </Card>
