@@ -5,7 +5,7 @@ import { log, describeError } from './log'
 
 /**
  * The IPC Diamond member list (0262). The platform owner keeps it in a Google
- * Sheet; every hour (and on "Refresh now") the phone numbers in it are copied
+ * Sheet; every 12 hours (and on "Refresh now") the phone numbers in it are copied
  * into diamond_roster, which is what an owner's number is checked against.
  *
  * Two ways in, whichever the sheet allows:
@@ -248,14 +248,30 @@ export interface SheetSync {
 }
 
 /**
+ * How often the hourly cron reads the sheet again (owner, 21 Oct: "it does not
+ * get frequently updated"). Save and read and Refresh now always read at once.
+ */
+export const SHEET_EVERY_HOURS = 12
+
+/** Is the last good read old enough for the cron to read again? Never read means yes. */
+export function sheetReadDue(lastRead: Date | string | null | undefined, now: Date = new Date()): boolean {
+  if (!lastRead) return true
+  return now.getTime() - new Date(lastRead).getTime() >= SHEET_EVERY_HOURS * 3_600_000
+}
+
+/**
  * Copy the member list in. A sheet that reads but holds no numbers keeps the
  * old list (an emptied sheet by mistake must not lock every member out).
+ * The cron passes `onlyIfDue`, so it reads only every SHEET_EVERY_HOURS; a
+ * failed read leaves the last read time alone, so the next hour tries again.
  */
-export async function syncDiamondSheet(env: Env): Promise<SheetSync> {
-  const [setting] = await withService(env, (sql) => sql<{ url: string | null }[]>`
-    select diamond_sheet_url as url from platform_settings limit 1`)
+export async function syncDiamondSheet(env: Env, opts: { onlyIfDue?: boolean } = {}): Promise<SheetSync> {
+  const [setting] = await withService(env, (sql) => sql<{ url: string | null; synced: string | null; rows: number | null }[]>`
+    select diamond_sheet_url as url, diamond_sheet_synced_at::text as synced, diamond_sheet_rows as rows
+      from platform_settings limit 1`)
   const url = setting?.url
   if (!url) return { ok: false, rows: 0, error: null }
+  if (opts.onlyIfDue && !sheetReadDue(setting.synced)) return { ok: true, rows: setting.rows ?? 0, error: null }
   let roster: RosterRow[]
   try {
     roster = rosterFromTabs(await readSheet(env, url))

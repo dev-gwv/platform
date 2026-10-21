@@ -15,7 +15,7 @@ import { diamondOutcomeWords } from './diamond-phone'
  * The door to the member price (owner, 14 Oct): everyone sees the IPC Diamond
  * prices, but Talk to us on WhatsApp on one of them first asks for the mobile
  * number registered with IPC. Only a number on the member list (the owner's
- * Google Sheet, copied in every hour, 0262) goes on to WhatsApp; the match
+ * Google Sheet, copied in every 12 hours, 0262) goes on to WhatsApp; the match
  * also makes the studio Diamond, with 30 days from sign-up. A miss offers the
  * number again or the regular price -- never WhatsApp from here.
  *

@@ -192,7 +192,7 @@ function ClaimCard({ claim: r }: { claim: PlatformDiamondClaim }) {
 
 /**
  * The IPC Diamond member list (0262): the platform owner's Google Sheet. Paste
- * its link once; the app copies the phone numbers in now and every hour, and an
+ * its link once; the app copies the phone numbers in now and every 12 hours, and an
  * owner who types a listed number gets member prices and 30 days. Below, the
  * studios verified that way, newest first.
  */
@@ -233,7 +233,7 @@ function MemberSheet() {
             <p className="text-sm font-semibold">Member list (Google Sheet)</p>
             <p className="text-xs text-muted-foreground">
               Paste the sheet's link (shared as "Anyone with the link can view") or its "Publish to the web" link. Any
-              column of mobile numbers is read, again every hour.
+              column of mobile numbers is read, again every 12 hours (Refresh now reads it at once).
             </p>
           </div>
           <form

@@ -133,8 +133,9 @@ export const cronRouter = new Hono<AppEnv>()
         // once when it has ended (0211).
         const accessEmails = await runAccessEmails(c.env, dryRun)
         const alertEmails = emailOneADay(c.env) ? { due: 0, people: 0, sent: 0 } : await runAlertEmails(c.env, dryRun)
-        // The IPC Diamond member list, copied from the owner's sheet (0262).
-        const diamondSheet = dryRun ? null : await syncDiamondSheet(c.env).catch(() => null)
+        // The IPC Diamond member list, copied from the owner's sheet (0262),
+        // every 12 hours rather than every run (owner, 21 Oct).
+        const diamondSheet = dryRun ? null : await syncDiamondSheet(c.env, { onlyIfDue: true }).catch(() => null)
         const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
         const expiredQuotes = followUpSummary.quotes?.expired ?? 0
         return {
