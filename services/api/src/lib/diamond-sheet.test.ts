@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCsv, phonesIn, publishedCsvUrl, rosterFromRows, rosterFromTabs, sheetRef } from './diamond-sheet'
+import { parseCsv, phonesIn, publishedCsvUrl, rosterFromRows, rosterFromTabs, sheetReadDue, sheetRef } from './diamond-sheet'
 
 describe('the IPC Diamond member sheet', () => {
   it('finds the spreadsheet and tab in a pasted link', () => {
@@ -98,5 +98,12 @@ describe('the IPC Diamond member sheet', () => {
     expect(publishedCsvUrl(`${pub}/pubhtml`)).toBe(`${pub}/pub?output=csv`)
     expect(publishedCsvUrl('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit')).toBeNull()
     expect(sheetRef(`${pub}/pubhtml`)).toBeNull()
+  })
+
+  it('reads the sheet again only every 12 hours on its own (owner, 21 Oct)', () => {
+    const now = new Date('2026-10-21T12:00:00Z')
+    expect(sheetReadDue(null, now)).toBe(true)
+    expect(sheetReadDue('2026-10-21T01:00:00Z', now)).toBe(false)
+    expect(sheetReadDue('2026-10-21T00:00:00Z', now)).toBe(true)
   })
 })
