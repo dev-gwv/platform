@@ -79,7 +79,15 @@ export function LeadLine({ lead }: { lead: EnquiryFormLead }) {
 }
 
 /** "Excel" and "CSV", the same pair everywhere leads can be downloaded (spec 3.12). */
-export function DownloadButtons({ query, className }: { query: Omit<LeadsDownload, 'format'>; className?: string }) {
+export function DownloadButtons({
+  query,
+  className,
+  solid = false,
+}: {
+  query: Omit<LeadsDownload, 'format'>
+  className?: string
+  solid?: boolean
+}) {
   const [busy, setBusy] = useState<'xlsx' | 'csv' | null>(null)
   const run = async (format: 'xlsx' | 'csv') => {
     setBusy(format)
@@ -95,12 +103,30 @@ export function DownloadButtons({ query, className }: { query: Omit<LeadsDownloa
   }
   return (
     <div className={cn('flex gap-2', className)}>
-      <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('xlsx')}>
+      <Button size="sm" variant={solid ? 'default' : 'outline'} disabled={!!busy} onClick={() => void run('xlsx')}>
         <FileSpreadsheet /> {busy === 'xlsx' ? 'Making…' : 'Excel'}
       </Button>
       <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('csv')}>
         {busy === 'csv' ? 'Making…' : 'CSV'}
       </Button>
+    </div>
+  )
+}
+
+/**
+ * The leads download, on top where it is seen (owner, 21 Oct: "it has to come
+ * in the All Partners section ... shown on top"): one sentence and Excel / CSV.
+ * Excel opens in Google Sheets too (File → Import).
+ */
+export function LeadsDownloadStrip({ title, query, className }: { title: string; query: Omit<LeadsDownload, 'format'>; className?: string }) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-3 rounded-xl border border-success/40 bg-success/10 px-4 py-3', className)}>
+      <Download className="size-5 shrink-0 text-success" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground">Excel opens in Google Sheets too: File → Import.</p>
+      </div>
+      <DownloadButtons query={query} solid />
     </div>
   )
 }

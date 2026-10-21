@@ -23,7 +23,7 @@ import {
   useUpdatePartner,
 } from '@/features/enquiry-forms/api'
 import { PartnerDialog } from '@/features/enquiry-forms/PartnerDialog'
-import { DownloadButtons, LeadLine, PartnerRow, QrDownloadButtons, QrImage, StatTiles, copyText } from '@/features/enquiry-forms/parts'
+import { LeadLine, LeadsDownloadStrip, PartnerRow, QrDownloadButtons, QrImage, StatTiles, copyText } from '@/features/enquiry-forms/parts'
 
 function NotYours() {
   return (
@@ -43,6 +43,7 @@ export function PartnersPage() {
   const hub = useEnquiryHub()
   const [tab, setTab] = useState<'live' | 'archived'>('live')
   const canManage = hub.data?.can_manage ?? false
+  const canExport = useAccess().hasModule('crm_export')
   const partners = usePartners(tab === 'archived', canManage)
   const [adding, setAdding] = useState(false)
   const rows = partners.data ?? []
@@ -124,6 +125,7 @@ export function PartnersPage() {
             </Card>
           ) : (
             <>
+              {tab === 'live' && canExport && <LeadsDownloadStrip title="Download every lead from all your partners" query={{ from: 'partner' }} />}
               {tab === 'live' && <StatTiles {...total} />}
               <Card>
                 <ul className="divide-y divide-border">
@@ -155,6 +157,7 @@ export function PartnerPage() {
 
 function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner; studio: string; formOn: boolean }) {
   const [editing, setEditing] = useState(false)
+  const canExport = useAccess().hasModule('crm_export')
   const update = useUpdatePartner(p.id)
   const confirm = useConfirm()
   const ended = !!p.archived_at
@@ -187,6 +190,7 @@ function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner
               </Button>
             </div>
             <StatTiles scans={p.scans} enquiries={p.enquiries} booked={p.booked} />
+            {canExport && <LeadsDownloadStrip title={`Download all leads from ${p.name}`} query={{ partner_id: p.id }} />}
             {p.notes && <p className="whitespace-pre-line rounded-xl bg-muted/60 px-4 py-3 text-sm">{p.notes}</p>}
           </CardContent>
         </Card>
@@ -368,14 +372,12 @@ function TheirPageCard({ partner: p, studio }: { partner: EnquiryPartner; studio
 }
 
 function EnquiriesCard({ partner: p }: { partner: EnquiryPartner }) {
-  const access = useAccess()
   const leads = usePartnerLeads(p.id)
   const rows = leads.data ?? []
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
         <CardTitle className="text-lg font-extrabold">Enquiries from {p.name}</CardTitle>
-        {rows.length > 0 && access.hasModule('crm_export') && <DownloadButtons query={{ partner_id: p.id }} />}
       </CardHeader>
       <CardContent>
         {leads.isPending ? (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, CalendarClock, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, CalendarClock, Download, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { LeadLimitLine } from '@/features/billing/LeadLimitLine'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -22,6 +22,7 @@ import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
+import { DownloadButtons } from '@/features/enquiry-forms/parts'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { useAccess } from '@/shared/auth/useAccess'
 import { NO_EXTRAS, NO_FACETS, activeExtrasCount, activeFacetCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
@@ -230,6 +231,7 @@ function Crm() {
               </Link>
             </Button>
             <ImportLeadsButton />
+            <DownloadLeadsButton count={allOpen.length} />
             {/* The enquiry form and its QR codes, one tap from Leads (0274). */}
             <Button variant="outline" asChild>
               <Link to="/follow-ups/form">
@@ -534,6 +536,32 @@ function MoreFilters({
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Every lead as Excel or CSV, from the Leads page itself (owner, 21 Oct: the
+ * download lived only on Form & QR, Reports and the bulk bar, so it looked
+ * missing). The same server file as Form & QR (/leads-export, sixteen
+ * columns), so it needs CRM Export; archived leads stay out.
+ */
+function DownloadLeadsButton({ count }: { count: number }) {
+  const canExport = useAccess().hasModule('crm_export')
+  if (!canExport) return null
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Download /> Download leads
+        </Button>
+      </DialogTrigger>
+      <DialogContent title="Download all your leads" description={`Every lead${count ? ` (${count} open now)` : ''}, won and lost too, with phone, email, event, source and stage.`}>
+        <DownloadButtons query={{}} />
+        <p className="text-sm text-muted-foreground">
+          For Google Sheets: download Excel, then in Google Sheets press <strong>File → Import → Upload</strong>.
+        </p>
+      </DialogContent>
+    </Dialog>
   )
 }
 
