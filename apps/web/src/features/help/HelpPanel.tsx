@@ -70,7 +70,7 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
             Something not working, or a question? Book a 15-minute call, or message us.
           </p>
         </div>
-        <BookCallButton variant="default" />
+        <BookCallButton />
         {(help?.support_whatsapp || help?.support_email) && <SupportButtons />}
       </div>
 

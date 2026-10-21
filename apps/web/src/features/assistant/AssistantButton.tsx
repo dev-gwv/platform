@@ -76,7 +76,7 @@ export function AssistantButton() {
           {/* Never a dead end: a person is one press away here too. */}
           <div className="flex flex-col gap-2 border-t border-border p-3">
             <p className="text-xs text-muted-foreground">Rather talk to a person?</p>
-            <BookCallButton size="sm" variant="default" />
+            <BookCallButton size="sm" />
             <SupportButtons compact />
           </div>
         </SheetContent>

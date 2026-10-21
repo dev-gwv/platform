@@ -78,7 +78,7 @@ export function HelpBubble() {
               <div className="border-t border-border p-3">
                 <p className="mb-2 text-xs text-muted-foreground">{t.ratherPerson}</p>
                 <div className="flex flex-col gap-2">
-                  <BookCallButton size="sm" variant="default" />
+                  <BookCallButton size="sm" />
                   <SupportButtons compact />
                 </div>
               </div>
@@ -86,9 +86,9 @@ export function HelpBubble() {
           ) : (
             <div className="flex flex-col gap-3 overflow-y-auto p-4">
               <p className="text-sm text-muted-foreground">
-                Something not working, or a question? Book a call with us, or message us.
+                Something not working, or a question? Book a support call, or message us.
               </p>
-              <BookCallButton variant="default" />
+              <BookCallButton />
               <SupportButtons />
               <Button asChild variant="ghost" className="justify-start">
                 <Link to="/learn">

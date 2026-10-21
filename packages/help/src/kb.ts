@@ -106,9 +106,9 @@ export const KB: readonly KbArticle[] = [
     area: 'Start',
     menu: 'Help, at the foot of the menu',
     to: '/learn',
-    keywords: ['support', 'contact', 'tutorial', 'video', 'stuck', 'training', 'call', 'person', 'demo', 'setup call'],
+    keywords: ['support', 'support call', 'contact', 'tutorial', 'video', 'stuck', 'training', 'call', 'person', 'demo', 'setup call'],
     body: [
-      'To talk to a person, press **Book a call** and pick a time that suits you. It is in **Help** at the bottom of the menu, in the round help button in the corner, on **Plan & billing** and on **Getting started**. The studio owner, admins and managers see it.',
+      'To talk to a person, press **Book a support call** (the teal button with the headphones) and pick a time that suits you. It is in the top bar as **Support call** on every page, in **Help** at the bottom of the menu, in the round help button in the corner, on **Plan & billing** and on **Getting started**. Everyone signed in sees it.',
       'Press **Help** at the bottom of the menu. It also has **WhatsApp us** and **Email us**, with your studio, your name and the page you are on already written into the message — you only press Send.',
       '**How to use Studio AutoPilot** is the whole app step by step with a short video for each job, in English and Hindi.',
       'Most screens also have **Watch how** beside the page title, which plays the recording for that screen.',
@@ -124,7 +124,7 @@ export const KB: readonly KbArticle[] = [
       'Press **Ask for help** (the sparkle in the top bar), or the round help button in the corner, and type your question in your own words.',
       'The first time, it asks which language to answer in: **English**, **हिन्दी**, or **Hinglish** (Hindi in English letters). It remembers your choice on every device.',
       'To change it, press **English**, **हिन्दी** or **Hinglish** under the question box. Button and menu names always stay in English, because that is what the screen shows.',
-      'It answers from this help only and cannot see your studio\'s data. When it cannot help, it offers **Book a call**.',
+      'It answers from this help only and cannot see your studio\'s data. When it cannot help, it offers **Book a support call**.',
     ],
   },
 

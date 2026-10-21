@@ -100,7 +100,7 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
       },
       ...(callUrl && {
         cancel: {
-          label: 'Book a call',
+          label: 'Book a support call',
           onClick: () => {
             window.open(callUrl, '_blank', 'noopener')
           },

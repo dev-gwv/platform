@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   ArrowUpRight,
-  CalendarClock,
+  Headphones,
   Check,
   Copy,
   CornerDownLeft,
@@ -19,6 +19,7 @@ import {
 import type { AssistantLang, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
+import { SUPPORT_CALL_CLASS } from '@/features/help/BookCall'
 import { useTutorials } from '@/features/help/api'
 import { useHelpLang } from '@/features/help/lang'
 import { TutorialPlayer } from '@/features/help/TutorialPlayer'
@@ -445,10 +446,10 @@ function Bubble({
       )}
 
       {said.callUrl && (
-        <Button size="sm" className="self-start" asChild>
+        <Button size="sm" className={cn('self-start', SUPPORT_CALL_CLASS)} asChild>
           {/* Opens away from the app, so the conversation is still here afterwards. */}
           <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
-            <CalendarClock /> {t.bookCall}
+            <Headphones /> {t.bookCall}
           </a>
         </Button>
       )}

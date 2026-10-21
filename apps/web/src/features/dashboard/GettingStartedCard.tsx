@@ -108,7 +108,7 @@ export function GettingStartedCard() {
         {callUrl && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm text-muted-foreground">
             Want us to set it up with you?
-            <BookCallButton size="sm" label="Book a 15-minute call" />
+            <BookCallButton size="sm" label="Book a 15-minute support call" />
           </div>
         )}
       </CardContent>

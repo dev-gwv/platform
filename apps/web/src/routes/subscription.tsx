@@ -180,7 +180,7 @@ function Subscription() {
       {callUrl && (
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
           Rather talk it through first?
-          <BookCallButton size="sm" label="Book a 15-minute call" />
+          <BookCallButton size="sm" label="Book a 15-minute support call" />
         </div>
       )}
       {/* Never a timer (owner, 14 Oct): one honest sentence. */}

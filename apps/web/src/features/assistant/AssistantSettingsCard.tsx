@@ -248,7 +248,7 @@ export function AssistantSettingsCard() {
         )}
 
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Where “Book a call” goes
+          Where “Book a support call” goes
           <Input className={filled(callUrl)} placeholder="https://cal.com/…" value={callUrl} onChange={(e) => setCallUrl(e.target.value)} />
         </label>
         {!callUrl.trim() && (

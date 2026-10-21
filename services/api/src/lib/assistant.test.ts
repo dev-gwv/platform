@@ -310,10 +310,10 @@ describe('answering in the language the studio picked', () => {
       callUrl: CALL,
       language: 'hinglish',
     })
-    expect(failed.answer).toBe('Abhi jawab nahi mil saka. Aap iski jagah call book kar sakte hain.')
+    expect(failed.answer).toBe('Abhi jawab nahi mil saka. Aap iski jagah support call book kar sakte hain.')
 
     const empty = await ask({ provider: stub(answered('')), help: HELP, question: 'q', callUrl: CALL, language: 'hi' })
-    expect(empty.answer).toBe('हेल्प में इसका जवाब नहीं है। कॉल बुक करें, हम साथ में देख लेंगे।')
+    expect(empty.answer).toBe('हेल्प में इसका जवाब नहीं है। सपोर्ट कॉल बुक करें, हम साथ में देख लेंगे।')
   })
 
   it('hands money questions to a person in Hindi and Hinglish as well', async () => {
