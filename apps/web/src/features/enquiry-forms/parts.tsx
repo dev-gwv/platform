@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Download, FileSpreadsheet, MessageCircle } from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, MessageCircle, QrCode } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryFormLead, EnquiryPartner } from '@ipc/contracts'
 import { partnerLine, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
+import { useAccess } from '@/shared/auth/useAccess'
 import { downloadQrPng, downloadQrSvg, qrSvg } from '@/shared/ui/qr-download'
 import { downloadLeads, type LeadsDownload } from './api'
 
@@ -131,6 +132,34 @@ export function LeadsDownloadStrip({ title, query, className }: { title: string;
   )
 }
 
+/** "Leads" on a partner's row: their leads as Excel in one tap. */
+function PartnerLeadsButton({ partner }: { partner: EnquiryPartner }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={busy}
+      aria-label={`Download ${partner.name}'s leads as Excel`}
+      title={`Download ${partner.name}'s leads as Excel`}
+      onClick={async () => {
+        setBusy(true)
+        try {
+          const n = await downloadLeads({ partner_id: partner.id, format: 'xlsx' })
+          if (n === 0) toast.info(`No leads from ${partner.name} yet`)
+          else toast.success(`${n} ${n === 1 ? 'lead' : 'leads'} from ${partner.name} downloaded`)
+        } catch (e) {
+          toast.error(e instanceof Error && e.message ? e.message : 'We could not make the file. Please try again.')
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      <FileSpreadsheet /> <span className="hidden sm:inline">{busy ? 'Making…' : 'Leads'}</span>
+    </Button>
+  )
+}
+
 /** "Download for print (HD)" and "SVG" for one QR (spec 3.13). */
 export function QrDownloadButtons({
   url,
@@ -211,6 +240,7 @@ export function PrintCardPreview({ url, studio, line }: { url: string; studio: s
 export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryPartner; studio: string; top?: boolean }) {
   const kinds = splitKinds(partner.label).join(', ')
   const counts = partnerLine(partner)
+  const canExport = useAccess().hasModule('crm_export')
   return (
     <li className="flex items-center gap-3 px-3 py-3 sm:px-4">
       <Link
@@ -232,6 +262,8 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
         </span>
         <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
       </Link>
+      {/* This partner's leads as Excel, on the row itself (owner, 21 Oct). */}
+      {canExport && partner.enquiries > 0 && <PartnerLeadsButton partner={partner} />}
       {partner.page_url && !partner.archived_at && (
         <Button size="icon" variant="outline" asChild>
           <a
@@ -266,7 +298,7 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
             }
           }}
         >
-          <Download />
+          <QrCode />
         </Button>
       )}
     </li>
