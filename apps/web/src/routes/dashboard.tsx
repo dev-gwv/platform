@@ -29,6 +29,7 @@ import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
 import { GettingStartedCard, useGettingStartedShowing } from '@/features/dashboard/GettingStartedCard'
 import { GuideCard } from '@/features/help/GuideCard'
 import { OfferStrip } from '@/features/billing/OfferStrip'
+import { DiamondTrialBanner } from '@/features/billing/DiamondTrialBanner'
 import { ProfileBanner } from '@/features/profile/ProfileBanner'
 import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
@@ -221,6 +222,8 @@ function StudioCommandCenter() {
       />
 
       <LowBalanceBanner />
+      {/* Shown during setup too: a member's first day is when the 7 days confuse them. */}
+      <DiamondTrialBanner />
 
       {settingUp ? (
         showJourney && journey.current && <SetupJourney steps={journey.steps} current={journey.current} />
