@@ -86,10 +86,10 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
       {s?.member_tier === 'outsider' && trial && (
         <Link
           to="/settings/subscription"
-          hash="diamond-prices"
+          hash="diamond-trial"
           className="mt-1.5 block text-center text-xs font-medium text-tone-violet hover:underline"
         >
-          IPC Diamond member?
+          IPC Diamond member? Get 30 days
         </Link>
       )}
     </div>

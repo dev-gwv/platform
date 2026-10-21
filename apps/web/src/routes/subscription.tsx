@@ -20,6 +20,7 @@ import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
 import { DiamondCheckDialog } from '@/features/billing/DiamondCheckDialog'
 import { BookCallButton, useCallUrl } from '@/features/help/BookCall'
 import { OfferStrip } from '@/features/billing/OfferStrip'
+import { DiamondTrialBanner } from '@/features/billing/DiamondTrialBanner'
 import { markOffer, useMyOffer } from '@/features/billing/offer-api'
 import { offerFor, offerLastDay } from '@/features/billing/offer'
 
@@ -92,6 +93,7 @@ function Subscription() {
           )
         }
       />
+      <DiamondTrialBanner />
       <OfferStrip />
       {/* One line only when a payment is in flight; the card below says the rest. */}
       {status.data?.latest_order_status && status.data.latest_order_status !== 'paid' && (
