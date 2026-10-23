@@ -545,6 +545,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
         review_note: d.custom_status_code === 'changes_requested' ? 'Skin tones in the haldi set look too orange. Warm them down a little.' : null,
         last_version: d.custom_status_code === 'changes_requested' ? 1 : null,
       }))
+  // The second sample project has no gallery yet, so Create gallery shows.
+  if (method === 'GET' && path === `/projects/${PROJ.p2}/gallery`)
+    return { connected: true, gallery: null, live: null, trouble: null, plan_ended_on: null, client: { name: 'Anil Mehta', phone: '09812345678' } }
   // The project's Frameline gallery (0261): made, with photos up.
   if (method === 'GET' && /^\/projects\/[^/]+\/gallery$/.test(path))
     return {
