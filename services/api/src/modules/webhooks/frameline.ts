@@ -16,8 +16,9 @@ import { saveGallerySnapshot, systemPerson } from '../../lib/gallery-sync'
  * new photos arrived. So the body is never trusted beyond which project, and a
  * replayed notice does nothing a fresh read would not.
  *
- * Answers 204 when done, 404 when we do not know the project (Frameline then
- * stops trying), 401 for a bad token and 503 when Frameline could not be read
+ * Answers 204 when done, 404 when we do not know the project or Frameline no
+ * longer has its gallery (the kept row is then removed); Frameline then stops
+ * trying. 401 for a bad token and 503 when Frameline could not be read
  * back (Frameline retries).
  */
 export const framelineWebhookRouter = new Hono<AppEnv>().post('/frameline', async (c) => {
@@ -42,7 +43,15 @@ export const framelineWebhookRouter = new Hono<AppEnv>().post('/frameline', asyn
   if (!known.row) return c.json({ error: 'unknown project' }, 404)
 
   const r = await readFramelineGallery(c.env, systemPerson(companyId, known.row.name), projectId)
-  if (!r.ok) return c.json({ error: 'could not read the gallery back' }, r.kind === 'missing' ? 404 : 503)
+  if (!r.ok && r.kind === 'missing') {
+    // Deleted in Frameline: forget it here too, as the Gallery tab does, so
+    // the client's page stops showing a dead link.
+    await attempt(c, 'frameline.notice.forget', () =>
+      withService(c.env, (sql) => sql`delete from project_galleries where project_id = ${projectId} and company_id = ${companyId}`),
+    )
+    return c.json({ error: 'gallery gone' }, 404)
+  }
+  if (!r.ok) return c.json({ error: 'could not read the gallery back' }, 503)
   const saved = await attempt(c, 'frameline.notice.save', () => withService(c.env, (sql) => saveGallerySnapshot(sql, companyId, projectId, r.data)))
   if (!saved) return c.json({ error: 'could not save' }, 503)
   return c.body(null, 204)

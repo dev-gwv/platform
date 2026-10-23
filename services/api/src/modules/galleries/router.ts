@@ -6,7 +6,7 @@ import { requireAction, requireOwner } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
-import { framelineConnected, framelineSignInUrl, listFramelineGalleries, readFramelineStudio } from '../../lib/frameline'
+import { FRAMELINE_SAYS, framelineConnected, framelineSignInUrl, framelineTrouble, listFramelineGalleries, nameMissing, readFramelineStudio } from '../../lib/frameline'
 import { saveGallerySnapshot } from '../../lib/gallery-sync'
 import { personOf } from '../projects/routes-gallery'
 
@@ -29,7 +29,6 @@ interface ListRow {
   status: string | null
 }
 
-const NOT_CONNECTED = 'The gallery add-on is not connected yet. Ask us on WhatsApp to switch it on.'
 
 export const galleriesRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -70,7 +69,11 @@ export const galleriesRouter = new Hono<AppEnv>()
     const empty = { linked: false, studio_name: null, plan: null, valid_till: null, wallet_rupees: null, photos_used: null, photos_limit: null, galleries: 0 }
     if (!framelineConnected(c.env)) return c.json(framelineAccount.parse({ connected: false, reachable: false, ...empty }))
     const r = await readFramelineStudio(c.env, await personOf(c))
-    if (!r.ok) return c.json(framelineAccount.parse({ connected: true, reachable: false, ...empty }))
+    // A blip ("try again") told apart from a link that is wrong until we fix it (Book a support call).
+    if (!r.ok) {
+      console.error(`[galleries] Frameline studio read failed: ${r.kind} ${r.status}`)
+      return c.json(framelineAccount.parse({ connected: true, reachable: false, trouble: framelineTrouble(r.kind), ...empty }))
+    }
     const s = r.data
     return c.json(
       framelineAccount.parse({
@@ -90,6 +93,9 @@ export const galleriesRouter = new Hono<AppEnv>()
 
   /** "Open Frameline": signed in as the owner, on Frameline's home (plan, wallet, every event). */
   .post('/account/open', requireOwner(), async (c) => {
-    if (!framelineConnected(c.env)) fail(503, NOT_CONNECTED)
-    return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, await personOf(c), '/') }))
+    if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
+    const person = await personOf(c)
+    // The owner's first sign-in makes their Frameline studio: never as "Studio".
+    if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
+    return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, person, '/') }))
   })

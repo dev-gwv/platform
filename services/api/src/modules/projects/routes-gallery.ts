@@ -10,9 +10,15 @@ import { audit } from '../../lib/audit'
 import { todayInIndia } from '../../lib/dates'
 import {
   createFramelineGallery,
+  FRAMELINE_SAYS,
   framelineConnected,
   framelineSignInUrl,
+  framelineTrouble,
+  nameMissing,
+  planEndedOn,
   readFramelineGallery,
+  readFramelineStudio,
+  type FramelineFailure,
   type FramelineGallery,
   type FramelinePerson,
 } from '../../lib/frameline'
@@ -80,7 +86,7 @@ export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
   const facts = await attempt(c, 'gallery.person', () =>
     withService(c.env, async (sql) => {
       const [co] = await sql<{ name: string | null }[]>`
-        select coalesce(display_name, name) as name from companies where id = ${auth.companyId}`
+        select coalesce(nullif(btrim(display_name), ''), name) as name from companies where id = ${auth.companyId}`
       const [au] = await sql<{ v: boolean }[]>`
         select au.email_verified as v from auth.users au where au.id = auth_identity_of(${auth.userId})`
       return { companyName: co?.name ?? '', emailVerified: au?.v === true }
@@ -105,6 +111,29 @@ const readRow = (c: Context<AppEnv>, projectId: string) =>
     }),
   )
 
+/**
+ * A gallery Frameline no longer has (deleted or moved to its trash): the kept
+ * row goes, so the tab offers Create gallery again (Frameline makes it afresh)
+ * and the client's page stops showing a dead link. Only the row for that very
+ * event, so a gallery made again in the meantime is left alone. Nothing else
+ * reads the row's history.
+ */
+const forget = (c: Context<AppEnv>, projectId: string, eventId: string) =>
+  attempt(c, 'gallery.forget', () =>
+    withUser(c.env, c.get('auth').userId, async (sql) => {
+      const gone = await sql`delete from project_galleries where project_id = ${projectId} and event_id = ${eventId} returning project_id`
+      return gone.length > 0
+    }),
+  )
+
+/** What a failed Create gallery says, by why. */
+export function createFailure(kind: FramelineFailure): { status: 409 | 502 | 503; message: string } {
+  if (kind === 'owner_first') return { status: 409, message: 'Your studio’s owner needs to make the first gallery. After that, anyone who runs projects can.' }
+  if (kind === 'no_name') return { status: 503, message: FRAMELINE_SAYS.no_name }
+  if (framelineTrouble(kind) === 'misconfigured') return { status: 502, message: FRAMELINE_SAYS.misconfigured }
+  return { status: 503, message: FRAMELINE_SAYS.no_answer }
+}
+
 export const projectGalleryRoutes = new Hono<AppEnv>()
   /** The tab: the gallery if there is one, and what Frameline says about it now. */
   .get('/:id/gallery', requireAction('projects', 'edit'), async (c) => {
@@ -114,20 +143,37 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     let { row } = read
     const connected = framelineConnected(c.env)
     let live = null
+    let trouble: 'unreachable' | 'misconfigured' | null = null
+    let planEnded: string | null = null
     if (connected && row) {
-      const r = await readFramelineGallery(c.env, await personOf(c), projectId)
+      const person = await personOf(c)
+      // The plan beside the gallery, both at once: a plan that ended is the
+      // studio's next thing even while the gallery itself still opens.
+      const [r, studio] = await Promise.all([readFramelineGallery(c.env, person, projectId), readFramelineStudio(c.env, person)])
       if (r.ok) {
         live = { photo_count: r.data.photoCount, status: r.data.status }
         // A PIN changed in Frameline shows here (and on the client's page) from this read on.
         await refresh(c, projectId, r.data)
         row = fromFrameline(row, r.data)
+      } else if (r.kind === 'missing') {
+        if (await forget(c, projectId, row.event_id)) {
+          await audit(c, { action: 'project.gallery_gone', entityType: 'project', entityId: projectId, before: { event_id: row.event_id } })
+          row = null
+        } else {
+          trouble = 'unreachable'
+        }
+      } else {
+        trouble = framelineTrouble(r.kind)
       }
+      if (row && studio.ok && studio.data.linked) planEnded = planEndedOn(studio.data.validTill)
     }
     return c.json(
       projectGallery.parse({
         connected,
         gallery: row ? galleryOut(row) : null,
         live,
+        trouble,
+        plan_ended_on: planEnded,
         client: read.client,
       }),
     )
@@ -136,7 +182,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
   /** "Create gallery": made once per project in Frameline, then kept here. */
   .post('/:id/gallery', requireAction('projects', 'edit'), async (c) => {
     const projectId = uuidParam(c)
-    if (!framelineConnected(c.env)) fail(503, 'The gallery add-on is not connected yet. Ask us on WhatsApp to switch it on.')
+    if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
     const auth = c.get('auth')
 
     // The project's name, and the day the gallery is for: the wedding if there
@@ -144,13 +190,16 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     const found = await attempt(c, 'gallery.project', () =>
       withUser(c.env, auth.userId, async (sql) => {
         const [p] = await sql<{ name: string }[]>`select name from projects where id = ${projectId}`
-        if (!p) return { project: null }
+        if (!p) return { project: null, client: null }
+        const [client] = await sql<ClientRow[]>`
+          select cl.name, nullif(cl.phone, '') as phone
+            from projects p join clients cl on cl.id = p.client_id where p.id = ${projectId}`
         const [s] = await sql<{ d: string | null }[]>`
           select to_char(shoot_date, 'YYYY-MM-DD') as d from shoots
            where project_id = ${projectId} and shoot_date is not null and status <> 'cancelled'
            order by (name ~* 'wedding' and name !~* '(pre|post)[\\s-]*wedding') desc, shoot_date
            limit 1`
-        return { project: { name: p.name, date: s?.d ?? null } }
+        return { project: { name: p.name, date: s?.d ?? null }, client: client ?? null }
       }),
     )
     if (!found) fail(400, 'We could not read the project.')
@@ -164,8 +213,9 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
       city: '',
     })
     if (!r.ok) {
-      if (r.kind === 'owner_first') fail(409, 'Your studio’s owner needs to make the first gallery. After that, anyone who runs projects can.')
-      fail(503, 'The gallery app did not answer. Please try again in a minute.')
+      const why = createFailure(r.kind)
+      console.error(`[gallery] create for ${projectId} failed: ${r.kind} ${r.status}`)
+      fail(why.status, why.message)
     }
 
     const saved = await attempt(c, 'gallery.save', () =>
@@ -189,6 +239,8 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
         connected: true,
         gallery: galleryOut(fromFrameline({ created_at: r.data.createdAt }, r.data)),
         live: { photo_count: r.data.photoCount, status: r.data.status },
+        // So Send to the client works straight away, without a second read.
+        client: found.client,
       }),
     )
   })
@@ -200,9 +252,11 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
    */
   .post('/:id/gallery/open', requireAction('projects', 'edit'), async (c) => {
     const projectId = uuidParam(c)
-    if (!framelineConnected(c.env)) fail(503, 'The gallery add-on is not connected yet. Ask us on WhatsApp to switch it on.')
+    if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
     const read = await readRow(c, projectId)
     if (!read) fail(400, 'We could not open the gallery.')
-    const url = await framelineSignInUrl(c.env, await personOf(c), read.row ? `/events/${read.row.event_id}` : '/events')
+    const person = await personOf(c)
+    if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
+    const url = await framelineSignInUrl(c.env, person, read.row ? `/events/${read.row.event_id}` : '/events')
     return c.json(galleryOpenLink.parse({ url }))
   })

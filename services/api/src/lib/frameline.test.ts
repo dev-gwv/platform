@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { sign, verify } from 'hono/jwt'
 import type { Env } from '../context'
-import { createFramelineGallery, framelineClaims, framelineConnected, framelineSignInUrl, readFramelineGallery, verifyFramelineNotice, type FramelinePerson } from './frameline'
+import {
+  createFramelineGallery,
+  framelineClaims,
+  framelineConnected,
+  framelineSignInUrl,
+  framelineTrouble,
+  nameMissing,
+  planEndedOn,
+  readFramelineGallery,
+  readFramelineStudio,
+  refusalKind,
+  verifyFramelineNotice,
+  type FramelinePerson,
+} from './frameline'
 
 /**
  * Frameline, the gallery add-on (0261). Its own suite checks the other half
@@ -122,5 +135,62 @@ describe('Frameline\'s gallery-changed notice', () => {
     expect(await verifyFramelineNotice(env, await notice({ cid: '' }))).toBeNull()
     expect(await verifyFramelineNotice(env, undefined)).toBeNull()
     expect(await verifyFramelineNotice({} as Env, await notice())).toBeNull()
+  })
+})
+
+describe('telling a blip from a link only we can fix', () => {
+  it('reads 401, 403, 501 and a bare 404 as not linked properly, and Frameline’s own 404 as a gallery gone', () => {
+    expect(refusalKind(401, 'invalid_partner_token')).toBe('misconfigured')
+    expect(refusalKind(403, undefined)).toBe('misconfigured')
+    expect(refusalKind(501, 'not_configured')).toBe('misconfigured')
+    // A wrong FRAMELINE_API_URL answers 404 to everything: never "the gallery was deleted".
+    expect(refusalKind(404, undefined)).toBe('misconfigured')
+    expect(refusalKind(404, 'not_found')).toBe('missing')
+    expect(refusalKind(409, 'partner_studio_not_set_up')).toBe('owner_first')
+    expect(refusalKind(500, 'internal')).toBe('refused')
+    expect(refusalKind(503, undefined)).toBe('refused')
+  })
+
+  it('says "tell us" only for what a retry cannot fix', () => {
+    expect(framelineTrouble('misconfigured')).toBe('misconfigured')
+    expect(framelineTrouble('not_connected')).toBe('misconfigured')
+    expect(framelineTrouble('refused')).toBe('unreachable')
+    expect(framelineTrouble('unreachable')).toBe('unreachable')
+    expect(framelineTrouble('no_name')).toBe('unreachable')
+  })
+
+  it('sees a secret mismatch through the call itself', async () => {
+    expect(await readFramelineStudio(env, owner, reply(401, { code: 'invalid_partner_token' }))).toMatchObject({ ok: false, kind: 'misconfigured', status: 401 })
+    expect(await readFramelineGallery(env, owner, 'p-1', reply(404, {}))).toMatchObject({ ok: false, kind: 'misconfigured' })
+  })
+})
+
+describe('the owner’s studio is never made as "Studio"', () => {
+  const nameless: FramelinePerson = { ...owner, companyName: '  ' }
+
+  it('stops an owner whose studio name could not be read, before anything is sent', async () => {
+    expect(nameMissing(nameless)).toBe(true)
+    expect(nameMissing({ ...manager, companyName: '' })).toBe(false)
+    let called = false
+    const r = await createFramelineGallery(env, nameless, { id: 'p-1', name: 'W', date: '2026-12-11', city: '' }, async () => {
+      called = true
+      return new Response(JSON.stringify(gallery), { status: 201 })
+    })
+    expect(r).toMatchObject({ ok: false, kind: 'no_name' })
+    expect(called).toBe(false)
+  })
+
+  it('sends the studio’s own name, trimmed', () => {
+    expect(framelineClaims({ ...owner, companyName: '  Asha Studio ' }, 'api').cname).toBe('Asha Studio')
+  })
+})
+
+describe('a Frameline plan that ended', () => {
+  const now = Date.parse('2026-10-23T06:00:00Z')
+  it('names the day only once it has passed', () => {
+    expect(planEndedOn('2026-10-01T00:00:00Z', now)).toBe('2026-10-01T00:00:00Z')
+    expect(planEndedOn('2027-03-03T00:00:00Z', now)).toBeNull()
+    expect(planEndedOn(null, now)).toBeNull()
+    expect(planEndedOn('not a date', now)).toBeNull()
   })
 })

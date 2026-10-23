@@ -164,7 +164,8 @@ export const publicClientPortal = z.object({
   updates: z.array(z.object({ at: z.string(), text: z.string() })).default([]),
   /**
    * The project's photo gallery in Frameline (0261): where the client and
-   * their guests see the photos, and its PIN. Null until the studio makes one.
+   * their guests see the photos, and its PIN. Null until it has photos, and
+   * again once it has closed (the API holds it back, portalGallery).
    */
   gallery: z
     .object({

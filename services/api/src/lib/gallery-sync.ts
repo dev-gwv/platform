@@ -59,3 +59,22 @@ async function announcePhotos(sql: TransactionSql, companyId: string, projectId:
       from (select notification_admin_recipients(${companyId}) as r
             union select ${createdBy}::uuid where ${createdBy}::uuid is not null) who`
 }
+
+/**
+ * Whether the client's page shows the gallery: only once photos are in (an
+ * empty gallery behind a PIN reads as broken to a couple), and never after it
+ * closed in Frameline. `facts` is the kept row's count and expiry.
+ */
+export function galleryForClient<G>(
+  gallery: G | null | undefined,
+  facts: { photo_count: number | null; expires_at: string | null } | null | undefined,
+  now: number = Date.now(),
+): G | null {
+  if (!gallery || !facts) return null
+  if (!facts.photo_count || facts.photo_count <= 0) return null
+  if (facts.expires_at) {
+    const t = Date.parse(facts.expires_at)
+    if (Number.isFinite(t) && t <= now) return null
+  }
+  return gallery
+}

@@ -1,10 +1,15 @@
-import type { ModuleKey } from '@ipc/permissions'
+import type { ModuleAction, ModuleKey } from '@ipc/permissions'
 
 export interface HubTab {
   to: string
   label: string
   module: ModuleKey
+  /** What the page's API asks beyond seeing the module; 'view' when left out. */
+  action?: ModuleAction
 }
+
+/** May this person open the tab? The same question the page's API asks. */
+export type HubCan = (module: ModuleKey, action: ModuleAction) => boolean
 
 /**
  * Pages that belong together, reached from one sidebar entry and switched
@@ -62,8 +67,9 @@ export const TEAM_SETUP: readonly HubTab[] = [
 export const PROJECTS_HUB: readonly HubTab[] = [
   { to: '/projects', label: 'All projects', module: 'projects' },
   { to: '/project-tracking', label: 'Needs attention', module: 'projects' },
-  // Every project's Frameline gallery in one list (0264).
-  { to: '/galleries', label: 'Galleries', module: 'projects' },
+  // Every project's Frameline gallery in one list (0264). GET /galleries asks
+  // projects edit, so a viewer would only meet a refusal there.
+  { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit' },
 ]
 
 /**
@@ -85,8 +91,10 @@ const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_P
  * hubs (/leave: the studio's leave and holidays, or a person's own) takes the
  * first one this person can switch around in.
  */
-export function hubFor(pathname: string, can: (m: ModuleKey) => boolean = () => true): readonly HubTab[] | null {
+export function hubFor(pathname: string, can: HubCan = () => true): readonly HubTab[] | null {
   const p = pathname.replace(/\/+$/, '') || '/'
   const found = TAB_HUBS.filter((h) => h.some((t) => t.to === p))
-  return found.find((h) => h.filter((t) => can(t.module)).length >= 2) ?? found[0] ?? null
+  return found.find((h) => h.filter((t) => tabAllowed(t, can)).length >= 2) ?? found[0] ?? null
 }
+
+export const tabAllowed = (t: HubTab, can: HubCan) => can(t.module, t.action ?? 'view')

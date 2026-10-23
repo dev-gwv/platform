@@ -30,6 +30,13 @@ export const projectGallery = z.object({
    * separate app, and its being slow must never stop the project page).
    */
   live: z.object({ photo_count: z.number().int(), status: z.string() }).nullable(),
+  /**
+   * Why `live` is null: Frameline did not answer (a blip, try again) or
+   * refused us in a way only we can fix (the add-on is not linked properly).
+   */
+  trouble: z.enum(['unreachable', 'misconfigured']).nullable().default(null),
+  /** The day the studio's Frameline plan ended, while it has; null while it runs. */
+  plan_ended_on: z.string().nullable().default(null),
   /** Who to tell the photos are ready: the project's client. */
   client: z.object({ name: z.string(), phone: z.string().nullable() }).nullable().default(null),
 })
@@ -74,6 +81,8 @@ export const framelineAccount = z.object({
   connected: z.boolean(),
   /** Frameline answered. False: it is connected but did not answer just now. */
   reachable: z.boolean(),
+  /** Why it did not: a blip, or a link only we can fix. Null when it answered. */
+  trouble: z.enum(['unreachable', 'misconfigured']).nullable().default(null),
   /** The owner has opened a gallery once, which sets the Frameline studio up. */
   linked: z.boolean(),
   studio_name: z.string().nullable(),

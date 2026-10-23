@@ -20,6 +20,7 @@ import { textParam, uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { galleryForClient } from '../../lib/gallery-sync'
 import { requireStudioWork } from '../../lib/scope'
 import { newRawToken, sha256Hex } from '../../lib/auth-token'
 
@@ -219,8 +220,15 @@ async function withGallery(sql: TransactionSql, token: string, doc: unknown): Pr
   try {
     // A savepoint, so a failure here cannot abort the transaction that just
     // counted the client's visit.
-    const rows = await sql.savepoint((sp) => sp<{ g: unknown }[]>`select client_portal_gallery(${token}) as g`)
-    return { ...(doc as object), gallery: rows[0]?.g ?? null }
+    // The kept row's photos and expiry ride beside it, found by the address
+    // client_portal_gallery just gave for this link (no migration for two
+    // figures): the card waits for photos and goes once the gallery closed.
+    const rows = await sql.savepoint((sp) => sp<{ g: { url?: string } | null; facts: { photo_count: number | null; expires_at: string | null } | null }[]>`
+      select x.g,
+             (select jsonb_build_object('photo_count', pg.photo_count, 'expires_at', pg.expires_at)
+                from project_galleries pg where pg.gallery_url = x.g->>'url' limit 1) as facts
+        from (select client_portal_gallery(${token}) as g) x`)
+    return { ...(doc as object), gallery: galleryForClient(rows[0]?.g, rows[0]?.facts) }
   } catch (e) {
     console.error('[client-portal] could not read the gallery', e)
     return doc

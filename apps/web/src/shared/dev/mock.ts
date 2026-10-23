@@ -550,11 +550,26 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return {
       connected: true,
       gallery: {
-        gallery_url: 'https://frameline-gallery.pages.dev/7KQ2M9X', short_id: '7KQ2M9X', pin: '4821', full_access_pin: '2378',
+        gallery_url: 'https://frameline-gallery.pages.dev/7KQ2M9X', short_id: '7KQ2M9X', pin: '4821', full_access_pin: null,
         photo_count: 248, visits: 412, guests: 37, expires_at: '2027-10-12T00:00:00+05:30', created_at: '2026-10-12T10:00:00+05:30',
       },
       live: { photo_count: 248, status: 'live' },
+      trouble: null,
+      plan_ended_on: null,
       client: { name: 'Priya Sharma', phone: '9845055012' },
+    }
+  // Create gallery: made just now, so no photos yet (Open gallery to upload).
+  if (method === 'POST' && /^\/projects\/[^/]+\/gallery$/.test(path))
+    return {
+      connected: true,
+      gallery: {
+        gallery_url: 'https://frameline-gallery.pages.dev/9MX4K2P', short_id: '9MX4K2P', pin: '6143', full_access_pin: null,
+        photo_count: 0, visits: 0, guests: null, expires_at: '2027-10-23T00:00:00+05:30', created_at: '2026-10-23T10:00:00+05:30',
+      },
+      live: { photo_count: 0, status: 'draft' },
+      trouble: null,
+      plan_ended_on: null,
+      client: { name: 'Priya Sharma', phone: '09845055012' },
     }
   if (method === 'POST' && /^\/projects\/[^/]+\/gallery\/open$/.test(path)) return { url: 'https://frameline-admin.pages.dev/events' }
   // Projects → Galleries and Settings → Gallery (0264).
@@ -563,13 +578,13 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       connected: true,
       fresh: true,
       items: [
-        { project_id: 'p-1', project_name: 'Priya & Rahul Wedding', client_name: 'Priya Sharma', gallery_url: 'https://frameline-gallery.pages.dev/7KQ2M9X', pin: '4821', full_access_pin: '2378', photo_count: 248, visits: 412, expires_at: '2027-10-12T00:00:00+05:30', status: 'live' },
+        { project_id: 'p-1', project_name: 'Priya & Rahul Wedding', client_name: 'Priya Sharma', gallery_url: 'https://frameline-gallery.pages.dev/7KQ2M9X', pin: '4821', full_access_pin: null, photo_count: 248, visits: 412, expires_at: '2027-10-12T00:00:00+05:30', status: 'live' },
         { project_id: 'p-2', project_name: 'Mehta Sangeet', client_name: 'Anil Mehta', gallery_url: 'https://frameline-gallery.pages.dev/3F9E21D', pin: '5211', full_access_pin: null, photo_count: 96, visits: 58, expires_at: '2026-11-02T00:00:00+05:30', status: 'live' },
         { project_id: 'p-3', project_name: 'Kapoor Engagement', client_name: 'Riya Kapoor', gallery_url: 'https://frameline-gallery.pages.dev/2A6F1C9', pin: '7310', full_access_pin: null, photo_count: 0, visits: 0, expires_at: '2027-10-01T00:00:00+05:30', status: 'draft' },
       ],
     }
   if (method === 'GET' && path === '/galleries/account')
-    return { connected: true, reachable: true, linked: true, studio_name: 'Asha Studio', plan: 'starter', valid_till: '2027-03-03T00:00:00Z', wallet_rupees: 1250, photos_used: 344, photos_limit: 50000, galleries: 3 }
+    return { connected: true, reachable: true, trouble: null, linked: true, studio_name: 'Asha Studio', plan: 'starter', valid_till: '2027-03-03T00:00:00Z', wallet_rupees: 1250, photos_used: 344, photos_limit: 50000, galleries: 3 }
   if (method === 'POST' && path === '/galleries/account/open') return { url: 'https://frameline-admin.pages.dev/' }
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
@@ -2463,6 +2478,8 @@ const clientPortalStatusFx = {
 }
 
 const publicClientPortalFx = {
+  // The Frameline gallery card (0261): live galleries carry no couple's PIN while face privacy is off.
+  gallery: { url: 'https://frameline-gallery.pages.dev/7KQ2M9X', pin: '4821', full_access_pin: null },
   studio: {
     name: 'Demo Studio',
     logo_url: null,

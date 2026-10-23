@@ -1,7 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { useAccess } from '../auth/useAccess'
 import { cn } from '../ui/cn'
-import { hubFor } from './hubs'
+import { hubFor, tabAllowed, type HubCan } from './hubs'
 
 /**
  * The tab row on top of a hub's pages (People, Attendance & leave, Pay).
@@ -11,9 +11,10 @@ import { hubFor } from './hubs'
 export function HubTabs() {
   const { pathname } = useLocation()
   const access = useAccess()
-  const hub = hubFor(pathname, (m) => access.hasModule(m))
+  const can: HubCan = (m, a) => access.hasAction(m, a)
+  const hub = hubFor(pathname, can)
   if (!hub) return null
-  const tabs = hub.filter((t) => access.hasModule(t.module))
+  const tabs = hub.filter((t) => tabAllowed(t, can))
   if (tabs.length < 2) return null
   const here = pathname.replace(/\/+$/, '')
 

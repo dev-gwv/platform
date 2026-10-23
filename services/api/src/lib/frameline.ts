@@ -3,7 +3,7 @@ import type { AuthContext, Env } from '../context'
 
 /**
  * Frameline, the gallery add-on (0261): its own app on Cloudflare, where the
- * studio uploads a project's photos and guests find theirs with a selfie.
+ * studio uploads a project's photos and guests open them with the PIN.
  *
  * Studio AutoPilot speaks to it with tokens it signs itself, using the secret
  * both servers hold (FRAMELINE_SECRET here, STUDIOAUTOPILOT_SECRET there):
@@ -61,7 +61,10 @@ export function framelineClaims(p: FramelinePerson, purpose: 'sso' | 'api', to?:
     exp: now + LIFETIME_SEC,
     purpose,
     cid: p.auth.companyId,
-    cname: p.companyName.slice(0, 160) || 'Studio',
+    // Frameline names a new studio from this, and only for the owner; an owner
+    // whose name could not be read is stopped before any call (nameMissing).
+    // The placeholder is for everyone else, who can never set a studio up.
+    cname: p.companyName.trim().slice(0, 160) || 'Studio',
     name: p.auth.displayName.slice(0, 120),
     email: p.auth.email.slice(0, 254),
     email_verified: p.emailVerified,
@@ -117,14 +120,49 @@ export interface FramelineStudio {
 /**
  * Deliberately not a thrown error, like lib/ai.ts: every caller decides what
  * the studio is told. 'owner_first' is Frameline saying only the owner may set
- * the studio up; 'missing' is a project with no gallery yet.
+ * the studio up; 'missing' is a project whose gallery Frameline does not have
+ * (never made, or deleted there); 'misconfigured' is a refusal that trying
+ * again will not fix (the two secrets differ, Frameline is not set up for us,
+ * or the address is wrong); 'refused' and 'unreachable' may pass; 'no_name' is
+ * an owner whose studio name could not be read, so nothing was sent.
  */
-export type FramelineResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; kind: 'not_connected' | 'owner_first' | 'missing' | 'refused' | 'unreachable'; status: number }
+export type FramelineFailure = 'not_connected' | 'owner_first' | 'missing' | 'misconfigured' | 'refused' | 'unreachable' | 'no_name'
+export type FramelineResult<T> = { ok: true; data: T } | { ok: false; kind: FramelineFailure; status: number }
+
+/**
+ * The owner's first call makes their Frameline studio, named from the company:
+ * never send it without the name (it used to make a studio called "Studio").
+ */
+export const nameMissing = (p: FramelinePerson) => p.auth.isOwner && !p.companyName.trim()
+
+/** What the studio is told when Frameline could not do it, by why. */
+export const FRAMELINE_SAYS = {
+  misconfigured: 'The gallery add-on isn’t linked properly. Book a support call and we’ll set it right.',
+  no_answer: 'The gallery app did not answer. Please try again in a minute.',
+  no_name: 'We could not read your studio’s name just now. Please try again in a minute.',
+  not_connected: 'The gallery add-on is not connected yet. Ask us on WhatsApp to switch it on.',
+} as const
+
+/** Trouble the studio can do nothing about but tell us, apart from a blip that passes. */
+export function framelineTrouble(kind: FramelineFailure): 'misconfigured' | 'unreachable' {
+  return kind === 'misconfigured' || kind === 'not_connected' ? 'misconfigured' : 'unreachable'
+}
+
+/** How a refusal reads: 401/403/501, or a 404 that is not Frameline's own, will not pass on a retry. */
+export function refusalKind(status: number, code: string | undefined): FramelineFailure {
+  if (status === 409 && code === 'partner_studio_not_set_up') return 'owner_first'
+  // Frameline's own "not found" carries its code; a bare 404 is the wrong address.
+  if (status === 404) return code === 'not_found' ? 'missing' : 'misconfigured'
+  if (status === 401 || status === 403 || status === 501 || code === 'not_configured') return 'misconfigured'
+  return 'refused'
+}
 
 async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', path: string, body?: unknown, fetchImpl: FetchLike = fetch): Promise<FramelineResult<T>> {
   if (!framelineConnected(env)) return { ok: false, kind: 'not_connected', status: 0 }
+  if (nameMissing(p)) {
+    console.error(`[frameline] ${method} ${path} not sent: the studio's name could not be read`)
+    return { ok: false, kind: 'no_name', status: 0 }
+  }
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS)
   try {
@@ -139,10 +177,9 @@ async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', pat
     })
     if (res.ok) return { ok: true, data: (await res.json()) as T }
     const problem = (await res.json().catch(() => ({}))) as { code?: string }
-    if (res.status === 409 && problem.code === 'partner_studio_not_set_up') return { ok: false, kind: 'owner_first', status: 409 }
-    if (res.status === 404) return { ok: false, kind: 'missing', status: 404 }
-    console.error(`[frameline] ${method} ${path} refused ${res.status} ${problem.code ?? ''}`)
-    return { ok: false, kind: 'refused', status: res.status }
+    const kind = refusalKind(res.status, problem.code)
+    if (kind !== 'owner_first' && kind !== 'missing') console.error(`[frameline] ${method} ${path} ${kind} ${res.status} ${problem.code ?? ''}`)
+    return { ok: false, kind, status: res.status }
   } catch (e) {
     console.error(`[frameline] ${method} ${path} unreachable`, e instanceof Error ? e.message : e)
     return { ok: false, kind: 'unreachable', status: 0 }
@@ -193,4 +230,11 @@ export async function verifyFramelineNotice(env: Env, token: string | undefined)
   } catch {
     return null
   }
+}
+
+/** The day Frameline's plan ended, or null while it runs (or nobody knows). */
+export function planEndedOn(validTill: string | null | undefined, now: number = Date.now()): string | null {
+  if (!validTill) return null
+  const t = Date.parse(validTill)
+  return Number.isFinite(t) && t < now ? validTill : null
 }

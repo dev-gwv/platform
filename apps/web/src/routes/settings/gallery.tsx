@@ -8,7 +8,9 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { SupportButtons } from '@/features/help/HelpPanel'
+import { BookCallButton } from '@/features/help/BookCall'
 import { useFramelineAccount, useOpenFramelineHome } from '@/features/gallery/api'
+import { framelinePlanLine } from '@/features/gallery/gallery-text'
 import { useINR } from '@/shared/money/MoneyMask'
 
 export function GallerySettingsPage() {
@@ -19,9 +21,6 @@ export function GallerySettingsPage() {
     </AuthedPage>
   )
 }
-
-const PLAN_NAMES: Record<string, string> = { starter: 'Starter', studio: 'Studio', pro: 'Pro', agency: 'Agency' }
-const dateFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /**
  * Frameline, the photo gallery add-on (0261, 0264): whether it is on, the
@@ -70,8 +69,10 @@ function OwnerView() {
     )
   }
 
+  // Frameline sends no trial flag, only the plan and the day it runs till.
+  const plan = a.linked ? framelinePlanLine(a.plan, a.valid_till) : null
   const openButton = (
-    <Button onClick={() => open.mutate()} disabled={open.isPending}>
+    <Button onClick={() => open.mutate()} disabled={open.isPending} className={plan?.ended ? 'ipc-nudge' : undefined}>
       <ExternalLink /> {open.isPending ? 'Opening…' : 'Open Frameline'}
     </Button>
   )
@@ -79,9 +80,14 @@ function OwnerView() {
   return (
     <div className="flex max-w-3xl flex-col gap-3">
       {heading}
-      <Card className={a.linked ? 'border-success/40' : 'border-warning/50'}>
+      <Card className={a.linked && !plan?.ended ? 'border-success/40' : 'border-warning/50'}>
         <CardContent className="flex flex-col gap-3 p-4">
-          {!a.reachable ? (
+          {!a.reachable && a.trouble === 'misconfigured' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm">The gallery add-on isn’t linked properly. Your galleries still open for guests.</p>
+              <BookCallButton size="sm" />
+            </div>
+          ) : !a.reachable ? (
             <p className="text-sm text-muted-foreground">Frameline did not answer just now. Your galleries still work; try again in a minute.</p>
           ) : !a.linked ? (
             <p className="text-sm">
@@ -91,13 +97,9 @@ function OwnerView() {
             <>
               <p className="text-sm">
                 Connected as <b>{a.studio_name}</b>
-                {a.plan && (
-                  <>
-                    {' '}
-                    · {PLAN_NAMES[a.plan] ?? a.plan} plan{a.valid_till && <> till {dateFmt.format(new Date(a.valid_till))}</>}
-                  </>
-                )}
+                {plan && !plan.ended && <> · {plan.text}</>}
               </p>
+              {plan?.ended && <p className="text-sm font-medium text-warning">{plan.text}</p>}
               <p className="text-sm text-muted-foreground">
                 {a.photos_used !== null && a.photos_limit !== null && (
                   <>

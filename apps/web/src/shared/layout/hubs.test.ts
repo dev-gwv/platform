@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ModuleKey } from '@ipc/permissions'
 import { NAV, filterNav, navDestinations, type NavGroup, type NavLeaf } from './nav'
-import { hubFor, MY_TIME, TEAM_PAY, TEAM_TIME } from './hubs'
+import { hubFor, MY_TIME, tabAllowed, TEAM_PAY, TEAM_TIME } from './hubs'
 
 const access = (mods: ModuleKey[], writes: string[] = ['projects.edit']) =>
   ({
@@ -110,6 +110,15 @@ describe('the studio menu', () => {
     expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking', '/galleries'])
     const money = filterNav(NAV, 'admin', access(['company_expenses']), false).find((e) => e.label === 'Money') as NavLeaf
     expect(money.to).toBe('/company-expenses')
+  })
+
+  it('shows Galleries only to people who can edit projects, as its API asks', () => {
+    const projects = (writes: string[]) =>
+      filterNav(NAV, 'admin', access(['projects', 'billing'], writes), false).find((e) => e.label === 'Projects') as NavLeaf
+    expect(projects(['projects.edit']).hub?.map((t) => t.to)).toContain('/galleries')
+    expect(projects([]).hub?.map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
+    const viewer = (m: ModuleKey, a: string) => m === 'projects' && a === 'view'
+    expect(hubFor('/projects', viewer)?.filter((t) => tabAllowed(t, viewer)).map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
   })
 })
 

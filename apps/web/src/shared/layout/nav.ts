@@ -1,7 +1,7 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
-import { MONEY, MY_TIME, PLAN_BILLING, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, type HubTab } from './hubs'
+import { MONEY, MY_TIME, PLAN_BILLING, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, tabAllowed, type HubTab } from './hubs'
 import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import {
   BarChart3,
@@ -171,7 +171,7 @@ function leafVisible(
   isPlatformAdmin: boolean,
 ): boolean {
   if (leaf.platformOnly) return isPlatformAdmin
-  if (leaf.hub && !leaf.hub.some((t) => access.hasModule(t.module))) return false
+  if (leaf.hub && !leaf.hub.some((t) => tabAllowed(t, access.hasAction))) return false
   if (leaf.roles && !leaf.roles.includes(role as never)) return false
   if (leaf.module && !access.hasModule(leaf.module as ModuleKey)) return false
   if (leaf.studioWork && !seesStudioWork(access)) return false
@@ -181,7 +181,8 @@ function leafVisible(
 /** A hub entry keeps only the pages this person can open, and links to the first. */
 function narrowHub(leaf: NavLeaf, access: Access): NavLeaf {
   if (!leaf.hub) return leaf
-  const hub = leaf.hub.filter((t) => access.hasModule(t.module))
+  // A tab whose page needs more than seeing the module (Galleries: projects edit) goes too.
+  const hub = leaf.hub.filter((t) => tabAllowed(t, access.hasAction))
   return { ...leaf, hub, to: hub[0]?.to ?? leaf.to }
 }
 

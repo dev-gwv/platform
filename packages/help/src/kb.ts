@@ -545,8 +545,8 @@ export const KB: readonly KbArticle[] = [
     body: [
       'Open the project, then **Post-Production → Gallery**, and press **Create gallery**. It makes one gallery for the project, with a link and a PIN for the guests.',
       'Press **Open gallery** to upload the photos. It opens the gallery app already signed in as you, at this project.',
-      'Hand the link and PIN on with **Send on WhatsApp**, or **Download QR** to print. Guests open the link, type the PIN, add their name and number, and can see and download the photos. The gallery opens to guests once the first photo is up.',
-      'The gallery also shows on the client\'s own page, under their progress. The first gallery is made by the studio\'s owner; after that anyone who runs projects can. The gallery is an add-on with its own plan.',
+      'Once the photos are up, hand the link and PIN on with **Send on WhatsApp**, or **Download QR** to print. Guests open the link, type the PIN, add their name and number, and can see and download the photos.',
+      'The gallery also shows on the client\'s own page, under their progress, once it has photos and until it closes. The first gallery is made by the studio\'s owner; after that anyone who runs projects can. The gallery is an add-on with its own plan, renewed in the gallery app. A gallery deleted there can be made again with **Create gallery**.',
     ],
   },
 
