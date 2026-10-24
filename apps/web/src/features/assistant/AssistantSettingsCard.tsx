@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Select, Textarea } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
+import { Switch } from '@/shared/ui/switch'
 import { cn } from '@/shared/ui/cn'
 import { useAssistantSettings, useSaveAssistantSettings, useTestAssistant } from './api'
 
@@ -31,6 +32,7 @@ export function AssistantSettingsCard() {
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [callUrl, setCallUrl] = useState('')
+  const [inApp, setInApp] = useState(false)
   const [limit, setLimit] = useState('')
   const [prompt, setPrompt] = useState('')
   const [fbUrl, setFbUrl] = useState('')
@@ -46,6 +48,7 @@ export function AssistantSettingsCard() {
     setModel(d.assistant_model ?? '')
     setBaseUrl(d.assistant_base_url ?? '')
     setCallUrl(d.support_call_url ?? '')
+    setInApp(d.support_call_in_app)
     setLimit(num(d.assistant_daily_limit))
     setPrompt(d.assistant_prompt ?? '')
     setFbUrl(d.assistant_fallback_base_url ?? '')
@@ -62,6 +65,7 @@ export function AssistantSettingsCard() {
     model !== (d.assistant_model ?? '') ||
     baseUrl !== (d.assistant_base_url ?? '') ||
     callUrl !== (d.support_call_url ?? '') ||
+    inApp !== d.support_call_in_app ||
     limit !== num(d.assistant_daily_limit) ||
     prompt !== (d.assistant_prompt ?? '') ||
     fbUrl !== (d.assistant_fallback_base_url ?? '') ||
@@ -256,6 +260,12 @@ export function AssistantSettingsCard() {
             Empty falls back to the onboarding call link on the server. With neither, the assistant asks studios to write in.
           </p>
         )}
+        <Switch
+          checked={inApp}
+          onChange={setInApp}
+          label="Open the calendar inside the app"
+          description="Turn on once the booking app lists https://studioautopilot.in in EMBED_ALLOWED_ORIGINS. Off opens the link in a new tab."
+        />
 
         <label className="flex flex-col gap-1 text-sm font-medium">
           Questions one studio may ask a day
@@ -295,6 +305,7 @@ export function AssistantSettingsCard() {
               assistant_model: model.trim() || null,
               assistant_base_url: baseUrl.trim() || null,
               support_call_url: callUrl.trim() || null,
+              support_call_in_app: inApp,
               assistant_daily_limit: limit.trim() === '' ? null : n,
               assistant_fallback_base_url: fbUrl.trim() || null,
               assistant_fallback_model: fbModel.trim() || null,

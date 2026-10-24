@@ -23,6 +23,8 @@ export const helpContent = z.object({
   support_email: z.string().nullable(),
   /** Book a call: the Help console's call link, else the server's ONBOARDING_CALL_URL. */
   support_call_url: z.string().nullable().default(null),
+  /** Whether Book a support call opens the calendar over the app (0279); off means a new tab. */
+  support_call_in_app: z.boolean().default(false),
   faqs: z.array(helpFaq),
   videos: z.array(helpVideo),
 })

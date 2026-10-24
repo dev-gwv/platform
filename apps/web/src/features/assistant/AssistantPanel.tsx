@@ -19,7 +19,7 @@ import {
 import type { AssistantLang, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { SUPPORT_CALL_CLASS } from '@/features/help/BookCall'
+import { SUPPORT_CALL_CLASS, useSupportCall } from '@/features/help/BookCall'
 import { useTutorials } from '@/features/help/api'
 import { useHelpLang } from '@/features/help/lang'
 import { TutorialPlayer } from '@/features/help/TutorialPlayer'
@@ -391,6 +391,7 @@ function Bubble({
   tutorials: readonly Tutorial[]
   onWatch: (t: Tutorial) => void
 }) {
+  const supportCall = useSupportCall()
   if (said.role === 'user') {
     return (
       <div className="max-w-[85%] self-end rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
@@ -448,7 +449,7 @@ function Bubble({
       {said.callUrl && (
         <Button size="sm" className={cn('self-start', SUPPORT_CALL_CLASS)} asChild>
           {/* Opens away from the app, so the conversation is still here afterwards. */}
-          <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
+          <a href={said.callUrl} target="_blank" rel="noreferrer noopener" onClick={supportCall.open}>
             <Headphones /> {t.bookCall}
           </a>
         </Button>

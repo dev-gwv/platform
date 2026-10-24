@@ -75,6 +75,7 @@ interface SettingsRow {
   assistant_fallback_model: string | null
   assistant_minute_tokens: number | null
   assistant_day_tokens: number | null
+  support_call_in_app: boolean | null
 }
 
 const readSettings = (env: AppEnv['Bindings']) =>
@@ -83,7 +84,7 @@ const readSettings = (env: AppEnv['Bindings']) =>
       select assistant_enabled, assistant_prompt, assistant_model, assistant_base_url,
              support_call_url, assistant_daily_limit,
              assistant_fallback_base_url, assistant_fallback_model,
-             assistant_minute_tokens, assistant_day_tokens
+             assistant_minute_tokens, assistant_day_tokens, support_call_in_app
         from platform_settings limit 1`
     return row ?? null
   })
@@ -304,6 +305,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
         assistant_fallback_model: row.assistant_fallback_model,
         assistant_minute_tokens: row.assistant_minute_tokens,
         assistant_day_tokens: row.assistant_day_tokens,
+        support_call_in_app: row.support_call_in_app ?? false,
         ready: !!c.env.AI_API_KEY,
         fallback_ready: !!c.env.AI_FALLBACK_API_KEY,
       }),
@@ -435,6 +437,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
                assistant_fallback_model = ${fallbackModel},
                assistant_minute_tokens = ${d.assistant_minute_tokens},
                assistant_day_tokens = ${d.assistant_day_tokens},
+               support_call_in_app = ${d.support_call_in_app},
                updated_at = now()`),
     )
     if (!ok) fail(400, 'We could not save the assistant settings.')
@@ -454,6 +457,7 @@ export const platformAssistantRouter = new Hono<AppEnv>()
         assistant_fallback_model: fallbackModel,
         assistant_minute_tokens: d.assistant_minute_tokens,
         assistant_day_tokens: d.assistant_day_tokens,
+        support_call_in_app: d.support_call_in_app,
         prompt_length: prompt?.length ?? 0,
       },
     })

@@ -8,7 +8,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { cn } from '@/shared/ui/cn'
 import { useHints, useSetHint } from '@/features/team/hints-api'
 import { useTutorials } from './api'
-import { useCallUrl } from './BookCall'
+import { useSupportCall } from './BookCall'
 import { isRetired, remember } from './learning'
 import { startStuck, stuckReason, stuckStep, type StuckEvent, type StuckState } from './stuck-rules'
 import { trackFlow } from '@/shared/usage/usageTracker'
@@ -55,7 +55,11 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
   const tutorials = useTutorials()
   const tutorial = useMemo(() => tutorials.find((t) => t.key === key) ?? null, [tutorials, key])
   // Whoever runs the studio can also talk it through with us.
-  const callUrl = useCallUrl()
+  const supportCall = useSupportCall()
+  const callUrl = supportCall.url
+  // Read at the press, so the toast below need not be rebuilt on every render.
+  const openCall = useRef(supportCall.open)
+  openCall.current = supportCall.open
   const signals = useLearnSignals()
   const hints = useHints()
   const setHint = useSetHint()
@@ -102,7 +106,7 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
         cancel: {
           label: 'Book a support call',
           onClick: () => {
-            window.open(callUrl, '_blank', 'noopener')
+            openCall.current()
           },
         },
       }),
