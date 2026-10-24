@@ -10,7 +10,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { describeError, log } from '../../lib/log'
 import { whatsappConfigured } from '../../lib/whatsapp'
-import { maskNumber, verifySupportCallSignature } from '../../lib/support-calls'
+import { maskNumber, sampleNotice, verifySupportCallSignature } from '../../lib/support-calls'
 import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
 
 /** Send what is due now, without holding up the answer to whoever asked. */
@@ -142,6 +142,16 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     const ok = await attempt(c, 'platform.support_calls_logout', () => botLogout(c.env).then(() => true))
     if (!ok) fail(400, 'The bot could not be unlinked.')
     await audit(c, { action: 'platform.support_calls_bot_logout', entityType: 'platform_settings', entityId: null })
+    return c.json({ ok: true })
+  })
+
+  // A made-up booking through the whole path, for trying it before the booking
+  // app sends real ones. It never messages anyone personally (sampleNotice).
+  .post('/support-calls/sample', async (c) => {
+    const result = await attempt(c, 'platform.support_calls_sample', () => saveSupportCallNotice(c.env, sampleNotice()))
+    if (!result) fail(400, 'We could not make the sample booking.')
+    await audit(c, { action: 'platform.support_calls_sample', entityType: 'platform_settings', entityId: null })
+    drainSoon(c.env)
     return c.json({ ok: true })
   })
 

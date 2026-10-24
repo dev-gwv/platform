@@ -255,5 +255,33 @@ export function groupHasRoom(sentLastHour: number, sentToday: number, s: Pick<Su
   return sentLastHour < s.hourly_cap && sentToday < s.daily_cap
 }
 
+/**
+ * A made-up booking for Platform -> Support calls' "Try a sample booking": the
+ * whole path (saved, planned, posted in the group) without the booking app.
+ * It never asks for WhatsApp, so nobody is messaged personally; only the group
+ * (or, with the bot off, the team numbers) hears of it.
+ */
+export function sampleNotice(now = Date.now()): SupportCallNotice {
+  // Two hours ahead, on the half hour, twenty minutes long.
+  const start = Math.ceil((now + 2 * 3600_000) / 1_800_000) * 1_800_000
+  const id = `sample-${now}`
+  return {
+    id,
+    event: 'booking.created',
+    booking: {
+      id,
+      start: new Date(start).toISOString(),
+      end: new Date(start + 20 * 60_000).toISOString(),
+      timezone: 'Asia/Kolkata',
+      event_type: 'support-call',
+      meeting_url: 'https://meet.google.com/sample-only',
+      notes: 'A sample from Platform → Support calls. Nobody booked this.',
+      invitee: { name: 'Sample booking', email: null, phone: null, whatsapp_ok: false },
+      utm: { source: 'studioautopilot', medium: 'platform', campaign: 'sample', content: 'Sample Studio' },
+      parent: null,
+    },
+  }
+}
+
 /** "••••3210": enough to tell numbers apart on the Platform page. */
 export const maskNumber = (n: string | null): string | null => (n ? `••••${n.slice(-4)}` : null)

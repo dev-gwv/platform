@@ -166,3 +166,15 @@ describe('groupHasRoom', () => {
     expect(groupHasRoom(5, 100, caps)).toBe(false)
   })
 })
+
+describe('sampleNotice', () => {
+  it('is a real notice two hours ahead that never asks to message anyone personally', async () => {
+    const { supportCallNotice } = await import('@ipc/contracts')
+    const { sampleNotice } = await import('./support-calls')
+    const n = supportCallNotice.parse(sampleNotice(Date.parse('2026-10-24T10:10:00Z')))
+    expect(n.booking.start).toBe('2026-10-24T12:30:00.000Z')
+    expect(n.booking.invitee.whatsapp_ok).toBe(false)
+    const p = planMessages(n.event, bookingFromNotice(n), settings, { now: Date.parse('2026-10-24T10:10:00Z'), bookerSoFar: 0, groupWorks: true })
+    expect(p.filter((m) => !m.skipped).map((m) => m.audience)).toEqual(['group'])
+  })
+})

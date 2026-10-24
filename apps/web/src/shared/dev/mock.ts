@@ -901,7 +901,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     Object.assign(supportCallsFx.settings, body)
     return { ok: true }
   }
-  if (method === 'POST' && (path === '/platform/support-calls/test' || path === '/platform/support-calls/bot/logout')) return { ok: true }
+  if (method === 'POST' && (path === '/platform/support-calls/test' || path === '/platform/support-calls/sample' || path === '/platform/support-calls/bot/logout')) return { ok: true }
   if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
   if (method === 'POST' && path === '/platform/help/faqs') {
     const faq = { id: uid(0x4e1 + helpFx.faqs.length), sort_order: helpFx.faqs.length * 10 + 10, ...(body as { question: string; answer: string }) }

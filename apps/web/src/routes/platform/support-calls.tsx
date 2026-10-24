@@ -160,6 +160,13 @@ function BotCard({
     queryFn: () => callApi('/platform/support-calls/groups', { responseSchema: supportBotGroup.array() }),
     enabled: showGroups && bot.state === 'open',
   })
+  const sample = useMutation({
+    mutationFn: () => callApi('/platform/support-calls/sample', { method: 'POST', responseSchema: ok }),
+    onSuccess: () => {
+      toast.success('Sample booking made. Its group post shows under Messages in a few seconds.')
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: KEY }), 5_000)
+    },
+  })
   const unlink = useMutation({
     mutationFn: () => callApi('/platform/support-calls/bot/logout', { method: 'POST', responseSchema: ok }),
     onSuccess: () => {
@@ -234,6 +241,15 @@ function BotCard({
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={bot.state !== 'open' || !data.settings.group_jid || testing} onClick={onTest}>
             <Send /> Send a test to the group
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            title="A made-up booking through the whole path. Nobody is messaged personally."
+            disabled={bot.state !== 'open' || !data.settings.group_jid || !data.settings.bot_on || sample.isPending}
+            onClick={() => sample.mutate()}
+          >
+            <Headphones /> Try a sample booking
           </Button>
           {(bot.state === 'open' || bot.state === 'qr') && (
             <Button size="sm" variant="ghost" className="hover:text-destructive" disabled={unlink.isPending} onClick={() => unlink.mutate()}>
