@@ -30,6 +30,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
+import { DesignerCredit } from '@/shared/ui/designer-credit'
 import { Wordmark } from '@/shared/ui/wordmark'
 
 type Mode = 'signin' | 'register' | 'forgot'
@@ -683,6 +684,7 @@ export function LoginPage() {
             <LegalLinks className="mt-6" />
           </>
         )}
+        <DesignerCredit className="mt-8" />
       </div>
     </div>
   )
