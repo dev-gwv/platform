@@ -5,7 +5,7 @@
  * The same app serves `/embed/<owner>/<event>`, a calendar made to sit in a
  * frame, which takes the person's name and email to fill in and passes the
  * utm_* tags into the booking, so each booking says which studio asked and
- * from which page.
+ * from which page (utm_content is the studio, utm_term its id, parent the page).
  */
 
 /**
@@ -18,6 +18,8 @@ export interface SupportCallContext {
   name?: string | null | undefined
   email?: string | null | undefined
   studio?: string | null | undefined
+  /** The studio's id, so the server can name its plan in the support group (0280). */
+  companyId?: string | null | undefined
   /** The page they pressed it on, e.g. "/projects/123". */
   page: string
   /** Our own origin, for the booking app's "booked from" record. */
@@ -45,7 +47,7 @@ export function embedUrlFor(link: string | null | undefined, ctx: SupportCallCon
     utm_campaign: 'support-call',
   })
   if (ctx.studio?.trim()) params.set('utm_content', ctx.studio.trim())
-  params.set('utm_term', ctx.page)
+  if (ctx.companyId) params.set('utm_term', ctx.companyId)
   params.set('parent', ctx.origin + ctx.page)
   if (ctx.name?.trim()) params.set('name', ctx.name.trim())
   if (ctx.email?.trim()) params.set('email', ctx.email.trim())

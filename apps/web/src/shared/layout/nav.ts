@@ -34,6 +34,7 @@ import {
   IndianRupee,
   type LucideIcon,
   MessageCircle,
+  Headphones,
 } from 'lucide-react'
 
 export interface NavLeaf {
@@ -158,6 +159,7 @@ export const NAV: NavEntry[] = [
       leaf('Messaging', '/platform/messaging', MessageCircle, { platformOnly: true }),
       leaf('Email', '/platform/email', Mail, { platformOnly: true }),
       leaf('Help', '/platform/help', LifeBuoy, { platformOnly: true }),
+      leaf('Support calls', '/platform/support-calls', Headphones, { platformOnly: true }),
       leaf('Studio referrals', '/platform/studio-referrals', Gift, { platformOnly: true }),
       leaf('Payments to check', '/platform/payments', CreditCard, { platformOnly: true }),
     ],

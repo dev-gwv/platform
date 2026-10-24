@@ -24,6 +24,14 @@ What is waiting, and on whom. Update this file when an item is done.
    chats open with (it falls back to the invoice phone, then the owner's), send yourself one
    enquiry from a phone, and tell studios their old vendor QR codes are now partners -- same
    printed code, same page link.
+8. **Support call alerts (0280), once deployed** -- step by step in `docs/support-call-webhook.md`:
+   (a) add `SUPPORT_CALL_WEBHOOK_SECRET` and `WA_BOT_SECRET` (each `openssl rand -hex 32`) to
+   `/root/ipc/platform/.env` and run `sh deploy/deploy.sh`; (b) buy a **spare SIM**, use it from a
+   phone for a week or two, add it to the support WhatsApp group, then scan the QR on Platform →
+   **Support calls** and pick the group; (c) submit the four utility templates in Meta and, once
+   approved, add the team numbers and switch official messages on; (d) send the booking app's
+   developer `docs/support-call-webhook.md` and the webhook secret; (e) when the booking app lists
+   https://studioautopilot.in, turn on **Open the calendar inside the app** (Platform → Help).
 
 ## On Claude (ready to build once the owner says)
 

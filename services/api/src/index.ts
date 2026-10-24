@@ -24,6 +24,7 @@ import { financialsRouter } from './modules/financials/router'
 import { crmRouter } from './modules/crm/router'
 import { webhooksRouter, metaRouter } from './modules/webhooks/router'
 import { framelineWebhookRouter } from './modules/webhooks/frameline'
+import { platformSupportCallsRouter, supportCallWebhookRouter } from './modules/support-calls/router'
 import { galleriesRouter } from './modules/galleries/router'
 import { hrRouter } from './modules/hr/router'
 import { performanceRouter } from './modules/performance/router'
@@ -189,6 +190,7 @@ app.route('/financials', financialsRouter)
 app.route('/crm', crmCallsRouter)
 app.route('/crm', crmSequencesRouter)
 app.route('/crm', crmRouter)
+app.route('/webhooks', supportCallWebhookRouter)
 app.route('/webhooks', webhooksRouter)
 app.route('/webhooks', framelineWebhookRouter)
 app.route('/galleries', galleriesRouter)
@@ -217,6 +219,7 @@ app.route('/platform', platformRouter)
 app.route('/platform', platformFeaturesRouter)
 app.route('/assistant', assistantRouter)
 app.route('/platform', platformHelpRouter)
+app.route('/platform', platformSupportCallsRouter)
 app.route('/platform', platformAssistantRouter)
 app.route('/platform', platformStudioReferralsRouter)
 app.route('/studio-referrals', studioReferralsRouter)

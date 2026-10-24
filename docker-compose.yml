@@ -187,7 +187,27 @@ services:
           sleep 300
         done
 
+  # The support group bot (0280, deploy/wa-bot): a spare WhatsApp number linked
+  # like WhatsApp Web, posting support call alerts into one group. No published
+  # port: only the API reaches it, on this network, with WA_BOT_SECRET. It gets
+  # that secret and its caps, never the rest of .env. Its link to the phone and
+  # its send log live in wa_bot_data, so a rebuild keeps it linked. Link it from
+  # Platform -> Support calls (scan the QR with the spare phone).
+  wa-bot:
+    build:
+      context: deploy/wa-bot
+    restart: unless-stopped
+    environment:
+      WA_BOT_SECRET: ${WA_BOT_SECRET:-}
+      WA_BOT_HOURLY_CAP: ${WA_BOT_HOURLY_CAP:-30}
+      WA_BOT_DAILY_CAP: ${WA_BOT_DAILY_CAP:-150}
+    volumes:
+      - wa_bot_data:/data
+    expose:
+      - "3001"
+
 volumes:
+  wa_bot_data:
   db_data:
   db_backups:
   caddy_data:

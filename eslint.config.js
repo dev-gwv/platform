@@ -54,6 +54,13 @@ export default tseslint.config(
     },
   },
   {
+    // The support group bot (deploy/wa-bot): a Node service, not part of the app build.
+    files: ['deploy/wa-bot/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', fetch: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', Buffer: 'readonly', URL: 'readonly' },
+    },
+  },
+  {
     // Standalone Node scripts (run manually via bun), not part of the app build.
     files: ['**/*.mjs'],
     languageOptions: {

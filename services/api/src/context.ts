@@ -78,6 +78,19 @@ export interface Env {
   /** Meta app id + Embedded Signup configuration id: "Connect with Facebook" for a studio's number. Optional. */
   META_APP_ID?: string
   WHATSAPP_CONFIG_ID?: string
+  /**
+   * Support call bookings (0280, lib/support-call-store.ts). The booking app
+   * signs each notice to POST /webhooks/support-call with this secret; without
+   * it every notice is refused. Share it with the booking app's developer only.
+   */
+  SUPPORT_CALL_WEBHOOK_SECRET?: string
+  /**
+   * The group bot (deploy/wa-bot): where the API reaches it on the compose
+   * network (default http://wa-bot:3001) and the secret it checks. Without the
+   * secret the bot reads as off and the team's own numbers are used.
+   */
+  WA_BOT_URL?: string
+  WA_BOT_SECRET?: string
   /** Facebook Login for Business configuration for lead ads (pages + leads_retrieval). Optional: without it the dialog asks by scope. */
   META_LOGIN_CONFIG_ID?: string
   /** Twilio Programmable Voice for click-to-call (lib/twilio.ts). All three or none. */

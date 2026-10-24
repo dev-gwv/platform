@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { BOOKING_APP_ORIGINS, embedUrlFor } from './support-call'
 
-const ctx = { name: 'Asha Rao', email: 'asha@mehta.in', studio: 'Mehta Studio', page: '/projects/1', origin: 'https://studioautopilot.in' }
+const ctx = { name: 'Asha Rao', email: 'asha@mehta.in', studio: 'Mehta Studio', companyId: '6f1c2d3e-4b5a-4c6d-8e7f-001122334455', page: '/projects/1', origin: 'https://studioautopilot.in' }
 const APP = 'https://calendly-common-meeting-web-bjvr.vercel.app'
 
 describe('embedUrlFor', () => {
@@ -15,7 +15,7 @@ describe('embedUrlFor', () => {
       utm_medium: 'app',
       utm_campaign: 'support-call',
       utm_content: 'Mehta Studio',
-      utm_term: '/projects/1',
+      utm_term: '6f1c2d3e-4b5a-4c6d-8e7f-001122334455',
       parent: 'https://studioautopilot.in/projects/1',
       name: 'Asha Rao',
       email: 'asha@mehta.in',
@@ -32,6 +32,7 @@ describe('embedUrlFor', () => {
     expect(url.searchParams.has('name')).toBe(false)
     expect(url.searchParams.has('email')).toBe(false)
     expect(url.searchParams.has('utm_content')).toBe(false)
+    expect(url.searchParams.has('utm_term')).toBe(false)
   })
 
   it('keeps any other link in a new tab', () => {

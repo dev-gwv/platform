@@ -66,6 +66,7 @@ export function useSupportCall(): { url: string | null; open: (event?: MouseEven
         // booking confirmation is sent to an owner's confirmed one alone.
         email: session?.is_owner && session.email_verified ? session.email : null,
         studio: session?.studios.find((s) => s.company_id === session.company_id)?.company_name,
+        companyId: session?.company_id,
         page,
         origin: window.location.origin,
       })

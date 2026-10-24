@@ -213,6 +213,35 @@ const profileFx = {
 }
 
 /** Help (0236): what the panel and /help show. */
+/** Platform -> Support calls (0280). */
+const supportCallsFx = {
+  settings: {
+    official_on: false,
+    bot_on: true,
+    team_numbers: ['919876500001'],
+    group_jid: '120363025555555555@g.us' as string | null,
+    group_name: 'Studio AutoPilot Support' as string | null,
+    hourly_cap: 20,
+    daily_cap: 100,
+    daily_summary: true,
+    tpl_booked: 'support_call_booked',
+    tpl_reminder: 'support_call_reminder',
+    tpl_cancelled: 'support_call_cancelled',
+    tpl_team: 'support_call_team',
+  },
+  ready: { webhook_secret: true, official_api: true, bot_secret: true },
+  bot: { state: 'open', qr: null, me: '919000012345', sent_last_hour: 1, sent_today: 3 },
+  bookings: [
+    { id: 'b1', status: 'booked', starts_at: '2026-10-27T09:30:00Z', name: 'Asha Rao', studio_name: 'Mehta Studio', whatsapp_ok: true, has_phone: true },
+    { id: 'b2', status: 'cancelled', starts_at: '2026-10-26T06:00:00Z', name: 'Rohit', studio_name: 'Lens & Light', whatsapp_ok: false, has_phone: true },
+  ],
+  messages: [
+    { id: 'm1', channel: 'group', audience: 'group', to: null, what: 'Group post · Asha Rao', status: 'sent', last_error: null, send_after: '2026-10-24T10:00:00Z', sent_at: '2026-10-24T10:00:05Z' },
+    { id: 'm2', channel: 'official', audience: 'booker', to: '••••3210', what: 'support_call_reminder · Asha Rao', status: 'queued', last_error: null, send_after: '2026-10-27T08:30:00Z', sent_at: null },
+    { id: 'm3', channel: 'official', audience: 'booker', to: '••••3210', what: 'support_call_booked · Asha Rao', status: 'skipped', last_error: 'Official messages are off.', send_after: '2026-10-24T10:00:00Z', sent_at: null },
+  ],
+}
+
 const helpFx = {
   support_whatsapp: '919876543210' as string | null,
   support_call_url: 'https://calendly-common-meeting-web-bjvr.vercel.app/harsh-solanki/support-call' as string | null,
@@ -861,6 +890,18 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/platform/studio-referrals') return { terms: { reward: null, discount_pct: null, hold_days: null }, referrals: [] }
   if (path.startsWith('/platform/studio-referrals')) return {}
   if (method === 'GET' && (path === '/public/help' || path === '/platform/help')) return helpFx
+  // Platform -> Support calls (0280): a linked bot, a booking and its messages.
+  if (method === 'GET' && path === '/platform/support-calls') return supportCallsFx
+  if (method === 'GET' && path === '/platform/support-calls/groups')
+    return [
+      { jid: '120363025555555555@g.us', name: 'Studio AutoPilot Support', size: 6 },
+      { jid: '120363026666666666@g.us', name: 'Team chat', size: 14 },
+    ]
+  if (method === 'PUT' && path === '/platform/support-calls/settings') {
+    Object.assign(supportCallsFx.settings, body)
+    return { ok: true }
+  }
+  if (method === 'POST' && (path === '/platform/support-calls/test' || path === '/platform/support-calls/bot/logout')) return { ok: true }
   if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
   if (method === 'POST' && path === '/platform/help/faqs') {
     const faq = { id: uid(0x4e1 + helpFx.faqs.length), sort_order: helpFx.faqs.length * 10 + 10, ...(body as { question: string; answer: string }) }

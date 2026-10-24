@@ -19,6 +19,7 @@ import { syncDiamondSheet } from '../../lib/diamond-sheet'
 import { emailOneADay } from '../../lib/email'
 import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
+import { drainSupportCalls, queueDailySummary } from '../../lib/support-call-store'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -280,7 +281,13 @@ export const cronRouter = new Hono<AppEnv>()
     const nudged = await attempt(c, 'cron.attendance_reminders', () =>
       withService(c.env, async (sql) => (await sql<{ r: unknown }[]>`select run_attendance_reminders() as r`)[0]?.r ?? null),
     )
-    log.info({ path: c.req.path, ...result, attendance_reminders: nudged }, 'cron messages ran')
+    // Support call alerts (0280) ride the same tick: retries, reminders an hour
+    // before, and the group's morning list. A failure here never fails the rest.
+    const supportCalls = await attempt(c, 'cron.support_calls', async () => {
+      const summary = await queueDailySummary(c.env)
+      return { summary, ...(await drainSupportCalls(c.env)) }
+    })
+    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 

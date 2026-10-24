@@ -1,0 +1,16 @@
+{
+  "name": "wa-bot",
+  "private": true,
+  "type": "module",
+  "description": "Studio AutoPilot's support group bot (0280): posts support call alerts into one WhatsApp group. Not a bun workspace; built by its Dockerfile with npm ci.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "pino": "9.6.0"
+  }
+}
