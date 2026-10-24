@@ -13,8 +13,15 @@ What is waiting, and on whom. Update this file when an item is done.
 2. **Resend paid plan** (about $20 a month, 50,000 emails). Then add `EMAIL_EVERY_KIND=on` to
    `/root/ipc/platform/.env` on the VPS and run `sh deploy/deploy.sh` (never a bare
    `docker compose`). Decided 17 Oct: email work comes later.
-3. **Meta business verification and App Review** (Facebook dashboards): lead ads into the CRM
-   for every studio, and WhatsApp from our own number. Check-prompt: `docs/meta-app-review.md`.
+3. **Meta Access Verification, pending since 29 Sept** (checked 24 Oct). App Review for
+   Studio AutoPilot (App ID 4492691704338819) was **approved on 16 Oct**: leads_retrieval,
+   pages_manage_metadata, pages_read_engagement, pages_show_list, business_management. The app
+   is Live and the business (Grateful World Ventures, ID 822350745034082) is verified. Only
+   **Access Verification** is still "In review" (Meta says about 5 business days), and it may be
+   what lets studios outside our business connect their Pages. To do: have one outside studio
+   press **Connect with Facebook** on Leads → Setup and send a test lead; if it fails, or it is
+   still in review after 31 Oct, ask Meta support quoting the App ID. WhatsApp from our own
+   number is separate (item 6). Check-prompt: `docs/meta-app-review.md`.
 4. **Android release key**: add `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASSWORD` as
    GitHub repository secrets, so the APK opens full screen (`docs/apps.md`).
 5. **Claude GitHub app** on the repository (https://github.com/apps/claude/installations/select_target),
