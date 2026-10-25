@@ -1489,6 +1489,8 @@ export const crmActivity = z.object({
   id: uuid,
   lead_id: uuid.nullable(),
   lead_name: z.string().nullable().default(null),
+  /** The lead's number, so a follow-up can be called from where it is shown. */
+  lead_phone: z.string().nullable().default(null),
   contact_id: uuid.nullable(),
   contact_name: z.string().nullable().default(null),
   type: activityType,
@@ -1505,6 +1507,12 @@ export const crmActivity = z.object({
   assignee_name: z.string().nullable().default(null),
   actor_id: uuid.nullable(),
   actor_name: z.string().nullable().default(null),
+  /**
+   * Whose it is (0282): the person it was given to, else the lead's owner,
+   * else whoever wrote it -- the one its reminders go to.
+   */
+  whose_id: uuid.nullable().default(null),
+  whose_name: z.string().nullable().default(null),
   provider: activityProvider,
   external_id: z.string().nullable().default(null),
   /** Where a meeting is; collected by the form and kept on the row. */
@@ -1534,6 +1542,11 @@ export const activitiesQuery = z.object({
     .transform((v) => v === '1' || v === 'true'),
   /** Tasks due before this instant (reminders ask for the next hour). */
   due_before: isoDateTime.optional(),
+  /** Leave out archived leads (the follow-up board). */
+  live: z
+    .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => v === '1' || v === 'true'),
   limit: z.coerce.number().int().min(1).max(1000).default(200),
 })
 export type ActivitiesQuery = z.infer<typeof activitiesQuery>
@@ -1843,3 +1856,57 @@ export const myFollowUp = z.object({
   priority: z.string().nullable(),
 })
 export type MyFollowUp = z.infer<typeof myFollowUp>
+
+/**
+ * A lead given to the caller (0282), on their own "My leads" page: enough to
+ * call, follow up and write down what was said, without the studio's CRM.
+ */
+export const myLead = z.object({
+  id: uuid,
+  name: z.string().nullable(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  status: z.string().nullable(),
+  stage_name: z.string().nullable(),
+  stage_color: z.string().nullable(),
+  quality: z.string().nullable(),
+  event_type: z.string().nullable(),
+  event_date: isoDate.nullable(),
+  city: z.string().nullable(),
+  partner_name: z.string().nullable(),
+  enquiry_occasion: z.string().nullable(),
+  follow_up_at: isoDateTime.nullable(),
+  next_subject: z.string().nullable(),
+  last_note: z.string().nullable(),
+  last_note_at: isoDateTime.nullable(),
+  created_at: isoDateTime,
+})
+export type MyLead = z.infer<typeof myLead>
+
+export const myLeadActivity = z.object({
+  id: uuid,
+  type: z.string(),
+  subject: z.string().nullable(),
+  body: z.string().nullable(),
+  outcome: z.string().nullable(),
+  due_at: isoDateTime.nullable(),
+  done_at: isoDateTime.nullable(),
+  actor_name: z.string().nullable(),
+  created_at: isoDateTime,
+})
+export type MyLeadActivity = z.infer<typeof myLeadActivity>
+
+export const myLeadDetail = myLead.extend({
+  enquiry_answers: z.array(z.object({ question: z.string(), answer: z.string() })).nullable().default(null),
+  notes: z.string().nullable(),
+  activities: z.array(myLeadActivity),
+})
+export type MyLeadDetail = z.infer<typeof myLeadDetail>
+
+export const myLeadNoteRequest = z.object({ body: z.string().trim().min(1, 'Write what was said.').max(4000) })
+export const myLeadFollowUpRequest = z.object({
+  due_at: isoDateTime,
+  subject: z.string().trim().min(1).max(60).default('Call'),
+  body: z.string().trim().max(1000).optional(),
+})
+export const myFollowUpMoveRequest = z.object({ due_at: isoDateTime })

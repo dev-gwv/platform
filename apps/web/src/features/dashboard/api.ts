@@ -21,7 +21,7 @@ export function useFollowUpDone() {
     mutationFn: (id: string) => callApi(`/me/follow-ups/${id}/done`, { method: 'POST', responseSchema: z.object({ ok: z.boolean() }) }),
     onSuccess: () => {
       toast.success('Done')
-      void qc.invalidateQueries({ queryKey: ['me', 'follow-ups'] })
+      void qc.invalidateQueries({ queryKey: ['me'] })
       void qc.invalidateQueries({ queryKey: ['crm'] })
     },
     onError: (e: Error) => toast.error(e.message),

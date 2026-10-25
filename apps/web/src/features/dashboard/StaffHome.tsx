@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowRight, Check, ClipboardList, HardDrive, MapPin, Phone, Play, Reply, UserRoundCheck } from 'lucide-react'
+import { ArrowRight, Check, ClipboardList, HardDrive, Inbox, MapPin, Phone, Play, Reply, UserRoundCheck } from 'lucide-react'
 import { PROFILE_FIELD_LABEL, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -24,6 +24,8 @@ import { SubmitWorkDialog } from '@/features/work/SubmitWorkDialog'
 import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { localDate } from '@/features/shoots/assign'
 import { useFollowUpDone, useMyFollowUps } from './api'
+import { useMyLeads } from '@/features/my-leads/api'
+import { isClosed, leadState, myLeadsSentence } from '@/features/my-leads/my-leads'
 import { myDay, openWorkLine, type TodayItem } from './today'
 
 /**
@@ -132,8 +134,35 @@ export function StaffHome() {
         </Link>
       )}
 
+      <MyLeadsLine />
+
       <ProfileNudge />
     </div>
+  )
+}
+
+/** The leads given to them (0282), one line that opens My leads; amber while one is late. */
+function MyLeadsLine() {
+  const q = useMyLeads()
+  const leads = q.data ?? []
+  const now = new Date()
+  const open = leads.filter((l) => !isClosed(l))
+  if (!open.length) return null
+  const late = open.some((l) => leadState(l, now) === 'late')
+  return (
+    <Link
+      to="/my-leads"
+      className={cn(
+        'flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm hover:bg-accent',
+        late ? 'border-warning/60 bg-warning/5' : 'border-border',
+      )}
+    >
+      <Inbox className="size-4 text-muted-foreground" aria-hidden />
+      <span className="flex-1">{myLeadsSentence(leads, now)}</span>
+      <span className="inline-flex items-center gap-1 font-medium text-primary">
+        My leads <ArrowRight className="size-4" aria-hidden />
+      </span>
+    </Link>
   )
 }
 

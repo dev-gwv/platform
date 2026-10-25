@@ -39,13 +39,15 @@ const edit = requireAction('crm', 'edit')
 const remove = requireAction('crm', 'delete')
 
 const selectActivity = (sql: TransactionSql) => sql`
-  select a.id, a.lead_id, l.name as lead_name, a.contact_id, ct.name as contact_name, a.type, a.direction, a.subject, a.body, a.outcome,
+  select a.id, a.lead_id, l.name as lead_name, l.phone as lead_phone, a.contact_id, ct.name as contact_name, a.type, a.direction, a.subject, a.body, a.outcome,
          a.started_at, a.ended_at, a.duration_s, a.due_at, a.done_at, a.assigned_to, au.name as assignee_name,
-         a.actor_id, ac.name as actor_name, a.provider, a.external_id, a.meta ->> 'location' as location, a.priority, a.meta, a.created_at
+         a.actor_id, ac.name as actor_name,
+         coalesce(a.assigned_to, l.assigned_to, a.actor_id) as whose_id, wu.name as whose_name, a.provider, a.external_id, a.meta ->> 'location' as location, a.priority, a.meta, a.created_at
   from crm_activities a
   left join crm_leads l on l.id = a.lead_id
   left join users au on au.user_id = a.assigned_to
   left join users ac on ac.user_id = a.actor_id
+  left join users wu on wu.user_id = coalesce(a.assigned_to, l.assigned_to, a.actor_id)
   left join crm_contacts ct on ct.id = a.contact_id`
 
 export const crmActivitiesRouter = new Hono<AppEnv>()
@@ -59,10 +61,11 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
       open_tasks: c.req.query('open_tasks'),
       mine: c.req.query('mine'),
       due_before: c.req.query('due_before'),
+      live: c.req.query('live'),
       limit: c.req.query('limit'),
     })
     if (!q.success) fail(422, 'Invalid query.')
-    const { lead_id, contact_id, type, assigned_to, open_tasks, mine, due_before, limit } = q.data
+    const { lead_id, contact_id, type, assigned_to, open_tasks, mine, due_before, live, limit } = q.data
     const me = c.get('auth').userId
     const rows = await attempt(c, 'crm.activities', () =>
       withUser(
@@ -77,6 +80,7 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
             and ${open_tasks ? sql`a.type = 'task' and a.done_at is null` : sql`true`}
             and ${mine ? sql`coalesce(a.assigned_to, l.assigned_to, a.actor_id) = ${me}` : sql`true`}
             and ${due_before ? sql`a.due_at < ${due_before}` : sql`true`}
+            and ${live ? sql`coalesce(l.is_archived, false) = false` : sql`true`}
           order by ${open_tasks ? sql`a.due_at asc nulls last, a.created_at desc` : sql`a.created_at desc`}
           limit ${limit}`,
       ),

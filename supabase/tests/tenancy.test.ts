@@ -2769,7 +2769,8 @@ describe('CRM v3 — merge/unmerge, import, bulk undo, ranged stats, automations
     )
     expect(runs.rows[0]!.n).toBe(2)
     const notif = await db.query<{ type: string }>(
-      `select type from notifications where recipient_uid = '${member}' and entity_id = '${id}';`,
+      // Being given the lead is its own notice (0282); the sweep's is the overdue one.
+      `select type from notifications where recipient_uid = '${member}' and entity_id = '${id}' and type <> 'crm_assigned';`,
     )
     expect(notif.rows[0]!.type).toBe('crm_overdue')
   })

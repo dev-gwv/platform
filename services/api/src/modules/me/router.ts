@@ -1,10 +1,22 @@
 import { Hono } from 'hono'
-import { myDueItem, myFollowUp, myPayouts, myProject, z } from '@ipc/contracts'
+import {
+  myDueItem,
+  myFollowUp,
+  myFollowUpMoveRequest,
+  myLead,
+  myLeadDetail,
+  myLeadFollowUpRequest,
+  myLeadNoteRequest,
+  myPayouts,
+  myProject,
+  z,
+} from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
+import type { TransactionSql } from 'postgres'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { selectMyDeliverables } from '../../lib/my-work'
@@ -21,6 +33,25 @@ import { summarizeCrewOwed } from '@ipc/domain'
  * Whose a follow-up is: the person it was given to, else the lead's owner
  * (as the morning email reads it), else whoever wrote it.
  */
+/** One of my leads, as the My leads page lists it (0282). */
+const selectMyLead = (sql: TransactionSql, detail = false) => sql`
+  select l.id, l.name, l.phone, l.email, l.status, s.name as stage_name, s.color as stage_color, l.quality,
+         l.event_type, l.event_date, l.city,
+         (select pt.name from enquiry_partners pt where pt.id = l.partner_id) as partner_name,
+         l.enquiry_occasion, l.follow_up_at,
+         (select a.subject from crm_activities a
+           where a.lead_id = l.id and a.type = 'task' and a.done_at is null and a.due_at is not null
+           order by a.due_at limit 1) as next_subject,
+         n.body as last_note, n.created_at as last_note_at, l.created_at
+         ${detail ? sql`, l.enquiry_answers, l.notes` : sql``}
+    from crm_leads l
+    left join crm_pipeline_stages s on s.id = l.stage_id
+    left join lateral (
+      select a.body, a.created_at from crm_activities a
+       where a.lead_id = l.id and a.type in ('note', 'call') and a.body is not null
+       order by a.created_at desc limit 1
+    ) n on true`
+
 export const meRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
@@ -62,6 +93,110 @@ export const meRouter = new Hono<AppEnv>()
     if (!rows.length) fail(404, 'That follow-up is not yours, or it is already done.')
     await audit(c, { action: 'activity.update', entityType: 'crm_activity', entityId: id, after: { done: true } })
     return c.json({ ok: true })
+  })
+
+  // A follow-up moved to another time from Home or My leads (Tomorrow).
+  .patch('/follow-ups/:id', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const parsed = myFollowUpMoveRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick a time.')
+    const rows = await attempt(c, 'me.follow_up_move', () =>
+      withService(c.env, (sql) => sql<{ id: string }[]>`
+        update crm_activities a
+           set due_at = ${parsed.data.due_at}
+          from crm_leads l
+         where a.id = ${id} and l.id = a.lead_id
+           and a.company_id = ${auth.companyId}
+           and a.type = 'task' and a.done_at is null
+           and coalesce(a.assigned_to, l.assigned_to, a.actor_id) = ${auth.userId}
+        returning a.id`),
+    )
+    if (!rows) fail(400, 'We could not move that.')
+    if (!rows.length) fail(404, 'That follow-up is not yours, or it is already done.')
+    await audit(c, { action: 'activity.update', entityType: 'crm_activity', entityId: id, after: { due_at: parsed.data.due_at } })
+    return c.json({ ok: true })
+  })
+
+  // The leads given to me (0282): a team member's own list, without the CRM.
+  // Only leads whose owner is the caller; archived ones stay out.
+  .get('/leads', async (c) => {
+    const auth = c.get('auth')
+    const rows = await attempt(c, 'me.leads', () =>
+      withService(c.env, (sql) => sql`
+        ${selectMyLead(sql)}
+         where l.company_id = ${auth.companyId} and l.assigned_to = ${auth.userId}
+           and coalesce(l.is_archived, false) = false and l.merged_into is null
+         order by (l.status = 'lost' or l.converted_at is not null), l.follow_up_at asc nulls last, l.created_at desc
+         limit 500`),
+    )
+    if (!rows) fail(400, 'We could not load your leads.')
+    return c.json(myLead.array().parse(rows))
+  })
+
+  .get('/leads/:id', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const out = await attempt(c, 'me.lead', () =>
+      withService(c.env, async (sql) => {
+        const [lead] = await sql`
+          ${selectMyLead(sql, true)}
+           where l.id = ${id} and l.company_id = ${auth.companyId} and l.assigned_to = ${auth.userId}`
+        if (!lead) return null
+        const activities = await sql`
+          select a.id, a.type, a.subject, a.body, a.outcome, a.due_at, a.done_at, u.name as actor_name, a.created_at
+            from crm_activities a
+            left join users u on u.user_id = a.actor_id
+           where a.lead_id = ${id} and a.type in ('task', 'note', 'call', 'whatsapp', 'email', 'meeting', 'sms')
+           order by coalesce(a.done_at, a.created_at) desc
+           limit 40`
+        return { ...lead, activities }
+      }),
+    )
+    if (out === null) fail(404, 'That lead is not given to you.')
+    if (!out) fail(400, 'We could not load this lead.')
+    return c.json(myLeadDetail.parse(out))
+  })
+
+  // What was said, written on my lead.
+  .post('/leads/:id/notes', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const parsed = myLeadNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Write what was said.')
+    const rows = await attempt(c, 'me.lead_note', () =>
+      withService(c.env, (sql) => sql<{ id: string }[]>`
+        insert into crm_activities (company_id, lead_id, type, direction, body, actor_id)
+        select l.company_id, l.id, 'note', 'none', ${parsed.data.body}, ${auth.userId}
+          from crm_leads l
+         where l.id = ${id} and l.company_id = ${auth.companyId} and l.assigned_to = ${auth.userId}
+        returning id`),
+    )
+    if (!rows) fail(400, 'We could not save the note.')
+    if (!rows.length) fail(404, 'That lead is not given to you.')
+    await audit(c, { action: 'activity.create', entityType: 'crm_activity', entityId: rows[0]!.id, after: { type: 'note', lead_id: id } })
+    return c.json({ ok: true }, 201)
+  })
+
+  // The next follow-up on my lead: mine, so its reminder comes to me.
+  .post('/leads/:id/follow-ups', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const parsed = myLeadFollowUpRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick when to follow up.')
+    const v = parsed.data
+    const rows = await attempt(c, 'me.lead_follow_up', () =>
+      withService(c.env, (sql) => sql<{ id: string }[]>`
+        insert into crm_activities (company_id, lead_id, type, direction, subject, body, due_at, assigned_to, actor_id, priority)
+        select l.company_id, l.id, 'task', 'none', ${v.subject}, ${v.body ?? null}, ${v.due_at}, ${auth.userId}, ${auth.userId}, 'Normal'
+          from crm_leads l
+         where l.id = ${id} and l.company_id = ${auth.companyId} and l.assigned_to = ${auth.userId}
+        returning id`),
+    )
+    if (!rows) fail(400, 'We could not set the follow-up.')
+    if (!rows.length) fail(404, 'That lead is not given to you.')
+    await audit(c, { action: 'activity.create', entityType: 'crm_activity', entityId: rows[0]!.id, after: { type: 'task', lead_id: id } })
+    return c.json({ ok: true }, 201)
   })
 
   // Email copies of my alerts (0227): on unless I turned them off.
