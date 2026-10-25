@@ -1,0 +1,2 @@
+-- 0281: what happens after the form is sent, per partner QR (owner, 25 Oct).
+-- Claimed; the body follows in this pull request.
