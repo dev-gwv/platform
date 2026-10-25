@@ -128,6 +128,9 @@ export const crmLead = z.object({
   /** The partner or vendor whose QR code brought this lead in (0274), and their name. */
   partner_id: uuid.nullable().default(null),
   partner_name: z.string().nullable().default(null),
+  /** 0281: what the partner's QR was for ("Priya & Rahul's wedding"), and the answers to its own questions. */
+  enquiry_occasion: z.string().nullable().default(null),
+  enquiry_answers: z.array(z.object({ question: z.string(), answer: z.string() })).nullable().catch(null).default(null),
   notes: z.string().nullable(),
   /** The next promised contact. Null means nobody has agreed to call back. */
   follow_up_at: isoDateTime.nullable(),

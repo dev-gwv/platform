@@ -8,6 +8,17 @@
 -- A partner's WhatsApp number or first message left empty falls back to the
 -- form's, then to the studio's own number.
 --
+-- Also (owner, 25 Oct: "add some customised questions when I'm creating the
+-- partner form ... the moment we open the lead, the system should show all the
+-- details"): a partner QR can carry
+--   * what it is for (enquiry_partners.occasion: "Priya & Rahul's wedding"),
+--     shown on the form and kept on every lead it brings (crm_leads.enquiry_occasion);
+--   * up to ten questions of its own (enquiry_partners.questions): a typed
+--     answer or one pick from a list, each optional or must-answer.
+-- The answers are kept on the lead with each question's words as they were
+-- asked (crm_leads.enquiry_answers: [{"question": ..., "answer": ...}]), go in
+-- the WhatsApp message, and a repeat enquiry writes them in its note.
+--
 -- enquiry_public and enquiry_submit are copied from 0278.
 -- Safe to run twice.
 
@@ -25,6 +36,40 @@ alter table enquiry_partners add constraint enquiry_partners_link_needs_url
   check (after_submit is distinct from 'link' or redirect_url is not null);
 
 grant update (after_submit, whatsapp_phone, whatsapp_text, redirect_url, thank_you) on enquiry_partners to authenticated;
+
+-- A partner QR's own questions: [{id, label, kind text|choice, options[], required}].
+create or replace function enquiry_questions_ok(p jsonb)
+returns boolean
+language sql
+immutable
+as $$
+  select jsonb_typeof(p) = 'array'
+     and jsonb_array_length(p) <= 10
+     and not exists (
+       select 1 from jsonb_array_elements(p) q
+        where jsonb_typeof(q) <> 'object'
+           or coalesce(q ->> 'id', '') !~ '^[a-z0-9]{4,12}$'
+           or char_length(trim(coalesce(q ->> 'label', ''))) not between 1 and 120
+           or coalesce(q ->> 'kind', '') not in ('text', 'choice')
+           or jsonb_typeof(coalesce(q -> 'required', 'false'::jsonb)) <> 'boolean'
+           or (q ->> 'kind' = 'choice' and (
+                 jsonb_typeof(q -> 'options') is distinct from 'array'
+                 or jsonb_array_length(q -> 'options') not between 2 and 20
+                 or exists (select 1 from jsonb_array_elements(q -> 'options') o
+                             where jsonb_typeof(o) <> 'string' or char_length(trim(o #>> '{}')) not between 1 and 60))))
+     and (select count(distinct q ->> 'id') from jsonb_array_elements(p) q) = jsonb_array_length(p);
+$$;
+
+alter table enquiry_partners
+  add column if not exists occasion  text check (occasion is null or char_length(occasion) <= 120),
+  add column if not exists questions jsonb not null default '[]'::jsonb;
+alter table enquiry_partners drop constraint if exists enquiry_partners_questions_ok;
+alter table enquiry_partners add constraint enquiry_partners_questions_ok check (enquiry_questions_ok(questions));
+grant update (occasion, questions) on enquiry_partners to authenticated;
+
+alter table crm_leads
+  add column if not exists enquiry_occasion text,
+  add column if not exists enquiry_answers  jsonb;
 
 create or replace function enquiry_public(p_key text, p_partner text default null, p_count boolean default true)
 returns jsonb
@@ -82,6 +127,8 @@ begin
     'services', to_jsonb(enquiry_services(v_form.company_id)),
     'event_types', to_jsonb(enquiry_event_types(v_form.company_id)),
     'partner', v_partner.name,
+    'occasion', v_partner.occasion,
+    'questions', coalesce(v_partner.questions, '[]'::jsonb),
     'goes_to', v_goes);
 end;
 $$;
@@ -115,6 +162,9 @@ declare
   v_budget   numeric;
   v_message  text;
   v_said     text;
+  v_answers  jsonb := '[]'::jsonb;
+  v_q        jsonb;
+  v_a        text;
   v_lead     uuid;
   v_open     crm_leads;
   v_assignee uuid;
@@ -200,6 +250,22 @@ begin
   if f ->> 'guests' = 'required' and v_guests is null then v_errors := v_errors || '{"guests":"Please fill this in"}'; end if;
   if f ->> 'budget' = 'required' and v_budget is null then v_errors := v_errors || '{"budget":"Please fill this in"}'; end if;
   if f ->> 'message' = 'required' and v_message is null then v_errors := v_errors || '{"message":"Please fill this in"}'; end if;
+  -- The partner QR's own questions (0281): keyed "q:<id>" in the errors.
+  for v_q in select q from jsonb_array_elements(coalesce(v_partner.questions, '[]'::jsonb)) q loop
+    v_a := nullif(left(trim(coalesce(p_data -> 'answers' ->> (v_q ->> 'id'), '')), 500), '');
+    if v_a is not null and v_q ->> 'kind' = 'choice'
+       and not exists (select 1 from jsonb_array_elements_text(v_q -> 'options') o where o = v_a) then
+      v_a := null;
+    end if;
+    if v_a is null and coalesce((v_q ->> 'required')::boolean, false) then
+      v_errors := v_errors || jsonb_build_object('q:' || (v_q ->> 'id'),
+        case when v_q ->> 'kind' = 'choice' then 'Pick one' else 'Please fill this in' end);
+    elsif v_a is not null then
+      v_answers := v_answers || jsonb_build_array(jsonb_build_object('question', trim(v_q ->> 'label'), 'answer', v_a));
+    end if;
+  end loop;
+  if jsonb_array_length(v_answers) = 0 then v_answers := null; end if;
+
   if v_errors <> '{}'::jsonb then
     return jsonb_build_object('errors', v_errors);
   end if;
@@ -211,7 +277,8 @@ begin
 
   -- One line for alerts: "Wedding · 14 Feb 2027 · Jaipur · via Riya Boutique".
   v_line := nullif(concat_ws(' · ', v_event, to_char(v_date, 'FMDD Mon YYYY'), v_city,
-                             case when v_partner.id is not null then 'via ' || v_partner.name end), '');
+                             case when v_partner.id is not null then 'via ' || v_partner.name end,
+                             v_partner.occasion), '');
 
   update crm_webhook_sources set last_received_at = now() where id = v_source.id;
 
@@ -231,12 +298,19 @@ begin
     values (v_form.company_id, v_lead, 'note', 'in', 'Enquired again',
             nullif(concat_ws(E'\n', v_said,
                    case when v_date is not null then 'Event date: ' || to_char(v_date, 'FMDD Mon YYYY') end,
-                   case when v_partner.id is not null then 'Via ' || v_partner.name end), ''),
+                   case when v_partner.id is not null then 'Via ' || v_partner.name end,
+                   case when v_partner.occasion is not null then 'For: ' || v_partner.occasion end,
+                   (select string_agg((x ->> 'question') || ': ' || (x ->> 'answer'), E'\n')
+                      from jsonb_array_elements(coalesce(v_answers, '[]'::jsonb)) x)), ''),
             jsonb_build_object('form_id', v_form.id, 'partner_id', v_partner.id));
     -- Came back through a partner's QR: the partner gets the credit if nobody had it.
     if v_partner.id is not null and v_open.partner_id is null then
       update crm_leads set partner_id = v_partner.id where id = v_lead;
     end if;
+    update crm_leads
+       set enquiry_occasion = coalesce(enquiry_occasion, v_partner.occasion),
+           enquiry_answers  = coalesce(enquiry_answers, v_answers)
+     where id = v_lead and (enquiry_occasion is null or enquiry_answers is null);
     v_who := coalesce(v_open.assigned_to, v_company.owner_user_id);
     if exists (select 1 from users where user_id = v_who and company_id = v_form.company_id) then
       perform create_notification(
@@ -248,7 +322,7 @@ begin
     v_assignee := coalesce(v_source.default_assigned_to, crm_pick_assignee(v_form.company_id));
     insert into crm_leads (
       company_id, name, phone, phone_norm, email, source, source_key, assigned_to, source_meta, quality,
-      partner_id, event_type, event_date, city, deal_value, notes, follow_up_at)
+      partner_id, event_type, event_date, city, deal_value, notes, follow_up_at, enquiry_occasion, enquiry_answers)
     values (
       v_form.company_id, v_name, '+91' || v_ten, crm_normalize_phone(v_ten), v_email,
       coalesce(v_source.default_source, 'enquiry'), v_source.source_key, v_assignee,
@@ -256,7 +330,8 @@ begin
         || case when v_partner.id is not null
                 then jsonb_build_object('partner_id', v_partner.id, 'partner_name', v_partner.name)
                 else '{}'::jsonb end,
-      v_source.default_quality, v_partner.id, v_event, v_date, v_city, v_budget, v_said, now())
+      v_source.default_quality, v_partner.id, v_event, v_date, v_city, v_budget, v_said, now(),
+      v_partner.occasion, v_answers)
     returning id into v_lead;
 
     if v_source.default_stage is not null then
@@ -300,7 +375,10 @@ begin
              then 'Event: ' || concat_ws(', ', v_event, to_char(v_date, 'FMDD Mon YYYY')) end,
         case when v_city is not null then 'City: ' || v_city end,
         case when cardinality(v_services) > 0 then 'Looking for: ' || array_to_string(v_services, ', ') end,
-        case when v_guests is not null then 'Guests: ' || v_guests end);
+        case when v_guests is not null then 'Guests: ' || v_guests end,
+        case when v_partner.occasion is not null then 'For: ' || v_partner.occasion end,
+        (select string_agg((x ->> 'question') || ': ' || (x ->> 'answer'), E'\n')
+           from jsonb_array_elements(coalesce(v_answers, '[]'::jsonb)) x));
     end if;
   end if;
 

@@ -284,6 +284,59 @@ describe('the main form (0274)', () => {
     expect(e.wa_phone).toBe('919876921126')
   })
 
+  it("asks a partner QR's own questions and keeps the answers and the occasion on the lead (0281)", async () => {
+    const wed = await asUser(OWNER, async () => {
+      const [p] = await q<{ id: string; code: string }>(
+        `select id, code from create_enquiry_partner('Sharma Wedding Desk', null, null, null, null, 'weddingtoken_abcdefghijklmn')`,
+      )
+      return p!
+    })
+    const questions = [
+      { id: 'side1', label: 'Bride side or groom side?', kind: 'choice', options: ['Bride side', 'Groom side'], required: true },
+      { id: 'note1', label: 'Anything you liked at this wedding?', kind: 'text', required: false },
+    ]
+    // A broken question list is refused by the database.
+    await expect(
+      asUser(OWNER, () => q(`update enquiry_partners set questions = $1::jsonb where id = $2`, [JSON.stringify([{ id: 'x', label: '', kind: 'nope' }]), wed.id])),
+    ).rejects.toThrow()
+    await asUser(OWNER, () =>
+      q(`update enquiry_partners set occasion = $1, questions = $2::jsonb where id = $3`, ["Priya & Rahul's wedding", JSON.stringify(questions), wed.id]),
+    )
+
+    const [pub] = await q<{ doc: { occasion: string; questions: { id: string }[] } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, wed.code])
+    expect(pub!.doc.occasion).toBe("Priya & Rahul's wedding")
+    expect(pub!.doc.questions.map((x) => x.id)).toEqual(['side1', 'note1'])
+
+    // A must-answer pick is checked, and an answer not on the list does not count.
+    const bad = await send(main.slug, { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Neither' } }, wed.code)
+    expect(bad.errors).toEqual({ 'q:side1': 'Pick one' })
+
+    const ok = await send(
+      main.slug,
+      { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Bride side', note1: '  The candid shots  ', junk: 'x' } },
+      wed.code,
+    )
+    expect(ok.errors).toBeUndefined()
+    const [lead] = await q<{ enquiry_occasion: string; enquiry_answers: { question: string; answer: string }[] }>(
+      `select enquiry_occasion, enquiry_answers from crm_leads where id = $1`,
+      [ok.lead_id],
+    )
+    expect(lead!.enquiry_occasion).toBe("Priya & Rahul's wedding")
+    expect(lead!.enquiry_answers).toEqual([
+      { question: 'Bride side or groom side?', answer: 'Bride side' },
+      { question: 'Anything you liked at this wedding?', answer: 'The candid shots' },
+    ])
+    expect(ok.wa_text).toContain("For: Priya & Rahul's wedding\nBride side or groom side?: Bride side")
+    const [n] = await q<{ body: string }>(`select body from notifications where entity_id = $1 and type = 'enquiry_new'`, [ok.lead_id])
+    expect(n!.body).toContain("Priya & Rahul's wedding")
+
+    // The same number again: one lead, and the note carries the answers.
+    const again = await send(main.slug, { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Groom side' } }, wed.code)
+    expect(again.lead_id).toBe(ok.lead_id)
+    const notes = await q<{ body: string }>(`select body from crm_activities where lead_id = $1 and subject = 'Enquired again'`, [ok.lead_id])
+    expect(notes[0]!.body).toContain('Bride side or groom side?: Groom side')
+  })
+
   it('shows nothing when the form is switched off', async () => {
     await q(`update enquiry_forms set is_active = false where id = $1`, [main.id])
     const [r] = await q<{ doc: unknown }>(`select enquiry_public($1) as doc`, [main.slug])

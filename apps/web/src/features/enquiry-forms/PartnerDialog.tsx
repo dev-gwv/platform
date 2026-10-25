@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import type { EnquiryPartner } from '@ipc/contracts'
+import type { EnquiryPartner, EnquiryQuestion } from '@ipc/contracts'
 import { PARTNER_KINDS, joinKinds, splitKinds } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useCreatePartner, usePartnerVendors, useUpdatePartner } from './api'
+import { PartnerQuestions, questionsProblem } from './PartnerQuestions'
 
 /**
  * Add or edit a partner (spec 3.7). What they are is a set of chips with
@@ -27,6 +28,8 @@ export function PartnerDialog({ partner, onClose }: { partner?: EnquiryPartner; 
   const [phone, setPhone] = useState((partner?.phone ?? '').replace(/\D/g, '').slice(-10))
   const [vendor, setVendor] = useState(partner?.party_id ?? '')
   const [notes, setNotes] = useState(partner?.notes ?? '')
+  const [occasion, setOccasion] = useState(partner?.occasion ?? '')
+  const [questions, setQuestions] = useState<EnquiryQuestion[]>(partner?.questions ?? [])
   const [error, setError] = useState<string | null>(null)
   const busy = create.isPending || update.isPending
   const list = vendors.data ?? []
@@ -54,12 +57,16 @@ export function PartnerDialog({ partner, onClose }: { partner?: EnquiryPartner; 
   const save = () => {
     setError(null)
     if (name.trim().length < 2) return setError('Give the partner a name.')
+    const problem = questionsProblem(questions)
+    if (problem) return setError(problem)
     const body = {
       name: name.trim(),
       label: joinKinds(kinds),
       phone: phone.trim() || null,
       party_id: vendor || null,
       notes: notes.trim() || null,
+      occasion: occasion.trim() || null,
+      questions: questions.map((q) => ({ ...q, label: q.label.trim(), options: q.kind === 'choice' ? q.options : [] })),
     }
     const fail = (e: Error) => setError(e.message || 'We could not save the partner.')
     if (partner) {
@@ -196,6 +203,25 @@ export function PartnerDialog({ partner, onClose }: { partner?: EnquiryPartner; 
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="p-occasion" className="font-semibold">
+              What is this QR for? (optional)
+            </Label>
+            <Input
+              id="p-occasion"
+              maxLength={120}
+              placeholder="e.g. Priya & Rahul's wedding, 14 Feb"
+              value={occasion}
+              onChange={(e) => setOccasion(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Shown on the form, and on every lead this QR brings.</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold">Your own questions on this QR</p>
+            <PartnerQuestions value={questions} onChange={setQuestions} />
           </div>
 
           {error && (

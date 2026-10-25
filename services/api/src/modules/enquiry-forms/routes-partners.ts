@@ -30,7 +30,7 @@ const selectPartners = (sql: TransactionSql) => sql`
   select p.id, p.name, p.label, p.party_id, v.name as vendor_name, p.phone, p.notes, p.code, p.view_token,
          p.show_phone, p.scans, coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
          st.last_enquiry_at, p.page_viewed_at, p.archived_at, p.created_at,
-         p.after_submit, p.whatsapp_phone, p.whatsapp_text, p.redirect_url, p.thank_you
+         p.after_submit, p.whatsapp_phone, p.whatsapp_text, p.redirect_url, p.thank_you, p.occasion, p.questions
     from enquiry_partners p
     left join parties v on v.id = p.party_id
     left join enquiry_partner_stats st on st.partner_id = p.id`
@@ -110,6 +110,12 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
           const [made] = await sql<{ id: string }[]>`
             select (create_enquiry_partner(${d.name}, ${d.label ?? null}, ${phone}, ${d.party_id ?? null},
                                            ${d.notes ?? null}, ${pageToken()})).id`
+          // What the QR is for and its own questions (0281).
+          if (d.occasion || d.questions?.length) {
+            await sql`update enquiry_partners
+                         set occasion = ${d.occasion?.trim() || null}, questions = ${sql.json(d.questions ?? [])}
+                       where id = ${made!.id}`
+          }
           const formUrl = await formUrlOf(sql, c.env.APP_URL)
           const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${made!.id}`
           return { formUrl, row: rows[0]! }
@@ -198,6 +204,7 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
       }
     }
     if (archived !== undefined) patch.archived_at = archived ? new Date().toISOString() : null
+    if (patch.occasion !== undefined) patch.occasion = (patch.occasion as string | null)?.trim() || null
     // Their QR's own after-send (0281), checked the way the main form's is.
     if (patch.after_submit === null) {
       // "Same as your main form": nothing of their own is kept.
@@ -256,8 +263,14 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
       'enquiry_partners.update',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          const done = await sql`update enquiry_partners set ${sql(patch)} where id = ${id} returning id`
+          const { questions, ...plain } = patch
+          const done = Object.keys(plain).length
+            ? await sql`update enquiry_partners set ${sql(plain)} where id = ${id} returning id`
+            : await sql`select id from enquiry_partners where id = ${id}`
           if (!done[0]) return 'missing' as const
+          if (questions !== undefined) {
+            await sql`update enquiry_partners set questions = ${sql.json(questions as never)} where id = ${id}`
+          }
           const formUrl = await formUrlOf(sql, c.env.APP_URL)
           const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${id}`
           return { formUrl, row: rows[0]! }

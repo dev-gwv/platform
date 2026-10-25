@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PartnerChip } from './PartnerChip'
+import { FormAnswersCard } from './drawer/FormAnswersCard'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
@@ -218,6 +219,8 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 <PartnerChip name={lead.partner_name} />
               </Link>
             )}
+            {/* What that QR was for: "Priya & Rahul's wedding" (0281). */}
+            {lead.enquiry_occasion && <p className="text-sm font-semibold text-primary">For {lead.enquiry_occasion}</p>}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
               {lead.phone ? (
                 <button
@@ -414,6 +417,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </p>
             <LeadEvents value={eventRows} onCommit={saveEvents} disabled={!canEdit || update.isPending} compact />
           </section>
+          <FormAnswersCard lead={lead} />
           {lead.lost_reason && (
             <p className="-mt-2 text-xs text-muted-foreground">
               Lost: {lead.lost_reason}

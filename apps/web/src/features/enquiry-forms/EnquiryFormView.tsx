@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, CircleCheck, ExternalLink, Handshake, MessageCircle } from 'lucide-react'
+import { CalendarHeart, Check, CircleCheck, ExternalLink, Handshake, MessageCircle } from 'lucide-react'
 import { enquiryEventTypes, type PublicEnquiryFormV2 } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
@@ -11,7 +11,7 @@ type FormLook = Pick<
   PublicEnquiryFormV2,
   'studio' | 'form_name' | 'purpose' | 'title' | 'intro' | 'thank_you' | 'accent' | 'logo_url' | 'fields'
 > &
-  Partial<Pick<PublicEnquiryFormV2, 'city' | 'services' | 'event_types' | 'partner' | 'goes_to'>>
+  Partial<Pick<PublicEnquiryFormV2, 'city' | 'services' | 'event_types' | 'partner' | 'goes_to' | 'occasion' | 'questions'>>
 
 export interface EnquirySend {
   name: string
@@ -25,13 +25,18 @@ export interface EnquirySend {
   budget: number | null
   message: string | null
   website: string
+  /** A partner QR's own questions, answered (0281). */
+  answers?: Record<string, string> | null
 }
+
+/** Field errors, plus "q:<id>" for a partner QR's own questions. */
+type SendErrors = FieldErrors & Record<string, string | undefined>
 
 /** What the server says about a send it refused: one message, and a word per field. */
 export class EnquirySendError extends Error {
   constructor(
     message: string,
-    readonly fields: FieldErrors = {},
+    readonly fields: SendErrors = {},
   ) {
     super(message)
   }
@@ -69,7 +74,9 @@ export function EnquiryFormView({
   // Hidden from people; a bot fills it and the server quietly drops the send.
   const [website, setWebsite] = useState('')
   const [busy, setBusy] = useState(false)
-  const [errors, setErrors] = useState<FieldErrors>({})
+  const [errors, setErrors] = useState<SendErrors>({})
+  const questions = look.questions ?? []
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
   const [done, setDone] = useState<{ redirect: string | null } | null>(null)
   const accent = look.accent && look.accent !== 'slate' ? toneVar(look.accent) : undefined
@@ -80,7 +87,10 @@ export function EnquiryFormView({
     e.preventDefault()
     if (preview) return
     setNotice(null)
-    const found = checkEnquiry(f, name, phone, values)
+    const found: SendErrors = checkEnquiry(f, name, phone, values)
+    for (const q of questions) {
+      if (q.required && !(answers[q.id] ?? '').trim()) found[`q:${q.id}`] = q.kind === 'choice' ? 'Pick one' : 'Please fill this in'
+    }
     setErrors(found)
     if (Object.keys(found).length) {
       focusFirstError(found)
@@ -100,6 +110,9 @@ export function EnquiryFormView({
         budget: num(values.budget),
         message: values.message?.trim() || null,
         website,
+        answers: questions.length
+          ? Object.fromEntries(questions.map((q) => [q.id, (answers[q.id] ?? '').trim()]).filter(([, a]) => a))
+          : null,
       })
       setDone({ redirect: res?.redirect_url ?? null })
     } catch (err) {
@@ -128,6 +141,11 @@ export function EnquiryFormView({
         {look.partner && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-card/80 px-3 py-1 text-sm font-semibold text-primary ring-1 ring-brand/50">
             <Handshake className="size-4" aria-hidden /> Sent via {look.partner}
+          </span>
+        )}
+        {look.occasion && (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+            <CalendarHeart className="size-4 text-primary" aria-hidden /> {look.occasion}
           </span>
         )}
       </header>
@@ -330,6 +348,53 @@ export function EnquiryFormView({
               </Field>
             )}
 
+            {/* A partner QR's own questions (0281), after the form's. */}
+            {questions.map((q) => {
+              const id = `enq-q-${q.id}`
+              const err = errors[`q:${q.id}`]
+              const title = q.required ? q.label : `${q.label} (optional)`
+              if (q.kind === 'text')
+                return (
+                  <Field key={q.id} id={id} label={title} error={err}>
+                    <Input
+                      id={id}
+                      maxLength={500}
+                      value={answers[q.id] ?? ''}
+                      aria-invalid={!!err}
+                      aria-describedby={err ? `${id}-note` : undefined}
+                      onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                    />
+                  </Field>
+                )
+              return (
+                <fieldset key={q.id} id={id} tabIndex={-1} aria-invalid={!!err} className="flex flex-col gap-1.5 outline-none">
+                  <legend className="mb-1.5 text-sm font-semibold">{title}</legend>
+                  <div className="flex flex-wrap gap-2" role="radiogroup">
+                    {q.options.map((o) => {
+                      const on = answers[q.id] === o
+                      return (
+                        <button
+                          key={o}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => setAnswers((a) => ({ ...a, [q.id]: on ? '' : o }))}
+                          className={cn(
+                            'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors',
+                            on ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card hover:border-brand',
+                          )}
+                        >
+                          {on && <Check className="size-4" aria-hidden />}
+                          {o}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {err && <p className="text-xs text-destructive">{err}</p>}
+                </fieldset>
+              )
+            })}
+
             <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
               <label>
                 Website
@@ -373,11 +438,11 @@ const FIELD_IDS: [keyof FieldErrors, string][] = [
 ]
 
 /** Send refused: the cursor goes to the first answer to fix, so a phone scrolls to it. */
-function focusFirstError(errors: FieldErrors) {
-  const first = FIELD_IDS.find(([k]) => errors[k])
+function focusFirstError(errors: SendErrors) {
+  const first = FIELD_IDS.find(([k]) => errors[k])?.[1] ?? Object.keys(errors).find((k) => k.startsWith('q:') && errors[k])?.replace('q:', 'enq-q-')
   if (!first) return
   // After the error text has been drawn, so the box is where it will stay.
-  window.requestAnimationFrame(() => document.getElementById(first[1])?.focus())
+  window.requestAnimationFrame(() => document.getElementById(first)?.focus())
 }
 
 function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string | undefined; error?: string | undefined; children: ReactNode }) {
