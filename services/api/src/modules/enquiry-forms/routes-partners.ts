@@ -29,7 +29,8 @@ import { appBase, canManageLeads, mainFormRow } from './shared'
 const selectPartners = (sql: TransactionSql) => sql`
   select p.id, p.name, p.label, p.party_id, v.name as vendor_name, p.phone, p.notes, p.code, p.view_token,
          p.show_phone, p.scans, coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
-         st.last_enquiry_at, p.page_viewed_at, p.archived_at, p.created_at
+         st.last_enquiry_at, p.page_viewed_at, p.archived_at, p.created_at,
+         p.after_submit, p.whatsapp_phone, p.whatsapp_text, p.redirect_url, p.thank_you, p.occasion, p.questions
     from enquiry_partners p
     left join parties v on v.id = p.party_id
     left join enquiry_partner_stats st on st.partner_id = p.id`
@@ -109,6 +110,12 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
           const [made] = await sql<{ id: string }[]>`
             select (create_enquiry_partner(${d.name}, ${d.label ?? null}, ${phone}, ${d.party_id ?? null},
                                            ${d.notes ?? null}, ${pageToken()})).id`
+          // What the QR is for and its own questions (0281).
+          if (d.occasion || d.questions?.length) {
+            await sql`update enquiry_partners
+                         set occasion = ${d.occasion?.trim() || null}, questions = ${sql.json(d.questions ?? [])}
+                       where id = ${made!.id}`
+          }
           const formUrl = await formUrlOf(sql, c.env.APP_URL)
           const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${made!.id}`
           return { formUrl, row: rows[0]! }
@@ -197,6 +204,50 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
       }
     }
     if (archived !== undefined) patch.archived_at = archived ? new Date().toISOString() : null
+    if (patch.occasion !== undefined) patch.occasion = (patch.occasion as string | null)?.trim() || null
+    // Their QR's own after-send (0281), checked the way the main form's is.
+    if (patch.after_submit === null) {
+      // "Same as your main form": nothing of their own is kept.
+      Object.assign(patch, { whatsapp_phone: null, whatsapp_text: null, redirect_url: null, thank_you: null })
+    } else {
+      if (patch.whatsapp_phone !== undefined) {
+        const raw = (patch.whatsapp_phone as string | null) ?? ''
+        if (raw.trim() === '') patch.whatsapp_phone = null
+        else {
+          const wa = toIndianMobile(raw)
+          if (!wa) return c.json({ error: 'Enter a valid 10-digit mobile number', field: 'whatsapp_phone' }, 422)
+          patch.whatsapp_phone = wa
+        }
+      }
+      if (patch.whatsapp_text !== undefined) patch.whatsapp_text = (patch.whatsapp_text as string | null)?.trim() || null
+      if (patch.thank_you !== undefined) patch.thank_you = (patch.thank_you as string | null)?.trim() || null
+      if (patch.redirect_url !== undefined) {
+        const url = ((patch.redirect_url as string | null) ?? '').trim()
+        if (url === '') patch.redirect_url = null
+        else if (!/^https:\/\/[^\s<>"]+$/.test(url)) return c.json({ error: 'Paste a link that starts with https://', field: 'redirect_url' }, 422)
+        else patch.redirect_url = url
+      }
+      if (patch.after_submit !== undefined || patch.whatsapp_phone !== undefined || patch.redirect_url !== undefined) {
+        const check = await attempt(c, 'enquiry_partners.after_check', () =>
+          withUser(c.env, c.get('auth').userId, async (sql) => {
+            const form = await mainFormRow(sql)
+            return sql<{ after_submit: string | null; whatsapp_phone: string | null; redirect_url: string | null; fallback: string | null }[]>`
+              select p.after_submit, p.whatsapp_phone, p.redirect_url,
+                     coalesce(f.whatsapp_phone, enquiry_default_whatsapp(p.company_id)) as fallback
+                from enquiry_partners p, enquiry_forms f
+               where p.id = ${id} and f.id = ${form.id}`
+          }),
+        )
+        const cur = check?.[0]
+        if (cur) {
+          const after = patch.after_submit !== undefined ? (patch.after_submit as string | null) : cur.after_submit
+          const wa = patch.whatsapp_phone !== undefined ? patch.whatsapp_phone : cur.whatsapp_phone
+          const link = patch.redirect_url !== undefined ? patch.redirect_url : cur.redirect_url
+          if (after === 'whatsapp' && !wa && !cur.fallback) return c.json({ error: 'Add the WhatsApp number', field: 'whatsapp_phone' }, 422)
+          if (after === 'link' && !link) return c.json({ error: 'Paste the link to open', field: 'redirect_url' }, 422)
+        }
+      }
+    }
     if (typeof patch.name === 'string') {
       const name = patch.name
       const dupes = await attempt(c, 'enquiry_partners.name_check', () =>
@@ -212,8 +263,14 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
       'enquiry_partners.update',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          const done = await sql`update enquiry_partners set ${sql(patch)} where id = ${id} returning id`
+          const { questions, ...plain } = patch
+          const done = Object.keys(plain).length
+            ? await sql`update enquiry_partners set ${sql(plain)} where id = ${id} returning id`
+            : await sql`select id from enquiry_partners where id = ${id}`
           if (!done[0]) return 'missing' as const
+          if (questions !== undefined) {
+            await sql`update enquiry_partners set questions = ${sql.json(questions as never)} where id = ${id}`
+          }
           const formUrl = await formUrlOf(sql, c.env.APP_URL)
           const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${id}`
           return { formUrl, row: rows[0]! }

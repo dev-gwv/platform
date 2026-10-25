@@ -109,11 +109,37 @@ function Hub({ hub }: { hub: EnquiryHub }) {
         </div>
       )}
       {tab === 'after' && (
-        <AfterSendCard key={`a-${form.after_submit}-${form.whatsapp_phone}-${form.redirect_url}`} form={form} studio={studio} defaultPhone={hub.default_whatsapp_phone} />
+        <div className="flex flex-col gap-3">
+          <AfterSendCard key={`a-${form.after_submit}-${form.whatsapp_phone}-${form.redirect_url}`} form={form} studio={studio} defaultPhone={hub.default_whatsapp_phone} />
+          <PartnerAfterSendLine />
+        </div>
       )}
       {tab === 'questions' && <QuestionsCard key={`q-${JSON.stringify(form.fields)}`} form={form} services={hub.services} />}
       {adding && <PartnerDialog onClose={() => setAdding(false)} />}
     </>
+  )
+}
+
+/**
+ * Each partner's QR can send people somewhere of its own (0281); this says
+ * which ones do and where to change it, in one line.
+ */
+function PartnerAfterSendLine() {
+  const partners = usePartners()
+  const live = (partners.data ?? []).filter((p) => !p.archived_at)
+  if (!live.length) return null
+  const own = live.filter((p) => p.after_submit)
+  return (
+    <p className="text-sm text-muted-foreground">
+      {own.length
+        ? `${own.map((p) => p.name).join(', ')} ${own.length === 1 ? 'has its' : 'have their'} own. Every other partner QR does the same as above.`
+        : 'Every partner QR does the same as above.'}{' '}
+      To give one its own link, chat or thank-you, open the partner under{' '}
+      <Link to="/follow-ups/partners" className="font-semibold text-primary hover:underline">
+        Partners
+      </Link>
+      .
+    </p>
   )
 }
 

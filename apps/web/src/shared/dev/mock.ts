@@ -329,7 +329,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && /^\/enquiry-partners\/[0-9a-f-]{36}$/.test(path)) return enquiryPartnersFx[0]
   if (method === 'GET' && path.startsWith('/enquiry-partners')) return path.includes('archived') ? [] : enquiryPartnersFx
   if (method === 'GET' && path.startsWith('/public/forms/'))
-    return { ...publicEnquiryFx, partner: path.includes('?p=') ? 'Riya Boutique' : null }
+    return path.includes('?p=')
+      ? { ...publicEnquiryFx, partner: 'Riya Boutique', occasion: enquiryPartnersFx[0]!.occasion, questions: enquiryPartnersFx[0]!.questions }
+      : { ...publicEnquiryFx, partner: null }
   if (method === 'POST' && path.startsWith('/public/forms/'))
     return { received: true, redirect_url: 'https://wa.me/919876921126?text=Hi%20Asha%20Studio!' }
   if (method === 'GET' && path.startsWith('/public/enquiry-view/')) return publicPartnerFx
@@ -1957,6 +1959,12 @@ const rawLeads = [
     source_label: 'Enquiry form',
     partner_id: '00000000-0000-4000-8000-0000000008f1',
     partner_name: 'Riya Boutique',
+    // Their QR's own questions, answered (0281).
+    enquiry_occasion: "Priya & Rahul's wedding, 14 Feb",
+    enquiry_answers: [
+      { question: 'Bride side or groom side?', answer: 'Bride side' },
+      { question: 'What did you like at this wedding?', answer: 'The candid photos and the drone shots at the pheras.' },
+    ],
     status: 'contacted',
     assigned_to: uid(0xe3),
     assignee_name: 'Sana',
@@ -3985,6 +3993,11 @@ const enquiryPartnersFx = [
     enquiries: 4, booked: 1, last_enquiry_at: '2026-10-17T09:00:00Z', page_viewed_at: '2026-10-19T09:00:00Z', archived_at: null, created_at: '2026-09-10T10:00:00Z',
     form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=r1y2a3',
     page_url: 'https://studioautopilot.in/enquiry-view/riyatoken_abcdefghijklmnop',
+    after_submit: 'link', redirect_url: 'https://wa.me/message/RIYAWEDDING', occasion: "Priya & Rahul's wedding, 14 Feb",
+    questions: [
+      { id: 'side1234', label: 'Bride side or groom side?', kind: 'choice', options: ['Bride side', 'Groom side'], required: true },
+      { id: 'like1234', label: 'What did you like at this wedding?', kind: 'text', options: [], required: false },
+    ],
   },
   {
     id: '00000000-0000-4000-8000-0000000008f2', name: 'Kiran Florist', label: 'Decorator', party_id: uid(0x8f3), vendor_name: 'Kiran Flowers',

@@ -199,6 +199,20 @@ export const setEnquiryServicesRequest = z.object({
   values: z.array(z.string().trim().min(1).max(60)).max(30),
 })
 
+/** A partner QR's own question (0281): a typed answer or one pick from a list. */
+export const enquiryQuestion = z.object({
+  id: z.string().regex(/^[a-z0-9]{4,12}$/),
+  label: z.string().trim().min(1, 'Write the question.').max(120),
+  kind: z.enum(['text', 'choice']),
+  options: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  required: z.boolean().default(false),
+})
+export type EnquiryQuestion = z.infer<typeof enquiryQuestion>
+export const enquiryQuestions = z
+  .array(enquiryQuestion)
+  .max(10, 'Up to ten questions.')
+  .refine((qs) => qs.every((q) => q.kind === 'text' || q.options.length >= 2), 'Give each list at least two choices.')
+
 export const enquiryPartner = z.object({
   id: uuid,
   name: z.string(),
@@ -221,6 +235,15 @@ export const enquiryPartner = z.object({
   form_url: z.string(),
   /** Their private page, or null while sharing is stopped. */
   page_url: z.string().nullable(),
+  /** 0281: their QR's own after-send; null = same as the main form. */
+  after_submit: enquiryAfterSubmit.nullable().default(null),
+  whatsapp_phone: z.string().nullable().default(null),
+  whatsapp_text: z.string().nullable().default(null),
+  redirect_url: z.string().nullable().default(null),
+  thank_you: z.string().nullable().default(null),
+  /** 0281: what this QR is for ("Priya & Rahul's wedding"), and its own questions. */
+  occasion: z.string().nullable().default(null),
+  questions: z.array(enquiryQuestion).catch([]).default([]),
 })
 export type EnquiryPartner = z.infer<typeof enquiryPartner>
 
@@ -231,6 +254,8 @@ export const createEnquiryPartnerRequest = z.object({
   phone: text(30).nullish(),
   party_id: uuid.nullish(),
   notes: text(1000).nullish(),
+  occasion: text(120).nullish(),
+  questions: enquiryQuestions.optional(),
 })
 export type CreateEnquiryPartnerRequest = z.input<typeof createEnquiryPartnerRequest>
 
@@ -243,6 +268,15 @@ export const updateEnquiryPartnerRequest = z
     notes: text(1000).nullable(),
     show_phone: z.boolean(),
     archived: z.boolean(),
+    /** 0281: null = same as the main form (and clears the four below). */
+    after_submit: enquiryAfterSubmit.nullable(),
+    /** "" clears it, so the form's number (then the studio's) is used. */
+    whatsapp_phone: z.string().trim().max(20).nullable(),
+    whatsapp_text: text(300).nullable(),
+    redirect_url: z.string().trim().max(500).nullable(),
+    thank_you: text(300).nullable(),
+    occasion: text(120).nullable(),
+    questions: enquiryQuestions,
   })
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')
@@ -268,6 +302,9 @@ export const publicEnquiryFormV2 = publicEnquiryForm.extend({
   partner: z.string().nullable().default(null),
   /** So the thank-you screen says the right words before sending. */
   goes_to: z.enum(['whatsapp', 'link']).nullable().default(null),
+  /** 0281: what a partner's QR is for, and its own questions. */
+  occasion: z.string().nullable().default(null),
+  questions: z.array(enquiryQuestion).catch([]).default([]),
 })
 export type PublicEnquiryFormV2 = z.infer<typeof publicEnquiryFormV2>
 
@@ -286,6 +323,8 @@ export const submitEnquiryRequestV2 = z.object({
   website: z.string().max(500).optional(),
   /** A partner's code, from ?p=. */
   p: z.string().max(20).nullish(),
+  /** Answers to a partner QR's own questions, by question id (0281). */
+  answers: z.record(z.string().max(40), z.string().max(500)).nullish(),
 })
 export type SubmitEnquiryRequestV2 = z.input<typeof submitEnquiryRequestV2>
 

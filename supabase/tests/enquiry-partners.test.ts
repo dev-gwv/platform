@@ -235,6 +235,108 @@ describe('the main form (0274)', () => {
     expect(await scans()).toBe(once)
   })
 
+  it("sends a partner's QR to its own after-send, and the rest to the form's (0281)", async () => {
+    const make = async (name: string, token: string) =>
+      asUser(OWNER, async () => {
+        const [p] = await q<{ id: string; code: string }>(
+          `select id, code from create_enquiry_partner($1, null, null, null, null, $2)`,
+          [name, token],
+        )
+        return p!
+      })
+    const plain = await make('Plain Partner', 'plaintoken_abcdefghijklmnop')
+    const linked = await make('Link Partner', 'linktoken_abcdefghijklmnopq')
+    const chatty = await make('Chat Partner', 'chattoken_abcdefghijklmnopq')
+    const thanks = await make('Thanks Partner', 'thankstoken_abcdefghijklmno')
+
+    // A link needs its link; the studio sets each partner's own.
+    await expect(asUser(OWNER, () => q(`update enquiry_partners set after_submit = 'link' where id = $1`, [linked.id]))).rejects.toThrow()
+    await asUser(OWNER, async () => {
+      await q(`update enquiry_partners set after_submit = 'link', redirect_url = 'https://wa.me/message/LINKPARTNER' where id = $1`, [linked.id])
+      await q(`update enquiry_partners set after_submit = 'whatsapp', whatsapp_phone = '+919811100000', whatsapp_text = 'Hi from the jeweller!' where id = $1`, [chatty.id])
+      await q(`update enquiry_partners set after_submit = 'thanks', thank_you = 'Thank you, the boutique told us about you.' where id = $1`, [thanks.id])
+    })
+
+    // Unset: the main form's WhatsApp, as before.
+    const a = await send(main.slug, { name: 'Anu', phone: '9844400001', email: 'a@test.in' }, plain.code)
+    expect(a.wa_phone).toBe('919876921126')
+    expect(a.redirect_url).toBeNull()
+
+    const b = await send(main.slug, { name: 'Bina', phone: '9844400002', email: 'b@test.in' }, linked.code)
+    expect(b.redirect_url).toBe('https://wa.me/message/LINKPARTNER')
+    expect(b.wa_phone).toBeNull()
+    const [pubB] = await q<{ doc: { goes_to: string } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, linked.code])
+    expect(pubB!.doc.goes_to).toBe('link')
+
+    const c = await send(main.slug, { name: 'Chitra', phone: '9844400003', email: 'c@test.in' }, chatty.code)
+    expect(c.wa_phone).toBe('919811100000')
+    expect(c.wa_text).toMatch(/^Hi from the jeweller!\n\nName: Chitra/)
+
+    const d = await send(main.slug, { name: 'Dia', phone: '9844400004', email: 'd@test.in' }, thanks.code)
+    expect(d.wa_phone).toBeNull()
+    expect(d.redirect_url).toBeNull()
+    const [pubD] = await q<{ doc: { goes_to: string | null; thank_you: string } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, thanks.code])
+    expect(pubD!.doc.goes_to).toBeNull()
+    expect(pubD!.doc.thank_you).toBe('Thank you, the boutique told us about you.')
+
+    // The main form without a partner is untouched.
+    const e = await send(main.slug, { name: 'Esha', phone: '9844400005', email: 'e@test.in' })
+    expect(e.wa_phone).toBe('919876921126')
+  })
+
+  it("asks a partner QR's own questions and keeps the answers and the occasion on the lead (0281)", async () => {
+    const wed = await asUser(OWNER, async () => {
+      const [p] = await q<{ id: string; code: string }>(
+        `select id, code from create_enquiry_partner('Sharma Wedding Desk', null, null, null, null, 'weddingtoken_abcdefghijklmn')`,
+      )
+      return p!
+    })
+    const questions = [
+      { id: 'side1', label: 'Bride side or groom side?', kind: 'choice', options: ['Bride side', 'Groom side'], required: true },
+      { id: 'note1', label: 'Anything you liked at this wedding?', kind: 'text', required: false },
+    ]
+    // A broken question list is refused by the database.
+    await expect(
+      asUser(OWNER, () => q(`update enquiry_partners set questions = $1::jsonb where id = $2`, [JSON.stringify([{ id: 'x', label: '', kind: 'nope' }]), wed.id])),
+    ).rejects.toThrow()
+    await asUser(OWNER, () =>
+      q(`update enquiry_partners set occasion = $1, questions = $2::jsonb where id = $3`, ["Priya & Rahul's wedding", JSON.stringify(questions), wed.id]),
+    )
+
+    const [pub] = await q<{ doc: { occasion: string; questions: { id: string }[] } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, wed.code])
+    expect(pub!.doc.occasion).toBe("Priya & Rahul's wedding")
+    expect(pub!.doc.questions.map((x) => x.id)).toEqual(['side1', 'note1'])
+
+    // A must-answer pick is checked, and an answer not on the list does not count.
+    const bad = await send(main.slug, { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Neither' } }, wed.code)
+    expect(bad.errors).toEqual({ 'q:side1': 'Pick one' })
+
+    const ok = await send(
+      main.slug,
+      { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Bride side', note1: '  The candid shots  ', junk: 'x' } },
+      wed.code,
+    )
+    expect(ok.errors).toBeUndefined()
+    const [lead] = await q<{ enquiry_occasion: string; enquiry_answers: { question: string; answer: string }[] }>(
+      `select enquiry_occasion, enquiry_answers from crm_leads where id = $1`,
+      [ok.lead_id],
+    )
+    expect(lead!.enquiry_occasion).toBe("Priya & Rahul's wedding")
+    expect(lead!.enquiry_answers).toEqual([
+      { question: 'Bride side or groom side?', answer: 'Bride side' },
+      { question: 'Anything you liked at this wedding?', answer: 'The candid shots' },
+    ])
+    expect(ok.wa_text).toContain("For: Priya & Rahul's wedding\nBride side or groom side?: Bride side")
+    const [n] = await q<{ body: string }>(`select body from notifications where entity_id = $1 and type = 'enquiry_new'`, [ok.lead_id])
+    expect(n!.body).toContain("Priya & Rahul's wedding")
+
+    // The same number again: one lead, and the note carries the answers.
+    const again = await send(main.slug, { name: 'Ritu', phone: '9855500001', email: 'r@test.in', answers: { side1: 'Groom side' } }, wed.code)
+    expect(again.lead_id).toBe(ok.lead_id)
+    const notes = await q<{ body: string }>(`select body from crm_activities where lead_id = $1 and subject = 'Enquired again'`, [ok.lead_id])
+    expect(notes[0]!.body).toContain('Bride side or groom side?: Groom side')
+  })
+
   it('shows nothing when the form is switched off', async () => {
     await q(`update enquiry_forms set is_active = false where id = $1`, [main.id])
     const [r] = await q<{ doc: unknown }>(`select enquiry_public($1) as doc`, [main.slug])

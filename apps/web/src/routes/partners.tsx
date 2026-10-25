@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { Archive, ArchiveRestore, ArrowLeft, Copy, Eye, Handshake, Link2Off, MessageCircle, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import type { EnquiryPartner } from '@ipc/contracts'
+import type { EnquiryHub, EnquiryPartner } from '@ipc/contracts'
 import { firstWord, formatIndianPhone, partnerPageText, partnerQrText, splitKinds, topPartnerId, whatsappUrl } from '@ipc/domain'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -23,6 +23,7 @@ import {
   useUpdatePartner,
 } from '@/features/enquiry-forms/api'
 import { PartnerDialog } from '@/features/enquiry-forms/PartnerDialog'
+import { PartnerAfterSendCard } from '@/features/enquiry-forms/AfterSendCard'
 import { LeadLine, LeadsDownloadStrip, PartnerRow, QrDownloadButtons, QrImage, StatTiles, copyText } from '@/features/enquiry-forms/parts'
 
 function NotYours() {
@@ -152,10 +153,10 @@ export function PartnerPage() {
   if (hub.data && !hub.data.can_manage) return <NotYours />
   if (partner.isError || !partner.data || !hub.data)
     return <ErrorState message="We could not load this partner." onRetry={() => void partner.refetch()} />
-  return <PartnerDetail partner={partner.data} studio={hub.data.studio} formOn={hub.data.form.is_active} />
+  return <PartnerDetail partner={partner.data} studio={hub.data.studio} formOn={hub.data.form.is_active} hub={hub.data} />
 }
 
-function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner; studio: string; formOn: boolean }) {
+function PartnerDetail({ partner: p, studio, formOn, hub }: { partner: EnquiryPartner; studio: string; formOn: boolean; hub: EnquiryHub }) {
   const [editing, setEditing] = useState(false)
   const canExport = useAccess().hasModule('crm_export')
   const update = useUpdatePartner(p.id)
@@ -235,6 +236,20 @@ function PartnerDetail({ partner: p, studio, formOn }: { partner: EnquiryPartner
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* This QR's own after-send (0281): a link, chat or thank-you just for them. */}
+        {!ended && (
+          <section className="flex flex-col gap-2">
+            <h2 className="text-lg font-extrabold">After they send, through {firstWord(p.name)}'s QR</h2>
+            <PartnerAfterSendCard
+              key={`a-${p.after_submit}-${p.whatsapp_phone}-${p.redirect_url}-${p.thank_you}-${p.whatsapp_text}`}
+              partner={p}
+              form={hub.form}
+              studio={studio}
+              defaultPhone={hub.default_whatsapp_phone}
+            />
+          </section>
         )}
 
         <EnquiriesCard partner={p} />
