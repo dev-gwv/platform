@@ -221,6 +221,12 @@ export function PartnerDialog({ partner, onClose }: { partner?: EnquiryPartner; 
 
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold">Your own questions on this QR</p>
+            {partner && partner.enquiries > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Change them freely. Leads that already came in keep the questions they were asked and their answers; only new
+                enquiries get the new questions.
+              </p>
+            )}
             <PartnerQuestions value={questions} onChange={setQuestions} />
           </div>
 

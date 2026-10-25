@@ -558,7 +558,7 @@ function DownloadLeadsButton({ count }: { count: number }) {
       <DialogContent title="Download all your leads" description={`Every lead${count ? ` (${count} open now)` : ''}, won and lost too, with phone, email, event, source and stage.`}>
         <DownloadButtons query={{}} />
         <p className="text-sm text-muted-foreground">
-          For Google Sheets: download Excel, then in Google Sheets press <strong>File → Import → Upload</strong>.
+          <strong>Google Sheets</strong> saves the file and opens a new sheet: there press <strong>File → Import → Upload</strong>.
         </p>
       </DialogContent>
     </Dialog>

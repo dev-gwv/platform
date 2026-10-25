@@ -335,6 +335,24 @@ describe('the main form (0274)', () => {
     expect(again.lead_id).toBe(ok.lead_id)
     const notes = await q<{ body: string }>(`select body from crm_activities where lead_id = $1 and subject = 'Enquired again'`, [ok.lead_id])
     expect(notes[0]!.body).toContain('Bride side or groom side?: Groom side')
+
+    // The studio changes the questions later: Ritu's lead keeps what she was
+    // asked and answered, and only the next enquiry is asked the new ones.
+    const edited = [{ id: 'venue1', label: 'Which venue was it?', kind: 'text', required: true }]
+    await asUser(OWNER, () => q(`update enquiry_partners set questions = $1::jsonb where id = $2`, [JSON.stringify(edited), wed.id]))
+    const [after] = await q<{ doc: { questions: { id: string }[] } }>(`select enquiry_public($1, $2, false) as doc`, [main.slug, wed.code])
+    expect(after!.doc.questions.map((x) => x.id)).toEqual(['venue1'])
+    const next = await send(main.slug, { name: 'Kavya', phone: '9855500002', email: 'k@test.in', answers: { venue1: 'Leela Palace' } }, wed.code)
+    const rows = await q<{ id: string; enquiry_answers: { question: string; answer: string }[] }>(
+      `select id, enquiry_answers from crm_leads where id in ($1, $2)`,
+      [ok.lead_id, next.lead_id],
+    )
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.enquiry_answers]))
+    expect(byId[ok.lead_id!]).toEqual([
+      { question: 'Bride side or groom side?', answer: 'Bride side' },
+      { question: 'Anything you liked at this wedding?', answer: 'The candid shots' },
+    ])
+    expect(byId[next.lead_id!]).toEqual([{ question: 'Which venue was it?', answer: 'Leela Palace' }])
   })
 
   it('shows nothing when the form is switched off', async () => {

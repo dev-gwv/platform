@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Download, FileSpreadsheet, MessageCircle, QrCode } from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, MessageCircle, Pencil, QrCode, Sheet } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryFormLead, EnquiryPartner } from '@ipc/contracts'
 import { partnerLine, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
@@ -10,6 +10,7 @@ import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
 import { downloadQrPng, downloadQrSvg, qrSvg } from '@/shared/ui/qr-download'
 import { downloadLeads, type LeadsDownload } from './api'
+import { PartnerDialog } from './PartnerDialog'
 
 /** Copy a link, or say how to copy it by hand (spec 3.1). */
 export async function copyText(text: string, done = 'Link copied') {
@@ -79,7 +80,15 @@ export function LeadLine({ lead }: { lead: EnquiryFormLead }) {
   )
 }
 
-/** "Excel" and "CSV", the same pair everywhere leads can be downloaded (spec 3.12). */
+/** Google's own "new spreadsheet" address: the file is brought in with File → Import. */
+const NEW_SHEET_URL = 'https://docs.google.com/spreadsheets/create'
+
+/**
+ * "Google Sheets", "Excel" and "CSV", the same buttons everywhere leads can be
+ * downloaded (spec 3.12; Google Sheets, owner 25 Oct). We hold no Google
+ * sign-in, so Google Sheets saves the Excel file and opens a new sheet beside
+ * it, and the toast says the one step left: File → Import → Upload.
+ */
 export function DownloadButtons({
   query,
   className,
@@ -89,22 +98,36 @@ export function DownloadButtons({
   className?: string
   solid?: boolean
 }) {
-  const [busy, setBusy] = useState<'xlsx' | 'csv' | null>(null)
-  const run = async (format: 'xlsx' | 'csv') => {
+  const [busy, setBusy] = useState<'xlsx' | 'csv' | 'sheet' | null>(null)
+  const run = async (format: 'xlsx' | 'csv' | 'sheet') => {
     setBusy(format)
+    // Opened at the press, before the wait, so the browser does not block it.
+    const tab = format === 'sheet' ? window.open('', '_blank') : null
     try {
-      const n = await downloadLeads({ ...query, format })
-      if (n === 0) toast.info('No leads to download yet')
-      else toast.success(`${n} ${n === 1 ? 'lead' : 'leads'} downloaded`)
+      const n = await downloadLeads({ ...query, format: format === 'csv' ? 'csv' : 'xlsx' })
+      if (n === 0) {
+        tab?.close()
+        toast.info('No leads to download yet')
+      } else if (format === 'sheet') {
+        if (tab) tab.location.href = NEW_SHEET_URL
+        else window.open(NEW_SHEET_URL, '_blank')
+        toast.success(`${n} ${n === 1 ? 'lead' : 'leads'} saved. In the new Google Sheet: File → Import → Upload, and pick the file.`, {
+          duration: 15_000,
+        })
+      } else toast.success(`${n} ${n === 1 ? 'lead' : 'leads'} downloaded`)
     } catch (e) {
+      tab?.close()
       toast.error(e instanceof Error && e.message ? e.message : 'We could not make the file. Please try again.')
     } finally {
       setBusy(null)
     }
   }
   return (
-    <div className={cn('flex gap-2', className)}>
-      <Button size="sm" variant={solid ? 'default' : 'outline'} disabled={!!busy} onClick={() => void run('xlsx')}>
+    <div className={cn('flex flex-wrap gap-2', className)}>
+      <Button size="sm" variant={solid ? 'default' : 'outline'} disabled={!!busy} onClick={() => void run('sheet')}>
+        <Sheet /> {busy === 'sheet' ? 'Making…' : 'Google Sheets'}
+      </Button>
+      <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('xlsx')}>
         <FileSpreadsheet /> {busy === 'xlsx' ? 'Making…' : 'Excel'}
       </Button>
       <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void run('csv')}>
@@ -116,8 +139,8 @@ export function DownloadButtons({
 
 /**
  * The leads download, on top where it is seen (owner, 21 Oct: "it has to come
- * in the All Partners section ... shown on top"): one sentence and Excel / CSV.
- * Excel opens in Google Sheets too (File → Import).
+ * in the All Partners section ... shown on top"): one sentence and Google
+ * Sheets / Excel / CSV.
  */
 export function LeadsDownloadStrip({ title, query, className }: { title: string; query: Omit<LeadsDownload, 'format'>; className?: string }) {
   return (
@@ -125,7 +148,6 @@ export function LeadsDownloadStrip({ title, query, className }: { title: string;
       <Download className="size-5 shrink-0 text-success" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold">{title}</p>
-        <p className="text-xs text-muted-foreground">Excel opens in Google Sheets too: File → Import.</p>
       </div>
       <DownloadButtons query={query} solid />
     </div>
@@ -241,6 +263,7 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
   const kinds = splitKinds(partner.label).join(', ')
   const counts = partnerLine(partner)
   const canExport = useAccess().hasModule('crm_export')
+  const [editing, setEditing] = useState(false)
   return (
     <li className="flex items-center gap-3 px-3 py-3 sm:px-4">
       <Link
@@ -267,6 +290,17 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
         </span>
         <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
       </Link>
+      {/* Edit from the list itself: name, questions, what the QR is for (owner, 25 Oct). */}
+      <Button
+        size="icon"
+        variant="outline"
+        aria-label={`Edit ${partner.name}`}
+        title={`Edit ${partner.name}: details and questions`}
+        onClick={() => setEditing(true)}
+      >
+        <Pencil />
+      </Button>
+      {editing && <PartnerDialog partner={partner} onClose={() => setEditing(false)} />}
       {/* This partner's leads as Excel, on the row itself (owner, 21 Oct). */}
       {canExport && partner.enquiries > 0 && <PartnerLeadsButton partner={partner} />}
       {partner.page_url && !partner.archived_at && (
