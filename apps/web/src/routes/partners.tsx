@@ -186,7 +186,7 @@ function PartnerDetail({ partner: p, studio, formOn, hub }: { partner: EnquiryPa
                   {[kinds, vendor, p.phone ? formatIndianPhone(p.phone) : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+              <Button size="sm" onClick={() => setEditing(true)}>
                 <Pencil /> Edit
               </Button>
             </div>
@@ -238,6 +238,9 @@ function PartnerDetail({ partner: p, studio, formOn, hub }: { partner: EnquiryPa
           </Card>
         )}
 
+        {/* Its questions stay editable for good (owner, 25 Oct); answers already given stay on their leads. */}
+        {!ended && <QrQuestionsCard partner={p} onEdit={() => setEditing(true)} />}
+
         {/* This QR's own after-send (0281): a link, chat or thank-you just for them. */}
         {!ended && (
           <section className="flex flex-col gap-2">
@@ -283,6 +286,49 @@ function PartnerDetail({ partner: p, studio, formOn, hub }: { partner: EnquiryPa
       </div>
       {editing && <PartnerDialog partner={p} onClose={() => setEditing(false)} />}
     </>
+  )
+}
+
+function QrQuestionsCard({ partner: p, onEdit }: { partner: EnquiryPartner; onEdit: () => void }) {
+  const qs = p.questions ?? []
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-2">
+        <CardTitle className="text-lg font-extrabold">Questions on {firstWord(p.name)}'s QR</CardTitle>
+        <Button size="sm" onClick={onEdit}>
+          <Pencil /> {qs.length || p.occasion ? 'Edit questions' : 'Add questions'}
+        </Button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {p.occasion && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">For </span>
+            <span className="font-semibold">{p.occasion}</span>
+          </p>
+        )}
+        {qs.length ? (
+          <ol className="flex flex-col gap-1.5">
+            {qs.map((q, i) => (
+              <li key={q.id} className="text-sm">
+                <span className="font-semibold">
+                  {i + 1}. {q.label}
+                </span>
+                <span className="text-muted-foreground">
+                  {' · '}
+                  {q.kind === 'choice' ? q.options.join(' / ') : 'Typed answer'}
+                  {q.required ? ' · Must answer' : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-muted-foreground">Only your form's own questions are asked.</p>
+        )}
+        {qs.length > 0 && (
+          <p className="text-xs text-muted-foreground">Change them any time. Answers already given stay on their leads.</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
