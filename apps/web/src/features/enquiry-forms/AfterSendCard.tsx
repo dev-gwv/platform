@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { CircleCheck, ExternalLink, Link2, MessageCircle } from 'lucide-react'
+import { CircleCheck, Copy, ExternalLink, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import type { EnquiryAfterSubmit, EnquiryForm } from '@ipc/contracts'
+import type { EnquiryAfterSubmit, EnquiryForm, EnquiryPartner } from '@ipc/contracts'
 import { formatIndianPhone, waDigits, whatsappPreview } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { fieldOf, useUpdateEnquiryForm } from './api'
+import { fieldOf, useUpdateEnquiryForm, useUpdatePartner } from './api'
 
 const CHOICES: { key: EnquiryAfterSubmit; title: string; line: string; icon: ReactNode; best?: boolean }[] = [
   {
@@ -33,41 +33,134 @@ const CHOICES: { key: EnquiryAfterSubmit; title: string; line: string; icon: Rea
 
 const tenOf = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '').slice(-10)
 
+type Choice = EnquiryAfterSubmit | 'same'
+type Values = { after: Choice; phone: string; text: string; link: string; thanks: string }
+
+/** "WhatsApp chat", "a thank-you", "opens a link": the main form's choice in a few words. */
+export function afterSendWords(after: EnquiryAfterSubmit): string {
+  return after === 'whatsapp' ? 'a WhatsApp chat with you' : after === 'link' ? 'the link you set' : 'a thank-you'
+}
+
 /**
  * Where a client lands after sending (spec 3.2): a WhatsApp chat with the
  * studio (the default), a plain thank-you, or a link the studio chooses.
+ * This is the main form's, which every partner QR follows unless it has its own.
  */
 export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryForm; studio: string; defaultPhone: string | null }) {
   const update = useUpdateEnquiryForm(form.id)
-  const start = {
-    after: form.after_submit,
-    phone: tenOf(form.whatsapp_phone),
-    text: form.whatsapp_text ?? '',
-    link: form.redirect_url ?? '',
-    thanks: form.thank_you ?? '',
-  }
+  return (
+    <AfterSendEditor
+      studio={studio}
+      fallbackPhone={defaultPhone}
+      pending={update.isPending}
+      start={{
+        after: form.after_submit,
+        phone: tenOf(form.whatsapp_phone),
+        text: form.whatsapp_text ?? '',
+        link: form.redirect_url ?? '',
+        thanks: form.thank_you ?? '',
+      }}
+      save={(v, done, failed) =>
+        update.mutate(
+          {
+            after_submit: v.after as EnquiryAfterSubmit,
+            whatsapp_phone: v.phone.trim() ? v.phone : null,
+            whatsapp_text: v.text.trim() || null,
+            redirect_url: v.link.trim() || null,
+            thank_you: v.thanks.trim() || null,
+          },
+          { onSuccess: done, onError: failed },
+        )
+      }
+    />
+  )
+}
+
+/**
+ * One partner's QR, after they send (owner, 25 Oct: "sometimes we need to send
+ * some unique links to different QR codes"). "Same as your main form" until the
+ * studio picks something else; an empty number or message falls back to the
+ * main form's, then the studio's own number (0281).
+ */
+export function PartnerAfterSendCard({
+  partner,
+  form,
+  studio,
+  defaultPhone,
+}: {
+  partner: EnquiryPartner
+  form: EnquiryForm
+  studio: string
+  defaultPhone: string | null
+}) {
+  const update = useUpdatePartner(partner.id)
+  return (
+    <AfterSendEditor
+      studio={studio}
+      fallbackPhone={form.whatsapp_phone ?? defaultPhone}
+      fallbackText={form.whatsapp_text}
+      sameLine={`Like your main form: ${afterSendWords(form.after_submit)}.`}
+      pending={update.isPending}
+      start={{
+        after: partner.after_submit ?? 'same',
+        phone: tenOf(partner.whatsapp_phone),
+        text: partner.whatsapp_text ?? '',
+        link: partner.redirect_url ?? '',
+        thanks: partner.thank_you ?? '',
+      }}
+      save={(v, done, failed) =>
+        update.mutate(
+          v.after === 'same'
+            ? { after_submit: null }
+            : {
+                after_submit: v.after,
+                whatsapp_phone: v.phone.trim() ? v.phone : null,
+                whatsapp_text: v.text.trim() || null,
+                redirect_url: v.link.trim() || null,
+                thank_you: v.thanks.trim() || null,
+              },
+          { onSuccess: done, onError: failed },
+        )
+      }
+    />
+  )
+}
+
+function AfterSendEditor({
+  start,
+  save,
+  pending,
+  studio,
+  fallbackPhone,
+  fallbackText = null,
+  sameLine,
+}: {
+  start: Values
+  save: (v: Values, done: () => void, failed: (e: unknown) => void) => void
+  pending: boolean
+  studio: string
+  fallbackPhone: string | null
+  fallbackText?: string | null
+  /** Offers "Same as your main form" first, with what that is. */
+  sameLine?: string
+}) {
   const [v, setV] = useState(start)
   const [error, setError] = useState<{ field: string; text: string } | null>(null)
   const changed = JSON.stringify(v) !== JSON.stringify(start)
+  const defaultPhone = fallbackPhone
   const chatNumber = waDigits(v.phone) ?? waDigits(defaultPhone)
+  const choices: { key: Choice; title: string; line: string; icon: ReactNode; best?: boolean }[] = sameLine
+    ? [{ key: 'same', title: 'Same as your main form', line: sameLine, icon: <Copy className="size-4" aria-hidden /> }, ...CHOICES.map((c) => ({ ...c, best: false }))]
+    : CHOICES
 
-  const save = () => {
+  const onSave = () => {
     setError(null)
-    update.mutate(
-      {
-        after_submit: v.after,
-        whatsapp_phone: v.phone.trim() ? v.phone : null,
-        whatsapp_text: v.text.trim() || null,
-        redirect_url: v.link.trim() || null,
-        thank_you: v.thanks.trim() || null,
-      },
-      {
-        onSuccess: () =>
-          toast.success(v.after === 'whatsapp' ? 'Saved. After sending the form, people land in a WhatsApp chat with you.' : 'Saved'),
-        onError: (e) => {
-          const field = fieldOf(e)
-          if (field) setError({ field, text: e.message })
-        },
+    save(
+      v,
+      () => toast.success(v.after === 'whatsapp' ? 'Saved. After sending the form, people land in a WhatsApp chat with you.' : 'Saved'),
+      (e) => {
+        const field = fieldOf(e)
+        if (field) setError({ field, text: e instanceof Error ? e.message : 'Please check this.' })
       },
     )
   }
@@ -75,8 +168,8 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 p-4 sm:p-6">
-        <div role="radiogroup" aria-label="After they send the form" className="grid gap-2 sm:grid-cols-3">
-          {CHOICES.map((c) => {
+        <div role="radiogroup" aria-label="After they send the form" className={cn('grid gap-2', sameLine ? 'sm:grid-cols-2' : 'sm:grid-cols-3')}>
+          {choices.map((c) => {
             const on = v.after === c.key
             return (
               <button
@@ -149,14 +242,14 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
                 id="wa-text"
                 rows={2}
                 maxLength={300}
-                placeholder={`Hi ${studio}! I just sent you an enquiry.`}
+                placeholder={fallbackText || `Hi ${studio}! I just sent you an enquiry.`}
                 value={v.text}
                 onChange={(e) => setV((x) => ({ ...x, text: e.target.value }))}
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <p className="text-sm font-semibold text-muted-foreground">What they'll send you</p>
-              <p className="whitespace-pre-line rounded-2xl bg-[#E7F8E1] p-4 text-sm text-[#112B1A]">{whatsappPreview(studio, v.text)}</p>
+              <p className="whitespace-pre-line rounded-2xl bg-[#E7F8E1] p-4 text-sm text-[#112B1A]">{whatsappPreview(studio, v.text || fallbackText || '')}</p>
               {chatNumber && (
                 <a
                   href={`https://wa.me/${chatNumber}`}
@@ -213,8 +306,8 @@ export function AfterSendCard({ form, studio, defaultPhone }: { form: EnquiryFor
 
         {changed && (
           <div className="flex gap-2">
-            <Button onClick={save} disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save'}
+            <Button onClick={onSave} disabled={pending}>
+              {pending ? 'Saving…' : 'Save'}
             </Button>
             <Button variant="ghost" onClick={() => (setV(start), setError(null))}>
               Undo

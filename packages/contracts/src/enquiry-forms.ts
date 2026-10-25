@@ -221,6 +221,12 @@ export const enquiryPartner = z.object({
   form_url: z.string(),
   /** Their private page, or null while sharing is stopped. */
   page_url: z.string().nullable(),
+  /** 0281: their QR's own after-send; null = same as the main form. */
+  after_submit: enquiryAfterSubmit.nullable().default(null),
+  whatsapp_phone: z.string().nullable().default(null),
+  whatsapp_text: z.string().nullable().default(null),
+  redirect_url: z.string().nullable().default(null),
+  thank_you: z.string().nullable().default(null),
 })
 export type EnquiryPartner = z.infer<typeof enquiryPartner>
 
@@ -243,6 +249,13 @@ export const updateEnquiryPartnerRequest = z
     notes: text(1000).nullable(),
     show_phone: z.boolean(),
     archived: z.boolean(),
+    /** 0281: null = same as the main form (and clears the four below). */
+    after_submit: enquiryAfterSubmit.nullable(),
+    /** "" clears it, so the form's number (then the studio's) is used. */
+    whatsapp_phone: z.string().trim().max(20).nullable(),
+    whatsapp_text: text(300).nullable(),
+    redirect_url: z.string().trim().max(500).nullable(),
+    thank_you: text(300).nullable(),
   })
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')

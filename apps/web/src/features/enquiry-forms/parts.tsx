@@ -257,6 +257,11 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
             {top && (
               <span className="shrink-0 rounded-full bg-brand/20 px-2 py-0.5 text-[0.7rem] font-bold ring-1 ring-brand/50">Top</span>
             )}
+            {partner.after_submit && (
+              <span className="shrink-0 rounded-full bg-tone-teal-soft px-2 py-0.5 text-[0.7rem] font-bold text-tone-teal">
+                {partner.after_submit === 'link' ? 'Own link' : partner.after_submit === 'whatsapp' ? 'Own chat' : 'Own thank-you'}
+              </span>
+            )}
           </span>
           <span className="block truncate text-sm text-muted-foreground">{[kinds, counts].filter(Boolean).join(' · ')}</span>
         </span>
