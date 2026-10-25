@@ -70,12 +70,14 @@ const FollowUpsPage = lazyRouteComponent(() => import('@/routes/follow-ups'), 'F
 const CrmSetupPage = lazyRouteComponent(() => import('@/routes/follow-ups/setup'), 'CrmSetupPage')
 const CrmReportsPage = lazyRouteComponent(() => import('@/routes/follow-ups/reports'), 'CrmReportsPage')
 const CallQueuePage = lazyRouteComponent(() => import('@/routes/follow-ups/queue'), 'CallQueuePage')
+const FollowUpBoardPage = lazyRouteComponent(() => import('@/routes/follow-ups/board'), 'FollowUpBoardPage')
 const SendNowPage = lazyRouteComponent(() => import('@/routes/follow-ups/send'), 'SendNowPage')
 const AttendancePage = lazyRouteComponent(() => import('@/routes/attendance'), 'AttendancePage')
 const MyAttendancePage = lazyRouteComponent(() => import('@/routes/attendance'), 'MyAttendancePage')
 const MyPerformancePage = lazyRouteComponent(() => import('@/routes/performance'), 'MyPerformancePage')
 const TeamPerformancePage = lazyRouteComponent(() => import('@/routes/performance'), 'TeamPerformancePage')
 const MyPayoutsPage = lazyRouteComponent(() => import('@/routes/my-payouts'), 'MyPayoutsPage')
+const MyLeadsPage = lazyRouteComponent(() => import('@/routes/my-leads'), 'MyLeadsPage')
 const NotificationsPage = lazyRouteComponent(() => import('@/routes/notifications'), 'NotificationsPage')
 const EmployeesPage = lazyRouteComponent(() => import('@/routes/employees'), 'EmployeesPage')
 const TeamSalariesPage = lazyRouteComponent(() => import('@/routes/team-salaries'), 'TeamSalariesPage')
@@ -280,6 +282,7 @@ const routeTree = rootRoute.addChildren([
   route('/team/performance', TeamPerformancePage),
   route('/performance/me', MyPerformancePage),
   route('/payouts/my', MyPayoutsPage),
+  route('/my-leads', MyLeadsPage),
   route('/clients', ClientsListPage),
 
   // One shoots page: Team Booking. The old list with six open filters is gone.
@@ -306,6 +309,7 @@ const routeTree = rootRoute.addChildren([
   // Everything a studio sets once and never opens again.
   route('/follow-ups/setup', CrmSetupPage),
   route('/follow-ups/queue', CallQueuePage),
+  route('/follow-ups/board', FollowUpBoardPage),
   route('/follow-ups/send', SendNowPage),
   // The funnel, the team and the forecast. Built long ago and unreachable
   // until now -- no route pointed at them while the API kept computing them.

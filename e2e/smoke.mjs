@@ -18,6 +18,8 @@ const { chromium } = await import(process.env.PLAYWRIGHT ?? 'playwright')
 const PAGES = [
   ['/dashboard', 'Home'],
   ['/follow-ups', 'Leads'],
+  ['/follow-ups/board', 'Follow-ups'],
+  ['/my-leads', 'My leads'],
   ['/clients', 'Clients'],
   ['/projects', 'Projects'],
   ['/team-allocation', 'Shoots'],

@@ -338,6 +338,10 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
   if (method === 'POST' && /^\/me\/follow-ups\/[^/]+\/done$/.test(path)) return { ok: true }
+  if (method === 'PATCH' && /^\/me\/follow-ups\/[^/]+$/.test(path)) return { ok: true }
+  if (method === 'GET' && path === '/me/leads') return myLeadsFx()
+  if (method === 'GET' && /^\/me\/leads\/[^/]+$/.test(path)) return myLeadDetailFx(path.split('/').pop()!)
+  if (method === 'POST' && /^\/me\/leads\/[^/]+\/(notes|follow-ups)$/.test(path)) return { ok: true }
   if (method === 'GET' && path === '/hr/leave/allowances') return [{ kind: 'casual', days_per_year: 12 }, { kind: 'sick', days_per_year: 6 }]
   if (method === 'PUT' && path === '/hr/leave/allowances') return null
   if (method === 'GET' && path.startsWith('/hr/leave/balances'))
@@ -1095,7 +1099,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/crm/activities/call') return { activity: crmActivitiesFx[0], placed: false, provider: 'manual', call_sid: null, dial_url: 'tel:+919876500001' }
   if (method === 'POST' && path === '/crm/activities/meeting') return { activity: crmActivitiesFx[2], ics_url: '/crm/activities/x/ics' }
   if (method === 'POST' && path === '/crm/activities/email/sync') return { status: 'not_configured', provider: null, fetched: 0, imported: 0, unmatched: 0, message: 'Mailbox sync is not configured in preview.' }
-  if (method === 'GET' && path.startsWith('/crm/activities')) return path.includes('open_tasks=1') ? crmActivitiesFx.filter((x) => x.type === 'task' && !x.done_at) : crmActivitiesFx
+  if (method === 'GET' && path.startsWith('/crm/activities')) return path.includes('open_tasks=1') ? (path.includes('lead_id=') ? crmActivitiesFx.filter((x) => x.type === 'task' && !x.done_at) : boardTasksFx()) : crmActivitiesFx
   if (method === 'POST' && path === '/crm/activities') return { ...crmActivitiesFx[0], id: uid(0xe9), ...(body as Record<string, unknown>) }
   if ((method === 'PATCH' || method === 'DELETE') && path.startsWith('/crm/activities/')) return {}
   if (method === 'GET' && path === '/crm/integrations') return crmIntegrationsFx
@@ -3530,6 +3534,48 @@ const crmActivitiesFx = [
   activityFx(uid(0xe4), { type: 'meeting', direction: 'out', subject: 'Venue recce', location: 'Taj Lands End, Bandra', started_at: '2026-09-10T04:30:00Z', ended_at: '2026-09-10T05:30:00Z', created_at: '2026-09-02T09:00:00Z' }),
   activityFx(uid(0xe5), { type: 'whatsapp', direction: 'in', subject: 'Yes, Sunday works', provider: 'whatsapp', created_at: '2026-09-01T12:00:00Z', lead_id: uid(0xb2), lead_name: 'Meera' }),
 ]
+/** Open follow-ups for the follow-up board, dated from now so every column has some. */
+const boardTasksFx = () => {
+  const at = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
+  const t = (n: number, over: Partial<Record<string, unknown>>) =>
+    activityFx(uid(0x700 + n), { type: 'task', subject: 'Call', priority: 'Normal', whose_id: uid(1), whose_name: 'Asha Rao', lead_phone: '+919812345670', ...over })
+  return [
+    t(1, { lead_name: 'Meera Joshi', due_at: at(-26), priority: 'Urgent', body: 'Promised the quote by Friday.' }),
+    t(2, { lead_name: 'Kavya & Rohan', subject: 'Site visit', due_at: at(-2), whose_id: uid(2), whose_name: 'Ravi' }),
+    t(3, { lead_name: 'Priya & Arjun', due_at: at(0.15), body: 'Ask about the haldi date.' }),
+    t(4, { lead_name: 'Sana Khan', subject: 'WhatsApp', due_at: at(3), whose_id: uid(2), whose_name: 'Ravi' }),
+    t(5, { lead_name: 'Ritu Malhotra', due_at: at(26), priority: 'High' }),
+    t(6, { lead_name: 'Anu & Dev', subject: 'Meeting', due_at: at(70), whose_id: uid(3), whose_name: 'Neha' }),
+    t(7, { lead_name: 'The Kapoors', due_at: at(24 * 12) }),
+  ]
+}
+
+const myLeadsFx = () => {
+  const at = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
+  const base = { email: null, status: 'contacted', stage_name: 'Contacted', stage_color: 'amber', quality: null, partner_name: null, enquiry_occasion: null, next_subject: 'Call', last_note: null, last_note_at: null, created_at: at(-72) }
+  return [
+    { ...base, id: uid(0x7a1), name: 'Meera Joshi', phone: '+919812345671', event_type: 'Wedding', event_date: '2027-02-14', city: 'Jaipur', follow_up_at: at(-20), last_note: 'Wants the drone too, will confirm budget.' },
+    { ...base, id: uid(0x7a2), name: 'Kavya & Rohan', phone: '+919812345672', event_type: 'Engagement', event_date: '2026-12-02', city: 'Udaipur', follow_up_at: at(4), partner_name: 'Riya Boutique', enquiry_occasion: "Priya & Rahul's wedding" },
+    { ...base, id: uid(0x7a3), name: 'Sana Khan', phone: '+919812345673', event_type: 'Wedding', event_date: null, city: 'Delhi', follow_up_at: null, stage_name: 'New', stage_color: 'blue', status: 'new' },
+    { ...base, id: uid(0x7a4), name: 'Ritu Malhotra', phone: '+919812345674', event_type: 'Pre-wedding', event_date: '2027-01-10', city: 'Goa', follow_up_at: at(50), next_subject: 'Meeting' },
+    { ...base, id: uid(0x7a5), name: 'The Kapoors', phone: '+919812345675', event_type: 'Wedding', event_date: '2026-11-20', city: 'Jaipur', follow_up_at: null, status: 'converted', stage_name: 'Booked', stage_color: 'green' },
+  ]
+}
+
+const myLeadDetailFx = (id: string) => {
+  const l = myLeadsFx().find((x) => x.id === id) ?? myLeadsFx()[0]!
+  const at = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
+  return {
+    ...l,
+    notes: null,
+    enquiry_answers: l.partner_name ? [{ question: 'Bride side or groom side?', answer: 'Bride side' }] : null,
+    activities: [
+      ...(l.follow_up_at ? [{ id: uid(0x7b1), type: 'task', subject: l.next_subject, body: null, outcome: null, due_at: l.follow_up_at, done_at: null, actor_name: 'Asha Rao', created_at: at(-24) }] : []),
+      { id: uid(0x7b2), type: 'note', subject: null, body: l.last_note ?? 'First call: wants candid and traditional.', outcome: null, due_at: null, done_at: null, actor_name: 'Ravi', created_at: at(-30) },
+    ],
+  }
+}
+
 const crmTimelineFx = {
   items: [
     ...crmActivitiesFx.filter((a) => a.lead_id === uid(0xb1)).map((a) => ({ kind: 'activity', at: a.created_at, activity: a })),

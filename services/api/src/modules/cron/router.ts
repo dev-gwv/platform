@@ -281,13 +281,18 @@ export const cronRouter = new Hono<AppEnv>()
     const nudged = await attempt(c, 'cron.attendance_reminders', () =>
       withService(c.env, async (sql) => (await sql<{ r: unknown }[]>`select run_attendance_reminders() as r`)[0]?.r ?? null),
     )
+    // A follow-up rings its owner's bell in the 15 minutes before it is due
+    // (0282), on the same tick so it is never an hour late.
+    const followUps = await attempt(c, 'cron.crm_follow_up_soon', () =>
+      withService(c.env, async (sql) => (await sql<{ n: number }[]>`select crm_follow_up_soon() as n`)[0]?.n ?? 0),
+    )
     // Support call alerts (0280) ride the same tick: retries, reminders an hour
     // before, and the group's morning list. A failure here never fails the rest.
     const supportCalls = await attempt(c, 'cron.support_calls', async () => {
       const summary = await queueDailySummary(c.env)
       return { summary, ...(await drainSupportCalls(c.env)) }
     })
-    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, support_calls: supportCalls }, 'cron messages ran')
+    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 

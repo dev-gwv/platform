@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PartnerChip } from './PartnerChip'
+import { AssigneeChip } from './AssigneeChip'
 import { FormAnswersCard } from './drawer/FormAnswersCard'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -260,7 +261,10 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             </div>
           </div>
 
-          {/* The two ways a lead ends, first: booked, or lost with a reason. */}
+          {/* Who has it, then the two ways a lead ends: booked, or lost with a reason. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <AssigneeChip value={lead.assigned_to} onChange={(id) => patch({ assigned_to: id })} disabled={!canEdit || update.isPending} />
+          </div>
           {canEdit && bookable && (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => setBooking(true)}>

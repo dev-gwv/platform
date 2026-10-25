@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { BarChart3, CalendarClock, Download, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { AlarmClock, BarChart3, CalendarClock, Download, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { LeadLimitLine } from '@/features/billing/LeadLimitLine'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -23,8 +23,11 @@ import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { DownloadButtons } from '@/features/enquiry-forms/parts'
+import { useOpenFollowUps } from '@/features/crm/FollowUpOnRow'
+import { followUpBucket } from '@/features/crm/follow-ups'
 import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { NO_EXTRAS, NO_FACETS, activeExtrasCount, activeFacetCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
 import { DateField } from '@/shared/ui/date-field'
 import { cn } from '@/shared/ui/cn'
@@ -66,11 +69,25 @@ function remember(key: string, value: unknown) {
  * picker; everything else is a keystroke away on the command palette.
  */
 export function FollowUpsPage() {
+  const access = useAccess()
+  const { loading } = useAuth()
+  // A lead link in the bell (given to you, a follow-up due) for someone
+  // without the CRM opens that lead on My leads instead (0282).
+  if (!loading && !access.hasModule('crm')) return <ToMyLeads />
   return (
     <AuthedPage module="crm">
       <Crm />
     </AuthedPage>
   )
+}
+
+function ToMyLeads() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const lead = new URLSearchParams(window.location.search).get('lead')
+    void navigate({ to: '/my-leads', search: (lead ? { lead } : {}) as never, replace: true })
+  }, [navigate])
+  return null
 }
 
 function Crm() {
@@ -220,6 +237,7 @@ function Crm() {
                 <PhoneCall /> Today's calls
               </Link>
             </Button>
+            <FollowUpsButton />
             <Button variant="outline" asChild>
               <Link to="/follow-ups/reports">
                 <BarChart3 /> Reports
@@ -562,6 +580,26 @@ function DownloadLeadsButton({ count }: { count: number }) {
         </p>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * The follow-up board, one tap from Leads, with how many of mine are late
+ * (amber: the next thing to do).
+ */
+function FollowUpsButton() {
+  const mine = useOpenFollowUps('mine')
+  const now = useMemo(() => new Date(), [mine.dataUpdatedAt])
+  const late = (mine.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
+  return (
+    <Button variant="outline" asChild>
+      <Link to="/follow-ups/board">
+        <AlarmClock /> Follow-ups
+        {late > 0 && (
+          <span className="rounded-full bg-tone-amber px-1.5 text-[0.7rem] font-bold text-card tabular-nums">{late} late</span>
+        )}
+      </Link>
+    </Button>
   )
 }
 

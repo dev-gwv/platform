@@ -58,7 +58,8 @@ describe('the staff menu', () => {
 
   it('is their own day and their own work, never the studio\'s', () => {
     const staff = labels(filterNav(NAV, 'employee', access(['dashboard', 'projects', 'personal_expenses'], []), false))
-    expect(staff.slice(0, 6)).toEqual(['Home', 'My Work', 'My Shoots', 'Attendance & leave', 'My payouts', 'My performance'])
+    // My leads (0282): the leads given to them, without the CRM.
+    expect(staff.slice(0, 7)).toEqual(['Home', 'My Work', 'My Shoots', 'Attendance & leave', 'My leads', 'My payouts', 'My performance'])
     // My Tasks folded into My work: the same tasks, one place.
     for (const hidden of ['My Tasks', 'Projects', 'Post-Production', 'Shoots', 'Data & Backup', 'Money', 'Activity'])
       expect(staff).not.toContain(hidden)

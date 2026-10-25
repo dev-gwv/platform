@@ -103,6 +103,8 @@ export const NAV: NavEntry[] = [
   leaf('My Work', '/my-work', ListTodo, { roles: ['employee'], badge: 'tasks-overdue' }),
   leaf('My Shoots', '/shoots/my', Camera, { roles: ['employee'] }),
   leaf('Attendance & leave', '/attendance/my', MapPin, { roles: ['employee'], hub: MY_TIME }),
+  // The leads given to them (0282): call, note, next follow-up, without the CRM.
+  leaf('My leads', '/my-leads', Inbox, { roles: ['employee'] }),
   leaf('My payouts', '/payouts/my', Banknote, { roles: ['employee'] }),
   leaf('My performance', '/performance/me', Gauge, { roles: ['employee'] }),
 

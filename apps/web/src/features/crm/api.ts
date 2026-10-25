@@ -658,6 +658,9 @@ export function useActivities(
     openTasks?: boolean
     mine?: boolean
     dueBefore?: string
+    /** Leave out archived leads. */
+    live?: boolean
+    limit?: number
   } = {},
 ) {
   const params = new URLSearchParams()
@@ -668,6 +671,8 @@ export function useActivities(
   if (opts.openTasks) params.set('open_tasks', '1')
   if (opts.mine) params.set('mine', '1')
   if (opts.dueBefore) params.set('due_before', opts.dueBefore)
+  if (opts.live) params.set('live', '1')
+  if (opts.limit) params.set('limit', String(opts.limit))
   const qs = params.toString()
   return useCrmQuery(['activities', qs], () => callApi(`/crm/activities${qs ? `?${qs}` : ''}`, { responseSchema: crmActivity.array() }))
 }
