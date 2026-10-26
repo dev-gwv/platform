@@ -143,6 +143,8 @@ export const createProjectRequest = z.object({
 export type CreateProjectRequest = z.infer<typeof createProjectRequest>
 
 export const updateProjectRequest = z.object({
+  /** The project moves to another of the studio's clients (a wrong pick at booking). */
+  client_id: uuid.optional(),
   name: z.string().trim().min(1).max(200).optional(),
   status: projectStatus.optional(),
   package_cost: money.optional(),
@@ -251,8 +253,16 @@ export const deliverableNote = z.object({
   /** For a submitted / approved / sent-back event: the work's link. */
   link: z.string().nullish(),
   created_at: isoDateTime,
+  /** Set when its author changed the words afterwards (0285). */
+  edited_at: isoDateTime.nullish(),
 })
 export type DeliverableNote = z.infer<typeof deliverableNote>
+
+/** Its author changes a written note's words (0285). */
+export const updateDeliverableNoteRequest = z.object({
+  body: z.string().trim().min(1, 'Write something first.').max(4000),
+})
+export type UpdateDeliverableNoteRequest = z.infer<typeof updateDeliverableNoteRequest>
 
 export const createDeliverableNoteRequest = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), body: z.string().trim().min(1, 'Write something first.').max(4000) }),
@@ -337,6 +347,14 @@ export const createShootTypeRequest = z.object({
   category: z.string().trim().max(80).nullish(),
 })
 export type CreateShootTypeRequest = z.infer<typeof createShootTypeRequest>
+
+/** Rename a shoot type, or hide it from the pickers and bring it back (0285). */
+export const updateShootTypeRequest = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  category: z.string().trim().max(80).nullish(),
+  is_archived: z.boolean().optional(),
+})
+export type UpdateShootTypeRequest = z.infer<typeof updateShootTypeRequest>
 
 /**
  * What a deliverable type's days count from. A fixed date belongs to one
@@ -635,6 +653,10 @@ export const saveDeliverableSetRequest = z.object({
   items: z.array(deliverableSetItem).min(1).max(60),
 })
 export type SaveDeliverableSetRequest = z.infer<typeof saveDeliverableSetRequest>
+
+/** A set (package) keeps its items; only its name changes (0285). */
+export const renameDeliverableSetRequest = z.object({ name: z.string().trim().min(1).max(80) })
+export type RenameDeliverableSetRequest = z.infer<typeof renameDeliverableSetRequest>
 
 /**
  * A studio's own stage inside one of the four steps -- "With manager",

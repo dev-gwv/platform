@@ -136,6 +136,15 @@ export function useUpdateProject(id: string) {
   })
 }
 
+/** Take back a client's Accept on the quotation (0285); the quotation itself stays. */
+export function useClearQuotationAcceptance(id: string) {
+  return useMutation({
+    mutationFn: () => callApi(`/projects/${id}/quotation/clear-acceptance`, { method: 'POST', responseSchema: anySchema }),
+    onSuccess: useProjectMutation(id, 'Acceptance cleared'),
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useAddDeliverable(id: string) {
   return useMutation({
     mutationFn: (input: DeliverableInput) =>
@@ -275,6 +284,19 @@ export function useCreateShootType() {
   })
 }
 
+export function useUpdateShootType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...patch }: { id: string; name?: string; is_archived?: boolean }) =>
+      callApi(`/projects/catalog/shoot-types/${id}`, { method: 'PATCH', body: patch, responseSchema: shootTypeItem }),
+    onSuccess: (_r, v) => {
+      toast.success(v.is_archived === true ? 'Shoot type hidden' : v.is_archived === false ? 'Shoot type back on the list' : 'Shoot type renamed')
+      void qc.invalidateQueries({ queryKey: ['catalog', 'shoot-types'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 // ── Deliverable types: what the studio delivers and how long each takes ──
 const TYPES_KEY = ['catalog', 'deliverable-types'] as const
 const NO_TYPES: DeliverableType[] = []
@@ -358,6 +380,20 @@ export function useSaveDeliverableSet() {
       toast.success(`Saved “${saved.name}”`)
       void qc.invalidateQueries({ queryKey: ['projects', 'deliverable-sets'] })
     },
+  })
+}
+
+/** Rename a saved set (package) where it is listed (0285). */
+export function useRenameDeliverableSet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      callApi(`/projects/deliverable-sets/${id}`, { method: 'PATCH', body: { name }, responseSchema: deliverableSet }),
+    onSuccess: () => {
+      toast.success('Set renamed')
+      void qc.invalidateQueries({ queryKey: ['projects', 'deliverable-sets'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

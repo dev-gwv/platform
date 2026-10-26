@@ -44,8 +44,10 @@ import { Switch } from '@/shared/ui/switch'
 import { ErrorState } from '@/shared/ui/states'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { useAccess } from '@/shared/auth/useAccess'
+import { useConfirm } from '@/shared/ui/confirm'
 import { formatINR } from '@/shared/ui/format'
 import {
+  useClearQuotationAcceptance,
   useIssueQuotation,
   useProject,
   useSendQuotationEmail,
@@ -113,6 +115,8 @@ function ProjectQuotation() {
   const canEdit = access.hasAction('projects', 'edit')
   const { data, isLoading, isError, refetch, isFetching } = useProject(id)
   const update = useUpdateQuotation(id)
+  const clearAccept = useClearQuotationAcceptance(id)
+  const confirmBox = useConfirm()
   const issue = useIssueQuotation()
   // The studio's own presets; the default stands in for a project with no terms.
   const presetsQ = useTermsPresets(canEdit)
@@ -532,6 +536,24 @@ function ProjectQuotation() {
             })}
             {project.quotation_accepted_by ? ` by ${project.quotation_accepted_by}` : ''}.
           </p>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7 shrink-0"
+              disabled={clearAccept.isPending}
+              onClick={async () => {
+                const yes = await confirmBox({
+                  title: 'Clear the acceptance?',
+                  description: 'The quotation stays as it is. The client can accept it again from their link.',
+                  confirmLabel: 'Clear acceptance',
+                })
+                if (yes) clearAccept.mutate()
+              }}
+            >
+              Clear acceptance
+            </Button>
+          )}
         </div>
       )}
 

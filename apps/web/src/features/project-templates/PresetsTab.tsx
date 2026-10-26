@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { ShootPreset, ShootPresetKind } from '@ipc/contracts'
 import { useAccess } from '@/shared/auth/useAccess'
 import { Button } from '@/shared/ui/button'
@@ -7,7 +8,8 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { useDeleteShootPreset, useShootPresets } from '@/features/shoots/api'
+import { useDeleteShootPreset, useRenameShootPreset, useShootPresets } from '@/features/shoots/api'
+import { Input } from '@/shared/ui/input'
 
 const COPY: Record<ShootPresetKind, { intro: string; emptyTitle: string; empty: string; kept: string }> = {
   shoot: {
@@ -70,6 +72,7 @@ export function PresetsTab({ kind }: { kind: ShootPresetKind }) {
             key={p.id}
             preset={p}
             onDelete={access.hasAction('projects', 'edit') ? () => void onDelete(p) : undefined}
+            canRename={access.hasAction('projects', 'edit')}
             deleting={remove.isPending && remove.variables === p.id}
           />
         ))}
@@ -83,11 +86,16 @@ function PresetCard({
   preset,
   onDelete,
   deleting,
+  canRename,
 }: {
   preset: ShootPreset
   onDelete: (() => void) | undefined
   deleting: boolean
+  canRename: boolean
 }) {
+  const rename = useRenameShootPreset()
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState(preset.name)
   const crew = preset.payload.requirements
   const work = preset.payload.internal_work
   const isShoot = preset.kind === 'shoot'
@@ -95,8 +103,41 @@ function PresetCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
+        {naming ? (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!name.trim() || name.trim() === preset.name) return setNaming(false)
+              rename.mutate({ id: preset.id, name: name.trim() }, { onSuccess: () => setNaming(false) })
+            }}
+          >
+            <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Preset name" className="h-8" autoFocus maxLength={80} />
+            <Button type="submit" size="sm" disabled={!name.trim() || rename.isPending}>
+              Save
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setNaming(false)}>
+              Cancel
+            </Button>
+          </form>
+        ) : (
         <div className="flex items-start justify-between gap-2">
           <h3 className="min-w-0 break-words font-semibold">{preset.name}</h3>
+          <span className="flex shrink-0 items-center">
+          {canRename && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-mt-1 size-8 text-muted-foreground"
+              onClick={() => {
+                setName(preset.name)
+                setNaming(true)
+              }}
+            >
+              <Pencil />
+              <span className="sr-only">Rename {preset.name}</span>
+            </Button>
+          )}
           {onDelete && (
             <Button
               variant="ghost"
@@ -109,7 +150,9 @@ function PresetCard({
               <span className="sr-only">Delete {preset.name}</span>
             </Button>
           )}
+          </span>
         </div>
+        )}
 
         {isShoot && (
           <div>

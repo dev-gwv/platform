@@ -210,5 +210,12 @@ export const projectDetailsStatus = z.object({
 })
 export type ProjectDetailsStatus = z.infer<typeof projectDetailsStatus>
 
+/** One of the client's events the studio does not want on the project (0285). */
+export const dismissDetailsEventRequest = z.object({
+  name: z.string().trim().min(1).max(80),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+})
+export type DismissDetailsEventRequest = z.infer<typeof dismissDetailsEventRequest>
+
 export const detailsLinkIssued = z.object({ url: z.string() })
 export type DetailsLinkIssued = z.infer<typeof detailsLinkIssued>

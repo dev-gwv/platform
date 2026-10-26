@@ -62,6 +62,16 @@ export function useSendVoiceNote(deliverableId: string) {
   })
 }
 
+/** Change the words of one's own written note (0285). */
+export function useEditDeliverableNote(deliverableId: string) {
+  const after = useAfterNote(deliverableId)
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) =>
+      callApi(`/projects/deliverables/notes/${id}`, { method: 'PATCH', body: { body }, responseSchema: z.unknown() }),
+    onSuccess: after,
+  })
+}
+
 export function useDeleteDeliverableNote(deliverableId: string) {
   const after = useAfterNote(deliverableId)
   return useMutation({

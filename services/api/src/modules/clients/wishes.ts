@@ -132,7 +132,22 @@ export const wishesRouter = new Hono<AppEnv>()
   .delete('/occasions/:id', requireAction('clients', 'edit'), async (c) => {
     const id = uuidParam(c)
     const rows = await attempt(c, 'wishes.occasion_delete', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from client_occasions where id = ${id} returning id`),
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const gone = await sql<{ id: string; company_id: string; client_id: string; kind: string; person_name: string; source: string }[]>`
+          delete from client_occasions where id = ${id}
+          returning id, company_id, client_id, kind, person_name, source`
+        // An anniversary the wedding day made would come straight back on the
+        // next change to that shoot; a note that it was taken off keeps it off
+        // (0285). Adding one by hand still works.
+        const g = gone[0]
+        if (g && g.source === 'wedding_day') {
+          await sql`
+            insert into client_occasion_dismissals (company_id, client_id, kind, person_name, created_by)
+            values (${g.company_id}, ${g.client_id}, ${g.kind}, ${g.person_name}, ${c.get('auth').userId})
+            on conflict do nothing`
+        }
+        return gone
+      }),
     )
     if (!rows?.length) fail(404, 'That date was not found.')
     return c.body(null, 204)

@@ -111,10 +111,19 @@ export const projectRoutes = new Hono<AppEnv>()
       withUser(
         c.env,
         c.get('auth').userId,
-        (sql) => sql<{ id: string }[]>`update projects set ${sql(parsed.data)} where id = ${id} returning id`,
+        async (sql) => {
+          // A new client must be one of this studio's: RLS hides every other
+          // studio's clients, so a plain read is the check.
+          if (parsed.data.client_id) {
+            const ok = await sql`select 1 from clients where id = ${parsed.data.client_id}`
+            if (!ok.length) return 'no_client' as const
+          }
+          return sql<{ id: string }[]>`update projects set ${sql(parsed.data)} where id = ${id} returning id`
+        },
       ),
     )
     if (!rows) fail(400, 'We could not update the project.')
+    if (rows === 'no_client') fail(422, 'That client was not found in your studio.')
     if (!rows.length) fail(404, 'That project was not found.')
     await audit(c, { action: 'project.update', entityType: 'project', entityId: id, after: parsed.data })
     return c.body(null, 204)
@@ -154,6 +163,24 @@ export const projectRoutes = new Hono<AppEnv>()
       }
     if (outcome === 'missing') fail(404, 'That project was not found.')
     await audit(c, { action: 'project.delete', entityType: 'project', entityId: id })
+    return c.body(null, 204)
+  })
+
+  // Clear a client's acceptance of the quotation (owner, 26 Oct: whatever is
+  // done can be undone) -- an Accept pressed by mistake, or a quote agreed and
+  // then renegotiated. The quotation stays; only the acceptance goes.
+  .post('/:id/quotation/clear-acceptance', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'projects.quotation_clear_acceptance', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update project_quotations
+           set accepted_at = null, accepted_by_name = null, accepted_ip = null, accepted_user_agent = null
+         where project_id = ${id} and accepted_at is not null
+         returning id`),
+    )
+    if (!rows) fail(400, 'We could not clear the acceptance.')
+    if (!rows.length) fail(404, 'This quotation has not been accepted.')
+    await audit(c, { action: 'quotation.acceptance_clear', entityType: 'project', entityId: id })
     return c.body(null, 204)
   })
 

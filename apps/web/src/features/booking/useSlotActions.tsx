@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
-import { CalendarPlus, IndianRupee, MessageCircle, Pencil, RotateCcw, UserRoundPen, XCircle } from 'lucide-react'
+import { CalendarPlus, IndianRupee, MessageCircle, Pencil, RotateCcw, Undo2, UserRoundPen, XCircle } from 'lucide-react'
 import type { TeamMember, TeamSlot } from '@ipc/contracts'
 import type { RowMenuItem } from '@/shared/ui/row-menu'
 import { useConfirm } from '@/shared/ui/confirm'
-import { useSetSlotStatus } from '@/features/allocation/api'
+import { useSetSlotStatus, useUnmarkArrived } from '@/features/allocation/api'
 import { SlotCostDialog, SlotEditDialog } from './SlotDialogs'
 import { downloadIcs, shareOnWhatsApp } from './share'
 
@@ -17,6 +17,7 @@ type Open = { slot: TeamSlot; kind: 'person' | 'hours' | 'cost' } | null
 export function useSlotActions({ canPlan, members }: { canPlan: boolean; members: readonly TeamMember[] }) {
   const confirm = useConfirm()
   const setStatus = useSetSlotStatus()
+  const unmark = useUnmarkArrived()
   const [open, setOpen] = useState<Open>(null)
 
   const phoneOf = (userId: string) => members.find((m) => m.user_id === userId)?.phone ?? null
@@ -28,6 +29,15 @@ export function useSlotActions({ canPlan, members }: { canPlan: boolean; members
       confirmLabel: 'Release',
     })
     if (yes) setStatus.mutate({ id: s.id, status: 'released' })
+  }
+
+  async function undoArrival(s: TeamSlot) {
+    const yes = await confirm({
+      title: `Undo ${s.user_name ?? 'this person'}'s arrival?`,
+      description: "Their \"I've reached\" is taken off, and so is the attendance it marked for that day.",
+      confirmLabel: 'Undo arrival',
+    })
+    if (yes) unmark.mutate(s.id)
   }
 
   async function cancel(s: TeamSlot) {
@@ -59,8 +69,13 @@ export function useSlotActions({ canPlan, members }: { canPlan: boolean; members
       items.push({ label: 'Release', icon: <RotateCcw className="size-4" />, onSelect: () => void release(s) })
       items.push({ label: 'Cancel booking', icon: <XCircle className="size-4" />, onSelect: () => void cancel(s) })
     }
-    if (canPlan && s.status === 'released') {
+    // A release or a cancel made by mistake is undone here (owner, 26 Oct).
+    if (canPlan && (s.status === 'released' || s.status === 'cancelled')) {
       items.push({ label: 'Book again', icon: <RotateCcw className="size-4" />, onSelect: () => setStatus.mutate({ id: s.id, status: 'booked' }) })
+    }
+    // "I've reached" tapped by mistake, or at the wrong venue: the planner takes it back.
+    if (canPlan && s.status === 'booked' && s.arrived_at) {
+      items.push({ label: 'Undo arrival', icon: <Undo2 className="size-4" />, onSelect: () => void undoArrival(s) })
     }
     return items
   }
