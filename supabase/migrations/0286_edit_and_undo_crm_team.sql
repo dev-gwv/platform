@@ -1,0 +1,1 @@
+-- 0286: leads, team and settings can be changed back (owner, 26 Oct). Claimed; the body follows.
