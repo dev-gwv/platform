@@ -14,6 +14,8 @@ export const companyProfile = z.object({
   avatar_url: z.string().nullable(),
   invoice_number_prefix: z.string(),
   invoice_next_number: z.number().int(),
+  /** Running number, by the invoice's date, or typed for each one (0284). */
+  invoice_number_mode: z.enum(['running', 'date', 'manual']).catch('running').default('running'),
   quote_number_prefix: z.string(),
   quote_next_number: z.number().int(),
   /** Branding/defaults applied to every new invoice (Lovable parity). */
@@ -53,6 +55,7 @@ export const updateCompanyRequest = z.object({
   avatar_url: z.string().trim().max(500).optional(),
   invoice_number_prefix: z.string().trim().min(1).max(20).optional(),
   invoice_next_number: z.number().int().min(1).optional(),
+  invoice_number_mode: z.enum(['running', 'date', 'manual']).optional(),
   quote_number_prefix: z.string().trim().min(1).max(20).optional(),
   quote_next_number: z.number().int().min(1).optional(),
   invoice_address: z.string().trim().max(500).nullish(),

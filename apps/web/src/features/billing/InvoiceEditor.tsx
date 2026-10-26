@@ -144,6 +144,7 @@ export function InvoiceEditor({
   const fileInput = useRef<HTMLInputElement>(null)
 
   const gst = !values.no_gst
+  const numberMode = company?.invoice_number_mode ?? 'running'
   const studioState = matchStudioState(states, company?.state)
   const selectedClient = clients.find((c) => c.id === values.client_id)
   const projectChoice = useClientProjectOptions(
@@ -319,6 +320,7 @@ export function InvoiceEditor({
     if (gstNumberError) problems.unshift(gstNumberError)
     if (gst && !values.place_of_supply) problems.unshift('Choose the place of supply for this tax invoice.')
     if (status === 'draft' && paymentOn) problems.unshift('A draft cannot take a payment. Use “Save and send” to record it.')
+    if (!isEdit && numberMode === 'manual' && !values.invoice_number.trim()) problems.unshift('Type the invoice number. Your studio types its own numbers.')
     if (problems.length) {
       setError(problems[0] ?? 'This invoice is not ready yet.')
       return
@@ -437,9 +439,21 @@ export function InvoiceEditor({
             <Input
               value={values.invoice_number}
               onChange={(e) => set('invoice_number', e.target.value)}
-              placeholder={isEdit ? (editNumber ?? '') : 'Next number, automatically'}
+              placeholder={
+                isEdit
+                  ? (editNumber ?? '')
+                  : numberMode === 'manual'
+                    ? 'Type the invoice number'
+                    : numberMode === 'date'
+                      ? `${company?.invoice_number_prefix ?? ''}${(values.invoice_date || todayInIndia()).replace(/-/g, '')}, by the date`
+                      : 'Next number, automatically'
+              }
+              className={cn(!isEdit && numberMode === 'manual' && !values.invoice_number.trim() && 'border-warning/70 bg-warning/5')}
               maxLength={40}
             />
+            <Link to="/settings/company" className="mt-1 inline-flex text-xs font-medium text-primary hover:underline">
+              {numberMode === 'date' ? 'Numbered by date' : numberMode === 'manual' ? 'You type each number' : 'Running number'} · change
+            </Link>
           </Field>
           <Field label="Project">
             <Select value={values.project_id} onChange={(e) => set('project_id', e.target.value)} disabled={!values.client_id} aria-label="Project">

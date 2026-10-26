@@ -16,6 +16,12 @@
 --    it is marked paid, so its lines can be worked out and adjusted again.
 -- 5. payroll_unmark_paid(): a line marked paid by mistake goes back to
 --    unpaid (with its salary record), and a paid month back to approved.
+-- 6. How invoices are numbered (owner, 26 Oct: "the automatic invoicing
+--    number has to be taken according to the date, or manually"):
+--    companies.invoice_number_mode -- 'running' (INV-0042, as before),
+--    'date' (the prefix and the invoice's date, INV-20261026, then
+--    INV-20261026-2 for a second one that day) or 'manual' (the studio types
+--    every number; a blank one is refused). create_invoice copied from 0120.
 --
 -- Safe to run twice: create or replace, same argument lists.
 
@@ -242,3 +248,111 @@ end;
 $$;
 revoke all on function payroll_unmark_paid(uuid, uuid, uuid, uuid) from public, anon, authenticated;
 grant execute on function payroll_unmark_paid(uuid, uuid, uuid, uuid) to service_role;
+
+-- ── 6. invoice numbering: running, by date, or typed ──────────────
+alter table companies add column if not exists invoice_number_mode text not null default 'running';
+do $$ begin
+  alter table companies add constraint companies_invoice_number_mode_chk
+    check (invoice_number_mode in ('running', 'date', 'manual'));
+exception when duplicate_object then null; end $$;
+
+create or replace function next_invoice_number_on(p_date date)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_company uuid := get_current_company_id();
+  v_mode    text;
+  v_prefix  text;
+  v_base    text;
+  v_try     text;
+  v_n       int := 1;
+begin
+  select invoice_number_mode, coalesce(invoice_number_prefix, '') into v_mode, v_prefix
+    from companies where id = v_company;
+  if v_mode = 'manual' then
+    raise exception 'type the invoice number' using errcode = '23514';
+  end if;
+  if v_mode is distinct from 'date' then
+    return next_invoice_number();
+  end if;
+  v_base := v_prefix || to_char(coalesce(p_date, (now() at time zone 'Asia/Kolkata')::date), 'YYYYMMDD');
+  v_try := v_base;
+  while exists (select 1 from invoices where company_id = v_company and invoice_number = v_try) loop
+    v_n := v_n + 1;
+    v_try := v_base || '-' || v_n;
+  end loop;
+  return v_try;
+end;
+$$;
+revoke all on function next_invoice_number_on(date) from public, anon;
+grant execute on function next_invoice_number_on(date) to authenticated, service_role;
+
+create or replace function create_invoice(
+  p_client_id       uuid,
+  p_project_id      uuid,
+  p_place_of_supply text,
+  p_invoice_date    date,
+  p_due_date        date,
+  p_subtotal        numeric,
+  p_discount        numeric,
+  p_taxable         numeric,
+  p_tax             numeric,
+  p_total           numeric,
+  p_items           jsonb,
+  p_notes           text default null,
+  p_template_id     uuid default null,
+  p_invoice_number  text default null,
+  p_discount_type   text default 'flat',
+  p_bank_details    text default null,
+  p_terms           text default null
+)
+returns table (id uuid, invoice_number text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_company uuid := get_current_company_id();
+  v_number  text;
+  v_id      uuid;
+begin
+  if not is_current_user_active() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_template_id is not null and not exists (
+    select 1 from invoice_templates where invoice_templates.id = p_template_id and company_id = v_company
+  ) then
+    raise exception 'template not in this studio' using errcode = '42501';
+  end if;
+
+  v_number := nullif(trim(p_invoice_number), '');
+  if v_number is null then
+    -- Running, by the invoice's date, or refused when the studio types them (0284).
+    v_number := next_invoice_number_on(coalesce(p_invoice_date, (now() at time zone 'Asia/Kolkata')::date));
+  end if;
+
+  insert into invoices (company_id, client_id, project_id, invoice_number, invoice_date,
+    due_date, place_of_supply, status, subtotal, discount, discount_type, taxable, tax, total, balance_due,
+    notes, bank_details, terms, template_id, created_by)
+    values (v_company, p_client_id, p_project_id, v_number, coalesce(p_invoice_date, current_date),
+      p_due_date, p_place_of_supply, 'sent', p_subtotal, p_discount,
+      coalesce(nullif(trim(p_discount_type), ''), 'flat'),
+      p_taxable, p_tax, p_total,
+      p_total, p_notes, nullif(trim(p_bank_details), ''), nullif(trim(p_terms), ''), p_template_id, auth.uid())
+    returning invoices.id into v_id;
+
+  insert into invoice_items (invoice_id, company_id, description, subtext, quantity, rate, amount,
+    gst_rate, taxable, cgst, sgst, igst, sort_order)
+  select v_id, v_company, e ->> 'description', nullif(e ->> 'subtext', ''),
+    (e ->> 'quantity')::numeric, (e ->> 'rate')::numeric, (e ->> 'amount')::numeric,
+    (e ->> 'gst_rate')::numeric, (e ->> 'taxable')::numeric,
+    (e ->> 'cgst')::numeric, (e ->> 'sgst')::numeric, (e ->> 'igst')::numeric,
+    (ord - 1)::int
+  from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) with ordinality as t(e, ord);
+
+  return query select v_id, v_number;
+end;
+$$;

@@ -247,9 +247,10 @@ export const invoiceRoutes = new Hono<AppEnv>()
           )`
           return rows[0] ?? null
         }),
-      { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+      { onCode: (code) => (code === '23505' ? 'taken' : code === '23514' ? 'needs_number' : undefined) },
     )
     if (row === 'taken') fail(409, 'An invoice with this number already exists.')
+    if (row === 'needs_number') fail(422, 'Your studio types its own invoice numbers. Type a number for this invoice.')
     if (!row) fail(400, 'We could not create the invoice.')
     // Money already received goes on the invoice as it is made, so it is
     // never a draft: a draft cannot be paid.

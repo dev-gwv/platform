@@ -46,6 +46,7 @@ const COMPANY_COLUMNS = [
   'avatar_url',
   'invoice_number_prefix',
   'invoice_next_number',
+  'invoice_number_mode',
   'quote_number_prefix',
   'quote_next_number',
   'invoice_address',
