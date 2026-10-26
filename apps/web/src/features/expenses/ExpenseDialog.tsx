@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/d
 import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useCreateExpense, useCreateExpenseTaxRate, useExpenseTaxRates, useUpdateExpense } from '@/features/financials/api'
+import { TaxRatesDialog } from './TaxRatesDialog'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { useDirectory } from '@/features/team/api'
 import { PartyPicker } from '@/features/parties/PartyPicker'
@@ -67,6 +68,7 @@ export function AddExpenseDialog({
   const [addingRate, setAddingRate] = useState(false)
   const [newRate, setNewRate] = useState({ name: '', rate: '' })
   const taxRates = useExpenseTaxRates()
+  const [managingRates, setManagingRates] = useState(false)
   const createRate = useCreateExpenseTaxRate()
   const [invoiceNumber, setInvoiceNumber] = useState(expense?.invoice_number ?? '')
   const [taxAmount, setTaxAmount] = useState(expense?.tax_amount ? String(expense.tax_amount) : '')
@@ -149,7 +151,8 @@ export function AddExpenseDialog({
         tax_amount: taxAmount.trim() ? Number(taxAmount) : gstTreatment === 'gst_applicable' ? Math.round(taxGuess * 100) / 100 : 0,
         reverse_charge: reverse,
         paid_by_user_id: paidBy || null,
-        is_fixed_overhead: false,
+        // An edit keeps the expense's own overhead flag.
+        is_fixed_overhead: isEdit ? (expense?.is_fixed_overhead ?? false) : false,
         itemize_json: cleanItems(items),
       }
       if (isEdit) {
@@ -330,6 +333,7 @@ export function AddExpenseDialog({
                         onChange={(e) => {
                           const v = e.target.value
                           if (v === '__add__') return setAddingRate(true)
+                          if (v === '__manage__') return setManagingRates(true)
                           if (v.startsWith('tax:')) {
                             const t = (taxRates.data ?? []).find((x) => `tax:${x.name}` === v)
                             if (t) {
@@ -360,8 +364,10 @@ export function AddExpenseDialog({
                           </option>
                         )}
                         <option value="__add__">+ Add a tax rate…</option>
+                        {(taxRates.data ?? []).length > 0 && <option value="__manage__">Change your tax rates…</option>}
                       </Select>
                     )}
+                    {managingRates && <TaxRatesDialog onClose={() => setManagingRates(false)} />}
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Amount is</Label>

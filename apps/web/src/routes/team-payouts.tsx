@@ -32,7 +32,7 @@ import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import { humanize } from '@/shared/ui/format'
 import { Money, useINR } from '@/shared/money/MoneyMask'
 import { type CreateTeamPayoutRequest, type CrewPayoutRow, type PayoutEntryType, type TeamPayout } from '@ipc/contracts'
-import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Wallet, CalendarClock, Filter } from 'lucide-react'
+import { Plus, Trash2, Pencil, IndianRupee, Clock, CheckCircle, Download, History, ListChecks, Wallet, CalendarClock, Filter, Undo2 } from 'lucide-react'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 
 const emptyForm = (): CreateTeamPayoutRequest => ({
@@ -307,6 +307,7 @@ type SettlementEntry = {
   payment_mode: string | null
   payment_reference: string | null
   notes: string | null
+  reverses_settlement_id?: string | null | undefined
 }
 
 /**
@@ -490,6 +491,10 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
   const [historyOpen, setHistoryOpen] = useState(false)
   const left = Math.max(0, row.amount - row.paid)
   const mine = entries.filter((e) => e.slot_id === row.slot_id)
+  // A payment recorded by mistake is undone by a reversal entry (the ledger
+  // keeps both, 0090); once undone it says so instead.
+  const undone = new Set(mine.map((e) => e.reverses_settlement_id).filter(Boolean))
+  const settle = useCreatePayoutSettlement()
   const past = row.shoot_date < today
   const settled = row.amount > 0 && left <= 0.001
 
@@ -528,7 +533,32 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
                   </p>
                   {e.notes && <p className="text-xs text-muted-foreground">{e.notes}</p>}
                 </div>
-                <span className={e.amount_paid < 0 ? 'text-destructive' : 'text-success'}>{inr(e.amount_paid)}</span>
+                <span className="flex items-center gap-2">
+                  <span className={e.amount_paid < 0 ? 'text-destructive' : 'text-success'}>{inr(e.amount_paid)}</span>
+                  {e.amount_paid > 0 && e.entry_type !== 'reversal' && (
+                    undone.has(e.id) ? (
+                      <span className="text-xs text-muted-foreground">Undone</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={settle.isPending}
+                        title="Recorded by mistake? Take this payment back"
+                        onClick={() =>
+                          settle.mutate({
+                            slot_id: row.slot_id,
+                            amount_paid: e.amount_paid,
+                            entry_type: 'reversal',
+                            reverses_settlement_id: e.id,
+                            notes: 'Undone: recorded by mistake',
+                          })
+                        }
+                      >
+                        <Undo2 className="h-4 w-4" /> Undo
+                      </Button>
+                    )
+                  )}
+                </span>
               </div>
             ))}
             {mine.length === 0 && <p className="text-sm text-muted-foreground">No entries yet.</p>}

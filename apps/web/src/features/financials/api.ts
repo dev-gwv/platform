@@ -344,6 +344,19 @@ export function useMarkReimbursed() {
   })
 }
 
+/** Marked paid back by mistake: owed again. */
+export function useMarkNotReimbursed() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/financials/expenses/${id}/not-reimbursed`, { method: 'POST', body: {}, responseSchema: z.object({ ok: z.boolean() }) }),
+    onSuccess: () => {
+      toast.success('Owed again')
+      void qc.invalidateQueries({ queryKey: ['expenses'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 /** GST collected and paid, month by month, for the accountant. */
 export function useGstSummary(from: string, to: string, enabled = true) {
   const { session } = useAuth()

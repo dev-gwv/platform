@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { party, type CreatePartyRequest, type UpdatePartyRequest } from '@ipc/contracts'
+import { party, z, type CreatePartyRequest, type UpdatePartyRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
@@ -40,5 +40,18 @@ export function useUpdateParty() {
       toast.success('Party updated')
       void qc.invalidateQueries({ queryKey: ['parties'] })
     },
+  })
+}
+
+/** Remove a vendor for good; past expenses keep their own record of it. */
+export function useDeleteParty() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/parties/${id}`, { method: 'DELETE', responseSchema: z.unknown() }),
+    onSuccess: () => {
+      toast.success('Vendor deleted')
+      void qc.invalidateQueries({ queryKey: ['parties'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }

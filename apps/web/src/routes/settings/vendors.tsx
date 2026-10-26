@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Archive, ArchiveRestore, Check, Pencil, Plus, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, Check, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { Party } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -10,7 +10,8 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { TONE_CHIP } from '@/shared/ui/tones'
-import { useCreateParty, useParties, useUpdateParty } from '@/features/parties/api'
+import { useCreateParty, useDeleteParty, useParties, useUpdateParty } from '@/features/parties/api'
+import { useConfirm } from '@/shared/ui/confirm'
 import { VendorQrCard } from '@/features/enquiry-forms/VendorQrCard'
 import { PARTNER_KINDS } from '@ipc/domain'
 
@@ -116,6 +117,8 @@ function Vendors() {
 
 function VendorRow({ party, onEdit }: { party: Party; onEdit: () => void }) {
   const update = useUpdateParty()
+  const remove = useDeleteParty()
+  const confirm = useConfirm()
   const k = kindOf(party.kind)
   const active = party.is_active !== false
   const details = [party.categories.join(', '), party.phone, party.email, party.gstin ? `GSTIN ${party.gstin}` : null, party.state].filter(Boolean)
@@ -153,6 +156,24 @@ function VendorRow({ party, onEdit }: { party: Party; onEdit: () => void }) {
             <ArchiveRestore /> Bring back
           </>
         )}
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="hover:text-destructive"
+        aria-label={`Delete ${party.name}`}
+        disabled={remove.isPending}
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Delete ${party.name}?`,
+            description: 'Past expenses keep the name they were saved with. Archive instead to keep the vendor on the list.',
+            confirmLabel: 'Delete',
+            destructive: true,
+          })
+          if (ok) remove.mutate(party.id)
+        }}
+      >
+        <Trash2 />
       </Button>
     </li>
   )
