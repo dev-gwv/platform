@@ -96,7 +96,8 @@ export const createInvoiceRequest = z.object({
 export type CreateInvoiceRequest = z.infer<typeof createInvoiceRequest>
 
 /** Same shape as creation minus the number override, which only ever applies once, at creation. */
-export const updateInvoiceRequest = createInvoiceRequest.omit({ invoice_number: true, payment: true, attach_payment_ids: true })
+/** An edit may also renumber the invoice (owner, 26 Oct); blank keeps the number. */
+export const updateInvoiceRequest = createInvoiceRequest.omit({ payment: true, attach_payment_ids: true })
 export type UpdateInvoiceRequest = z.infer<typeof updateInvoiceRequest>
 
 export const recordPaymentRequest = z.object({

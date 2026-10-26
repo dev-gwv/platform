@@ -435,10 +435,10 @@ export function InvoiceEditor({
         <section className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2">
           <Field label="Invoice #">
             <Input
-              value={isEdit ? (editNumber ?? '') : values.invoice_number}
+              value={values.invoice_number}
               onChange={(e) => set('invoice_number', e.target.value)}
-              placeholder="Next number, automatically"
-              disabled={isEdit}
+              placeholder={isEdit ? (editNumber ?? '') : 'Next number, automatically'}
+              maxLength={40}
             />
           </Field>
           <Field label="Project">
@@ -822,7 +822,7 @@ export function InvoiceEditor({
                   {isEdit ? 'Record an advance or token amount received' : 'I have received payment (full, advance or token amount)'}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' Once money is recorded, the lines are locked.' : ''}
+                  Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' You can still change the invoice after money comes in.' : ''}
                 </span>
               </span>
             </label>

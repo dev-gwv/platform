@@ -135,13 +135,15 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   /**
    * The things done with an invoice, each its own icon as in the old app:
    * view, record a payment (green, while money is owed), WhatsApp, email,
-   * copy the client link, print, edit and delete. Edit and delete only while
-   * nothing has been paid against it; after that it is a record.
+   * copy the client link, print, edit and delete. Edit whatever is paid
+   * (owner, 26 Oct); delete only while nothing has been paid against it.
    */
   const actionsFor = (inv: InvoiceListItem, labelled = false) => {
     const sendable = inv.status !== 'draft' && inv.status !== 'cancelled'
     const owed = inv.balance_due > 0 && sendable
-    const untouched = inv.status !== 'cancelled' && inv.balance_due >= inv.total
+    // Edit whatever is paid (owner, 26 Oct); delete only while nothing is.
+    const changeable = inv.status !== 'cancelled'
+    const untouched = inv.balance_due >= inv.total
     const late = owed && isOverdue(inv)
     const open = (search?: { print: string }) => void navigate({ to: '/billing/invoices/$id', params: { id: inv.id }, ...(search ? { search: search as never } : {}) })
     const actions = [
@@ -163,7 +165,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
       { key: 'email', label: 'Email', title: 'Send by email', icon: Mail, onClick: () => void emailInvoice(inv, late), show: sendable },
       { key: 'copy', label: 'Link', title: 'Copy client link', icon: Copy, onClick: () => void copyInvoiceLink(inv.id), show: sendable },
       { key: 'print', label: 'Print', title: 'Print or save as PDF', icon: Printer, onClick: () => open({ print: '1' }), show: true },
-      { key: 'edit', label: 'Edit', title: 'Edit invoice', icon: Pencil, onClick: () => void navigate({ to: '/billing/invoices/$id/edit', params: { id: inv.id } }), show: canEdit && untouched },
+      { key: 'edit', label: 'Edit', title: 'Edit invoice', icon: Pencil, onClick: () => void navigate({ to: '/billing/invoices/$id/edit', params: { id: inv.id } }), show: canEdit && changeable },
       {
         key: 'delete',
         label: 'Delete',

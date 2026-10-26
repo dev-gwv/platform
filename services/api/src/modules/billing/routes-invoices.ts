@@ -435,6 +435,19 @@ export const invoiceRoutes = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, id, req, patchGstNumber)),
     )
     if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
+    // A new number, if one was typed (unique per studio).
+    const number = req.invoice_number?.trim()
+    if (number) {
+      const renamed = await attempt(
+        c,
+        'billing.invoice_renumber',
+        () =>
+          withUser(c.env, c.get('auth').userId, (sql) => sql`
+            update invoices set invoice_number = ${number} where id = ${id} and invoice_number <> ${number}`),
+        { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+      )
+      if (renamed === 'taken') fail(409, `Another invoice is already numbered ${number}. Pick a different number.`)
+    }
     await audit(c, { action: 'invoice.update', entityType: 'invoice', entityId: id, after: { total: totals.total, client_id: req.client_id } })
     return c.json({ ok: true })
   })

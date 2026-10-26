@@ -505,6 +505,34 @@ export function useCancelInvoice() {
   })
 }
 
+/** A cancelled invoice back as sent (0284). */
+export function useReopenInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      callApi(`/billing/invoices/${invoiceId}/reopen`, { method: 'POST', body: {}, responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Invoice reopened. Send it again to make a new client link.')
+      invalidateMoney(qc)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** A sent invoice with no payment back to draft; its client link stops. */
+export function useInvoiceToDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      callApi(`/billing/invoices/${invoiceId}/draft`, { method: 'POST', body: {}, responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Back to draft')
+      invalidateMoney(qc)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 /** The studio's saved items -- what it bills again and again. */
 export function useInvoiceItems() {
   const { session } = useAuth()

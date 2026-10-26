@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Paperclip, Pencil, Printer, Trash2 } from 'lucide-react'
+import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Paperclip, Pencil, Printer, RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import { companyProfile, type InvoiceDetail } from '@ipc/contracts'
 import { callApi, downloadFile } from '@/shared/api/client'
 import { toast } from 'sonner'
@@ -18,6 +18,8 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { formatINR } from '@/shared/ui/format'
 import {
   useCancelInvoice,
+  useInvoiceToDraft,
+  useReopenInvoice,
   useDeleteInvoice,
   useInvoice,
   useReceivedPayment,
@@ -78,7 +80,9 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
   if (isError || !data) return <ErrorState onRetry={() => void refetch()} />
 
   const cancelled = data.status === 'cancelled'
-  const editable = data.amount_paid === 0 && !cancelled && data.payments.length === 0
+  // Changeable whatever is paid (owner, 26 Oct); only its total cannot drop
+  // below the money already in, which the server says in words.
+  const editable = !cancelled
   const isDraft = data.status === 'draft'
   const sendable = !cancelled && !isDraft
   const late = isOverdue(data)
@@ -139,7 +143,7 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               <Printer /> Print
             </Button>
-            <MoreActions invoice={data} editable={editable} />
+            <MoreActions invoice={data} />
           </div>
         </div>
         {isDraft && (
@@ -166,9 +170,10 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
           </div>
         )}
         {cancelled && (
-          <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-            This invoice is cancelled. Its link no longer opens for the client.
-          </p>
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            <span className="flex-1">This invoice is cancelled. Its link no longer opens for the client.</span>
+            {canEdit && <ReopenButton invoiceId={data.id} />}
+          </div>
         )}
       </div>
 
@@ -246,11 +251,22 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
   )
 }
 
-/** Edit, delete (only while nothing is paid), stop the link and cancel -- out of the way of the everyday buttons. */
-function MoreActions({ invoice, editable }: { invoice: InvoiceDetail; editable: boolean }) {
+function ReopenButton({ invoiceId }: { invoiceId: string }) {
+  const reopen = useReopenInvoice()
+  return (
+    <Button size="sm" variant="outline" disabled={reopen.isPending} onClick={() => reopen.mutate(invoiceId)}>
+      <RotateCcw /> Reopen invoice
+    </Button>
+  )
+}
+
+/** Delete (only while nothing is paid), back to draft, stop the link, cancel and reopen -- out of the way of the everyday buttons. */
+function MoreActions({ invoice }: { invoice: InvoiceDetail }) {
   const access = useAccess()
   const del = useDeleteInvoice()
   const cancel = useCancelInvoice()
+  const reopen = useReopenInvoice()
+  const toDraft = useInvoiceToDraft()
   const revoke = useRevokeInvoiceLink()
   const confirm = useConfirm()
   const navigate = useNavigate()
@@ -284,7 +300,22 @@ function MoreActions({ invoice, editable }: { invoice: InvoiceDetail; editable: 
         }).then((yes) => yes && cancel.mutate(invoice.id)),
     })
   }
-  if (editable && access.hasAction('billing', 'delete')) {
+  if (cancelled && access.hasAction('billing', 'edit')) {
+    items.push({ label: 'Reopen invoice', icon: <RotateCcw className="size-4" />, onSelect: () => reopen.mutate(invoice.id) })
+  }
+  if (invoice.status === 'sent' && invoice.payments.length === 0 && access.hasAction('billing', 'edit')) {
+    items.push({
+      label: 'Move back to draft',
+      icon: <Undo2 className="size-4" />,
+      onSelect: () =>
+        void confirm({
+          title: `Move ${invoice.invoice_number} back to draft?`,
+          description: 'The link you sent stops opening. Send it again when it is ready.',
+          confirmLabel: 'Back to draft',
+        }).then((yes) => yes && toDraft.mutate(invoice.id)),
+    })
+  }
+  if (invoice.payments.length === 0 && access.hasAction('billing', 'delete')) {
     items.push({
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
@@ -369,7 +400,7 @@ function EditInvoiceDialog({ invoice, onClose }: { invoice: InvoiceDetail; onClo
         busy={update.isPending || pay.isPending}
         onCancel={onClose}
         onSubmit={async (req) => {
-          const { invoice_number: _n, payment, ...rest } = req
+          const { payment, ...rest } = req
           // Money in hand means the invoice is sent: a draft cannot be paid.
           await update.mutateAsync(payment ? { ...rest, status: 'sent' } : rest)
           if (payment) await pay.mutateAsync(payment)
@@ -384,6 +415,7 @@ function EditInvoiceDialog({ invoice, onClose }: { invoice: InvoiceDetail; onClo
         }}
         initial={{
           ...emptyInvoiceForm(),
+          invoice_number: invoice.invoice_number,
           client_id: invoice.client_id ?? '',
           project_id: invoice.project_id ?? '',
           place_of_supply: invoice.place_of_supply ?? '',
