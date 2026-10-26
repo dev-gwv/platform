@@ -68,7 +68,22 @@ export const useUpdatePayrollLine = () =>
 export const useApprovePayroll = () =>
   usePayrollMutation(
     (runId: string) => callApi(`/payroll/runs/${runId}/approve`, { method: 'POST', responseSchema: none }),
-    'Approved. The month is now locked.',
+    'Approved. Reopen it any time before paying to change it.',
+  )
+
+/** An approved month back to draft, while nobody in it is paid (0284). */
+export const useReopenPayroll = () =>
+  usePayrollMutation(
+    (runId: string) => callApi(`/payroll/runs/${runId}/reopen`, { method: 'POST', responseSchema: none }),
+    'Reopened. Change it, then approve again.',
+  )
+
+/** A person marked paid by mistake, back to unpaid (0284). */
+export const useUnpayPayrollLine = () =>
+  usePayrollMutation(
+    ({ runId, lineId }: { runId: string; lineId: string }) =>
+      callApi(`/payroll/runs/${runId}/lines/${lineId}/unpay`, { method: 'POST', responseSchema: none }),
+    'Marked unpaid',
   )
 
 export const useMarkPayrollPaid = () =>

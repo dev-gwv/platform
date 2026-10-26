@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { CheckCircle2, Download, FileText, RefreshCcw, Wallet } from 'lucide-react'
+import { CheckCircle2, Download, FileText, RefreshCcw, Undo2, Wallet } from 'lucide-react'
 import type { PayrollLine, PayrollRun } from '@ipc/contracts'
 import { MONTH_NAMES, monthLabel, netPay, payrollBankRows, payrollTotals, proRataNote, PAYROLL_BANK_HEADERS } from '@ipc/domain'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -21,6 +21,8 @@ import { SalariesTab } from '@/features/team/SalariesTab'
 import {
   fetchPayrollExport,
   useApprovePayroll,
+  useReopenPayroll,
+  useUnpayPayrollLine,
   useGeneratePayroll,
   useMarkPayrollPaid,
   usePayrollMonth,
@@ -68,6 +70,8 @@ function Payroll() {
   const q = usePayrollMonth(year, month)
   const generate = useGeneratePayroll()
   const approve = useApprovePayroll()
+  const reopen = useReopenPayroll()
+  const unpay = useUnpayPayrollLine()
   const [paying, setPaying] = useState<PayrollLine | 'all' | null>(null)
   const [adjusting, setAdjusting] = useState<string | null>(null)
   const [confirmApprove, setConfirmApprove] = useState(false)
@@ -134,6 +138,11 @@ function Payroll() {
             {canEdit && run?.status === 'approved' && unpaid.length > 0 && (
               <Button onClick={() => setPaying('all')}>
                 <Wallet /> Mark all paid
+              </Button>
+            )}
+            {canEdit && run?.status === 'approved' && lines.every((l) => !l.paid_at) && (
+              <Button variant="outline" disabled={reopen.isPending} onClick={() => reopen.mutate(run.id)}>
+                <Undo2 /> Reopen month
               </Button>
             )}
             {canEdit && run && run.status !== 'draft' && (
@@ -235,6 +244,17 @@ function Payroll() {
                             <td className="px-3 py-2">
                               <div className="flex items-center justify-end gap-1.5">
                                 {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
+                                {canEdit && l.paid_at && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={unpay.isPending}
+                                    title="Marked paid by mistake? Make it unpaid again"
+                                    onClick={() => unpay.mutate({ runId: run.id, lineId: l.id })}
+                                  >
+                                    <Undo2 /> Undo paid
+                                  </Button>
+                                )}
                                 {canEdit && run.status === 'draft' && (
                                   <Button size="sm" variant="outline" onClick={() => setAdjusting(adjusting === l.id ? null : l.id)}>
                                     {adjusting === l.id ? 'Close' : 'Adjust'}
@@ -302,7 +322,7 @@ function Payroll() {
         <Dialog open onOpenChange={(o) => !o && setConfirmApprove(false)}>
           <DialogContent
             title={`Approve ${label}?`}
-            description={`${lines.length} ${lines.length === 1 ? 'person' : 'people'}, ${inr(totals.net)} in all. After this the numbers are locked and each person can see their payslip.`}
+            description={`${lines.length} ${lines.length === 1 ? 'person' : 'people'}, ${inr(totals.net)} in all. Each person can then see their payslip. You can reopen it to change it until someone is marked paid.`}
           >
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmApprove(false)}>
