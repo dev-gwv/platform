@@ -185,6 +185,10 @@ export const updateDataRecordRequest = z.object({
   backup_status: backupStatus.optional(),
   backup_folder_path: z.string().trim().max(500).nullable().optional(),
   backup_cloud_link: z.string().trim().max(500).nullable().optional(),
+  /** false takes the record out of the archive (0285); archiving goes through /data/bulk. */
+  archived: z.literal(false).optional(),
+  /** false says the cards are not with the editor after all (0285). */
+  handed_to_editor: z.literal(false).optional(),
 })
 export type UpdateDataRecordRequest = z.infer<typeof updateDataRecordRequest>
 

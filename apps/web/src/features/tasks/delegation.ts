@@ -26,6 +26,17 @@ export const BOARD_LANES: ReadonlyArray<{ key: TaskStatus; label: string; hint: 
 export const ASSIGNEE_STATUSES: readonly TaskStatus[] = ['to_do', 'in_progress', 'review', 'blocked']
 
 /**
+ * A task someone made for themselves, with nobody else on it (0285): theirs to
+ * edit, tick done, reopen and delete without a manager.
+ */
+export function isOwnTask(t: Pick<TaskListItem, 'created_by' | 'assignee_ids'>, me: string | null | undefined): boolean {
+  return !!me && t.created_by === me && t.assignee_ids.length === 1 && t.assignee_ids[0] === me
+}
+
+/** What the maker of their own task can set it to: everything but review, since nobody has to check it. */
+export const OWN_TASK_STATUSES: readonly TaskStatus[] = ['to_do', 'in_progress', 'blocked', 'completed', 'cancelled']
+
+/**
  * A plain status dropdown for the person on a task (My Work, My Tasks):
  * the moves they can make without a question, plus where it is now so the
  * control never shows the wrong thing. Blocked asks why, so it lives on the

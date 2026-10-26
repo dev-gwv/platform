@@ -221,6 +221,25 @@ export const workRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
+  // Take a hand-in back before anyone has looked at it (owner, 26 Oct: what
+  // is made can be undone). Only the person who handed it in, only while it
+  // still waits for review; the deliverable goes back to editing (0285).
+  .post('/submissions/:id/withdraw', async (c) => {
+    const id = uuidParam(c)
+    const outcome = await attempt(c, 'work.withdraw', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = await sql<{ r: string }[]>`select withdraw_submission(${id}) as r`
+        return rows[0]?.r ?? 'missing'
+      }),
+    )
+    if (!outcome) fail(400, 'We could not take this hand-in back.')
+    if (outcome === 'missing') fail(404, 'That hand-in was not found.')
+    if (outcome === 'not_yours') fail(403, 'Only the person who handed it in can take it back.')
+    if (outcome === 'reviewed') fail(409, 'This hand-in has already been reviewed, so it cannot be taken back.')
+    await audit(c, { action: 'work.withdraw', entityType: 'work_submission', entityId: id })
+    return c.json({ ok: true })
+  })
+
   // Run the work-submission reminder sweep now (same sweep cron runs hourly).
   .post('/reminders/run', requireOwner(), async (c) => {
     const summary = await attempt(c, 'work.reminders_run', () =>

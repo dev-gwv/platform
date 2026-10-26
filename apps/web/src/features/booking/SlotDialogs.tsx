@@ -5,6 +5,7 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers, useSetSlotCost, useUpdateSlot, ApiError } from '@/features/allocation/api'
+import { NO_PAYOUT, costClears } from '@/features/allocation/cost-clear'
 
 function toLocalInput(iso: string): string {
   const d = new Date(iso)
@@ -47,16 +48,18 @@ export function SlotCostDialog({ slot, onClose }: { slot: TeamSlot; onClose: () 
       setError('A final payout needs an amount.')
       return
     }
+    // An emptied box empties the field (0285); before, it quietly kept the old figure.
+    const next = {
+      estimated_cost: estimated.trim() ? Number(estimated) : null,
+      final_cost: final.trim() ? Number(final) : null,
+      cost_notes: notes.trim() || null,
+    }
+    await save({ ...next, cost_status: status, clear: costClears(slot, next) })
+  }
+
+  async function save(patch: Parameters<typeof setCost.mutateAsync>[0]['patch']) {
     try {
-      await setCost.mutateAsync({
-        id: slot.id,
-        patch: {
-          estimated_cost: estimated.trim() ? Number(estimated) : undefined,
-          final_cost: final.trim() ? Number(final) : undefined,
-          cost_status: status,
-          cost_notes: notes.trim() || undefined,
-        },
-      })
+      await setCost.mutateAsync({ id: slot.id, patch })
       draft.clear()
       onClose()
     } catch (err) {
@@ -96,7 +99,12 @@ export function SlotCostDialog({ slot, onClose }: { slot: TeamSlot; onClose: () 
               {error}
             </p>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {(slot.estimated_cost != null || slot.final_cost != null || slot.cost_notes) && (
+              <Button type="button" variant="ghost" className="mr-auto" disabled={setCost.isPending} onClick={() => void save(NO_PAYOUT)}>
+                No payout
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>

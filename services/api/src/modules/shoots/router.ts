@@ -3,6 +3,7 @@ import {
   createServiceRequest,
   createShootRequest,
   saveShootPresetRequest,
+  renameShootPresetRequest,
   serviceOption,
   shootListItem,
   myShoot,
@@ -250,6 +251,29 @@ export const shootsRouter = new Hono<AppEnv>()
     )
     if (!row) fail(400, 'We could not save the preset.')
     return c.json(shootPreset.parse(row), 201)
+  })
+
+  // Rename a preset where it is listed (0285); what it lays down stays.
+  .patch('/presets/:id', requireAction('projects', 'edit'), async (c) => {
+    const parsed = renameShootPresetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please name the preset.')
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'shoots.presets.rename',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql`update shoot_presets set name = ${parsed.data.name} where id = ${id}
+            returning id, kind, name, payload`
+          return rows[0] ?? ('missing' as const)
+        }),
+      { onCode: (code) => (code === '23505' ? ('taken' as const) : undefined) },
+    )
+    if (row === 'taken') fail(409, 'There is already a preset with that name.')
+    if (row === 'missing') fail(404, 'That preset was not found.')
+    if (!row) fail(400, 'We could not rename the preset.')
+    await audit(c, { action: 'shoot_preset.rename', entityType: 'shoot_preset', entityId: id, after: parsed.data })
+    return c.json(shootPreset.parse(row))
   })
 
   .delete('/presets/:id', requireAction('projects', 'edit'), async (c) => {

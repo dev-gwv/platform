@@ -13,6 +13,7 @@ import { cn } from '@/shared/ui/cn'
 import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useBookSlots, useMembers, useReleaseSlot, useSetSlotCost, useSlots, useUpdateSlot } from '@/features/allocation/api'
+import { NO_PAYOUT, costClears } from '@/features/allocation/cost-clear'
 import { useUpdateShoot } from './api'
 import {
   availabilityLine,
@@ -954,19 +955,20 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
       toast.error('Payout must be a positive number.')
       return
     }
+    // One amount on screen: it is the estimate, and also the final once agreed.
+    // A box left empty empties the field (0285) instead of keeping the old figure.
+    const next = {
+      estimated_cost: status === 'not_decided' ? null : n,
+      final_cost: status === 'final' ? n : null,
+      cost_notes: note.trim() || null,
+    }
     setCost.mutate(
-      {
-        id: slot.id,
-        patch: {
-          estimated_cost: status === 'not_decided' ? null : n,
-          ...(status === 'final' ? { final_cost: n } : {}),
-          cost_status: status,
-          cost_notes: note.trim() || null,
-        },
-      },
-      { onSuccess: onClose },
+      { id: slot.id, patch: { ...next, cost_status: status, clear: costClears(slot, next) } },
+      { onSuccess: onClose, onError: (e: Error) => toast.error(e.message) },
     )
   }
+
+  const hasPayout = slot.estimated_cost != null || slot.final_cost != null || !!slot.cost_notes
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -1009,7 +1011,17 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
             </Label>
             <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {hasPayout && (
+              <Button
+                variant="ghost"
+                className="mr-auto"
+                disabled={setCost.isPending}
+                onClick={() => setCost.mutate({ id: slot.id, patch: NO_PAYOUT }, { onSuccess: onClose, onError: (e: Error) => toast.error(e.message) })}
+              >
+                No payout
+              </Button>
+            )}
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>

@@ -8,7 +8,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { cn } from '@/shared/ui/cn'
-import { useBulkData, useStorageLocations } from './api'
+import { useBulkData, useStorageLocations, useUpdateDataRecord } from './api'
 import {
   BULK_ACTIONS,
   FOCI,
@@ -356,6 +356,7 @@ function DataCard({
 }) {
   const level = levelOf(row)
   const r = row.record
+  const update = useUpdateDataRecord()
   const link = r?.cloud_link || r?.backup_cloud_link
   return (
     <article
@@ -409,6 +410,27 @@ function DataCard({
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge tone={STAGE_TONE[row.stage]}>{STAGE_LABEL[row.stage]}</StatusBadge>
         {r?.handed_to_editor_at && <StatusBadge tone="info">With editor</StatusBadge>}
+        {/* "With editor" and Archived are stamps a tap can take back (0285). */}
+        {r?.handed_to_editor_at && (
+          <button
+            type="button"
+            disabled={update.isPending}
+            onClick={() => update.mutate({ id: r.id, patch: { handed_to_editor: false } })}
+            className="rounded-md border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Not with editor
+          </button>
+        )}
+        {r?.archived_at && (
+          <button
+            type="button"
+            disabled={update.isPending}
+            onClick={() => update.mutate({ id: r.id, patch: { archived: false } })}
+            className="rounded-md border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Unarchive
+          </button>
+        )}
         <span className="text-xs text-muted-foreground">{nextAction(row)}</span>
       </div>
       <div className="flex flex-wrap gap-1 pt-0.5">

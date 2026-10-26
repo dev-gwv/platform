@@ -418,7 +418,13 @@ export const dataRouter = new Hono<AppEnv>()
   .patch('/:id', requireAction('projects', 'edit'), async (c) => {
     const parsed = updateDataRecordRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the record details.')
-    const { data_status: _stage, ...patch } = parsed.data
+    const { data_status: _stage, archived, handed_to_editor, ...fields } = parsed.data
+    // Undoing a step is clearing its stamp: the stage is derived from it (0173).
+    const patch: Record<string, unknown> = {
+      ...fields,
+      ...(archived === false ? { archived_at: null, archive_location_id: null } : {}),
+      ...(handed_to_editor === false ? { handed_to_editor_at: null, handed_to_editor_by: null } : {}),
+    }
     if (Object.keys(patch).length === 0) {
       // Nothing but a stage, which is derived: nothing to write.
       if (_stage === undefined) fail(422, 'Nothing to change.')

@@ -207,15 +207,17 @@ function ReferralsContent() {
                     </p>
                   )}
                 </div>
-                <Select value={sub.status} onChange={(e) => updateStatus.mutate({ id: sub.id, status: e.target.value })} className="w-32">
-                  <option value="pending">Pending</option>
-                  <option value="converted">Converted</option>
-                  <option value="rewarded">Rewarded</option>
-                  <option value="rejected">Rejected</option>
+                {/* Every status the referral can be in, so any choice can be changed back. */}
+                <Select value={sub.status} onChange={(e) => updateStatus.mutate({ id: sub.id, status: e.target.value })} className="w-36">
+                  {SUBMISSION_STATUS_OPTIONS.filter((o) => !o.legacy || o.value === sub.status).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </Select>
               </div>
               {/* A booked referral earns the referring client their reward. */}
-              {(sub.status === 'converted' || sub.status === 'rewarded') && sub.reward_status === 'not_due' && (
+              {(sub.status === 'booked' || sub.status === 'converted' || sub.status === 'rewarded') && sub.reward_status === 'not_due' && (
                 <Button size="sm" variant="outline" className="mt-2" onClick={() => updateStatus.mutate({ id: sub.id, reward_status: 'due' })}>
                   Reward due
                 </Button>
@@ -297,6 +299,18 @@ function ReferralsContent() {
     </div>
   )
 }
+
+/** The statuses a referral moves through; the old app's three show only on a row that still has one. */
+const SUBMISSION_STATUS_OPTIONS: { value: string; label: string; legacy?: boolean }[] = [
+  { value: 'new', label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'booked', label: 'Booked' },
+  { value: 'rejected', label: 'Not interested' },
+  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'pending', label: 'Pending', legacy: true },
+  { value: 'converted', label: 'Converted', legacy: true },
+  { value: 'rewarded', label: 'Rewarded', legacy: true },
+]
 
 export function ReferralsPage() {
   return (

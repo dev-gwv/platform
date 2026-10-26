@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import {
   deliverableSet,
   saveDeliverableSetRequest,
+  renameDeliverableSetRequest,
   createProjectTemplateRequest,
   projectTemplateList,
   z,
@@ -50,6 +51,29 @@ export const projectTemplateRoutes = new Hono<AppEnv>()
     )
     if (!row) fail(400, 'We could not save the set.')
     return c.json(deliverableSet.parse(row), 201)
+  })
+
+  // Rename a package where it is listed (0285); its items stay.
+  .patch('/deliverable-sets/:id', requireAction('projects', 'edit'), async (c) => {
+    const parsed = renameDeliverableSetRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please name the set.')
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'projects.sets.rename',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql`update deliverable_sets set name = ${parsed.data.name} where id = ${id}
+            returning id, name, items`
+          return rows[0] ?? ('missing' as const)
+        }),
+      { onCode: (code) => (code === '23505' ? ('taken' as const) : undefined) },
+    )
+    if (row === 'taken') fail(409, 'There is already a set with that name.')
+    if (row === 'missing') fail(404, 'That set was not found.')
+    if (!row) fail(400, 'We could not rename the set.')
+    await audit(c, { action: 'deliverable_set.rename', entityType: 'deliverable_set', entityId: id, after: parsed.data })
+    return c.json(deliverableSet.parse(row))
   })
 
   .delete('/deliverable-sets/:id', requireAction('projects', 'edit'), async (c) => {

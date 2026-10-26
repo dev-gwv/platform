@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Ban, CalendarDays, CheckCircle2, Clock, ExternalLink, Filter, Mic, Pencil, Send } from 'lucide-react'
+import { AlertCircle, Ban, Undo2, CalendarDays, CheckCircle2, Clock, ExternalLink, Filter, Mic, Pencil, Send } from 'lucide-react'
 import { daysLeftText, daysUntil, todayInIndia } from '@/shared/ui/days-left'
 import { shortDayLabel } from '@/shared/ui/time-format'
 import { WORK_STATUS_LABEL, shootListItem, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
@@ -18,7 +18,7 @@ import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { assigneeStatusOptions } from '@/features/tasks/delegation'
 import { useProjects } from '@/features/projects/api'
-import { useRevokeDelivery } from '@/features/work/api'
+import { useRevokeDelivery, useWithdrawSubmission } from '@/features/work/api'
 import { SendWorkToClientDialog } from '@/features/work/SendWorkToClientDialog'
 import { MyDeliverables } from '@/features/projects/MyDeliverables'
 import { SubmitWorkDialog as SubmitDialog } from '@/features/work/SubmitWorkDialog'
@@ -339,6 +339,7 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
 
 function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmission[]; onSend: (s: WorkSubmission) => void }) {
   const revoke = useRevokeDelivery()
+  const withdraw = useWithdrawSubmission()
   // Sending to the client is the reviewer's call; the API refuses anyone else.
   const canDeliver = useAccess().hasAction('team_work_preview', 'edit')
   const confirm = useConfirm()
@@ -353,6 +354,16 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
       confirmLabel: 'Revoke link',
     })
     if (yes) revoke.mutate(s.id)
+  }
+
+  // A hand-in sent by mistake (wrong link, wrong cut) comes back before review.
+  async function onWithdraw(s: WorkSubmission) {
+    const yes = await confirm({
+      title: 'Take this hand-in back?',
+      description: `${s.deliverable_title ?? s.title ?? 'The work'} goes back to editing. Hand it in again when it is ready.`,
+      confirmLabel: 'Take it back',
+    })
+    if (yes) withdraw.mutate(s.id)
   }
 
   if (submissions.length === 0) return null
@@ -383,7 +394,12 @@ function SubmissionsSection({ submissions, onSend }: { submissions: WorkSubmissi
             </div>
             <div className="flex items-center gap-2">
               {(s.status === 'submitted' || (s.status === 'approved' && s.review_required === false)) && (
-                <SubmitDialog submission={s} trigger={<Button size="sm" variant="ghost"><Pencil /></Button>} />
+                <SubmitDialog submission={s} trigger={<Button size="sm" variant="ghost" aria-label="Edit hand-in"><Pencil /></Button>} />
+              )}
+              {s.status === 'submitted' && (
+                <Button size="sm" variant="outline" disabled={withdraw.isPending} onClick={() => void onWithdraw(s)}>
+                  <Undo2 /> Take back
+                </Button>
               )}
               {canDeliver && s.status === 'approved' && s.submission_link && (
                 <Button size="sm" variant="outline" onClick={() => onSend(s)}>

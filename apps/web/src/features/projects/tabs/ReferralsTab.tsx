@@ -10,6 +10,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
+import { RowMenu } from '@/shared/ui/row-menu'
 import { useCompanyProfile } from '@/features/settings/api'
 import {
   useProjectCampaign,
@@ -345,6 +346,20 @@ function SubmissionRow({ s, canEdit }: { s: ReferralSubmission; canEdit: boolean
           <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ id: s.id, reward_status: 'given' })}>
             Reward given
           </Button>
+        )}
+        {/* A tap made too soon is taken back here (owner, 26 Oct). */}
+        {canEdit && (booked || s.reward_status === 'given') && (
+          <RowMenu
+            label={`Change ${name}`}
+            items={[
+              ...(s.reward_status === 'given'
+                ? [{ label: 'Reward not given yet', onSelect: () => update.mutate({ id: s.id, reward_status: 'due' }) }]
+                : []),
+              ...(booked
+                ? [{ label: 'Not booked after all', onSelect: () => update.mutate({ id: s.id, status: 'contacted', reward_status: 'not_due' }) }]
+                : []),
+            ]}
+          />
         )}
       </div>
     </li>

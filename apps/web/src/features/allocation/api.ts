@@ -95,6 +95,22 @@ export function useSetSlotStatus() {
       toast.success('Booking updated')
       refreshBookings(qc)
     },
+    // "Book again" on a seat now taken says so (a clash is a 409 in words).
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+/** Take back an "I've reached" (0285): the stamp and the shoot-day attendance it wrote. */
+export function useUnmarkArrived() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => callApi(`/allocation/${id}/arrived/undo`, { method: 'POST', responseSchema: z.unknown() }),
+    onSuccess: () => {
+      toast.success('Arrival taken off')
+      refreshBookings(qc)
+      void qc.invalidateQueries({ queryKey: ['hr'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

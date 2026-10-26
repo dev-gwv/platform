@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bookmark, CalendarDays, ChevronDown, Package, Plus, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Bookmark, CalendarDays, ChevronDown, Package, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { DUE_BASIS_OPTIONS } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
@@ -10,6 +10,7 @@ import { ToneChip, toneAt } from '@/shared/ui/tone-chip'
 import { useINR } from '@/shared/money/MoneyMask'
 import {
   useDeleteDeliverableSet,
+  useRenameDeliverableSet,
   useDeliverableSets,
   useDeliverableTypeList,
   useSaveDeliverableSet,
@@ -181,6 +182,9 @@ function SetMenu({
   const sets = useDeliverableSets()
   const saveSet = useSaveDeliverableSet()
   const deleteSet = useDeleteDeliverableSet()
+  const renameSet = useRenameDeliverableSet()
+  // The set being renamed, in place in the list (0285).
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [open, setOpen] = useState(false)
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
@@ -240,7 +244,31 @@ function SetMenu({
               <span className="block truncate text-xs text-muted-foreground">{s.titles.join(', ')}</span>
             </button>
           ))}
-          {(sets.data ?? []).map((s) => (
+          {(sets.data ?? []).map((s) =>
+            renaming?.id === s.id ? (
+              <form
+                key={s.id}
+                className="flex items-center gap-1 p-1"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const next = renaming.name.trim()
+                  if (!next || next === s.name) return setRenaming(null)
+                  renameSet.mutate({ id: s.id, name: next }, { onSuccess: () => setRenaming(null) })
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={renaming.name}
+                  onChange={(e) => setRenaming({ id: s.id, name: e.target.value })}
+                  aria-label={`New name for ${s.name}`}
+                  maxLength={80}
+                  className="h-8"
+                />
+                <Button type="submit" size="sm" disabled={!renaming.name.trim() || renameSet.isPending}>
+                  Save
+                </Button>
+              </form>
+            ) : (
             <div key={s.id} className="flex items-center gap-1">
               <button type="button" role="menuitem" onClick={() => load(s.items)} className={cn(item, 'min-w-0 flex-1')}>
                 {s.name}
@@ -248,6 +276,10 @@ function SetMenu({
                   {s.items.map((i) => i.title).join(', ')}
                 </span>
               </button>
+              <Button variant="ghost" size="icon" className="size-7" onClick={() => setRenaming({ id: s.id, name: s.name })}>
+                <Pencil />
+                <span className="sr-only">Rename set {s.name}</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -259,7 +291,8 @@ function SetMenu({
                 <span className="sr-only">Delete set {s.name}</span>
               </Button>
             </div>
-          ))}
+            ),
+          )}
           <div className="my-1 border-t border-border" />
           {naming ? (
             <div className="flex items-center gap-2 p-1">

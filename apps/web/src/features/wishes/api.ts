@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   clientOccasion,
   detailsLinkIssued,
@@ -65,6 +66,21 @@ export function useDetailsStatus(projectId: string, enabled = true) {
     queryKey: ['client-details', 'project', projectId],
     queryFn: () => callApi(`/client-details/projects/${projectId}`, { responseSchema: projectDetailsStatus }),
     enabled,
+  })
+}
+
+/** Hide one of the client's events from the Shoots tab, or bring it back (0285). */
+export function useDismissDetailsEvent(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ event, undo = false }: { event: { name: string; date?: string | null | undefined }; undo?: boolean }) =>
+      callApi(`/client-details/projects/${projectId}/dismiss`, {
+        method: undo ? 'DELETE' : 'POST',
+        body: { name: event.name, date: event.date ?? null },
+        responseSchema: z.unknown(),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['client-details', 'project', projectId] }),
+    onError: (e: Error) => toast.error(e.message),
   })
 }
 

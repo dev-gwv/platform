@@ -195,3 +195,13 @@ export function waNumber(phone: string | null | undefined): string | null {
   if (d.length === 10) return `91${d}`
   return d.length >= 11 ? d : null
 }
+
+/**
+ * Why a record cannot be deleted, or null when it can. The API deletes only a
+ * record with no copy confirmed (0173 keeps the custody trail), so the menu
+ * says so up front instead of offering Delete and then refusing it.
+ */
+export function deleteBlock(r: { primary_status: string; backup_status: string }): string | null {
+  if (r.primary_status === 'pending' && (r.backup_status === 'pending' || r.backup_status === 'not_required')) return null
+  return 'Copies are confirmed; set them back to pending first'
+}
