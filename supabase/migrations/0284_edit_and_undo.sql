@@ -1,0 +1,3 @@
+-- 0284: whatever is made can be changed back (owner, 26 Oct): an invoice with
+-- money on it, a cancelled invoice, an approved payroll month, a salary marked
+-- paid. Claimed; the body follows.
