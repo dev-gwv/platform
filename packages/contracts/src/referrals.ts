@@ -47,6 +47,8 @@ export const referralCampaign = z.object({
   project_name: z.string().nullable().default(null),
   client_id: uuid.nullable().default(null),
   client_name: z.string().nullable().default(null),
+  /** The client's private link to see their referrals (0284). */
+  view_token: z.string().nullable().default(null),
   status: referralCampaignStatus,
   created_at: isoDateTime,
 })
@@ -177,3 +179,23 @@ export const submitReferralResponse = z.object({
   crm_lead_id: uuid.nullable().default(null),
 })
 export type SubmitReferralResponse = z.infer<typeof submitReferralResponse>
+
+/**
+ * Everyone a client has referred through their own link (owner, 26 Oct:
+ * "complete transparency"): the friend, their number, what was written, and
+ * where it stands. Only for a campaign made for one client's project.
+ */
+export const publicReferralRow = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  event_type: z.string().nullable(),
+  event_date: z.string().nullable(),
+  notes: z.string().nullable(),
+  referred_by: z.string().nullable(),
+  stage: z.enum(['received', 'in_touch', 'booked', 'not_taken']),
+  reward_given: z.boolean(),
+  created_at: z.string(),
+})
+export type PublicReferralRow = z.infer<typeof publicReferralRow>

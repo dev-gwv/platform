@@ -11,6 +11,7 @@ import {
   referralSubmissionList,
   submitReferralRequest,
   z,
+  publicReferralRow,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -40,7 +41,7 @@ export const referralsRouter = new Hono<AppEnv>()
         const campaigns = await sql`
           select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,
                  rc.reward_description, rc.reward_title, rc.project_id, p.name as project_name,
-                 rc.client_id, cl.name as client_name, rc.status, rc.created_at
+                 rc.client_id, cl.name as client_name, rc.view_token, rc.status, rc.created_at
             from referral_campaigns rc
             left join projects p on p.id = rc.project_id
             left join clients cl on cl.id = rc.client_id
@@ -308,6 +309,34 @@ publicReferralsRouter.get('/referrals/campaign/:slug', async (c) => {
       ? ((base['reward_description'] as string).split('\n')[0] ?? '').slice(0, 120)
       : null
   return c.json(publicReferralCampaign.parse({ ...base, ...extra, reward_title: rewardTitle }))
+})
+
+// The client's own list (owner, 26 Oct): who they referred and where each
+// stands, read with the campaign's private view token -- the link they forward
+// to friends carries only the slug, so friends never see the list.
+publicReferralsRouter.get('/referrals/campaign/:slug/referrals', async (c) => {
+  const slug = c.req.param('slug')
+  const view = c.req.query('view') ?? ''
+  if (!/^[a-f0-9]{16,64}$/.test(view)) fail(404, 'Not found.')
+  const rows = await attempt(c, 'referrals.public_list', () =>
+    withService(c.env, (sql) => sql`
+      select rs.id, rs.client_name as name, rs.client_phone as phone, rs.client_email as email,
+             rs.event_type, to_char(rs.event_date, 'YYYY-MM-DD') as event_date, rs.notes,
+             rs.referrer_name as referred_by,
+             case when rs.status in ('booked', 'converted', 'rewarded') then 'booked'
+                  when rs.status in ('rejected', 'duplicate') then 'not_taken'
+                  when rs.status = 'contacted' then 'in_touch'
+                  else 'received' end as stage,
+             (rs.reward_status = 'given' or rs.reward_granted) as reward_given,
+             rs.created_at
+        from referral_campaigns rc
+        join referral_submissions rs on rs.campaign_id = rc.id
+       where rc.slug = ${slug} and rc.view_token = ${view}
+       order by rs.created_at desc
+       limit 200`),
+  )
+  if (!rows) fail(400, 'We could not load your referrals.')
+  return c.json(publicReferralRow.array().parse(rows.map((r) => ({ ...r, created_at: new Date(r['created_at'] as string).toISOString() }))))
 })
 
 publicReferralsRouter.post('/referrals/submit', async (c) => {

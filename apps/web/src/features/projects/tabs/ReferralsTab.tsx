@@ -221,7 +221,10 @@ function ShareCard({
   const url = `${window.location.origin}/refer/${c.slug}`
   const reward = rewardText(c)
   const first = (clientName ?? '').split(' ')[0] || 'there'
-  const toClient = `Hi ${first}, thank you for choosing ${studio} for ${projectName}! If a friend or family member is planning their wedding, please share this link with them${reward ? ` — when they book with us, you get ${reward}` : ''}: ${url}`
+  // Their own link also lists everyone they referred and where each stands
+  // (owner, 26 Oct); the one they forward to friends does not.
+  const mine = c.view_token ? `${url}?view=${c.view_token}` : url
+  const toClient = `Hi ${first}, thank you for choosing ${studio} for ${projectName}! If a friend or family member is planning their wedding, please share this link with them${reward ? ` — when they book with us, you get ${reward}` : ''}: ${url}${c.view_token ? `\n\nSee everyone you have referred and how each is doing here: ${mine}` : ''}`
   const toFriends = `Planning a wedding? ${clientName ?? 'My family'} recommends ${studio}. Leave your details here and they will call you: ${url}`
   return (
     <Card>

@@ -22,6 +22,9 @@
 --    'date' (the prefix and the invoice's date, INV-20261026, then
 --    INV-20261026-2 for a second one that day) or 'manual' (the studio types
 --    every number; a blank one is refused). create_invoice copied from 0120.
+-- 7. referral_campaigns.view_token: the client's own private link to see
+--    everyone they referred and where each stands (owner, 26 Oct: "complete
+--    transparency"). The link they forward to friends never shows the list.
 --
 -- Safe to run twice: create or replace, same argument lists.
 
@@ -356,3 +359,9 @@ begin
   return query select v_id, v_number;
 end;
 $$;
+
+-- ── 7. the client's private view of their referrals ───────────────
+alter table referral_campaigns
+  add column if not exists view_token text default replace(gen_random_uuid()::text, '-', '');
+update referral_campaigns set view_token = replace(gen_random_uuid()::text, '-', '') where view_token is null;
+create unique index if not exists referral_campaigns_view_token_idx on referral_campaigns (view_token);
