@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlarmClock, Check, History, Pencil, X } from 'lucide-react'
+import { AlarmClock, Check, History, Pencil, RotateCcw, X } from 'lucide-react'
 import type { CrmActivity } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
@@ -44,6 +44,33 @@ export function FollowUpCard({ leadId, canEdit }: { leadId: string; canEdit: boo
   const [note, setNote] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [editAt, setEditAt] = useState('')
+  const [editType, setEditType] = useState<string | null>(null)
+  const [editPriority, setEditPriority] = useState<string | null>(null)
+  const [editNote, setEditNote] = useState('')
+
+  function startEdit(t: CrmActivity) {
+    setEditing(t.id)
+    setEditAt(toLocalInput(t.due_at))
+    setEditType(t.subject)
+    setEditPriority(t.priority)
+    setEditNote(t.body ?? '')
+  }
+
+  function saveEdit(t: CrmActivity) {
+    if (!editAt) return
+    update.mutate(
+      {
+        id: t.id,
+        patch: {
+          due_at: new Date(editAt).toISOString(),
+          subject: editType || 'Follow-up',
+          priority: editPriority || null,
+          body: editNote.trim() || null,
+        },
+      },
+      { onSuccess: () => setEditing(null) },
+    )
+  }
   const [showHistory, setShowHistory] = useState(false)
 
   const tasks = open.data ?? []
@@ -122,23 +149,40 @@ export function FollowUpCard({ leadId, canEdit }: { leadId: string; canEdit: boo
                 </div>
                 {t.body && <p className="mt-1 text-xs text-muted-foreground">{t.body}</p>}
                 {editing === t.id ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Input type="datetime-local" value={editAt} onChange={(e) => setEditAt(e.target.value)} className="h-8 w-52" />
-                    <Button
-                      size="sm"
-                      disabled={!editAt || update.isPending}
-                      onClick={() =>
-                        update.mutate(
-                          { id: t.id, patch: { due_at: new Date(editAt).toISOString() } },
-                          { onSuccess: () => setEditing(null) },
-                        )
-                      }
-                    >
-                      Save
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="datetime-local"
+                        aria-label="When"
+                        value={editAt}
+                        onChange={(e) => setEditAt(e.target.value)}
+                        className={cn('h-8 w-52', editAt ? 'border-tone-green/60' : 'border-tone-amber/60 bg-tone-amber-soft/30')}
+                      />
+                      <LookupChip category="follow_up_type" noun="type" value={editType} onChange={setEditType} clearable={false} aria-label="Follow-up type" />
+                      <LookupChip
+                        category="follow_up_priority"
+                        noun="priority"
+                        value={editPriority}
+                        onChange={setEditPriority}
+                        aria-label="Priority"
+                      />
+                    </div>
+                    <Input
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      placeholder="What is it for? (optional)"
+                      aria-label="Note"
+                      className="h-8"
+                      onKeyDown={(e) => e.key === 'Enter' && saveEdit(t)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" disabled={!editAt || update.isPending} onClick={() => saveEdit(t)}>
+                        Save
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   canEdit && (
@@ -155,12 +199,9 @@ export function FollowUpCard({ leadId, canEdit }: { leadId: string; canEdit: boo
                         size="sm"
                         variant="outline"
                         className="h-7"
-                        onClick={() => {
-                          setEditing(t.id)
-                          setEditAt(toLocalInput(t.due_at))
-                        }}
+                        onClick={() => startEdit(t)}
                       >
-                        <Pencil /> Reschedule
+                        <Pencil /> Change
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" onClick={() => remove.mutate(t.id)}>
                         <X /> Cancel
@@ -233,9 +274,23 @@ export function FollowUpCard({ leadId, canEdit }: { leadId: string; canEdit: boo
           {showHistory && (
             <ul className="mt-1 flex flex-col gap-1 text-xs text-muted-foreground">
               {done.map((t) => (
-                <li key={t.id}>
-                  ✓ {t.subject ?? 'Follow-up'} · done{' '}
-                  {t.done_at ? new Date(t.done_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                <li key={t.id} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    ✓ {t.subject ?? 'Follow-up'} · done{' '}
+                    {t.done_at ? new Date(t.done_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                  </span>
+                  {/* Marked done by mistake: it goes back on the list, and back on the call queue. */}
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[0.7rem]"
+                      disabled={update.isPending}
+                      onClick={() => update.mutate({ id: t.id, patch: { done: false } })}
+                    >
+                      <RotateCcw className="size-3" /> Reopen
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

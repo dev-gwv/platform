@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
-import { MessageCircle, NotebookPen, Phone, Pin } from 'lucide-react'
+import { MessageCircle, NotebookPen, Pencil, Phone, Pin, Trash2 } from 'lucide-react'
 import type { CrmActivity } from '@ipc/contracts'
 import { CALL_OUTCOMES } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { useActivities, useLogActivity } from '../api'
+import { RowMenu } from '@/shared/ui/row-menu'
+import { useConfirm } from '@/shared/ui/confirm'
+import { useAuth } from '@/shared/auth/AuthProvider'
+import { useCrmAccess } from '../access'
+import { useActivities, useDeleteActivity, useLogActivity, useUpdateActivity } from '../api'
+import { RowEditor } from '../Timeline'
 
 type Channel = 'note' | 'call' | 'whatsapp'
 
@@ -139,7 +144,21 @@ export function NoteComposer({ leadId, onSaved, autoFocus }: { leadId: string; o
   )
 }
 
-function ThreadItem({ a, n }: { a: CrmActivity; n: number }) {
+function ThreadItem({
+  a,
+  n,
+  canChange,
+  canRemove,
+  onEdit,
+  onRemove,
+}: {
+  a: CrmActivity
+  n: number
+  canChange: boolean
+  canRemove: boolean
+  onEdit: () => void
+  onRemove: () => void
+}) {
   const outcomeLabel = a.outcome ? (CALL_OUTCOMES.find((o) => o.key === a.outcome)?.label ?? a.outcome) : null
   const kind = a.type === 'note' ? 'Note' : a.type === 'whatsapp' ? 'WhatsApp' : a.type.charAt(0).toUpperCase() + a.type.slice(1)
   const pinned = a.meta['pinned'] === true
@@ -161,6 +180,16 @@ function ThreadItem({ a, n }: { a: CrmActivity; n: number }) {
           {kind}
           {outcomeLabel ? ` — ${outcomeLabel}` : ''}
         </span>
+        {(canChange || canRemove) && (
+          <RowMenu
+            label={`Change ${kind.toLowerCase()} #${n}`}
+            className="ml-auto h-6"
+            items={[
+              ...(canChange ? [{ label: a.type === 'call' ? 'Edit, or change how it went' : 'Edit', icon: <Pencil className="size-3.5" />, onSelect: onEdit }] : []),
+              ...(canRemove ? [{ label: 'Delete', icon: <Trash2 className="size-3.5" />, onSelect: onRemove, danger: true }] : []),
+            ]}
+          />
+        )}
       </p>
       {(a.body || a.subject) && <p className="mt-0.5 whitespace-pre-wrap text-sm">{a.body ?? a.subject}</p>}
     </li>
@@ -170,6 +199,25 @@ function ThreadItem({ a, n }: { a: CrmActivity; n: number }) {
 export function NotesThread({ leadId, canEdit }: { leadId: string; canEdit: boolean }) {
   const acts = useActivities({ leadId })
   const [all, setAll] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const update = useUpdateActivity()
+  const del = useDeleteActivity()
+  const confirm = useConfirm()
+  const { canDelete } = useCrmAccess()
+  const me = useAuth().session?.user_id ?? null
+
+  async function remove(a: CrmActivity) {
+    const yes = await confirm({
+      title: a.type === 'call' ? 'Delete this call?' : 'Delete this note?',
+      description:
+        a.type === 'call'
+          ? 'It leaves the lead’s history, and the call count is worked out again without it.'
+          : 'It leaves the lead’s history for everyone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (yes) del.mutate(a.id)
+  }
   const items = useMemo(() => {
     const rows = (acts.data ?? []).filter((a) => THREAD_TYPES.has(a.type))
     // Numbered oldest-first so #1 is the start of the conversation.
@@ -193,9 +241,37 @@ export function NotesThread({ leadId, canEdit }: { leadId: string; canEdit: bool
         <p className="mt-2 text-xs text-muted-foreground">No notes yet. The first one starts the thread.</p>
       ) : (
         <ul className="mt-3 flex flex-col gap-1.5">
-          {shown.map(({ a, n }) => (
-            <ThreadItem key={a.id} a={a} n={n} />
-          ))}
+          {shown.map(({ a, n }) =>
+            editing === a.id ? (
+              <RowEditor
+                key={a.id}
+                activity={a}
+                pending={update.isPending}
+                onCancel={() => setEditing(null)}
+                onSave={(patch, onSaved) =>
+                  update.mutate(
+                    { id: a.id, patch },
+                    {
+                      onSuccess: () => {
+                        onSaved()
+                        setEditing(null)
+                      },
+                    },
+                  )
+                }
+              />
+            ) : (
+              <ThreadItem
+                key={a.id}
+                a={a}
+                n={n}
+                canChange={canEdit && a.provider === 'manual'}
+                canRemove={canEdit || canDelete || (!!me && a.actor_id === me)}
+                onEdit={() => setEditing(a.id)}
+                onRemove={() => void remove(a)}
+              />
+            ),
+          )}
         </ul>
       )}
       {items.length > 3 && (

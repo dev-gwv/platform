@@ -279,6 +279,32 @@ export const crmSequencesRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  // Tapped Sent or Skip by mistake (0286): the message waits in Send now
+  // again. Only what a person marked -- never what went out by itself -- and
+  // a Sent tap also takes back the line it wrote on the lead (same moment).
+  .post('/sequences/sends/:id/undo', edit, async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'crm.sequence_send_undo', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [s] = await sql<{ status: string; lead_id: string; channel: string; sent_at: string | null }[]>`
+          select s.status, s.lead_id, s.channel, s.sent_at from crm_sequence_sends s
+           where s.id = ${id} and s.done_by is not null and s.status in ('sent', 'skipped')`
+        if (!s) return false
+        if (s.status === 'sent' && s.sent_at) {
+          await sql`
+            delete from crm_activities
+             where lead_id = ${s.lead_id} and type = ${s.channel} and direction = 'out'
+               and started_at = ${s.sent_at} and provider = 'manual'`
+        }
+        await sql`update crm_sequence_sends set status = 'manual', sent_at = null, error = null, done_by = null where id = ${id}`
+        return true
+      }),
+    )
+    if (rows === null) fail(400, 'We could not undo that.')
+    if (!rows) fail(404, 'That message was not marked by hand, so there is nothing to undo.')
+    return c.body(null, 204)
+  })
+
   // Where one lead is: its sequence and every message written for it.
   .get('/leads/:id/sequence', async (c) => {
     const leadId = uuidParam(c)

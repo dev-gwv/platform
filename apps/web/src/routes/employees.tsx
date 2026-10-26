@@ -24,6 +24,7 @@ import { SetupWelcome } from '@/features/onboarding/SetupWelcome'
 import { useMembers } from '@/features/allocation/api'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
+import { RemovedPeople } from '@/features/team/RemovedPeople'
 import { InvitationsPanel } from '@/features/team/InvitationsPanel'
 import { InviteDialog } from '@/features/team/InviteDialog'
 import { ManageAccessDialog } from '@/features/team/ManageAccessDialog'
@@ -440,6 +441,8 @@ function Directory({ onAdd }: { onAdd: () => void }) {
           if (!v) setAccessTarget(null)
         }}
       />
+
+      {canDelete && <RemovedPeople />}
 
       {powers.canCreate && <InvitationsPanel />}
     </>

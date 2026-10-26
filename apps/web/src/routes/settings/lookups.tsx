@@ -12,10 +12,15 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
+import { cn } from '@/shared/ui/cn'
+import { TONES, TONE_BG, toneVar, type ToneName } from '@/shared/ui/tones'
 import { useCustomLookups, useCreateCustomLookup, useUpdateCustomLookup, useDeleteCustomLookup } from '@/features/settings/api'
 
 const CATEGORIES = [
   { value: 'lead_source', label: 'Lead Sources' },
+  { value: 'lead_quality', label: 'Lead Quality' },
+  { value: 'follow_up_type', label: 'Follow-up Types' },
+  { value: 'follow_up_priority', label: 'Follow-up Priorities' },
   { value: 'enquiry_source', label: 'Enquiry Sources' },
   { value: 'enquiry_status', label: 'Enquiry Statuses' },
   { value: 'payment_type', label: 'Payment Types' },
@@ -25,6 +30,9 @@ const CATEGORIES = [
 
 const SEEDS: Record<string, string[]> = {
   lead_source: ['Instagram', 'Referral', 'Walk-in', 'Google', 'Facebook'],
+  lead_quality: ['hot', 'warm', 'cold'],
+  follow_up_type: ['Call', 'WhatsApp', 'Meeting', 'Site visit'],
+  follow_up_priority: ['High', 'Normal', 'Low'],
   enquiry_source: ['Instagram', 'Website', 'Referral', 'Walk-in'],
   enquiry_status: ['New', 'Contacted', 'Booked', 'Lost'],
   payment_type: ['UPI', 'Cash', 'Bank Transfer', 'Card'],
@@ -59,7 +67,7 @@ function Lookups() {
   const update = useUpdateCustomLookup()
   const del = useDeleteCustomLookup()
   const confirm = useConfirm()
-  const [form, setForm] = useState<{ id: string | null; label: string; description: string; color: string; sort: number; active: boolean } | null>(null)
+  const [form, setForm] = useState<{ id: string | null; label: string; color: ToneName | null; sort: number; active: boolean } | null>(null)
 
   const rows = useMemo(() => {
     const items = [...(q.data ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.value.localeCompare(b.value))
@@ -108,9 +116,12 @@ function Lookups() {
     }
     try {
       if (form.id) {
-        await update.mutateAsync({ id: form.id, patch: { value: form.label.trim(), sort_order: form.sort, is_active: form.active } })
+        await update.mutateAsync({
+          id: form.id,
+          patch: { value: form.label.trim(), sort_order: form.sort, is_active: form.active, color: form.color },
+        })
       } else {
-        await create.mutateAsync({ category, value: form.label.trim(), sort_order: form.sort })
+        await create.mutateAsync({ category, value: form.label.trim(), sort_order: form.sort, color: form.color })
       }
       setForm(null)
     } catch (e) {
@@ -147,7 +158,7 @@ function Lookups() {
             <EmptyState title="No values yet" description="Seed the defaults or add your first value." />
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>
-              <Button size="sm" onClick={() => setForm({ id: null, label: '', description: '', color: '', sort: rows.length, active: true })}>
+              <Button size="sm" onClick={() => setForm({ id: null, label: '', color: null, sort: rows.length, active: true })}>
                 <Plus /> Add value
               </Button>
             </div>
@@ -157,14 +168,14 @@ function Lookups() {
         <Card>
           <CardContent className="p-4">
             <div className="mb-3 flex justify-end">
-              <Button size="sm" onClick={() => setForm({ id: null, label: '', description: '', color: '', sort: rows.length, active: true })}>
+              <Button size="sm" onClick={() => setForm({ id: null, label: '', color: null, sort: rows.length, active: true })}>
                 <Plus /> Add
               </Button>
             </div>
             <ul className="flex flex-col gap-2">
               {rows.map((r) => (
                 <li key={r.id} className={`flex items-center gap-3 rounded-lg border border-border p-3 ${r.is_active ? '' : 'opacity-60'}`}>
-                  <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: 'var(--muted)' }} aria-hidden />
+                  <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: r.color ? toneVar(r.color as ToneName) : 'var(--muted)' }} aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium">{r.value}</p>
@@ -172,7 +183,7 @@ function Lookups() {
                     </div>
                     <p className="truncate font-mono text-xs text-muted-foreground">{slugify(r.value)} · sort {r.sort_order}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setForm({ id: r.id, label: r.value, description: '', color: '', sort: r.sort_order, active: r.is_active })}>
+                  <Button variant="ghost" size="sm" onClick={() => setForm({ id: r.id, label: r.value, color: (TONES as readonly string[]).includes(r.color ?? '') ? (r.color as ToneName) : null, sort: r.sort_order, active: r.is_active })}>
                     <Pencil />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => toggleActive(r.id, r.is_active, r.value)} title={r.is_active ? 'Deactivate (soft-delete)' : 'Activate'}>
@@ -186,7 +197,7 @@ function Lookups() {
             </ul>
             <p className="mt-3 text-xs text-muted-foreground">
               Deactivation is the safe default — values stay on old records but disappear from new
-              pickers. Description &amp; color are captured on the edit form as display hints.
+              pickers.
             </p>
           </CardContent>
         </Card>
@@ -204,14 +215,27 @@ function Lookups() {
                 <Label>Code (auto)</Label>
                 <Input value={slugify(form.label) || ''} disabled placeholder="walk_in" />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Description (optional display hint)</Label>
-                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Where this value is used" />
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Color (optional display hint)</Label>
-                  <Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#4F46E5" />
+                  <Label>Colour</Label>
+                  <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Colour">
+                    {TONES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.color === t}
+                        aria-label={t}
+                        title={t}
+                        onClick={() => setForm({ ...form, color: form.color === t ? null : t })}
+                        className={cn(
+                          'size-6 rounded-full border-2',
+                          TONE_BG[t],
+                          form.color === t ? 'border-foreground ring-2 ring-ring/40' : 'border-card',
+                        )}
+                      />
+                    ))}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Sort order</Label>

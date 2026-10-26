@@ -36,6 +36,8 @@ export function SequencesSection() {
   const starters = useAddStarters()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
+  // Delete is its own grant; the API refuses it without crm.delete.
+  const canDelete = access.hasAction('crm', 'delete')
   const auto = useHasFeature('sequences_auto')
   const [editing, setEditing] = useState<Sequence | 'new' | null>(null)
   const list = q.data ?? []
@@ -91,7 +93,7 @@ export function SequencesSection() {
       ) : (
         <ul className="flex flex-col gap-2">
           {list.map((s) => (
-            <SequenceRow key={s.id} s={s} canEdit={canEdit} onEdit={() => setEditing(s)} />
+            <SequenceRow key={s.id} s={s} canEdit={canEdit} canDelete={canDelete} onEdit={() => setEditing(s)} />
           ))}
         </ul>
       )}
@@ -107,7 +109,7 @@ export function SequencesSection() {
   )
 }
 
-function SequenceRow({ s, canEdit, onEdit }: { s: Sequence; canEdit: boolean; onEdit: () => void }) {
+function SequenceRow({ s, canEdit, canDelete, onEdit }: { s: Sequence; canEdit: boolean; canDelete: boolean; onEdit: () => void }) {
   const patch = usePatchSequence()
   const del = useDeleteSequence()
   const confirm = useConfirm()
@@ -159,9 +161,11 @@ function SequenceRow({ s, canEdit, onEdit }: { s: Sequence; canEdit: boolean; on
             <Button size="icon" variant="ghost" onClick={onEdit} aria-label={`Edit ${s.name}`}>
               <Pencil />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => void onDelete()} aria-label={`Delete ${s.name}`}>
-              <Trash2 />
-            </Button>
+            {canDelete && (
+              <Button size="icon" variant="ghost" onClick={() => void onDelete()} aria-label={`Delete ${s.name}`}>
+                <Trash2 />
+              </Button>
+            )}
           </div>
         )}
       </div>

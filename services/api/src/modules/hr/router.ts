@@ -42,23 +42,12 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { rpcJson } from '../../lib/rpc'
 import { audit } from '../../lib/audit'
+import { explain } from './shared'
+import { hrChangeRoutes } from './routes-changes'
 
 const list = attendanceRecord.array()
 const idOnly = z.object({ id: z.string() })
 const DATE = /^\d{4}-\d{2}-\d{2}$/
-
-/**
- * The database's own words for a refused request ("you already have leave on
- * some of these days") as a sentence -- they are written for people.
- */
-function explain(code: string, err: unknown): undefined {
-  const msg = String((err as { message?: string })?.message ?? '')
-  const sentence = msg ? `${msg[0]!.toUpperCase()}${msg.slice(1)}.` : ''
-  if (code === 'P0002') fail(404, sentence || 'Not found.')
-  if (code === '22023' && msg) fail(422, sentence)
-  if (code === '42501' && msg && msg !== 'not allowed') fail(403, sentence)
-  return undefined
-}
 
 /** The RPCs signal their own refusals as P0001 with a leading keyword. */
 const rpcReason = (err: unknown): string => String((err as { message?: string })?.message ?? '')
@@ -89,6 +78,10 @@ async function readSettings(c: Context<AppEnv>) {
 
 export const hrRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+
+  // Changing things back (0286): a leave decision reopened, a waiting
+  // request edited, an attendance fix taken back, a holiday moved.
+  .route('/', hrChangeRoutes)
 
   // ── Leave ────────────────────────────────────────────────────
   // ?scope=team is for whoever decides (RLS returns everyone's to an owner,
@@ -689,7 +682,7 @@ export const hrRouter = new Hono<AppEnv>()
       'hr.attendance_correct',
       () =>
         withUser(c.env, auth.userId, async (sql) => {
-          const rows = await sql<{ id: string }[]>`
+          const rows = await sql<{ id: string | null }[]>`
             select set_attendance_manual(
               p_user_id => ${userId},
               p_date => ${date}::date,
@@ -705,12 +698,13 @@ export const hrRouter = new Hono<AppEnv>()
     if (row === 'missing') fail(404, 'We could not find that team member.')
     if (!row) fail(400, 'We could not save the correction.')
     await audit(c, {
-      action: 'attendance.correct',
+      action: v.status === 'none' ? 'attendance.clear' : 'attendance.correct',
       entityType: 'attendance',
-      entityId: row.id,
+      entityId: row.id ?? undefined,
       after: { user_id: userId, date, ...v },
     })
-    return c.json(idOnly.parse(row))
+    // 'none' clears the day: there is no row left to name.
+    return c.json({ id: row.id })
   })
 
   .post('/check-out', async (c) => {

@@ -8,7 +8,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useDuplicateGroups, useMerge, useResolveDuplicates, useUnmerge } from '../api'
+import { useDismissedDuplicates, useDuplicateGroups, useMerge, useResolveDuplicates, useUndoDismissal, useUnmerge } from '../api'
 import { STAGE_LABEL } from '../leads'
 import { STAGE_TONE, prettyDate } from './shared'
 
@@ -28,6 +28,9 @@ export function DuplicatesTab({ archivedLeads, allLeads }: { archivedLeads: read
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
   const [pick, setPick] = useState<Record<string, string>>({})
+  const [showSetAside, setShowSetAside] = useState(false)
+  const setAside = useDismissedDuplicates(showSetAside)
+  const undoSetAside = useUndoDismissal()
   const busy = merge.isPending || resolve.isPending
 
   // Survivors with something merged into them, for the undo list.
@@ -55,7 +58,8 @@ export function DuplicatesTab({ archivedLeads, allLeads }: { archivedLeads: read
    * genuinely different people, so the group stops being offered.
    */
   async function doResolve(groupKey: string, ids: string[], action: 'archive' | 'keep_separate') {
-    const survivor = pick[groupKey]
+    // "Not duplicates" is about the whole group, so it needs no pick.
+    const survivor = pick[groupKey] ?? (action === 'keep_separate' ? ids[0] : undefined)
     if (!survivor) return
     const dups = ids.filter((x) => x !== survivor)
     const yes = await confirm({
@@ -66,7 +70,7 @@ export function DuplicatesTab({ archivedLeads, allLeads }: { archivedLeads: read
       description:
         action === 'archive'
           ? 'They are archived without their notes moving onto the lead you picked.'
-          : 'They stay as they are and this group stops being flagged as a duplicate.',
+          : 'They stay as they are and this group stops being flagged as a duplicate. You can undo it under “Set aside as not duplicates”.',
       confirmLabel: action === 'archive' ? 'Archive' : 'Keep separate',
     })
     if (yes) resolve.mutate({ survivor_id: survivor, duplicate_ids: dups, action })
@@ -128,7 +132,7 @@ export function DuplicatesTab({ archivedLeads, allLeads }: { archivedLeads: read
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!pick[key] || busy}
+                    disabled={busy}
                     onClick={() => void doResolve(key, g.lead_ids, 'keep_separate')}
                   >
                     <Split /> Not duplicates
@@ -165,6 +169,53 @@ export function DuplicatesTab({ archivedLeads, allLeads }: { archivedLeads: read
           </CardContent>
         </Card>
       )}
+
+      {/* "Not duplicates" said by mistake: put the pair back on the list (0286). */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setShowSetAside((v) => !v)}
+          className="w-fit text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          {showSetAside ? 'Hide the pairs set aside' : 'Set aside as not duplicates'}
+        </button>
+        {showSetAside &&
+          (setAside.isLoading ? (
+            <SkeletonCards count={1} />
+          ) : (setAside.data ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nothing set aside.</p>
+          ) : (
+            <Card>
+              <CardContent className="p-4">
+                <ul className="divide-y divide-border">
+                  {(setAside.data ?? []).map((d) => (
+                    <li key={`${d.lead_a}-${d.lead_b}`} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium">
+                          {d.name_a} and {d.name_b}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Same {d.matched_on} · set aside {prettyDate(d.created_at)}
+                          {d.dismissed_by ? ` by ${d.dismissed_by}` : ''}
+                        </span>
+                      </span>
+                      {canEdit && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={undoSetAside.isPending}
+                          onClick={() => undoSetAside.mutate({ lead_a: d.lead_a, lead_b: d.lead_b })}
+                        >
+                          <Undo2 /> Undo
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+      </div>
     </div>
   )
 }

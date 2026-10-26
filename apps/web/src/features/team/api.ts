@@ -16,6 +16,7 @@ import {
   invitation,
   invitationLink,
   monthlySalaryList,
+  removedMember,
   updateMemberRequest,
   updateMonthlySalaryRequest,
   upsertEmployeeRoleRequest,
@@ -330,6 +331,34 @@ export function useSetSignIn() {
       body: setMemberSignInRequest.parse(input.body),
       responseSchema: setMemberSignInResponse,
     }),
+  )
+}
+
+/** Sign-in off: they stay on the team but cannot sign in, and are signed out now (0286). */
+export function useTurnOffSignIn() {
+  return useTeamMutation(
+    (input: { userId: string; name: string }) =>
+      callApi(`/team/members/${input.userId}/sign-in/off`, { method: 'POST', responseSchema: z.object({ ok: z.boolean() }) }),
+    (_out, input) => `${input.name.split(' ')[0] || input.name} can no longer sign in. Set a password again to turn it back on.`,
+  )
+}
+
+/** People removed from the team, who can be put back (0286). */
+export function useRemovedMembers(enabled: boolean) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['team', 'removed'],
+    queryFn: () => callApi('/team/removed-members', { responseSchema: removedMember.array() }),
+    enabled: !!session && enabled,
+    staleTime: 30_000,
+  })
+}
+
+export function useRestoreMember() {
+  return useTeamMutation(
+    (input: { userId: string; name: string }) =>
+      callApi(`/team/members/${input.userId}/restore`, { method: 'POST', responseSchema: z.object({ ok: z.boolean() }) }),
+    (_out, input) => `${input.name} is back on the team, switched off. Turn them on when they are working again.`,
   )
 }
 

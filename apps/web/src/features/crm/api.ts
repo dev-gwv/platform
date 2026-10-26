@@ -39,6 +39,7 @@ import {
   csvImportCommitResponse,
   csvImportPreviewResponse,
   distributionRule,
+  duplicateDismissal,
   duplicateGroup,
   idResponse,
   lostReason,
@@ -157,8 +158,13 @@ export function useDuplicateGroups() {
   return useCrmQuery(['duplicates'], () => callApi('/crm/duplicates', { responseSchema: duplicateGroup.array() }), 30_000)
 }
 
-export function useTemplates() {
-  return useCrmQuery(['templates'], () => callApi('/crm/templates', { responseSchema: crmTemplate.array() }), 60_000)
+/** The live templates; with `withArchived`, the archived ones too (0286: so they can be restored). */
+export function useTemplates(withArchived = false) {
+  return useCrmQuery(
+    ['templates', withArchived ? 'all' : 'live'],
+    () => callApi(`/crm/templates${withArchived ? '?include_inactive=1' : ''}`, { responseSchema: crmTemplate.array() }),
+    60_000,
+  )
 }
 
 export function useCrmStats(range: CrmStatsQuery) {
@@ -883,6 +889,44 @@ export function useSetQuoteOutcome() {
     ({ id, ...body }: SetQuoteOutcomeRequest & { id: string }) =>
       callApi(`/crm/quotes/${id}/outcome`, { method: 'POST', body, responseSchema: crmQuoteStatusResponse }),
     (r) => (r.status === 'sent' ? 'Quote reopened' : `Quote marked ${r.status}`),
+  )
+}
+
+/** A sent, expired or declined quote copied into a new draft with the next number (0286). */
+export function useReviseQuote() {
+  return useCrmMutation(
+    (id: string) => callApi(`/crm/quotes/${id}/revise`, { method: 'POST', responseSchema: crmQuote }),
+    (q) => `Draft ${q.quote_number} made from it — change it and send it`,
+  )
+}
+
+/** Booked by mistake: the lead goes back to the first open stage; the project stays (0286). */
+export function useUnbookLead() {
+  const qc = useQueryClient()
+  return useCrmMutation(
+    (leadId: string) => callApi(`/crm/leads/${leadId}/unbook`, { method: 'POST', responseSchema: noContent }).then((r) => {
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+      return r
+    }),
+    'Booking undone — the lead is open again',
+  )
+}
+
+/** Pairs set aside as "not duplicates" (0286). */
+export function useDismissedDuplicates(enabled: boolean) {
+  return useCrmQuery(
+    ['duplicates', 'dismissed'],
+    () => callApi('/crm/duplicates/dismissed', { responseSchema: duplicateDismissal.array() }),
+    15_000,
+    enabled,
+  )
+}
+
+export function useUndoDismissal() {
+  return useCrmMutation(
+    (body: { lead_a: string; lead_b: string }) =>
+      callApi('/crm/duplicates/dismissed/undo', { method: 'POST', body, responseSchema: noContent }),
+    'They show as possible duplicates again',
   )
 }
 

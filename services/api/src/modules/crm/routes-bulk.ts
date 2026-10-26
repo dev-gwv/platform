@@ -6,11 +6,13 @@ import {
   bulkUndoResponse,
   eraseLeadsRequest,
   eraseLeadsResponse,
+  duplicateDismissal,
   duplicateGroup,
   mergeLeadsRequest,
   mergeLeadsResponse,
   resolveDuplicateRequest,
   resolveDuplicateResponse,
+  undoDismissalRequest,
   unmergeLeadsRequest,
   unmergeLeadsResponse,
 } from '@ipc/contracts'
@@ -87,6 +89,29 @@ export const crmBulkRoutes = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not load duplicates.')
     return c.json(duplicateGroup.array().parse(rows))
+  })
+
+  // The pairs set aside as "not duplicates" (0286), so they can be put back.
+  .get('/duplicates/dismissed', async (c) => {
+    const rows = await attempt(c, 'crm.duplicates_dismissed', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from crm_duplicate_dismissed()`),
+    )
+    if (!rows) fail(400, 'We could not load the pairs you set aside.')
+    return c.json(duplicateDismissal.array().parse(rows))
+  })
+
+  .post('/duplicates/dismissed/undo', edit, async (c) => {
+    const parsed = undoDismissalRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick the pair to put back.')
+    const { lead_a, lead_b } = parsed.data
+    const rows = await attempt(c, 'crm.duplicates_undo', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ ok: boolean }[]>`
+        select crm_undo_duplicate_dismissal(${lead_a}, ${lead_b}) as ok`),
+    )
+    if (!rows) fail(400, 'We could not put that pair back.')
+    if (!rows[0]?.ok) fail(404, 'That pair was not set aside.')
+    await audit(c, { action: 'lead.duplicates_undo', entityType: 'crm_lead', entityId: lead_a, after: { lead_b } })
+    return c.body(null, 204)
   })
 
   .post('/leads/merge', edit, async (c) => {

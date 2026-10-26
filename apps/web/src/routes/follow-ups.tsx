@@ -16,7 +16,7 @@ import { LeadDrawer } from '@/features/crm/LeadDrawer'
 import { GettingStarted } from '@/features/crm/GettingStarted'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
 import { inView, openingView, viewName } from '@/features/crm/builtin-views'
-import { toLeadQuery } from '@/features/crm/views'
+import { toLeadQuery, toSavedQuery } from '@/features/crm/views'
 import { EMPTY_QUERY, applyQuery, countsFor, isOpen, isUncontacted, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
@@ -93,6 +93,7 @@ function ToMyLeads() {
 function Crm() {
   const { search } = useLocation()
   const navigate = useNavigate()
+  const { session } = useAuth()
   const [view, setView] = useState<ViewChoice | null>(null)
   const [query, setQuery] = useState<LeadQuery>(EMPTY_QUERY)
   const [text, setText] = useState('')
@@ -281,7 +282,15 @@ function Crm() {
             { value: 'pipeline', label: 'Pipeline', icon: KanbanSquare },
           ]}
         />
-        <ViewPicker leads={allOpen} now={now} value={current} onChange={setView} saved={saved} label={label} />
+        <ViewPicker
+          leads={allOpen}
+          now={now}
+          value={current}
+          onChange={setView}
+          saved={saved}
+          label={label}
+          manage={{ me: session?.user_id ?? null, isOwner: !!session?.is_owner, current: toSavedQuery(query) }}
+        />
         {/* Who nobody has rung yet, counted the moment a lead lands. */}
         {notContacted > 0 && !(current.kind === 'builtin' && current.key === 'uncontacted') && (
           <button

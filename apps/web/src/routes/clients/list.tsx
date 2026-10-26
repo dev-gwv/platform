@@ -14,6 +14,7 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { cn } from '@/shared/ui/cn'
 import { useClient, useClients, useDeleteClient } from '@/features/clients/api'
+import { useAccess } from '@/shared/auth/useAccess'
 import { ClientFormDialog } from '@/features/clients/ClientFormDialog'
 import { AddMorePrompt, useFromSetup } from '@/features/onboarding/setup-flow'
 import { nextStep } from '@/features/onboarding/journey'
@@ -88,6 +89,10 @@ function ClientsList() {
   })
   const del = useDeleteClient()
   const confirm = useConfirm()
+  // Only what the API would allow: Edit and Delete each need their own grant.
+  const access = useAccess()
+  const canEdit = access.hasAction('clients', 'edit')
+  const canDelete = access.hasAction('clients', 'delete')
   const isMobile = useIsMobile()
 
   const rows = useMemo(() => (data && !Array.isArray(data) ? data.items : []), [data])
@@ -243,10 +248,12 @@ function ClientsList() {
                     <Button variant="outline" size="icon" aria-label={`View ${c.name}`} onClick={() => setViewing(c)}>
                       <Eye />
                     </Button>
-                    <ClientFormDialog client={c} />
-                    <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
-                      <Trash2 />
-                    </Button>
+                    {canEdit && <ClientFormDialog client={c} />}
+                    {canDelete && (
+                      <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
+                        <Trash2 />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -297,10 +304,12 @@ function ClientsList() {
                         <Button variant="outline" size="icon" aria-label={`View ${c.name}`} onClick={() => setViewing(c)}>
                           <Eye />
                         </Button>
-                        <ClientFormDialog client={c} />
-                        <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
-                          <Trash2 />
-                        </Button>
+                        {canEdit && <ClientFormDialog client={c} />}
+                        {canDelete && (
+                          <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
+                            <Trash2 />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

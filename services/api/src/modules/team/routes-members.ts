@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import {
   addMemberRequest,
   addMemberResponse,
+  removedMember,
   setMemberSignInRequest,
   setMemberSignInResponse,
   updateMemberRequest,
@@ -15,7 +16,8 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { hashPassword } from '../../lib/auth-token'
 import { sendPasswordResetEmail } from '../../lib/email'
-import { duplicateCode, PAY_KEYS, teamGate, mayGrant, setsPay, mayTouchPay, guardTarget, asCaller } from './shared'
+import { mayManageMember } from '@ipc/permissions'
+import { duplicateCode, PAY_KEYS, teamGate, mayGrant, setsPay, mayTouchPay, guardTarget, asCaller, actorOf } from './shared'
 
 export const memberRoutes = new Hono<AppEnv>()
   // ── Members ─────────────────────────────────────────────────
@@ -398,7 +400,7 @@ export const memberRoutes = new Hono<AppEnv>()
                set email = ${email}, encrypted_password = ${pwHash}, password_changed_at = now(),
                    email_verified = true, email_verified_at = coalesce(email_verified_at, now())
              where id = ${m.identity}`
-          await sql`update users set email = ${email}, login_enabled = true where user_id = ${targetId}`
+          await sql`update users set email = ${email}, login_enabled = true, sign_in_off = false where user_id = ${targetId}`
           // Bumps password_version and revokes every refresh family: whoever
           // was signed in as them is signed out.
           await sql`select revoke_all_sessions(${m.identity})`
@@ -425,4 +427,86 @@ export const memberRoutes = new Hono<AppEnv>()
       after: { email: done.email, email_changed: done.changedEmail },
     })
     return c.json(setMemberSignInResponse.parse({ email: done.email }))
+  })
+
+  // Turn a login off (0286): the person stays on the team -- bookable, paid,
+  // on every past shoot -- but cannot sign in to this studio, and is signed
+  // out of it now. Setting their sign-in again turns it back on.
+  .post('/members/:id/sign-in/off', teamGate('edit'), async (c) => {
+    const auth = c.get('auth')
+    if (!auth.isOwner && auth.role !== 'admin' && auth.role !== 'super_admin') {
+      fail(403, 'Only the owner or an admin can turn someone\'s sign-in off.')
+    }
+    const targetId = uuidParam(c)
+    if (targetId === auth.userId) fail(409, 'You cannot turn off your own sign-in.')
+    await guardTarget(c, targetId, 'You cannot turn off your own sign-in.')
+    const done = await attempt(c, 'team.sign_in_off', () =>
+      withService(c.env, async (sql) => {
+        const [m] = await sql<{ is_owner: boolean }[]>`
+          select (co.owner_user_id = u.user_id) as is_owner
+            from users u join companies co on co.id = u.company_id
+           where u.user_id = ${targetId} and u.company_id = ${auth.companyId} and u.deleted_at is null`
+        if (!m) return 'missing' as const
+        if (m.is_owner) return 'owner' as const
+        await sql`update users set sign_in_off = true, login_enabled = false where user_id = ${targetId}`
+        await sql`select revoke_profile_sessions(${targetId})`
+        return 'ok' as const
+      }),
+    )
+    if (done === 'missing') fail(404, 'We could not find that team member.')
+    if (done === 'owner') fail(403, 'The owner\'s sign-in cannot be turned off.')
+    if (!done) fail(400, 'We could not turn the sign-in off. Please try again.')
+    await audit(c, { action: 'member.sign_in_off', entityType: 'user', entityId: targetId })
+    return c.json({ ok: true })
+  })
+
+  // People removed from the team, newest first, so one removed by mistake
+  // can be put back (0286).
+  .get('/removed-members', teamGate('delete'), async (c) => {
+    const rows = await attempt(c, 'team.removed_list', () =>
+      withService(c.env, (sql) => sql`
+        select u.user_id, u.name, u.email, u.role::text as role, u.deleted_at as removed_at, b.name as removed_by_name
+          from users u
+          left join users b on b.user_id = u.deleted_by
+         where u.company_id = ${c.get('auth').companyId} and u.deleted_at is not null
+         order by u.deleted_at desc
+         limit 200`),
+    )
+    if (!rows) fail(400, 'We could not load the people removed.')
+    return c.json(removedMember.array().parse(rows))
+  })
+
+  // Put a removed person back (0286). They come back switched off, so nothing
+  // they could do starts again until someone turns them on.
+  .post('/members/:id/restore', teamGate('delete'), async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const done = await attempt(c, 'team.member_restore', () =>
+      withService(c.env, async (sql) => {
+        const [m] = await sql<{ role: string; is_owner: boolean; email: string | null }[]>`
+          select u.role::text as role, (co.owner_user_id = u.user_id) as is_owner, lower(u.email) as email
+            from users u join companies co on co.id = u.company_id
+           where u.user_id = ${id} and u.company_id = ${auth.companyId} and u.deleted_at is not null`
+        if (!m) return 'missing' as const
+        if (!auth.isOwner && !mayManageMember(actorOf(c), { user_id: id, role: m.role, is_owner: m.is_owner })) return 'denied' as const
+        if (m.email) {
+          const [taken] = await sql<{ one: number }[]>`
+            select 1 as one from users
+             where company_id = ${auth.companyId} and lower(email) = ${m.email} and user_id <> ${id} and deleted_at is null
+             limit 1`
+          if (taken) return 'taken' as const
+        }
+        await sql`
+          update users set deleted_at = null, deleted_by = null, status = 'inactive'
+           where user_id = ${id} and company_id = ${auth.companyId}`
+        return 'ok' as const
+      }),
+      { onCode: duplicateCode },
+    )
+    if (done === 'missing') fail(404, 'We could not find that person among those removed.')
+    if (done === 'denied') fail(403, 'Only the owner or someone above them can put this person back.')
+    if (done === 'taken' || done === 'duplicate') fail(409, 'Someone on your team already uses their email. Change that first.')
+    if (!done) fail(400, 'We could not put them back. Please try again.')
+    await audit(c, { action: 'member.restore', entityType: 'user', entityId: id })
+    return c.json({ ok: true })
   })

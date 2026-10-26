@@ -250,6 +250,12 @@ export const crmLeadRoutes = new Hono<AppEnv>()
         const [current] = await sql<{ status: string; last_contacted_at: string | null }[]>`
           select status, last_contacted_at from crm_leads where id = ${id}`
         if (!current) return 'missing' as const
+        // A partner's credit only ever goes to one of this studio's partners.
+        if (patch.partner_id) {
+          const [mine] = await sql<{ id: string }[]>`
+            select id from enquiry_partners where id = ${patch.partner_id} and company_id = get_current_company_id()`
+          if (!mine) return 'no_partner' as const
+        }
 
         const stamps: Record<string, string | null> = {}
         if (patch.status && patch.status !== 'new' && !current.last_contacted_at) {
@@ -270,6 +276,7 @@ export const crmLeadRoutes = new Hono<AppEnv>()
     )
     if (result === 'rule') fail(422, 'Tell us why it was lost (3+ chars).')
     if (result === 'missing') fail(404, 'That lead was not found.')
+    if (result === 'no_partner') fail(422, 'Pick one of your own partners.')
     if (!result) fail(400, 'We could not update the lead.')
     // Money, reason and notes are material to the story; follow-up shuffles
     // already live in the events trail, so they stay out of the audit log.
@@ -280,7 +287,11 @@ export const crmLeadRoutes = new Hono<AppEnv>()
       patch.lost_reason !== undefined ||
       patch.deal_value !== undefined ||
       patch.probability !== undefined ||
-      patch.notes !== undefined
+      patch.notes !== undefined ||
+      patch.partner_id !== undefined ||
+      patch.name !== undefined ||
+      patch.phone !== undefined ||
+      patch.email !== undefined
     ) {
       await audit(c, { action: 'lead.update', entityType: 'crm_lead', entityId: id, before: { status: result.from }, after: patch })
     }
