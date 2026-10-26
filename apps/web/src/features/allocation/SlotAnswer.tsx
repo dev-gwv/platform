@@ -59,14 +59,28 @@ export function SlotAnswer({ slot }: { slot: TeamSlot }) {
   const respond = useSlotAction<{ response: 'confirmed' | 'declined'; reason?: string }>((id) => `/allocation/${id}/respond`, 'Thanks — your answer is saved')
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState('')
+  // An answer given is not final: plans change, so it can be changed until the shoot ends.
+  const [changing, setChanging] = useState(false)
   if (slot.status !== 'booked' || new Date(slot.end_at).getTime() < Date.now()) return null
 
   if (slot.arrived_at) return <StatusBadge tone="success">Reached {time.format(new Date(slot.arrived_at))}</StatusBadge>
 
   if (canArrive(slot) && slot.response !== 'declined') return <ArrivedButton slotId={slot.id} className="h-7" />
 
-  if (slot.response === 'declined') return <StatusBadge tone="danger">You declined</StatusBadge>
-  if (slot.response === 'confirmed') return <StatusBadge tone="success">Confirmed</StatusBadge>
+  if (!changing && (slot.response === 'declined' || slot.response === 'confirmed')) {
+    return (
+      <span className="flex items-center gap-2">
+        {slot.response === 'declined' ? (
+          <StatusBadge tone="danger">You declined</StatusBadge>
+        ) : (
+          <StatusBadge tone="success">Confirmed</StatusBadge>
+        )}
+        <Button size="sm" variant="outline" className="h-7" onClick={() => setChanging(true)}>
+          Change answer
+        </Button>
+      </span>
+    )
+  }
 
   if (declining) {
     return (
@@ -83,7 +97,17 @@ export function SlotAnswer({ slot }: { slot: TeamSlot }) {
           variant="destructive"
           className="h-8"
           disabled={reason.trim().length < 3 || respond.isPending}
-          onClick={() => respond.mutate({ id: slot.id, body: { response: 'declined', reason: reason.trim() } }, { onSuccess: () => setDeclining(false) })}
+          onClick={() =>
+            respond.mutate(
+              { id: slot.id, body: { response: 'declined', reason: reason.trim() } },
+              {
+                onSuccess: () => {
+                  setDeclining(false)
+                  setChanging(false)
+                },
+              },
+            )
+          }
         >
           Send
         </Button>
@@ -96,12 +120,26 @@ export function SlotAnswer({ slot }: { slot: TeamSlot }) {
 
   return (
     <span className="flex items-center gap-2">
-      <Button size="sm" className="h-7" disabled={respond.isPending} onClick={() => respond.mutate({ id: slot.id, body: { response: 'confirmed' } })}>
-        <Check /> Confirm
-      </Button>
-      <Button size="sm" variant="outline" className="h-7 hover:border-destructive hover:text-destructive" onClick={() => setDeclining(true)}>
-        <X /> Can't make it
-      </Button>
+      {slot.response !== 'confirmed' && (
+        <Button
+          size="sm"
+          className="h-7"
+          disabled={respond.isPending}
+          onClick={() => respond.mutate({ id: slot.id, body: { response: 'confirmed' } }, { onSuccess: () => setChanging(false) })}
+        >
+          <Check /> Confirm
+        </Button>
+      )}
+      {slot.response !== 'declined' && (
+        <Button size="sm" variant="outline" className="h-7 hover:border-destructive hover:text-destructive" onClick={() => setDeclining(true)}>
+          <X /> Can't make it
+        </Button>
+      )}
+      {changing && (
+        <Button size="sm" variant="ghost" className="h-7" onClick={() => setChanging(false)}>
+          Keep my answer
+        </Button>
+      )}
     </span>
   )
 }

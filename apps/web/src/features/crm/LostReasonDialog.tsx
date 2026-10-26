@@ -22,8 +22,11 @@ export function LostReasonDialog({
   onCancel,
   onConfirm,
   pending = false,
+  initial = null,
 }: {
   open: boolean
+  /** The reason already on the deal, when it is being corrected rather than given. */
+  initial?: LostDetails | null
   /** How many deals are being lost, for the copy. */
   count?: number
   onCancel: () => void
@@ -44,9 +47,10 @@ export function LostReasonDialog({
 
   useEffect(() => {
     if (!open) return
-    setPick(options[0]?.label ?? '')
-    setOther('')
-    setCompetitor('')
+    const known = initial ? options.find((o) => o.label === initial.lost_reason) : undefined
+    setPick(initial && !known ? '__other' : (known?.label ?? options[0]?.label ?? ''))
+    setOther(initial && !known ? initial.lost_reason : '')
+    setCompetitor(initial?.lost_competitor ?? '')
     setError(null)
     setSaveReason(true)
     // Reset only when the dialog opens; the picklist rarely changes underneath it.
@@ -69,7 +73,7 @@ export function LostReasonDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
       <DialogContent
-        title={count === 1 ? 'Mark as lost' : `Mark ${count} deals as lost`}
+        title={initial ? 'Why it was lost' : count === 1 ? 'Mark as lost' : `Mark ${count} deals as lost`}
         description="The reason is kept on the deal and shows up in the lost analysis."
       >
         <div className="flex flex-col gap-3">
@@ -115,7 +119,7 @@ export function LostReasonDialog({
               Cancel
             </Button>
             <Button type="button" onClick={submit} disabled={pending}>
-              {pending ? 'Saving…' : 'Mark lost'}
+              {pending ? 'Saving…' : initial ? 'Save reason' : 'Mark lost'}
             </Button>
           </div>
         </div>

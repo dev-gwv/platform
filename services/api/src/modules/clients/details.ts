@@ -3,6 +3,7 @@ import {
   clientDetailsRequest,
   clientDetailsResult,
   detailsLinkIssued,
+  dismissDetailsEventRequest,
   projectDetailsStatus,
   publicClientDetails,
   type DetailsEvent,
@@ -29,13 +30,20 @@ const formUrl = (appUrl: string | undefined, raw: string) => `${(appUrl ?? '').r
 const sameEvent = (a: { name: string; date?: string | null | undefined }, b: { name: string; date?: string | null | undefined }) =>
   a.name.trim().toLowerCase() === b.name.trim().toLowerCase() && (a.date ?? null) === (b.date ?? null)
 
-/** The client's events that are not on the project yet, newest send first, each once. */
-export function waitingEvents(sent: DetailsEvent[][], shoots: { name: string; date: string | null }[]): DetailsEvent[] {
+/**
+ * The client's events that are not on the project yet, newest send first,
+ * each once. One the studio said No thanks to (`dismissed`, 0285) stays off.
+ */
+export function waitingEvents(
+  sent: DetailsEvent[][],
+  shoots: { name: string; date: string | null }[],
+  dismissed: { name: string; date: string | null }[] = [],
+): DetailsEvent[] {
   const out: DetailsEvent[] = []
   for (const events of sent) {
     for (const e of events) {
       if (!e?.name?.trim()) continue
-      if (shoots.some((s) => sameEvent(s, e)) || out.some((o) => sameEvent(o, e))) continue
+      if (shoots.some((s) => sameEvent(s, e)) || dismissed.some((d) => sameEvent(d, e)) || out.some((o) => sameEvent(o, e))) continue
       out.push(e)
     }
   }
@@ -59,15 +67,58 @@ export const clientDetailsRouter = new Hono<AppEnv>()
            where project_id = ${id} order by created_at desc limit 5`
         const shoots = await sql<{ name: string; date: string | null }[]>`
           select name, shoot_date::text as date from shoots where project_id = ${id} and status <> 'cancelled'`
+        const dismissed = await sql<{ name: string; date: string | null }[]>`
+          select name, event_date::text as date from client_detail_dismissals where project_id = ${id}`
         return {
           sent_at: link?.created_at ?? null,
           last_submitted_at: link?.last_submitted_at ?? null,
-          waiting: waitingEvents(sent.map((s) => (Array.isArray(s.events) ? s.events : [])), shoots),
+          waiting: waitingEvents(sent.map((s) => (Array.isArray(s.events) ? s.events : [])), shoots, dismissed),
         }
       }),
     )
     if (!data) fail(404, 'That project was not found.')
     return c.json(projectDetailsStatus.parse(data))
+  })
+
+  /**
+   * "Not this one": an event the client sent that the studio will not shoot
+   * stops waiting on the Shoots tab (0285). DELETE puts it back.
+   */
+  .post('/projects/:id/dismiss', requireAction('projects', 'edit'), async (c) => {
+    const parsed = dismissDetailsEventRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Which event?')
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    const ok = await attempt(c, 'client_details.dismiss', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const project = await sql`select 1 from projects where id = ${id}`
+        if (!project[0]) return 'missing' as const
+        await sql`
+          insert into client_detail_dismissals (company_id, project_id, name, event_date, created_by)
+          values (${auth.companyId}, ${id}, ${parsed.data.name}, ${parsed.data.date ?? null}, ${auth.userId})
+          on conflict do nothing`
+        return 'ok' as const
+      }),
+    )
+    if (ok === 'missing') fail(404, 'That project was not found.')
+    if (!ok) fail(400, 'We could not hide that event.')
+    await audit(c, { action: 'client_details.dismiss', entityType: 'project', entityId: id, after: parsed.data })
+    return c.body(null, 204)
+  })
+
+  .delete('/projects/:id/dismiss', requireAction('projects', 'edit'), async (c) => {
+    const parsed = dismissDetailsEventRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Which event?')
+    const id = uuidParam(c)
+    const ok = await attempt(c, 'client_details.undismiss', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        delete from client_detail_dismissals
+         where project_id = ${id} and lower(btrim(name)) = lower(btrim(${parsed.data.name}))
+           and event_date is not distinct from ${parsed.data.date ?? null}::date
+         returning id`),
+    )
+    if (!ok) fail(400, 'We could not bring that event back.')
+    return c.body(null, 204)
   })
 
   /** A new link for the project; the old one stops working. */

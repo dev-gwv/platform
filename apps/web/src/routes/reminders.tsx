@@ -25,7 +25,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useQuery } from '@tanstack/react-query'
 import { shootListItem, type CreateReminderRequest, type ReminderEntityType } from '@ipc/contracts'
-import { Plus, Trash2, CheckCircle, Clock, AlertTriangle, Bell, Link2 } from 'lucide-react'
+import { Plus, Trash2, CheckCircle, Clock, AlertTriangle, Bell, Link2, RotateCcw } from 'lucide-react'
 
 const shootsList = shootListItem.array()
 
@@ -358,6 +358,17 @@ export function RemindersContent({ embedded = false }: { embedded?: boolean }) {
                   onClick={() => updateStatus.mutate({ id: reminder.id, status: 'completed' })}
                 >
                   <CheckCircle className="h-4 w-4" />
+                </Button>
+              )}
+              {/* Ticked by mistake, or it came back: one tap puts it back on the list. */}
+              {reminder.status !== 'active' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => updateStatus.mutate({ id: reminder.id, status: 'active' })}
+                >
+                  <RotateCcw className="h-4 w-4" /> Reopen
                 </Button>
               )}
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(reminder)}>

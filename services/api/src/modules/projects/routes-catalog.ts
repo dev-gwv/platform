@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   createShootTypeRequest,
+  updateShootTypeRequest,
   shootTypeItem,
   deliverableType,
   upsertDeliverableTypeRequest,
@@ -43,6 +44,32 @@ export const projectCatalogRoutes = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not add this shoot type.')
     await audit(c, { action: 'shoot_type.create', entityType: 'shoot_type', entityId: row.id, after: parsed.data })
     return c.json(shootTypeItem.parse(row), 201)
+  })
+
+  // Rename a shoot type, or archive it so the pickers stop offering it --
+  // and bring it back the same way (0285). Shoots already named keep their name.
+  .patch('/catalog/shoot-types/:id', requireAction('projects', 'edit'), async (c) => {
+    const parsed = updateShootTypeRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the shoot type.')
+    const fields = withoutUndefined(parsed.data)
+    if (Object.keys(fields).length === 0) fail(422, 'Nothing to change.')
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'projects.catalog.shoot_types.update',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const rows = await sql`update shoot_types set ${sql(fields)} where id = ${id}
+            returning id, name, category, usage_count, is_archived`
+          return rows[0] ?? ('missing' as const)
+        }),
+      { onCode: (code) => (code === '23505' ? ('taken' as const) : undefined) },
+    )
+    if (row === 'taken') fail(409, 'There is already a shoot type with that name.')
+    if (row === 'missing') fail(404, 'That shoot type was not found.')
+    if (!row) fail(400, 'We could not change this shoot type.')
+    await audit(c, { action: 'shoot_type.update', entityType: 'shoot_type', entityId: id, after: fields })
+    return c.json(shootTypeItem.parse(row))
   })
 
   /**

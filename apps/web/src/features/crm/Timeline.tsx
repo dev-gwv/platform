@@ -14,6 +14,7 @@ import { downloadFile, ApiError } from '@/shared/api/client'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useMembers } from '@/features/allocation/api'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { useCrmAccess } from './access'
 import { useDeleteActivity, useLogActivity, usePlaceCall, useScheduleMeeting, useTimeline, useUpdateActivity } from './api'
 import { STAGE_LABEL } from './leads'
@@ -68,6 +69,7 @@ export function Timeline({ lead }: { lead: CrmLead }) {
   const del = useDeleteActivity()
   const confirm = useConfirm()
   const { canEdit, canDelete } = useCrmAccess()
+  const me = useAuth().session?.user_id ?? null
   const [editing, setEditing] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [form, setForm] = useState<ActivityType | null>(null)
@@ -131,6 +133,7 @@ export function Timeline({ lead }: { lead: CrmLead }) {
               item={item}
               canEdit={canEdit}
               canDelete={canDelete}
+              me={me}
               editing={editing}
               onEdit={setEditing}
               onSave={(id, patch, onSaved) =>
@@ -172,6 +175,8 @@ interface RowProps {
   item: TimelineItem
   canEdit: boolean
   canDelete: boolean
+  /** Whoever wrote a line may take it back without the delete grant (0286). */
+  me: string | null
   editing: string | null
   onEdit: (id: string | null) => void
   onSave: (id: string, patch: UpdateActivityRequest, onSaved: () => void) => void
@@ -180,7 +185,7 @@ interface RowProps {
   onDelete: (a: CrmActivity) => void
 }
 
-function TimelineRow({ item, canEdit, canDelete, editing, onEdit, onSave, pending, onDone, onDelete }: RowProps) {
+function TimelineRow({ item, canEdit, canDelete, me, editing, onEdit, onSave, pending, onDone, onDelete }: RowProps) {
   if (item.kind === 'event') {
     const e = item.event
     return (
@@ -246,7 +251,7 @@ function TimelineRow({ item, canEdit, canDelete, editing, onEdit, onSave, pendin
           <span className="sr-only">Edit</span>
         </Button>
       )}
-      {canDelete && (
+      {(canDelete || canEdit || (!!me && a.actor_id === me)) && (
         <Button size="sm" variant="ghost" onClick={() => onDelete(a)} title="Remove">
           <Trash2 className="size-3.5" />
           <span className="sr-only">Remove</span>
@@ -261,7 +266,7 @@ function TimelineRow({ item, canEdit, canDelete, editing, onEdit, onSave, pendin
  * that needs another week, a name typed wrong — all of it used to be
  * permanent, because the only patch the product ever sent was "done".
  */
-function RowEditor({
+export function RowEditor({
   activity: a,
   pending,
   onCancel,
@@ -278,8 +283,10 @@ function RowEditor({
   const [location, setLocation] = useState(a.location ?? '')
   const [due, setDue] = useState(a.due_at ? toLocalInput(a.due_at) : '')
   const [assignee, setAssignee] = useState(a.assigned_to ?? '')
+  const [outcome, setOutcome] = useState(a.outcome ?? '')
   // What was typed survives a refresh or a closed tab until it is saved.
-  const draft = useFormDraft(`activity-edit:${a.id}`, { subject, body, location, due, assignee }, (v) => {
+  const draft = useFormDraft(`activity-edit:${a.id}`, { subject, body, location, due, assignee, outcome }, (v) => {
+    setOutcome(v.outcome ?? '')
     setSubject(v.subject)
     setBody(v.body)
     setLocation(v.location)
@@ -293,6 +300,8 @@ function RowEditor({
       body: body.trim() || null,
     }
     if (a.type === 'meeting') patch.location = location.trim() || null
+    // A call's outcome can be corrected; the lead's call count follows (0286).
+    if (a.type === 'call' && outcome !== (a.outcome ?? '')) patch.outcome = outcome || null
     if (a.type === 'task') {
       patch.due_at = due ? new Date(due).toISOString() : null
       patch.assigned_to = assignee || null
@@ -325,6 +334,19 @@ function RowEditor({
               </Select>
             </div>
           </>
+        )}
+        {a.type === 'call' && (
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <Label htmlFor={`ed-outcome-${a.id}`}>How the call went</Label>
+            <Select id={`ed-outcome-${a.id}`} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+              <option value="">Not said</option>
+              {CALL_OUTCOMES.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
         )}
         {a.type === 'meeting' && (
           <div className="flex flex-col gap-1 sm:col-span-2">

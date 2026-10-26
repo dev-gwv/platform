@@ -239,3 +239,16 @@ export const setHintRequest = z.object({
   value: z.union([learnNote.strict(), assistantLangNote.strict(), hintNote]).nullable(),
 })
 export type SetHintRequest = z.infer<typeof setHintRequest>
+
+/**
+ * A word someone added to a list they cannot grow for the studio (owner,
+ * 26 Oct): it joins their own quick list (users.hints `q_<category>`), so it
+ * is offered to them next time, everywhere that list is picked.
+ */
+export const QUICK_WORDS_MAX = 30
+export const quickWordRequest = z.object({
+  category: z.string().regex(/^[a-z][a-z0-9_]{0,37}$/),
+  word: z.string().trim().min(1).max(40),
+})
+export type QuickWordRequest = z.infer<typeof quickWordRequest>
+export const quickHintKey = (category: string) => `q_${category}`

@@ -60,7 +60,7 @@ import { mapHref } from '@/features/shoots/map-link'
 import { useProjectDataRecords } from '@/features/data/api'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import { EventIcon, EventTile, RoleTile } from '@/shared/ui/icon-tile'
-import { useDetailsStatus } from '@/features/wishes/api'
+import { useDetailsStatus, useDismissDetailsEvent } from '@/features/wishes/api'
 import { FromTheClient } from '@/features/wishes/FromTheClient'
 import { QUICK_SHOOTS } from '@/features/projects/wizard'
 import { useINR } from '@/shared/money/MoneyMask'
@@ -191,6 +191,7 @@ export function ShootsTab({
   }, [focusAssign, data, slots.data])
 
   const details = useDetailsStatus(projectId, canEdit)
+  const dismissEvent = useDismissDetailsEvent(projectId)
   const hasShoots = (data?.length ?? 0) > 0
   const chipsOpen = canEdit && !isLoading && (!hasShoots || addOpen)
 
@@ -212,7 +213,22 @@ export function ShootsTab({
       )}
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
       {canEdit && (details.data?.waiting.length ?? 0) > 0 && (
-        <FromTheClient events={details.data!.waiting} busy={create.isPending} onAdd={(e) => create.mutate(e)} />
+        <FromTheClient
+          events={details.data!.waiting}
+          busy={create.isPending || dismissEvent.isPending}
+          onAdd={(e) => create.mutate(e)}
+          onDismiss={(e) =>
+            dismissEvent.mutate(
+              { event: e },
+              {
+                onSuccess: () =>
+                  toast.success(`${e.name} hidden`, {
+                    action: { label: 'Undo', onClick: () => dismissEvent.mutate({ event: e, undo: true }) },
+                  }),
+              },
+            )
+          }
+        />
       )}
 
       {chipsOpen && (

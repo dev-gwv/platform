@@ -12,6 +12,7 @@ import {
   useAutosaveTermsDraft,
   useDeleteTermsTemplate,
   useSaveTermsTemplate,
+  useUpdateTermsTemplate,
   useSendNewTerms,
   useTermsDraft,
   useTermsTemplates,
@@ -103,6 +104,7 @@ export function TermsComposer({
   const draft = useTermsDraft(project.id)
   const autosave = useAutosaveTermsDraft()
   const saveTemplate = useSaveTermsTemplate()
+  const updateTemplate = useUpdateTermsTemplate()
   const deleteTemplate = useDeleteTermsTemplate()
   const send = useSendNewTerms()
   const confirm = useConfirm()
@@ -370,9 +372,23 @@ export function TermsComposer({
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {savingAs === null ? (
-                <Button type="button" size="sm" variant="ghost" onClick={() => setSavingAs('')}>
-                  <Save /> Save as my terms, for next time
-                </Button>
+                <>
+                  {/* The saved terms picked above, changed in place. */}
+                  {picked.startsWith('mine:') && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={updateTemplate.isPending}
+                      onClick={() => updateTemplate.mutate({ id: picked.slice(5), body })}
+                    >
+                      <Save /> Update “{(myTemplates ?? []).find((t) => `mine:${t.id}` === picked)?.name ?? 'my terms'}”
+                    </Button>
+                  )}
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setSavingAs('')}>
+                    <Save /> Save as my terms, for next time
+                  </Button>
+                </>
               ) : (
                 <div className="flex flex-1 items-center gap-1.5">
                   <Input

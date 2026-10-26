@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/shared/auth/AuthProvider'
-import { CalendarOff, Check, Clock3, Plus, Trash2, X } from 'lucide-react'
+import { CalendarOff, Check, Clock3, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import type { AttendanceCorrection, LeaveKind, LeaveRequest } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -20,6 +20,7 @@ import {
   useAskCorrection,
   useAskLeave,
   useCanDecide,
+  useCancelCorrection,
   useCancelLeave,
   useCorrections,
   useDecideCorrection,
@@ -31,7 +32,10 @@ import {
   usePolicy,
   useSaveLeaveAllowances,
   useRemoveHoliday,
+  useReopenLeave,
   useSetWeeklyOff,
+  useUpdateHoliday,
+  useUpdateLeave,
 } from '@/features/hr/leave-api'
 import { approvalCheck, balanceLine, days as dayCount } from '@/features/hr/leave-balance'
 import type { AllowanceKind } from '@ipc/contracts'
@@ -109,8 +113,10 @@ function MyLeave() {
   const balances = useLeaveBalances(session?.user_id ?? null)
   const fixes = useCorrections('mine')
   const cancel = useCancelLeave()
+  const takeBack = useCancelCorrection()
   const confirm = useConfirm()
   const [asking, setAsking] = useState(false)
+  const [changing, setChanging] = useState<LeaveRequest | null>(null)
   const [fixing, setFixing] = useState(false)
   const today = todayIST()
 
@@ -159,6 +165,11 @@ function MyLeave() {
                       </p>
                     </div>
                     <StatusBadge tone={STATUS_TONE[l.status]}>{l.status === 'rejected' ? 'Not approved' : l.status[0]!.toUpperCase() + l.status.slice(1)}</StatusBadge>
+                    {l.status === 'pending' && (
+                      <Button size="sm" variant="outline" onClick={() => setChanging(l)}>
+                        <Pencil /> Change
+                      </Button>
+                    )}
                     {canCancel && (
                       <Button
                         size="sm"
@@ -204,6 +215,19 @@ function MyLeave() {
                     </p>
                   </div>
                   <StatusBadge tone={STATUS_TONE[f.status]}>{f.status === 'rejected' ? 'Not changed' : f.status[0]!.toUpperCase() + f.status.slice(1)}</StatusBadge>
+                  {f.status === 'pending' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={takeBack.isPending}
+                      onClick={async () => {
+                        if (await confirm({ title: 'Take this request back?', description: `${day(f.a_date)} · nobody has answered it yet.`, confirmLabel: 'Take it back' }))
+                          takeBack.mutate(f.id)
+                      }}
+                    >
+                      <X /> Take back
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -212,22 +236,25 @@ function MyLeave() {
       </Card>
 
       {asking && <AskLeaveDialog onClose={() => setAsking(false)} />}
+      {changing && <AskLeaveDialog editing={changing} onClose={() => setChanging(null)} />}
       {fixing && <FixDayDialog onClose={() => setFixing(false)} />}
     </div>
   )
 }
 
-function AskLeaveDialog({ onClose }: { onClose: () => void }) {
+/** Ask for leave, or (with `editing`) change your own request while it waits. */
+function AskLeaveDialog({ onClose, editing = null }: { onClose: () => void; editing?: LeaveRequest | null }) {
   const { session } = useAuth()
   const ask = useAskLeave()
+  const change = useUpdateLeave()
   const balances = useLeaveBalances(session?.user_id ?? null)
   const today = todayIST()
-  const [kind, setKind] = useState<LeaveKind>('casual')
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(today)
-  const [half, setHalf] = useState(false)
-  const [reason, setReason] = useState('')
-  const draft = useFormDraft('leave:new', { kind, from, to, half, reason }, (v) => {
+  const [kind, setKind] = useState<LeaveKind>(editing?.kind ?? 'casual')
+  const [from, setFrom] = useState(editing?.start_date ?? today)
+  const [to, setTo] = useState(editing?.end_date ?? today)
+  const [half, setHalf] = useState(editing?.half_day ?? false)
+  const [reason, setReason] = useState(editing?.reason ?? '')
+  const draft = useFormDraft(editing ? `leave:edit:${editing.id}` : 'leave:new', { kind, from, to, half, reason }, (v) => {
     setKind(v.kind)
     setFrom(v.from)
     setTo(v.to)
@@ -238,7 +265,10 @@ function AskLeaveDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title="Ask for leave" description="Your manager is told straight away, and you hear back here.">
+      <DialogContent
+        title={editing ? 'Change your leave request' : 'Ask for leave'}
+        description={editing ? 'It still waits for your manager, with the new days.' : 'Your manager is told straight away, and you hear back here.'}
+      >
         <DraftRestoredBanner at={draft.restoredAt} onDismiss={draft.dismissRestored} onDiscard={() => draft.clear()} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
@@ -284,20 +314,20 @@ function AskLeaveDialog({ onClose }: { onClose: () => void }) {
             Cancel
           </Button>
           <Button
-            disabled={ask.isPending || !from || !to}
-            onClick={() =>
-              ask.mutate(
-                { kind, start_date: from, end_date: to, half_day: half && oneDay, reason: reason.trim() || null },
-                {
-                  onSuccess: () => {
-                    draft.clear()
-                    onClose()
-                  },
+            disabled={ask.isPending || change.isPending || !from || !to}
+            onClick={() => {
+              const body = { kind, start_date: from, end_date: to, half_day: half && oneDay, reason: reason.trim() || null }
+              const done = {
+                onSuccess: () => {
+                  draft.clear()
+                  onClose()
                 },
-              )
-            }
+              }
+              if (editing) change.mutate({ id: editing.id, ...body }, done)
+              else ask.mutate(body, done)
+            }}
           >
-            Send request
+            {editing ? 'Save changes' : 'Send request'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -371,6 +401,10 @@ function FixDayDialog({ onClose }: { onClose: () => void }) {
 // ── approvals ────────────────────────────────────────────────────
 function Approvals() {
   const leave = useLeave('team', 'pending')
+  const decided = useLeave('team')
+  const reopen = useReopenLeave()
+  const confirm = useConfirm()
+  const { session } = useAuth()
   const balances = useLeaveBalances()
   const fixes = useCorrections('team', 'pending')
   const decideLeave = useDecideLeave()
@@ -435,6 +469,23 @@ function Approvals() {
           </CardContent>
         </Card>
       )}
+      <DecidedLeave
+        rows={(decided.data ?? []).filter(
+          (l) => (l.status === 'approved' || l.status === 'rejected') && (l.user_id !== session?.user_id || !!session.is_owner),
+        )}
+        busy={reopen.isPending}
+        onReopen={async (l) => {
+          const yes = await confirm({
+            title: `Change the decision on ${l.user_name ?? 'this'} leave?`,
+            description:
+              l.status === 'approved'
+                ? `${span(l)} goes back to waiting, as it was asked (a split into unpaid days is joined up again), and ${l.user_name ?? 'they'} is told. Days already past that were marked absent before the approval stay without a mark; correct them on the register if needed.`
+                : `${span(l)} goes back to waiting and ${l.user_name ?? 'they'} is told. Decide it again above.`,
+            confirmLabel: 'Back to waiting',
+          })
+          if (yes) reopen.mutate({ id: l.id })
+        }}
+      />
       {declining && (
         <DeclineDialog
           label={declining.label}
@@ -446,6 +497,42 @@ function Approvals() {
         />
       )}
     </div>
+  )
+}
+
+/** Leave decided lately, each with Change decision: a slip on Approve is not for good (0286). */
+function DecidedLeave({ rows, busy, onReopen }: { rows: LeaveRequest[]; busy: boolean; onReopen: (l: LeaveRequest) => void }) {
+  const [all, setAll] = useState(false)
+  if (rows.length === 0) return null
+  const shown = all ? rows.slice(0, 50) : rows.slice(0, 5)
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <h2 className="font-semibold">Decided lately</h2>
+        <ul className="mt-2 divide-y divide-border">
+          {shown.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{l.user_name ?? 'Team member'}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {span(l)} · {KIND_LABEL[l.kind]}
+                  {l.decided_by_name ? ` · by ${l.decided_by_name}` : ''}
+                </p>
+              </div>
+              <StatusBadge tone={STATUS_TONE[l.status]}>{l.status === 'rejected' ? 'Not approved' : 'Approved'}</StatusBadge>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => onReopen(l)}>
+                <RotateCcw /> Change decision
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {rows.length > 5 && (
+          <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 text-xs font-medium text-primary hover:underline">
+            {all ? 'Show fewer' : `Show more (${rows.length})`}
+          </button>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -528,6 +615,8 @@ function Holidays({ canEdit }: { canEdit: boolean }) {
   const policy = usePolicy()
   const add = useAddHoliday()
   const remove = useRemoveHoliday()
+  const change = useUpdateHoliday()
+  const [editing, setEditing] = useState<{ id: string; date: string; name: string } | null>(null)
   const setOff = useSetWeeklyOff()
   const confirm = useConfirm()
   const [date, setDate] = useState('')
@@ -575,10 +664,48 @@ function Holidays({ canEdit }: { canEdit: boolean }) {
             <p className="mt-3 text-sm text-muted-foreground">No holidays added for {year}.</p>
           ) : (
             <ul className="mt-3 divide-y divide-border">
-              {(holidays.data ?? []).map((h) => (
+              {(holidays.data ?? []).map((h) =>
+                editing?.id === h.id ? (
+                  <li key={h.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                    <Input
+                      aria-label="Holiday date"
+                      type="date"
+                      value={editing.date}
+                      onChange={(e) => setEditing({ ...editing, date: e.target.value })}
+                      className="w-40"
+                    />
+                    <Input
+                      aria-label="Holiday name"
+                      value={editing.name}
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                      className="min-w-[10rem] flex-1"
+                      autoFocus
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!editing.date || !editing.name.trim() || change.isPending}
+                      onClick={() =>
+                        change.mutate(
+                          { id: h.id, holiday_date: editing.date, name: editing.name.trim() },
+                          { onSuccess: () => setEditing(null) },
+                        )
+                      }
+                    >
+                      Save
+                    </Button>
+                  </li>
+                ) : (
                 <li key={h.id} className="flex items-center gap-2 py-2 text-sm">
                   <span className="w-36 shrink-0 tabular-nums text-muted-foreground">{day(h.holiday_date)}</span>
                   <span className="min-w-0 flex-1 truncate font-medium">{h.name}</span>
+                  {canEdit && (
+                    <Button size="sm" variant="outline" aria-label={`Change ${h.name}`} onClick={() => setEditing({ id: h.id, date: h.holiday_date, name: h.name })}>
+                      <Pencil />
+                    </Button>
+                  )}
                   {canEdit && (
                     <Button
                       size="sm"
@@ -592,7 +719,8 @@ function Holidays({ canEdit }: { canEdit: boolean }) {
                     </Button>
                   )}
                 </li>
-              ))}
+                ),
+              )}
             </ul>
           )}
         </CardContent>

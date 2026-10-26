@@ -150,3 +150,7 @@ export const saveShootPresetRequest = z.object({
   payload: shootPresetPayload,
 })
 export type SaveShootPresetRequest = z.infer<typeof saveShootPresetRequest>
+
+/** A preset keeps what it lays down; only its name changes (0285). */
+export const renameShootPresetRequest = z.object({ name: z.string().trim().min(1).max(80) })
+export type RenameShootPresetRequest = z.infer<typeof renameShootPresetRequest>

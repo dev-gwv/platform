@@ -95,7 +95,9 @@ export function TermsAcknowledgePage() {
   return (
     <div className="relative overflow-hidden">
       <PageBackdrop />
-      <div className="paper relative mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-4">
+      {/* Wide and easy to read (owner, 26 Oct): it was a narrow column with the
+          terms in a little scrolling box. */}
+      <div className="paper relative mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-5 px-4 py-6 sm:px-8 sm:py-10">
       {doc && <TermsDocumentLetterhead doc={doc} />}
 
       {loadError ? (
@@ -116,7 +118,7 @@ export function TermsAcknowledgePage() {
               </div>
             </CardContent>
           </Card>
-          {doc && <TermsDocumentSheet doc={doc} bodyClassName="" />}
+          {doc && <TermsDocumentSheet doc={doc} reading />}
           <div className="no-print flex flex-wrap gap-2">
             <DownloadDocumentButton name={`${doc?.document_number ?? 'Terms'}${doc?.project_name ? ` ${doc.project_name}` : ''}`} />
             <Button variant="outline" size="sm" onClick={() => window.print()}>
@@ -132,7 +134,7 @@ export function TermsAcknowledgePage() {
         </div>
       ) : (
         <>
-          <TermsDocumentSheet doc={doc} />
+          <TermsDocumentSheet doc={doc} reading />
           <div className="flex flex-wrap gap-2">
             <DownloadDocumentButton
               name={`${doc.document_number ?? 'Terms'}${doc.project_name ? ` ${doc.project_name}` : ''}`}
@@ -142,15 +144,18 @@ export function TermsAcknowledgePage() {
             </Button>
           </div>
           <Card className="no-print">
-            <CardContent className="p-4">
-              <form onSubmit={onAgree} className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Your full name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Email (optional)</Label>
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <CardContent className="p-5 sm:p-8">
+              <form onSubmit={onAgree} className="flex flex-col gap-4">
+                <p className="text-[19px] font-semibold">Agree to these terms</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Your full name</Label>
+                    <Input className="h-12 text-[16px]" value={name} onChange={(e) => setName(e.target.value)} required />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Email (optional)</Label>
+                    <Input className="h-12 text-[16px]" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Your signature</Label>

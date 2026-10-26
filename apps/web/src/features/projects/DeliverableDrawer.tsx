@@ -21,7 +21,7 @@ import { TONE_CLASSES, stageName, stageTone } from './stages'
 import { useDeliverableStages } from './stages-api'
 import { VoiceNotePlayer } from './VoiceNotePlayer'
 import { VoiceNoteRecorder } from './VoiceNoteRecorder'
-import { useAddDeliverableNote, useDeleteDeliverableNote, useDeliverableNotes, useSendVoiceNote } from './notes-api'
+import { useAddDeliverableNote, useDeleteDeliverableNote, useDeliverableNotes, useEditDeliverableNote, useSendVoiceNote } from './notes-api'
 import { useINR } from '@/shared/money/MoneyMask'
 
 const when = (iso: string) =>
@@ -285,6 +285,7 @@ function Timeline({
 }) {
   const { data, isLoading, isError } = useDeliverableNotes(d.id)
   const del = useDeleteDeliverableNote(d.id)
+  const edit = useEditDeliverableNote(d.id)
   const confirm = useConfirm()
   const end = useRef<HTMLDivElement>(null)
   const notes = data ?? []
@@ -314,6 +315,12 @@ function Timeline({
               n={n}
               stages={stages}
               mine={!!me && n.author_id === me}
+              onEdit={
+                n.kind === 'text' && !!me && n.author_id === me
+                  ? (body, done) => edit.mutate({ id: n.id, body }, { onSuccess: done })
+                  : undefined
+              }
+              saving={edit.isPending}
               onDelete={
                 n.kind !== 'event' && ((!!me && n.author_id === me) || canModerate)
                   ? async () => {
@@ -335,12 +342,19 @@ function NoteItem({
   mine,
   stages,
   onDelete,
+  onEdit,
+  saving = false,
 }: {
   n: DeliverableNote
   mine: boolean
   stages: readonly DeliverableStage[]
   onDelete?: (() => void) | undefined
+  /** Its author changes the words; `done` closes the box once saved. */
+  onEdit?: ((body: string, done: () => void) => void) | undefined
+  saving?: boolean
 }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(n.body ?? '')
   if (n.kind === 'event') {
     const [tag = '', status = '', code] = (n.body ?? '').split(':')
     const isMove = tag === 'moved'
@@ -387,6 +401,35 @@ function NoteItem({
         >
           {n.kind === 'voice' ? (
             <VoiceNotePlayer fileId={n.file_id} seconds={n.duration_seconds} tone={mine ? 'inverse' : 'default'} />
+          ) : editing ? (
+            <form
+              className="flex flex-col gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const body = text.trim()
+                if (!body || !onEdit) return
+                if (body === (n.body ?? '').trim()) return setEditing(false)
+                onEdit(body, () => setEditing(false))
+              }}
+            >
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={3}
+                maxLength={4000}
+                aria-label="Change the note"
+                autoFocus
+                className="bg-card text-foreground"
+              />
+              <span className="flex justify-end gap-1.5">
+                <Button type="button" size="sm" variant="secondary" className="h-7" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" variant="secondary" className="h-7" disabled={!text.trim() || saving}>
+                  Save
+                </Button>
+              </span>
+            </form>
           ) : (
             <p className="whitespace-pre-wrap break-words">{n.body}</p>
           )}
@@ -394,6 +437,20 @@ function NoteItem({
         <span className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
           {!mine && <span className="font-medium">{n.author_name ?? 'Someone'}</span>}
           {when(n.created_at)}
+          {n.edited_at && <span>· edited</span>}
+          {onEdit && !editing && (
+            <button
+              type="button"
+              onClick={() => {
+                setText(n.body ?? '')
+                setEditing(true)
+              }}
+              className="opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+              aria-label="Edit note"
+            >
+              <Pencil className="size-3" />
+            </button>
+          )}
           {onDelete && (
             <button type="button" onClick={onDelete} className="opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100" aria-label="Delete note">
               <Trash2 className="size-3" />

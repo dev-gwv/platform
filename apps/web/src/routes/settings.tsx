@@ -29,6 +29,8 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { PhotoUpload } from '@/shared/ui/photo-upload'
 
 import { humanize } from '@/shared/ui/format'
+import { cn } from '@/shared/ui/cn'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { EmailBrandingCard } from '@/features/branding/EmailBrandingCard'
 import { SecurityCard } from '@/features/account/SecurityCard'
 
@@ -411,6 +413,7 @@ function brandForm(data: CompanyProfile): UpdateCompanyRequest {
     invoice_address: data.invoice_address ?? '',
     invoice_number_prefix: data.invoice_number_prefix,
     invoice_next_number: data.invoice_next_number,
+    invoice_number_mode: data.invoice_number_mode,
     quote_number_prefix: data.quote_number_prefix,
     quote_next_number: data.quote_next_number,
   }
@@ -613,6 +616,37 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
           <p className="mt-0.5 text-xs text-muted-foreground">
             The next document takes this prefix and number. Only change the number to correct a mistake.
           </p>
+          {/* Running, by date, or typed for each invoice (owner, 26 Oct). */}
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="text-sm font-medium">How invoices are numbered</p>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="How invoices are numbered">
+              {(
+                [
+                  ['running', 'Running number', `${form.invoice_number_prefix ?? ''}${String(form.invoice_next_number ?? 1).padStart(4, '0')}`],
+                  ['date', 'By the invoice date', `${form.invoice_number_prefix ?? ''}${todayInIndia().replace(/-/g, '')}`],
+                  ['manual', 'I type each one', 'You type it on every invoice'],
+                ] as const
+              ).map(([mode, label, example]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={(form.invoice_number_mode ?? 'running') === mode}
+                  disabled={readOnly}
+                  onClick={() => set({ invoice_number_mode: mode })}
+                  className={cn(
+                    'flex flex-col items-start rounded-xl border px-3 py-2 text-left text-sm',
+                    (form.invoice_number_mode ?? 'running') === mode
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+                      : 'border-input bg-card hover:border-primary/60',
+                  )}
+                >
+                  <span className="font-semibold">{label}</span>
+                  <span className="text-xs text-muted-foreground">{example}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <Field label="Invoice prefix">
               <Input

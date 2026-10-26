@@ -5,6 +5,7 @@ import {
   deliverableWorkload,
   deliverableNote,
   createDeliverableNoteRequest,
+  updateDeliverableNoteRequest,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
@@ -149,7 +150,7 @@ export const deliverableRoutes = new Hono<AppEnv>()
         if (!found.length) return null
         return sql`
           select n.id, n.deliverable_id, n.kind, n.body, n.file_id, n.duration_seconds,
-                 n.author_id, u.name as author_name, n.created_at, w.submission_link as link
+                 n.author_id, u.name as author_name, n.created_at, n.edited_at, w.submission_link as link
             from deliverable_notes n
             left join users u on u.user_id = n.author_id
             -- submitted:<id>, approved:<id>, sent_back:<id>: the work's link.
@@ -202,6 +203,24 @@ export const deliverableRoutes = new Hono<AppEnv>()
     if (!outcome) fail(400, 'We could not save the note.')
     await audit(c, { action: `deliverable.note.${n.kind}`, entityType: 'deliverable', entityId: did })
     return c.json(deliverableNote.parse({ ...outcome, author_name: null }), 201)
+  })
+
+  /** Change a written note's words: its author only (0285). Voice notes and events stay as they are. */
+  .patch('/deliverables/notes/:nid', async (c) => {
+    const parsed = updateDeliverableNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the note.')
+    const nid = uuidParam(c, 'nid')
+    const me = c.get('auth').userId
+    const rows = await attempt(c, 'projects.deliverable_note_edit', () =>
+      withUser(c.env, me, (sql) => sql`
+        update deliverable_notes set body = ${parsed.data.body}, edited_at = now()
+         where id = ${nid} and kind = 'text' and author_id = ${me}
+         returning id, deliverable_id, kind, body, file_id, duration_seconds, author_id, created_at, edited_at`),
+    )
+    if (!rows) fail(400, 'We could not change the note.')
+    if (!rows.length) fail(404, 'That note was not found, or it is not yours to change.')
+    await audit(c, { action: 'deliverable.note.edit', entityType: 'deliverable_note', entityId: nid })
+    return c.json(deliverableNote.parse({ ...rows[0], author_name: null }))
   })
 
   /** Take a note back: its author, or an admin or manager. Stage events stay. */

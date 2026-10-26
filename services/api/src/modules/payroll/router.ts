@@ -213,6 +213,38 @@ export const payrollRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
+  // An approved month back to draft (0284), while nobody in it is paid, so
+  // its lines can be worked out and adjusted again.
+  .post('/runs/:id/reopen', editGate, async (c) => {
+    const id = uuidParam(c)
+    const auth = c.get('auth')
+    const ok = await attempt(
+      c,
+      'payroll.reopen',
+      () => withService(c.env, async (sql) => (await sql`select payroll_reopen(${auth.companyId}, ${id}, ${auth.userId})`, true)),
+      { onCode: explain },
+    )
+    if (!ok) fail(400, 'We could not reopen this month.')
+    await audit(c, { action: 'payroll.reopen', entityType: 'payroll_run', entityId: id })
+    return c.body(null, 204)
+  })
+
+  // A person marked paid by mistake, back to unpaid (0284).
+  .post('/runs/:id/lines/:lineId/unpay', editGate, async (c) => {
+    const id = uuidParam(c)
+    const lineId = uuidParam(c, 'lineId')
+    const auth = c.get('auth')
+    const ok = await attempt(
+      c,
+      'payroll.unpay',
+      () => withService(c.env, async (sql) => (await sql`select payroll_unmark_paid(${auth.companyId}, ${id}, ${lineId}, ${auth.userId})`, true)),
+      { onCode: explain },
+    )
+    if (!ok) fail(400, 'We could not undo that payment.')
+    await audit(c, { action: 'payroll.unpay', entityType: 'payroll_line', entityId: lineId })
+    return c.body(null, 204)
+  })
+
   // Mark one person paid, or everyone still to pay. Each member is told
   // their payslip is ready; the salaries ledger follows.
   .post('/runs/:id/pay', editGate, async (c) => {

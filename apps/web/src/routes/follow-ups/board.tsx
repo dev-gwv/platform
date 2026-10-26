@@ -18,8 +18,7 @@ import { CallButton } from '@/features/crm-calls/CallButton'
 import { useActivities } from '@/features/crm/api'
 import { FollowUpActions, FollowUpTag } from '@/features/crm/FollowUpOnRow'
 import { useLookupOptions } from '@/features/crm/fields'
-import { useCreateCustomLookup } from '@/features/settings/api'
-import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
+import { useAddLookupWord } from '@/features/settings/quick-words'
 import {
   BOARD_COLUMNS,
   NONE,
@@ -229,9 +228,8 @@ function Filters({
 }) {
   const types = useLookupOptions('follow_up_type')
   const priorities = useLookupOptions('follow_up_priority')
-  const createLookup = useCreateCustomLookup()
-  const canAddType = useCanAddLookup('follow_up_type')
-  const canAddPriority = useCanAddLookup('follow_up_priority')
+  const addType = useAddLookupWord('follow_up_type')
+  const addPriority = useAddLookupWord('follow_up_priority')
 
   const count = (pick: (t: CrmActivity) => string | null) => {
     const m = new Map<string, number>()
@@ -252,10 +250,6 @@ function Filters({
     }))
     return out
   }
-  const add = (category: string) => async (label: string) => {
-    await createLookup.mutateAsync({ category, value: label })
-    return label
-  }
   const set = (k: 'people' | 'types' | 'priorities') => (next: string[]) => onChange({ ...value, [k]: next })
 
   return (
@@ -275,7 +269,7 @@ function Filters({
         options={withSeen(types, typeCounts)}
         selected={value.types}
         onChange={set('types')}
-        onCreate={canAddType ? add('follow_up_type') : undefined}
+        onCreate={addType}
         noun="type"
       />
       <MultiSelectFilter
@@ -284,7 +278,7 @@ function Filters({
         options={withSeen(priorities, priorityCounts)}
         selected={value.priorities}
         onChange={set('priorities')}
-        onCreate={canAddPriority ? add('follow_up_priority') : undefined}
+        onCreate={addPriority}
         noun="priority"
       />
       {activeFilterCount(value) > 0 && (

@@ -2,8 +2,8 @@ import { useState, type KeyboardEvent } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Input, Label, Select } from '@/shared/ui/input'
-import { useActiveLookups, useCreateCustomLookup } from './api'
-import { useCanAddLookup } from './useCanAddLookup'
+import { useActiveLookups } from './api'
+import { useAddLookupWord, usePersonalWords } from './quick-words'
 
 /**
  * A labelled dropdown over one of the studio's own lists, with a visible
@@ -32,8 +32,9 @@ export function LookupPicker({
   example?: string
 }) {
   const { data: items } = useActiveLookups(category)
-  const create = useCreateCustomLookup()
-  const canAdd = useCanAddLookup(category)
+  const mine = usePersonalWords(category)
+  const addWord = useAddLookupWord(category)
+  const [saving, setSaving] = useState(false)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -48,11 +49,14 @@ export function LookupPicker({
       onChange(existing.value)
     } else {
       try {
-        await create.mutateAsync({ category, value: v })
-        onChange(v)
+        setSaving(true)
+        // The studio's list when allowed, else the person's own quick list.
+        onChange(await addWord(v))
       } catch (e) {
         setError(e instanceof Error ? e.message : `Could not add the ${noun}.`)
         return
+      } finally {
+        setSaving(false)
       }
     }
     setAdding(false)
@@ -75,7 +79,7 @@ export function LookupPicker({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={adding ? `${id ?? category}-new` : id}>{adding ? `New ${noun}` : label}</Label>
-        {canAdd && !adding && (
+        {!adding && (
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -95,7 +99,7 @@ export function LookupPicker({
             placeholder={example ? `e.g. ${example}` : undefined}
             autoFocus
           />
-          <Button type="button" size="icon" onClick={() => void save()} disabled={!name.trim() || create.isPending} aria-label={`Save ${noun}`}>
+          <Button type="button" size="icon" onClick={() => void save()} disabled={!name.trim() || saving} aria-label={`Save ${noun}`}>
             <Check />
           </Button>
           <Button type="button" size="icon" variant="outline" onClick={() => setAdding(false)} aria-label="Cancel">
@@ -113,13 +117,21 @@ export function LookupPicker({
         >
           <option value="">{emptyLabel}</option>
           {/* A value saved before it was renamed or removed still shows its own text. */}
-          {value && !(items ?? []).some((i) => i.value === value) && <option value={value}>{value}</option>}
+          {value && !(items ?? []).some((i) => i.value === value) && !mine.includes(value) && <option value={value}>{value}</option>}
           {(items ?? []).map((i) => (
             <option key={i.id} value={i.value}>
               {i.value}
             </option>
           ))}
-          {canAdd && <option value="__add__">+ Add new {noun}…</option>}
+          {/* The person's own words, kept from earlier picks. */}
+          {mine
+            .filter((w) => !(items ?? []).some((i) => i.value.toLowerCase() === w.toLowerCase()))
+            .map((w) => (
+              <option key={`mine:${w}`} value={w}>
+                {w}
+              </option>
+            ))}
+          <option value="__add__">+ Add new {noun}…</option>
         </Select>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -18,6 +18,7 @@ import {
   taskListItem,
   updateTaskRequest,
   updateTaskStatusRequest,
+  type UpdateTaskRequest,
   z,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -127,6 +128,26 @@ async function taskAccess(sql: TransactionSql, id: string) {
            coalesce(array(select a.user_id from task_assignees a where a.task_id = t.id), '{}'::uuid[]) as assignee_ids
       from tasks t where t.id = ${id}`
   return rows[0] ?? null
+}
+
+/** Made by the caller for themselves alone (0285): theirs to edit, close, reopen and delete. */
+async function isOwnTask(sql: TransactionSql, id: string): Promise<boolean> {
+  const [r] = await sql<{ ok: boolean }[]>`select is_own_task(${id}) as ok`
+  return r?.ok ?? false
+}
+
+/** The part of an edit a person may make to their own task, or null when it asks for more. */
+export function ownTaskPatch(d: UpdateTaskRequest): Record<string, unknown> | null {
+  const { title, description, status, priority, due_date, ...rest } = d
+  if (Object.values(rest).some((v) => v !== undefined)) return null
+  if (status === 'blocked' || status === 'review') return null
+  const out: Record<string, unknown> = {}
+  if (title !== undefined) out.title = title
+  if (description !== undefined) out.description = description
+  if (status !== undefined) out.status = status
+  if (priority !== undefined) out.priority = priority
+  if (due_date !== undefined) out.due_date = due_date
+  return Object.keys(out).length ? out : null
 }
 
 const activityList = taskActivityItem.array()
@@ -258,6 +279,10 @@ export const tasksRouter = new Hono<AppEnv>()
           if (manages && (d.status === 'completed' || d.status === 'cancelled')) {
             const rows = await sql`update tasks set status = ${d.status} where id = ${id} returning id`
             if (!rows.length) return false
+          } else if (d.status !== 'blocked' && d.status !== 'review' && (await isOwnTask(sql, id))) {
+            // A task someone made for themselves is theirs to tick done and to
+            // reopen (0285); nobody else has to review it.
+            await sql`select update_own_task(${id}, ${sql.json({ status: d.status })}::jsonb)`
           } else {
             await sql`select update_my_task_status(p_task_id => ${id}, p_status => ${d.status}, p_reason => ${d.reason ?? null})`
           }
@@ -446,13 +471,33 @@ export const tasksRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
-  .patch('/:id', requireAction('tasks', 'edit'), async (c) => {
+  .patch('/:id', async (c) => {
     const parsed = updateTaskRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the task details.')
     const { assignees, ...patch } = parsed.data
     if (Object.keys(patch).length === 0 && assignees === undefined) fail(422, 'Nothing to change.')
     const id = uuidParam(c)
     const auth = c.get('auth')
+    // Someone who does not manage tasks edits only a task they made for
+    // themselves, and only its own words, date, priority and status (0285).
+    if (!auth.access.hasAction('tasks', 'edit')) {
+      const own = ownTaskPatch(parsed.data)
+      if (!own) fail(403, 'You can change only the title, details, date, priority and status of a task you made for yourself.')
+      const ok = await attempt(
+        c,
+        'tasks.update_own',
+        () =>
+          withUser(c.env, auth.userId, async (sql) => {
+            await sql`select update_own_task(${id}, ${sql.json(own as never)}::jsonb)`
+            return true as const
+          }),
+        { onCode: (code, err) => (code === '42501' ? ('denied' as const) : sayIt(code, err)) },
+      )
+      if (ok === 'denied') fail(403, 'You can change only tasks you made for yourself.')
+      if (!ok) fail(400, 'We could not update the task.')
+      await audit(c, { action: 'task.update', entityType: 'task', entityId: id, after: own })
+      return c.body(null, 204)
+    }
     const found = await attempt(c, 'tasks.update', () =>
       withUser(c.env, auth.userId, async (sql) => {
         const rows =
@@ -478,10 +523,24 @@ export const tasksRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
-  .delete('/:id', requireAction('tasks', 'delete'), async (c) => {
+  .delete('/:id', async (c) => {
     const id = uuidParam(c)
+    const auth = c.get('auth')
+    // Without delete access, only a task made for oneself goes (0285).
+    if (!auth.access.hasAction('tasks', 'delete')) {
+      const gone = await attempt(c, 'tasks.delete_own', () =>
+        withUser(c.env, auth.userId, async (sql) => {
+          const [r] = await sql<{ ok: boolean }[]>`select delete_own_task(${id}) as ok`
+          return r?.ok ? ('ok' as const) : ('denied' as const)
+        }),
+      )
+      if (gone === 'denied') fail(403, 'You can delete only tasks you made for yourself.')
+      if (!gone) fail(400, 'We could not delete this task.')
+      await audit(c, { action: 'task.delete', entityType: 'task', entityId: id, after: { own: true } })
+      return c.body(null, 204)
+    }
     const rows = await attempt(c, 'tasks.delete', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`delete from tasks where id = ${id} returning id`),
+      withUser(c.env, auth.userId, (sql) => sql<{ id: string }[]>`delete from tasks where id = ${id} returning id`),
     )
     if (!rows) fail(400, 'We could not delete this task.')
     if (!rows.length) fail(404, 'That task was not found.')

@@ -22,6 +22,7 @@ import {
 import {
   useShootTypes,
   useCreateShootType,
+  useUpdateShootType,
 } from '@/features/projects/api'
 import { PresetsTab } from '@/features/project-templates/PresetsTab'
 import { DeliverableTypesTab } from '@/features/project-templates/DeliverableTypesTab'
@@ -458,7 +459,9 @@ function ShootTypeManager() {
   const create = useCreateShootType()
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
+  const [showHidden, setShowHidden] = useState(false)
   const items = (data ?? []).filter((t) => !t.is_archived)
+  const hidden = (data ?? []).filter((t) => t.is_archived)
 
   async function onAdd() {
     if (!name.trim()) return
@@ -483,17 +486,88 @@ function ShootTypeManager() {
           </Button>
         </div>
         <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (optional)" aria-label="Shoot type category" className="mt-2" />
-        <ul className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
+        <ul className="mt-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
           {items.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
-              <span className="min-w-0 truncate">{t.name}{t.category && <span className="ml-1.5 text-xs text-muted-foreground">{t.category}</span>}</span>
-              {t.usage_count > 0 && <Badge variant="secondary">used {t.usage_count}×</Badge>}
-            </li>
+            <ShootTypeRow key={t.id} item={t} />
           ))}
           {items.length === 0 && <li className="py-3 text-center text-xs text-muted-foreground">No shoot types yet.</li>}
         </ul>
+        {hidden.length > 0 && (
+          <div className="mt-2">
+            <Button size="sm" variant="ghost" onClick={() => setShowHidden((v) => !v)}>
+              {showHidden ? 'Hide the hidden ones' : `Hidden (${hidden.length})`}
+            </Button>
+            {showHidden && (
+              <ul className="mt-1 flex flex-col gap-1">
+                {hidden.map((t) => (
+                  <ShootTypeRow key={t.id} item={t} />
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
+  )
+}
+
+/** One shoot name: rename it where it is seen, hide it from the pickers, or bring it back. */
+function ShootTypeRow({ item }: { item: { id: string; name: string; category: string | null; usage_count: number; is_archived: boolean } }) {
+  const update = useUpdateShootType()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(item.name)
+
+  if (editing) {
+    return (
+      <li className="flex items-center gap-2 rounded-md border border-border/60 px-2 py-1.5">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label={`New name for ${item.name}`}
+          className="h-8"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setEditing(false)
+          }}
+        />
+        <Button
+          size="sm"
+          disabled={!name.trim() || name.trim() === item.name || update.isPending}
+          onClick={() => update.mutate({ id: item.id, name: name.trim() }, { onSuccess: () => setEditing(false) })}
+        >
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </li>
+    )
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
+      <span className={item.is_archived ? 'min-w-0 truncate text-muted-foreground' : 'min-w-0 truncate'}>
+        {item.name}
+        {item.category && <span className="ml-1.5 text-xs text-muted-foreground">{item.category}</span>}
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        {item.usage_count > 0 && <Badge variant="secondary">used {item.usage_count}×</Badge>}
+        {item.is_archived ? (
+          <Button size="sm" variant="outline" className="h-7" disabled={update.isPending} onClick={() => update.mutate({ id: item.id, is_archived: false })}>
+            Bring back
+          </Button>
+        ) : (
+          <>
+            <Button size="icon" variant="ghost" className="size-7" aria-label={`Rename ${item.name}`} onClick={() => setEditing(true)}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" disabled={update.isPending} onClick={() => update.mutate({ id: item.id, is_archived: true })}>
+              Hide
+            </Button>
+          </>
+        )}
+      </span>
+    </li>
   )
 }
 

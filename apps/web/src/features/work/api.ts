@@ -60,6 +60,24 @@ export function useReviewWork() {
   })
 }
 
+/** Take one's own hand-in back while it still waits for review (0285). */
+export function useWithdrawSubmission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      callApi(`/work/submissions/${id}/withdraw`, { method: 'POST', responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Hand-in taken back. The work is back in editing.')
+      void qc.invalidateQueries({ queryKey: ['work', 'submissions'] })
+      void qc.invalidateQueries({ queryKey: ['team-work-preview'] })
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+      void qc.invalidateQueries({ queryKey: ['me'] })
+      void qc.invalidateQueries({ queryKey: ['deliverable-notes'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 /**
  * Send the work-submission nudges now instead of waiting for the hourly tick.
  *

@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  PenLine,
 } from 'lucide-react'
 import { lineAmount, rateUnit, type GstSlab } from '@ipc/domain'
 import {
@@ -53,6 +54,7 @@ import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } f
 import { HsnSearchDialog } from './HsnSearchDialog'
 import { DaysInput, UnitInput } from './LineUnitFields'
 import { DESIGN_INFO } from './InvoicePaper'
+import { SignatureDialog } from './SignatureDialog'
 import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { todayInIndia } from '@/shared/ui/days-left'
 
@@ -142,6 +144,7 @@ export function InvoiceEditor({
   const fileInput = useRef<HTMLInputElement>(null)
 
   const gst = !values.no_gst
+  const numberMode = company?.invoice_number_mode ?? 'running'
   const studioState = matchStudioState(states, company?.state)
   const selectedClient = clients.find((c) => c.id === values.client_id)
   const projectChoice = useClientProjectOptions(
@@ -149,6 +152,14 @@ export function InvoiceEditor({
     values.project_id && linkedProject.data ? { id: values.project_id, name: linkedProject.data.name } : null,
   )
   const templates = templateData?.items ?? []
+  // The signature is the studio's, the same on every design (PUT /billing/signature).
+  const sigFrom = templates.find((t) => t.is_default) ?? templates[0]
+  const signature = {
+    signatory_name: sigFrom?.layout_json.signatory_name ?? null,
+    signatory_title: sigFrom?.layout_json.signatory_title ?? null,
+    signature_image: sigFrom?.layout_json.signature_image ?? null,
+  }
+  const [signing, setSigning] = useState(false)
   const defaultSac = company?.invoice_sac_code?.trim() || ''
 
   // A customer with one project: that is almost always what the invoice is
@@ -309,6 +320,7 @@ export function InvoiceEditor({
     if (gstNumberError) problems.unshift(gstNumberError)
     if (gst && !values.place_of_supply) problems.unshift('Choose the place of supply for this tax invoice.')
     if (status === 'draft' && paymentOn) problems.unshift('A draft cannot take a payment. Use “Save and send” to record it.')
+    if (!isEdit && numberMode === 'manual' && !values.invoice_number.trim()) problems.unshift('Type the invoice number. Your studio types its own numbers.')
     if (problems.length) {
       setError(problems[0] ?? 'This invoice is not ready yet.')
       return
@@ -425,11 +437,23 @@ export function InvoiceEditor({
         <section className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2">
           <Field label="Invoice #">
             <Input
-              value={isEdit ? (editNumber ?? '') : values.invoice_number}
+              value={values.invoice_number}
               onChange={(e) => set('invoice_number', e.target.value)}
-              placeholder="Next number, automatically"
-              disabled={isEdit}
+              placeholder={
+                isEdit
+                  ? (editNumber ?? '')
+                  : numberMode === 'manual'
+                    ? 'Type the invoice number'
+                    : numberMode === 'date'
+                      ? `${company?.invoice_number_prefix ?? ''}${(values.invoice_date || todayInIndia()).replace(/-/g, '')}, by the date`
+                      : 'Next number, automatically'
+              }
+              className={cn(!isEdit && numberMode === 'manual' && !values.invoice_number.trim() && 'border-warning/70 bg-warning/5')}
+              maxLength={40}
             />
+            <Link to="/settings/company" className="mt-1 inline-flex text-xs font-medium text-primary hover:underline">
+              {numberMode === 'date' ? 'Numbered by date' : numberMode === 'manual' ? 'You type each number' : 'Running number'} · change
+            </Link>
           </Field>
           <Field label="Project">
             <Select value={values.project_id} onChange={(e) => set('project_id', e.target.value)} disabled={!values.client_id} aria-label="Project">
@@ -730,6 +754,32 @@ export function InvoiceEditor({
                 <Pencil className="size-3" /> Designs, colours and logo
               </Link>
             </div>
+
+            {/* Who signs it, changed right here (owner, 26 Oct). */}
+            <div className="rounded-xl border border-border p-4">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <PenLine className="size-4" /> Signature
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {signature.signature_image ? (
+                  <img src={signature.signature_image} alt="Signature" className="h-10 w-auto max-w-[140px] rounded border border-border bg-white object-contain" />
+                ) : null}
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="block font-medium">{signature.signatory_name || 'Your studio’s legal name'}</span>
+                  <span className="block text-xs text-muted-foreground">{signature.signatory_title || 'Authorised signatory'}</span>
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={signature.signature_image ? 'outline' : 'default'}
+                  disabled={!access.hasAction('billing', 'edit')}
+                  onClick={() => setSigning(true)}
+                >
+                  <PenLine /> {signature.signature_image || signature.signatory_name ? 'Edit signature' : 'Add signature'}
+                </Button>
+              </div>
+            </div>
+            {signing && <SignatureDialog value={signature} onClose={() => setSigning(false)} />}
           </div>
         </section>
 
@@ -786,7 +836,7 @@ export function InvoiceEditor({
                   {isEdit ? 'Record an advance or token amount received' : 'I have received payment (full, advance or token amount)'}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' Once money is recorded, the lines are locked.' : ''}
+                  Recorded with the invoice, with its receipt number. No second step later.{isEdit ? ' You can still change the invoice after money comes in.' : ''}
                 </span>
               </span>
             </label>

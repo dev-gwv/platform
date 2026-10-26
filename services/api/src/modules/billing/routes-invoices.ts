@@ -247,9 +247,10 @@ export const invoiceRoutes = new Hono<AppEnv>()
           )`
           return rows[0] ?? null
         }),
-      { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+      { onCode: (code) => (code === '23505' ? 'taken' : code === '23514' ? 'needs_number' : undefined) },
     )
     if (row === 'taken') fail(409, 'An invoice with this number already exists.')
+    if (row === 'needs_number') fail(422, 'Your studio types its own invoice numbers. Type a number for this invoice.')
     if (!row) fail(400, 'We could not create the invoice.')
     // Money already received goes on the invoice as it is made, so it is
     // never a draft: a draft cannot be paid.
@@ -356,8 +357,10 @@ export const invoiceRoutes = new Hono<AppEnv>()
     return c.json(invoiceDetail.parse(row))
   })
 
-  // Full resend, same as creation: once a payment is recorded the totals are
-  // a ledger fact, not a draft, so update_invoice() itself refuses those.
+  // Full resend, same as creation. An invoice with money on it can still be
+  // changed (owner, 26 Oct), as long as its new total is not below what was
+  // received; update_invoice() (0284) holds that rule and refuses a
+  // cancelled invoice until it is reopened.
   .patch('/invoices/:id', requireAction('billing', 'edit'), async (c) => {
     const parsed = updateInvoiceRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the invoice details.')
@@ -422,9 +425,10 @@ export const invoiceRoutes = new Hono<AppEnv>()
           )`
           return true
         }),
-      { onCode: (code) => (code === '23514' ? 'has_payment' : undefined) },
+      { onCode: (code, err) => (code === '23514' ? (String((err as Error)?.message ?? '').includes('cancelled') ? 'cancelled' : 'below_paid') : undefined) },
     )
-    if (ok === 'has_payment') fail(409, 'A payment has already been recorded against this invoice — it can no longer be edited.')
+    if (ok === 'cancelled') fail(409, 'This invoice is cancelled. Reopen it first, then edit it.')
+    if (ok === 'below_paid') fail(409, 'The new total is less than the money already received on this invoice. Move or delete a payment first, then lower it.')
     if (!ok) fail(400, 'We could not update this invoice.')
     // Preserve the extras from creation: status transitions (draft↔sent),
     // the GSTIN snapshot, subject, terms, HSN/SAC and attachments.
@@ -432,6 +436,19 @@ export const invoiceRoutes = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, id, req, patchGstNumber)),
     )
     if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
+    // A new number, if one was typed (unique per studio).
+    const number = req.invoice_number?.trim()
+    if (number) {
+      const renamed = await attempt(
+        c,
+        'billing.invoice_renumber',
+        () =>
+          withUser(c.env, c.get('auth').userId, (sql) => sql`
+            update invoices set invoice_number = ${number} where id = ${id} and invoice_number <> ${number}`),
+        { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
+      )
+      if (renamed === 'taken') fail(409, `Another invoice is already numbered ${number}. Pick a different number.`)
+    }
     await audit(c, { action: 'invoice.update', entityType: 'invoice', entityId: id, after: { total: totals.total, client_id: req.client_id } })
     return c.json({ ok: true })
   })
@@ -443,10 +460,12 @@ export const invoiceRoutes = new Hono<AppEnv>()
       'billing.invoice_delete',
       () =>
         withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
-          delete from invoices where id = ${id} and amount_paid = 0 returning id`),
+          delete from invoices i where i.id = ${id} and i.amount_paid = 0
+             and not exists (select 1 from received_payments rp where rp.invoice_id = i.id)
+          returning i.id`),
     )
     if (!rows) fail(400, 'We could not delete this invoice.')
-    if (!rows.length) fail(404, 'That invoice was not found, or already has a payment recorded.')
+    if (!rows.length) fail(409, 'This invoice has a payment on it. Move or delete the payment first, or cancel the invoice instead.')
     await audit(c, { action: 'invoice.delete', entityType: 'invoice', entityId: id })
     return c.body(null, 204)
   })

@@ -255,6 +255,30 @@ export const crmQuotesRouter = new Hono<AppEnv>()
     return c.json(crmQuoteStatusResponse.parse({ status: result.status }))
   })
 
+  // Revise (0286): a sent, expired or declined quote stays as the record of
+  // the offer made; the change is a new draft, copied line for line, with
+  // the next number.
+  .post('/quotes/:id/revise', edit, async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(
+      c,
+      'crm.quote_revise',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const [r] = await sql<{ id: string }[]>`select * from duplicate_quote(${id})`
+          if (!r) return null
+          const [full] = await sql`${selectQuotes(sql)} where q.id = ${r.id}`
+          return full ?? null
+        }),
+      { onCode: (code) => (code === '42501' ? ('missing' as const) : undefined) },
+    )
+    if (row === 'missing') fail(404, 'That quote was not found.')
+    if (!row) fail(400, 'We could not copy this quote.')
+    const made = crmQuote.parse(row)
+    await audit(c, { action: 'quote.revise', entityType: 'crm_quote', entityId: made.id, after: { from: id } })
+    return c.json(made, 201)
+  })
+
   // A draft can be dropped; anything sent stays as the record of the offer.
   .delete('/quotes/:id', remove, async (c) => {
     const id = uuidParam(c)

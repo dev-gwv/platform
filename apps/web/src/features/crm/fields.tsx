@@ -3,8 +3,8 @@ import type { Pipeline, PipelineStage } from '@ipc/contracts'
 import { QuickSelect, type QuickOption } from '@/shared/ui/quick-select'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { toneOf, type ToneName } from '@/shared/ui/tones'
-import { useActiveLookups, useCreateCustomLookup } from '@/features/settings/api'
-import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
+import { useActiveLookups } from '@/features/settings/api'
+import { useAddLookupWord, usePersonalWords } from '@/features/settings/quick-words'
 import { useCreateStage, usePipelines } from './api'
 import { EVENT_TYPE_DEFAULTS } from './event-types'
 
@@ -26,6 +26,7 @@ const QUALITY_FALLBACK: Record<string, ToneName> = { hot: 'rose', warm: 'amber',
 /** A studio list as picker options, with each value's colour. */
 export function useLookupOptions(category: string, defaults: readonly string[] = []): QuickOption[] {
   const lookups = useActiveLookups(category)
+  const mine = usePersonalWords(category)
   return useMemo(() => {
     const out: QuickOption[] = []
     const seen = new Set<string>()
@@ -39,8 +40,14 @@ export function useLookupOptions(category: string, defaults: readonly string[] =
       seen.add(d.toLowerCase())
       out.push({ value: d, label: prettyWord(d), color: QUALITY_FALLBACK[d] ?? null })
     }
+    // The person's own words (0284 quick list), after the studio's.
+    for (const w of mine) {
+      if (seen.has(w.toLowerCase())) continue
+      seen.add(w.toLowerCase())
+      out.push({ value: w, label: w, color: null })
+    }
     return out
-  }, [lookups.data, defaults])
+  }, [lookups.data, defaults, mine])
 }
 
 /** The colour a value wears in its list (a quality's rose, a source's blue). */
@@ -84,8 +91,7 @@ export function LookupChip({
   'aria-label'?: string | undefined
 }) {
   const options = useLookupOptions(category, defaults)
-  const canAdd = useCanAddLookup(category)
-  const create = useCreateCustomLookup()
+  const addWord = useAddLookupWord(category)
   return (
     <QuickSelect
       aria-label={ariaLabel ?? noun}
@@ -98,10 +104,7 @@ export function LookupChip({
       disabled={disabled}
       variant={variant}
       placeholder={placeholder ?? `Add ${noun}`}
-      onCreate={async (label, color) => {
-        if (canAdd) await create.mutateAsync({ category, value: label, color })
-        return label
-      }}
+      onCreate={(label, color) => addWord(label, color)}
     />
   )
 }
@@ -119,8 +122,7 @@ export function EventTypeChip({
   variant?: 'chip' | 'field' | undefined
 }) {
   const base = useLookupOptions('project_type', EVENT_TYPE_DEFAULTS.map((d) => d.value))
-  const canAdd = useCanAddLookup('project_type')
-  const create = useCreateCustomLookup()
+  const addWord = useAddLookupWord('project_type')
   const options = useMemo(
     () => base.map((o) => ({ ...o, icon: <EventTile name={o.value} size="sm" className="size-5 rounded-md [&_svg]:size-3" /> })),
     [base],
@@ -136,10 +138,7 @@ export function EventTypeChip({
       disabled={disabled}
       variant={variant}
       placeholder="What's the event?"
-      onCreate={async (label) => {
-        if (canAdd) await create.mutateAsync({ category: 'project_type', value: label })
-        return label
-      }}
+      onCreate={(label) => addWord(label)}
     />
   )
 }

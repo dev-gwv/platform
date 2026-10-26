@@ -8,6 +8,7 @@ import {
   creatorInitials,
   extractUrls,
   hostOf,
+  isOwnTask,
   isWebLink,
   matchesDue,
   matchesScope,
@@ -203,5 +204,17 @@ describe('groupByPerson', () => {
       TODAY,
     )
     expect(cols.map((c) => c.name)).toEqual(['Unassigned', 'Yash', 'Xena'])
+  })
+})
+
+describe('a task made for oneself', () => {
+  const me = 'u-me'
+  it('is one made by me with only me on it', () => {
+    expect(isOwnTask({ created_by: me, assignee_ids: [me] }, me)).toBe(true)
+  })
+  it('is not one given to me by someone else, or shared with others', () => {
+    expect(isOwnTask({ created_by: 'u-boss', assignee_ids: [me] }, me)).toBe(false)
+    expect(isOwnTask({ created_by: me, assignee_ids: [me, 'u-other'] }, me)).toBe(false)
+    expect(isOwnTask({ created_by: me, assignee_ids: [me] }, null)).toBe(false)
   })
 })

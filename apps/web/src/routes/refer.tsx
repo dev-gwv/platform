@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { Gift, CheckCircle2, Share2, MessageCircle, Mail, Copy } from 'lucide-react'
 import { toast } from 'sonner'
-import { publicReferralCampaign, z, buildWhatsAppUrl, type PublicReferralCampaign } from '@ipc/contracts'
+import { publicReferralCampaign, publicReferralRow, z, buildWhatsAppUrl, type PublicReferralCampaign, type PublicReferralRow } from '@ipc/contracts'
 
 const created = z.object({ id: z.string().uuid() })
 const duplicateResponse = z.object({ duplicate: z.boolean(), message: z.string().nullish() })
@@ -38,6 +38,7 @@ const REWARD_LABEL: Record<PublicReferralCampaign['reward_type'], (v: number) =>
  */
 export function ReferPage() {
   const { slug } = useParams({ from: '/refer/$slug' })
+  const viewToken = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('view') : null
   const [campaign, setCampaign] = useState<PublicReferralCampaign | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [referrerName, setReferrerName] = useState('')
@@ -110,12 +111,13 @@ export function ReferPage() {
     }
   }
 
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
+  // The link to pass on never carries the private ?view=.
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 font-sans">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4 font-sans">
       <PageBackdrop />
-      <Card className="relative z-10 w-full max-w-lg">
+      <Card className="relative z-10 w-full max-w-2xl">
         <CardContent className="flex flex-col gap-4 p-4">
           <div className="flex items-center gap-3">
             {campaign?.logo_url ? (
@@ -234,7 +236,72 @@ export function ReferPage() {
           )}
         </CardContent>
       </Card>
+      {campaign && viewToken && <YourReferrals slug={slug} view={viewToken} refresh={done} />}
     </div>
+  )
+}
+
+const STAGE: Record<PublicReferralRow['stage'], { label: string; tone: string }> = {
+  received: { label: 'Received', tone: 'border-border bg-muted text-foreground' },
+  in_touch: { label: 'Studio in touch', tone: 'border-tone-amber/40 bg-tone-amber-soft text-tone-amber' },
+  booked: { label: 'Booked', tone: 'border-success/40 bg-success/10 text-success' },
+  not_taken: { label: 'Not going ahead', tone: 'border-border bg-muted text-muted-foreground' },
+}
+
+/**
+ * Everyone referred through this link, with their number, what was written
+ * and where each one stands (owner, 26 Oct: "complete transparency"). Only on
+ * the client's own link (`?view=`); the link forwarded to friends has none.
+ */
+function YourReferrals({ slug, view, refresh }: { slug: string; view: string; refresh: boolean }) {
+  const [rows, setRows] = useState<PublicReferralRow[] | null>(null)
+  useEffect(() => {
+    callApi(`/public/referrals/campaign/${slug}/referrals?view=${encodeURIComponent(view)}`, { responseSchema: publicReferralRow.array() })
+      .then(setRows)
+      .catch(() => setRows([]))
+  }, [slug, view, refresh])
+  if (!rows || rows.length === 0) return null
+  const booked = rows.filter((r) => r.stage === 'booked').length
+  return (
+    <Card className="relative z-10 w-full max-w-2xl">
+      <CardContent className="flex flex-col gap-3 p-4 sm:p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Your referrals</h2>
+          <p className="text-sm text-muted-foreground">
+            {rows.length} {rows.length === 1 ? 'person' : 'people'} referred through this link
+            {booked ? ` · ${booked} booked` : ''}
+          </p>
+        </div>
+        <ul className="flex flex-col gap-2">
+          {rows.map((r) => (
+            <li key={r.id} className="rounded-xl border border-border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{r.name}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STAGE[r.stage].tone}`}>{STAGE[r.stage].label}</span>
+                {r.reward_given && (
+                  <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Reward given</span>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+              <p className="mt-1 text-sm">
+                {[r.phone, r.email].filter(Boolean).join(' · ')}
+              </p>
+              {(r.event_type || r.event_date) && (
+                <p className="text-sm text-muted-foreground">
+                  {[r.event_type, r.event_date ? new Date(`${r.event_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
+              {r.notes && <p className="mt-1 whitespace-pre-line rounded-lg bg-muted/50 px-3 py-2 text-sm">{r.notes}</p>}
+              {r.referred_by && <p className="mt-1 text-xs text-muted-foreground">Sent by {r.referred_by}</p>}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }
 

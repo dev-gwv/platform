@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown } from 'lucide-react'
+import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown, Undo2 } from 'lucide-react'
 import type { Expense } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -19,7 +19,7 @@ import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { humanize } from '@/shared/ui/format'
 import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
-import { useExpensePage, useDeleteExpense, useExpenseSummary, useMarkReimbursed } from '@/features/financials/api'
+import { useExpensePage, useDeleteExpense, useExpenseSummary, useMarkNotReimbursed, useMarkReimbursed } from '@/features/financials/api'
 import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
@@ -93,6 +93,7 @@ function Expenses() {
   const { data: categories } = useActiveLookups('expense_category')
   const del = useDeleteExpense()
   const reimburse = useMarkReimbursed()
+  const unreimburse = useMarkNotReimbursed()
 
   // The one period switch shared with Invoices, Payments, Profit & Loss and Reports.
   const period = usePeriod()
@@ -175,6 +176,9 @@ function Expenses() {
         ...(canEdit ? [{ label: 'Edit', icon: <Pencil className="size-4" />, onSelect: () => setEditing(e) }] : []),
         ...(canEdit && e.paid_by_user_id && e.reimbursement_status === 'pending'
           ? [{ label: `Paid back to ${e.paid_by_name ?? 'them'}`, icon: <CheckCircle2 className="size-4" />, onSelect: () => reimburse.mutate(e.id) }]
+          : []),
+        ...(canEdit && e.paid_by_user_id && e.reimbursement_status === 'reimbursed'
+          ? [{ label: 'Not paid back yet', icon: <Undo2 className="size-4" />, onSelect: () => unreimburse.mutate(e.id) }]
           : []),
         ...(canDelete ? [{ label: 'Delete', icon: <Trash2 className="size-4" />, onSelect: () => void onDelete(e) }] : []),
       ]}

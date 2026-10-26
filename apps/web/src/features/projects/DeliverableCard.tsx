@@ -291,6 +291,8 @@ export function activityWhat(kind: string, body: string | null | undefined, stag
       return 'sent it back for changes'
     case 'sent_to_client':
       return 'sent it to the client'
+    case 'withdrawn':
+      return 'took the hand-in back'
     default:
       return `moved it to ${movedLabel(body, stages)}`
   }

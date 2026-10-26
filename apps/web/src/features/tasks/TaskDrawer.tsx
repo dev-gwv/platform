@@ -1,16 +1,17 @@
-import { useState, type ReactNode } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { TASK_TAGS, type TaskListItem, type TaskStatus } from '@ipc/contracts'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
-import { Select, Textarea } from '@/shared/ui/input'
+import { Input, Label, Select, Textarea } from '@/shared/ui/input'
+import { useConfirm } from '@/shared/ui/confirm'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
-import { useBlockTask, useMoveTask, useSubtasks, useTask, useTaskActivity, useTaskSubmissions, useUpdateTask } from './api'
+import { useBlockTask, useDeleteTask, useMoveTask, useSubtasks, useTask, useTaskActivity, useTaskSubmissions, useUpdateTask } from './api'
 import { STATUS_LABEL, todayISO } from './board'
-import { ASSIGNEE_STATUSES, canReview, extractUrls, hostOf, isOpen, isWebLink } from './delegation'
+import { ASSIGNEE_STATUSES, OWN_TASK_STATUSES, canReview, extractUrls, hostOf, isOpen, isOwnTask, isWebLink } from './delegation'
 import { DueText, PriorityPill } from './TaskCard'
 import { ReviewBox, SubmitWorkForm, useTaskViewer } from './TaskActions'
 
@@ -53,17 +54,28 @@ export function TaskDrawer({
         ) : isError || !task ? (
           <p className="p-5 text-sm text-muted-foreground">This task could not be opened. It may have been deleted.</p>
         ) : (
-          <DrawerBody task={task} editSlot={editSlot} />
+          <DrawerBody task={task} editSlot={editSlot} onClose={onClose} />
         )}
       </SheetContent>
     </Sheet>
   )
 }
 
-function DrawerBody({ task, editSlot }: { task: TaskListItem; editSlot?: ((task: TaskListItem) => ReactNode) | undefined }) {
+function DrawerBody({
+  task,
+  editSlot,
+  onClose,
+}: {
+  task: TaskListItem
+  editSlot?: ((task: TaskListItem) => ReactNode) | undefined
+  onClose: () => void
+}) {
   const today = todayISO()
   const { me, canManage } = useTaskViewer()
   const onIt = !!me && task.assignee_ids.includes(me)
+  // A task made for oneself is one's own to change, close, reopen or delete.
+  const own = !canManage && isOwnTask(task, me)
+  const [editing, setEditing] = useState(false)
   const links = extractUrls(task.description)
   const subtasks = useSubtasks(task.id)
 
@@ -88,7 +100,14 @@ function DrawerBody({ task, editSlot }: { task: TaskListItem; editSlot?: ((task:
         <p className="rounded-lg bg-tone-amber-soft px-3 py-2 text-sm text-tone-amber">Blocked: {task.blocked_reason}</p>
       )}
 
-      <StatusRow task={task} onIt={onIt} canManage={canManage} />
+      <StatusRow task={task} onIt={onIt} canManage={canManage} own={own} />
+
+      {own &&
+        (editing ? (
+          <OwnTaskForm task={task} onDone={() => setEditing(false)} />
+        ) : (
+          <OwnTaskButtons task={task} onEdit={() => setEditing(true)} onDeleted={onClose} />
+        ))}
 
       {(canManage || editSlot) && (
         <div className="flex flex-wrap items-center gap-2">
@@ -160,14 +179,15 @@ function DrawerBody({ task, editSlot }: { task: TaskListItem; editSlot?: ((task:
 }
 
 /** Move it: the person on it picks from their four; a manager from all. Blocked asks why. */
-function StatusRow({ task, onIt, canManage }: { task: TaskListItem; onIt: boolean; canManage: boolean }) {
+function StatusRow({ task, onIt, canManage, own }: { task: TaskListItem; onIt: boolean; canManage: boolean; own: boolean }) {
   const move = useMoveTask()
   const block = useBlockTask()
   const [askReason, setAskReason] = useState(false)
   const [reason, setReason] = useState('')
   if (!onIt && !canManage) return null
-  if (!canManage && !isOpen(task)) return null
-  const options = canManage ? ALL_STATUSES : ASSIGNEE_STATUSES
+  // A closed task stays closed for the person on it -- unless they made it for themselves.
+  if (!canManage && !own && !isOpen(task)) return null
+  const options = canManage ? ALL_STATUSES : own ? OWN_TASK_STATUSES : ASSIGNEE_STATUSES
 
   return (
     <section className="flex flex-col gap-2">
@@ -222,6 +242,72 @@ function StatusRow({ task, onIt, canManage }: { task: TaskListItem; onIt: boolea
         </form>
       )}
     </section>
+  )
+}
+
+/** Edit and Delete for a task made for oneself, where a manager would have the page's own editor. */
+function OwnTaskButtons({ task, onEdit, onDeleted }: { task: TaskListItem; onEdit: () => void; onDeleted: () => void }) {
+  const del = useDeleteTask()
+  const confirm = useConfirm()
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="outline" onClick={onEdit}>
+        <Pencil /> Edit
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="hover:border-destructive hover:text-destructive"
+        disabled={del.isPending}
+        onClick={async () => {
+          const yes = await confirm({ title: `Delete "${task.title}"?`, description: 'It goes from your list for good.', confirmLabel: 'Delete', destructive: true })
+          if (yes) del.mutate(task.id, { onSuccess: onDeleted })
+        }}
+      >
+        <Trash2 /> Delete
+      </Button>
+    </div>
+  )
+}
+
+function OwnTaskForm({ task, onDone }: { task: TaskListItem; onDone: () => void }) {
+  const update = useUpdateTask()
+  const [title, setTitle] = useState(task.title)
+  const [details, setDetails] = useState(task.description ?? '')
+  const [due, setDue] = useState(task.due_date ?? '')
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    update.mutate(
+      { id: task.id, patch: { title: title.trim(), description: details.trim() || null, due_date: due || null } },
+      { onSuccess: onDone },
+    )
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-xl border border-border p-3">
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="own-task-title">Task</Label>
+        <Input id="own-task-title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} autoFocus />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="own-task-details">Details</Label>
+        <Textarea id="own-task-details" rows={3} value={details} onChange={(e) => setDetails(e.target.value)} maxLength={2000} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="own-task-due">Due</Label>
+        <Input id="own-task-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-44" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" disabled={!title.trim() || update.isPending}>
+          Save
+        </Button>
+      </div>
+    </form>
   )
 }
 

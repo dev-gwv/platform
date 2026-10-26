@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Database, ExternalLink, HardDrive } from 'lucide-react'
+import { Archive, Database, ExternalLink, HardDrive, Trash2, UserX } from 'lucide-react'
 import type { DataBoardRow } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -10,11 +10,12 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
-import { useBulkData, useDataBoard, useDeleteDataRecord } from '@/features/data/api'
-import { byAge, figures, nextAction } from '@/features/data/board-model'
+import { useBulkData, useDataBoard, useDeleteDataRecord, useUpdateDataRecord } from '@/features/data/api'
+import { byAge, deleteBlock, figures, nextAction } from '@/features/data/board-model'
 import { STAGE_LABEL, STAGE_TONE } from '@/features/data/stage'
 import { cardsLine } from '@/features/data/cards'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { AddRecordDialog } from '@/features/data/AddRecordDialog'
 import { todayInIndia } from '@/shared/ui/days-left'
 
 const shortDay = (iso: string | null) =>
@@ -37,6 +38,7 @@ export function DataTab({ projectId }: { projectId: string }) {
   const board = useDataBoard(projectId)
   const bulk = useBulkData()
   const del = useDeleteDataRecord()
+  const update = useUpdateDataRecord()
   const confirm = useConfirm()
   const [opened, setOpened] = useState<DataBoardRow | null>(null)
 
@@ -44,8 +46,9 @@ export function DataTab({ projectId }: { projectId: string }) {
   const f = figures(rows)
   const safe = rows.filter((r) => ['backed_up', 'verified', 'archived', 'not_required'].includes(r.stage)).length
 
+  // A booking's row opens the crew dialog; a card logged on its own opens its own editor.
   const open = (r: DataBoardRow) => {
-    if (r.slot_id && r.shoot_id) setOpened(r)
+    if ((r.slot_id && r.shoot_id) || r.record) setOpened(r)
   }
 
   return (
@@ -133,7 +136,7 @@ export function DataTab({ projectId }: { projectId: string }) {
                           <StatusBadge tone={STAGE_TONE[r.stage]}>{STAGE_LABEL[r.stage]}</StatusBadge>
                         </td>
                         <td className="px-3 py-2.5">
-                          <RowActions r={r} onOpen={open} bulk={bulk} del={del} confirm={confirm} />
+                          <RowActions r={r} onOpen={open} bulk={bulk} del={del} update={update} confirm={confirm} />
                         </td>
                       </tr>
                     ))}
@@ -163,13 +166,17 @@ export function DataTab({ projectId }: { projectId: string }) {
                           .join(' · ')}
                       </p>
                     )}
-                    <RowActions r={r} onOpen={open} bulk={bulk} del={del} confirm={confirm} />
+                    <RowActions r={r} onOpen={open} bulk={bulk} del={del} update={update} confirm={confirm} />
                   </li>
                 ))}
               </ul>
             </CardContent>
           </Card>
         </>
+      )}
+
+      {opened && !(opened.slot_id && opened.shoot_id) && opened.record && (
+        <AddRecordDialog record={opened.record} open onOpenChange={(v) => !v && setOpened(null)} />
       )}
 
       {opened && opened.slot_id && opened.shoot_id && (
@@ -198,17 +205,21 @@ function RowActions({
   onOpen,
   bulk,
   del,
+  update,
   confirm,
 }: {
   r: DataBoardRow
   onOpen: (r: DataBoardRow) => void
   bulk: ReturnType<typeof useBulkData>
   del: ReturnType<typeof useDeleteDataRecord>
+  update: ReturnType<typeof useUpdateDataRecord>
   confirm: ReturnType<typeof useConfirm>
 }) {
   const quick = quickStep(r)
   const next = nextAction(r)
-  const editable = !!(r.slot_id && r.shoot_id)
+  const editable = !!(r.slot_id && r.shoot_id) || !!r.record
+  const rec = r.record
+  const blocked = rec ? deleteBlock(rec) : null
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
       {quick ? (
@@ -231,13 +242,26 @@ function RowActions({
         label="More"
         items={[
           ...(editable ? [{ label: 'Edit', icon: <Database />, onSelect: () => onOpen(r) }] : []),
-          ...(r.record
+          // Archived and "with the editor" can be taken back (owner, 26 Oct).
+          ...(rec?.archived_at
+            ? [{ label: 'Unarchive', icon: <Archive />, onSelect: () => update.mutate({ id: rec.id, patch: { archived: false } }) }]
+            : []),
+          ...(rec?.handed_to_editor_at
+            ? [{ label: 'Not with editor', icon: <UserX />, onSelect: () => update.mutate({ id: rec.id, patch: { handed_to_editor: false } }) }]
+            : []),
+          ...(rec
             ? [
                 {
-                  label: 'Delete record',
+                  // Offered only when it can work; otherwise it says why.
+                  label: blocked ? `Delete record (${blocked})` : 'Delete record',
+                  icon: <Trash2 />,
+                  disabled: !!blocked,
+                  danger: !blocked,
+                  divider: true,
                   onSelect: async () => {
+                    if (blocked) return
                     if (await confirm({ title: 'Delete this data record?', description: 'The shoot and the booking stay; only where the cards went is forgotten.', confirmLabel: 'Delete', destructive: true })) {
-                      del.mutate(r.record!.id)
+                      del.mutate(rec.id)
                     }
                   },
                 },

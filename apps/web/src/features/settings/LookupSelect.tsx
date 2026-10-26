@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { useCanAddLookup } from './useCanAddLookup'
 import { CreatableSelect, type CreatableOption } from '@/shared/ui/creatable-select'
-import { useActiveLookups, useCreateCustomLookup } from './api'
+import { useActiveLookups } from './api'
+import { useAddLookupWord, usePersonalWords } from './quick-words'
 
 /**
  * A dropdown of one of the studio's own lists (Settings → Lists) that can
@@ -10,8 +10,8 @@ import { useActiveLookups, useCreateCustomLookup } from './api'
  *
  * `defaults` are the built-in choices shown before the studio has added any
  * of its own. Saving to the list needs create access where the list is
- * used (see LOOKUP_QUICK_ADD), so for anyone else the typed option is used on this record
- * without joining the list -- they are never stuck at "Other".
+ * used (see LOOKUP_QUICK_ADD); anyone else keeps the typed option on their own
+ * quick list, offered to them next time (owner, 26 Oct).
  */
 export function LookupSelect({
   category,
@@ -36,9 +36,9 @@ export function LookupSelect({
   className?: string | undefined
   'aria-label'?: string | undefined
 }) {
-  const canAdd = useCanAddLookup(category)
   const lookups = useActiveLookups(category)
-  const create = useCreateCustomLookup()
+  const mine = usePersonalWords(category)
+  const addWord = useAddLookupWord(category)
 
   const options = useMemo(() => {
     const out: CreatableOption[] = [...defaults]
@@ -48,8 +48,12 @@ export function LookupSelect({
       )
       if (!seen) out.push({ value: l.value, label: l.value })
     }
+    // The person's own words, kept from earlier picks (quick list).
+    for (const w of mine) {
+      if (!out.some((o) => o.value.toLowerCase() === w.toLowerCase() || o.label.toLowerCase() === w.toLowerCase())) out.push({ value: w, label: w })
+    }
     return out
-  }, [defaults, lookups.data])
+  }, [defaults, lookups.data, mine])
 
   return (
     <CreatableSelect
@@ -62,10 +66,7 @@ export function LookupSelect({
       placeholder={placeholder}
       addLabel={addLabel}
       inputPlaceholder={inputPlaceholder}
-      onCreate={async (label) => {
-        if (canAdd) await create.mutateAsync({ category, value: label })
-        return label
-      }}
+      onCreate={(label) => addWord(label)}
     />
   )
 }

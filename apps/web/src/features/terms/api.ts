@@ -176,6 +176,20 @@ export function useSaveTermsTemplate() {
   })
 }
 
+/** A saved template changed in place. */
+export function useUpdateTermsTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; name?: string; body?: string }) =>
+      callApi(`/terms/templates/${id}`, { method: 'PATCH', body: input, responseSchema: z.object({ id: z.string() }) }),
+    onSuccess: () => {
+      toast.success('Template updated')
+      void qc.invalidateQueries({ queryKey: ['terms', 'templates'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 /** One instalment of the schedule the client is agreeing to. */
 interface IssueTermsInput {
   project_id: string | null

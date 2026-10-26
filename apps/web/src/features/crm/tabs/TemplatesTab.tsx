@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Sparkles, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Sparkles, Trash2 } from 'lucide-react'
 import { templateVariables } from '@ipc/domain'
 import type { CrmTemplate, TemplateKind } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -20,7 +20,10 @@ const KNOWN = new Set(['name', 'phone', 'email', 'studio'])
  * filled from the lead — name, phone, email — and {{studio}} from the company.
  */
 export function TemplatesTab() {
-  const { data, isLoading, isError, error, refetch } = useTemplates()
+  const { data: everything, isLoading, isError, error, refetch } = useTemplates(true)
+  const data = (everything ?? []).filter((t) => t.is_active)
+  const archived = (everything ?? []).filter((t) => !t.is_active)
+  const [showArchived, setShowArchived] = useState(false)
   const create = useCreateTemplate()
   const seed = useSeedTemplates()
   const update = useUpdateTemplate()
@@ -133,7 +136,7 @@ export function TemplatesTab() {
         </Card>
       )}
 
-      {!data || data.length === 0 ? (
+      {data.length === 0 ? (
         <Card>
           <CardContent className="py-4">
             <EmptyState title="No templates yet" description="Save a follow-up you send every day, then send it from any lead in one tap." />
@@ -156,6 +159,13 @@ export function TemplatesTab() {
                     <span className="sr-only">Edit {t.name}</span>
                   </Button>
                 )}
+                {/* Put away, not gone: it can come back from Archived below. */}
+                {canEdit && (
+                  <Button size="sm" variant="ghost" title="Archive" onClick={() => update.mutate({ id: t.id, patch: { is_active: false } })}>
+                    <Archive />
+                    <span className="sr-only">Archive {t.name}</span>
+                  </Button>
+                )}
                 {canDelete && (
                   <Button size="sm" variant="ghost" onClick={() => void onDelete(t.id, t.name)}>
                     <Trash2 />
@@ -166,6 +176,44 @@ export function TemplatesTab() {
             </CardContent>
           </Card>
         ))
+      )}
+
+      {archived.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="w-fit text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            {showArchived ? 'Hide archived' : `Archived (${archived.length})`}
+          </button>
+          {showArchived &&
+            archived.map((t) => (
+              <Card key={t.id} className="opacity-80">
+                <CardContent className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 font-medium">
+                      {t.name} <StatusBadge tone="neutral">Archived</StatusBadge>
+                    </p>
+                    <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{t.body}</p>
+                  </div>
+                  <span className="flex gap-1">
+                    {canEdit && (
+                      <Button size="sm" variant="outline" disabled={update.isPending} onClick={() => update.mutate({ id: t.id, patch: { is_active: true } })}>
+                        <ArchiveRestore /> Restore
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button size="sm" variant="ghost" onClick={() => void onDelete(t.id, t.name)}>
+                        <Trash2 />
+                        <span className="sr-only">Delete {t.name}</span>
+                      </Button>
+                    )}
+                  </span>
+                </CardContent>
+              </Card>
+            ))}
+        </div>
       )}
     </div>
   )

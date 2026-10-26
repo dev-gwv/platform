@@ -284,6 +284,8 @@ export const updateLeadRequest = z
     group_name: z.string().trim().max(120).nullable().optional(),
     /** Replaces the lead's whole list of functions (0212). Wins over event_type/date/location. */
     functions: z.array(leadFunctionInput).max(12).optional(),
+    /** Whose QR code the lead is credited to (0274); null takes the credit off. */
+    partner_id: uuid.nullable().optional(),
   })
   .refine(lostNeedsReason, {
     message: 'Tell us why it was lost (3+ chars).',
@@ -602,6 +604,22 @@ export type ResolveDuplicateRequest = z.infer<typeof resolveDuplicateRequest>
 
 export const resolveDuplicateResponse = z.object({ resolved: z.number().int() })
 export type ResolveDuplicateResponse = z.infer<typeof resolveDuplicateResponse>
+
+/** A pair someone said is not a duplicate (0286), so it stays out of the groups. */
+export const duplicateDismissal = z.object({
+  lead_a: uuid,
+  name_a: z.string(),
+  lead_b: uuid,
+  name_b: z.string(),
+  matched_on: z.enum(['phone', 'email']),
+  dismissed_by: z.string().nullable(),
+  created_at: isoDateTime,
+})
+export type DuplicateDismissal = z.infer<typeof duplicateDismissal>
+
+/** Undo "not duplicates" for one pair: it can be offered again. */
+export const undoDismissalRequest = z.object({ lead_a: uuid, lead_b: uuid })
+export type UndoDismissalRequest = z.infer<typeof undoDismissalRequest>
 
 // ── CSV import ────────────────────────────────────────────────
 export const csvImportPreviewRequest = z.object({

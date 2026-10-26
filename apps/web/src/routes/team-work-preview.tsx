@@ -194,7 +194,13 @@ function TeamWorkPreview() {
                       >
                         {WORK_STATUS_LABEL[s.status]}
                       </StatusBadge>
-                      {canReview && s.status === 'submitted' && <ReviewButtons submissionId={s.id} editorName={selected?.name} />}
+                      {canReview && (s.status === 'submitted' || s.status === 'approved' || s.status === 'rejected') && (
+                        <ReviewButtons
+                          submissionId={s.id}
+                          editorName={selected?.name}
+                          decided={s.status === 'submitted' ? undefined : s.status}
+                        />
+                      )}
                     </div>
                   </li>
                 ))}

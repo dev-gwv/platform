@@ -234,7 +234,8 @@ export type AttendanceDayPage = z.infer<typeof attendanceDayPage>
 /** An owner or admin fixing one person's day: forgot to tap in, wrong side of the fence. */
 export const setAttendanceRequest = z
   .object({
-    status: attendanceStatus,
+    /** 'none' clears the day's mark (0286). */
+    status: z.union([attendanceStatus, z.literal('none')]),
     check_in_at: isoDateTime.nullable().optional(),
     check_out_at: isoDateTime.nullable().optional(),
     note: z.string().trim().max(300).optional(),
@@ -319,6 +320,13 @@ export type LeaveBalance = z.infer<typeof leaveBalance>
 export const companyHoliday = z.object({ id: uuid, holiday_date: isoDate, name: z.string() })
 export type CompanyHoliday = z.infer<typeof companyHoliday>
 export const createHolidayRequest = z.object({ holiday_date: isoDate, name: z.string().trim().min(1).max(80) })
+/** Rename a holiday or move it to another day. */
+export const updateHolidayRequest = createHolidayRequest.partial()
+export type UpdateHolidayRequest = z.infer<typeof updateHolidayRequest>
+
+/** A manager puts a decided leave request back to waiting (0286). */
+export const reopenLeaveRequest = z.object({ note: z.string().trim().max(500).nullable().optional() })
+export type ReopenLeaveRequest = z.infer<typeof reopenLeaveRequest>
 
 export const attendancePolicy = z.object({
   /** 0 = Sunday … 6 = Saturday. */

@@ -13,16 +13,22 @@ import type { TermsPayload } from './document'
  * different renderings of the same legal text, the whole point of being able
  * to read it in the app would be lost.
  *
- * `bodyClassName` is the one concession: the public page scrolls the body
- * inside a short card on a phone, the dialog gives it the whole panel.
+ * `bodyClassName` lets a small panel (a dialog) scroll the body inside itself.
+ * `reading` is the client's own page (owner, 26 Oct: it was "very narrow" and
+ * the client "has to scroll down a lot"): the whole text in one piece, in
+ * larger type with room between lines, never a box inside the page.
  */
 export function TermsDocumentSheet({
   doc,
   bodyClassName = 'max-h-[45vh] overflow-auto',
+  reading = false,
 }: {
   doc: TermsPayload
   bodyClassName?: string
+  reading?: boolean
 }) {
+  // Fixed sizes: the app's rem is small, and a client reads this on a phone.
+  const text = reading ? 'p-5 text-[16px] leading-[1.7] sm:p-8 sm:text-[17px]' : 'p-4 text-sm'
   const estimatedFor = (mode: string | null | undefined, value: number | null | undefined) =>
     (mode === 'percentage' || mode === 'percent') && doc.total_cost ? ((Number(value) || 0) / 100) * doc.total_cost : Number(value) || 0
 
@@ -30,7 +36,7 @@ export function TermsDocumentSheet({
     <div className="flex flex-col gap-4">
       {doc.total_cost != null && doc.total_cost > 0 && (
         <Card>
-          <CardContent className="p-4 text-sm">
+          <CardContent className={reading ? 'p-5 text-[16px] sm:px-8' : 'p-4 text-sm'}>
             <div className="flex items-center justify-between">
               <p className="font-semibold">Project value</p>
               <p className="font-semibold tabular-nums">₹{doc.total_cost.toLocaleString('en-IN')}</p>
@@ -41,10 +47,10 @@ export function TermsDocumentSheet({
 
       {doc.payment_terms && doc.payment_terms.length > 0 ? (
         <Card>
-          <CardContent className="p-4 text-sm">
+          <CardContent className={reading ? 'p-5 text-[16px] sm:px-8' : 'p-4 text-sm'}>
             <p className="font-semibold">Payment terms</p>
             <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-xs">
+              <table className={reading ? 'w-full text-[15px] [&_td]:py-2.5 [&_th]:py-2' : 'w-full text-xs'}>
                 <thead className="bg-muted/40 text-left">
                   <tr>
                     <th className="px-2 py-1.5 font-medium">Label</th>
@@ -90,11 +96,11 @@ export function TermsDocumentSheet({
 
       {doc.sections.length > 0 && (
         <Card>
-          <CardContent className="p-4 text-sm">
+          <CardContent className={text}>
             {doc.sections.map((s, i) => (
-              <div key={i} className="mb-3 last:mb-0">
-                {(s['heading'] as string | undefined) && <p className="font-semibold">{String(s['heading'])}</p>}
-                <p className="whitespace-pre-wrap text-muted-foreground">{String(s['body'] ?? '')}</p>
+              <div key={i} className={reading ? 'mb-5 last:mb-0' : 'mb-3 last:mb-0'}>
+                {(s['heading'] as string | undefined) && <p className={reading ? 'mb-1 text-[19px] font-semibold' : 'font-semibold'}>{String(s['heading'])}</p>}
+                <p className={reading ? 'whitespace-pre-wrap text-foreground/85' : 'whitespace-pre-wrap text-muted-foreground'}>{String(s['body'] ?? '')}</p>
               </div>
             ))}
           </CardContent>
@@ -102,7 +108,7 @@ export function TermsDocumentSheet({
       )}
 
       <Card>
-        <CardContent className={`terms-body whitespace-pre-wrap p-4 text-sm leading-relaxed ${bodyClassName}`}>
+        <CardContent className={`terms-body whitespace-pre-wrap leading-relaxed ${text} ${reading ? '' : bodyClassName}`}>
           {doc.body}
         </CardContent>
       </Card>

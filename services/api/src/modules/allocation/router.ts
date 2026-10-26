@@ -105,6 +105,27 @@ export const allocationRouter = new Hono<AppEnv>()
     return c.json({ arrived_at: out })
   })
 
+  // Undo an "I've reached" (0285): for whoever plans crew, not the person
+  // booked. The attendance it wrote for that day goes with it.
+  .post('/:id/arrived/undo', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const ok = await attempt(
+      c,
+      'allocation.arrived_undo',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          const [r] = await sql<{ ok: boolean }[]>`select unmark_arrived(${id}) as ok`
+          return r?.ok ? ('ok' as const) : ('missing' as const)
+        }),
+      { onCode: (code) => (code === '42501' ? ('forbidden' as const) : undefined) },
+    )
+    if (ok === 'forbidden') fail(403, 'Only an owner or a manager can undo an arrival.')
+    if (ok === 'missing') fail(404, 'That booking was not found, or nobody marked it as reached.')
+    if (!ok) fail(400, 'We could not undo the arrival.')
+    await audit(c, { action: 'slot.arrived_undo', entityType: 'team_slot', entityId: id })
+    return c.body(null, 204)
+  })
+
   /**
    * Bookings, with what each is for. `from`/`to` (dates, inclusive) and
    * `user_id` narrow it. Payout is bookkeeping for whoever plans crew: anyone
@@ -238,18 +259,25 @@ export const allocationRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, 'Please check the cost details.')
     const id = uuidParam(c)
     const d = parsed.data
-    const ok = await attempt(c, 'allocation.set_cost', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
-        await sql`select set_slot_cost(
-          p_slot_id => ${id},
-          p_estimated_cost => ${d.estimated_cost ?? null},
-          p_final_cost => ${d.final_cost ?? null},
-          p_cost_status => ${d.cost_status ?? null},
-          p_cost_notes => ${d.cost_notes ?? null}
-        )`
-        return true
-      }),
+    const ok = await attempt(
+      c,
+      'allocation.set_cost',
+      () =>
+        withUser(c.env, c.get('auth').userId, async (sql) => {
+          await sql`select set_slot_cost(
+            p_slot_id => ${id},
+            p_estimated_cost => ${d.estimated_cost ?? null},
+            p_final_cost => ${d.final_cost ?? null},
+            p_cost_status => ${d.cost_status ?? null},
+            p_cost_notes => ${d.cost_notes ?? null}
+          )`
+          // An amount or a note taken out of the box is emptied (0285).
+          if (d.clear?.length) await sql`select clear_slot_cost(${id}, ${sql.array(d.clear)}::text[])`
+          return true as const
+        }),
+      { onCode: (code, err) => (code === 'P0001' && reason(err).includes('paid') ? ('paid' as const) : undefined) },
     )
+    if (ok === 'paid') fail(409, 'Money has already been paid on this booking, so its payout cannot be emptied. Change the amount instead.')
     if (!ok) fail(400, 'We could not update the cost.')
     await audit(c, { action: 'allocation.set_cost', entityType: 'team_assignment_slot', entityId: id, after: d })
     return c.body(null, 204)

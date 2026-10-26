@@ -112,18 +112,44 @@ export function useSendNow() {
   })
 }
 
-export function useMarkSent() {
+/** Puts a message marked Sent or Skipped by mistake back in Send now (0286). */
+async function undoSend(id: string) {
+  await callApi(`/crm/sequences/sends/${id}/undo`, { method: 'POST', responseSchema: z.unknown() })
+}
+
+/** Sent and Skip each say what happened, with Undo beside it. */
+function useMarkedWithUndo(path: 'done' | 'skip', message: string) {
+  const qc = useQueryClient()
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['crm'] })
   return useMutation({
-    mutationFn: (id: string) => callApi(`/crm/sequences/sends/${id}/done`, { method: 'POST', responseSchema: z.unknown() }),
-    ...useDone(),
+    mutationFn: (id: string) => callApi(`/crm/sequences/sends/${id}/${path}`, { method: 'POST', responseSchema: z.unknown() }),
+    onSuccess: (_out, id) => {
+      refresh()
+      toast.success(message, {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            undoSend(id).then(
+              () => {
+                refresh()
+                toast.success('Back in Send now')
+              },
+              (e: Error) => toast.error(e.message || 'That did not work. Please try again.'),
+            )
+          },
+        },
+      })
+    },
+    onError: (e: Error) => toast.error(e.message || 'That did not work. Please try again.'),
   })
 }
 
+export function useMarkSent() {
+  return useMarkedWithUndo('done', 'Marked sent')
+}
+
 export function useSkipSend() {
-  return useMutation({
-    mutationFn: (id: string) => callApi(`/crm/sequences/sends/${id}/skip`, { method: 'POST', responseSchema: z.unknown() }),
-    ...useDone('Skipped'),
-  })
+  return useMarkedWithUndo('skip', 'Skipped')
 }
 
 export function useLeadSequence(leadId: string) {

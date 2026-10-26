@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DataBoardRow, DataRecord } from '@ipc/contracts'
-import { bulkIds, chaseMessage, figures, inFocus, laneOf, levelOf, matches, mostPending, nextAction, waNumber } from './board-model'
+import { bulkIds, chaseMessage, deleteBlock, figures, inFocus, laneOf, levelOf, matches, mostPending, nextAction, waNumber } from './board-model'
 
 const PRIYA = '00000000-0000-4000-8000-000000000001'
 const AMAN = '00000000-0000-4000-8000-000000000002'
@@ -103,5 +103,17 @@ describe('search, next step, bulk', () => {
     const loose = row({ slot_id: null, record: { id: 'rec-1' } as DataRecord, stage: 'received' })
     const booked = row({})
     expect(bulkIds([loose, booked])).toEqual({ slot_ids: [booked.slot_id], record_ids: ['rec-1'] })
+  })
+})
+
+describe('deleting a record', () => {
+  it('is offered while no copy is confirmed', () => {
+    expect(deleteBlock({ primary_status: 'pending', backup_status: 'pending' })).toBeNull()
+    expect(deleteBlock({ primary_status: 'pending', backup_status: 'not_required' })).toBeNull()
+  })
+
+  it('says why not once a copy is confirmed', () => {
+    expect(deleteBlock({ primary_status: 'copied', backup_status: 'pending' })).toMatch(/set them back to pending/)
+    expect(deleteBlock({ primary_status: 'pending', backup_status: 'copied' })).toMatch(/Copies are confirmed/)
   })
 })

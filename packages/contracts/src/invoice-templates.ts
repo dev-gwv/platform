@@ -13,7 +13,19 @@ const layoutJsonDefaults = {
   design: 'classic' as InvoiceDesign,
   accent: '#4f46e5',
   show_logo: true,
+  signatory_name: null as string | null,
+  signatory_title: null as string | null,
+  signature_image: null as string | null,
 }
+
+/**
+ * Who signs the invoice (owner, 26 Oct: it could only be changed by asking us):
+ * a name, a title and a drawn or uploaded signature, a small PNG/JPEG data URL.
+ */
+const signatureImage = z
+  .string()
+  .max(300_000, 'Keep the signature image small (under 200 KB).')
+  .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, 'Use a PNG or JPG image.')
 
 /**
  * How a printed invoice looks. Each design is a whole page style -- header,
@@ -37,6 +49,9 @@ export const invoiceTemplateLayout = z.object({
   design: invoiceDesign.catch('classic').default('classic'),
   accent: hexColour.catch('#4f46e5').default('#4f46e5'),
   show_logo: z.boolean().default(true),
+  signatory_name: z.string().nullable().catch(null).default(null),
+  signatory_title: z.string().nullable().catch(null).default(null),
+  signature_image: z.string().nullable().catch(null).default(null),
 })
 export type InvoiceTemplateLayout = z.infer<typeof invoiceTemplateLayout>
 
@@ -69,10 +84,21 @@ export const createInvoiceTemplateRequest = z.object({
     design: invoiceDesign.default('classic'),
     accent: hexColour.default('#4f46e5'),
     show_logo: z.boolean().default(true),
+    signatory_name: z.string().trim().max(80).nullish(),
+    signatory_title: z.string().trim().max(60).nullish(),
+    signature_image: signatureImage.nullish(),
   }).default(layoutJsonDefaults),
   is_default: z.boolean().default(false),
 })
 export type CreateInvoiceTemplateRequest = z.infer<typeof createInvoiceTemplateRequest>
+
+/** Set who signs every invoice, from the invoice itself (PUT /billing/signature). */
+export const invoiceSignatureRequest = z.object({
+  signatory_name: z.string().trim().max(80).nullable(),
+  signatory_title: z.string().trim().max(60).nullable(),
+  signature_image: signatureImage.nullable(),
+})
+export type InvoiceSignatureRequest = z.infer<typeof invoiceSignatureRequest>
 
 /**
  * A reusable Notes snippet -- independent of layoutJsonDefaults' print-layout

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Gift } from 'lucide-react'
+import { Gift, Undo2 } from 'lucide-react'
 import type { ReferralCampaign, ReferralSubmission } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -18,6 +18,7 @@ const whom = (s: ReferralSubmission) => s.referred_name ?? s.client_name
  */
 export function RewardsBoard({ campaigns }: { campaigns: readonly ReferralCampaign[] }) {
   const inr = useINR()
+  const update = useUpdateSubmissionStatus()
   const due = useRewardSubmissions('due')
   const given = useRewardSubmissions('given')
   const dueRows = due.data?.items ?? []
@@ -51,6 +52,16 @@ export function RewardsBoard({ campaigns }: { campaigns: readonly ReferralCampai
                   <span className="text-muted-foreground"> · for {whom(s)}</span>
                 </span>
                 <span className="tabular-nums">{s.reward_amount ? inr(s.reward_amount) : '—'}</span>
+                {/* Marked given by mistake: back to To give. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7"
+                  disabled={update.isPending}
+                  onClick={() => update.mutate({ id: s.id, reward_status: 'due' })}
+                >
+                  <Undo2 /> Undo
+                </Button>
               </li>
             ))
           )}

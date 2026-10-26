@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip, PenLine } from 'lucide-react'
 import { amountInWords, lineMeasure, rateUnit } from '@ipc/domain'
 import { placeOfSupplyLabel, type InvoiceDesign, type InvoiceDetail, type InvoiceTemplateLayout } from '@ipc/contracts'
 import { formatINR, humanize } from '@/shared/ui/format'
@@ -35,6 +35,9 @@ const NO_LAYOUT: InvoiceTemplateLayout = {
   design: 'classic',
   accent: '#4f46e5',
   show_logo: true,
+  signatory_name: null,
+  signatory_title: null,
+  signature_image: null,
 }
 
 /** The five looks a studio picks from, with the words shown in the picker. */
@@ -63,6 +66,7 @@ export function InvoicePaper({
   company,
   layoutOverride,
   attachmentHref,
+  onEditSignature,
 }: {
   invoice: InvoiceDetail
   company: InvoiceFrom
@@ -70,6 +74,8 @@ export function InvoicePaper({
   layoutOverride?: LayoutOverride | undefined
   /** Where a listed attachment downloads from; without it the names are listed plainly. */
   attachmentHref?: ((fileId: string) => string) | undefined
+  /** The studio's own screen: an Edit beside the signature (never printed, never on the client's link). */
+  onEditSignature?: (() => void) | undefined
 }) {
   const override = Object.fromEntries(Object.entries(layoutOverride ?? {}).filter(([, v]) => v !== undefined)) as Partial<InvoiceTemplateLayout>
   const base: InvoiceTemplateLayout = { ...NO_LAYOUT, ...(invoice.template_layout ?? {}), ...override }
@@ -379,9 +385,26 @@ export function InvoicePaper({
 
         <div className="mt-10 flex items-end justify-between gap-6">
           <p className="text-xs text-slate-400">{layout.footer_text ?? 'This is a computer-generated invoice.'}</p>
-          <div className="min-w-[180px] border-t border-slate-300 pt-2 text-right">
-            <p className="text-xs text-slate-500">Authorised signatory</p>
-            <p className="text-xs font-medium text-slate-700">{company.legal_name || company.name}</p>
+          <div className="relative min-w-[180px] text-right">
+            {layout.signature_image && (
+              <img src={layout.signature_image} alt="Signature" className="mb-1 ml-auto h-14 w-auto max-w-[200px] object-contain" />
+            )}
+            <div className="border-t border-slate-300 pt-2">
+              <p className="text-xs text-slate-500">{layout.signatory_title || 'Authorised signatory'}</p>
+              <p className="text-xs font-medium text-slate-700">{layout.signatory_name || company.legal_name || company.name}</p>
+              {layout.signatory_name && company.legal_name && company.legal_name !== layout.signatory_name && (
+                <p className="text-[11px] text-slate-500">for {company.legal_name}</p>
+              )}
+            </div>
+            {onEditSignature && (
+              <button
+                type="button"
+                onClick={onEditSignature}
+                className="mt-2 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-500 print:hidden"
+              >
+                <PenLine className="size-3.5" aria-hidden /> {layout.signature_image || layout.signatory_name ? 'Edit signature' : 'Add signature'}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -63,7 +63,7 @@ export function CompletedWorkTab({ projectId, canReview }: { projectId: string; 
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Already reviewed ({rest.length})</h2>
           {rest.map((s) => (
-            <Submission key={s.id} s={s} canReview={false} />
+            <Submission key={s.id} s={s} canReview={canReview} />
           ))}
         </section>
       )}
@@ -124,7 +124,13 @@ function Submission({ s, canReview }: { s: WorkSubmission; canReview: boolean })
         {s.notes && <p className="text-sm text-muted-foreground">“{s.notes}”</p>}
         {s.review_notes && s.status === 'rejected' && <p className="text-sm text-destructive">What to change: {s.review_notes}</p>}
 
-        {canReview && <ReviewButtons submissionId={s.id} editorName={s.submitted_by_name} />}
+        {canReview && (s.status === 'submitted' || s.status === 'approved' || s.status === 'rejected') && (
+          <ReviewButtons
+            submissionId={s.id}
+            editorName={s.submitted_by_name}
+            decided={s.status === 'submitted' ? undefined : s.status}
+          />
+        )}
       </CardContent>
     </Card>
   )

@@ -548,6 +548,28 @@ export const termsRouter = new Hono<AppEnv>()
     return c.json({ id: rows[0]!.id }, 201)
   })
 
+  // A saved template changed in place (owner, 26 Oct), not saved again as a copy.
+  .patch('/templates/:id', requireAction('projects', 'edit'), async (c) => {
+    const id = c.req.param('id') ?? ''
+    if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid template id.')
+    const parsed = z
+      .object({ name: z.string().trim().min(2).max(120).optional(), body: z.string().trim().min(1).max(20000).optional() })
+      .safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success || (!parsed.data.name && !parsed.data.body)) fail(422, 'Give the template a name or some text.')
+    const rows = await attempt(c, 'terms.template_update', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        update project_terms_templates
+           set name = coalesce(${parsed.data.name ?? null}, name),
+               body = coalesce(${parsed.data.body ?? null}, body),
+               version = version + 1
+         where id = ${id} returning id`),
+    )
+    if (!rows) fail(400, 'We could not save that template.')
+    if (!rows.length) fail(404, 'That template was not found.')
+    await audit(c, { action: 'terms.template_update', entityType: 'terms_template', entityId: id })
+    return c.json({ id })
+  })
+
   .delete('/templates/:id', requireAction('projects', 'edit'), async (c) => {
     const id = c.req.param('id') ?? ''
     if (!z.string().uuid().safeParse(id).success) fail(422, 'Invalid template id.')

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Eye, FileText, Mail, MessageCircle, Pencil, RotateCcw, Send, Trash2, X } from 'lucide-react'
+import { Check, Copy, CopyPlus, Eye, FileText, Mail, MessageCircle, Pencil, RotateCcw, Send, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CrmQuote, QuoteStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -8,7 +8,7 @@ import { humanize } from '@/shared/ui/format'
 import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useDeleteQuote, useSendQuote, useSetQuoteOutcome } from '../api'
+import { useDeleteQuote, useReviseQuote, useSendQuote, useSetQuoteOutcome } from '../api'
 import { QuoteViewer } from '../QuoteViewer'
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
@@ -26,11 +26,14 @@ export function QuoteRow({
   quote: q,
   onOpen,
   onEdit,
+  onRevised,
   compact = false,
 }: {
   quote: CrmQuote
   onOpen?: () => void
   onEdit?: (() => void) | undefined
+  /** Opens the new draft a Revise made, when the caller can show the builder. */
+  onRevised?: ((draft: CrmQuote) => void) | undefined
   compact?: boolean
 }) {
   const inr = useINR()
@@ -38,6 +41,7 @@ export function QuoteRow({
   const send = useSendQuote()
   const outcome = useSetQuoteOutcome()
   const del = useDeleteQuote()
+  const revise = useReviseQuote()
   const confirm = useConfirm()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
@@ -76,7 +80,10 @@ export function QuoteRow({
   async function reopen() {
     const yes = await confirm({
       title: `Reopen ${q.quote_number}?`,
-      description: 'It goes back to awaiting an answer, and the recorded acceptance is cleared.',
+      description:
+        q.status === 'accepted'
+          ? 'It goes back to awaiting an answer, the recorded acceptance is cleared, and the deal value goes back to what it was before.'
+          : 'It goes back to awaiting an answer.',
       confirmLabel: 'Reopen',
     })
     if (yes) outcome.mutate({ id: q.id, status: 'sent' })
@@ -158,6 +165,18 @@ export function QuoteRow({
             </>
           )}
         </span>
+      )}
+      {/* What was sent stays as sent; a change is a new draft with the next number. */}
+      {canEdit && (q.status === 'sent' || q.status === 'expired' || q.status === 'declined') && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={revise.isPending}
+          onClick={() => revise.mutate(q.id, { onSuccess: (draft) => onRevised?.(draft) })}
+          title="Copy it into a new draft to change and send again"
+        >
+          <CopyPlus /> Revise
+        </Button>
       )}
       {canEdit && (q.status === 'accepted' || q.status === 'declined') && (
         <Button size="sm" variant="ghost" disabled={outcome.isPending} onClick={() => void reopen()} title="Answered by mistake — put it back">

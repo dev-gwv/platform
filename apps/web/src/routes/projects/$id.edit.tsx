@@ -13,7 +13,8 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import type { ProjectStatus, UpdateProjectRequest } from '@ipc/contracts'
 import { useProject, useUpdateProject } from '@/features/projects/api'
-import { useClient, useUpdateClient } from '@/features/clients/api'
+import { useClient, useClients, useUpdateClient } from '@/features/clients/api'
+import { ClientCombobox } from '@/features/billing/InvoiceForm'
 import { ShootsTab } from '@/features/projects/tabs/ShootsTab'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { toast } from 'sonner'
@@ -58,6 +59,31 @@ function ProjectEdit() {
   const updateClient = useUpdateClient(data?.client_id ?? '')
   const [clientForm, setClientForm] = useState({ name: '', phone: '', email: '', address: '' })
   const [clientLoaded, setClientLoaded] = useState(false)
+  // A project booked under the wrong client moves to the right one here.
+  const [swapping, setSwapping] = useState(false)
+  const clientsQuery = useClients()
+  const allClients = Array.isArray(clientsQuery.data) ? clientsQuery.data : (clientsQuery.data?.items ?? [])
+
+  const swapClient = async (clientId: string) => {
+    if (!data || clientId === data.client_id) {
+      setSwapping(false)
+      return
+    }
+    const next = allClients.find((x) => x.id === clientId)
+    const yes = await confirm({
+      title: `Move this project to ${next?.name ?? 'this client'}?`,
+      description: 'Invoices already made keep the client they were made for.',
+      confirmLabel: 'Move project',
+    })
+    if (!yes) return
+    try {
+      await update.mutateAsync({ client_id: clientId })
+      setSwapping(false)
+      setClientLoaded(false)
+    } catch {
+      // the toast from the API helper says why
+    }
+  }
 
   useEffect(() => {
     const c = clientQuery.data
@@ -324,9 +350,24 @@ function ProjectEdit() {
             <CardTitle className="flex items-center gap-2">
               <User className="size-4" aria-hidden /> Client
             </CardTitle>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              The linked client cannot be swapped here — edit their details to fix a phone or email.
-            </p>
+            {canEdit && (
+              <div className="mt-2">
+                {swapping ? (
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <ClientCombobox clients={allClients} value={data.client_id} onChange={(v) => void swapClient(v)} />
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setSwapping(false)}>
+                      Keep
+                    </Button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setSwapping(true)} disabled={busy}>
+                    Change client
+                  </Button>
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {clientQuery.isLoading ? (

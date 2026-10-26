@@ -240,7 +240,16 @@ export const financialsRouter = new Hono<AppEnv>()
         if (Array.isArray(patch['itemize_json'])) patch['itemize_json'] = sql.json(patch['itemize_json'] as never) as never
         // Taking the person off an expense takes it off the "to reimburse" list.
         if ('paid_by_user_id' in patch && patch['paid_by_user_id'] === null && !('reimbursement_status' in patch)) patch['reimbursement_status'] = 'none'
-        if (patch['paid_by_user_id'] && !('reimbursement_status' in patch)) patch['reimbursement_status'] = 'pending'
+        // Owed again only when the person changed: an edit used to put a paid-back
+        // expense back on the owed list every time it was saved.
+        if (patch['paid_by_user_id'] && !('reimbursement_status' in patch)) {
+          const [was] = await sql<{ paid_by_user_id: string | null }[]>`select paid_by_user_id from expenses where id = ${id}`
+          if (was?.paid_by_user_id !== patch['paid_by_user_id']) {
+            patch['reimbursement_status'] = 'pending'
+            patch['reimbursed_at'] = null
+          }
+        }
+        if (patch['reimbursement_status'] && patch['reimbursement_status'] !== 'reimbursed') patch['reimbursed_at'] = null
         const rows = await sql`
           update expenses set ${sql(patch)} where id = ${id}
           returning id, project_id, party_id,
@@ -281,6 +290,20 @@ export const financialsRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not update this expense.')
     if (!rows.length) fail(404, 'That expense was not found, or nobody is owed for it.')
     await audit(c, { action: 'expense.reimbursed', entityType: 'expense', entityId: id })
+    return c.json({ ok: true })
+  })
+
+  /** Marked paid back by mistake: owed to the person again. */
+  .post('/expenses/:id/not-reimbursed', requireAction('company_expenses', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'financials.expense_not_reimbursed', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
+        update expenses set reimbursement_status = 'pending', reimbursed_at = null
+         where id = ${id} and paid_by_user_id is not null returning id`),
+    )
+    if (!rows) fail(400, 'We could not update this expense.')
+    if (!rows.length) fail(404, 'That expense was not found, or nobody paid it.')
+    await audit(c, { action: 'expense.not_reimbursed', entityType: 'expense', entityId: id })
     return c.json({ ok: true })
   })
 

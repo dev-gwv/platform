@@ -73,8 +73,14 @@ export const setSlotCostRequest = z.object({
   final_cost: money.nullish(),
   cost_status: slotCostStatus.nullish(),
   cost_notes: z.string().trim().max(500).nullish(),
+  /**
+   * Fields to empty. A missing or null field above means "leave it", so an
+   * amount or a note taken out has to be named here to go (0285).
+   */
+  clear: z.array(z.enum(['estimated_cost', 'final_cost', 'cost_notes'])).max(3).optional(),
 })
 export type SetSlotCostRequest = z.infer<typeof setSlotCostRequest>
+export type SlotCostField = NonNullable<SetSlotCostRequest['clear']>[number]
 
 export const bookSlotRequest = z.object({
   user_id: uuid,

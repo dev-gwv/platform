@@ -129,6 +129,20 @@ export function useSaveShootPreset() {
   })
 }
 
+/** Rename a preset where it is listed (0285). */
+export function useRenameShootPreset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      callApi(`/shoots/presets/${id}`, { method: 'PATCH', body: { name }, responseSchema: anySchema }),
+    onSuccess: () => {
+      toast.success('Preset renamed')
+      void qc.invalidateQueries({ queryKey: ['shoots', 'presets'] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useDeleteShootPreset() {
   const qc = useQueryClient()
   return useMutation({
