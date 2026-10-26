@@ -229,7 +229,8 @@ const supportCallsFx = {
     tpl_cancelled: 'support_call_cancelled',
     tpl_team: 'support_call_team',
   },
-  ready: { webhook_secret: true, official_api: true, bot_secret: true },
+  ready: { official_api: true, bot_secret: true },
+  calendar: { address: null as string | null, checked_at: null as string | null, error: null as string | null, upcoming: 0 },
   bot: { state: 'open', qr: null, me: '919000012345', sent_last_hour: 1, sent_today: 3 },
   bookings: [
     { id: 'b1', status: 'booked', starts_at: '2026-10-27T09:30:00Z', name: 'Asha Rao', studio_name: 'Mehta Studio', whatsapp_ok: true, has_phone: true },
@@ -907,6 +908,12 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     Object.assign(supportCallsFx.settings, body)
     return { ok: true }
   }
+  if (method === 'PUT' && path === '/platform/support-calls/calendar') {
+    const url = (body as { url: string | null }).url
+    supportCallsFx.calendar = url ? { address: 'calendar.google.com/…/basic.ics', checked_at: new Date().toISOString(), error: null, upcoming: 2 } : { address: null, checked_at: null, error: null, upcoming: 0 }
+    return { ok: true, error: null }
+  }
+  if (method === 'POST' && path === '/platform/support-calls/calendar/check') return { ok: true, error: null, booked: 1, moved: 0, cancelled: 0 }
   if (method === 'POST' && (path === '/platform/support-calls/test' || path === '/platform/support-calls/sample' || path === '/platform/support-calls/bot/logout')) return { ok: true }
   if (method === 'PUT' && path === '/platform/help/contacts') return Object.assign(helpFx, body as Record<string, unknown>)
   if (method === 'POST' && path === '/platform/help/faqs') {

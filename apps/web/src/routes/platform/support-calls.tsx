@@ -84,6 +84,7 @@ function Loaded({ data }: { data: SupportWhatsappOverview }) {
     <>
       <PageHeader title="Support calls" description={summary} />
       <div className="flex flex-col gap-4">
+        <CalendarCard calendar={data.calendar} />
         <ReadyCard ready={data.ready} />
         <BotCard data={data} s={s} patch={patch} onTest={() => test.mutate('group')} testing={test.isPending} />
         <OfficialCard s={s} patch={patch} ready={data.ready.official_api} onTest={() => test.mutate('team')} testing={test.isPending} />
@@ -104,7 +105,86 @@ function Loaded({ data }: { data: SupportWhatsappOverview }) {
 function sentence(d: SupportWhatsappOverview, s: SupportWhatsappSettings): string {
   const group = s.bot_on && s.group_jid && d.bot.state === 'open' ? `posting in ${s.group_name ?? 'the group'}` : 'the group bot is not posting'
   const official = s.official_on ? 'confirmations and reminders on' : 'official messages off'
-  return `Bookings arrive from the booking app; ${group}; ${official}.`
+  const from = d.calendar.address ? (d.calendar.error ? 'the calendar could not be read' : `${d.calendar.upcoming} calls ahead on the calendar`) : 'no calendar connected yet'
+  return `${from[0]!.toUpperCase()}${from.slice(1)}; ${group}; ${official}.`
+}
+
+/** Where bookings come from: the support calls calendar's private address (0283). */
+function CalendarCard({ calendar }: { calendar: SupportWhatsappOverview['calendar'] }) {
+  const qc = useQueryClient()
+  const [url, setUrl] = useState('')
+  const [editing, setEditing] = useState(!calendar.address)
+  const save = useMutation({
+    mutationFn: (next: string | null) =>
+      callApi('/platform/support-calls/calendar', { method: 'PUT', body: { url: next }, responseSchema: z.object({ ok: z.boolean(), error: z.string().nullable() }) }),
+    onSuccess: (r, next) => {
+      if (r.error) toast.error(r.error)
+      else toast.success(next ? 'Connected. Calls already on it were noted quietly; new ones will post.' : 'Disconnected.')
+      setUrl('')
+      setEditing(!next)
+      void qc.invalidateQueries({ queryKey: KEY })
+    },
+  })
+  const check = useMutation({
+    mutationFn: () =>
+      callApi('/platform/support-calls/calendar/check', {
+        method: 'POST',
+        responseSchema: z.object({ ok: z.boolean(), error: z.string().nullable(), booked: z.number(), moved: z.number(), cancelled: z.number() }),
+      }),
+    onSuccess: (r) => {
+      if (r.error) toast.error(r.error)
+      else toast.success(r.booked + r.moved + r.cancelled ? `${r.booked} new · ${r.moved} moved · ${r.cancelled} cancelled` : 'Nothing new on the calendar.')
+      void qc.invalidateQueries({ queryKey: KEY })
+    },
+  })
+  const checked = calendar.checked_at ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }).format(new Date(calendar.checked_at)) : null
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-semibold">Support calls calendar</h2>
+          {calendar.address && <StatusBadge tone={calendar.error ? 'danger' : 'success'}>{calendar.error ? 'Not reading' : 'Connected'}</StatusBadge>}
+          {calendar.address && !calendar.error && (
+            <span className="text-xs text-muted-foreground">
+              {calendar.upcoming} calls ahead{checked ? ` · read ${checked}` : ''}
+            </span>
+          )}
+        </div>
+        {calendar.error && <p className="text-sm text-destructive">{calendar.error}</p>}
+        {editing ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                className={cn('min-w-0 flex-1 font-mono text-xs', !url.trim() && 'border-warning bg-warning/5')}
+                placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+              <Button disabled={!url.trim() || save.isPending} onClick={() => save.mutate(url.trim())}>
+                Connect
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Google Calendar → the support calls calendar’s <b>Settings</b> → <b>Secret address in iCal format</b>. Use a calendar that holds only support calls.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-md border border-success/60 px-2 py-1 font-mono text-xs">{calendar.address}</span>
+            <Button size="sm" variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
+              <RefreshCw /> Check now
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+              Change
+            </Button>
+            <Button size="sm" variant="ghost" className="hover:text-destructive" disabled={save.isPending} onClick={() => save.mutate(null)}>
+              Disconnect
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function ReadyCard({ ready }: { ready: SupportWhatsappOverview['ready'] }) {
@@ -120,7 +200,6 @@ function ReadyCard({ ready }: { ready: SupportWhatsappOverview['ready'] }) {
       <CardContent className="flex flex-col gap-2 p-4">
         <h2 className="font-semibold">On the server</h2>
         <ul className="flex flex-col gap-1.5">
-          {row(ready.webhook_secret, 'Booking notices', 'Set SUPPORT_CALL_WEBHOOK_SECRET in .env and give it to the booking app.')}
           {row(ready.official_api, 'Official WhatsApp number', 'Set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN.')}
           {row(ready.bot_secret, 'Group bot', 'Set WA_BOT_SECRET in .env, then deploy.')}
         </ul>

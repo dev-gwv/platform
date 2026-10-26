@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { supportCallNotice, supportWhatsappOverview, supportWhatsappSettings } from '@ipc/contracts'
+import { supportWhatsappOverview, supportWhatsappSettings } from '@ipc/contracts'
 import { z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -10,40 +10,15 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { describeError, log } from '../../lib/log'
 import { whatsappConfigured } from '../../lib/whatsapp'
-import { maskNumber, sampleNotice, verifySupportCallSignature } from '../../lib/support-calls'
+import { maskNumber, sampleNotice } from '../../lib/support-calls'
+import { looksLikeIcal, maskIcal } from '../../lib/support-calendar'
+import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
 
 /** Send what is due now, without holding up the answer to whoever asked. */
 function drainSoon(env: AppEnv['Bindings']) {
   void drainSupportCalls(env).catch((err: unknown) => log.error({ err: describeError(err) }, 'support call drain failed'))
 }
-
-/**
- * POST /webhooks/support-call: the booking app telling us of a support call
- * booked, moved or cancelled (docs/support-call-webhook.md). Signed with
- * SUPPORT_CALL_WEBHOOK_SECRET; 401 unsigned or stale, 400 malformed, 200 once
- * saved (or already seen), 503 when it could not be saved so the booking app
- * tries again.
- */
-export const supportCallWebhookRouter = new Hono<AppEnv>().post('/support-call', async (c) => {
-  const raw = await c.req.text()
-  if (raw.length > 64_000) return c.json({ error: 'too large' }, 413)
-  if (!(await verifySupportCallSignature(raw, c.req.header('x-signature'), c.env.SUPPORT_CALL_WEBHOOK_SECRET))) {
-    return c.json({ error: 'bad or missing signature' }, 401)
-  }
-  let json: unknown
-  try {
-    json = JSON.parse(raw)
-  } catch {
-    return c.json({ error: 'not JSON' }, 400)
-  }
-  const parsed = supportCallNotice.safeParse(json)
-  if (!parsed.success) return c.json({ error: 'bad notice', detail: parsed.error.issues[0]?.message ?? '' }, 400)
-  const result = await attempt(c, 'support_call.notice', () => saveSupportCallNotice(c.env, parsed.data))
-  if (!result) return c.json({ error: 'try again' }, 503)
-  if (result === 'saved') drainSoon(c.env)
-  return c.json({ ok: true, duplicate: result === 'duplicate' })
-})
 
 const saveRequest = supportWhatsappSettings
 
@@ -73,7 +48,11 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
             select count(*) filter (where sent_at > now() - interval '1 hour')::int as hour,
                    count(*) filter (where sent_at > now() - interval '24 hours')::int as day
               from support_call_outbox where channel = 'group' and status = 'sent'`
-          return { settings, bookings, messages, sent: sent[0] ?? { hour: 0, day: 0 } }
+          const [cal] = await sql<{ url: string | null; checked_at: string | null; error: string | null; upcoming: number }[]>`
+            select support_ical_url as url, support_ical_checked_at::text as checked_at, support_ical_error as error,
+                   (select count(*)::int from support_call_bookings where booking_ref like 'gcal:%' and status <> 'cancelled' and starts_at > now()) as upcoming
+              from platform_settings limit 1`
+          return { settings, bookings, messages, sent: sent[0] ?? { hour: 0, day: 0 }, cal }
         }),
       ),
     ])
@@ -89,7 +68,13 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     return c.json(
       supportWhatsappOverview.parse({
         settings: data.settings,
-        ready: { webhook_secret: !!c.env.SUPPORT_CALL_WEBHOOK_SECRET, official_api: whatsappConfigured(c.env), bot_secret: !!c.env.WA_BOT_SECRET },
+        ready: { official_api: whatsappConfigured(c.env), bot_secret: !!c.env.WA_BOT_SECRET },
+        calendar: {
+          address: maskIcal(data.cal?.url ?? null),
+          checked_at: data.cal?.checked_at ?? null,
+          error: data.cal?.error ?? null,
+          upcoming: data.cal?.upcoming ?? 0,
+        },
         bot: { ...bot, sent_last_hour: data.sent.hour, sent_today: data.sent.day },
         bookings: data.bookings,
         messages: data.messages.map((m) => ({
@@ -143,6 +128,33 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     if (!ok) fail(400, 'The bot could not be unlinked.')
     await audit(c, { action: 'platform.support_calls_bot_logout', entityType: 'platform_settings', entityId: null })
     return c.json({ ok: true })
+  })
+
+  // The support calls calendar's private address. A new address starts quiet:
+  // its first read only learns what is already there (0283).
+  .put('/support-calls/calendar', async (c) => {
+    const parsed = z.object({ url: z.string().trim().max(2000).nullable() }).safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Paste the calendar address.')
+    const url = parsed.data.url || null
+    if (url && !looksLikeIcal(url)) fail(422, 'Use the calendar’s "Secret address in iCal format" (it ends in .ics).')
+    const ok = await attempt(c, 'platform.support_calls_calendar', () =>
+      withService(c.env, (sql) => sql`
+        update platform_settings
+           set support_ical_url = ${url}, support_ical_primed = false, support_ical_checked_at = null,
+               support_ical_error = null, updated_at = now()`),
+    )
+    if (!ok) fail(400, 'We could not save the address.')
+    // Never the address itself in the audit trail: anyone holding it reads the calendar.
+    await audit(c, { action: 'platform.support_calls_calendar', entityType: 'platform_settings', entityId: null, after: { connected: !!url } })
+    const first = url ? await attempt(c, 'platform.support_calls_calendar_first', () => syncSupportCalendar(c.env)) : null
+    return c.json({ ok: true, error: first?.error ?? null })
+  })
+
+  .post('/support-calls/calendar/check', async (c) => {
+    const r = await attempt(c, 'platform.support_calls_calendar_check', () => syncSupportCalendar(c.env))
+    if (!r) fail(400, 'We could not read the calendar.')
+    if (r.booked + r.moved + r.cancelled > 0) drainSoon(c.env)
+    return c.json({ ok: !r.error, error: r.error, booked: r.booked, moved: r.moved, cancelled: r.cancelled })
   })
 
   // A made-up booking through the whole path, for trying it before the booking

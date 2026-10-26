@@ -3,9 +3,9 @@ import { z } from 'zod'
 /**
  * Support call bookings and their WhatsApp messages (0280).
  *
- * `supportCallNotice` is what the booking app sends to POST
- * /webhooks/support-call (docs/support-call-webhook.md); the rest is the
- * Platform -> Support calls page, which only platform admins can open.
+ * `supportCallNotice` is the one shape every booking takes on its way in --
+ * from the support calls calendar (lib/support-calendar.ts) or a sample; the
+ * rest is the Platform -> Support calls page, which only platform admins open.
  */
 
 export const supportCallNoticeKind = z.enum(['booking.created', 'booking.rescheduled', 'booking.cancelled'])
@@ -112,7 +112,9 @@ export type SupportCallMessageRow = z.infer<typeof supportCallMessageRow>
 export const supportWhatsappOverview = z.object({
   settings: supportWhatsappSettings,
   /** Whether the server holds what each part needs. */
-  ready: z.object({ webhook_secret: z.boolean(), official_api: z.boolean(), bot_secret: z.boolean() }),
+  ready: z.object({ official_api: z.boolean(), bot_secret: z.boolean() }),
+  /** The support calls calendar (0283): masked address, last read, why it failed, calls ahead. */
+  calendar: z.object({ address: z.string().nullable(), checked_at: z.string().nullable(), error: z.string().nullable(), upcoming: z.number().int() }),
   bot: supportBotStatus,
   bookings: z.array(supportCallBookingRow),
   messages: z.array(supportCallMessageRow),

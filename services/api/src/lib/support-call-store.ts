@@ -147,7 +147,7 @@ async function insertPlanned(sql: TransactionSql, bookingId: string | null, plan
  * Save one notice and write what it sends. A notice already seen (by its id)
  * does nothing: 'duplicate'.
  */
-export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice, now = Date.now()): Promise<'saved' | 'duplicate'> {
+export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice, now = Date.now(), quiet?: string): Promise<'saved' | 'duplicate'> {
   const groupWorks = (await botStatus(env)).state === 'open'
   const b = bookingFromNotice(notice)
   return withService(env, async (sql) => {
@@ -190,7 +190,8 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
       groupWorks,
       plan: await planName(sql, company?.id ?? null),
     })
-    await insertPlanned(sql, bookingId, planned)
+    // A quiet save keeps the booking and says why nothing went out.
+    await insertPlanned(sql, bookingId, quiet ? planned.map((m) => ({ ...m, skipped: m.skipped ?? quiet })) : planned)
     return 'saved'
   })
 }

@@ -9,9 +9,7 @@ import {
   istWhen,
   maskNumber,
   planMessages,
-  signSupportCall,
   summaryText,
-  verifySupportCallSignature,
 } from './support-calls'
 
 const notice = (over: Partial<SupportCallNotice['booking']> = {}, event: SupportCallNotice['event'] = 'booking.created'): SupportCallNotice => ({
@@ -44,20 +42,6 @@ const settings = {
 }
 // Two days before the call.
 const now = Date.parse('2026-10-21T09:30:00Z')
-
-describe('the signed notice', () => {
-  it('accepts its own signature inside five minutes, and nothing else', async () => {
-    const raw = '{"id":"evt_1"}'
-    const t = 1_800_000_000
-    const v1 = await signSupportCall(raw, 'shh', t)
-    expect(await verifySupportCallSignature(raw, `t=${t},v1=${v1}`, 'shh', t + 60)).toBe(true)
-    expect(await verifySupportCallSignature(raw, `t=${t},v1=${v1}`, 'shh', t + 301)).toBe(false)
-    expect(await verifySupportCallSignature(raw + ' ', `t=${t},v1=${v1}`, 'shh', t)).toBe(false)
-    expect(await verifySupportCallSignature(raw, `t=${t},v1=${v1}`, 'other', t)).toBe(false)
-    expect(await verifySupportCallSignature(raw, undefined, 'shh', t)).toBe(false)
-    expect(await verifySupportCallSignature(raw, `t=${t},v1=${v1}`, undefined, t)).toBe(false)
-  })
-})
 
 describe('bookingFromNotice', () => {
   it('reads who, when, the studio and the page', () => {

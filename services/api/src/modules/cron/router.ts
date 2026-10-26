@@ -20,6 +20,7 @@ import { emailOneADay } from '../../lib/email'
 import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
 import { drainSupportCalls, queueDailySummary } from '../../lib/support-call-store'
+import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -289,8 +290,10 @@ export const cronRouter = new Hono<AppEnv>()
     // Support call alerts (0280) ride the same tick: retries, reminders an hour
     // before, and the group's morning list. A failure here never fails the rest.
     const supportCalls = await attempt(c, 'cron.support_calls', async () => {
+      // New, moved and removed entries on the support calls calendar (0283).
+      const calendar = await syncSupportCalendar(c.env)
       const summary = await queueDailySummary(c.env)
-      return { summary, ...(await drainSupportCalls(c.env)) }
+      return { calendar, summary, ...(await drainSupportCalls(c.env)) }
     })
     log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))

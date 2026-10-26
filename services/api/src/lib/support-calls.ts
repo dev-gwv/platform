@@ -1,5 +1,4 @@
 import { normalizePhoneForWhatsApp, type SupportCallNotice, type SupportCallNoticeKind, type SupportWhatsappSettings } from '@ipc/contracts'
-import { timingSafeEqual, toHex } from './crypto'
 
 /**
  * Support call bookings and their WhatsApp messages (0280): the parts with no
@@ -16,36 +15,10 @@ import { timingSafeEqual, toHex } from './crypto'
  *     decides anything.
  */
 
-/** How old a signed notice may be before it is refused, either way. */
-export const SIGNATURE_TOLERANCE_S = 300
 /** Messages to one person about one booking, whatever happens to it. */
 export const BOOKER_CAP = 4
 /** The reminder goes this long before the call. */
 export const REMINDER_BEFORE_MS = 60 * 60_000
-
-/**
- * The booking app signs each notice: header `X-Signature: t=<unix seconds>,v1=<hex>`
- * where v1 = HMAC-SHA256(secret, `${t}.${raw body}`). The timestamp keeps an
- * old notice from being replayed later.
- */
-export async function verifySupportCallSignature(raw: string, header: string | undefined, secret: string | undefined, nowS = Math.floor(Date.now() / 1000)): Promise<boolean> {
-  if (!secret || !header) return false
-  const parts = Object.fromEntries(
-    header.split(',').map((p) => {
-      const i = p.indexOf('=')
-      return [p.slice(0, i).trim(), p.slice(i + 1).trim()]
-    }),
-  )
-  const t = Number(parts.t)
-  if (!Number.isInteger(t) || Math.abs(nowS - t) > SIGNATURE_TOLERANCE_S || !parts.v1) return false
-  return timingSafeEqual(await signSupportCall(raw, secret, t), String(parts.v1).toLowerCase())
-}
-
-/** The v1 signature for a body at a time. The booking app does the same. */
-export async function signSupportCall(raw: string, secret: string, t: number): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return toHex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${t}.${raw}`)))
-}
 
 export interface Booking {
   ref: string
