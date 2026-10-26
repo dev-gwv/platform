@@ -16,7 +16,10 @@ import {
   Mail,
   MessageCircle,
   NotebookPen,
+  Pencil,
+  RotateCcw,
   Square,
+  Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, type CrmLead, type CrmQuote } from '@ipc/contracts'
@@ -49,6 +52,7 @@ import {
   useSendTemplate,
   useTemplates,
   useUpdateLead,
+  useUnbookLead,
   useEraseLeads,
   useWorkflows,
 } from './api'
@@ -63,6 +67,8 @@ import { LookupChip, StagePicker, prettyWord } from './fields'
 import { LeadEvents, toFunctions, type EventRow } from './LeadEvents'
 import { NoteComposer, NotesThread } from './drawer/NotesThread'
 import { FollowUpCard } from './drawer/FollowUpCard'
+import { InlineField } from './drawer/InlineField'
+import { usePartners } from '@/features/enquiry-forms/api'
 import { TagPicker } from './TagPicker'
 import { convertDefaults } from './convert'
 import { followUpChip } from './follow-up-chip'
@@ -121,6 +127,11 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   // client-only is how one enquiry ends up as two clients.
   const followUp = followUpChip(lead.follow_up_at, !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && !lead.is_archived)
   const bookable = !lead.converted_project_id && !lead.converted_client_id && lead.status !== 'lost' && !lead.is_archived
+  const booked = !!(lead.converted_project_id || lead.converted_client_id)
+  // Where a lead goes when it is reopened or its booking is undone.
+  const firstOpen = stages.find((s) => s.kind === 'open' && s.is_active !== false) ?? stages.find((s) => s.kind === 'open')
+  const unbook = useUnbookLead()
+  const [editingReason, setEditingReason] = useState(false)
 
   function moveTo(stageId: string) {
     const stage = stages.find((s) => s.id === stageId)
@@ -152,6 +163,20 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
       destructive: true,
     })
     if (yes) erase.mutate([lead.id], { onSuccess: onClose })
+  }
+
+  async function undoBooking() {
+    const project = lead.converted_project_name
+    const yes = await confirm({
+      title: `Undo the booking for ${lead.name ?? 'this lead'}?`,
+      description: `The lead goes back to ${firstOpen?.name ?? 'the first stage'} so you can work it again.${
+        project
+          ? ` The project “${project}” and the client stay; if the project should go, delete it from its own page.`
+          : ' The client stays.'
+      }`,
+      confirmLabel: 'Undo booking',
+    })
+    if (yes) unbook.mutate(lead.id)
   }
 
   // The lead's functions as editable rows; a lead from before 0212 that only
@@ -213,34 +238,74 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             {/* The panel's title is for screen readers only, so the name has
                 to be drawn here -- without it the drawer opened on a bare
                 phone number. */}
-            <h2 className="text-xl font-semibold leading-tight tracking-tight">{lead.name ?? 'Unnamed lead'}</h2>
+            <InlineField
+              value={lead.name}
+              label="Name"
+              disabled={!canEdit}
+              onSave={(v) => patch({ name: v })}
+              validate={(v) => (!v && !lead.phone ? 'A lead needs a name or a number.' : null)}
+              inputClassName="h-9 text-base font-semibold"
+            >
+              <h2 className="text-xl font-semibold leading-tight tracking-tight">{lead.name ?? 'Unnamed lead'}</h2>
+            </InlineField>
             {/* Whose QR code brought them in, one tap to that partner's page (0274). */}
             {lead.partner_id && lead.partner_name && (
-              <Link to="/follow-ups/partners/$id" params={{ id: lead.partner_id }} className="w-fit hover:opacity-80">
-                <PartnerChip name={lead.partner_name} />
-              </Link>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <Link to="/follow-ups/partners/$id" params={{ id: lead.partner_id }} className="w-fit hover:opacity-80">
+                  <PartnerChip name={lead.partner_name} />
+                </Link>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setTab('info')}
+                    title="Change the partner"
+                    aria-label="Change the partner"
+                    className="inline-flex size-6 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  >
+                    <Pencil className="size-3" />
+                  </button>
+                )}
+              </span>
             )}
             {/* What that QR was for: "Priya & Rahul's wedding" (0281). */}
             {lead.enquiry_occasion && <p className="text-sm font-semibold text-primary">For {lead.enquiry_occasion}</p>}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
               {lead.phone ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(lead.phone!)
-                    setCopied(true)
-                    toast.success('Number copied')
-                  }}
-                  className="group inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground hover:text-primary"
-                  title="Copy number"
+                <InlineField
+                  value={lead.phone}
+                  label="Phone number"
+                  type="tel"
+                  inputMode="tel"
+                  disabled={!canEdit}
+                  onSave={(v) => patch({ phone: v })}
+                  validate={(v) =>
+                    !v
+                      ? lead.name
+                        ? null
+                        : 'A lead needs a name or a number.'
+                      : v.replace(/\D/g, '').length < 6
+                        ? 'That number looks too short.'
+                        : null
+                  }
                 >
-                  {lead.phone}
-                  {copied ? (
-                    <Check className="size-3.5 text-tone-green" />
-                  ) : (
-                    <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(lead.phone!)
+                      setCopied(true)
+                      toast.success('Number copied')
+                    }}
+                    className="group inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground hover:text-primary"
+                    title="Copy number"
+                  >
+                    {lead.phone}
+                    {copied ? (
+                      <Check className="size-3.5 text-tone-green" />
+                    ) : (
+                      <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                    )}
+                  </button>
+                </InlineField>
               ) : canEdit ? (
                 // A lead can start with just a name; the number is the next thing to get.
                 <input
@@ -257,7 +322,19 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               ) : (
                 <span>No phone number</span>
               )}
-              {lead.email && <span className="truncate">{lead.email}</span>}
+              {(lead.email || canEdit) && (
+                <InlineField
+                  value={lead.email}
+                  label="Email"
+                  type="email"
+                  inputMode="email"
+                  disabled={!canEdit}
+                  onSave={(v) => patch({ email: v })}
+                  validate={(v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Type an email, like name@example.com.' : null)}
+                >
+                  {lead.email ? <span className="truncate">{lead.email}</span> : <span>No email</span>}
+                </InlineField>
+              )}
             </div>
           </div>
 
@@ -274,6 +351,22 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 <Button size="sm" variant="outline" onClick={() => setLosingTo(lostStage.id)}>
                   Lost
                 </Button>
+              )}
+            </div>
+          )}
+          {/* Booked or lost by mistake: one tap puts it back on the board. */}
+          {canEdit && !lead.is_archived && (booked || lead.status === 'lost') && (
+            <div className="flex flex-wrap gap-2">
+              {booked ? (
+                <Button size="sm" variant="outline" disabled={unbook.isPending} onClick={() => void undoBooking()}>
+                  <Undo2 /> Undo booking
+                </Button>
+              ) : (
+                firstOpen && (
+                  <Button size="sm" variant="outline" disabled={move.isPending} onClick={() => moveTo(firstOpen.id)}>
+                    <RotateCcw /> Reopen
+                  </Button>
+                )
               )}
             </div>
           )}
@@ -423,9 +516,16 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
           </section>
           <FormAnswersCard lead={lead} />
           {lead.lost_reason && (
-            <p className="-mt-2 text-xs text-muted-foreground">
-              Lost: {lead.lost_reason}
-              {lead.lost_competitor ? ` · to ${lead.lost_competitor}` : ''}
+            <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <span>
+                Lost: {lead.lost_reason}
+                {lead.lost_competitor ? ` · to ${lead.lost_competitor}` : ''}
+              </span>
+              {canEdit && (
+                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setEditingReason(true)}>
+                  <Pencil className="size-3" /> Edit reason
+                </Button>
+              )}
             </p>
           )}
 
@@ -584,6 +684,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                   ))}
                 </Select>
               </div>
+              <PartnerField lead={lead} disabled={!canEdit || update.isPending} onChange={(id) => patch({ partner_id: id })} />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
@@ -634,6 +735,18 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               move.mutate({ leadId: lead.id, stage_id: losingTo, ...d }, { onSuccess: () => setLosingTo(null) })
             }}
           />
+          <LostReasonDialog
+            open={editingReason}
+            initial={lead.lost_reason ? { lost_reason: lead.lost_reason, ...(lead.lost_competitor ? { lost_competitor: lead.lost_competitor } : {}) } : null}
+            pending={update.isPending}
+            onCancel={() => setEditingReason(false)}
+            onConfirm={(d) =>
+              update.mutate(
+                { id: lead.id, patch: { lost_reason: d.lost_reason, lost_competitor: d.lost_competitor ?? null } },
+                { onSuccess: () => setEditingReason(false) },
+              )
+            }
+          />
           <ArchiveDialog
             open={askArchive}
             pending={update.isPending}
@@ -679,6 +792,39 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   )
 }
 
+/**
+ * Which partner's QR the lead is credited to (0274). Credited to the wrong
+ * one, or to one when it walked in by itself: changed or cleared here.
+ */
+function PartnerField({ lead, disabled, onChange }: { lead: CrmLead; disabled: boolean; onChange: (id: string | null) => void }) {
+  const { data: partners } = usePartners(false, !disabled)
+  const list = partners ?? []
+  // A partner since archived still shows as the current value.
+  const known = !lead.partner_id || list.some((p) => p.id === lead.partner_id)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor="lead-partner">Came through partner</Label>
+      <Select
+        id="lead-partner"
+        value={lead.partner_id ?? ''}
+        disabled={disabled}
+        onChange={(e) => {
+          const next = e.target.value || null
+          if (next !== lead.partner_id) onChange(next)
+        }}
+      >
+        <option value="">No partner</option>
+        {!known && lead.partner_id && <option value={lead.partner_id}>{lead.partner_name ?? 'Partner'}</option>}
+        {list.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 /** Priced offers on this deal: build one, send its link, watch it land. */
 function QuotesPanel({ lead, canEdit }: { lead: CrmLead; canEdit: boolean }) {
   const { data: quotes } = useQuotes(lead.id)
@@ -701,7 +847,13 @@ function QuotesPanel({ lead, canEdit }: { lead: CrmLead; canEdit: boolean }) {
       {rows.length > 0 ? (
         <ul className="mt-2 divide-y divide-border">
           {rows.map((q) => (
-            <QuoteRow key={q.id} quote={q} compact onEdit={q.status === 'draft' && canEdit ? () => setEditing(q) : undefined} />
+            <QuoteRow
+              key={q.id}
+              quote={q}
+              compact
+              onEdit={q.status === 'draft' && canEdit ? () => setEditing(q) : undefined}
+              onRevised={(draft) => setEditing(draft)}
+            />
           ))}
         </ul>
       ) : (

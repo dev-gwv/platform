@@ -10,7 +10,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { useTodayBoard } from './api'
 import { GROUP_LABEL, GROUP_ORDER, boardSentence, clockText, dayClock, groupRows, inLine, overdue, type BoardGroup } from './board'
-import { CorrectDialog } from './CorrectDialog'
+import { CorrectDialog, useCanCorrectAttendance } from './CorrectDialog'
 import { SelfieThumb } from './SelfieThumb'
 
 const TONE: Record<BoardGroup, string> = {
@@ -89,6 +89,7 @@ export function TodayBoard() {
 }
 
 function BoardRow({ r, group, late, date }: { r: TodayBoardRow; group: BoardGroup; late: boolean; date: string }) {
+  const canCorrect = useCanCorrectAttendance()
   const line =
     group === 'shoot' && r.shoot
       ? `${r.shoot.name} · ${clockText(r.shoot.start_at)}–${clockText(r.shoot.end_at)} · ${
@@ -109,7 +110,7 @@ function BoardRow({ r, group, late, date }: { r: TodayBoardRow; group: BoardGrou
         <p className={cn('truncate text-xs', late ? 'font-medium text-warning' : 'text-muted-foreground')}>{line}</p>
       </div>
       {r.selfie_file_id && <SelfieThumb fileId={r.selfie_file_id} name={r.name} />}
-      {group !== 'leave' && (
+      {group !== 'leave' && canCorrect && (
         <CorrectDialog
           row={{ user_id: r.user_id, name: r.name, status: r.status ?? 'absent', check_in_at: r.check_in_at, check_out_at: r.check_out_at, correction_note: null }}
           date={date}

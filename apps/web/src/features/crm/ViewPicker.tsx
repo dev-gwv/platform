@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
-import type { CrmLead, SavedView } from '@ipc/contracts'
+import { Check, ChevronDown, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react'
+import type { CrmLead, SavedView, SavedViewQuery } from '@ipc/contracts'
+import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
+import { Input } from '@/shared/ui/input'
+import { useConfirm } from '@/shared/ui/confirm'
 import { BUILTIN_VIEWS, viewCounts, type BuiltinViewKey } from './builtin-views'
+import { useDeleteView, useUpdateView } from './api'
 
 /**
  * Which leads, not how they are drawn.
@@ -31,6 +35,7 @@ export function ViewPicker({
   onChange,
   saved,
   label,
+  manage,
 }: {
   /** Open leads, unfiltered — the counts describe the whole desk. */
   leads: readonly CrmLead[]
@@ -40,6 +45,11 @@ export function ViewPicker({
   saved: readonly SavedView[]
   /** What the button reads, worked out by the page that owns the rows. */
   label: string
+  /**
+   * Renaming, updating and deleting a saved view where it is picked (0286).
+   * Only a view's maker or the owner can change it; RLS says the same.
+   */
+  manage?: { me: string | null; isOwner: boolean; current: SavedViewQuery } | undefined
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -117,22 +127,16 @@ export function ViewPicker({
                   Saved
                 </li>
                 {saved.map((v) => (
-                  <li key={v.id}>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => pick({ kind: 'saved', id: v.id })}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent"
-                    >
-                      <Check
-                        className={cn(
-                          'size-3.5 shrink-0',
-                          value.kind === 'saved' && value.id === v.id ? 'opacity-100' : 'opacity-0',
-                        )}
-                      />
-                      <span className="min-w-0 flex-1 truncate text-sm">{v.name}</span>
-                    </button>
-                  </li>
+                  <SavedViewRow
+                    key={v.id}
+                    view={v}
+                    on={value.kind === 'saved' && value.id === v.id}
+                    onPick={() => pick({ kind: 'saved', id: v.id })}
+                    manage={manage && (manage.isOwner || v.user_id === manage.me) ? manage.current : null}
+                    onDeleted={() => {
+                      if (value.kind === 'saved' && value.id === v.id) onChange({ kind: 'builtin', key: 'all' })
+                    }}
+                  />
                 ))}
               </>
             )}
@@ -140,5 +144,91 @@ export function ViewPicker({
         </div>
       )}
     </div>
+  )
+}
+
+/** One saved view in the picker: pick it, or change it right there. */
+function SavedViewRow({
+  view: v,
+  on,
+  onPick,
+  manage,
+  onDeleted,
+}: {
+  view: SavedView
+  on: boolean
+  onPick: () => void
+  /** The filters on screen now, when this person may change the view. */
+  manage: SavedViewQuery | null
+  onDeleted: () => void
+}) {
+  const update = useUpdateView()
+  const del = useDeleteView()
+  const confirm = useConfirm()
+  const [open, setOpen] = useState(false)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState(v.name)
+
+  async function remove() {
+    const yes = await confirm({ title: `Delete the view “${v.name}”?`, description: 'The leads stay; only this saved list goes.', confirmLabel: 'Delete', destructive: true })
+    if (yes) del.mutate(v.id, { onSuccess: onDeleted })
+  }
+
+  return (
+    <li>
+      <div className="flex items-center gap-1 pr-2">
+        <button type="button" role="menuitem" onClick={onPick} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left hover:bg-accent">
+          <Check className={cn('size-3.5 shrink-0', on ? 'opacity-100' : 'opacity-0')} />
+          <span className="min-w-0 flex-1 truncate text-sm">{v.name}</span>
+        </button>
+        {manage && (
+          <button
+            type="button"
+            onClick={() => setOpen((x) => !x)}
+            aria-expanded={open}
+            title={`Change “${v.name}”`}
+            aria-label={`Change ${v.name}`}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+          >
+            <Pencil className="size-3" />
+          </button>
+        )}
+      </div>
+      {manage && open && (
+        <div className="flex flex-col gap-1.5 border-y border-border bg-muted/40 px-3 py-2">
+          {naming ? (
+            <form
+              className="flex items-center gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!name.trim() || name.trim() === v.name) return setNaming(false)
+                update.mutate({ id: v.id, patch: { name: name.trim() } }, { onSuccess: () => setNaming(false) })
+              }}
+            >
+              <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="View name" className="h-8" autoFocus />
+              <Button size="sm" type="submit" disabled={!name.trim() || update.isPending}>
+                Save
+              </Button>
+            </form>
+          ) : (
+            <Button size="sm" variant="outline" className="justify-start" onClick={() => setNaming(true)}>
+              <Pencil /> Rename
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="justify-start"
+            disabled={update.isPending}
+            onClick={() => update.mutate({ id: v.id, patch: { query: manage } }, { onSuccess: () => setOpen(false) })}
+          >
+            <SlidersHorizontal /> Save the filters on screen into it
+          </Button>
+          <Button size="sm" variant="ghost" className="justify-start hover:text-destructive" disabled={del.isPending} onClick={() => void remove()}>
+            <Trash2 /> Delete view
+          </Button>
+        </div>
+      )}
+    </li>
   )
 }

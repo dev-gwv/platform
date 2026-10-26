@@ -36,7 +36,6 @@ import { log } from '../../lib/log'
  * auth and module guard.
  */
 const edit = requireAction('crm', 'edit')
-const remove = requireAction('crm', 'delete')
 
 const selectActivity = (sql: TransactionSql) => sql`
   select a.id, a.lead_id, l.name as lead_name, l.phone as lead_phone, a.contact_id, ct.name as contact_name, a.type, a.direction, a.subject, a.body, a.outcome,
@@ -141,11 +140,22 @@ export const crmActivitiesRouter = new Hono<AppEnv>()
     return c.body(null, 204)
   })
 
-  .delete('/activities/:id', remove, async (c) => {
+  // Whoever can edit the CRM, or whoever wrote it, can take back a note, a
+  // call or a follow-up (0286). Deleting was a crm.delete grant alone, so the
+  // person who typed a note on the wrong lead could not remove it.
+  .delete('/activities/:id', async (c) => {
     const id = uuidParam(c)
+    const auth = c.get('auth')
+    const anyone = auth.access.hasAction('crm', 'edit') || auth.access.hasAction('crm', 'delete')
     const rows = await attempt(c, 'crm.activity_delete', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`delete from crm_activities where id = ${id} returning id`),
+      withUser(c.env, auth.userId, async (sql) => {
+        const [a] = await sql<{ actor_id: string | null }[]>`select actor_id from crm_activities where id = ${id}`
+        if (!a) return [] as { id: string }[]
+        if (!anyone && a.actor_id !== auth.userId) return 'denied' as const
+        return sql<{ id: string }[]>`delete from crm_activities where id = ${id} returning id`
+      }),
     )
+    if (rows === 'denied') fail(403, 'Only whoever wrote it, or someone who can edit leads, can remove this.')
     if (!rows) fail(400, 'We could not delete this activity.')
     if (!rows.length) fail(404, 'That activity was not found.')
     await audit(c, { action: 'activity.delete', entityType: 'crm_activity', entityId: id })

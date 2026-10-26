@@ -127,6 +127,38 @@ export const useRemoveHoliday = () =>
     ['hr', 'holidays'],
   ])
 
+/** Rename a holiday or move it to another day (0286). */
+export const useUpdateHoliday = () =>
+  useHrMutation(
+    ({ id, ...body }: { id: string; holiday_date?: string; name?: string }) =>
+      callApi(`/hr/holidays/${id}`, { method: 'PATCH', body, responseSchema: companyHoliday }),
+    'Holiday changed',
+    [['hr', 'holidays']],
+  )
+
+/** A manager puts a decided request back to waiting, to decide it again (0286). */
+export const useReopenLeave = () =>
+  useHrMutation(
+    ({ id, note }: { id: string; note?: string | null }) =>
+      callApi(`/hr/leave/${id}/reopen`, { method: 'POST', body: { note: note ?? null }, responseSchema: none }),
+    'Back to waiting. Decide it again in Approvals.',
+    [['hr', 'leave'], ['hr', 'attendance']],
+  )
+
+/** Whoever asked changes the days or kind of their own waiting request (0286). */
+export const useUpdateLeave = () =>
+  useHrMutation(
+    ({ id, ...body }: CreateLeaveRequest & { id: string }) => callApi(`/hr/leave/${id}`, { method: 'PATCH', body, responseSchema: none }),
+    'Request changed',
+    [['hr', 'leave']],
+  )
+
+/** Take back your own attendance-fix request while nobody has answered it (0286). */
+export const useCancelCorrection = () =>
+  useHrMutation((id: string) => callApi(`/hr/corrections/${id}/cancel`, { method: 'POST', responseSchema: none }), 'Request taken back', [
+    ['hr', 'corrections'],
+  ])
+
 export const useSetWeeklyOff = () =>
   useHrMutation(
     (weekly_off: number[]) => callApi('/hr/policy', { method: 'PATCH', body: { weekly_off }, responseSchema: attendancePolicy }),

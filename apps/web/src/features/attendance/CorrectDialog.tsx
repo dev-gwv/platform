@@ -9,8 +9,16 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { STATUS_LABEL } from '@/features/hr/attendance'
+import { useAuth } from '@/shared/auth/AuthProvider'
 
-const idOnly = z.object({ id: z.string() })
+/** The API lets only the owner or an admin correct a day; nobody else sees the button. */
+export function useCanCorrectAttendance(): boolean {
+  const { session } = useAuth()
+  return !!session && (session.is_owner || session.role === 'admin' || session.role === 'super_admin')
+}
+
+// Clearing a day ('none') leaves no row, so no id comes back.
+const idOnly = z.object({ id: z.string().nullable() })
 /** A datetime-local value from an ISO string, in the viewer's own timezone. */
 function toLocalInput(iso: string | null): string {
   if (!iso) return ''
@@ -28,13 +36,22 @@ function toLocalInput(iso: string | null): string {
 export function CorrectDialog({
   row,
   date,
+  open: controlled,
+  onOpenChange,
 }: {
-  row: Pick<AttendanceDayRow, 'user_id' | 'name' | 'status' | 'check_in_at' | 'check_out_at' | 'correction_note'>
+  row: Pick<AttendanceDayRow, 'user_id' | 'name' | 'check_in_at' | 'check_out_at' | 'correction_note'> & {
+    status: AttendanceDayRow['status'] | null
+  }
   date: string
+  /** Opened from outside (the month register's cells); no button of its own then. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [status, setStatus] = useState<SetAttendanceRequest['status']>(row.status)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlled ?? ownOpen
+  const setOpen = (o: boolean) => (onOpenChange ? onOpenChange(o) : setOwnOpen(o))
+  const [status, setStatus] = useState<SetAttendanceRequest['status']>(row.status ?? 'none')
   const [checkIn, setCheckIn] = useState(toLocalInput(row.check_in_at))
   const [checkOut, setCheckOut] = useState(toLocalInput(row.check_out_at))
   const [note, setNote] = useState(row.correction_note ?? '')
@@ -56,7 +73,7 @@ export function CorrectDialog({
       callApi(`/hr/attendance/${row.user_id}/${date}`, { method: 'PUT', body: input, responseSchema: idOnly }),
     onSuccess: () => {
       draft.clear()
-      toast.success(`Attendance corrected for ${row.name}`)
+      toast.success(status === 'none' ? `Mark cleared for ${row.name}` : `Attendance corrected for ${row.name}`)
       void qc.invalidateQueries({ queryKey: ['hr'] })
       setOpen(false)
     },
@@ -65,10 +82,11 @@ export function CorrectDialog({
 
   function onSave() {
     setError(null)
+    const clearing = status === 'none'
     const parsed = setAttendanceRequest.safeParse({
       status,
-      check_in_at: checkIn ? new Date(checkIn).toISOString() : null,
-      check_out_at: checkOut ? new Date(checkOut).toISOString() : null,
+      check_in_at: checkIn && !clearing ? new Date(checkIn).toISOString() : null,
+      check_out_at: checkOut && !clearing ? new Date(checkOut).toISOString() : null,
       ...(note.trim() ? { note: note.trim() } : {}),
     })
     if (!parsed.success) {
@@ -84,7 +102,7 @@ export function CorrectDialog({
       onOpenChange={(o) => {
         setOpen(o)
         if (o) {
-          setStatus(row.status)
+          setStatus(row.status ?? 'none')
           setCheckIn(toLocalInput(row.check_in_at))
           setCheckOut(toLocalInput(row.check_out_at))
           setNote(row.correction_note ?? '')
@@ -92,11 +110,13 @@ export function CorrectDialog({
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button size="sm" variant="ghost">
-          <Pencil /> Correct
-        </Button>
-      </DialogTrigger>
+      {controlled === undefined && (
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline">
+            <Pencil /> Correct
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent
         title={`Correct ${row.name}`}
         description={`${date} · the row for this date is replaced with what you enter.`}
@@ -114,8 +134,11 @@ export function CorrectDialog({
                   {STATUS_LABEL[s]}
                 </option>
               ))}
+              {/* Marked by mistake: the day goes back to having no mark. */}
+              <option value="none">No mark</option>
             </Select>
           </div>
+          {status !== 'none' && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="corr-in">Checked in</Label>
@@ -126,6 +149,7 @@ export function CorrectDialog({
               <Input id="corr-out" type="datetime-local" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
             </div>
           </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="corr-note">Why</Label>
             <Input
@@ -147,7 +171,7 @@ export function CorrectDialog({
               </Button>
             </DialogClose>
             <Button onClick={onSave} disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save correction'}
+              {save.isPending ? 'Saving…' : status === 'none' ? 'Clear the mark' : 'Save correction'}
             </Button>
           </div>
         </div>

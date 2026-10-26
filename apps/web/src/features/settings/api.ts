@@ -173,7 +173,7 @@ export function useCreateCustomLookup() {
 export function useUpdateCustomLookup() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: { value?: string; sort_order?: number; is_active?: boolean } }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: { value?: string; sort_order?: number; is_active?: boolean; color?: string | null } }) =>
       callApi(`/settings/lookups/${id}`, {
         method: 'PATCH',
         body: patch,

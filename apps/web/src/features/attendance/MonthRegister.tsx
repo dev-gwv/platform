@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { dayCode, registerTotals, type DayCode } from '@ipc/domain'
-import type { MonthRegister as Register } from '@ipc/contracts'
+import type { MonthRegister as Register, RegisterCell } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
@@ -9,6 +9,7 @@ import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { useMonthRegister } from './api'
+import { CorrectDialog, useCanCorrectAttendance } from './CorrectDialog'
 
 const CODE_TONE: Record<DayCode, string> = {
   P: 'bg-success/15 text-success',
@@ -41,6 +42,7 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 export function MonthRegister({ mine = false }: { mine?: boolean }) {
   const [month, setMonth] = useState(thisMonth)
   const reg = useMonthRegister(month, mine)
+  const canCorrect = useCanCorrectAttendance() && !mine
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -64,16 +66,18 @@ export function MonthRegister({ mine = false }: { mine?: boolean }) {
       ) : reg.data.people.length === 0 ? (
         <EmptyState title="Nobody to show" description="Nobody on the team is tracked this month." />
       ) : (
-        <RegisterTable reg={reg.data} />
+        <RegisterTable reg={reg.data} canCorrect={canCorrect} />
       )}
       <p className="text-xs text-muted-foreground">
         P present · L late · H half day · A absent · S shoot · Lv leave · Off weekly off · Hol holiday
+        {canCorrect ? ' · tap a day to correct it' : ''}
       </p>
     </div>
   )
 }
 
-function RegisterTable({ reg }: { reg: Register }) {
+function RegisterTable({ reg, canCorrect }: { reg: Register; canCorrect: boolean }) {
+  const [correcting, setCorrecting] = useState<{ user_id: string; name: string; day: string; status: RegisterCell['status'] } | null>(null)
   const ctx = { today: reg.today, trackedFrom: reg.tracked_from, lateMarksPerHalfDay: reg.late_marks_per_half_day }
   const days = reg.people[0]?.cells.map((c) => c.day) ?? []
   const rows = useMemo(
@@ -113,15 +117,42 @@ function RegisterTable({ reg }: { reg: Register }) {
                     </span>
                   </p>
                 </td>
-                {p.codes.map((c, i) => (
-                  <td key={days[i]} className="px-0.5 py-2 text-center">
-                    {c && <span className={cn('inline-block min-w-6 rounded px-0.5 py-0.5 font-semibold', CODE_TONE[c])}>{c}</span>}
-                  </td>
-                ))}
+                {p.codes.map((c, i) => {
+                  const cell = p.cells[i]
+                  const mark = c && <span className={cn('inline-block min-w-6 rounded px-0.5 py-0.5 font-semibold', CODE_TONE[c])}>{c}</span>
+                  // A past day (or today) can be corrected, a day ahead cannot.
+                  const correctable = canCorrect && !!cell && cell.day <= reg.today
+                  return (
+                    <td key={days[i]} className="px-0.5 py-2 text-center">
+                      {correctable ? (
+                        <button
+                          type="button"
+                          onClick={() => setCorrecting({ user_id: p.user_id, name: p.name, day: cell.day, status: cell.status })}
+                          title={`Correct ${p.name} on ${cell.day}`}
+                          aria-label={`Correct ${p.name} on ${cell.day}`}
+                          className="inline-flex min-h-6 min-w-6 items-center justify-center rounded border border-transparent hover:border-primary/50"
+                        >
+                          {mark || <span className="text-muted-foreground/40">·</span>}
+                        </button>
+                      ) : (
+                        mark
+                      )}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>
         </table>
+        {correcting && (
+          <CorrectDialog
+            key={`${correcting.user_id}:${correcting.day}`}
+            open
+            onOpenChange={(o) => !o && setCorrecting(null)}
+            date={correcting.day}
+            row={{ user_id: correcting.user_id, name: correcting.name, status: correcting.status, check_in_at: null, check_out_at: null, correction_note: null }}
+          />
+        )}
       </CardContent>
     </Card>
   )

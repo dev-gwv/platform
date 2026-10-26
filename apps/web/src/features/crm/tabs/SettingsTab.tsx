@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Archive, ArrowDown, ArrowUp, Columns3, Gauge, KanbanSquare, Megaphone, Plug, Plus, RefreshCw, RotateCcw, Timer, Trash2, XCircle, Tag as TagIcon} from 'lucide-react'
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns3, Pencil, Gauge, KanbanSquare, Megaphone, Plug, Plus, RefreshCw, RotateCcw, Timer, Trash2, XCircle, Tag as TagIcon} from 'lucide-react'
 import type { ConditionOp, CrmLead, PipelineStage, StageKind, StageRequiredField, TagColor,} from '@ipc/contracts'
 import { CONDITION_FIELDS, OP_LABEL, REQUIRED_FIELD_LABEL, sortStages } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
@@ -196,6 +196,7 @@ function PipelinesCard() {
   const confirm = useConfirm()
   const [pick, setPick] = useState<string | null>(null)
   const [newPipeline, setNewPipeline] = useState('')
+  const [renaming, setRenaming] = useState<string | null>(null)
   const [newStage, setNewStage] = useState('')
   const [newStageKind, setNewStageKind] = useState<StageKind>('open')
   const [editing, setEditing] = useState<string | null>(null)
@@ -253,7 +254,31 @@ function PipelinesCard() {
                   ))}
                 </Select>
               )}
-              {current && list.length === 1 && <span className="text-sm font-medium">{current.name}</span>}
+              {current && list.length === 1 && renaming === null && <span className="text-sm font-medium">{current.name}</span>}
+              {current && isOwner && renaming === null && (
+                <Button size="sm" variant="outline" onClick={() => setRenaming(current.name)}>
+                  <Pencil /> Rename
+                </Button>
+              )}
+              {current && isOwner && renaming !== null && (
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const name = renaming.trim()
+                    if (name.length < 2 || name === current.name) return setRenaming(null)
+                    updatePipeline.mutate({ id: current.id, patch: { name } }, { onSuccess: () => setRenaming(null) })
+                  }}
+                >
+                  <Input value={renaming} onChange={(e) => setRenaming(e.target.value)} className="w-48" aria-label="Pipeline name" autoFocus />
+                  <Button size="sm" type="submit" disabled={renaming.trim().length < 2 || updatePipeline.isPending}>
+                    Save
+                  </Button>
+                  <Button size="sm" type="button" variant="ghost" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </Button>
+                </form>
+              )}
               {current && !current.is_default && isOwner && (
                 <>
                   <Button size="sm" variant="ghost" onClick={() => updatePipeline.mutate({ id: current.id, patch: { is_default: true } })}>
@@ -564,6 +589,20 @@ function LostReasonsCard() {
   const update = useUpdateLostReason()
   const remove = useDeleteLostReason()
   const [label, setLabel] = useState('')
+  const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null)
+  const reasons = data ?? []
+
+  // Swap two neighbours' places; positions are rewritten for both so a list
+  // that started with ties gets a real order.
+  function move(index: number, dir: -1 | 1) {
+    const target = index + dir
+    const a = reasons[index]
+    const b = reasons[target]
+    if (!a || !b) return
+    update.mutate({ id: a.id, patch: { position: target } })
+    update.mutate({ id: b.id, patch: { position: index } })
+  }
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
@@ -575,11 +614,59 @@ function LostReasonsCard() {
           <Skeleton className="h-20" />
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {(data ?? []).map((r) => (
+            {reasons.map((r, i) => (
               <li key={r.id} className={`flex items-center gap-1 rounded-full border border-border py-1 pl-3 pr-1 text-sm ${r.is_active ? '' : 'opacity-50'}`}>
-                <span>{r.label}</span>
-                {canEdit && (
+                {renaming?.id === r.id ? (
+                  <form
+                    className="flex items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const next = renaming.label.trim()
+                      if (next.length < 3 || next === r.label) return setRenaming(null)
+                      update.mutate({ id: r.id, patch: { label: next } }, { onSuccess: () => setRenaming(null) })
+                    }}
+                  >
+                    <Input
+                      value={renaming.label}
+                      onChange={(e) => setRenaming({ id: r.id, label: e.target.value })}
+                      onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+                      onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
+                      className="h-7 w-40"
+                      aria-label={`Rename ${r.label}`}
+                      autoFocus
+                    />
+                  </form>
+                ) : (
+                  <span>{r.label}</span>
+                )}
+                {canEdit && renaming?.id !== r.id && (
                   <>
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      disabled={i === 0 || update.isPending}
+                      onClick={() => move(i, -1)}
+                      aria-label={`Move ${r.label} earlier`}
+                    >
+                      <ArrowLeft className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      disabled={i === reasons.length - 1 || update.isPending}
+                      onClick={() => move(i, 1)}
+                      aria-label={`Move ${r.label} later`}
+                    >
+                      <ArrowRight className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setRenaming({ id: r.id, label: r.label })}
+                      aria-label={`Rename ${r.label}`}
+                    >
+                      <Pencil className="size-3" />
+                    </button>
                     <button type="button" className="rounded-full px-1.5 text-xs text-muted-foreground hover:text-foreground" onClick={() => update.mutate({ id: r.id, patch: { is_active: !r.is_active } })}>
                       {r.is_active ? 'hide' : 'show'}
                     </button>

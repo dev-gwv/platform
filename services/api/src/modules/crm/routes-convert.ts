@@ -7,6 +7,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { claimRule } from './rules'
 
 export const crmConvertRoutes = new Hono<AppEnv>()
   // ── Lead → project ──────────────────────────────────────────
@@ -55,4 +56,27 @@ export const crmConvertRoutes = new Hono<AppEnv>()
     if (!row) fail(400, 'We could not convert this lead.')
     await audit(c, { action: 'lead.convert', entityType: 'crm_lead', entityId: leadId, after: { ...row, client_only: !v.project && !v.quote_id } })
     return c.json(convertLeadResponse.parse(row), 201)
+  })
+
+  // Booked by mistake (0286): the lead goes back to the first open stage and
+  // forgets the project and client. Both stay -- the project is deleted from
+  // its own page if it should go.
+  .post('/leads/:id/unbook', requireAction('crm', 'edit'), async (c) => {
+    const leadId = uuidParam(c)
+    const before = await attempt(c, 'crm.unbook_read', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql<{ converted_project_id: string | null; converted_client_id: string | null }[]>`
+        select converted_project_id, converted_client_id from crm_leads where id = ${leadId}`),
+    )
+    if (!before) fail(400, 'We could not undo this booking.')
+    if (!before[0]) fail(404, 'That lead was not found.')
+    const done = await attempt(
+      c,
+      'crm.unbook',
+      () => withUser(c.env, c.get('auth').userId, (sql) => sql`select crm_unbook_lead(${leadId}) as stage_id`),
+      { onCode: claimRule },
+    )
+    if (done && 'rule' in done) fail(422, done.rule)
+    if (!done) fail(400, 'We could not undo this booking.')
+    await audit(c, { action: 'lead.unbook', entityType: 'crm_lead', entityId: leadId, before: before[0] })
+    return c.body(null, 204)
   })

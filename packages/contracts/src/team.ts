@@ -352,3 +352,14 @@ export const updateMonthlySalaryRequest = z.object({
   status: monthlySalaryStatus.optional(),
 })
 export type UpdateMonthlySalaryRequest = z.infer<typeof updateMonthlySalaryRequest>
+
+/** Someone removed from the team (0286), who can be put back. */
+export const removedMember = z.object({
+  user_id: uuid,
+  name: z.string(),
+  email: z.string().nullable(),
+  role: z.string(),
+  removed_at: isoDateTime,
+  removed_by_name: z.string().nullable(),
+})
+export type RemovedMember = z.infer<typeof removedMember>

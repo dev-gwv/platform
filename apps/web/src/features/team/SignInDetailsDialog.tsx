@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Wand2 } from 'lucide-react'
+import { LogOut, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { Dialog, DialogClose, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
-import { useSetSignIn } from './api'
+import { useConfirm } from '@/shared/ui/confirm'
+import { useSetSignIn, useTurnOffSignIn } from './api'
 import { suggestPassword } from './member-form'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -27,6 +28,8 @@ export function SignInDetailsDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const save = useSetSignIn()
+  const turnOff = useTurnOffSignIn()
+  const confirm = useConfirm()
   const [email, setEmail] = useState(member.email ?? '')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
@@ -125,7 +128,27 @@ export function SignInDetailsDialog({
                 : `${first} is signed out everywhere and uses this from now on.`}
             </p>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {/* Someone who has left, or a shared phone: no sign-in, still on the team (0286). */}
+            {member.login_enabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="mr-auto hover:text-destructive"
+                disabled={turnOff.isPending}
+                onClick={async () => {
+                  const yes = await confirm({
+                    title: `Turn off ${first}'s sign-in?`,
+                    description: `${first} is signed out now and cannot sign in again. They stay on the team, on their shoots and in pay. To turn it back on, set a password here.`,
+                    confirmLabel: 'Turn off sign-in',
+                    destructive: true,
+                  })
+                  if (yes) turnOff.mutate({ userId: member.user_id, name: member.name }, { onSuccess: () => onOpenChange(false) })
+                }}
+              >
+                <LogOut /> Turn off sign-in
+              </Button>
+            )}
             <DialogClose asChild>
               <Button type="button" variant="ghost">
                 Cancel
