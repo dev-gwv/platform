@@ -30,6 +30,7 @@ import { emptyInvoiceForm } from '@/features/billing/InvoiceForm'
 import { InvoiceEditor } from '@/features/billing/InvoiceEditor'
 import { FullScreen } from '@/features/billing/NewInvoiceDialog'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
+import { SignatureDialog } from '@/features/billing/SignatureDialog'
 import { PaymentReminderCard } from '@/features/billing/PaymentReminder'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
@@ -56,6 +57,7 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
   const access = useAccess()
   const [recording, setRecording] = useState(false)
   const [editing, setEditing] = useState(!!edit)
+  const [signing, setSigning] = useState(false)
   const send = useSendInvoice()
   const navigate = useNavigate()
   const { data: company } = useQuery({
@@ -171,9 +173,20 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
       </div>
 
       <PaymentReminderCard invoice={data} canSend={canEdit} />
+      {signing && (
+        <SignatureDialog
+          value={{
+            signatory_name: data.template_layout?.signatory_name ?? null,
+            signatory_title: data.template_layout?.signatory_title ?? null,
+            signature_image: data.template_layout?.signature_image ?? null,
+          }}
+          onClose={() => setSigning(false)}
+        />
+      )}
 
       <InvoicePaper
         invoice={data}
+        onEditSignature={canEdit ? () => setSigning(true) : undefined}
         company={{
           name: company?.display_name ?? company?.name ?? null,
           legal_name: company?.legal_name,

@@ -129,6 +129,43 @@ export const invoiceActionRoutes = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
+  /**
+   * Bring a cancelled invoice back (0284): it reads as sent again, its totals
+   * from the payments still on it. Money moved off it when it was cancelled
+   * stays on the project; Change… on a payment moves it back.
+   */
+  .post('/invoices/:id/reopen', requireAction('billing', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const status = await attempt(c, 'billing.invoice_reopen', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => (await sql<{ s: string }[]>`select reopen_invoice(${id}) as s`)[0]?.s ?? null),
+    )
+    if (!status) fail(404, 'That invoice was not found.')
+    await audit(c, { action: 'invoice.reopen', entityType: 'invoice', entityId: id, after: { status } })
+    return c.json({ ok: true, status })
+  })
+
+  /** A sent invoice with nothing paid on it goes back to draft (its link stops). */
+  .post('/invoices/:id/draft', requireAction('billing', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const result = await attempt(c, 'billing.invoice_to_draft', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [inv] = await sql<{ status: string }[]>`select status from invoices where id = ${id} for update`
+        if (!inv) return 'missing' as const
+        if (inv.status === 'draft') return 'ok' as const
+        const [money] = await sql`select 1 from received_payments where invoice_id = ${id} limit 1`
+        if (money || inv.status !== 'sent') return 'has_money' as const
+        await sql`update invoices set status = 'draft' where id = ${id}`
+        await sql`select revoke_access_token('invoice', ${id})`
+        return 'ok' as const
+      }),
+    )
+    if (!result) fail(400, 'We could not move this invoice back to draft.')
+    if (result === 'missing') fail(404, 'That invoice was not found.')
+    if (result === 'has_money') fail(409, 'This invoice has a payment on it, so it stays sent.')
+    await audit(c, { action: 'invoice.to_draft', entityType: 'invoice', entityId: id })
+    return c.json({ ok: true })
+  })
+
   .post('/invoices/:id/payments', requireAction('billing', 'edit'), async (c) => {
     const parsed = recordPaymentRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the payment details.')
@@ -136,6 +173,8 @@ export const invoiceActionRoutes = new Hono<AppEnv>()
     const id = uuidParam(c)
     const ok = await attempt(c, 'billing.payment', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [inv] = await sql<{ status: string }[]>`select status from invoices where id = ${id}`
+        if (inv?.status === 'cancelled') return 'cancelled' as const
         await sql`select record_invoice_payment(
           p_invoice_id => ${id},
           p_amount => ${d.amount},
@@ -147,6 +186,7 @@ export const invoiceActionRoutes = new Hono<AppEnv>()
       }),
     )
     if (!ok) fail(400, 'We could not record the payment.')
+    if (ok === 'cancelled') fail(409, 'This invoice is cancelled. Reopen it first, then record the payment.')
     await audit(c, { action: 'invoice.payment', entityType: 'invoice', entityId: id, after: d })
     return c.body(null, 204)
   })

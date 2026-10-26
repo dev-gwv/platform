@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  PenLine,
 } from 'lucide-react'
 import { lineAmount, rateUnit, type GstSlab } from '@ipc/domain'
 import {
@@ -53,6 +54,7 @@ import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } f
 import { HsnSearchDialog } from './HsnSearchDialog'
 import { DaysInput, UnitInput } from './LineUnitFields'
 import { DESIGN_INFO } from './InvoicePaper'
+import { SignatureDialog } from './SignatureDialog'
 import { DraftRestoredBanner, agoText, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { todayInIndia } from '@/shared/ui/days-left'
 
@@ -149,6 +151,14 @@ export function InvoiceEditor({
     values.project_id && linkedProject.data ? { id: values.project_id, name: linkedProject.data.name } : null,
   )
   const templates = templateData?.items ?? []
+  // The signature is the studio's, the same on every design (PUT /billing/signature).
+  const sigFrom = templates.find((t) => t.is_default) ?? templates[0]
+  const signature = {
+    signatory_name: sigFrom?.layout_json.signatory_name ?? null,
+    signatory_title: sigFrom?.layout_json.signatory_title ?? null,
+    signature_image: sigFrom?.layout_json.signature_image ?? null,
+  }
+  const [signing, setSigning] = useState(false)
   const defaultSac = company?.invoice_sac_code?.trim() || ''
 
   // A customer with one project: that is almost always what the invoice is
@@ -730,6 +740,32 @@ export function InvoiceEditor({
                 <Pencil className="size-3" /> Designs, colours and logo
               </Link>
             </div>
+
+            {/* Who signs it, changed right here (owner, 26 Oct). */}
+            <div className="rounded-xl border border-border p-4">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <PenLine className="size-4" /> Signature
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {signature.signature_image ? (
+                  <img src={signature.signature_image} alt="Signature" className="h-10 w-auto max-w-[140px] rounded border border-border bg-white object-contain" />
+                ) : null}
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="block font-medium">{signature.signatory_name || 'Your studio’s legal name'}</span>
+                  <span className="block text-xs text-muted-foreground">{signature.signatory_title || 'Authorised signatory'}</span>
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={signature.signature_image ? 'outline' : 'default'}
+                  disabled={!access.hasAction('billing', 'edit')}
+                  onClick={() => setSigning(true)}
+                >
+                  <PenLine /> {signature.signature_image || signature.signatory_name ? 'Edit signature' : 'Add signature'}
+                </Button>
+              </div>
+            </div>
+            {signing && <SignatureDialog value={signature} onClose={() => setSigning(false)} />}
           </div>
         </section>
 

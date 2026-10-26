@@ -341,9 +341,11 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
         let nextProject = d.project_id !== undefined ? d.project_id : existing[0].project_id
         const nextInvoice = d.invoice_id !== undefined ? d.invoice_id : existing[0].invoice_id
         if (d.invoice_id) {
-          const inv = await sql<{ project_id: string | null }[]>`
-            select project_id from invoices where id = ${d.invoice_id} and company_id = ${auth.companyId}`
+          const inv = await sql<{ project_id: string | null; status: string }[]>`
+            select project_id, status from invoices where id = ${d.invoice_id} and company_id = ${auth.companyId}`
           if (!inv[0]) return 'bad_invoice' as const
+          // Money never lands on a cancelled invoice; it is reopened first (0284).
+          if (inv[0].status === 'cancelled' && d.invoice_id !== existing[0].invoice_id) return 'cancelled_invoice' as const
           const invProject = inv[0].project_id
           if (invProject) {
             if (d.project_id === undefined) nextProject = invProject
@@ -383,6 +385,7 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
     if (outcome === 'bad_project') fail(422, 'Selected project does not belong to this studio.')
     if (outcome === 'bad_client') fail(422, 'Selected client does not belong to this studio.')
     if (outcome === 'bad_invoice') fail(422, 'Selected invoice does not belong to this studio.')
+    if (outcome === 'cancelled_invoice') fail(409, 'That invoice is cancelled. Reopen it first, then move the payment onto it.')
     if (outcome === 'mismatch') fail(422, 'That invoice belongs to another project.')
     if (outcome === 'unlinked') fail(422, 'Choose the project or the invoice this payment is against.')
     if (outcome === 'bad_gst') fail(422, 'GST number is required when GST applies.')

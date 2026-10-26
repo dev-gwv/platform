@@ -4,6 +4,7 @@ import {
   invoiceTemplate,
   invoiceTemplateList,
   createInvoiceNoteTemplateRequest,
+  invoiceSignatureRequest,
   invoiceNoteTemplateList,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -35,6 +36,14 @@ export const invoiceTemplateRoutes = new Hono<AppEnv>()
     const d = parsed.data
     const rows = await attempt(c, 'billing.template_create', () =>
       withUser(c.env, auth.userId, async (sql) => {
+        // A new design keeps the studio's signature (set once from an invoice).
+        if (d.layout_json.signatory_name === undefined && d.layout_json.signature_image === undefined) {
+          const [had] = await sql<{ n: string | null; t: string | null; i: string | null }[]>`
+            select layout_json->>'signatory_name' as n, layout_json->>'signatory_title' as t, layout_json->>'signature_image' as i
+              from invoice_templates where company_id = ${auth.companyId}
+             order by is_default desc, created_at limit 1`
+          if (had) Object.assign(d.layout_json, { signatory_name: had.n, signatory_title: had.t, signature_image: had.i })
+        }
         // If setting as default, unset other defaults
         if (d.is_default) {
           await sql`update invoice_templates set is_default = false where company_id = ${auth.companyId} and is_default = true`
@@ -72,6 +81,42 @@ export const invoiceTemplateRoutes = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not save this template.')
     if (!rows.length) fail(404, 'We could not find that template.')
     await audit(c, { action: 'invoice_template.update', entityType: 'invoice_template', entityId: id, after: d })
+    return c.json({ ok: true })
+  })
+
+  // Who signs the invoices, set from the invoice itself (owner, 26 Oct): the
+  // name, title and signature go on every one of the studio's designs, so a
+  // switch of design never loses them. A studio with no design yet gets one.
+  .put('/signature', requireAction('billing', 'edit'), async (c) => {
+    const parsed = invoiceSignatureRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the signature.')
+    const auth = c.get('auth')
+    const patch = {
+      signatory_name: parsed.data.signatory_name || null,
+      signatory_title: parsed.data.signatory_title || null,
+      signature_image: parsed.data.signature_image,
+    }
+    const done = await attempt(c, 'billing.signature', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const rows = await sql<{ id: string }[]>`
+          update invoice_templates set layout_json = coalesce(layout_json, '{}'::jsonb) || ${sql.json(patch)}
+           where company_id = ${auth.companyId}
+          returning id`
+        if (rows.length) return rows.length
+        const layout = createInvoiceTemplateRequest.parse({ name: 'Standard' }).layout_json
+        await sql`
+          insert into invoice_templates (company_id, name, layout_json, is_default)
+          values (${auth.companyId}, 'Standard', ${sql.json({ ...layout, ...patch })}, true)`
+        return 1
+      }),
+    )
+    if (!done) fail(400, 'We could not save the signature.')
+    await audit(c, {
+      action: 'invoice_template.signature',
+      entityType: 'invoice_template',
+      entityId: null,
+      after: { signatory_name: patch.signatory_name, signatory_title: patch.signatory_title, signature: !!patch.signature_image },
+    })
     return c.json({ ok: true })
   })
 

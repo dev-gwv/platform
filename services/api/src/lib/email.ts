@@ -14,50 +14,28 @@ interface Outgoing {
 type DeliveryResult = { status: 'sent' | 'provider_missing' | 'failed'; id?: string; error?: string; held?: boolean }
 
 /**
- * One email a day for now (owner, 14 Oct: "just give them one reminder a
- * day"): the owner's morning email. Beside it only what a person needs to get
- * in or to keep their studio running: confirming the email, a password reset,
- * "your plan is ending", and the platform's own test send. Everything else
- * (hourly alert copies, setup nudges, the Monday email, "client agreed") is
- * held and logged as skipped. The cron also stops running the held ones.
+ * No email goes out by itself (owner, 26 Oct: "turn off all the automatic
+ * sending of emails ... only when we trigger it at some place manually").
+ * What a person asks for still goes: confirming their own email, a password
+ * reset, a team invite, a document, receipt or terms someone pressed Send on,
+ * and the platform's test send. Everything the app would send on its own --
+ * the morning and Monday emails, "your plan is ending", alert copies, setup
+ * nudges, "client agreed", sequences and queued messages -- is held and
+ * logged as skipped, and the cron no longer even tries them.
  * EMAIL_EVERY_KIND=on on the server lifts it (the senders' own tests use it).
  */
-export const emailOneADay = (env: Env): boolean => env.EMAIL_EVERY_KIND !== 'on'
-export const OWNER_MAIL_KINDS: ReadonlySet<string> = new Set(['verification', 'password_reset', 'morning', 'access', 'test'])
-export const ONE_A_DAY_NOTE = 'Not emailed: for now Studio AutoPilot sends one email a day, the morning summary.'
-
-/** Why a mail to anyone but a studio owner is not sent (owner, 12 Oct). */
-export const OWNER_ONLY_NOTE =
-  'Not emailed: for now Studio AutoPilot emails only the studio owner. Share the link on WhatsApp instead.'
-
-/**
- * Owner only, for now (owner, 12 Oct: "send the mail only to the main admin,
- * super admin… do not send mails to any of the people"). Mail to the team,
- * clients and leads was using up the day's Resend allowance. An address goes
- * out only if it is a studio owner's (role super_admin) or a platform admin's;
- * everyone else is held and logged as skipped. A studio sending its own
- * mail through its own Resend account (white label) is what lifts this later.
- * The platform's own test send is never held. With no database (dev, CI) or
- * a failed lookup the mail is let through: a lost owner email is the worse
- * mistake.
- */
-export async function ownerMayReceive(env: Env, to: string, kind: string): Promise<boolean> {
-  if (kind === 'test' || !env.DATABASE_URL) return true
-  const email = to.trim().toLowerCase()
-  try {
-    const [row] = await withService(env, (sql) => sql<{ ok: boolean }[]>`
-      select exists (
-               select 1 from users u
-                where lower(trim(u.email)) = ${email} and u.role = 'super_admin' and u.deleted_at is null)
-          or exists (
-               select 1 from platform_admins pa join auth.users au on au.id = pa.user_id
-                where lower(trim(au.email)) = ${email}) as ok`)
-    return row?.ok ?? false
-  } catch (e) {
-    console.error('[email] could not check the recipient', e)
-    return true
-  }
-}
+export const automaticEmailOff = (env: Env): boolean => env.EMAIL_EVERY_KIND !== 'on'
+/** Kept for older callers: the same switch. */
+export const emailOneADay = automaticEmailOff
+export const MANUAL_MAIL_KINDS: ReadonlySet<string> = new Set([
+  'verification',
+  'password_reset',
+  'invitation',
+  'client_doc',
+  'team_terms',
+  'test',
+])
+export const AUTOMATIC_OFF_NOTE = 'Not emailed: automatic emails are switched off. Only what someone sends with a button is emailed.'
 
 /**
  * Every email the app sends goes through here (0217): one call to Resend, and
@@ -67,10 +45,8 @@ export async function ownerMayReceive(env: Env, to: string, kind: string): Promi
  */
 export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; companyId?: string | null }): Promise<DeliveryResult> {
   let result: DeliveryResult
-  if (emailOneADay(env) && !OWNER_MAIL_KINDS.has(meta.kind)) {
-    result = { status: 'failed', error: ONE_A_DAY_NOTE, held: true }
-  } else if (!(await ownerMayReceive(env, mail.to, meta.kind))) {
-    result = { status: 'failed', error: OWNER_ONLY_NOTE, held: true }
+  if (automaticEmailOff(env) && !MANUAL_MAIL_KINDS.has(meta.kind)) {
+    result = { status: 'failed', error: AUTOMATIC_OFF_NOTE, held: true }
   } else if (!env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY unset — skipping "${mail.subject}" to ${mail.to}`)
     result = { status: 'provider_missing', error: 'Email is not set up on the server (RESEND_API_KEY is empty).' }

@@ -1,6 +1,9 @@
 import { Hono, type Context } from 'hono'
 import type { TransactionSql } from 'postgres'
 import {
+  QUICK_WORDS_MAX,
+  quickHintKey,
+  quickWordRequest,
   registerRequest,
   registerResult,
   loginRequest,
@@ -877,5 +880,25 @@ export const authRouter = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not save that.')
+    return c.json(userHints.parse(rows[0]?.hints ?? {}))
+  })
+
+  // A word joins the caller's own quick list for one studio list (owner,
+  // 26 Oct): newest first, no repeats in other capitals, at most 30.
+  .put('/quick-words', requireAuth, async (c) => {
+    const parsed = quickWordRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Invalid word.')
+    const { category, word } = parsed.data
+    const a = c.get('auth')
+    const key = quickHintKey(category)
+    const rows = await attempt(c, 'auth.quick_word', () =>
+      withUser(c.env, a.userId, async (sql) => {
+        const [me] = await sql<{ hints: Record<string, unknown> | null }[]>`select hints from users where user_id = ${a.userId}`
+        const had = Array.isArray(me?.hints?.[key]) ? (me!.hints![key] as unknown[]).filter((x): x is string => typeof x === 'string') : []
+        const next = [word, ...had.filter((w) => w.toLowerCase() !== word.toLowerCase())].slice(0, QUICK_WORDS_MAX)
+        return sql<{ hints: unknown }[]>`select set_user_hint(${key}, ${sql.json(next)}) as hints`
+      }),
+    )
+    if (!rows) fail(400, 'We could not save that word.')
     return c.json(userHints.parse(rows[0]?.hints ?? {}))
   })

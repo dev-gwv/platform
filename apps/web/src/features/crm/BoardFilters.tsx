@@ -7,6 +7,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { useMembers } from '@/features/allocation/api'
 import { useCreateCustomLookup } from '@/features/settings/api'
 import { useCanAddLookup } from '@/features/settings/useCanAddLookup'
+import { useAddLookupWord } from '@/features/settings/quick-words'
 import { useCreateStage, useCreateTag, useCrmPrefs, usePipelines, useTags } from './api'
 import { UNSET, activeFacetCount, facetCounts, type LeadFacets } from './board-filters'
 import { EVENT_TYPE_DEFAULTS } from './event-types'
@@ -56,6 +57,12 @@ export function BoardFilters({
   const canAddQuality = useCanAddLookup('lead_quality')
   const canAddSource = useCanAddLookup('lead_source')
   const canAddEvent = useCanAddLookup('project_type')
+  // Anyone else's new word joins their own quick list (owner, 26 Oct).
+  const addMine = {
+    lead_quality: useAddLookupWord('lead_quality'),
+    lead_source: useAddLookupWord('lead_source'),
+    project_type: useAddLookupWord('project_type'),
+  }
 
   // "+ Add" in each filter: the new value joins the studio's list, and the
   // filter is switched to it straight away. The owner asked to create a
@@ -82,9 +89,9 @@ export function BoardFilters({
         }
       : {}),
     ...(canEdit ? { tag: async (name: string) => (await createTag.mutateAsync({ name, color: 'violet' })).id } : {}),
-    ...(canAddQuality ? { quality: addLookup('lead_quality', qualities.length) } : {}),
-    ...(canAddSource ? { source: addLookup('lead_source', sources.length) } : {}),
-    ...(canAddEvent ? { event: addLookup('project_type', events.length) } : {}),
+    quality: canAddQuality ? addLookup('lead_quality', qualities.length) : addMine.lead_quality,
+    source: canAddSource ? addLookup('lead_source', sources.length) : addMine.lead_source,
+    event: canAddEvent ? addLookup('project_type', events.length) : addMine.project_type,
   }
 
   const options = useMemo(() => {
