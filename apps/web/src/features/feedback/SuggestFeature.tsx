@@ -41,6 +41,8 @@ export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header
           className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-tone-amber/40 bg-tone-amber-soft px-3 text-xs font-semibold text-foreground transition-colors hover:border-tone-amber sm:px-4"
         >
           <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
+          {/* Named from 1360px, like the shortcut pills, so it reads as an invitation. */}
+          <span className="hidden min-[1360px]:inline min-[1800px]:hidden">Suggest an idea</span>
           <span className="hidden min-[1800px]:inline">Suggest a feature</span>
           <span className="hidden text-muted-foreground min-[1800px]:inline" aria-hidden>
             ·
@@ -146,7 +148,9 @@ function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open && !capturing} onOpenChange={(o) => !capturing && onOpenChange(o)}>
-      <DialogContent className="max-w-md" title="Suggest a feature · सुझाव दें" description="Tell us what would make your work easier. We read every one. · आपके काम को आसान बनाने के लिए क्या चाहिए, बताइए।">
+      {/* Big and welcoming (owner, 26 Oct): a suggestion box should say we want
+          to hear it, not look like a form to get through. */}
+      <DialogContent className="max-w-2xl" title="Suggest a feature · सुझाव दें" description="Tell us what would make your work easier. We read every one. · आपके काम को आसान बनाने के लिए क्या चाहिए, बताइए।">
         {done ? (
           <div className="flex flex-col items-center gap-2 py-6 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-tone-green-soft text-tone-green">
@@ -159,15 +163,27 @@ function SuggestFeatureDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
+            <div className="flex items-start gap-4 rounded-2xl border border-tone-amber/40 bg-gradient-to-br from-tone-amber-soft to-card p-5">
+              <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-tone-amber/15">
+                <Lightbulb className="size-7 text-tone-amber" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-lg font-bold leading-snug">We would love to hear your idea</p>
+                <p className="text-base font-semibold text-muted-foreground">आपका सुझाव हमारे लिए बहुत कीमती है</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Big or small, every suggestion reaches the people who build Studio AutoPilot, and many of the app's best parts began as one.
+                </p>
+              </div>
+            </div>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               <Bi en="What would help you?" hi="आपको क्या मदद करेगा?" />
               <Textarea
-                rows={3}
+                rows={6}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="e.g. Send the album selection link on WhatsApp · जैसे: एल्बम सिलेक्शन लिंक WhatsApp पर भेजें"
-                className="text-sm"
+                className="min-h-36 text-base"
               />
             </label>
 

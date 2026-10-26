@@ -1398,7 +1398,23 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { duplicate: false, expires_at: '2027-01-01T00:00:00Z' }
   if (method === 'GET' && path.startsWith('/public/terms/'))
     return {
-      body: 'These are the terms of service for your photography package. By clicking "I agree" you accept the scope, payment schedule, and delivery timelines outlined in your quotation.',
+      title: 'Terms & conditions', project_name: "Priya & Rahul's Wedding", client_name: 'Priya Sharma', client_phone: '+919876500001',
+      company_name: 'Asha Studio', logo_url: null, company_phone: '+919876921126', company_email: 'hello@ashastudio.in',
+      company_address: '12 Turner Road, Bandra West, Mumbai', payment_summary: null, expires_at: null, revoked: false,
+      acknowledged_at: null, acknowledged_by_name: null, access_count: 1, document_number: 'T-0012', issued_at: '2026-10-20T10:00:00Z',
+      total_cost: 350000,
+      payment_terms: [
+        { label: 'On booking', value: 30, mode: 'percentage', due_trigger: 'On booking' },
+        { label: 'Before the wedding', value: 50, mode: 'percentage', due_trigger: '7 days before' },
+        { label: 'On delivery', value: 20, mode: 'percentage', due_trigger: 'On delivery' },
+      ],
+      sections: [
+        { heading: 'What we will shoot', body: 'Haldi, Mehendi, Wedding and Reception, with two photographers and one cinematographer on each day.' },
+        { heading: 'Delivery', body: 'Edited photos within 30 days of the wedding, the film within 60 days, and the album after you pick your photos.' },
+      ],
+      body: Array.from({ length: 6 }, (_, i) =>
+        `${i + 1}. ${['Booking', 'Payments', 'Travel and stay', 'Changes to dates', 'Delivery and backups', 'Use of photos'][i]}\nThe studio keeps the date only once the booking amount is received. Any change to the dates must be told at least 30 days before the event. Travel and stay outside the city are paid by the client. Raw files are kept for 6 months after delivery.`,
+      ).join('\n\n'),
     }
   if (method === 'POST' && path.includes('/terms/') && path.endsWith('/ack')) return { ok: true }
   if (method === 'GET' && path === '/platform/studios') return platformStudiosFx

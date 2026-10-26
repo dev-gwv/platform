@@ -772,7 +772,7 @@ describe('billing & invoicing (Phase 9)', () => {
     expect(lineItems.rows.map((r) => r.description)).toEqual(['Wedding Package'])
   })
 
-  it('an invoice with a recorded payment can no longer be edited or deleted', async () => {
+  it('an invoice with a recorded payment can still be edited, never below what was paid, and not deleted', async () => {
     const items = JSON.stringify([
       { description: 'Retainer', quantity: 1, rate: 20000, amount: 20000, gst_rate: 18, taxable: 20000, cgst: 1800, sgst: 1800, igst: 0 },
     ])
@@ -783,6 +783,7 @@ describe('billing & invoicing (Phase 9)', () => {
     const id = inv.rows[0]!.id
     await db.query(`select record_invoice_payment('${id}', 5000);`)
 
+    // 0284 (owner, 26 Oct): it stays editable, but its total cannot drop below the 5,000 received.
     await expect(
       db.query(`
         select update_invoice(
@@ -792,7 +793,21 @@ describe('billing & invoicing (Phase 9)', () => {
           p_items => '[]'::jsonb, p_notes => null
         );
       `),
-    ).rejects.toThrow(/cannot be edited/)
+    ).rejects.toThrow(/less than/)
+    await db.query(`
+      select update_invoice(
+        p_invoice_id => '${id}', p_client_id => '${clientId}', p_project_id => null,
+        p_place_of_supply => '27', p_intra_state => true, p_invoice_date => null, p_due_date => null,
+        p_subtotal => 25000, p_discount => 0, p_taxable => 25000, p_tax => 4500, p_total => 29500,
+        p_items => '${items}'::jsonb, p_notes => 'More hours'
+      );
+    `)
+    const after = await db.query<{ total: string; balance_due: string; status: string }>(
+      `select total, balance_due, status from invoices where id = '${id}'`,
+    )
+    expect(Number(after.rows[0]!.total)).toBe(29500)
+    expect(Number(after.rows[0]!.balance_due)).toBe(24500)
+    expect(after.rows[0]!.status).toBe('partial')
 
     // The API's delete guard mirrors update_invoice's own rule (amount_paid = 0).
     const attempted = await db.query(`delete from invoices where id = '${id}' and amount_paid = 0 returning id;`)
