@@ -93,7 +93,14 @@ async function start() {
         status = { state: 'logged_out', qr: null, me: null }
         await fs.rm(AUTH_DIR, { recursive: true, force: true })
         restartTimer = setTimeout(() => void start(), 2_000)
+      } else if (code === DisconnectReason.restartRequired || !auth.creds.me) {
+        // Just after a scan WhatsApp asks for one restart; and while no phone is
+        // linked, an unscanned QR simply expires. Either way come straight back,
+        // so the Platform page always has a fresh QR instead of "Connecting…".
+        status = { state: 'connecting', qr: null, me: null }
+        restartTimer = setTimeout(() => void start(), 3_000)
       } else {
+        // A linked session dropped: back off, so a WhatsApp outage is not hammered.
         status = { ...status, state: 'connecting', qr: null }
         restartTimer = setTimeout(() => void start(), backoffMs)
         backoffMs = Math.min(backoffMs * 2, 5 * 60_000)
