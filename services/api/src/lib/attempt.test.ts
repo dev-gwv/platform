@@ -4,6 +4,7 @@ import type { AppEnv } from '../context'
 import { errorHandler } from '../middleware/errors'
 import { requestId } from '../middleware/request-id'
 import { attempt } from './attempt'
+import * as reporter from './error-reporter'
 
 class PgError extends Error {
   constructor(
@@ -101,5 +102,30 @@ describe('attempt()', () => {
       (code) => (code === '23505' ? 'taken' : undefined),
     ).request('/x', {}, env)
     expect(await res.json()).toEqual({ r: 'taken' })
+  })
+
+  it('reports only faults to Sentry, never a refusal the studio is answered with', async () => {
+    const report = vi.spyOn(reporter, 'reportError').mockImplementation(() => undefined)
+    try {
+      await build(async () => {
+        throw new PgError('no_open_check_in: nothing to check out of', 'P0001')
+      }).request('/x', {}, env)
+      await build(
+        async () => {
+          throw new PgError('dup', '23505')
+        },
+        () => 'taken',
+      ).request('/x', {}, env)
+      expect(report).not.toHaveBeenCalled()
+      const levels = errSpy.mock.calls.map((call) => (JSON.parse(String(call[0])) as { levelName: string }).levelName)
+      expect(levels).toEqual(['warn', 'warn'])
+
+      await build(async () => {
+        throw new Error('boom')
+      }).request('/x', {}, env)
+      expect(report).toHaveBeenCalledTimes(1)
+    } finally {
+      report.mockRestore()
+    }
   })
 })

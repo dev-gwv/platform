@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react'
 import { config } from '../config'
+import { ApiError } from '../api/client'
 
 /**
  * Browser-side Sentry.
@@ -78,22 +79,44 @@ export function initSentry(router: unknown): boolean {
       /extension:\/\//,
     ],
 
-    beforeSend(event) {
-      // A tab open across a deploy asks for page files the deploy removed.
-      // Each missing file used to file its own issue, named after the file
-      // ("…follow-ups-Ia-SCERZ.js"), so one deploy looked like a dozen new
-      // bugs. They are one thing, and the app reloads itself onto the new
-      // release, so they become one warning.
-      if (isStaleChunk(event)) {
-        event.fingerprint = ['stale-chunk-after-deploy']
-        event.level = 'warning'
-        event.tags = { ...event.tags, stale_chunk: 'yes' }
-      }
-      return event
-    },
+    beforeSend: shapeEvent,
   })
 
   return true
+}
+
+/**
+ * What reaches Sentry, and under which name. Exported for its test.
+ *
+ *   * An ApiError below 500 is the API's answer ("you have not checked in
+ *     today", a plan limit, a lost connection shown as a toast), not a fault.
+ *     A handler that awaits a mutation without a catch let each one escape as
+ *     an unhandled rejection and email the team. Dropped.
+ *   * A 502/503/504 from our API is the few seconds a deploy restarts it.
+ *     Every open tab reported each request on its own; now one warning.
+ *   * A tab open across a deploy asks for page files the deploy removed: one
+ *     warning too, and the app reloads itself onto the new release.
+ */
+export function shapeEvent(event: Sentry.ErrorEvent, hint: Sentry.EventHint): Sentry.ErrorEvent | null {
+  const original = hint.originalException
+  if (original instanceof ApiError && original.status < 500) return null
+  if (isStaleChunk(event)) {
+    event.fingerprint = ['stale-chunk-after-deploy']
+    event.level = 'warning'
+    event.tags = { ...event.tags, stale_chunk: 'yes' }
+  } else if (isApiUnreachable(event, original)) {
+    event.fingerprint = ['api-unreachable']
+    event.level = 'warning'
+    event.tags = { ...event.tags, api_unreachable: 'yes' }
+  }
+  return event
+}
+
+const UNREACHABLE = /status code: 50[234]\b/
+
+function isApiUnreachable(event: Sentry.ErrorEvent, original: unknown): boolean {
+  if (original instanceof ApiError) return [502, 503, 504].includes(original.status)
+  return (event.exception?.values ?? []).some((v) => UNREACHABLE.test(v.value ?? ''))
 }
 
 /** What each browser says when a page file is gone (Chrome, Safari, Firefox, a CSS preload). */

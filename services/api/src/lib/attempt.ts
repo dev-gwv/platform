@@ -32,7 +32,10 @@ interface AttemptOptions<C> {
   onCode?: (code: string, err: unknown) => C | undefined
 }
 
-const CONNECTION_CODES = new Set(['08000', '08003', '08006', '57P01', '57P02', '57P03', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'CONNECT_TIMEOUT'])
+/** Codes that are the database saying no on purpose, answered below with 409/422/402. */
+const REFUSAL_CODES = new Set(['23505', '23503', '22023', 'P0001', '54000'])
+
+const CONNECTION_CODES =new Set(['08000', '08003', '08006', '57P01', '57P02', '57P03', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'CONNECT_TIMEOUT'])
 
 export async function attempt<T, C = never>(
   c: Context<AppEnv>,
@@ -45,25 +48,21 @@ export async function attempt<T, C = never>(
   } catch (err) {
     const requestId = currentRequestId(c)
     const d = describeError(err)
-    log.error(
-      {
-        requestId,
-        method: c.req.method,
-        path: c.req.path,
-        label,
-        code: d.code,
-        message: d.message,
-        stack: d.stack,
-      },
-      'operation failed',
-    )
-    reportError(c.env, err, { requestId, method: c.req.method, path: c.req.path, label })
     c.header('X-Correlation-Id', requestId)
-
-    if (d.code && opts.onCode) {
-      const claimed = opts.onCode(d.code, err)
-      if (claimed !== undefined) return claimed
+    const claimed = d.code && opts.onCode ? opts.onCode(d.code, err) : undefined
+    // A refusal the caller answers, or one the database means as an answer
+    // (a check, a duplicate, a plan limit), is the studio being told no, not
+    // a bug: it is logged, and only a fault of ours goes to Sentry. Every
+    // "you have not checked in today" used to email the team as an error.
+    const answered = claimed !== undefined || (d.code !== undefined && REFUSAL_CODES.has(d.code))
+    const line = { requestId, method: c.req.method, path: c.req.path, label, code: d.code, message: d.message }
+    if (answered) {
+      log.warn(line, 'operation refused')
+    } else {
+      log.error({ ...line, stack: d.stack }, 'operation failed')
+      reportError(c.env, err, { requestId, method: c.req.method, path: c.req.path, label })
     }
+    if (claimed !== undefined) return claimed as C
     switch (d.code) {
       case '42501':
         fail(403, 'You do not have access to this action.')
