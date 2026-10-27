@@ -119,9 +119,13 @@ function isApiUnreachable(event: Sentry.ErrorEvent, original: unknown): boolean 
   return (event.exception?.values ?? []).some((v) => UNREACHABLE.test(v.value ?? ''))
 }
 
-/** What each browser says when a page file is gone (Chrome, Safari, Firefox, a CSS preload). */
+/**
+ * What each browser says when a page file is gone (Chrome, Safari, Firefox, a
+ * CSS preload), and the page read off the empty module that tabs still on an
+ * older release hit until their next load.
+ */
 export const STALE_CHUNK =
-  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|is not a valid JavaScript MIME type/i
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|is not a valid JavaScript MIME type|reading '\w+Page'|property "\w+Page", \w+ is undefined|evaluating '\w+\.\w+Page'/i
 
 function isStaleChunk(event: Sentry.ErrorEvent): boolean {
   return (event.exception?.values ?? []).some((v) => STALE_CHUNK.test(`${v.type ?? ''}: ${v.value ?? ''}`))

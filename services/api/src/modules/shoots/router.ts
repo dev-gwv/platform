@@ -168,8 +168,11 @@ export const shootsRouter = new Hono<AppEnv>()
       'shoots.services.create',
       () =>
         withUser(c.env, auth.userId, async (sql) => {
+          // The studio the database sees for this login, so the row always
+          // passes the services policy (a token naming another of the login's
+          // studios was refused by RLS, IPC-API-G).
           const rows = await sql`
-            insert into services ${sql({ company_id: auth.companyId, name: parsed.data.name })}
+            insert into services (company_id, name) values (get_current_company_id(), ${parsed.data.name})
             returning id, name`
           return rows[0] ?? null
         }),

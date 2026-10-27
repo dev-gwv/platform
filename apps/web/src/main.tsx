@@ -15,8 +15,17 @@ import { ThemeProvider } from '@/shared/theme/ThemeProvider'
 import { ConfirmProvider } from '@/shared/ui/confirm'
 import { router } from '@/app/router'
 import { ApiError } from '@/shared/api/client'
+import { z } from '@ipc/contracts'
 import { registerPwa } from '@/shared/pwa/install'
 import { watchForNewRelease } from '@/shared/pwa/update'
+
+/** "Check the email: Invalid email" from a form's ZodError. */
+function checkMessage(error: z.ZodError): string {
+  const issue = error.issues[0]
+  if (!issue) return 'Please check the details and try again.'
+  const field = String(issue.path[issue.path.length - 1] ?? '').replace(/_/g, ' ')
+  return field ? `Check the ${field}: ${issue.message}` : issue.message
+}
 
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
@@ -40,11 +49,14 @@ const queryClient = new QueryClient({
       // is already filed by httpClientIntegration with the request beside it,
       // and status 0 is the user's own connection. Filing them buried the
       // real crashes under hundreds of "Add a phone number first".
-      if (!(error instanceof ApiError)) Sentry.captureException(error)
+      // A ZodError here is a form's own check on what was typed (a code with
+      // a space, an email without @) before anything was sent: the person's to
+      // fix, not ours, and its raw JSON was the toast.
+      if (!(error instanceof ApiError) && !(error instanceof z.ZodError)) Sentry.captureException(error)
       // Many hooks toast their own error too, and theirs runs just after this
       // one, so the same words showed twice ("Add a phone number to this lead
       // before booking it." on Book it). Wait a tick and say it only once.
-      const message = error instanceof Error ? error.message : 'Something went wrong.'
+      const message = error instanceof z.ZodError ? checkMessage(error) : error instanceof Error ? error.message : 'Something went wrong.'
       setTimeout(() => {
         if (toast.getToasts().some((t) => 'title' in t && t.title === message)) return
         toast.error(message)
@@ -72,7 +84,7 @@ if (!MOCK_ENABLED && !sentryOn) installClientErrorReporting()
 // dynamically imported module"). The router reloads once for a page's own
 // file; this covers every other late-loaded file. One reload per minute at
 // most, so a host that is really down shows the error instead of looping.
-window.addEventListener('vite:preloadError', (event) => {
+window.addEventListener('vite:preloadError', () => {
   const KEY = 'chunk-reload-at'
   let last = 0
   try {
@@ -86,7 +98,10 @@ window.addEventListener('vite:preloadError', (event) => {
   } catch {
     /* reload anyway */
   }
-  event.preventDefault()
+  // No preventDefault: Vite then resolves the import with undefined, and the
+  // router crashed reading the page off it ("reading 'ProjectQuotationPage'",
+  // one Sentry issue per page) while the reload was already on its way. The
+  // error goes on to the router as a stale-chunk warning instead.
   window.location.reload()
 })
 

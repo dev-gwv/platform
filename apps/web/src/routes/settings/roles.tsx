@@ -36,6 +36,12 @@ const toCode = (name: string): string =>
     .replace(/^_+|_+$/g, '')
     .slice(0, 40)
 
+/** A code the API takes: tidied, and never shorter than two letters. */
+const codeFor = (text: string): string => {
+  const c = toCode(text)
+  return c.length >= 2 ? c : `role_${Date.now().toString(36)}`
+}
+
 export function RolesAccessPage() {
   return (
     <AuthedPage module="team_roles">
@@ -278,7 +284,9 @@ function RoleDialog({ role }: { role?: EmployeeRole }) {
     e.preventDefault()
     const body = {
       type_name: name.trim(),
-      role_code: (codeTouched ? code : toCode(name)).trim(),
+      // A typed code is tidied the same way ("Drone Pilot" -> drone_pilot), and
+      // a name with no Latin letters (ड्रोन) still gets a code to save under.
+      role_code: codeFor(codeTouched ? code : name),
       stage,
     }
     const done = {

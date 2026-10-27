@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Ban, Undo2, CalendarDays, CheckCircle2, Clock, ExternalLink, Filter, Mic, Pencil, Send } from 'lucide-react'
 import { daysLeftText, daysUntil, todayInIndia } from '@/shared/ui/days-left'
 import { shortDayLabel } from '@/shared/ui/time-format'
-import { WORK_STATUS_LABEL, shootListItem, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
+import { WORK_STATUS_LABEL, myShoot, workSubmission, type TaskListItem, type TaskStatus, type WorkSubmission } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -26,7 +26,9 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { STATUS_LABEL } from '@/features/tasks/board'
 
 const list = workSubmission.array()
-const shootsList = shootListItem.array()
+// The same cache entry as My shoots, so the same schema: shootListItem dropped
+// `crew`, and My shoots opened after My work crashed on s.crew.filter.
+const shootsList = myShoot.array()
 const TONE = { submitted: 'warning', approved: 'success', rejected: 'danger', sent: 'success' } as const
 
 type SortKey = 'due_asc' | 'due_desc' | 'recent' | 'priority'

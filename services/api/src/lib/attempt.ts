@@ -54,7 +54,11 @@ export async function attempt<T, C = never>(
     // (a check, a duplicate, a plan limit), is the studio being told no, not
     // a bug: it is logged, and only a fault of ours goes to Sentry. Every
     // "you have not checked in today" used to email the team as an error.
-    const answered = claimed !== undefined || (d.code !== undefined && REFUSAL_CODES.has(d.code))
+    // A function's own "not allowed" (42501 raised on purpose) is a refusal
+    // too; a row-level security violation is not, it is a policy we got wrong.
+    const refused =
+      d.code !== undefined && (REFUSAL_CODES.has(d.code) || (d.code === '42501' && !/row-level security/i.test(d.message)))
+    const answered = claimed !== undefined || refused
     const line = { requestId, method: c.req.method, path: c.req.path, label, code: d.code, message: d.message }
     if (answered) {
       log.warn(line, 'operation refused')

@@ -10,6 +10,9 @@ describe('STALE_CHUNK', () => {
       'TypeError: error loading dynamically imported module: https://studioautopilot.in/assets/x.js',
       'Error: Unable to preload CSS for /assets/index-hUa24wpy.css',
       "TypeError: 'text/html' is not a valid JavaScript MIME type.",
+      "TypeError: Cannot read properties of undefined (reading 'ProjectQuotationPage')",
+      'TypeError: can\'t access property "EmployeesPage", m is undefined',
+      "TypeError: undefined is not an object (evaluating 'm.HelpPage')",
     ])
       expect(STALE_CHUNK.test(m)).toBe(true)
   })
