@@ -230,7 +230,7 @@ export function groupHasRoom(sentLastHour: number, sentToday: number, s: Pick<Su
 
 /**
  * A made-up booking for Platform -> Support calls' "Try a sample booking": the
- * whole path (saved, planned, posted in the group) without the booking app.
+ * whole path (saved, planned, posted in the group) without a real booking.
  * It never asks for WhatsApp, so nobody is messaged personally; only the group
  * (or, with the bot off, the team numbers) hears of it.
  */

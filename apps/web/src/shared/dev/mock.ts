@@ -246,7 +246,6 @@ const supportCallsFx = {
 const helpFx = {
   support_whatsapp: '919876543210' as string | null,
   support_call_url: 'https://calendly-common-meeting-web-bjvr.vercel.app/harsh-solanki/support-call' as string | null,
-  support_call_in_app: true,
   support_email: 'help@studioautopilot.in' as string | null,
   faqs: [
     { id: '00000000-0000-4000-8000-0000000004e0', question: 'Can Studio AutoPilot see my clients and prices?', answer: 'No. Your clients, prices and payments belong to your studio alone.', sort_order: 10 },

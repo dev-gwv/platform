@@ -5,7 +5,7 @@ import type { SupportCallNotice, SupportCallNoticeKind } from '@ipc/contracts'
  * or database, so every rule is tested.
  *
  * The calendar is one used only for support calls (whichever booking page
- * fills it -- Google's appointment schedule or the booking app), read through
+ * fills it -- a Google Calendar appointment schedule), read through
  * its private iCal address every five minutes. Each entry is a booking: new is
  * "booked", a changed time is "moved", removed or cancelled is "cancelled".
  */

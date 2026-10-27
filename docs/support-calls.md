@@ -7,18 +7,18 @@ calls**. Everything starts off.
 ## How it works
 
 ```
-Booking page ──► "Support calls" Google Calendar ──► Studio AutoPilot reads it every 5 min
-(Google appointment                                      │
- schedule, or the booking app)                           ▼
+Google appointment schedule ──► "Support calls" calendar ──► Studio AutoPilot reads it every 5 min
+(the Support call button)                                    │
+                                                             ▼
                                         new = booked · time changed = moved · gone = cancelled
                                                          │
                                                          ▼
                                   one post in the support WhatsApp group (the group bot)
 ```
 
-- **Bookings come from one Google Calendar** that holds only support calls.
-  Whichever booking page fills it -- Google's own appointment schedule or the
-  booking app -- the automation is the same. Studio AutoPilot reads the
+- **Bookings come from one Google Calendar** that holds only support calls,
+  filled by a Google Calendar **appointment schedule** -- the page the Support
+  call button opens. Studio AutoPilot reads the
   calendar's private address ("Secret address in iCal format"); no Google login
   is stored. The first read only notes what is already there, so connecting it
   never floods the group.
@@ -35,9 +35,10 @@ Booking page ──► "Support calls" Google Calendar ──► Studio AutoPilo
 
 ## Setting it up
 
-1. **Calendar.** In Google Calendar make a calendar called "Support calls" and
-   point the booking page at it (Google appointment schedule: choose that
-   calendar when you create the schedule). Then that calendar's Settings →
+1. **Calendar and booking page.** In Google Calendar make a calendar called
+   "Support calls", then Create → **Appointment schedule** and pick that
+   calendar for the bookings. Copy the schedule's booking page link into
+   Platform → Help → "Where Book a support call goes". Then that calendar's Settings →
    **Secret address in iCal format** → copy → Platform → Support calls →
    **Connect**. Anyone with that address can read that calendar, so use one
    that holds only support calls and never share the address.

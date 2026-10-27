@@ -5,15 +5,13 @@
 # beyond Razorpay Checkout, Google sign-in and Facebook's SDK (WhatsApp signup).
 # connect-src is https: rather than the exact API origin because the origin differs per deployment and Pages cannot template
 # this file — tighten it to your api.<domain> once it is known (docs/RUNBOOK.md).
-# frame-src also names the booking app, whose calendar Book a support call can
-# open in a popup (0279): a frame only, never a script of theirs on our pages.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(self), camera=(), microphone=(self), display-capture=(self)
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net https://checkout.razorpay.com https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: https://accounts.google.com https://oauth2.googleapis.com; frame-src https://www.facebook.com https://web.facebook.com https://api.razorpay.com https://checkout.razorpay.com https://accounts.google.com https://calendly-common-meeting-web-bjvr.vercel.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; media-src 'self' blob: data:; worker-src 'self' blob:
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net https://checkout.razorpay.com https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: https://accounts.google.com https://oauth2.googleapis.com; frame-src https://www.facebook.com https://web.facebook.com https://api.razorpay.com https://checkout.razorpay.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; media-src 'self' blob: data:; worker-src 'self' blob:
 
 # An enquiry form is shown on studios' own websites (0240): only these pages
 # may be framed, by anyone. They hold no session action -- a name, a phone

@@ -14,7 +14,7 @@ import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './na
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
 import { AssistantButton } from '@/features/assistant/AssistantButton'
-import { HeaderBookCall, SupportCallHost } from '@/features/help/BookCall'
+import { HeaderBookCall } from '@/features/help/BookCall'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
@@ -272,7 +272,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
         <MobileTabBar onMenu={() => setMobileOpen(true)} />
         <HelpBubble />
-        <SupportCallHost />
       </div>
     </div>
   )

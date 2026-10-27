@@ -477,7 +477,7 @@ function BookingsCard({ bookings }: { bookings: SupportWhatsappOverview['booking
         <h2 className="flex items-center gap-2 font-semibold">
           <Headphones className="size-4 text-tone-teal" /> Latest bookings
         </h2>
-        {bookings.length === 0 && <p className="text-sm text-muted-foreground">None yet. They appear here as the booking app sends them.</p>}
+        {bookings.length === 0 && <p className="text-sm text-muted-foreground">None yet. They appear here as calls are booked on the calendar.</p>}
         <ul className="flex flex-col divide-y divide-border">
           {bookings.map((b) => (
             <li key={b.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">

@@ -218,8 +218,6 @@ export const saveAssistantSettingsRequest = z.object({
    */
   assistant_minute_tokens: z.number().int().min(1_000).max(10_000_000).nullable(),
   assistant_day_tokens: z.number().int().min(1_000).max(1_000_000_000).nullable(),
-  /** Open the booking app's calendar in a popup over the app instead of a new tab (0279). */
-  support_call_in_app: z.boolean().default(false),
 })
 export type SaveAssistantSettingsRequest = z.infer<typeof saveAssistantSettingsRequest>
 
