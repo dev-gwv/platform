@@ -5,7 +5,7 @@ import { subscriptionStatus } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
-import { planLine } from './plan-line'
+import { isLifetime, planLine } from './plan-line'
 import { usePlanUsage } from './UsageCard'
 import { nearestLimit } from './usage'
 
@@ -32,9 +32,10 @@ export function PlanCard({ collapsed }: { collapsed: boolean }) {
   const left = s?.days_left ?? null
   const ended = left != null && left < 0
   const soon = left != null && left >= 0 && left <= 7
-  const title = !s ? 'Your plan' : trial ? 'Free trial' : (s.plan_name ?? 'Your plan')
+  const lifetime = isLifetime(left)
+  const title = !s ? 'Your plan' : trial ? 'Free trial' : lifetime ? 'Studio AutoPilot' : (s.plan_name ?? 'Your plan')
   const line = planLine(left, s?.access_until)
-  const cta = trial || ended || !s?.plan_name ? 'Upgrade' : 'Manage'
+  const cta = !lifetime && (trial || ended || !s?.plan_name) ? 'Upgrade' : 'Manage'
 
   if (collapsed) {
     return (
