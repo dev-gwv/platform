@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planLine } from './plan-line'
+import { isLifetime, planLine } from './plan-line'
 
 describe('planLine', () => {
   it('names the day it runs until', () => {
@@ -16,5 +16,10 @@ describe('planLine', () => {
   it('falls back without numbers', () => {
     expect(planLine(null, null)).toBe('See plans')
     expect(planLine(9, null)).toBe('9 days left')
+  })
+  it('says a platform admin studio is open for life', () => {
+    expect(planLine(26_000, '2099-12-31T18:29:59Z')).toBe('Open for life · no limits')
+    expect(isLifetime(26_000)).toBe(true)
+    expect(isLifetime(365)).toBe(false)
   })
 })

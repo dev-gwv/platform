@@ -23,6 +23,7 @@ import { OfferStrip } from '@/features/billing/OfferStrip'
 import { DiamondTrialBanner } from '@/features/billing/DiamondTrialBanner'
 import { markOffer, useMyOffer } from '@/features/billing/offer-api'
 import { offerFor, offerLastDay } from '@/features/billing/offer'
+import { isLifetime } from '@/features/billing/plan-line'
 
 const plans = plan.array()
 const WHATSAPP = 'border-0 bg-[#25D366] text-white hover:bg-[#1ebe5b] hover:text-white'
@@ -119,9 +120,14 @@ function Subscription() {
               <p className="text-2xl font-bold tabular-nums">
                 {(status.data.days_left ?? 0) < 0
                   ? 'Ended'
-                  : `${status.data.days_left} day${status.data.days_left === 1 ? '' : 's'} left`}
+                  : isLifetime(status.data.days_left)
+                    ? 'Open for life'
+                    : `${status.data.days_left} day${status.data.days_left === 1 ? '' : 's'} left`}
               </p>
             </div>
+            {isLifetime(status.data.days_left) ? (
+              <p className="text-sm text-muted-foreground">Every feature, no limits and no end date on this studio.</p>
+            ) : (
             <p className="text-sm text-muted-foreground">
               {(status.data.days_left ?? 0) < 0 ? 'Ended on ' : 'Ends on '}
               <strong className="text-foreground">
@@ -132,6 +138,7 @@ function Subscription() {
                 ? 'Pick a plan below to keep everything running after that.'
                 : 'Paying again extends from that date, so nothing is lost by renewing early.'}
             </p>
+            )}
           </CardContent>
         </Card>
       )}
