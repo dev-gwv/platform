@@ -181,13 +181,6 @@ export const saveAssistantSettingsRequest = z.object({
     .startsWith('https://', 'The address must start with https://')
     .or(z.literal(''))
     .nullable(),
-  support_call_url: z
-    .string()
-    .trim()
-    .url('That does not look like a web address.')
-    .startsWith('https://', 'The link must start with https://')
-    .or(z.literal(''))
-    .nullable(),
   assistant_daily_limit: z.number().int().min(1).max(1000).nullable(),
   /**
    * The second vendor, tried when the first refuses or cannot be reached.
@@ -222,6 +215,8 @@ export const saveAssistantSettingsRequest = z.object({
 export type SaveAssistantSettingsRequest = z.infer<typeof saveAssistantSettingsRequest>
 
 export const assistantSettings = saveAssistantSettingsRequest.extend({
+  /** Where Book a support call goes: the first Google booking page on Platform -> Support calls (0290). Read only here. */
+  support_call_url: z.string().nullable().default(null),
   /** Whether the server has a key at all — the console says so plainly. */
   ready: z.boolean(),
   /**

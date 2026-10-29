@@ -21,8 +21,13 @@ export type HelpVideo = z.infer<typeof helpVideo>
 export const helpContent = z.object({
   support_whatsapp: z.string().nullable(),
   support_email: z.string().nullable(),
-  /** Book a call: the Help console's call link, else the server's ONBOARDING_CALL_URL. */
+  /** Book a call: the first person's Google booking page, else the server's ONBOARDING_CALL_URL. */
   support_call_url: z.string().nullable().default(null),
+  /**
+   * Everyone who takes support calls, each with their own Google Calendar
+   * booking page (0290). Two or more and Book a support call asks whom.
+   */
+  support_calls: z.array(z.object({ name: z.string(), url: z.string() })).default([]),
   faqs: z.array(helpFaq),
   videos: z.array(helpVideo),
 })

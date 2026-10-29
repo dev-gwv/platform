@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   ArrowUpRight,
-  Headphones,
   Check,
   Copy,
   CornerDownLeft,
@@ -19,7 +18,7 @@ import {
 import type { AssistantLang, AssistantTurn } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { SUPPORT_CALL_CLASS } from '@/features/help/BookCall'
+import { BookCallButton } from '@/features/help/BookCall'
 import { useTutorials } from '@/features/help/api'
 import { useHelpLang } from '@/features/help/lang'
 import { TutorialPlayer } from '@/features/help/TutorialPlayer'
@@ -445,14 +444,9 @@ function Bubble({
         </div>
       )}
 
-      {said.callUrl && (
-        <Button size="sm" className={cn('self-start', SUPPORT_CALL_CLASS)} asChild>
-          {/* Opens away from the app, so the conversation is still here afterwards. */}
-          <a href={said.callUrl} target="_blank" rel="noreferrer noopener">
-            <Headphones /> {t.bookCall}
-          </a>
-        </Button>
-      )}
+      {/* Opens away from the app (or asks whom, with two people), so the
+          conversation is still here afterwards. */}
+      {said.callUrl && <BookCallButton size="sm" className="self-start" label={t.bookCall} />}
 
       {/* Nothing to copy or rate on a failure: that answer was ours, not the
           knowledge base's. */}

@@ -109,12 +109,43 @@ export const supportCallMessageRow = z.object({
 })
 export type SupportCallMessageRow = z.infer<typeof supportCallMessageRow>
 
+export const supportCalendar = z.object({
+  slot: z.number().int(),
+  name: z.string().nullable(),
+  booking_url: z.string().nullable(),
+  address: z.string().nullable(),
+  checked_at: z.string().nullable(),
+  error: z.string().nullable(),
+  upcoming: z.number().int(),
+})
+export type SupportCalendar = z.infer<typeof supportCalendar>
+
+/** A Google appointment schedule's booking page, or any https page; never the old booking app. */
+const bookingPage = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((v) => v === '' || /^https:\/\/\S+$/.test(v), 'Paste the booking page’s https:// link.')
+  .transform((v) => v || null)
+
+/** Saving one person's calendar. `ical_url` left out keeps the address as it is. */
+export const saveSupportCalendarRequest = z.object({
+  name: z.string().trim().max(60).transform((v) => v || null),
+  booking_url: bookingPage,
+  ical_url: z.string().trim().max(2000).nullable().optional(),
+})
+export type SaveSupportCalendarRequest = z.infer<typeof saveSupportCalendarRequest>
+
 export const supportWhatsappOverview = z.object({
   settings: supportWhatsappSettings,
   /** Whether the server holds what each part needs. */
   ready: z.object({ official_api: z.boolean(), bot_secret: z.boolean() }),
-  /** The support calls calendar (0283): masked address, last read, why it failed, calls ahead. */
-  calendar: z.object({ address: z.string().nullable(), checked_at: z.string().nullable(), error: z.string().nullable(), upcoming: z.number().int() }),
+  /**
+   * The people who take support calls (0290), one Google Calendar each: the
+   * name on the chooser, the appointment schedule's booking page, the masked
+   * iCal address, last read, why it failed, and calls ahead.
+   */
+  calendars: z.array(supportCalendar),
   bot: supportBotStatus,
   bookings: z.array(supportCallBookingRow),
   messages: z.array(supportCallMessageRow),

@@ -177,14 +177,20 @@ export interface KnownBooking {
 
 export type CalendarChange = { kind: SupportCallNoticeKind; event: CalEvent } | { kind: 'booking.cancelled'; ref: string; startsAt: string }
 
-export const refOf = (uid: string) => `gcal:${uid}`
+/**
+ * A booking's ref: the calendar's prefix and the event's uid. Slot 1 keeps
+ * 0283's plain "gcal:" so its bookings stay matched; slot 2 is "gcal2:", so
+ * reading one person's calendar never cancels the other's calls.
+ */
+export const refPrefix = (slot = 1) => (slot === 1 ? 'gcal:' : `gcal${slot}:`)
+export const refOf = (uid: string, slot = 1) => `${refPrefix(slot)}${uid}`
 
 /**
  * What changed since the last read. `known` is every calendar booking still
  * ahead and not cancelled. An empty feed never cancels anything: a calendar
  * that answered with nothing is more likely a hiccup than every call gone.
  */
-export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: number): CalendarChange[] {
+export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: number, slot = 1): CalendarChange[] {
   const inWindow = feed.filter((e) => {
     const t = Date.parse(e.startsAt)
     return t >= now - BEHIND_MS && t <= now + AHEAD_MS
@@ -192,7 +198,7 @@ export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: numbe
   const byRef = new Map(known.map((k) => [k.ref, k]))
   const out: CalendarChange[] = []
   for (const e of inWindow) {
-    const k = byRef.get(refOf(e.uid))
+    const k = byRef.get(refOf(e.uid, slot))
     if (e.status === 'CANCELLED') {
       if (k) out.push({ kind: 'booking.cancelled', event: e })
       continue
@@ -201,7 +207,7 @@ export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: numbe
     else if (Math.abs(Date.parse(k.startsAt) - Date.parse(e.startsAt)) > 60_000) out.push({ kind: 'booking.rescheduled', event: e })
   }
   if (feed.length > 0) {
-    const present = new Set(feed.map((e) => refOf(e.uid)))
+    const present = new Set(feed.map((e) => refOf(e.uid, slot)))
     for (const k of known) {
       if (!present.has(k.ref) && Date.parse(k.startsAt) > now) out.push({ kind: 'booking.cancelled', ref: k.ref, startsAt: k.startsAt })
     }
@@ -210,15 +216,15 @@ export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: numbe
 }
 
 /** The notice a change makes, in the shape every booking goes through. */
-export function noticeFor(change: CalendarChange, studio: { id: string; name: string } | null): SupportCallNotice | null {
+export function noticeFor(change: CalendarChange, studio: { id: string; name: string } | null, slot = 1): SupportCallNotice | null {
   if (!('event' in change)) return null
   const e = change.event
   const who = personOf(e)
   return {
-    id: `${refOf(e.uid)}:${change.kind}:${e.startsAt}`,
+    id: `${refOf(e.uid, slot)}:${change.kind}:${e.startsAt}`,
     event: change.kind,
     booking: {
-      id: refOf(e.uid),
+      id: refOf(e.uid, slot),
       start: e.startsAt,
       end: e.endsAt,
       timezone: 'Asia/Kolkata',

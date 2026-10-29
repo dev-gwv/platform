@@ -52,7 +52,7 @@ export interface Env {
   FRAMELINE_SECRET?: string
   /** Where "Suggest a feature" is emailed (optional; the platform inbox has them all regardless). */
   PLATFORM_FEEDBACK_EMAIL?: string
-  /** Booking page for an onboarding call (Calendly etc.); the welcome email's call button. Optional. */
+  /** Booking page for an onboarding call (a Google appointment schedule); the welcome email's call button. Optional. */
   ONBOARDING_CALL_URL?: string
   /** Public web app origin, used to build the verification link. */
   APP_URL: string

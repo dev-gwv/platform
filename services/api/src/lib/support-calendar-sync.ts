@@ -3,10 +3,10 @@ import type { Env } from '../context'
 import { withService } from './db'
 import { describeError } from './log'
 import { saveSupportCallNotice } from './support-call-store'
-import { diffCalendar, noticeFor, parseIcs, personOf, type CalendarChange } from './support-calendar'
+import { diffCalendar, noticeFor, parseIcs, personOf, refPrefix, type CalendarChange } from './support-calendar'
 
 /**
- * Read the support calls calendar (0283) and turn what changed into bookings,
+ * Read the support calls calendars (0283, two since 0290) and turn what changed into bookings,
  * through the same path as every other booking (saveSupportCallNotice), so the
  * group post, caps, outbox and log are one. Runs on the five-minute messages
  * tick and from "Check now" on Platform -> Support calls.
@@ -62,58 +62,72 @@ async function cancelledNotice(env: Env, ref: string): Promise<SupportCallNotice
   })
 }
 
-async function setStatus(env: Env, patch: { error: string | null; primed?: boolean }) {
+async function setStatus(env: Env, slot: number, patch: { error: string | null; primed?: boolean }) {
   await withService(env, (sql) => sql`
-    update platform_settings
-       set support_ical_checked_at = now(), support_ical_error = ${patch.error},
-           support_ical_primed = coalesce(${patch.primed ?? null}, support_ical_primed), updated_at = now()`)
+    update support_calendars
+       set checked_at = now(), error = ${patch.error},
+           primed = coalesce(${patch.primed ?? null}, primed), updated_at = now()
+     where slot = ${slot}`)
 }
 
+/** Every connected calendar (0290: one per person who takes calls), each read on its own. */
 export async function syncSupportCalendar(env: Env, now = Date.now()): Promise<CalendarSyncResult> {
-  const result: CalendarSyncResult = { ran: false, error: null, booked: 0, moved: 0, cancelled: 0 }
-  const settings = await withService(env, async (sql) => {
-    const [s] = await sql<{ url: string | null; primed: boolean }[]>`
-      select support_ical_url as url, support_ical_primed as primed from platform_settings limit 1`
-    return s ?? null
-  })
-  if (!settings?.url) return result
-  result.ran = true
+  const calendars = await withService(env, (sql) =>
+    sql<{ slot: number; url: string; primed: boolean }[]>`
+      select slot, ical_url as url, primed from support_calendars where ical_url is not null order by slot`,
+  )
+  const total: CalendarSyncResult = { ran: false, error: null, booked: 0, moved: 0, cancelled: 0 }
+  for (const cal of calendars) {
+    const r = await syncOne(env, cal, now)
+    total.ran = true
+    total.booked += r.booked
+    total.moved += r.moved
+    total.cancelled += r.cancelled
+    total.error ??= r.error && (calendars.length > 1 ? `Calendar ${cal.slot}: ${r.error}` : r.error)
+  }
+  return total
+}
+
+async function syncOne(env: Env, cal: { slot: number; url: string; primed: boolean }, now: number): Promise<CalendarSyncResult> {
+  const result: CalendarSyncResult = { ran: true, error: null, booked: 0, moved: 0, cancelled: 0 }
+  const fault = async (error: string) => {
+    result.error = error
+    await setStatus(env, cal.slot, { error })
+    return result
+  }
 
   let text: string
   try {
-    const res = await fetch(settings.url, { signal: AbortSignal.timeout(15_000), headers: { accept: 'text/calendar' } })
+    const res = await fetch(cal.url, { signal: AbortSignal.timeout(15_000), headers: { accept: 'text/calendar' } })
     if (!res.ok) {
-      result.error =
+      return fault(
         res.status === 404 || res.status === 403
           ? `The calendar refused the address (${res.status}). Copy the "Secret address in iCal format" again.`
-          : `The calendar answered ${res.status}. Trying again in five minutes.`
-      await setStatus(env, { error: result.error })
-      return result
+          : `The calendar answered ${res.status}. Trying again in five minutes.`,
+      )
     }
     text = await res.text()
   } catch (err) {
-    result.error = `The calendar could not be reached: ${describeError(err).message.slice(0, 120)}`
-    await setStatus(env, { error: result.error })
-    return result
+    return fault(`The calendar could not be reached: ${describeError(err).message.slice(0, 120)}`)
   }
   const events = parseIcs(text)
-  if (!events) {
-    result.error = 'That address did not give a calendar. Use the "Secret address in iCal format".'
-    await setStatus(env, { error: result.error })
-    return result
-  }
+  if (!events) return fault('That address did not give a calendar. Use the "Secret address in iCal format".')
 
+  const prefix = refPrefix(cal.slot)
   const known = await withService(env, async (sql) =>
     (
       await sql<{ ref: string; starts_at: Date }[]>`
         select booking_ref as ref, starts_at from support_call_bookings
-         where booking_ref like 'gcal:%' and status <> 'cancelled' and starts_at > now()`
+         where starts_with(booking_ref, ${prefix}) and status <> 'cancelled' and starts_at > now()`
     ).map((k) => ({ ref: k.ref, startsAt: new Date(k.starts_at).toISOString() })),
   )
-  const changes: CalendarChange[] = diffCalendar(events, known, now)
-  const quiet = settings.primed ? undefined : FIRST_READ
+  const changes: CalendarChange[] = diffCalendar(events, known, now, cal.slot)
+  const quiet = cal.primed ? undefined : FIRST_READ
   for (const change of changes) {
-    const notice = 'event' in change ? noticeFor(change, await studioByEmail(env, personOf(change.event).email)) : await cancelledNotice(env, change.ref)
+    const notice =
+      'event' in change
+        ? noticeFor(change, await studioByEmail(env, personOf(change.event).email), cal.slot)
+        : await cancelledNotice(env, change.ref)
     if (!notice) continue
     const saved = await saveSupportCallNotice(env, notice, now, quiet)
     if (saved !== 'saved') continue
@@ -121,6 +135,6 @@ export async function syncSupportCalendar(env: Env, now = Date.now()): Promise<C
     else if (change.kind === 'booking.rescheduled') result.moved++
     else result.cancelled++
   }
-  await setStatus(env, { error: null, primed: true })
+  await setStatus(env, cal.slot, { error: null, primed: true })
   return result
 }

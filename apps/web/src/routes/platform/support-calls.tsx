@@ -7,6 +7,7 @@ import {
   normalizePhoneForWhatsApp,
   supportBotGroup,
   supportWhatsappOverview,
+  type SupportCalendar,
   type SupportCallMessageRow,
   type SupportWhatsappOverview,
   type SupportWhatsappSettings,
@@ -84,7 +85,7 @@ function Loaded({ data }: { data: SupportWhatsappOverview }) {
     <>
       <PageHeader title="Support calls" description={summary} />
       <div className="flex flex-col gap-4">
-        <CalendarCard calendar={data.calendar} />
+        <CalendarsCard calendars={data.calendars} />
         <ReadyCard ready={data.ready} />
         <BotCard data={data} s={s} patch={patch} onTest={() => test.mutate('group')} testing={test.isPending} />
         <OfficialCard s={s} patch={patch} ready={data.ready.official_api} onTest={() => test.mutate('team')} testing={test.isPending} />
@@ -105,26 +106,24 @@ function Loaded({ data }: { data: SupportWhatsappOverview }) {
 function sentence(d: SupportWhatsappOverview, s: SupportWhatsappSettings): string {
   const group = s.bot_on && s.group_jid && d.bot.state === 'open' ? `posting in ${s.group_name ?? 'the group'}` : 'the group bot is not posting'
   const official = s.official_on ? 'confirmations and reminders on' : 'official messages off'
-  const from = d.calendar.address ? (d.calendar.error ? 'the calendar could not be read' : `${d.calendar.upcoming} calls ahead on the calendar`) : 'no calendar connected yet'
+  const read = d.calendars.filter((c) => c.address)
+  const ahead = read.reduce((n, c) => n + c.upcoming, 0)
+  const from = read.length
+    ? read.some((c) => c.error)
+      ? 'a calendar could not be read'
+      : `${ahead} calls ahead on ${read.length === 1 ? 'the calendar' : 'the calendars'}`
+    : 'no calendar connected yet'
   return `${from[0]!.toUpperCase()}${from.slice(1)}; ${group}; ${official}.`
 }
 
-/** Where bookings come from: the support calls calendar's private address (0283). */
-function CalendarCard({ calendar }: { calendar: SupportWhatsappOverview['calendar'] }) {
+/**
+ * Who takes support calls (0290): two people, each with their own Google
+ * Calendar. The booking page is what Book a support call opens (a chooser
+ * when both are set); the private iCal address is how bookings reach the
+ * group (0283), read every five minutes.
+ */
+function CalendarsCard({ calendars }: { calendars: SupportCalendar[] }) {
   const qc = useQueryClient()
-  const [url, setUrl] = useState('')
-  const [editing, setEditing] = useState(!calendar.address)
-  const save = useMutation({
-    mutationFn: (next: string | null) =>
-      callApi('/platform/support-calls/calendar', { method: 'PUT', body: { url: next }, responseSchema: z.object({ ok: z.boolean(), error: z.string().nullable() }) }),
-    onSuccess: (r, next) => {
-      if (r.error) toast.error(r.error)
-      else toast.success(next ? 'Connected. Calls already on it were noted quietly; new ones will post.' : 'Disconnected.')
-      setUrl('')
-      setEditing(!next)
-      void qc.invalidateQueries({ queryKey: KEY })
-    },
-  })
   const check = useMutation({
     mutationFn: () =>
       callApi('/platform/support-calls/calendar/check', {
@@ -133,57 +132,113 @@ function CalendarCard({ calendar }: { calendar: SupportWhatsappOverview['calenda
       }),
     onSuccess: (r) => {
       if (r.error) toast.error(r.error)
-      else toast.success(r.booked + r.moved + r.cancelled ? `${r.booked} new · ${r.moved} moved · ${r.cancelled} cancelled` : 'Nothing new on the calendar.')
+      else toast.success(r.booked + r.moved + r.cancelled ? `${r.booked} new · ${r.moved} moved · ${r.cancelled} cancelled` : 'Nothing new on the calendars.')
       void qc.invalidateQueries({ queryKey: KEY })
     },
   })
-  const checked = calendar.checked_at ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }).format(new Date(calendar.checked_at)) : null
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-4">
+      <CardContent className="flex flex-col gap-4 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-semibold">Support calls calendar</h2>
-          {calendar.address && <StatusBadge tone={calendar.error ? 'danger' : 'success'}>{calendar.error ? 'Not reading' : 'Connected'}</StatusBadge>}
-          {calendar.address && !calendar.error && (
-            <span className="text-xs text-muted-foreground">
-              {calendar.upcoming} calls ahead{checked ? ` · read ${checked}` : ''}
-            </span>
-          )}
-        </div>
-        {calendar.error && <p className="text-sm text-destructive">{calendar.error}</p>}
-        {editing ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-2">
-              <Input
-                className={cn('min-w-0 flex-1 font-mono text-xs', !url.trim() && 'border-warning bg-warning/5')}
-                placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <Button disabled={!url.trim() || save.isPending} onClick={() => save.mutate(url.trim())}>
-                Connect
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Google Calendar → the support calls calendar’s <b>Settings</b> → <b>Secret address in iCal format</b>. Use a calendar that holds only support calls.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded-md border border-success/60 px-2 py-1 font-mono text-xs">{calendar.address}</span>
-            <Button size="sm" variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
+          <h2 className="font-semibold">Google Calendars</h2>
+          {calendars.some((c) => c.address) && (
+            <Button size="sm" variant="outline" className="ml-auto" disabled={check.isPending} onClick={() => check.mutate()}>
               <RefreshCw /> Check now
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-              Change
-            </Button>
-            <Button size="sm" variant="ghost" className="hover:text-destructive" disabled={save.isPending} onClick={() => save.mutate(null)}>
-              Disconnect
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
+        {calendars.map((cal) => (
+          <CalendarRow key={cal.slot} cal={cal} />
+        ))}
       </CardContent>
     </Card>
+  )
+}
+
+function CalendarRow({ cal }: { cal: SupportCalendar }) {
+  const qc = useQueryClient()
+  const [name, setName] = useState(cal.name ?? '')
+  const [booking, setBooking] = useState(cal.booking_url ?? '')
+  const [ical, setIcal] = useState('')
+  const [editingIcal, setEditingIcal] = useState(!cal.address)
+  useEffect(() => {
+    setName(cal.name ?? '')
+    setBooking(cal.booking_url ?? '')
+    setEditingIcal(!cal.address)
+  }, [cal.name, cal.booking_url, cal.address])
+  const changed = name.trim() !== (cal.name ?? '') || booking.trim() !== (cal.booking_url ?? '') || !!ical.trim()
+  const save = useMutation({
+    mutationFn: (body: { name: string; booking_url: string; ical_url?: string | null }) =>
+      callApi(`/platform/support-calls/calendars/${cal.slot}`, {
+        method: 'PUT',
+        body,
+        responseSchema: z.object({ ok: z.boolean(), error: z.string().nullable() }),
+      }),
+    onSuccess: (r, body) => {
+      if (r.error) toast.error(r.error)
+      else if (body.ical_url) toast.success('Connected. Calls already on it were noted quietly; new ones will post.')
+      else if (body.ical_url === null) toast.success('Calendar disconnected.')
+      else toast.success('Saved')
+      setIcal('')
+      void qc.invalidateQueries({ queryKey: KEY })
+      void qc.invalidateQueries({ queryKey: ['help'] })
+    },
+  })
+  const send = (icalUrl?: string | null) =>
+    save.mutate({ name: name.trim(), booking_url: booking.trim(), ...(icalUrl !== undefined ? { ical_url: icalUrl } : {}) })
+  const checked = cal.checked_at
+    ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }).format(new Date(cal.checked_at))
+    : null
+  const field = (v: string) => (v.trim() ? 'border-success/60' : 'border-warning bg-warning/5')
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold">{cal.name || `Person ${cal.slot}`}</h3>
+        {cal.address && <StatusBadge tone={cal.error ? 'danger' : 'success'}>{cal.error ? 'Not reading' : 'Connected'}</StatusBadge>}
+        {cal.address && !cal.error && (
+          <span className="text-xs text-muted-foreground">
+            {cal.upcoming} calls ahead{checked ? ` · read ${checked}` : ''}
+          </span>
+        )}
+      </div>
+      {cal.error && <p className="text-sm text-destructive">{cal.error}</p>}
+      <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
+        <label className="flex flex-col gap-1 text-xs font-medium">
+          Name on the button
+          <Input className={field(name)} placeholder={`e.g. Harsh`} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium">
+          Booking page (Google appointment schedule)
+          <Input className={cn('font-mono text-xs', field(booking))} placeholder="https://calendar.app.google/…" value={booking} onChange={(e) => setBooking(e.target.value)} />
+        </label>
+      </div>
+      {editingIcal ? (
+        <label className="flex flex-col gap-1 text-xs font-medium">
+          Secret address in iCal format
+          <Input
+            className={cn('font-mono text-xs', field(ical))}
+            placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+            value={ical}
+            onChange={(e) => setIcal(e.target.value)}
+          />
+        </label>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-md border border-success/60 px-2 py-1 font-mono text-xs">{cal.address}</span>
+          <Button size="sm" variant="ghost" onClick={() => setEditingIcal(true)}>
+            Change
+          </Button>
+          <Button size="sm" variant="ghost" className="hover:text-destructive" disabled={save.isPending} onClick={() => send(null)}>
+            Disconnect
+          </Button>
+        </div>
+      )}
+      <div>
+        <Button size="sm" disabled={!changed || save.isPending} className={cn(changed && 'ipc-nudge')} onClick={() => send(ical.trim() || undefined)}>
+          Save
+        </Button>
+      </div>
+    </div>
   )
 }
 

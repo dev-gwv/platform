@@ -103,6 +103,15 @@ describe('diffCalendar', () => {
   it('an empty answer never cancels everything', () => {
     expect(diffCalendar([], [{ ref: refOf('x'), startsAt: '2026-11-05T09:30:00.000Z' }], now)).toEqual([])
   })
+  it("keeps the second person's calendar apart from the first (0290)", () => {
+    expect(refOf('abc123@google.com')).toBe('gcal:abc123@google.com')
+    expect(refOf('abc123@google.com', 2)).toBe('gcal2:abc123@google.com')
+    // A booking known on calendar 2 matches only when calendar 2 is read.
+    const known = [{ ref: refOf('abc123@google.com', 2), startsAt: '2026-10-30T09:30:00.000Z' }]
+    expect(diffCalendar(events, known, now, 2)).toEqual([])
+    const [change] = diffCalendar(events, [], now, 2)
+    expect(noticeFor(change!, null, 2)?.booking.id).toBe('gcal2:abc123@google.com')
+  })
   it('only looks two months ahead', () => {
     const far = { ...events[0]!, uid: 'far', startsAt: '2027-03-01T09:30:00.000Z' }
     expect(diffCalendar([far], [], now)).toEqual([])

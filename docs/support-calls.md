@@ -35,13 +35,16 @@ Google appointment schedule ──► "Support calls" calendar ──► Studio 
 
 ## Setting it up
 
-1. **Calendar and booking page.** In Google Calendar make a calendar called
-   "Support calls", then Create → **Appointment schedule** and pick that
-   calendar for the bookings. Copy the schedule's booking page link into
-   Platform → Help → "Where Book a support call goes". Then that calendar's Settings →
-   **Secret address in iCal format** → copy → Platform → Support calls →
-   **Connect**. Anyone with that address can read that calendar, so use one
-   that holds only support calls and never share the address.
+1. **Calendar and booking page, once per person (two since 0290).** In each
+   person's Google Calendar make a calendar called "Support calls", then
+   Create → **Appointment schedule** and pick that calendar for the bookings.
+   On Platform → Support calls → **Google Calendars**, fill that person's row:
+   the name studios see on the button, the schedule's booking page link, and
+   the calendar's Settings → **Secret address in iCal format**, then **Save**.
+   With two booking pages set, Book a support call opens a small chooser
+   (one button per person), and each opens Google's page in a new tab. Anyone
+   with an iCal address can read that calendar, so use one that holds only
+   support calls and never share the address.
 2. **The group bot (VPS).** Back up `/root/ipc/platform/.env`, add
    `WA_BOT_SECRET=` with a value from `openssl rand -hex 32`, then
    `sh deploy/deploy.sh` (never a bare `docker compose up`).

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { ASSISTANT_PROVIDERS } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -30,7 +31,6 @@ export function AssistantSettingsCard() {
   const [on, setOn] = useState(false)
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
-  const [callUrl, setCallUrl] = useState('')
   const [limit, setLimit] = useState('')
   const [prompt, setPrompt] = useState('')
   const [fbUrl, setFbUrl] = useState('')
@@ -45,7 +45,6 @@ export function AssistantSettingsCard() {
     setOn(d.assistant_enabled)
     setModel(d.assistant_model ?? '')
     setBaseUrl(d.assistant_base_url ?? '')
-    setCallUrl(d.support_call_url ?? '')
     setLimit(num(d.assistant_daily_limit))
     setPrompt(d.assistant_prompt ?? '')
     setFbUrl(d.assistant_fallback_base_url ?? '')
@@ -61,7 +60,6 @@ export function AssistantSettingsCard() {
     on !== d.assistant_enabled ||
     model !== (d.assistant_model ?? '') ||
     baseUrl !== (d.assistant_base_url ?? '') ||
-    callUrl !== (d.support_call_url ?? '') ||
     limit !== num(d.assistant_daily_limit) ||
     prompt !== (d.assistant_prompt ?? '') ||
     fbUrl !== (d.assistant_fallback_base_url ?? '') ||
@@ -247,15 +245,13 @@ export function AssistantSettingsCard() {
           </p>
         )}
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          Where “Book a support call” goes
-          <Input className={filled(callUrl)} placeholder="https://calendar.app.google/…" value={callUrl} onChange={(e) => setCallUrl(e.target.value)} />
-        </label>
-        {!callUrl.trim() && (
-          <p className="text-xs text-muted-foreground">
-            Empty falls back to the onboarding call link on the server. With neither, the assistant asks studios to write in.
-          </p>
-        )}
+        <p className="text-sm">
+          “Book a support call” opens the Google Calendar booking pages set on{' '}
+          <Link to="/platform/support-calls" className="font-medium text-primary underline-offset-2 hover:underline">
+            Support calls
+          </Link>
+          {d.support_call_url ? '.' : ' (none set yet).'}
+        </p>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Questions one studio may ask a day
           <Input
@@ -293,7 +289,6 @@ export function AssistantSettingsCard() {
               assistant_prompt: prompt.trim() || null,
               assistant_model: model.trim() || null,
               assistant_base_url: baseUrl.trim() || null,
-              support_call_url: callUrl.trim() || null,
               assistant_daily_limit: limit.trim() === '' ? null : n,
               assistant_fallback_base_url: fbUrl.trim() || null,
               assistant_fallback_model: fbModel.trim() || null,

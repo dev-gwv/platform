@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { supportWhatsappOverview, supportWhatsappSettings } from '@ipc/contracts'
+import { saveSupportCalendarRequest, supportWhatsappOverview, supportWhatsappSettings } from '@ipc/contracts'
 import { z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -11,7 +11,7 @@ import { audit } from '../../lib/audit'
 import { describeError, log } from '../../lib/log'
 import { whatsappConfigured } from '../../lib/whatsapp'
 import { maskNumber, sampleNotice } from '../../lib/support-calls'
-import { looksLikeIcal, maskIcal } from '../../lib/support-calendar'
+import { looksLikeIcal, maskIcal, refPrefix } from '../../lib/support-calendar'
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
 
@@ -48,11 +48,12 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
             select count(*) filter (where sent_at > now() - interval '1 hour')::int as hour,
                    count(*) filter (where sent_at > now() - interval '24 hours')::int as day
               from support_call_outbox where channel = 'group' and status = 'sent'`
-          const [cal] = await sql<{ url: string | null; checked_at: string | null; error: string | null; upcoming: number }[]>`
-            select support_ical_url as url, support_ical_checked_at::text as checked_at, support_ical_error as error,
-                   (select count(*)::int from support_call_bookings where booking_ref like 'gcal:%' and status <> 'cancelled' and starts_at > now()) as upcoming
-              from platform_settings limit 1`
-          return { settings, bookings, messages, sent: sent[0] ?? { hour: 0, day: 0 }, cal }
+          const cals = await sql<{ slot: number; name: string | null; booking_url: string | null; url: string | null; checked_at: string | null; error: string | null }[]>`
+            select slot, name, booking_url, ical_url as url, checked_at::text as checked_at, error from support_calendars order by slot`
+          const ahead = await sql<{ ref: string }[]>`
+            select booking_ref as ref from support_call_bookings
+             where booking_ref like 'gcal%' and status <> 'cancelled' and starts_at > now()`
+          return { settings, bookings, messages, sent: sent[0] ?? { hour: 0, day: 0 }, cals, ahead: ahead.map((a) => a.ref) }
         }),
       ),
     ])
@@ -69,12 +70,15 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
       supportWhatsappOverview.parse({
         settings: data.settings,
         ready: { official_api: whatsappConfigured(c.env), bot_secret: !!c.env.WA_BOT_SECRET },
-        calendar: {
-          address: maskIcal(data.cal?.url ?? null),
-          checked_at: data.cal?.checked_at ?? null,
-          error: data.cal?.error ?? null,
-          upcoming: data.cal?.upcoming ?? 0,
-        },
+        calendars: data.cals.map((cal) => ({
+          slot: cal.slot,
+          name: cal.name,
+          booking_url: cal.booking_url,
+          address: maskIcal(cal.url),
+          checked_at: cal.checked_at,
+          error: cal.error,
+          upcoming: data.ahead.filter((ref) => ref.startsWith(refPrefix(cal.slot))).length,
+        })),
         bot: { ...bot, sent_last_hour: data.sent.hour, sent_today: data.sent.day },
         bookings: data.bookings,
         messages: data.messages.map((m) => ({
@@ -130,22 +134,41 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
-  // The support calls calendar's private address. A new address starts quiet:
-  // its first read only learns what is already there (0283).
-  .put('/support-calls/calendar', async (c) => {
-    const parsed = z.object({ url: z.string().trim().max(2000).nullable() }).safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Paste the calendar address.')
-    const url = parsed.data.url || null
+  // One person's Google Calendar (0290): the name on the chooser, the booking
+  // page studios open, and the calendar's private address. A new address
+  // starts quiet: its first read only learns what is already there (0283).
+  .put('/support-calls/calendars/:slot', async (c) => {
+    const slot = Number(c.req.param('slot'))
+    if (slot !== 1 && slot !== 2) fail(404, 'There are two calendars: 1 and 2.')
+    const parsed = saveSupportCalendarRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the details.')
+    const d = parsed.data
+    const icalChanged = d.ical_url !== undefined
+    const url = d.ical_url || null
     if (url && !looksLikeIcal(url)) fail(422, 'Use the calendar’s "Secret address in iCal format" (it ends in .ics).')
     const ok = await attempt(c, 'platform.support_calls_calendar', () =>
-      withService(c.env, (sql) => sql`
-        update platform_settings
-           set support_ical_url = ${url}, support_ical_primed = false, support_ical_checked_at = null,
-               support_ical_error = null, updated_at = now()`),
+      withService(c.env, async (sql) => {
+        await sql`insert into support_calendars (slot) values (${slot}) on conflict (slot) do nothing`
+        await sql`
+        update support_calendars
+           set name = ${d.name}, booking_url = ${d.booking_url},
+               ical_url = case when ${icalChanged} then ${url} else ical_url end,
+               primed = case when ${icalChanged} then false else primed end,
+               checked_at = case when ${icalChanged} then null else checked_at end,
+               error = case when ${icalChanged} then null else error end,
+               updated_at = now()
+         where slot = ${slot}`
+        return true
+      }),
     )
-    if (!ok) fail(400, 'We could not save the address.')
+    if (!ok) fail(400, 'We could not save the calendar.')
     // Never the address itself in the audit trail: anyone holding it reads the calendar.
-    await audit(c, { action: 'platform.support_calls_calendar', entityType: 'platform_settings', entityId: null, after: { connected: !!url } })
+    await audit(c, {
+      action: 'platform.support_calls_calendar',
+      entityType: 'platform_settings',
+      entityId: null,
+      after: { slot, name: d.name, booking_url: d.booking_url, ...(icalChanged ? { connected: !!url } : {}) },
+    })
     const first = url ? await attempt(c, 'platform.support_calls_calendar_first', () => syncSupportCalendar(c.env)) : null
     return c.json({ ok: true, error: first?.error ?? null })
   })

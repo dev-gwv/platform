@@ -230,7 +230,10 @@ const supportCallsFx = {
     tpl_team: 'support_call_team',
   },
   ready: { official_api: true, bot_secret: true },
-  calendar: { address: null as string | null, checked_at: null as string | null, error: null as string | null, upcoming: 0 },
+  calendars: [
+    { slot: 1, name: 'Harsh' as string | null, booking_url: 'https://calendar.app.google/harsh-support' as string | null, address: 'calendar.google.com/…/basic.ics' as string | null, checked_at: '2026-10-29T06:00:00Z' as string | null, error: null as string | null, upcoming: 2 },
+    { slot: 2, name: 'Abdullah' as string | null, booking_url: 'https://calendar.app.google/abdullah-support' as string | null, address: null as string | null, checked_at: null as string | null, error: null as string | null, upcoming: 0 },
+  ],
   bot: { state: 'open', qr: null, me: '919000012345', sent_last_hour: 1, sent_today: 3 },
   bookings: [
     { id: 'b1', status: 'booked', starts_at: '2026-10-27T09:30:00Z', name: 'Asha Rao', studio_name: 'Mehta Studio', whatsapp_ok: true, has_phone: true },
@@ -245,7 +248,11 @@ const supportCallsFx = {
 
 const helpFx = {
   support_whatsapp: '919876543210' as string | null,
-  support_call_url: 'https://calendly-common-meeting-web-bjvr.vercel.app/harsh-solanki/support-call' as string | null,
+  support_call_url: 'https://calendar.app.google/harsh-support' as string | null,
+  support_calls: [
+    { name: 'Harsh', url: 'https://calendar.app.google/harsh-support' },
+    { name: 'Abdullah', url: 'https://calendar.app.google/abdullah-support' },
+  ],
   support_email: 'help@studioautopilot.in' as string | null,
   faqs: [
     { id: '00000000-0000-4000-8000-0000000004e0', question: 'Can Studio AutoPilot see my clients and prices?', answer: 'No. Your clients, prices and payments belong to your studio alone.', sort_order: 10 },
@@ -907,9 +914,14 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     Object.assign(supportCallsFx.settings, body)
     return { ok: true }
   }
-  if (method === 'PUT' && path === '/platform/support-calls/calendar') {
-    const url = (body as { url: string | null }).url
-    supportCallsFx.calendar = url ? { address: 'calendar.google.com/…/basic.ics', checked_at: new Date().toISOString(), error: null, upcoming: 2 } : { address: null, checked_at: null, error: null, upcoming: 0 }
+  if (method === 'PUT' && path.startsWith('/platform/support-calls/calendars/')) {
+    const cal = supportCallsFx.calendars.find((c) => c.slot === Number(path.split('/').pop()))
+    const b = body as { name: string | null; booking_url: string | null; ical_url?: string | null }
+    if (cal) {
+      cal.name = b.name || null
+      cal.booking_url = b.booking_url || null
+      if (b.ical_url !== undefined) Object.assign(cal, b.ical_url ? { address: 'calendar.google.com/…/basic.ics', checked_at: new Date().toISOString(), upcoming: 0 } : { address: null, checked_at: null, upcoming: 0 })
+    }
     return { ok: true, error: null }
   }
   if (method === 'POST' && path === '/platform/support-calls/calendar/check') return { ok: true, error: null, booked: 1, moved: 0, cancelled: 0 }

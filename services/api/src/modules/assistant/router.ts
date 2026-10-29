@@ -81,7 +81,8 @@ const readSettings = (env: AppEnv['Bindings']) =>
   withService(env, async (sql) => {
     const [row] = await sql<SettingsRow[]>`
       select assistant_enabled, assistant_prompt, assistant_model, assistant_base_url,
-             support_call_url, assistant_daily_limit,
+             (select booking_url from support_calendars where booking_url is not null order by slot limit 1) as support_call_url,
+             assistant_daily_limit,
              assistant_fallback_base_url, assistant_fallback_model,
              assistant_minute_tokens, assistant_day_tokens
         from platform_settings limit 1`
@@ -132,7 +133,7 @@ const PROVIDER_MS = 11_000
 const SHARED = { totalMs: PROVIDER_MS, timeoutMs: PROVIDER_MS } as const
 
 /**
- * Where "book a call" goes. The platform setting first, then the onboarding
+ * Where "book a call" goes. The first Google booking page (0290) first, then the onboarding
  * call link the app already had — a studio wanting to talk to us should not be
  * stopped because the newer of two settings is empty.
  */
@@ -418,7 +419,6 @@ export const platformAssistantRouter = new Hono<AppEnv>()
     const prompt = d.assistant_prompt?.trim() || null
     const model = d.assistant_model || null
     const baseUrl = d.assistant_base_url || null
-    const callUrl = d.support_call_url || null
     const fallbackUrl = d.assistant_fallback_base_url || null
     const fallbackModel = d.assistant_fallback_model || null
 
@@ -429,7 +429,6 @@ export const platformAssistantRouter = new Hono<AppEnv>()
                assistant_prompt = ${prompt},
                assistant_model = ${model},
                assistant_base_url = ${baseUrl},
-               support_call_url = ${callUrl},
                assistant_daily_limit = ${d.assistant_daily_limit},
                assistant_fallback_base_url = ${fallbackUrl},
                assistant_fallback_model = ${fallbackModel},
@@ -448,7 +447,6 @@ export const platformAssistantRouter = new Hono<AppEnv>()
         assistant_enabled: d.assistant_enabled,
         assistant_model: model,
         assistant_base_url: baseUrl,
-        support_call_url: callUrl,
         assistant_daily_limit: d.assistant_daily_limit,
         assistant_fallback_base_url: fallbackUrl,
         assistant_fallback_model: fallbackModel,
