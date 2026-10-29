@@ -32,7 +32,8 @@ const limitCell = (key: PlanLimitKey) => (p: Plan): Cell => {
   const n = p.limits?.[key]
   if (n == null) return { kind: 'text', text: 'Unlimited' }
   // Counted by the plan year on a monthly plan too (0267): never "3 a month".
-  return { kind: 'text', text: PER_PERIOD.has(key) ? `${n} a year` : String(n) }
+  // Leads are the ones held now (0289), never a yearly count.
+  return { kind: 'text', text: PER_PERIOD.has(key) ? `${n} a year` : key === 'leads' ? `${n} at a time` : String(n) }
 }
 
 const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: 'yes' } : { kind: 'no' })
@@ -40,7 +41,7 @@ const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: '
 /** Only the rows that differ between plans, at most ten. */
 export const COMPARE: CompareRow[] = [
   { label: 'Projects', cell: limitCell('projects') },
-  { label: 'Leads (enquiries always come in)', cell: limitCell('leads') },
+  { label: 'Leads held at a time', cell: limitCell('leads') },
   { label: 'GST invoices', cell: limitCell('invoices') },
   { label: 'Team logins', cell: limitCell('team_logins') },
   // 0276: more than one studio (a maternity brand beside the wedding one) on one login.

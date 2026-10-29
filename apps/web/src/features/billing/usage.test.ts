@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { PlanUsage } from '@ipc/contracts'
 import { nearestLimit, perDay, usageBars, windowLine } from './usage'
 
-const used = { projects: 25, leads: 120, invoices: 10, team_logins: 1, team_members: 6, enquiry_forms: 1, facebook_pages: 0, packages: 1, storage_mb: 300 }
+const used = { projects: 25, leads: 12, invoices: 10, team_logins: 1, team_members: 6, enquiry_forms: 1, facebook_pages: 0, packages: 1, storage_mb: 300 }
 const starter: PlanUsage = {
   plan_key: 'starter_yearly',
   plan_name: 'Starter',
   tier: 'starter',
-  limits: { projects: 30, leads: 300, team_logins: 3, storage_mb: 2048 },
+  limits: { projects: 30, leads: 30, team_logins: 3, storage_mb: 2048 },
   includes: [],
   used,
   window_starts: '2026-10-15T06:30:00Z',
@@ -20,7 +20,7 @@ describe('usage bars', () => {
     const bars = usageBars(starter)
     expect(bars.map((b) => b.line)).toEqual([
       '25 of 30 projects this year',
-      '120 of 300 leads this year',
+      '12 of 30 leads at a time',
       '1 of 3 team logins',
       '0.3 of 2 GB of uploads',
     ])

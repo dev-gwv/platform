@@ -29,9 +29,10 @@ export const plan = z.object({
 export type Plan = z.infer<typeof plan>
 
 /**
- * What a plan allows; a missing key is unlimited (0242). Projects, invoices
- * and leads count in the studio's plan year (from the day it paid); the rest
- * count what stands now. Leads that arrive by themselves are never refused.
+ * What a plan allows; a missing key is unlimited (0242). Projects and
+ * invoices count in the studio's plan year (from the day it paid); the rest
+ * count what stands now. Leads (0289) are the ones held now, from every
+ * source: archive or delete one to make room.
  */
 export const PLAN_LIMIT_KEYS = [
   'projects',

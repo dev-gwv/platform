@@ -155,7 +155,7 @@ export const KB: readonly KbArticle[] = [
       'Press **Add lead** and fill in what you know — a name or a number is enough.',
       'Leads also arrive on their own: from your enquiry form or vendor QR code, from Facebook lead ads, and from WhatsApp.',
       'If the number is already in your CRM, it finds that lead instead of making a second one.',
-      'Leads that arrive on their own are never refused, even if your plan is at its lead limit.',
+      'On Starter you can hold 30 leads at a time, from every source. Archive or delete a lead you no longer need to make room, or move to Pro for no limit.',
     ],
   },
   {

@@ -6,9 +6,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 /**
  * Plans with limits (0241, 0242). A studio's plan year starts the day it
- * pays; a monthly plan counts the same yearly numbers (0267); leads that arrive
- * by themselves are never refused; a trial and an unlimited plan are never
- * stopped; upgrading part-way costs only the difference.
+ * pays; a monthly plan counts the same yearly numbers (0267); leads are the
+ * ones held now, from every source (0289); a trial and an unlimited plan are
+ * never stopped; upgrading part-way costs only the difference.
  */
 const migDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
@@ -117,18 +117,36 @@ describe('plan limits from the billing date (0242)', () => {
     expect(room!.r).toBeNull()
   })
 
-  it('refuses leads added by hand past the limit, never leads that arrive by themselves', async () => {
+  it('holds leads at the limit from every source, and archiving one makes room (0289)', async () => {
     await as(TIGHT_OWNER)
     await lead(TIGHT, 'Asha')
     await lead(TIGHT, 'Ravi')
-    await expect(lead(TIGHT, 'Meena')).rejects.toThrow(/takes 2 leads a year\. Enquiries from your forms and Facebook still come in\./)
-    await expect(lead(TIGHT, 'From a sheet', 'csv_import')).rejects.toThrow(/2 leads a year/)
-    // A form or Facebook lead: captured with its source's key, or with nobody signed in.
-    await lead(TIGHT, 'Facebook lead', 'fb_main')
+    await expect(lead(TIGHT, 'Meena')).rejects.toThrow(/holds 2 leads at a time\. Archive or delete a lead to make room\./)
+    await expect(lead(TIGHT, 'From a sheet', 'csv_import')).rejects.toThrow(/2 leads at a time/)
+    // A form or Facebook lead is held to it too.
+    await expect(lead(TIGHT, 'Facebook lead', 'fb_main')).rejects.toThrow(/2 leads at a time/)
     await as(null)
+    await expect(lead(TIGHT, 'Website lead')).rejects.toThrow(/2 leads at a time/)
+    // Archive one: a place opens, and the next lead (from anywhere) takes it.
+    await q(`update crm_leads set is_archived = true where company_id = $1 and name = 'Asha'`, [TIGHT])
     await lead(TIGHT, 'Website lead')
-    const rows = await q<{ created_via: string }>(`select created_via from crm_leads where company_id = $1 order by created_at`, [TIGHT])
-    expect(rows.map((r) => r.created_via)).toEqual(['manual', 'manual', 'auto', 'auto'])
+    // Bringing Asha back would make three.
+    await expect(q(`update crm_leads set is_archived = false where company_id = $1 and name = 'Asha'`, [TIGHT])).rejects.toThrow(
+      /2 leads at a time/,
+    )
+    const [u] = await q<{ n: number }>(`select (company_usage($1) ->> 'leads')::int as n`, [TIGHT])
+    expect(u!.n).toBe(2)
+  })
+
+  it('tells the owner once a day that a lead was turned away (0289)', async () => {
+    await q(`select plan_full_notice($1, 'Priya (Facebook)')`, [TIGHT])
+    await q(`select plan_full_notice($1, 'Ravi (enquiry form)')`, [TIGHT])
+    const rows = await q<{ title: string; body: string }>(
+      `select title, body from notifications where company_id = $1 and type = 'plan_limit'`,
+      [TIGHT],
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.body).toMatch(/^Priya \(Facebook\) came in, but your plan holds 2 leads at a time\./)
   })
 
   it('counts team without a login on their own, and logins on theirs', async () => {
@@ -265,7 +283,7 @@ describe('plan limits from the billing date (0242)', () => {
     )
     const by = Object.fromEntries(rows.map((r) => [r.key, r]))
     // One set of Starter numbers, counted by the year, monthly or yearly (0267).
-    expect(by['starter_yearly']!.limits).toMatchObject({ projects: 30, invoices: 30, leads: 300, team_logins: 3, team_members: 10 })
+    expect(by['starter_yearly']!.limits).toMatchObject({ projects: 30, invoices: 30, leads: 30, team_logins: 3, team_members: 10 })
     expect(by['starter_monthly']!.limits).toEqual(by['starter_yearly']!.limits)
     // Pro has every limit lifted but brands (0276): three studios on one login.
     expect(by['pro_yearly']!.limits).toEqual({ brands: 3 })

@@ -25,9 +25,18 @@ export async function routeStudioWhatsapp(
     let matched = 0
     let marked = 0
     for (const m of messages) {
-      const [r] = await sql<{ r: { matched?: boolean } }[]>`
-        select crm_whatsapp_inbound(${m.phoneNumberId}, ${m.from}, ${m.name}, ${m.text}, ${m.id}, ${m.at}) as r`
-      if (r?.r?.matched) matched += 1
+      try {
+        // Its own savepoint: a studio whose plan holds no more leads (0289)
+        // must not lose the other messages and receipts in this post.
+        const [r] = await sql.savepoint((sp) => sp<{ r: { matched?: boolean } }[]>`
+          select crm_whatsapp_inbound(${m.phoneNumberId}, ${m.from}, ${m.name}, ${m.text}, ${m.id}, ${m.at}) as r`)
+        if (r?.r?.matched) matched += 1
+      } catch (err) {
+        if ((err as { code?: string }).code !== '54000') throw err
+        await sql`
+          select plan_full_notice(w.company_id, ${`${m.name ?? 'A new number'} (WhatsApp)`})
+            from company_whatsapp w where w.phone_number_id = ${m.phoneNumberId}`
+      }
     }
     for (const u of receipts) {
       const [r] = await sql<{ ok: boolean }[]>`select crm_whatsapp_receipt(${u.id}, ${u.status}, ${u.error}) as ok`

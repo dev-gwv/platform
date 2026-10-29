@@ -9,19 +9,20 @@ export function priceWords(p: Pick<PlatformPlan, 'price' | 'billing_interval'>):
 
 /**
  * A plan's limits in one line, the counted ones first:
- * "30 projects, 300 leads, 60 invoices a year · 3 logins · 20 crew".
+ * "30 projects, 60 invoices a year · 30 leads at a time · 3 logins · 20 crew".
  * No limits is "Unlimited".
  */
 export function limitWords(p: Pick<PlatformPlan, 'limits' | 'billing_interval'>): string {
   const l = p.limits ?? {}
   const counted = [
     l['projects'] != null ? `${l['projects']} projects` : null,
-    l['leads'] != null ? `${l['leads']} leads` : null,
     l['invoices'] != null ? `${l['invoices']} invoices` : null,
   ].filter(Boolean)
   const per = p.billing_interval === 'monthly' ? ' a month' : ' a year'
   const parts = [
     counted.length ? counted.join(', ') + per : null,
+    // 0289: leads are what a studio holds now, never a yearly count.
+    l['leads'] != null ? `${l['leads']} leads at a time` : null,
     l['team_logins'] != null ? `${l['team_logins']} logins` : null,
     l['team_members'] != null ? `${l['team_members']} crew` : null,
   ].filter(Boolean)

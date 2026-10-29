@@ -106,20 +106,33 @@ async function captureLead(c: Context<AppEnv>, sourceKey: string, incoming: Inco
         failure = (err as { code?: string }).code ? `Database refused the lead (${(err as { code?: string }).code}).` : 'The lead could not be saved.'
         throw err
       }),
-    { onCode: (code) => (code === '42501' ? ('unknown_source' as const) : undefined) },
+    {
+      onCode: (code) =>
+        code === '42501' ? ('unknown_source' as const) : code === '54000' ? ('plan_full' as const) : undefined,
+    },
   )
   if (id === 'unknown_source') return id
+  // 0289: the studio's plan holds no more leads. The lead stays in the import
+  // log (Retry on Lead Sources once there is room) and the owner is told.
+  const full = id === 'plan_full'
+  if (full) {
+    failure = 'Your plan holds no more leads right now. Archive or delete a lead, or upgrade, then press Retry.'
+    await withService(c.env, (sql) => sql`
+      select plan_full_notice(s.company_id, ${`${lead.name ?? 'A lead'} (Facebook)`})
+        from crm_webhook_sources s where s.source_key = ${sourceKey}`).catch(() => undefined)
+  }
+  const saved = full ? null : id
   await logImport(c, sourceKey, {
     name: lead.name,
     phone: lead.phone,
     email: lead.email,
     meta: lead.meta,
     pageName,
-    status: id ? 'imported' : 'failed',
-    error: id ? null : (failure ?? 'The lead could not be saved.'),
-    leadId: id,
+    status: saved ? 'imported' : 'failed',
+    error: saved ? null : (failure ?? 'The lead could not be saved.'),
+    leadId: saved,
   })
-  return id
+  return saved
 }
 
 /** The sealed token we hold for a page, opened; null when the studio never connected it. */

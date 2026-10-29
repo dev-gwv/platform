@@ -13,7 +13,7 @@ email from credits" -- credits are not built yet.
 |---|---|---|---|
 | Billed yearly | ₹1,499/mo · ₹17,988 a year · ₹49 a day | ₹2,499/mo · ₹29,988 · ₹82 a day | ₹3,999/mo · ₹47,988 · ₹131 a day |
 | Billed monthly | ₹1,999 | ₹2,999 | ₹4,999 |
-| On the card | 30 projects a year · 30 invoices a year · 3 team logins · 10 crew | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name, logo and WhatsApp number (white label) · Priority help |
+| On the card | 30 projects · 30 invoices a year · 30 leads at a time · 3 team logins · 10 crew | Unlimited projects, leads and team · Every feature, no limits | Everything unlimited · Your own name, logo and WhatsApp number (white label) · Priority help |
 
 Prices are before 18% GST.
 
@@ -40,7 +40,7 @@ A lower plan waits until the current one ends.
 | Limit | Yearly | Monthly | Why |
 |---|---|---|---|
 | Projects | 30 | 30 (by the year) | 2–3 bookings a month; a working studio passes it in its first season, which is the move to Pro |
-| Leads | 300 | 300 (by the year) | ~10 enquiries a booking. **Enquiries from forms, Facebook and WhatsApp always come in**; only adding by hand or import stops |
+| Leads | 30 at a time | 30 at a time | Owner, 29 Oct (0289): the leads held now, not archived or merged, **from every source** -- typed, imported, form, QR, Facebook, WhatsApp. Archive or delete one to make room. A refused Facebook lead waits in the import log for Retry; the form tells the person to call the studio; the owner's bell says so once a day |
 | GST invoices | 30 | 30 (by the year) | An advance and a final per project; recording money received is never stopped |
 | Team logins (besides the owner) | 3 | 3 | An editor, a manager, one shooter |
 | Crew (team without a login) | 10 | 10 | A wedding crew of 6–10 (owner, 17 Oct) |
