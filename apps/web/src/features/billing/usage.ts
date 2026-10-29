@@ -2,13 +2,14 @@ import { PLAN_LIMIT_KEYS, type PlanLimitKey, type PlanUsage } from '@ipc/contrac
 
 /**
  * A plan's limits as bars (0242): only the ones the plan has, each with its
- * sentence ("12 of 30 projects this year"). Projects, leads and invoices count
- * in the studio's plan year (from the day it paid); the rest as they stand.
+ * sentence ("12 of 30 projects this year"). Projects and invoices count in
+ * the studio's plan year (from the day it paid); leads (0289) and the rest as
+ * they stand.
  * An unlimited plan or a trial has no bars at all.
  */
 const WORDS: Record<PlanLimitKey, (n: number, period: 'year' | 'month') => string> = {
   projects: (n, p) => `project${n === 1 ? '' : 's'} this ${p}`,
-  leads: (n, p) => `lead${n === 1 ? '' : 's'} this ${p}`,
+  leads: (n) => `lead${n === 1 ? '' : 's'} at a time`,
   invoices: (n, p) => `GST invoice${n === 1 ? '' : 's'} this ${p}`,
   team_logins: (n) => `team login${n === 1 ? '' : 's'}`,
   team_members: () => 'team without a login',
@@ -19,7 +20,7 @@ const WORDS: Record<PlanLimitKey, (n: number, period: 'year' | 'month') => strin
 }
 
 /** The keys that count in the plan year; the rest count what stands now. */
-export const PER_PERIOD: ReadonlySet<PlanLimitKey> = new Set(['projects', 'leads', 'invoices'])
+export const PER_PERIOD: ReadonlySet<PlanLimitKey> = new Set(['projects', 'invoices'])
 
 interface UsageBar {
   key: PlanLimitKey

@@ -369,8 +369,15 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
       () =>
         withService(c.env, (sql) => sql<{ doc: SubmitDoc }[]>`
           select enquiry_submit(${key}, ${partnerCode(p)}, ${sql.json(data as never)}) as doc`),
-      { onCode: (pg) => (pg === 'P0002' ? fail(404, NOT_OPEN) : undefined) },
+      { onCode: (pg) => (pg === 'P0002' ? fail(404, NOT_OPEN) : pg === '54000' ? ('plan_full' as const) : undefined) },
     )
+    // 0289: the studio's plan holds no more leads. Tell the person to reach
+    // the studio directly, and ring the owner's bell.
+    if (rows === 'plan_full') {
+      await withService(c.env, (sql) => sql`
+        select plan_full_notice(enquiry_form_company(${key}), ${`${data.name ?? 'An enquiry'} (enquiry form)`})`).catch(() => undefined)
+      fail(402, 'This studio cannot take new enquiries online right now. Please call or WhatsApp them directly.')
+    }
     if (!rows?.[0]) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     const doc = rows[0].doc
     if (doc.errors) return c.json({ error: 'Please check the form.', fields: doc.errors }, 400)

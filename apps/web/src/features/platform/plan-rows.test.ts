@@ -22,11 +22,11 @@ describe('Platform → Plans in words', () => {
   })
 
   it('reads Starter\'s limits in one line, and none as Unlimited', () => {
-    expect(limitWords(row({ limits: { projects: 30, leads: 300, invoices: 60, team_logins: 3, team_members: 20, packages: 3 } }))).toBe(
-      '30 projects, 300 leads, 60 invoices a year · 3 logins · 20 crew',
+    expect(limitWords(row({ limits: { projects: 30, leads: 30, invoices: 60, team_logins: 3, team_members: 20, packages: 3 } }))).toBe(
+      '30 projects, 60 invoices a year · 30 leads at a time · 3 logins · 20 crew',
     )
     expect(limitWords(row({ billing_interval: 'monthly', limits: { projects: 3, leads: 25, invoices: 5, team_logins: 3 } }))).toBe(
-      '3 projects, 25 leads, 5 invoices a month · 3 logins',
+      '3 projects, 5 invoices a month · 25 leads at a time · 3 logins',
     )
     expect(limitWords(row({ limits: {} }))).toBe('Unlimited')
     expect(limitWords(row({}))).toBe('Unlimited')
