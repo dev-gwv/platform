@@ -109,6 +109,15 @@ async function emailVerifiedOf(c: Context<AppEnv>, uid: string): Promise<boolean
   return v ?? true
 }
 
+/**
+ * A login whose email the owner named a platform admin (0291) becomes one, once
+ * the inbox is proven theirs (a confirmation link, or Google). Never fails the
+ * sign-in it rides on.
+ */
+async function claimPlatformAdmin(c: Context<AppEnv>, uid: string): Promise<void> {
+  await withService(c.env, (sql) => sql`select claim_platform_admin(${uid})`).catch(() => undefined)
+}
+
 async function setupStateOf(c: Context<AppEnv>, uid: string) {
   const row = await attempt(c, 'auth.session.setup', () =>
     withUser(c.env, uid, async (sql) => {
@@ -248,6 +257,9 @@ export const authRouter = new Hono<AppEnv>()
       }),
     )
     if (!uid) fail(400, 'This verification link is invalid or has expired.')
+    // The inbox is proven theirs: an email the owner named a platform admin
+    // (0291) becomes one now.
+    await claimPlatformAdmin(c, uid)
 
     // The studio owner's welcome email goes out in the background; signing in
     // never waits on it.
@@ -378,10 +390,13 @@ export const authRouter = new Hono<AppEnv>()
         }),
       )
       if (!created) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+      await claimPlatformAdmin(c, created)
       return c.json({ ...(await signIn(c, created)), needs_setup: true })
     }
 
-    // Google proves mailbox control: auto-verify if still pending
+    // Google proves mailbox control: auto-verify if still pending, and an
+    // email the owner named a platform admin (0291) becomes one.
+    await claimPlatformAdmin(c, row.id)
     if (!row.email_verified) {
       await attempt(c, 'auth.google.verify', () =>
         withService(c.env, (sql) => sql`update auth.users set email_verified = true where id = ${row.id}`),
