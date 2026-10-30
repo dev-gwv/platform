@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { sign, verify } from 'hono/jwt'
 import type { Env } from '../context'
+import { createFailure } from '../modules/projects/routes-gallery'
 import {
   createFramelineGallery,
+  driveOut,
+  FRAMELINE_SAYS,
+  type FetchLike,
   framelineClaims,
   framelineConnected,
   framelineSignInUrl,
@@ -111,6 +115,35 @@ describe('talking to Frameline', () => {
         throw new Error('ECONNREFUSED')
       }),
     ).toMatchObject({ ok: false, kind: 'unreachable' })
+  })
+})
+
+describe('Google Drive, which lives in Frameline', () => {
+  const p = { id: 'p-1', name: 'Wedding', date: '2026-12-11T00:00:00.000Z', city: '' }
+
+  it('asks for the full-size photos in Drive only when the studio chose it', async () => {
+    const bodies: unknown[] = []
+    const capture: FetchLike = async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return new Response(JSON.stringify(gallery), { status: 201 })
+    }
+    await createFramelineGallery(env, owner, { ...p, originalsIn: 'drive' }, capture)
+    await createFramelineGallery(env, owner, p, capture)
+    expect(bodies[0]).toMatchObject({ originalsIn: 'drive' })
+    // Unset: Frameline follows the studio's own Drive default.
+    expect(bodies[1]).not.toHaveProperty('originalsIn')
+  })
+
+  it('says plainly that Drive is not connected, rather than "try again"', async () => {
+    expect(await createFramelineGallery(env, owner, { ...p, originalsIn: 'drive' }, reply(409, { code: 'drive_not_connected' }))).toMatchObject({ ok: false, kind: 'drive_off' })
+    expect(createFailure('drive_off')).toEqual({ status: 409, message: FRAMELINE_SAYS.drive_off })
+  })
+
+  it('carries the studio’s Drive state, and nothing from a Frameline too old to say', () => {
+    expect(
+      driveOut({ available: true, importAvailable: true, connected: true, needsReconnect: false, email: 'a@gmail.com', defaultForNewEvents: true, settingsPath: '/settings/drive' }),
+    ).toEqual({ available: true, import_available: true, connected: true, needs_reconnect: false, email: 'a@gmail.com', default_for_new: true })
+    expect(driveOut(undefined)).toBeNull()
   })
 })
 

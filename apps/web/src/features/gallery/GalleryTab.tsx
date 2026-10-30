@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Copy, Download, ExternalLink, Images, KeyRound, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
+import { Switch } from '@/shared/ui/switch'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
@@ -14,17 +15,23 @@ import { ApiError } from '@/shared/api/client'
 import type { ProjectGallery } from '@ipc/contracts'
 import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
 import { clientWhatsapp, galleryDate, galleryFigures } from './gallery-text'
+import { GoogleDriveIcon } from './GoogleDriveIcon'
 
 /**
  * The project's photo gallery, in Frameline (0261). Frameline is its own app
  * and add-on: the photos are uploaded there, and guests open them with the
  * PIN. Here the studio makes the gallery once, hands the guests' link and
  * PIN on, and presses Open gallery to upload -- signed in as themselves.
+ * Google Drive lives in Frameline too: Import from Google Drive opens its
+ * import window for this gallery, and Create gallery can keep the full-size
+ * photos in the studio's Drive once it is connected (Settings → Gallery).
  */
 export function GalleryTab({ projectId, projectName }: { projectId: string; projectName: string }) {
   const q = useProjectGallery(projectId)
   const create = useCreateGallery(projectId)
   const open = useOpenGallery(projectId)
+  // Create gallery's Drive switch: the studio's own default until it is flipped here.
+  const [inDrive, setInDrive] = useState<boolean | null>(null)
 
   if (q.isPending) return <SkeletonList rows={2} className="mt-4" />
   if (q.isError) {
@@ -35,7 +42,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
     )
   }
 
-  const { connected, gallery, live, client, trouble, plan_ended_on: planEnded } = q.data
+  const { connected, gallery, live, client, trouble, plan_ended_on: planEnded, drive } = q.data
 
   if (!connected) {
     return (
@@ -54,6 +61,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
   if (!gallery) {
     // 502: Frameline refused us in a way only we can fix (the add-on is not linked properly).
     const mislinked = create.error instanceof ApiError && create.error.status === 502
+    const keepInDrive = inDrive ?? drive?.default_for_new ?? false
     return (
       <Card className="mt-4 border-warning/50">
         <CardContent className="flex flex-col items-start gap-3 p-5">
@@ -63,7 +71,20 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
           <p className="text-sm text-muted-foreground">
             One link for {projectName}: guests open it, type the PIN, and see and download the photos.
           </p>
-          <Button className="ipc-nudge" onClick={() => create.mutate()} disabled={create.isPending}>
+          {drive?.connected && (
+            <Switch
+              label="Keep full-size photos in Google Drive"
+              description={keepInDrive ? `In ${drive.email ?? 'your'} Drive. Guests view a smaller copy.` : 'Off: Frameline keeps them.'}
+              checked={keepInDrive}
+              onChange={setInDrive}
+              className="w-auto"
+            />
+          )}
+          <Button
+            className="ipc-nudge"
+            onClick={() => create.mutate(drive?.connected ? { inDrive: keepInDrive } : {})}
+            disabled={create.isPending}
+          >
             <Images /> {create.isPending ? 'Making the gallery…' : 'Create gallery'}
           </Button>
           {mislinked && (
@@ -85,8 +106,11 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
       trouble={trouble}
       planEnded={planEnded}
       client={client}
-      onOpen={() => open.mutate()}
-      opening={open.isPending}
+      drive={drive}
+      onOpen={() => open.mutate('gallery')}
+      opening={open.isPending && open.variables !== 'import'}
+      onImport={() => open.mutate('import')}
+      importing={open.isPending && open.variables === 'import'}
     />
   )
 }
@@ -98,8 +122,11 @@ function GalleryReady({
   trouble,
   planEnded,
   client,
+  drive,
   onOpen,
   opening,
+  onImport,
+  importing,
 }: {
   projectName: string
   gallery: NonNullable<ProjectGallery['gallery']>
@@ -107,8 +134,11 @@ function GalleryReady({
   trouble: ProjectGallery['trouble']
   planEnded: string | null
   client: ProjectGallery['client']
+  drive: ProjectGallery['drive']
   onOpen: () => void
   opening: boolean
+  onImport: () => void
+  importing: boolean
 }) {
   const svg = useMemo(() => qrSvg(gallery.gallery_url), [gallery.gallery_url])
   // What Frameline says now, else what it said last time.
@@ -144,9 +174,25 @@ function GalleryReady({
               <span>No photos yet. Open the gallery to upload them.</span>
             )}
           </p>
-          <Button onClick={onOpen} disabled={opening} className={done ? undefined : 'ipc-nudge'}>
-            <ExternalLink /> {opening ? 'Opening…' : done ? 'Open gallery' : 'Open gallery to upload'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {/* Frameline's own Import window for this gallery: pick Drive folders, each becomes an album. */}
+            {drive?.import_available && (
+              <Button variant="outline" onClick={onImport} disabled={importing}>
+                <GoogleDriveIcon /> {importing ? 'Opening…' : 'Import from Google Drive'}
+              </Button>
+            )}
+            <Button onClick={onOpen} disabled={opening} className={done ? undefined : 'ipc-nudge'}>
+              <ExternalLink /> {opening ? 'Opening…' : done ? 'Open gallery' : 'Open gallery to upload'}
+            </Button>
+          </div>
+          {live?.originals_in === 'drive' && (
+            <p className={cn('flex w-full items-center gap-1.5 text-xs', drive?.needs_reconnect ? 'text-warning' : 'text-muted-foreground')}>
+              <GoogleDriveIcon className="size-3.5" />
+              {drive?.needs_reconnect
+                ? 'Full-size photos are in Google Drive, which needs connecting again in Frameline. Until then guests get smaller copies.'
+                : `Full-size photos are kept in ${drive?.email ? `${drive.email}’s` : 'your'} Google Drive.`}
+            </p>
+          )}
           {trouble === 'unreachable' && (
             <p className="w-full text-xs text-muted-foreground">The gallery app did not answer just now; the link below still works.</p>
           )}

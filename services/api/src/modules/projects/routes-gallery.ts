@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { galleryOpenLink, projectGallery } from '@ipc/contracts'
+import { createGalleryRequest, galleryOpenLink, openGalleryRequest, projectGallery } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
@@ -10,6 +10,7 @@ import { audit } from '../../lib/audit'
 import { todayInIndia } from '../../lib/dates'
 import {
   createFramelineGallery,
+  driveOut,
   FRAMELINE_SAYS,
   framelineConnected,
   framelineSignInUrl,
@@ -129,6 +130,7 @@ const forget = (c: Context<AppEnv>, projectId: string, eventId: string) =>
 /** What a failed Create gallery says, by why. */
 export function createFailure(kind: FramelineFailure): { status: 409 | 502 | 503; message: string } {
   if (kind === 'owner_first') return { status: 409, message: 'Your studio’s owner needs to make the first gallery. After that, anyone who runs projects can.' }
+  if (kind === 'drive_off') return { status: 409, message: FRAMELINE_SAYS.drive_off }
   if (kind === 'no_name') return { status: 503, message: FRAMELINE_SAYS.no_name }
   if (framelineTrouble(kind) === 'misconfigured') return { status: 502, message: FRAMELINE_SAYS.misconfigured }
   return { status: 503, message: FRAMELINE_SAYS.no_answer }
@@ -145,13 +147,20 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     let live = null
     let trouble: 'unreachable' | 'misconfigured' | null = null
     let planEnded: string | null = null
+    let drive = null
+    if (connected && !row) {
+      // Before Create gallery: whether to offer "Keep full-size photos in Google Drive".
+      const studio = await readFramelineStudio(c.env, await personOf(c))
+      if (studio.ok) drive = driveOut(studio.data.drive)
+    }
     if (connected && row) {
       const person = await personOf(c)
       // The plan beside the gallery, both at once: a plan that ended is the
       // studio's next thing even while the gallery itself still opens.
       const [r, studio] = await Promise.all([readFramelineGallery(c.env, person, projectId), readFramelineStudio(c.env, person)])
+      if (studio.ok) drive = driveOut(studio.data.drive)
       if (r.ok) {
-        live = { photo_count: r.data.photoCount, status: r.data.status }
+        live = { photo_count: r.data.photoCount, status: r.data.status, originals_in: r.data.originalsIn ?? null }
         // A PIN changed in Frameline shows here (and on the client's page) from this read on.
         await refresh(c, projectId, r.data)
         row = fromFrameline(row, r.data)
@@ -175,6 +184,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
         trouble,
         plan_ended_on: planEnded,
         client: read.client,
+        drive,
       }),
     )
   })
@@ -184,6 +194,8 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
     const projectId = uuidParam(c)
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
     const auth = c.get('auth')
+    const asked = createGalleryRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!asked.success) fail(400, 'We could not read what to make.')
 
     // The project's name, and the day the gallery is for: the wedding if there
     // is one, else the first shoot, else today.
@@ -211,6 +223,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
       name: project.name,
       date: `${project.date ?? todayInIndia()}T00:00:00.000Z`,
       city: '',
+      originalsIn: asked.data.originals_in,
     })
     if (!r.ok) {
       const why = createFailure(r.kind)
@@ -238,7 +251,7 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
       projectGallery.parse({
         connected: true,
         gallery: galleryOut(fromFrameline({ created_at: r.data.createdAt }, r.data)),
-        live: { photo_count: r.data.photoCount, status: r.data.status },
+        live: { photo_count: r.data.photoCount, status: r.data.status, originals_in: r.data.originalsIn ?? null },
         // So Send to the client works straight away, without a second read.
         client: found.client,
       }),
@@ -249,14 +262,19 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
    * "Open gallery": a sign-in link into Frameline as this person, at this
    * project's event (or the events list before there is one). Good for one
    * minute and once, so the page asks for it at the moment it is pressed.
+   * `to: 'import'` lands on the event's Import from Google Drive window
+   * instead; Frameline asks the owner to connect Drive there if it is not yet.
    */
   .post('/:id/gallery/open', requireAction('projects', 'edit'), async (c) => {
     const projectId = uuidParam(c)
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
+    const asked = openGalleryRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!asked.success) fail(400, 'We could not open the gallery.')
     const read = await readRow(c, projectId)
     if (!read) fail(400, 'We could not open the gallery.')
     const person = await personOf(c)
     if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
-    const url = await framelineSignInUrl(c.env, person, read.row ? `/events/${read.row.event_id}` : '/events')
+    const at = read.row ? `/events/${read.row.event_id}` : '/events'
+    const url = await framelineSignInUrl(c.env, person, read.row && asked.data.to === 'import' ? `${at}?modal=import` : at)
     return c.json(galleryOpenLink.parse({ url }))
   })

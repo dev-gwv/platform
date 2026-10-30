@@ -1,18 +1,19 @@
 import { Hono } from 'hono'
-import { framelineAccount, galleryList, galleryOpenLink } from '@ipc/contracts'
+import { framelineAccount, galleryList, galleryOpenLink, openFramelineRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction, requireOwner } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
-import { FRAMELINE_SAYS, framelineConnected, framelineSignInUrl, framelineTrouble, listFramelineGalleries, nameMissing, readFramelineStudio } from '../../lib/frameline'
+import { driveOut, FRAMELINE_SAYS, framelineConnected, framelineSignInUrl, framelineTrouble, listFramelineGalleries, nameMissing, readFramelineStudio } from '../../lib/frameline'
 import { saveGallerySnapshot } from '../../lib/gallery-sync'
 import { personOf } from '../projects/routes-gallery'
 
 /**
  * The studio's Frameline galleries across projects (Projects → Galleries) and
- * the Frameline studio behind the company (Settings → Messaging → Gallery).
+ * the Frameline studio behind the company (Settings → Messaging → Gallery),
+ * with its Google Drive (connected in Frameline, shown here).
  * A project's own gallery is modules/projects/routes-gallery.ts.
  */
 
@@ -87,15 +88,23 @@ export const galleriesRouter = new Hono<AppEnv>()
         photos_used: s.photosUsed,
         photos_limit: s.photosLimit,
         galleries: s.galleries,
+        drive: driveOut(s.drive),
       }),
     )
   })
 
-  /** "Open Frameline": signed in as the owner, on Frameline's home (plan, wallet, every event). */
+  /**
+   * "Open Frameline": signed in as the owner, on Frameline's home (plan, wallet,
+   * every event), or with `to: 'drive'` on its Google Drive settings, where the
+   * owner connects Drive (Google's own consent page) and sets new galleries to
+   * keep their originals there.
+   */
   .post('/account/open', requireOwner(), async (c) => {
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
+    const asked = openFramelineRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!asked.success) fail(400, 'We could not open Frameline.')
     const person = await personOf(c)
     // The owner's first sign-in makes their Frameline studio: never as "Studio".
     if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
-    return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, person, '/') }))
+    return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, person, asked.data.to === 'drive' ? '/settings/drive' : '/') }))
   })

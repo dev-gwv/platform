@@ -12,6 +12,8 @@ import { BookCallButton } from '@/features/help/BookCall'
 import { useFramelineAccount, useOpenFramelineHome } from '@/features/gallery/api'
 import { framelinePlanLine } from '@/features/gallery/gallery-text'
 import { useINR } from '@/shared/money/MoneyMask'
+import { GoogleDriveIcon } from '@/features/gallery/GoogleDriveIcon'
+import type { GalleryDrive } from '@ipc/contracts'
 
 export function GallerySettingsPage() {
   return (
@@ -26,6 +28,8 @@ export function GallerySettingsPage() {
  * Frameline, the photo gallery add-on (0261, 0264): whether it is on, the
  * Frameline studio behind this company, and a way in. Frameline bills for
  * itself (its own plan and wallet), so this page shows them and never charges.
+ * Google Drive is connected in Frameline; this page says whether it is and
+ * opens Frameline's Drive settings to connect or manage it.
  */
 function GallerySettings() {
   const { session } = useAuth()
@@ -71,9 +75,10 @@ function OwnerView() {
 
   // Frameline sends no trial flag, only the plan and the day it runs till.
   const plan = a.linked ? framelinePlanLine(a.plan, a.valid_till) : null
+  const openingHome = open.isPending && open.variables !== 'drive'
   const openButton = (
-    <Button onClick={() => open.mutate()} disabled={open.isPending} className={plan?.ended ? 'ipc-nudge' : undefined}>
-      <ExternalLink /> {open.isPending ? 'Opening…' : 'Open Frameline'}
+    <Button onClick={() => open.mutate('home')} disabled={openingHome} className={plan?.ended ? 'ipc-nudge' : undefined}>
+      <ExternalLink /> {openingHome ? 'Opening…' : 'Open Frameline'}
     </Button>
   )
 
@@ -117,6 +122,41 @@ function OwnerView() {
           <p className="text-xs text-muted-foreground">The gallery's plan, wallet and renewals are paid in Frameline.</p>
         </CardContent>
       </Card>
+      {a.linked && a.drive?.available && (
+        <DriveCard drive={a.drive} onOpen={() => open.mutate('drive')} opening={open.isPending && open.variables === 'drive'} />
+      )}
     </div>
+  )
+}
+
+/**
+ * Google Drive in Frameline: the owner connects it there (Google's own page),
+ * then projects import shoots from it and can keep full-size photos in it.
+ */
+function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: () => void; opening: boolean }) {
+  const label = opening ? 'Opening…' : drive.connected ? 'Manage in Frameline' : drive.needs_reconnect ? 'Connect again' : 'Connect Google Drive'
+  return (
+    <Card className={drive.connected ? 'border-success/40' : drive.needs_reconnect ? 'border-warning/50' : undefined}>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <GoogleDriveIcon /> Google Drive
+        </p>
+        {drive.connected ? (
+          <p className="text-sm">
+            Connected as <b>{drive.email}</b> ·{' '}
+            {drive.default_for_new ? 'new galleries keep full-size photos in Drive' : 'full-size photos stay in Frameline unless a gallery says otherwise'}
+          </p>
+        ) : drive.needs_reconnect ? (
+          <p className="text-sm text-warning">Google no longer lets Frameline into {drive.email ?? 'your Drive'}. Connect it again so imports and Drive photos work.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Import shoots from your Drive, and keep full-size photos there. Frameline sees only the files you pick.</p>
+        )}
+        <div>
+          <Button onClick={onOpen} disabled={opening} variant={drive.connected ? 'outline' : 'default'} className={drive.needs_reconnect ? 'ipc-nudge' : undefined}>
+            <ExternalLink /> {label}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

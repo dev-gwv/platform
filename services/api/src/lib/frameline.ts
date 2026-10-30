@@ -100,8 +100,37 @@ export interface FramelineGallery {
   visits?: number
   /** Signed-up guests; only on the single-gallery read. */
   guests?: number
+  /** Where its full-size photos go: Frameline, or the studio's Google Drive. */
+  originalsIn?: 'frameline' | 'drive'
   adminPath: string
+  /** Frameline's Import from Google Drive window for this gallery (a sign-in `to`). */
+  importPath?: string
   createdAt: string
+}
+
+/** Google Drive in Frameline for this studio. Connecting, picking and importing all happen in Frameline. */
+export interface FramelineDrive {
+  available: boolean
+  importAvailable: boolean
+  connected: boolean
+  needsReconnect: boolean
+  email: string | null
+  defaultForNewEvents: boolean
+  /** Frameline's Google Drive settings page (a sign-in `to`). */
+  settingsPath: string
+}
+
+/** Frameline's Drive answer as the contracts carry it; null from a Frameline that does not say. */
+export function driveOut(d: FramelineDrive | undefined | null) {
+  if (!d) return null
+  return {
+    available: d.available,
+    import_available: d.importAvailable,
+    connected: d.connected,
+    needs_reconnect: d.needsReconnect,
+    email: d.email,
+    default_for_new: d.defaultForNewEvents,
+  }
 }
 
 /** The Frameline studio joined to this company, for Settings. */
@@ -115,6 +144,8 @@ export interface FramelineStudio {
   photosLimit: number | null
   galleries: number
   adminUrl: string
+  /** Since Frameline's Drive work (30 Oct); missing from an older Frameline. */
+  drive?: FramelineDrive
 }
 
 /**
@@ -124,9 +155,11 @@ export interface FramelineStudio {
  * (never made, or deleted there); 'misconfigured' is a refusal that trying
  * again will not fix (the two secrets differ, Frameline is not set up for us,
  * or the address is wrong); 'refused' and 'unreachable' may pass; 'no_name' is
- * an owner whose studio name could not be read, so nothing was sent.
+ * an owner whose studio name could not be read, so nothing was sent;
+ * 'drive_off' is a gallery asked to keep its photos in Google Drive while the
+ * studio's Drive is not connected in Frameline.
  */
-export type FramelineFailure = 'not_connected' | 'owner_first' | 'missing' | 'misconfigured' | 'refused' | 'unreachable' | 'no_name'
+export type FramelineFailure = 'not_connected' | 'owner_first' | 'missing' | 'misconfigured' | 'refused' | 'unreachable' | 'no_name' | 'drive_off'
 export type FramelineResult<T> = { ok: true; data: T } | { ok: false; kind: FramelineFailure; status: number }
 
 /**
@@ -141,6 +174,7 @@ export const FRAMELINE_SAYS = {
   no_answer: 'The gallery app did not answer. Please try again in a minute.',
   no_name: 'We could not read your studio’s name just now. Please try again in a minute.',
   not_connected: 'The gallery add-on is not connected yet. Ask us on WhatsApp to switch it on.',
+  drive_off: 'Google Drive isn’t connected in Frameline. Connect it in Settings → Gallery, or make the gallery without it.',
 } as const
 
 /** Trouble the studio can do nothing about but tell us, apart from a blip that passes. */
@@ -151,6 +185,7 @@ export function framelineTrouble(kind: FramelineFailure): 'misconfigured' | 'unr
 /** How a refusal reads: 401/403/501, or a 404 that is not Frameline's own, will not pass on a retry. */
 export function refusalKind(status: number, code: string | undefined): FramelineFailure {
   if (status === 409 && code === 'partner_studio_not_set_up') return 'owner_first'
+  if (status === 409 && code === 'drive_not_connected') return 'drive_off'
   // Frameline's own "not found" carries its code; a bare 404 is the wrong address.
   if (status === 404) return code === 'not_found' ? 'missing' : 'misconfigured'
   if (status === 401 || status === 403 || status === 501 || code === 'not_configured') return 'misconfigured'
@@ -178,7 +213,7 @@ async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', pat
     if (res.ok) return { ok: true, data: (await res.json()) as T }
     const problem = (await res.json().catch(() => ({}))) as { code?: string }
     const kind = refusalKind(res.status, problem.code)
-    if (kind !== 'owner_first' && kind !== 'missing') console.error(`[frameline] ${method} ${path} ${kind} ${res.status} ${problem.code ?? ''}`)
+    if (kind !== 'owner_first' && kind !== 'missing' && kind !== 'drive_off') console.error(`[frameline] ${method} ${path} ${kind} ${res.status} ${problem.code ?? ''}`)
     return { ok: false, kind, status: res.status }
   } catch (e) {
     console.error(`[frameline] ${method} ${path} unreachable`, e instanceof Error ? e.message : e)
@@ -188,14 +223,31 @@ async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', pat
   }
 }
 
-/** Makes the project's gallery, or returns the one already made. */
+/**
+ * Makes the project's gallery, or returns the one already made. `originalsIn`
+ * 'drive' keeps its full-size photos in the studio's Google Drive; unset
+ * follows the studio's own Drive default in Frameline.
+ */
 export function createFramelineGallery(
   env: Env,
   p: FramelinePerson,
-  project: { id: string; name: string; date: string; city: string },
+  project: { id: string; name: string; date: string; city: string; originalsIn?: 'frameline' | 'drive' | undefined },
   fetchImpl?: FetchLike,
 ): Promise<FramelineResult<FramelineGallery>> {
-  return call(env, p, 'POST', '/events', { projectId: project.id, name: project.name, date: project.date, city: project.city }, fetchImpl)
+  return call(
+    env,
+    p,
+    'POST',
+    '/events',
+    {
+      projectId: project.id,
+      name: project.name,
+      date: project.date,
+      city: project.city,
+      ...(project.originalsIn ? { originalsIn: project.originalsIn } : {}),
+    },
+    fetchImpl,
+  )
 }
 
 /** How the project's gallery is doing: photos so far, live or not. */

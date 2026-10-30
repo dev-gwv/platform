@@ -15,10 +15,16 @@ export function useProjectGallery(projectId: string) {
   })
 }
 
+/** `inDrive`: keep the gallery's full-size photos in the studio's Google Drive (offered once Drive is connected). */
 export function useCreateGallery(projectId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => callApi(`/projects/${projectId}/gallery`, { method: 'POST', body: {}, responseSchema: projectGallery }),
+    mutationFn: (opts: { inDrive?: boolean } = {}) =>
+      callApi(`/projects/${projectId}/gallery`, {
+        method: 'POST',
+        body: opts.inDrive === undefined ? {} : { originals_in: opts.inDrive ? 'drive' : 'frameline' },
+        responseSchema: projectGallery,
+      }),
     onSuccess: (g) => {
       qc.setQueryData(key(projectId), g)
       toast.success('Gallery ready. Open it to upload the photos.')
@@ -28,14 +34,15 @@ export function useCreateGallery(projectId: string) {
 }
 
 /**
- * Opens Frameline signed in as this person, at this project's gallery.
+ * Opens Frameline signed in as this person, at this project's gallery, or
+ * (`'import'`) at its Import from Google Drive window.
  *
  * The window is opened at the press, before the link is asked for, because a
  * browser blocks a window opened after a wait; the link is good for a minute
  * and once, so it is never fetched ahead of the press.
  */
 export function useOpenGallery(projectId: string) {
-  return useOpenFrameline(`/projects/${projectId}/gallery/open`)
+  return useOpenFrameline<'gallery' | 'import'>(`/projects/${projectId}/gallery/open`)
 }
 
 /** Projects → Galleries: every project with a gallery. */
@@ -56,17 +63,18 @@ export function useFramelineAccount() {
   })
 }
 
-/** "Open Frameline": the owner signed in, on Frameline's home. */
+/** "Open Frameline": the owner signed in, on Frameline's home, or (`'drive'`) its Google Drive settings. */
 export function useOpenFramelineHome() {
-  return useOpenFrameline('/galleries/account/open')
+  return useOpenFrameline<'home' | 'drive'>('/galleries/account/open')
 }
 
-function useOpenFrameline(path: string) {
+/** `mutate()` opens the default place; `mutate(to)` another one the server knows. */
+function useOpenFrameline<To extends string>(path: string) {
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (to?: To) => {
       const w = window.open('', '_blank')
       try {
-        const { url } = await callApi(path, { method: 'POST', body: {}, responseSchema: galleryOpenLink })
+        const { url } = await callApi(path, { method: 'POST', body: to ? { to } : {}, responseSchema: galleryOpenLink })
         if (w) {
           w.opener = null
           w.location.href = url

@@ -549,6 +549,18 @@ export const KB: readonly KbArticle[] = [
       'The gallery also shows on the client\'s own page, under their progress, once it has photos and until it closes. The first gallery is made by the studio\'s owner; after that anyone who runs projects can. The gallery is an add-on with its own plan, renewed in the gallery app. A gallery deleted there can be made again with **Create gallery**.',
     ],
   },
+  {
+    key: 'gallery-google-drive',
+    title: 'Photos from Google Drive in the gallery',
+    area: 'Editing',
+    menu: 'Settings → Gallery, and a project → Post-Production → Gallery',
+    keywords: ['google drive', 'drive', 'gdrive', 'import', 'folder', 'originals', 'full size', 'storage', 'gallery', 'frameline'],
+    body: [
+      'The studio\'s owner connects Google Drive once: **Settings → Gallery → Connect Google Drive**. It opens the gallery app, and Google asks to allow it. The gallery app only sees the files you pick and the folders it makes.',
+      'To bring in a shoot that is already in Drive, open the project\'s **Post-Production → Gallery** and press **Import from Google Drive**. Pick the folders in Google\'s window: each folder becomes an album. The import keeps going if you close the window.',
+      'To keep the full-size photos in your own Drive instead of the gallery app, turn on **Keep full-size photos in Google Drive** before pressing **Create gallery**. Guests still view and download from the gallery link; the full-size files come from your Drive.',
+    ],
+  },
 
   // ── Data ────────────────────────────────────────────────────
   {
