@@ -16,9 +16,10 @@ Google appointment schedule ──► "Support calls" calendar ──► Studio 
                                   one post in the support WhatsApp group (the group bot)
 ```
 
-- **Bookings come from one Google Calendar** that holds only support calls,
-  filled by a Google Calendar **appointment schedule** -- the page the Support
-  call button opens. Studio AutoPilot reads the
+- **Bookings come from each person's main Google Calendar** (owner, 30 Oct),
+  filled by their Google Calendar **appointment schedule** -- the page the
+  Support call button opens. Only entries the schedule made count ("Booked by"
+  in the description, `isBooking`); the person's other events are never posted. Studio AutoPilot reads the
   calendar's private address ("Secret address in iCal format"); no Google login
   is stored. The first read only notes what is already there, so connecting it
   never floods the group.
@@ -35,16 +36,15 @@ Google appointment schedule ──► "Support calls" calendar ──► Studio 
 
 ## Setting it up
 
-1. **Calendar and booking page, once per person (two since 0290).** In each
-   person's Google Calendar make a calendar called "Support calls", then
-   Create → **Appointment schedule** and pick that calendar for the bookings.
-   On Platform → Support calls → **Google Calendars**, fill that person's row:
-   the name studios see on the button, the schedule's booking page link, and
-   the calendar's Settings → **Secret address in iCal format**, then **Save**.
+1. **Booking page, once per person (two since 0290).** In each person's Google
+   Calendar, Create → **Appointment schedule** (it books into their main
+   calendar). On Platform → Support calls → **Google Calendars**, fill that
+   person's row: the name studios see on the button, the schedule's booking
+   page link, and the main calendar's Settings → **Secret address in iCal
+   format**, then **Save**.
    With two booking pages set, Book a support call opens a small chooser
    (one button per person), and each opens Google's page in a new tab. Anyone
-   with an iCal address can read that calendar, so use one that holds only
-   support calls and never share the address.
+   with an iCal address can read that whole calendar, so never share it.
 2. **The group bot (VPS).** Back up `/root/ipc/platform/.env`, add
    `WA_BOT_SECRET=` with a value from `openssl rand -hex 32`, then
    `sh deploy/deploy.sh` (never a bare `docker compose up`).

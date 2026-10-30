@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { supportCallNotice } from '@ipc/contracts'
-import { diffCalendar, looksLikeIcal, maskIcal, noticeFor, parseIcs, personOf, refOf, zonedToUtc } from './support-calendar'
+import { diffCalendar, isBooking, looksLikeIcal, maskIcal, noticeFor, parseIcs, personOf, refOf, zonedToUtc } from './support-calendar'
 
 // The shape Google writes for a booked appointment (folded line included).
 const FEED = [
@@ -111,6 +111,19 @@ describe('diffCalendar', () => {
     expect(diffCalendar(events, known, now, 2)).toEqual([])
     const [change] = diffCalendar(events, [], now, 2)
     expect(noticeFor(change!, null, 2)?.booking.id).toBe('gcal2:abc123@google.com')
+  })
+  it("ignores the rest of the person's main calendar (30 Oct)", () => {
+    const own = { ...events[0]!, uid: 'mine', description: 'Pick up the camera', attendees: [], summary: 'Dentist' }
+    const meeting = { ...events[0]!, uid: 'meet', description: 'Weekly sync', summary: 'Team sync' }
+    expect(isBooking(events[0]!)).toBe(true)
+    expect(isBooking(own)).toBe(false)
+    expect(isBooking(meeting)).toBe(false)
+    // A booking whose description was cleared still has its booker in the title.
+    expect(isBooking({ ...events[0]!, description: '' })).toBe(true)
+    expect(diffCalendar([own, meeting], [], now)).toEqual([])
+    // Something we already know is still followed, whatever it says now.
+    const known = [{ ref: refOf('mine'), startsAt: '2026-10-29T09:30:00.000Z' }]
+    expect(diffCalendar([own], known, now).map((c) => c.kind)).toEqual(['booking.rescheduled'])
   })
   it('only looks two months ahead', () => {
     const far = { ...events[0]!, uid: 'far', startsAt: '2027-03-01T09:30:00.000Z' }

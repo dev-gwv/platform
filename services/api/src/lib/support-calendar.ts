@@ -4,9 +4,10 @@ import type { SupportCallNotice, SupportCallNoticeKind } from '@ipc/contracts'
  * Support calls read from a Google Calendar (0283): the parts with no network
  * or database, so every rule is tested.
  *
- * The calendar is one used only for support calls (whichever booking page
- * fills it -- a Google Calendar appointment schedule), read through
- * its private iCal address every five minutes. Each entry is a booking: new is
+ * The calendar is the person's main Google Calendar (owner, 30 Oct), which
+ * their appointment schedule books into, read through its private iCal
+ * address every five minutes. Only entries the booking page made count
+ * (isBooking): the rest of the person's day is never posted. A booking new is
  * "booked", a changed time is "moved", removed or cancelled is "cancelled".
  */
 
@@ -170,6 +171,19 @@ export function personOf(e: CalEvent): { name: string; email: string | null } {
   return { name: name.trim(), email: guest?.email ?? null }
 }
 
+/**
+ * Whether an entry was made by the appointment schedule, not typed by the
+ * person: Google writes "Booked by <name>" into every booking's description.
+ * A booking whose description was cleared still reads "Title (Booker)" with
+ * the booker as a guest, so that counts too. Anything else on the main
+ * calendar (a meeting, a reminder, a block of time) is left alone.
+ */
+export function isBooking(e: CalEvent): boolean {
+  if (/\bbooked by\b/i.test(e.description)) return true
+  const guest = e.attendees.some((a) => a.email !== e.organizer)
+  return guest && /\([^)]+\)\s*$/.test(e.summary)
+}
+
 export interface KnownBooking {
   ref: string
   startsAt: string
@@ -203,6 +217,7 @@ export function diffCalendar(feed: CalEvent[], known: KnownBooking[], now: numbe
       if (k) out.push({ kind: 'booking.cancelled', event: e })
       continue
     }
+    if (!k && !isBooking(e)) continue
     if (!k) out.push({ kind: 'booking.created', event: e })
     else if (Math.abs(Date.parse(k.startsAt) - Date.parse(e.startsAt)) > 60_000) out.push({ kind: 'booking.rescheduled', event: e })
   }
