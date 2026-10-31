@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { sign, verify } from 'hono/jwt'
 import type { Env } from '../context'
 import { createFailure } from '../modules/projects/routes-gallery'
+import { driveFailure } from '../modules/projects/routes-gallery-drive'
 import {
   createFramelineGallery,
+  driveImportOut,
   driveOut,
+  expandDriveItems,
   FRAMELINE_SAYS,
   type FetchLike,
   framelineClaims,
@@ -16,6 +19,8 @@ import {
   readFramelineGallery,
   readFramelineStudio,
   refusalKind,
+  startDriveImport,
+  stopDriveImport,
   verifyFramelineNotice,
   type FramelinePerson,
 } from './frameline'
@@ -144,6 +149,39 @@ describe('Google Drive, which lives in Frameline', () => {
       driveOut({ available: true, importAvailable: true, connected: true, needsReconnect: false, email: 'a@gmail.com', defaultForNewEvents: true, settingsPath: '/settings/drive' }),
     ).toEqual({ available: true, import_available: true, connected: true, needs_reconnect: false, email: 'a@gmail.com', default_for_new: true })
     expect(driveOut(undefined)).toBeNull()
+  })
+})
+
+describe('Import from Google Drive on our Gallery tab', () => {
+  const started = {
+    id: 'di_1', eventId: 'ev_1', name: 'Haldi', status: 'running', total: 2, done: 0, skipped: 0, failed: 0, albumsCreated: 1,
+    quality: 'web', createdAt: '2026-10-31T10:00:00.000Z',
+  } as const
+
+  it("sends the picked files to the project's gallery, never watermarked from here", async () => {
+    const seen: { url: string; method: string | undefined; body: unknown }[] = []
+    const capture: FetchLike = async (url, init) => {
+      seen.push({ url, method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : null })
+      return new Response(JSON.stringify(started), { status: 201 })
+    }
+    const items = [{ fileId: 'fileHaldi0001', name: 'H1.JPG', size: 10, mimeType: 'image/jpeg', albumName: 'Haldi' }]
+    const r = await startDriveImport(env, manager, 'p-1', { name: 'Haldi', quality: 'web', items }, capture)
+    expect(r.ok).toBe(true)
+    expect(seen[0]).toMatchObject({ url: 'https://fl.example/v1/integrations/studioautopilot/events/p-1/drive-imports', method: 'POST', body: { name: 'Haldi', quality: 'web', watermark: false, items } })
+    await stopDriveImport(env, manager, 'p-1', 'di_1', capture)
+    expect(seen[1]).toMatchObject({ url: 'https://fl.example/v1/integrations/studioautopilot/events/p-1/drive-imports/di_1', method: 'DELETE', body: null })
+    expect(driveImportOut(started)).toMatchObject({ albums_created: 1, finished_at: null, error: null })
+  })
+
+  it('passes on how much room is left, and says who connects Drive', async () => {
+    const full = await startDriveImport(env, owner, 'p-1', { name: 'X', quality: 'original', items: [] }, reply(402, { code: 'quota_exceeded', detail: 'Your plan has 40 left.' }))
+    expect(full).toMatchObject({ ok: false, kind: 'full', detail: 'Your plan has 40 left.' })
+    if (!full.ok) expect(driveFailure(full)).toEqual({ status: 402, message: 'Your plan has 40 left.' })
+    const off = await expandDriveItems(env, owner, ['folderHaldi01'], reply(409, { code: 'drive_revoked' }))
+    expect(off.ok).toBe(false)
+    if (!off.ok) expect(driveFailure(off)).toMatchObject({ status: 409, message: expect.stringContaining('Settings → Gallery') })
+    const gone = await stopDriveImport(env, owner, 'p-1', 'di_1', reply(404, { code: 'not_found' }))
+    if (!gone.ok) expect(driveFailure(gone).status).toBe(404)
   })
 })
 

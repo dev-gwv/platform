@@ -603,7 +603,27 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
       trouble: null,
       plan_ended_on: null,
       client: { name: 'Priya Sharma', phone: '9845055012' },
+      drive: { available: true, import_available: true, connected: true, needs_reconnect: false, email: 'studio@gmail.com', default_for_new: false },
     }
+  // Import from Google Drive on the Gallery tab: no Google here, so a sample pick.
+  if (method === 'GET' && /^\/projects\/[^/]+\/gallery\/drive\/picker$/.test(path))
+    return { access_token: 'sample', expires_at: '2026-10-31T12:00:00Z', api_key: 'sample', app_id: null }
+  if (method === 'POST' && /^\/projects\/[^/]+\/gallery\/drive\/expand$/.test(path)) {
+    const f = (id: string, folder: string | null, over: Record<string, unknown> = {}) => ({ id, name: `${id}.JPG`, mime_type: 'image/jpeg', size: 4_200_000, folder_path: folder, importable: true, reason: null, ...over })
+    return {
+      items: [
+        ...Array.from({ length: 84 }, (_, i) => f(`HALDI_${1000 + i}`, 'Haldi')),
+        ...Array.from({ length: 36 }, (_, i) => f(`CAND_${2000 + i}`, 'Haldi/Candids')),
+        ...Array.from({ length: 3 }, (_, i) => f(`RAW_${3000 + i}`, 'Haldi', { name: `RAW_${3000 + i}.CR3`, mime_type: 'image/x-canon-cr3', importable: false, reason: 'RAW and other camera files aren’t imported yet' })),
+        f('COUPLE_0001', null),
+      ],
+      closed_folders: [],
+    }
+  }
+  if (/^\/projects\/[^/]+\/gallery\/drive\/imports/.test(path)) {
+    const run = { id: 'di_mock1', name: 'Haldi and 2 more', status: method === 'DELETE' ? 'cancelled' : 'running', total: 121, done: 47, skipped: 0, failed: 0, albums_created: 2, quality: 'web', created_at: '2026-10-31T10:00:00Z', finished_at: null, error: null }
+    return method === 'GET' ? { items: [run] } : run
+  }
   // Create gallery: made just now, so no photos yet (Open gallery to upload).
   if (method === 'POST' && /^\/projects\/[^/]+\/gallery$/.test(path))
     return {

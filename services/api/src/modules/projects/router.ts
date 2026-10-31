@@ -11,6 +11,7 @@ import { deliverableRoutes } from './routes-deliverables'
 import { projectRoutes } from './routes-project'
 import { projectMoneyRoutes } from './routes-project-money'
 import { projectGalleryRoutes } from './routes-gallery'
+import { projectGalleryDriveRoutes } from './routes-gallery-drive'
 
 export const projectsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
@@ -51,3 +52,5 @@ export const projectsRouter = new Hono<AppEnv>()
 
   // One project's photo gallery in Frameline, the gallery add-on (0261).
   .route('/', projectGalleryRoutes)
+  // Import from Google Drive into that gallery, on our page.
+  .route('/', projectGalleryDriveRoutes)

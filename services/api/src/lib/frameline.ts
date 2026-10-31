@@ -156,11 +156,13 @@ export interface FramelineStudio {
  * again will not fix (the two secrets differ, Frameline is not set up for us,
  * or the address is wrong); 'refused' and 'unreachable' may pass; 'no_name' is
  * an owner whose studio name could not be read, so nothing was sent;
- * 'drive_off' is a gallery asked to keep its photos in Google Drive while the
- * studio's Drive is not connected in Frameline.
+ * 'drive_off' is Google Drive not connected (or no longer let in) in
+ * Frameline when something needs it; 'full' is Frameline's plan or the
+ * gallery with no room for what was asked (402).
  */
-export type FramelineFailure = 'not_connected' | 'owner_first' | 'missing' | 'misconfigured' | 'refused' | 'unreachable' | 'no_name' | 'drive_off'
-export type FramelineResult<T> = { ok: true; data: T } | { ok: false; kind: FramelineFailure; status: number }
+export type FramelineFailure = 'not_connected' | 'owner_first' | 'missing' | 'misconfigured' | 'refused' | 'unreachable' | 'no_name' | 'drive_off' | 'full'
+/** `detail` is Frameline's own sentence for a refusal (a plan with no room says how much is left). */
+export type FramelineResult<T> = { ok: true; data: T } | { ok: false; kind: FramelineFailure; status: number; detail?: string }
 
 /**
  * The owner's first call makes their Frameline studio, named from the company:
@@ -185,14 +187,15 @@ export function framelineTrouble(kind: FramelineFailure): 'misconfigured' | 'unr
 /** How a refusal reads: 401/403/501, or a 404 that is not Frameline's own, will not pass on a retry. */
 export function refusalKind(status: number, code: string | undefined): FramelineFailure {
   if (status === 409 && code === 'partner_studio_not_set_up') return 'owner_first'
-  if (status === 409 && code === 'drive_not_connected') return 'drive_off'
+  if (status === 409 && (code === 'drive_not_connected' || code === 'drive_revoked')) return 'drive_off'
+  if (status === 402) return 'full'
   // Frameline's own "not found" carries its code; a bare 404 is the wrong address.
   if (status === 404) return code === 'not_found' ? 'missing' : 'misconfigured'
   if (status === 401 || status === 403 || status === 501 || code === 'not_configured') return 'misconfigured'
   return 'refused'
 }
 
-async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', path: string, body?: unknown, fetchImpl: FetchLike = fetch): Promise<FramelineResult<T>> {
+async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, fetchImpl: FetchLike = fetch): Promise<FramelineResult<T>> {
   if (!framelineConnected(env)) return { ok: false, kind: 'not_connected', status: 0 }
   if (nameMissing(p)) {
     console.error(`[frameline] ${method} ${path} not sent: the studio's name could not be read`)
@@ -211,10 +214,10 @@ async function call<T>(env: Env, p: FramelinePerson, method: 'GET' | 'POST', pat
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
     if (res.ok) return { ok: true, data: (await res.json()) as T }
-    const problem = (await res.json().catch(() => ({}))) as { code?: string }
+    const problem = (await res.json().catch(() => ({}))) as { code?: string; detail?: string }
     const kind = refusalKind(res.status, problem.code)
-    if (kind !== 'owner_first' && kind !== 'missing' && kind !== 'drive_off') console.error(`[frameline] ${method} ${path} ${kind} ${res.status} ${problem.code ?? ''}`)
-    return { ok: false, kind, status: res.status }
+    if (kind !== 'owner_first' && kind !== 'missing' && kind !== 'drive_off' && kind !== 'full') console.error(`[frameline] ${method} ${path} ${kind} ${res.status} ${problem.code ?? ''}`)
+    return { ok: false, kind, status: res.status, ...(typeof problem.detail === 'string' ? { detail: problem.detail.slice(0, 300) } : {}) }
   } catch (e) {
     console.error(`[frameline] ${method} ${path} unreachable`, e instanceof Error ? e.message : e)
     return { ok: false, kind: 'unreachable', status: 0 }
@@ -264,6 +267,85 @@ export function listFramelineGalleries(env: Env, p: FramelinePerson, fetchImpl?:
 export function readFramelineStudio(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<FramelineStudio>> {
   return call(env, p, 'GET', '/studio', undefined, fetchImpl)
 }
+
+/** Google Drive import on our Gallery tab (Frameline's /drive and /events/:p/drive-imports doors). */
+export interface FramelineDriveImport {
+  id: string
+  eventId: string
+  name: string
+  status: 'running' | 'done' | 'failed' | 'cancelled'
+  total: number
+  done: number
+  skipped: number
+  failed: number
+  albumsCreated: number
+  quality: 'web' | 'original'
+  createdAt: string
+  finishedAt?: string
+  error?: string
+}
+
+export interface FramelineDriveItem {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  folderPath?: string
+  importable: boolean
+  reason?: string
+}
+
+/** A short-lived token for the studio's Drive, and the keys Google's picker needs on our page. */
+export function readDrivePicker(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<{ accessToken: string; expiresAt: string; apiKey: string; appId?: string }>> {
+  return call(env, p, 'GET', '/drive/picker', undefined, fetchImpl)
+}
+
+/** What the picked files and folders hold. */
+export function expandDriveItems(
+  env: Env,
+  p: FramelinePerson,
+  ids: string[],
+  fetchImpl?: FetchLike,
+): Promise<FramelineResult<{ items: FramelineDriveItem[]; closedFolders: { id: string; name: string }[] }>> {
+  return call(env, p, 'POST', '/drive/expand', { ids }, fetchImpl)
+}
+
+/** Copies picked Drive files into the project's gallery; Frameline does it in the background. */
+export function startDriveImport(
+  env: Env,
+  p: FramelinePerson,
+  projectId: string,
+  input: { name: string; quality: 'web' | 'original'; items: { fileId: string; name: string; size: number; mimeType: string; albumName: string }[] },
+  fetchImpl?: FetchLike,
+): Promise<FramelineResult<FramelineDriveImport>> {
+  return call(env, p, 'POST', `/events/${encodeURIComponent(projectId)}/drive-imports`, { ...input, watermark: false }, fetchImpl)
+}
+
+/** The project gallery's Drive imports, newest first. */
+export function listDriveImports(env: Env, p: FramelinePerson, projectId: string, fetchImpl?: FetchLike): Promise<FramelineResult<{ items: FramelineDriveImport[] }>> {
+  return call(env, p, 'GET', `/events/${encodeURIComponent(projectId)}/drive-imports`, undefined, fetchImpl)
+}
+
+/** Stops an import: what came in stays. */
+export function stopDriveImport(env: Env, p: FramelinePerson, projectId: string, importId: string, fetchImpl?: FetchLike): Promise<FramelineResult<FramelineDriveImport>> {
+  return call(env, p, 'DELETE', `/events/${encodeURIComponent(projectId)}/drive-imports/${encodeURIComponent(importId)}`, undefined, fetchImpl)
+}
+
+/** Frameline's import in the contracts' shape. */
+export const driveImportOut = (i: FramelineDriveImport) => ({
+  id: i.id,
+  name: i.name,
+  status: i.status,
+  total: i.total,
+  done: i.done,
+  skipped: i.skipped,
+  failed: i.failed,
+  albums_created: i.albumsCreated,
+  quality: i.quality,
+  created_at: i.createdAt,
+  finished_at: i.finishedAt ?? null,
+  error: i.error ?? null,
+})
 
 /**
  * A gallery-changed notice from Frameline (POST /webhooks/frameline), checked:

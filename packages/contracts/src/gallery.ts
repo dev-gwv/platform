@@ -136,3 +136,83 @@ export const framelineAccount = z.object({
   drive: galleryDrive.nullable().default(null),
 })
 export type FramelineAccount = z.infer<typeof framelineAccount>
+
+/**
+ * Import from Google Drive on the Gallery tab: Google's own picker opens on
+ * this page with a token Frameline gives for the studio's connected Drive,
+ * and Frameline copies what was picked into the project's gallery. The Drive
+ * connection, the copy and the photo limits stay Frameline's.
+ */
+export const drivePicker = z.object({
+  access_token: z.string(),
+  expires_at: z.string(),
+  /** The Picker's browser key (it must allow this site's address). */
+  api_key: z.string(),
+  /** The Google Cloud project number; with it, picking a file lets Frameline read it. */
+  app_id: z.string().nullable(),
+})
+export type DrivePicker = z.infer<typeof drivePicker>
+
+const driveFileId = z.string().regex(/^[\w-]{10,200}$/)
+
+export const driveExpandRequest = z.object({ ids: z.array(driveFileId).min(1).max(500) })
+
+export const driveItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  mime_type: z.string(),
+  size: z.number(),
+  /** The picked folder it sits in ("Haldi/Candids"); null for a photo picked by itself. */
+  folder_path: z.string().nullable(),
+  importable: z.boolean(),
+  /** Why it is left out (a RAW file, a video, over 200 MB). */
+  reason: z.string().nullable(),
+})
+export type DriveItem = z.infer<typeof driveItem>
+
+/** What the picked files and folders hold. `closed_folders`: Google would not let Frameline look inside. */
+export const driveExpand = z.object({
+  items: z.array(driveItem),
+  closed_folders: z.array(z.object({ id: z.string(), name: z.string() })),
+})
+export type DriveExpand = z.infer<typeof driveExpand>
+
+export const driveQuality = z.enum(['web', 'original'])
+
+export const driveImportRequest = z.object({
+  name: z.string().trim().min(1).max(200),
+  /** web: Standard (counts 1 photo each in Frameline); original: full quality (counts 2). */
+  quality: driveQuality.default('web'),
+  items: z
+    .array(
+      z.object({
+        file_id: driveFileId,
+        name: z.string().trim().min(1).max(255),
+        size: z.number().int().min(0),
+        mime_type: z.string().max(200),
+        /** The album it goes into; one of that name is reused. */
+        album_name: z.string().trim().min(1).max(120),
+      }),
+    )
+    .min(1)
+    .max(5000),
+})
+export type DriveImportRequest = z.infer<typeof driveImportRequest>
+
+export const driveImport = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.enum(['running', 'done', 'failed', 'cancelled']),
+  total: z.number().int(),
+  done: z.number().int(),
+  skipped: z.number().int(),
+  failed: z.number().int(),
+  albums_created: z.number().int(),
+  quality: driveQuality,
+  created_at: z.string(),
+  finished_at: z.string().nullable(),
+  error: z.string().nullable(),
+})
+export type DriveImport = z.infer<typeof driveImport>
+export const driveImports = z.object({ items: z.array(driveImport) })
+export type DriveImports = z.infer<typeof driveImports>

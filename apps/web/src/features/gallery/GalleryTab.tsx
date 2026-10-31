@@ -16,15 +16,17 @@ import type { ProjectGallery } from '@ipc/contracts'
 import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
 import { clientWhatsapp, galleryDate, galleryFigures } from './gallery-text'
 import { GoogleDriveIcon } from './GoogleDriveIcon'
+import { DriveImportButton, DriveImportProgress } from './DriveImport'
 
 /**
  * The project's photo gallery, in Frameline (0261). Frameline is its own app
  * and add-on: the photos are uploaded there, and guests open them with the
  * PIN. Here the studio makes the gallery once, hands the guests' link and
  * PIN on, and presses Open gallery to upload -- signed in as themselves.
- * Google Drive lives in Frameline too: Import from Google Drive opens its
- * import window for this gallery, and Create gallery can keep the full-size
- * photos in the studio's Drive once it is connected (Settings → Gallery).
+ * Google Drive is connected in Frameline: Import from Google Drive opens
+ * Google's picker right here and Frameline copies the photos in (DriveImport),
+ * and Create gallery can keep the full-size photos in the studio's Drive once
+ * it is connected (Settings → Gallery).
  */
 export function GalleryTab({ projectId, projectName }: { projectId: string; projectName: string }) {
   const q = useProjectGallery(projectId)
@@ -100,6 +102,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
 
   return (
     <GalleryReady
+      projectId={projectId}
       projectName={projectName}
       gallery={gallery}
       live={live}
@@ -108,14 +111,13 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
       client={client}
       drive={drive}
       onOpen={() => open.mutate('gallery')}
-      opening={open.isPending && open.variables !== 'import'}
-      onImport={() => open.mutate('import')}
-      importing={open.isPending && open.variables === 'import'}
+      opening={open.isPending}
     />
   )
 }
 
 function GalleryReady({
+  projectId,
   projectName,
   gallery,
   live,
@@ -125,9 +127,8 @@ function GalleryReady({
   drive,
   onOpen,
   opening,
-  onImport,
-  importing,
 }: {
+  projectId: string
   projectName: string
   gallery: NonNullable<ProjectGallery['gallery']>
   live: ProjectGallery['live']
@@ -137,8 +138,6 @@ function GalleryReady({
   drive: ProjectGallery['drive']
   onOpen: () => void
   opening: boolean
-  onImport: () => void
-  importing: boolean
 }) {
   const svg = useMemo(() => qrSvg(gallery.gallery_url), [gallery.gallery_url])
   // What Frameline says now, else what it said last time.
@@ -175,16 +174,12 @@ function GalleryReady({
             )}
           </p>
           <div className="flex flex-wrap gap-2">
-            {/* Frameline's own Import window for this gallery: pick Drive folders, each becomes an album. */}
-            {drive?.import_available && (
-              <Button variant="outline" onClick={onImport} disabled={importing}>
-                <GoogleDriveIcon /> {importing ? 'Opening…' : 'Import from Google Drive'}
-              </Button>
-            )}
+            <DriveImportButton projectId={projectId} projectName={projectName} drive={drive} />
             <Button onClick={onOpen} disabled={opening} className={done ? undefined : 'ipc-nudge'}>
               <ExternalLink /> {opening ? 'Opening…' : done ? 'Open gallery' : 'Open gallery to upload'}
             </Button>
           </div>
+          <DriveImportProgress projectId={projectId} enabled={!!drive?.import_available} />
           {live?.originals_in === 'drive' && (
             <p className={cn('flex w-full items-center gap-1.5 text-xs', drive?.needs_reconnect ? 'text-warning' : 'text-muted-foreground')}>
               <GoogleDriveIcon className="size-3.5" />
