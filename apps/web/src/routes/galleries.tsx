@@ -1,3 +1,4 @@
+import { GalleryGuide } from '@/features/gallery/GalleryGuide'
 import { Link } from '@tanstack/react-router'
 import { Images, KeyRound } from 'lucide-react'
 import type { GalleryListItem } from '@ipc/contracts'
@@ -14,7 +15,7 @@ import { useGalleries } from '@/features/gallery/api'
 export function GalleriesPage() {
   return (
     <AuthedPage module="projects" studioWork="/dashboard">
-      <PageHeader title="Galleries" />
+      <PageHeader title="Galleries" actions={<GalleryGuide />} />
       <Galleries />
     </AuthedPage>
   )

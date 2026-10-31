@@ -38,7 +38,7 @@ const limitCell = (key: PlanLimitKey) => (p: Plan): Cell => {
 
 const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: 'yes' } : { kind: 'no' })
 
-/** Only the rows that differ between plans, at most ten. */
+/** Only the rows that differ between plans, at most eleven (the eleventh, Drive import, the owner's 31 Oct). */
 export const COMPARE: CompareRow[] = [
   { label: 'Projects', cell: limitCell('projects') },
   { label: 'Leads held at a time', cell: limitCell('leads') },
@@ -53,6 +53,8 @@ export const COMPARE: CompareRow[] = [
     label: 'Your own name, logo and WhatsApp number (white label)',
     cell: (p) => (p.includes?.includes('white_label') ? { kind: 'yes' } : { kind: 'no' }),
   },
+  // 0292: the Gallery tab's Import from Google Drive is Pro and above (owner, 31 Oct).
+  { label: 'Import photos from Google Drive', cell: (p) => (p.includes?.includes('drive_import') ? { kind: 'yes' } : { kind: 'no' }) },
   { label: 'Priority help', cell: tierIs('max') },
 ]
 

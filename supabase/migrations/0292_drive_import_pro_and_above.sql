@@ -5,9 +5,8 @@
 -- Pro and Studio Max, regular and Diamond, carry 'drive_import' in
 -- plans.includes, so Compare plans reads it from the rows. A studio not on a
 -- running plan (a trial, a platform admin's studio open for life, an old plan
--- with no tier) keeps it: only a running Starter plan is refused, and a
--- studio given the entitlement by hand (company_entitlements) has it on any
--- plan. Safe to run twice.
+-- with no tier) keeps it: only a running Starter plan is refused. Safe to
+-- run twice.
 update plans
    set includes = array_append(includes, 'drive_import')
  where tier in ('pro', 'max')

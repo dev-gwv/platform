@@ -11,7 +11,7 @@ import {
   projectGallery,
   type DriveImportRequest,
 } from '@ipc/contracts'
-import { callApi } from '@/shared/api/client'
+import { ApiError, callApi } from '@/shared/api/client'
 
 /** A project's gallery in Frameline, the gallery add-on (0261). */
 const key = (projectId: string) => ['projects', projectId, 'gallery'] as const
@@ -130,7 +130,10 @@ export function useStartDriveImport(projectId: string) {
     mutationFn: (body: DriveImportRequest) =>
       callApi(`/projects/${projectId}/gallery/drive/imports`, { method: 'POST', body, responseSchema: driveImport }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: importsKey(projectId) }),
-    onError: (e: Error) => toast.error(e.message),
+    // A plan with no room or no Drive import (402) is said once, with Upgrade, by main.tsx.
+    onError: (e: Error) => {
+      if (!(e instanceof ApiError && e.status === 402)) toast.error(e.message)
+    },
   })
 }
 

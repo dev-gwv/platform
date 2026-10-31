@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Folder, ImageIcon, Square } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { Folder, ImageIcon, Lock, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DriveExpand, ProjectGallery } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -8,6 +9,7 @@ import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { NewBadge } from '@/shared/ui/new-badge'
 import { Segmented } from '@/shared/ui/segmented'
 import { cn } from '@/shared/ui/cn'
 import { expandDrive, readDrivePicker, useDriveImports, useOpenFramelineHome, useStartDriveImport, useStopDriveImport } from './api'
@@ -24,8 +26,22 @@ type Quality = 'web' | 'original'
  * as they like) and presses Import; Frameline copies the photos into the
  * gallery in the background. Connecting Drive stays Frameline's: the owner's
  * press opens Frameline's Google Drive settings, anyone else is told to ask them.
+ * Pro and above only (owner, 31 Oct; 0292): on Starter the button stays, with
+ * a lock, and says so with Upgrade.
  */
-export function DriveImportButton({ projectId, projectName, drive }: { projectId: string; projectName: string; drive: ProjectGallery['drive'] }) {
+export function DriveImportButton({
+  projectId,
+  projectName,
+  drive,
+  allowed,
+}: {
+  projectId: string
+  projectName: string
+  drive: ProjectGallery['drive']
+  /** The studio's plan has it (Pro and above). */
+  allowed: boolean
+}) {
+  const navigate = useNavigate()
   const { session } = useAuth()
   const owner = !!session?.is_owner
   const connect = useOpenFramelineHome()
@@ -52,6 +68,12 @@ export function DriveImportButton({ projectId, projectName, drive }: { projectId
   }
 
   const press = () => {
+    if (!allowed) {
+      return void toast.error('Import from Google Drive comes with Pro and Studio Max.', {
+        action: { label: 'Upgrade', onClick: () => void navigate({ to: '/settings/subscription' }) },
+        duration: 10_000,
+      })
+    }
     if (ready) return void choose()
     if (!owner) return void toast.info('Ask the studio owner to connect Google Drive, in Settings → Gallery.')
     connect.mutate('drive', { onSuccess: () => toast.info('Connect Google Drive in the tab that opened, then come back and press Import from Google Drive.') })
@@ -61,7 +83,13 @@ export function DriveImportButton({ projectId, projectName, drive }: { projectId
     <>
       <Button variant="outline" onClick={press} disabled={busy || connect.isPending}>
         <GoogleDriveIcon />
-        {busy ? 'Opening Google Drive…' : ready || !owner ? 'Import from Google Drive' : drive.needs_reconnect ? 'Reconnect Google Drive' : 'Connect Google Drive'}
+        {busy ? 'Opening Google Drive…' : !allowed || ready || !owner ? 'Import from Google Drive' : drive.needs_reconnect ? 'Reconnect Google Drive' : 'Connect Google Drive'}
+        {!allowed && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 text-[10px] font-bold uppercase leading-4 text-muted-foreground">
+            <Lock className="size-2.5" aria-hidden /> Pro
+          </span>
+        )}
+        <NewBadge feature="galleryDrive" />
       </Button>
       {picked && (
         <ReviewDialog projectId={projectId} projectName={projectName} picked={picked} onPickAgain={() => void choose()} onClose={() => setPicked(null)} />

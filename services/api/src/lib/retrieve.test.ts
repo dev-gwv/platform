@@ -71,6 +71,13 @@ describe('the questions studios actually ask', () => {
     finds('share wedding photos with guests with a pin', 'kb:project-gallery')
   })
 
+  it('finds Import from Google Drive and what Frameline does (31 Oct)', () => {
+    finds('how do I import photos from google drive', 'kb:gallery-google-drive')
+    finds('gdrive se photos kaise import kare', 'kb:gallery-google-drive')
+    finds('can I add a watermark to the gallery', 'kb:gallery-frameline')
+    finds('what is frameline', 'kb:gallery-frameline')
+  })
+
   it('finds them for Hinglish too', () => {
     finds('client ka payment kaise record karu?', 'kb:money-payments')
     finds('editor ko kaam kaise assign karu?', 'kb:editing-give-work')

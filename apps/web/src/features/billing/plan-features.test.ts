@@ -12,7 +12,7 @@ const starter: Plan = {
   tier: 'starter',
   limits: { projects: 30, invoices: 30, leads: 30, team_logins: 3, team_members: 10, enquiry_forms: 2, facebook_pages: 1, brands: 1 },
 }
-const pro: Plan = { ...base, id: '00000000-0000-4000-8000-000000000002', key: 'pro_yearly', name: 'Pro', price: 29988, tier: 'pro', limits: { brands: 3 } }
+const pro: Plan = { ...base, id: '00000000-0000-4000-8000-000000000002', key: 'pro_yearly', name: 'Pro', price: 29988, tier: 'pro', limits: { brands: 3 }, includes: ['drive_import'] }
 const max: Plan = {
   ...base,
   id: '00000000-0000-4000-8000-000000000003',
@@ -21,7 +21,7 @@ const max: Plan = {
   price: 47988,
   tier: 'max',
   limits: {},
-  includes: ['white_label', 'whatsapp_api', 'sequences_auto'],
+  includes: ['white_label', 'whatsapp_api', 'sequences_auto', 'drive_import'],
 }
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`
 const text = (c: ReturnType<(typeof COMPARE)[number]['cell']>) => (c.kind === 'text' ? c.text : c.kind)
@@ -29,13 +29,13 @@ const text = (c: ReturnType<(typeof COMPARE)[number]['cell']>) => (c.kind === 't
 describe('the pricing page stays short', () => {
   it('shows every feature once as eight chips, and compares only what differs', () => {
     expect(INCLUDED).toHaveLength(8)
-    expect(COMPARE.length).toBeLessThanOrEqual(10)
+    expect(COMPARE.length).toBeLessThanOrEqual(11)
   })
 
   it('reads Starter numbers from the plan, and Unlimited on Pro and Studio Max', () => {
-    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '30 at a time', '30 a year', '3', '1', '10', '2', '1', 'no', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(4).fill('Unlimited'), '3', ...Array(3).fill('Unlimited'), 'no', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(8).fill('Unlimited'), 'yes', 'yes'])
+    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '30 at a time', '30 a year', '3', '1', '10', '2', '1', 'no', 'no', 'no'])
+    expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(4).fill('Unlimited'), '3', ...Array(3).fill('Unlimited'), 'no', 'yes', 'no'])
+    expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(8).fill('Unlimited'), 'yes', 'yes', 'yes'])
   })
 
   it('counts by the year on the monthly plans too, never "a month" (0267)', () => {

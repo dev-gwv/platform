@@ -63,6 +63,8 @@ export const projectGallery = z.object({
     .nullable(),
   /** Google Drive for the studio, as Frameline said just now; null when it could not be asked. */
   drive: galleryDrive.nullable().default(null),
+  /** The studio's plan has Import from Google Drive: Pro and above, never a running Starter plan (0292). */
+  drive_import: z.boolean().default(true),
   /**
    * Why `live` is null: Frameline did not answer (a blip, try again) or
    * refused us in a way only we can fix (the add-on is not linked properly).

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { cn } from '../ui/cn'
+import { NewBadge, type NewFeature } from '../ui/new-badge'
 
 interface SectionTab<T extends string> {
   value: T
@@ -8,6 +9,8 @@ interface SectionTab<T extends string> {
   icon?: ComponentType<{ className?: string }>
   /** A small amber count after the label (things waiting), 'chips' only. */
   count?: number
+  /** A gold "New" for the week after it was released, 'chips' only. */
+  fresh?: NewFeature
 }
 
 /**
@@ -65,6 +68,7 @@ export function SectionTabs<T extends string>({
               {t.count ? (
                 <span className="ml-0.5 rounded-full bg-warning px-1.5 text-[11px] font-bold leading-5 text-white">{t.count}</span>
               ) : null}
+              <NewBadge feature={t.fresh} />
             </button>
           )
         })}

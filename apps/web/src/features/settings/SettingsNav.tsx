@@ -24,6 +24,7 @@ import type { ModuleKey } from '@ipc/permissions'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
+import { NewBadge, type NewFeature } from '@/shared/ui/new-badge'
 
 interface SettingsItem {
   to: string
@@ -39,7 +40,7 @@ interface SettingsItem {
    * The first tab is this page. Each keeps its own address (and is listed in
    * `also` so the rail lights this line on it).
    */
-  tabs?: readonly { to: string; label: string; module: ModuleKey }[]
+  tabs?: readonly { to: string; label: string; module: ModuleKey; fresh?: NewFeature }[]
 }
 
 interface SettingsGroup {
@@ -163,7 +164,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           { to: '/settings/messaging', label: 'Messages', module: 'settings' },
           { to: '/settings/whatsapp', label: 'WhatsApp', module: 'settings' },
           // Frameline, the photo gallery add-on: plan, wallet, Open Frameline.
-          { to: '/settings/gallery', label: 'Gallery', module: 'settings' },
+          { to: '/settings/gallery', label: 'Gallery', module: 'settings', fresh: 'galleryDrive' },
         ],
       },
       {
@@ -220,6 +221,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const groups = useVisibleGroups()
+  const access = useAccess()
   const current = settingsItemFor(pathname)
   const count = groups.reduce((n, g) => n + g.items.length, 0)
   if (count < 2) return <>{children}</>
@@ -277,6 +279,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
                   {i.label}
+                  <NewBadge feature={i.tabs?.find((t) => t.fresh && access.hasModule(t.module))?.fresh} className="ml-auto" />
                 </Link>
               )
             })}
@@ -310,11 +313,12 @@ function SettingsTabs({ item }: { item: SettingsItem | null }) {
           to={t.to}
           aria-current={here === t.to ? 'page' : undefined}
           className={cn(
-            'whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+            'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
             here === t.to ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
           )}
         >
           {t.label}
+          <NewBadge feature={t.fresh} />
         </Link>
       ))}
     </nav>

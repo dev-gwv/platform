@@ -1,3 +1,4 @@
+import type { NewFeature } from '../ui/new-badge'
 import type { ModuleAction, ModuleKey } from '@ipc/permissions'
 
 export interface HubTab {
@@ -6,6 +7,8 @@ export interface HubTab {
   module: ModuleKey
   /** What the page's API asks beyond seeing the module; 'view' when left out. */
   action?: ModuleAction
+  /** A gold "New" for the week after it was released. */
+  fresh?: NewFeature
 }
 
 /** May this person open the tab? The same question the page's API asks. */
@@ -69,7 +72,7 @@ export const PROJECTS_HUB: readonly HubTab[] = [
   { to: '/project-tracking', label: 'Needs attention', module: 'projects' },
   // Every project's Frameline gallery in one list (0264). GET /galleries asks
   // projects edit, so a viewer would only meet a refusal there.
-  { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit' },
+  { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit', fresh: 'galleryDrive' },
 ]
 
 /**

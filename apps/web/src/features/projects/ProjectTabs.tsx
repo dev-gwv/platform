@@ -20,6 +20,7 @@ import { useEffect, useRef } from 'react'
 import type { ModuleAction, ModuleKey } from '@ipc/permissions'
 import { useAccess } from '@/shared/auth/useAccess'
 import { SectionTabs } from '@/shared/layout/section-tabs'
+import { NewBadge, type NewFeature } from '@/shared/ui/new-badge'
 import { cn } from '@/shared/ui/cn'
 
 /**
@@ -38,7 +39,7 @@ export const PROJECT_TABS = [
   { value: 'tasks', label: 'Task Management', icon: CheckSquare },
   // The photo gallery in Frameline, the gallery add-on (0261): the guests'
   // link, the PIN, and Open gallery to upload.
-  { value: 'gallery', label: 'Gallery', icon: Images },
+  { value: 'gallery', label: 'Gallery', icon: Images, fresh: 'galleryDrive' },
   { value: 'terms', label: 'Terms', icon: FileSignature },
   { value: 'billing', label: 'Billing', icon: Wallet },
   { value: 'expenses', label: 'Expenses', icon: Receipt },
@@ -74,6 +75,15 @@ export const PROJECT_GROUPS = [
   { value: 'wishes', label: 'Wishes', icon: Cake, views: ['wishes', 'referrals'] },
 ] as const satisfies ReadonlyArray<{ value: string; label: string; icon: LucideIcon; views: readonly ProjectTab[] }>
 type ProjectGroup = (typeof PROJECT_GROUPS)[number]['value']
+
+/** The "New" a group carries while one of its views this person sees is new. */
+function freshIn(views: readonly ProjectTab[], visible: ProjectTab[]): NewFeature | undefined {
+  for (const v of views) {
+    const t = PROJECT_TABS.find((x) => x.value === v)
+    if (t && 'fresh' in t && visible.includes(v)) return t.fresh
+  }
+  return undefined
+}
 
 /** The group a view sits under. */
 export function groupOf(view: ProjectTab): ProjectGroup {
@@ -152,6 +162,7 @@ export function ProjectTabStrip({
         >
           <g.icon className="size-4" aria-hidden />
           {g.label}
+          <NewBadge feature={freshIn(g.views, visible)} />
         </button>
       ))}
     </div>
@@ -180,7 +191,7 @@ export function ProjectSubTabs({
   if (views.length < 2) return null
   const tabs = views.map((v) => {
     const t = PROJECT_TABS.find((x) => x.value === v)!
-    return { value: v, label: t.label, icon: t.icon, ...(counts?.[v] ? { count: counts[v] } : {}) }
+    return { value: v, label: t.label, icon: t.icon, ...(counts?.[v] ? { count: counts[v] } : {}), ...('fresh' in t ? { fresh: t.fresh } : {}) }
   })
   return <SectionTabs variant="chips" tabs={tabs} value={active} onChange={onSelect} label="Sections" {...(className ? { className } : {})} />
 }

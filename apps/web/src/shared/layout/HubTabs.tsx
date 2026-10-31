@@ -1,6 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { useAccess } from '../auth/useAccess'
 import { cn } from '../ui/cn'
+import { NewBadge } from '../ui/new-badge'
 import { hubFor, tabAllowed, type HubCan } from './hubs'
 
 /**
@@ -29,13 +30,14 @@ export function HubTabs() {
           to={t.to}
           aria-current={here === t.to ? 'page' : undefined}
           className={cn(
-            'whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+            'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
             here === t.to
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground',
           )}
         >
           {t.label}
+          <NewBadge feature={t.fresh} />
         </Link>
       ))}
     </nav>

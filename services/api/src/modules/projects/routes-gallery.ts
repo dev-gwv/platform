@@ -96,6 +96,18 @@ export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
   return { auth, companyName: facts?.companyName ?? '', emailVerified: facts?.emailVerified ?? false }
 }
 
+/** Import from Google Drive is for Pro and above (owner, 31 Oct; 0292). */
+export const DRIVE_IMPORT_PLAN = 'Import from Google Drive comes with Pro and Studio Max. Upgrade on Plan & billing to use it.'
+
+/** Whether the studio's plan has Drive import; null when it could not be read. */
+export const hasDriveImport = (c: Context<AppEnv>) =>
+  attempt(c, 'gallery.drive_plan', () =>
+    withService(c.env, async (sql) => {
+      const [r] = await sql<{ ok: boolean }[]>`select company_drive_import(${c.get('auth').companyId}) as ok`
+      return r?.ok === true
+    }),
+  )
+
 /** The kept gallery, or `{ row: null }` before there is one; null itself means the read failed. */
 const readRow = (c: Context<AppEnv>, projectId: string) =>
   attempt(c, 'gallery.read', () =>
@@ -185,6 +197,8 @@ export const projectGalleryRoutes = new Hono<AppEnv>()
         plan_ended_on: planEnded,
         client: read.client,
         drive,
+        // A read that fails shows the button; the import itself checks again.
+        drive_import: drive?.import_available ? ((await hasDriveImport(c)) ?? true) : true,
       }),
     )
   })

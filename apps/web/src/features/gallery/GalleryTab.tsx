@@ -17,6 +17,7 @@ import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
 import { clientWhatsapp, galleryDate, galleryFigures } from './gallery-text'
 import { GoogleDriveIcon } from './GoogleDriveIcon'
 import { DriveImportButton, DriveImportProgress } from './DriveImport'
+import { GalleryGuide } from './GalleryGuide'
 
 /**
  * The project's photo gallery, in Frameline (0261). Frameline is its own app
@@ -44,7 +45,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
     )
   }
 
-  const { connected, gallery, live, client, trouble, plan_ended_on: planEnded, drive } = q.data
+  const { connected, gallery, live, client, trouble, plan_ended_on: planEnded, drive, drive_import: driveImport } = q.data
 
   if (!connected) {
     return (
@@ -67,9 +68,12 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
     return (
       <Card className="mt-4 border-warning/50">
         <CardContent className="flex flex-col items-start gap-3 p-5">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <Images className="size-4 text-tone-violet" aria-hidden /> Photo gallery
-          </p>
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Images className="size-4 text-tone-violet" aria-hidden /> Photo gallery
+            </p>
+            <GalleryGuide />
+          </div>
           <p className="text-sm text-muted-foreground">
             One link for {projectName}: guests open it, type the PIN, and see and download the photos.
           </p>
@@ -110,6 +114,7 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
       planEnded={planEnded}
       client={client}
       drive={drive}
+      driveImport={driveImport}
       onOpen={() => open.mutate('gallery')}
       opening={open.isPending}
     />
@@ -125,6 +130,7 @@ function GalleryReady({
   planEnded,
   client,
   drive,
+  driveImport,
   onOpen,
   opening,
 }: {
@@ -136,6 +142,7 @@ function GalleryReady({
   planEnded: string | null
   client: ProjectGallery['client']
   drive: ProjectGallery['drive']
+  driveImport: boolean
   onOpen: () => void
   opening: boolean
 }) {
@@ -174,7 +181,8 @@ function GalleryReady({
             )}
           </p>
           <div className="flex flex-wrap gap-2">
-            <DriveImportButton projectId={projectId} projectName={projectName} drive={drive} />
+            <GalleryGuide />
+            <DriveImportButton projectId={projectId} projectName={projectName} drive={drive} allowed={driveImport} />
             <Button onClick={onOpen} disabled={opening} className={done ? undefined : 'ipc-nudge'}>
               <ExternalLink /> {opening ? 'Opening…' : done ? 'Open gallery' : 'Open gallery to upload'}
             </Button>

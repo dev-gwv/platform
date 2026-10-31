@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { driveExpand, driveExpandRequest, driveImport, driveImportRequest, driveImports, drivePicker } from '@ipc/contracts'
+import type { Context } from 'hono'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
@@ -17,7 +18,7 @@ import {
   stopDriveImport,
   type FramelineResult,
 } from '../../lib/frameline'
-import { personOf } from './routes-gallery'
+import { DRIVE_IMPORT_PLAN, hasDriveImport, personOf } from './routes-gallery'
 
 /**
  * Import from Google Drive on the project's Gallery tab. Google's own picker
@@ -37,6 +38,12 @@ export function driveFailure(r: Extract<FramelineResult<unknown>, { ok: false }>
   return { status: 503, message: FRAMELINE_SAYS.no_answer }
 }
 
+async function requirePlan(c: Context<AppEnv>) {
+  const ok = await hasDriveImport(c)
+  if (ok === null) fail(503, 'We could not check your plan just now. Please try again.')
+  if (!ok) fail(402, DRIVE_IMPORT_PLAN)
+}
+
 function refused(r: Extract<FramelineResult<unknown>, { ok: false }>): never {
   const why = driveFailure(r)
   fail(why.status, why.message)
@@ -47,6 +54,7 @@ export const projectGalleryDriveRoutes = new Hono<AppEnv>()
   .get('/:id/gallery/drive/picker', requireAction('projects', 'edit'), async (c) => {
     uuidParam(c)
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
+    await requirePlan(c)
     const r = await readDrivePicker(c.env, await personOf(c))
     if (!r.ok) refused(r)
     c.header('Cache-Control', 'no-store')
@@ -59,6 +67,7 @@ export const projectGalleryDriveRoutes = new Hono<AppEnv>()
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
     const asked = driveExpandRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!asked.success) fail(400, 'We could not read what was picked.')
+    await requirePlan(c)
     const r = await expandDriveItems(c.env, await personOf(c), asked.data.ids)
     if (!r.ok) refused(r)
     return c.json(
@@ -92,6 +101,7 @@ export const projectGalleryDriveRoutes = new Hono<AppEnv>()
     if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
     const asked = driveImportRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!asked.success) fail(400, 'We could not read what to import.')
+    await requirePlan(c)
     const r = await startDriveImport(c.env, await personOf(c), projectId, {
       name: asked.data.name,
       quality: asked.data.quality,

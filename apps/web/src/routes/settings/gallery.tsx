@@ -1,3 +1,5 @@
+import { GalleryGuide } from '@/features/gallery/GalleryGuide'
+import { NewBadge } from '@/shared/ui/new-badge'
 import { Link } from '@tanstack/react-router'
 import { ExternalLink, Images, Lock } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -54,9 +56,12 @@ function OwnerView() {
   const a = q.data
 
   const heading = (
-    <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-      <Images className="size-5 text-tone-violet" aria-hidden /> Photo gallery (Frameline)
-    </h2>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+        <Images className="size-5 text-tone-violet" aria-hidden /> Photo gallery (Frameline)
+      </h2>
+      <GalleryGuide />
+    </div>
   )
 
   if (!a.connected) {
@@ -139,7 +144,7 @@ function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: ()
     <Card className={drive.connected ? 'border-success/40' : drive.needs_reconnect ? 'border-warning/50' : undefined}>
       <CardContent className="flex flex-col gap-3 p-4">
         <p className="flex items-center gap-2 text-sm font-semibold">
-          <GoogleDriveIcon /> Google Drive
+          <GoogleDriveIcon /> Google Drive <NewBadge feature="galleryDrive" />
         </p>
         {drive.connected ? (
           <p className="text-sm">
@@ -149,7 +154,7 @@ function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: ()
         ) : drive.needs_reconnect ? (
           <p className="text-sm text-warning">Google no longer lets Frameline into {drive.email ?? 'your Drive'}. Connect it again so imports and Drive photos work.</p>
         ) : (
-          <p className="text-sm text-muted-foreground">Import shoots from your Drive, and keep full-size photos there. Frameline sees only the files you pick.</p>
+          <p className="text-sm text-muted-foreground">Import shoots from your Drive on each project’s Gallery tab, and keep full-size photos there. Frameline sees only the files you pick.</p>
         )}
         <div>
           <Button onClick={onOpen} disabled={opening} variant={drive.connected ? 'outline' : 'default'} className={drive.needs_reconnect ? 'ipc-nudge' : undefined}>
