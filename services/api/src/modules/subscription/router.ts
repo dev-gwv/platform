@@ -216,7 +216,7 @@ export const subscriptionRouter = new Hono<AppEnv>()
     // 0210: open access that ends within a couple of months is the 30-day
     // trial; the long grants a platform admin gives by hand stay
     // "grandfathered".
-    const source = planSource(gate, orders)
+    const source = planSource(gate, orders, str(comp['plan_name']))
     return c.json(subscriptionStatus.parse({
       plan_key: str(comp['plan_key']),
       plan_name: str(comp['plan_name']),

@@ -23,10 +23,13 @@ const isPaid = (o: PlanOrder): boolean => {
  * so they answer the question directly. Otherwise an account that is open
  * and has never had a successful payment is on its trial.
  */
-export function planSource(gate: PlanGate, orders: readonly PlanOrder[]): PlanSource {
+export function planSource(gate: PlanGate, orders: readonly PlanOrder[], planName?: string | null): PlanSource {
   if (gate === 'grandfathered') return 'grandfathered'
   if (gate === 'grace') return 'grace'
   if (orders.some(isPaid)) return 'paid'
+  // A plan from the catalogue given in Studio Access Manager: buying is a
+  // WhatsApp conversation (0256), so most plans have no online order at all.
+  if (gate === 'active' && planName) return 'paid'
   return gate === 'active' ? 'trial' : 'none'
 }
 

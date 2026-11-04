@@ -14,6 +14,14 @@ describe('planSource', () => {
     expect(planSource('active', [{ status: 'COMPLETED' }])).toBe('paid')
   })
 
+  it('calls a plan given by hand paid, never a trial', () => {
+    // Plans are sold on WhatsApp and given in Studio Access Manager, so there
+    // is no order; Diamond Pro read "Free trial · 30 days" (4 Nov).
+    expect(planSource('active', [], 'Diamond Pro')).toBe('paid')
+    expect(planSource('active', [], null)).toBe('trial')
+    expect(planSource('grandfathered', [], 'Diamond Pro')).toBe('grandfathered')
+  })
+
   it('names the reason the doors are open when it is not a purchase', () => {
     expect(planSource('grandfathered', [{ status: 'paid' }])).toBe('grandfathered')
     expect(planSource('grace', [{ status: 'paid' }])).toBe('grace')
