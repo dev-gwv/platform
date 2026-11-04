@@ -652,6 +652,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/galleries/account')
     return { connected: true, reachable: true, trouble: null, linked: true, studio_name: 'Asha Studio', plan: 'starter', valid_till: '2027-03-03T00:00:00Z', wallet_rupees: 1250, photos_used: 344, photos_limit: 50000, galleries: 3 }
   if (method === 'POST' && path === '/galleries/account/open') return { url: 'https://frameline-admin.pages.dev/' }
+  if (method === 'POST' && path === '/galleries/app/open') return { url: 'about:blank' }
   if (method === 'GET' && path.startsWith('/projects/')) return projectDetail
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')

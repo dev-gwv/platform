@@ -46,6 +46,7 @@ const ProjectEditPage = lazyRouteComponent(() => import('@/routes/projects/$id.e
 const ProjectQuotationPage = lazyRouteComponent(() => import('@/routes/projects/$id.quotation'), 'ProjectQuotationPage')
 const ProjectTrackingPage = lazyRouteComponent(() => import('@/routes/project-tracking'), 'ProjectTrackingPage')
 const GalleriesPage = lazyRouteComponent(() => import('@/routes/galleries'), 'GalleriesPage')
+const GalleryAppPage = lazyRouteComponent(() => import('@/routes/gallery-app'), 'GalleryAppPage')
 const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
 const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
 const ProductionBoardPage = lazyRouteComponent(() => import('@/routes/production-board'), 'ProductionBoardPage')
@@ -277,6 +278,7 @@ const routeTree = rootRoute.addChildren([
   route('/projects/$id/quotation', ProjectQuotationPage),
   route('/project-tracking', ProjectTrackingPage),
   route('/galleries', GalleriesPage),
+  route('/galleries/app', GalleryAppPage),
   route('/project-documents', ProjectDocumentsPage),
   route('/team/work-preview', TeamWorkPreviewPage),
   route('/team/performance', TeamPerformancePage),

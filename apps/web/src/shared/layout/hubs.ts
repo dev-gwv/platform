@@ -73,6 +73,8 @@ export const PROJECTS_HUB: readonly HubTab[] = [
   // Every project's Frameline gallery in one list (0264). GET /galleries asks
   // projects edit, so a viewer would only meet a refusal there.
   { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit', fresh: 'galleryDrive' },
+  // Frameline's own studio app inside the dashboard (signed in by POST /galleries/app/open, projects edit).
+  { to: '/galleries/app', label: 'Gallery app', module: 'projects', action: 'edit', fresh: 'galleryApp' },
 ]
 
 /**

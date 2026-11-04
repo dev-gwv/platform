@@ -9,6 +9,8 @@ import { todayInIndia } from './days-left'
 export const NEW_UNTIL = {
   /** Import from Google Drive on the Gallery tab, and the Frameline gallery around it (31 Oct). */
   galleryDrive: '2026-11-07',
+  /** Frameline's studio app inside the dashboard, Projects → Gallery app (4 Nov). */
+  galleryApp: '2026-11-11',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

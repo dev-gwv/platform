@@ -87,6 +87,17 @@ export const createGalleryRequest = z.object({ originals_in: originalsIn.optiona
 export const openGalleryRequest = z.object({ to: z.enum(['gallery', 'import']).default('gallery') })
 /** Open Frameline (owner): its home, or its Google Drive settings to connect or manage Drive. */
 export const openFramelineRequest = z.object({ to: z.enum(['home', 'drive']).default('home') })
+/**
+ * Projects → Gallery app (Frameline inside the dashboard): a sign-in link for the frame, at a Frameline page
+ * (`path`, an app path such as `/events/ev_1`; Frameline checks it again and falls back to its events list).
+ */
+export const openGalleryAppRequest = z.object({
+  path: z
+    .string()
+    .max(200)
+    .regex(/^\/(?!\/)[^\\\s]*$/)
+    .optional(),
+})
 
 /** Projects → Galleries: every project with a gallery. */
 export const galleryListItem = z.object({

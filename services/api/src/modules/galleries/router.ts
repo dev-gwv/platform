@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { framelineAccount, galleryList, galleryOpenLink, openFramelineRequest } from '@ipc/contracts'
+import { framelineAccount, galleryList, galleryOpenLink, openFramelineRequest, openGalleryAppRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction, requireOwner } from '../../middleware/permissions'
@@ -107,4 +107,20 @@ export const galleriesRouter = new Hono<AppEnv>()
     // The owner's first sign-in makes their Frameline studio: never as "Studio".
     if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
     return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, person, asked.data.to === 'drive' ? '/settings/drive' : '/') }))
+  })
+
+  /**
+   * Projects → Gallery app: Frameline's studio app shown inside the dashboard.
+   * A fresh sign-in link (a minute, once) each time the frame loads, and for a
+   * page Frameline asks to open in its own tab (Google's Drive steps won't run
+   * in a frame). Anyone who may open a project's gallery may open this; until
+   * the owner has set the Frameline studio up, Frameline says so in the frame.
+   */
+  .post('/app/open', requireAction('projects', 'edit'), async (c) => {
+    if (!framelineConnected(c.env)) fail(503, FRAMELINE_SAYS.not_connected)
+    const asked = openGalleryAppRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!asked.success) fail(400, 'We could not open the gallery.')
+    const person = await personOf(c)
+    if (nameMissing(person)) fail(503, FRAMELINE_SAYS.no_name)
+    return c.json(galleryOpenLink.parse({ url: await framelineSignInUrl(c.env, person, asked.data.path ?? '/') }))
   })

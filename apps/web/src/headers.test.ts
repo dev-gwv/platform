@@ -26,3 +26,11 @@ describe('live site headers', () => {
     expect(csp).toMatch(/img-src [^;]*blob:/)
   })
 })
+
+describe('the Gallery app page', () => {
+  it('may frame Frameline: its sign-in link and the studio app it lands in', () => {
+    const csp = line('Content-Security-Policy')
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/frameline-api\.dev-d9b\.workers\.dev/)
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/frameline-admin\.pages\.dev/)
+  })
+})

@@ -146,3 +146,10 @@ export function useStopDriveImport(projectId: string) {
     onError: (e: Error) => toast.error(e.message),
   })
 }
+
+/**
+ * Projects → Gallery app: a fresh Frameline sign-in link for the frame (a
+ * minute, once), at `path` inside Frameline or its home.
+ */
+export const galleryAppLink = (path?: string) =>
+  callApi('/galleries/app/open', { method: 'POST', body: path ? { path } : {}, responseSchema: galleryOpenLink }).then((r) => r.url)
