@@ -380,7 +380,7 @@ function NewProject() {
           actually deciding against is the one on the quotation. */}
       {/* Edge to edge of <main>'s padding and no further, so the bar never
           pushes the page into a sideways scroll. */}
-      <div className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card md:-mx-4 md:-mb-4">
+      <div data-sticky-actions className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card md:-mx-4 md:-mb-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-3 md:px-4">
           <Money label="Package" value={totals.packageCost} />
           <Money label="Add-ons" value={totals.addOns} />

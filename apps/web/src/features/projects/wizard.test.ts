@@ -83,6 +83,13 @@ describe('stepErrors', () => {
 
   it('catches half-filled rows in each section', () => {
     expect(stepErrors(named({ shoots: [newShoot()] })).shoots).toBe('Every shoot needs a name.')
+    // Owner, 5 Nov: a function with nobody planned for it cannot go on.
+    expect(stepErrors(named({ shoots: [{ ...newShoot(), name: 'Haldi' }] })).shoots).toBe(
+      'Add requirements to Haldi: who will shoot it?',
+    )
+    expect(
+      stepErrors(named({ shoots: [{ ...newShoot(), name: 'Haldi', requirements: [{ name: 'Candid', quantity: '1' }] }] })).shoots,
+    ).toBeUndefined()
     expect(stepErrors(named({ deliverables: [newDeliverable()] })).deliverables).toBe(
       'Every deliverable needs a title.',
     )

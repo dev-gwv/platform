@@ -852,3 +852,12 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* A sticky Save / Next bar keeps a lane free on its right for the help
+   bubble, wherever the bar sits on screen (owner, 5 Nov: the bubble sat on the
+   wizard's Next and merged into it). */
+@media (min-width: 768px) {
+  [data-sticky-actions] {
+    padding-right: 5.5rem !important;
+  }
+}

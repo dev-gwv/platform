@@ -40,6 +40,8 @@ export function useCreateGallery(projectId: string) {
       // The made gallery comes back without the studio's Drive state: read the tab again so
       // Import from Google Drive and the Drive line show straight away, not after a reload.
       void qc.invalidateQueries({ queryKey: key(projectId) })
+      // The studio's first gallery takes the "New" off the gallery places.
+      void qc.invalidateQueries({ queryKey: ['galleries'], exact: true })
       toast.success('Gallery ready. Open it to upload the photos.')
     },
     onError: (e: Error) => toast.error(e.message),

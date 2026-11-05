@@ -54,7 +54,7 @@ export const COMPARE: CompareRow[] = [
     cell: (p) => (p.includes?.includes('white_label') ? { kind: 'yes' } : { kind: 'no' }),
   },
   // 0292: the Gallery tab's Import from Google Drive is Pro and above (owner, 31 Oct).
-  { label: 'Import photos from Google Drive', cell: (p) => (p.includes?.includes('drive_import') ? { kind: 'yes' } : { kind: 'no' }) },
+  { label: 'Photo Sharing App via Google Drive', cell: (p) => (p.includes?.includes('drive_import') ? { kind: 'yes' } : { kind: 'no' }) },
   { label: 'Priority help', cell: tierIs('max') },
 ]
 

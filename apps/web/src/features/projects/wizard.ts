@@ -356,6 +356,11 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
   }
 
   if (draft.shoots.some((s) => !s.name.trim())) errors.shoots = 'Every shoot needs a name.'
+  else {
+    // Owner, 5 Nov: a function with nobody planned for it cannot happen.
+    const bare = draft.shoots.find((s) => !s.requirements.some((r) => r.name.trim()))
+    if (bare) errors.shoots = `Add requirements to ${bare.name.trim()}: who will shoot it?`
+  }
 
   if (draft.deliverables.some((d) => !d.title.trim())) {
     errors.deliverables = 'Every deliverable needs a title.'

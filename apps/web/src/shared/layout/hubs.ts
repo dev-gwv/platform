@@ -77,6 +77,9 @@ export const PROJECTS_HUB: readonly HubTab[] = [
   { to: '/galleries/app', label: 'Gallery app', module: 'projects', action: 'edit', fresh: 'galleryApp' },
 ]
 
+/** The Gallery line under Post-Production (owner, 5 Nov): the galleries list and Frameline's app. */
+export const GALLERY_HUB: readonly HubTab[] = PROJECTS_HUB.filter((t) => t.to.startsWith('/galleries'))
+
 /**
  * The studio's money under one menu line. Payments comes first: it is the one
  * "what is due" page; Invoices is the list of documents.

@@ -1676,7 +1676,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Every feature, no limits', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Photo Sharing App via Google Drive', 'Your own name, logo and WhatsApp number (white label)'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Photo Sharing App via Google Drive', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
     },
     {
       id: uid(0xa01 + i * 2 + (member ? 0x10 : 0)),
@@ -1690,7 +1690,7 @@ function tierPlansFx(list: 'regular' | 'member') {
       tier: r.tier,
       limits: r.limits,
       includes: r.tier === 'max' ? ['white_label'] : [],
-      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Your own name, logo and WhatsApp number (white label)', 'Priority help'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Every feature, no limits', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
+      features: r.tier === 'max' ? ['Everything unlimited, as many brands as you like', 'Photo Sharing App via Google Drive', 'Your own name, logo and WhatsApp number (white label)'] : r.tier === 'pro' ? ['Unlimited projects, leads and team', 'Photo Sharing App via Google Drive', 'Up to 3 brands on one login'] : ['30 projects a year', '3 team logins'],
     },
   ])
 }

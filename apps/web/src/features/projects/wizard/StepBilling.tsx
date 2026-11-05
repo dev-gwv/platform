@@ -1,6 +1,10 @@
-import { Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { Bookmark, Check, Wallet } from 'lucide-react'
 import { cn } from '@/shared/ui/cn'
+import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
+import { useAccess } from '@/shared/auth/useAccess'
+import { useInvoiceItems, useSaveInvoiceItem } from '@/features/billing/api'
 import { useINR } from '@/shared/money/MoneyMask'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
 import {
@@ -28,14 +32,17 @@ export function BillingStep({
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Package cost (₹)" hint="The headline price, before any chargeable extras.">
-          <Input
-            inputMode="numeric"
-            value={draft.package_cost}
-            onChange={(e) => patch({ package_cost: e.target.value })}
-            placeholder="150000"
-          />
-        </Field>
+        <div className="flex flex-col gap-2">
+          <Field label="Package cost (₹)" hint="The headline price, before any chargeable extras.">
+            <Input
+              inputMode="numeric"
+              value={draft.package_cost}
+              onChange={(e) => patch({ package_cost: e.target.value })}
+              placeholder="150000"
+            />
+          </Field>
+          <SavedPackages draft={draft} patch={patch} />
+        </div>
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Chargeable deliverables</span>
@@ -112,5 +119,81 @@ export function BillingStep({
         })()}
       </div>
     </div>
+  )
+}
+
+/**
+ * The studio's prices, one tap each, and "save this one for next time" under a
+ * price typed by hand (owner, 5 Nov: "make the typing as little as possible").
+ * They are the invoice's saved items, so a package saved here is also there
+ * when the invoice is made.
+ */
+function SavedPackages({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
+  const inr = useINR()
+  const access = useAccess()
+  const items = useInvoiceItems()
+  const save = useSaveInvoiceItem()
+  const [name, setName] = useState('')
+  const [dismissed, setDismissed] = useState<number | null>(null)
+  if (!access.hasModule('billing')) return null
+
+  const price = money(draft.package_cost)
+  const saved = (items.data ?? []).filter((i) => Number(i.rate) > 0)
+  const known = saved.some((i) => Number(i.rate) === price)
+  const canSave = access.hasAction('billing', 'create')
+  const offer = canSave && price > 0 && !known && dismissed !== price
+  const suggested = `${draft.name.trim() || 'Wedding'} package`
+
+  return (
+    <>
+      {saved.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Your packages:</span>
+          {saved.slice(0, 8).map((i) => {
+            const on = Number(i.rate) === price
+            return (
+              <button
+                key={i.id}
+                type="button"
+                onClick={() => patch({ package_cost: String(Number(i.rate)) })}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                  on ? 'border-success/50 bg-success/15 text-success' : 'border-border bg-card hover:border-primary',
+                )}
+              >
+                {on && <Check className="size-3" aria-hidden />}
+                {i.name} · {inr(Number(i.rate))}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {offer && (
+        <form
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-tone-amber/60 bg-tone-amber-soft p-2.5"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const n = (name.trim() || suggested).slice(0, 200)
+            save.mutate({ body: { name: n, rate: price, gst_rate: 0, kind: 'service' } }, { onSuccess: () => setName('') })
+          }}
+        >
+          <Bookmark className="size-4 shrink-0 text-tone-amber" aria-hidden />
+          <span className="text-sm font-medium">Save {inr(price)} as a package for next time?</span>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={suggested}
+            aria-label="Package name"
+            className="h-8 min-w-[10rem] flex-1 bg-card"
+          />
+          <Button type="submit" size="sm" disabled={save.isPending}>
+            {save.isPending ? 'Saving…' : 'Save package'}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setDismissed(price)}>
+            Not now
+          </Button>
+        </form>
+      )}
+    </>
   )
 }
