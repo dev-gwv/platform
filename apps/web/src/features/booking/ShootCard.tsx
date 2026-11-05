@@ -16,7 +16,9 @@ import { EventTile } from '@/shared/ui/icon-tile'
 const FILL_TONE: Record<Fill, { card: string; pill: string }> = {
   full: { card: 'border-tone-green/30 bg-tone-green-soft/50', pill: 'bg-tone-green-soft text-tone-green' },
   partial: { card: 'border-tone-amber/40 bg-tone-amber-soft/60', pill: 'bg-tone-amber-soft text-tone-amber' },
-  empty: { card: 'border-tone-rose/40 bg-tone-rose-soft/60', pill: 'bg-tone-rose-soft text-tone-rose' },
+  // An empty seat is the next thing to do, so amber; red is kept for a real
+  // problem (audit, 5 Nov: the Assign button was red).
+  empty: { card: 'border-tone-amber/40 bg-tone-amber-soft/50', pill: 'bg-tone-amber-soft text-tone-amber' },
 }
 
 const COST_TONE = { not_decided: 'text-muted-foreground', tentative: 'text-tone-amber', final: 'text-tone-green' } as const
@@ -206,7 +208,7 @@ function RoleCardView({
         </span>
       </div>
       {card.people.length === 0 ? (
-        <p className="mt-1.5 text-sm text-tone-rose">Not assigned yet</p>
+        <p className="mt-1.5 text-sm text-tone-amber">Not assigned yet</p>
       ) : (
         <ul className="mt-2 flex flex-col gap-1.5">
           {card.people.map((s) => (
@@ -222,8 +224,8 @@ function RoleCardView({
       {canPlan && (
         <Button
           size="sm"
-          variant={card.fill === 'empty' ? 'destructive' : card.fill === 'partial' ? 'default' : 'outline'}
-          className="mt-3 w-full"
+          variant={card.fill === 'full' ? 'outline' : 'default'}
+          className={cn('mt-3 w-full', card.fill === 'empty' && 'bg-tone-amber text-white hover:bg-tone-amber/90')}
           onClick={onAssign}
         >
           <UserPlus /> {card.fill === 'full' ? 'Manage' : card.fill === 'partial' ? 'Assign remaining' : 'Assign'}

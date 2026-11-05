@@ -32,9 +32,22 @@ export const crmConvertRoutes = new Hono<AppEnv>()
       'crm.convert',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
+          // A number typed in Book it is the lead's number too: the database
+          // books only a lead that has one (audit, 5 Nov: the dialog had no
+          // phone box and refused at the end).
+          const phone = v.client?.phone?.trim()
+          if (!v.client_id && phone) {
+            await sql`update crm_leads set phone = ${phone} where id = ${leadId} and (phone is null or btrim(phone) = '')`
+          }
+          // The lead's city goes with it to the new client.
+          let client: NonNullable<typeof v.client> = { ...(v.client ?? {}) }
+          if (!v.client_id && !client.city) {
+            const [lead] = await sql<{ city: string | null }[]>`select city from crm_leads where id = ${leadId}`
+            if (lead?.city?.trim()) client = { ...client, city: lead.city.trim() }
+          }
           const rows = await sql<{ client_id: string; project_id: string | null }[]>`
             select * from convert_lead_to_project(
-              ${leadId}, ${v.client_id ?? null}, ${sql.json(v.client ?? {})}, ${v.project ? sql.json(v.project) : null}, ${v.quote_id ?? null})`
+              ${leadId}, ${v.client_id ?? null}, ${sql.json(client)}, ${v.project ? sql.json(v.project) : null}, ${v.quote_id ?? null})`
           const made = rows[0] ?? null
           // Each function the couple asked for becomes a shoot on the new
           // project -- Haldi, Wedding, Reception arrive already planned. Not

@@ -68,6 +68,8 @@ export const wishesRouter = new Hono<AppEnv>()
                occasion_next(o.month, o.day, ${today}::date)::text as on
           from client_occasions o join clients cl on cl.id = o.client_id
          where o.wish and occasion_next(o.month, o.day, ${today}::date) <= ${today}::date + ${days}::int
+           -- A wedding still ahead is not its own anniversary (audit, 5 Nov).
+           and (o.year is null or extract(year from occasion_next(o.month, o.day, ${today}::date)) > o.year)
          order by occasion_next(o.month, o.day, ${today}::date), cl.name`),
     )
     if (!rows) fail(400, 'We could not load the dates.')

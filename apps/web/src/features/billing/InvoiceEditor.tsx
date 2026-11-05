@@ -873,7 +873,10 @@ export function InvoiceEditor({
       <div data-sticky-actions className="sticky bottom-0 z-20 border-t border-border bg-card px-4 py-3 sm:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            {!sentAlready && (
+            {/* Money already received on it makes it a live invoice, never a
+                draft (audit, 5 Nov: "Save as draft" with the advance ticked
+                made a live INV-0008), so the draft button goes. */}
+            {!sentAlready && !paymentOn && appliedTotal(values.applied) <= 0 && (
               <Button type="button" variant="outline" onClick={() => void submit('draft')} disabled={busy}>
                 Save as draft
               </Button>
@@ -881,9 +884,11 @@ export function InvoiceEditor({
             <Button type="submit" disabled={busy}>
               {busy
                 ? 'Saving…'
-                : paymentOn || (!sentAlready && appliedTotal(values.applied) > 0)
+                : paymentOn
                   ? 'Save and record payment'
-                  : sentAlready
+                  : !sentAlready && appliedTotal(values.applied) > 0
+                    ? 'Save the invoice'
+                    : sentAlready
                     ? 'Save changes'
                     : 'Save and send'}
             </Button>

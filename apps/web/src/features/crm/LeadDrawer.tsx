@@ -926,6 +926,10 @@ function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }
   const [quoteId, setQuoteId] = useState('')
   const [name, setName] = useState(defaults.name)
   const [cost, setCost] = useState(defaults.cost)
+  // A lead can start with just a name; its number is asked for here, not
+  // refused after Book it is pressed (audit, 5 Nov).
+  const [phone, setPhone] = useState('')
+  const needsPhone = !lead.phone?.trim() && !clientId
   const [error, setError] = useState<string | null>(null)
 
   // A client with this number is very likely the same person.
@@ -955,10 +959,11 @@ function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }
     const amount = Number(cost || 0)
     if (!name.trim()) return setError('Name the project.')
     if (Number.isNaN(amount) || amount < 0) return setError('The booked price must be a number.')
+    if (needsPhone && phone.replace(/\D/g, '').length < 7) return setError('Add their phone number: the client is found again by it.')
     convert.mutate(
       {
         leadId: lead.id,
-        ...(clientId ? { client_id: clientId } : {}),
+        ...(clientId ? { client_id: clientId } : needsPhone ? { client: { phone: phone.trim() } } : {}),
         ...(quoteId ? { quote_id: quoteId } : {}),
         project: { name: name.trim(), package_cost: amount, status: 'active' },
       },
@@ -991,6 +996,20 @@ function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }
               ))}
             </Select>
           </div>
+          {needsPhone && (
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <Label htmlFor="conv-phone">Their phone number</Label>
+              <Input
+                id="conv-phone"
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="98765 43210"
+                className={cn(phone.replace(/\D/g, '').length < 7 ? 'border-dashed border-tone-amber bg-tone-amber-soft/40' : 'border-success/50')}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <Label htmlFor="conv-name">Project name</Label>
             <Input id="conv-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!error && !name.trim()} />
@@ -1006,7 +1025,7 @@ function ConvertDialog({ lead, onClose }: { lead: CrmLead; onClose: () => void }
               placeholder="0"
               className={cn(!cost && 'border-dashed border-tone-amber bg-tone-amber-soft/40')}
             />
-            <p className="text-xs text-muted-foreground">This is the booked price, not the quote.</p>
+            <p className="text-xs text-muted-foreground">Starts from their budget. This is the booked price, not the quote.</p>
           </div>
           {rows.length > 0 && (
             <div className="flex flex-col gap-1 sm:col-span-2">

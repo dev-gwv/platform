@@ -358,8 +358,10 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
   if (draft.shoots.some((s) => !s.name.trim())) errors.shoots = 'Every shoot needs a name.'
   else {
     // Owner, 5 Nov: a function with nobody planned for it cannot happen.
-    const bare = draft.shoots.find((s) => !s.requirements.some((r) => r.name.trim()))
-    if (bare) errors.shoots = `Add requirements to ${bare.name.trim()}: who will shoot it?`
+    // Audit, 5 Nov: Next went on with a day still missing its date or hours.
+    // The crew is planned from all three, so each is asked for by name.
+    const gap = draft.shoots.map(shootGap).find(Boolean)
+    if (gap) errors.shoots = gap
   }
 
   if (draft.deliverables.some((d) => !d.title.trim())) {
@@ -510,9 +512,8 @@ export function toShootRequests(draft: ProjectDraft, projectId: string): (Create
 /**
  * What is still missing from a shoot, as the card's chips read it.
  *
- * Deliberately not errors: a studio can save a project with a shoot that has
- * no date and no crew yet — the chips are the reminder, `stepErrors` is the
- * gate, and only a missing title actually blocks.
+ * The card's chips; `stepErrors` is the gate, and refuses Next until every
+ * day has its date, start time, duration and requirements.
  */
 export function shootIssues(shoot: ShootDraft): string[] {
   const issues: string[] = []
@@ -529,6 +530,16 @@ export function shootIssues(shoot: ShootDraft): string[] {
   else if (!(shootHoursOf(shoot) > 0)) issues.push('Duration needed')
   if (shoot.requirements.filter((r) => r.name.trim()).length === 0) issues.push('No requirements')
   return issues
+}
+
+/** What a named day still needs before the wizard goes on, in a sentence. */
+function shootGap(shoot: ShootDraft): string | null {
+  const name = shoot.name.trim()
+  if (!shoot.shoot_date) return `Set the date for ${name}.`
+  if (!shoot.start_time) return `Set the start time for ${name}.`
+  if (!(shootHoursOf(shoot) > 0)) return `Pick how long ${name} runs.`
+  if (!shoot.requirements.some((r) => r.name.trim())) return `Add requirements to ${name}: who will shoot it?`
+  return null
 }
 
 /** The first shoot still missing something — the one to open for the user. */

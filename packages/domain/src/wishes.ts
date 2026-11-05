@@ -22,9 +22,14 @@ function onYear(month: number, day: number, year: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-/** The next time the day comes round, on or after `today` (YYYY-MM-DD, India's today). */
-export function nextOccurrence(o: Pick<OccasionDay, 'month' | 'day'>, today: string): string {
-  const year = Number(today.slice(0, 4))
+/**
+ * The next time the day comes round, on or after `today` (YYYY-MM-DD, India's
+ * today). With its year known it is never the day itself: a wedding in
+ * December has its first anniversary the December after, not this one (the
+ * audit saw a wish set for before the wedding).
+ */
+export function nextOccurrence(o: Pick<OccasionDay, 'month' | 'day'> & { year?: number | null }, today: string): string {
+  const year = Math.max(Number(today.slice(0, 4)), o.year ? o.year + 1 : 0)
   const thisYear = onYear(o.month, o.day, year)
   return thisYear >= today ? thisYear : onYear(o.month, o.day, year + 1)
 }
@@ -86,6 +91,6 @@ export function wishWords(input: {
 }
 
 /** The order a list of dates is shown in: soonest first. */
-export function sortBySoonest<T extends Pick<OccasionDay, 'month' | 'day'>>(list: T[], today: string): T[] {
+export function sortBySoonest<T extends Pick<OccasionDay, 'month' | 'day'> & { year?: number | null }>(list: T[], today: string): T[] {
   return [...list].sort((a, b) => nextOccurrence(a, today).localeCompare(nextOccurrence(b, today)))
 }

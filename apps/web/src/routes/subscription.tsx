@@ -19,6 +19,7 @@ import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { PlanExpiryBanner } from '@/features/billing/PlanExpiryBanner'
 import { DiamondCheckDialog } from '@/features/billing/DiamondCheckDialog'
 import { BookCallButton, useCallUrl } from '@/features/help/BookCall'
+import { Button } from '@/shared/ui/button'
 import { OfferStrip } from '@/features/billing/OfferStrip'
 import { DiamondTrialBanner } from '@/features/billing/DiamondTrialBanner'
 import { markOffer, useMyOffer } from '@/features/billing/offer-api'
@@ -71,6 +72,8 @@ function Subscription() {
     retry: false,
   })
   const diamond = status.data?.member_tier === 'diamond'
+  const lifetime = isLifetime(status.data?.days_left)
+  const [showPlans, setShowPlans] = useState(false)
   // A personal offer (0268): on the cards it covers, and named in the WhatsApp message.
   const offer = useMyOffer().data
   const ask = (p: Plan, kind: PlanQuote['kind'] | undefined, member: boolean) => {
@@ -142,7 +145,15 @@ function Subscription() {
           </CardContent>
         </Card>
       )}
-      {regular.isLoading || member.isLoading ? (
+      {/* Open for life: nothing to buy, so the prices fold behind one button
+          (audit, 5 Nov: a lifetime studio was still offered plans). */}
+      {lifetime && !showPlans ? (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setShowPlans(true)}>
+            See the plans studios buy
+          </Button>
+        </div>
+      ) : regular.isLoading || member.isLoading ? (
         <SkeletonCards count={3} />
       ) : regular.isError && member.isError ? (
         <ErrorState
@@ -191,10 +202,10 @@ function Subscription() {
         </div>
       )}
       {/* Never a timer (owner, 14 Oct): one honest sentence. */}
-      <p className="mx-auto mt-6 flex max-w-2xl items-start justify-center gap-2 rounded-xl border border-tone-amber/40 bg-tone-amber-soft px-4 py-3 text-center text-sm font-medium">
+      {!lifetime && <p className="mx-auto mt-6 flex max-w-2xl items-start justify-center gap-2 rounded-xl border border-tone-amber/40 bg-tone-amber-soft px-4 py-3 text-center text-sm font-medium">
         <TrendingUp className="mt-0.5 size-4 shrink-0 text-tone-amber" aria-hidden />
         Prices will go up as we add servers and grow our technical team. Buy now and today's price is yours.
-      </p>
+      </p>}
       <p className="mt-3 text-center text-xs text-muted-foreground">
         Every price is plus 18% GST. Message us and we'll set your plan up on a short call. Paying means you agree to the{' '}
         <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}

@@ -51,7 +51,7 @@ import { Band, Field, SubCard } from './wizard-ui'
  * blank row: a chip per common shoot day, a preset that lays down the four a
  * standard wedding books, and the whole searchable list behind Add shoot.
  */
-export function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch }) {
+export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft; patch: Patch; refused?: number }) {
   const services = useServices()
   const shootPresets = useShootPresets('shoot')
   const shootTypes = useShootTypes()
@@ -79,6 +79,17 @@ export function ShootsStep({ draft, patch }: { draft: ProjectDraft; patch: Patch
     }
     count.current = draft.shoots.length
   }, [draft.shoots.length])
+
+  // A refused Next opens the first day still missing something and brings it
+  // into view, so the gap the message names is right there (audit, 5 Nov).
+  useEffect(() => {
+    if (!refused) return
+    const first = firstOpenShoot(draft.shoots)
+    if (first === null) return
+    setOpenShoot(first)
+    scrollIntoView(cardAt(first))
+    // Only a new refusal moves the page, not every keystroke after it.
+  }, [refused])
 
   // The moment the open card turns green it folds and the next unfinished
   // one opens — the platform walks them down the list. It waits while a

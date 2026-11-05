@@ -133,8 +133,12 @@ createRoot(el, {
         <AuthProvider>
           <ConfirmProvider>
             <RouterProvider router={router} />
+            {/* Top centre, under the top bar: on the right a toast sat on the
+                bell and the account menu, and on a drawer's close button
+                (audit, 5 Nov); the bottom right is the help bubble's. */}
             <Toaster
-              position="top-right"
+              position="top-center"
+              offset={{ top: 68 }}
               closeButton
               icons={{
                 success: <CheckCircle2 className="size-5 text-success" />,

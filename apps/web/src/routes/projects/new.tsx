@@ -85,6 +85,7 @@ function NewProject() {
   const [step, setStep] = useState<WizardStep>('client')
   const [visited, setVisited] = useState<Set<WizardStep>>(new Set(['client']))
   const [showErrors, setShowErrors] = useState(false)
+  const [refused, setRefused] = useState(0)
   /** This step's how-to video: told when Next is refused, or a step is done. */
   const learn = useRef<Learn | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -168,6 +169,7 @@ function NewProject() {
   function onNext() {
     if (stepError) {
       setShowErrors(true)
+      setRefused((n) => n + 1)
       learn.current?.refused()
       return
     }
@@ -341,11 +343,13 @@ function NewProject() {
         </StatusBadge>
       </div>
 
-      <div ref={sectionRef} className="mt-3 scroll-mt-4">
+      {/* Tall enough that the Next bar sits at the foot of the screen on a short
+          step, never halfway up it (audit, 5 Nov). */}
+      <div ref={sectionRef} className="mt-3 min-h-[calc(100dvh-17rem)] scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
           <StepLearn key={step} step={step} into={learn} />
           {step === 'client' && <ClientStep draft={draft} patch={patch} onSendForm={busy ? undefined : () => void sendForm()} />}
-          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
+          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} refused={refused} />}
           {step === 'deliverables' && (
             <DeliverablesStep draft={draft} patch={patch} />
           )}
