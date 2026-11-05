@@ -433,6 +433,40 @@ export function InvoiceEditor({
           )}
         </section>
 
+        {/* The project's advance, already in hand: ticked, it counts against
+            this invoice so the balance is right the moment it is made. Right
+            under the customer, where it is seen first (owner, 5 Nov). */}
+        {!isEdit && values.applied.length > 0 && (
+          <section className="mt-6 rounded-xl border border-success/40 bg-success/[0.06] p-4 sm:p-5">
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <IndianRupee className="size-4 text-success" /> Already received for this project
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {values.applied.map((a) => (
+                <li key={a.id}>
+                  <label className="flex cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={a.on}
+                      onChange={(e) => set('applied', values.applied.map((x) => (x.id === a.id ? { ...x, on: e.target.checked } : x)))}
+                    />
+                    <span className="font-medium tabular-nums">{formatINR(a.amount)}</span>
+                    <span className="text-muted-foreground">
+                      {new Date(`${a.paid_on}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {a.mode ? ` · ${a.mode}` : ''}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm">
+              Invoice <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span> · {formatINR(appliedTotal(values.applied) + (paymentOn ? toAmount(values.payment.amount) : 0))} received ·{' '}
+              <span className="font-semibold tabular-nums">{formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (paymentOn ? toAmount(values.payment.amount) : 0)))}</span> to collect.
+            </p>
+          </section>
+        )}
+
         {/* Invoice facts */}
         <section className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2">
           <Field label="Invoice #">
@@ -782,39 +816,6 @@ export function InvoiceEditor({
             {signing && <SignatureDialog value={signature} onClose={() => setSigning(false)} />}
           </div>
         </section>
-
-        {/* The project's advance, already in hand: ticked, it counts against
-            this invoice so the balance is right the moment it is made. */}
-        {!isEdit && values.applied.length > 0 && (
-          <section className="mt-6 rounded-xl border border-success/40 bg-success/[0.06] p-4 sm:p-5">
-            <p className="flex items-center gap-1.5 text-sm font-medium">
-              <IndianRupee className="size-4 text-success" /> Already received for this project
-            </p>
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {values.applied.map((a) => (
-                <li key={a.id}>
-                  <label className="flex cursor-pointer items-center gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      className="size-4"
-                      checked={a.on}
-                      onChange={(e) => set('applied', values.applied.map((x) => (x.id === a.id ? { ...x, on: e.target.checked } : x)))}
-                    />
-                    <span className="font-medium tabular-nums">{formatINR(a.amount)}</span>
-                    <span className="text-muted-foreground">
-                      {new Date(`${a.paid_on}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      {a.mode ? ` · ${a.mode}` : ''}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-sm">
-              Invoice <span className="font-semibold tabular-nums">{formatINR(totals.total)}</span> · {formatINR(appliedTotal(values.applied) + (paymentOn ? toAmount(values.payment.amount) : 0))} received ·{' '}
-              <span className="font-semibold tabular-nums">{formatINR(Math.max(0, totals.total - appliedTotal(values.applied) - (paymentOn ? toAmount(values.payment.amount) : 0)))}</span> to collect.
-            </p>
-          </section>
-        )}
 
         {/* Payment now */}
         {/* One way to say what came in: while the project's advance is being

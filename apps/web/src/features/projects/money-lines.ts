@@ -28,5 +28,5 @@ export function marginOf(f: { income: number; profit: number; margin?: number | 
   if (!f) return null
   if (!(f.income > 0)) return { value: '—', sub: 'No value set yet', negative: false }
   const m = f.margin != null ? Math.round(f.margin) : pctOf(f.profit, f.income)
-  return { value: `${m}%`, sub: f.profit < 0 ? 'Costs are over the value' : 'after crew & expenses', negative: f.profit < 0 }
+  return { value: `${m}%`, sub: f.profit < 0 ? 'Costs are over the value so far' : 'after crew & expenses so far', negative: f.profit < 0 }
 }

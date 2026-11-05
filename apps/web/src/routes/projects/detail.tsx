@@ -397,7 +397,7 @@ function ProjectDetail() {
           {margin && (
             <Figure
               icon={TrendingUp}
-              label="Margin"
+              label="Ongoing margin"
               value={margin.value}
               sub={margin.sub}
               tone={margin.negative ? 'danger' : 'info'}

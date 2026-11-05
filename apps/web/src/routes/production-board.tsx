@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Search, X } from 'lucide-react'
+import { Images, Search, X } from 'lucide-react'
+import { NewBadge } from '@/shared/ui/new-badge'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
@@ -104,7 +105,20 @@ function Board() {
 
   return (
     <>
-      <PageHeader title="Post-Production" />
+      {/* The photo sharing gallery, on the page itself where studios look
+          (owner, 5 Nov: not a line in the menu). */}
+      <PageHeader
+        title="Post-Production"
+        actions={
+          access.hasAction('projects', 'edit') ? (
+            <Button asChild className="bg-tone-teal text-white shadow-md hover:bg-tone-teal/90">
+              <Link to="/galleries">
+                <Images /> Photo gallery <NewBadge feature="galleryDrive" className="ml-1 bg-white" />
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
       {isLoading ? (
         <SkeletonCards count={4} />

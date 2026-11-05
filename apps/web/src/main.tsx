@@ -30,6 +30,12 @@ function checkMessage(error: z.ZodError): string {
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
   mutationCache: new MutationCache({
+    // The margin is an ongoing one (owner, 5 Nov): any change -- a crew
+    // payout, an expense, a price, a payment -- re-reads the profit figures,
+    // so the project's Margin box moves the moment a cost is saved.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['financials', 'pnl'] })
+    },
     onError: (error, _vars, _ctx, mutation) => {
       // Background saves (e.g. a draft autosave) opt out with meta.silent:
       // the owner did not press anything, so a toast would come from nowhere.
