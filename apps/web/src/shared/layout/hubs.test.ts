@@ -82,16 +82,19 @@ describe('the staff menu', () => {
 })
 
 describe('the studio menu', () => {
-  it('is twelve lines, one word for each thing', () => {
+  it('is twelve lines, one word for each thing, and Gallery under Post-Production', () => {
     const every = [
       ...ALL, 'dashboard', 'crm', 'clients', 'projects', 'tasks', 'billing', 'company_expenses', 'financials',
       'reports', 'settings',
     ] as ModuleKey[]
     const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
     expect(lines).toEqual([
-      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Tasks', 'Data & Backup', 'Money',
+      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Gallery', 'Tasks', 'Data & Backup', 'Money',
       'Team', 'Reports', 'Settings',
     ])
+    // Owner, 5 Nov: the photo sharing gallery sits right under Post-Production.
+    const gallery = filterNav(NAV, 'admin', access(every), false).find((e) => e.label === 'Gallery') as NavLeaf
+    expect(gallery).toMatchObject({ to: '/galleries', sub: true })
   })
 
   it('gives the owner a Plan & billing line just above Settings', () => {

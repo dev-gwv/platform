@@ -10,6 +10,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { useAccess } from '../auth/useAccess'
 import { Button } from '../ui/button'
 import { cn } from '../ui/cn'
+import { NewBadge } from '../ui/new-badge'
 import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './nav'
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
@@ -371,6 +372,8 @@ function Sidebar({
               active={isActive(e, active)}
               collapsed={collapsed}
               badge={e.badge}
+              sub={e.sub}
+              fresh={e.fresh}
             />
           ) : (
             <Group
@@ -472,6 +475,8 @@ function NavItem({
   active,
   collapsed,
   badge,
+  sub,
+  fresh,
 }: {
   to: string
   label: string
@@ -479,6 +484,8 @@ function NavItem({
   active: boolean
   collapsed: boolean
   badge?: NavLeaf['badge'] | undefined
+  sub?: boolean | undefined
+  fresh?: NavLeaf['fresh'] | undefined
 }) {
   return (
     <Link
@@ -490,10 +497,12 @@ function NavItem({
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:bg-brand hover:text-brand-foreground',
         collapsed && 'justify-center px-0',
+        sub && !collapsed && 'ml-[1.4rem] border-l border-border pl-3',
       )}
     >
       {Icon && <Icon className="size-4 shrink-0" />}
       {!collapsed && label}
+      {!collapsed && fresh && <NewBadge feature={fresh} className="ml-auto" />}
       {badge === 'tasks-overdue' && <TaskOverdueBadge collapsed={collapsed} />}
     </Link>
   )
