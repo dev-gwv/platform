@@ -475,8 +475,8 @@ function ShootCard({
           >
             {shoot.requirements.length === 0 ? (
               <Band tone="warning">
-                Who will shoot {shoot.name.trim() || 'this day'}? Tap <strong>Add requirements</strong> — every function needs
-                its team before you go on.
+                Who will shoot {shoot.name.trim() || 'this day'}? Tap <strong>Add requirements</strong>, or add them later on
+                the project's Shoots tab.
               </Band>
             ) : (
               // A summary, not an editor: changes happen in the dialog, so the card

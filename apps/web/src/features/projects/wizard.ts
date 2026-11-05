@@ -340,7 +340,16 @@ type StepErrors = Partial<Record<WizardStep, string>>
  * Lovable parity: new-client phone is required + validated (min 7 digits),
  * email/address/notes/relation travel with the inline create.
  */
-export function stepErrors(draft: ProjectDraft): StepErrors {
+export interface StepOptions {
+  /**
+   * The person chose to add shoot requirements later (owner, 5 Nov): a
+   * function without them no longer stops Next. Date, start time and
+   * duration still do.
+   */
+  requirementsLater?: boolean
+}
+
+export function stepErrors(draft: ProjectDraft, opts: StepOptions = {}): StepErrors {
   const errors: StepErrors = {}
 
   if (!draft.name.trim()) errors.client = 'Give the project a name.'
@@ -360,7 +369,7 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
     // Owner, 5 Nov: a function with nobody planned for it cannot happen.
     // Audit, 5 Nov: Next went on with a day still missing its date or hours.
     // The crew is planned from all three, so each is asked for by name.
-    const gap = draft.shoots.map(shootGap).find(Boolean)
+    const gap = draft.shoots.map((s) => shootGap(s, opts)).find(Boolean)
     if (gap) errors.shoots = gap
   }
 
@@ -383,8 +392,8 @@ export function stepErrors(draft: ProjectDraft): StepErrors {
 }
 
 /** Ready to create: every step clean, not just the one on screen. */
-export const canSubmit = (draft: ProjectDraft): boolean =>
-  Object.keys(stepErrors(draft)).length === 0
+export const canSubmit = (draft: ProjectDraft, opts: StepOptions = {}): boolean =>
+  Object.keys(stepErrors(draft, opts)).length === 0
 
 export const stepIndex = (step: WizardStep): number => WIZARD_STEPS.indexOf(step)
 
@@ -532,13 +541,24 @@ export function shootIssues(shoot: ShootDraft): string[] {
   return issues
 }
 
+const hasRequirements = (shoot: ShootDraft) => shoot.requirements.some((r) => r.name.trim())
+
+/**
+ * The named functions with no requirements yet, when that is all Event days
+ * still lacks: Next then asks "now or later" instead of refusing.
+ */
+export function onlyRequirementsMissing(draft: ProjectDraft): string[] {
+  if (stepErrors(draft, { requirementsLater: true }).shoots) return []
+  return draft.shoots.filter((s) => s.name.trim() && !hasRequirements(s)).map((s) => s.name.trim())
+}
+
 /** What a named day still needs before the wizard goes on, in a sentence. */
-function shootGap(shoot: ShootDraft): string | null {
+function shootGap(shoot: ShootDraft, opts: StepOptions = {}): string | null {
   const name = shoot.name.trim()
   if (!shoot.shoot_date) return `Set the date for ${name}.`
   if (!shoot.start_time) return `Set the start time for ${name}.`
   if (!(shootHoursOf(shoot) > 0)) return `Pick how long ${name} runs.`
-  if (!shoot.requirements.some((r) => r.name.trim())) return `Add requirements to ${name}: who will shoot it?`
+  if (!opts.requirementsLater && !hasRequirements(shoot)) return `Add requirements to ${name}: who will shoot it?`
   return null
 }
 
@@ -613,8 +633,8 @@ export function dueSummary(d: DeliverableDraft): string {
  * Whether a step is finished — not just allowed to be left (that is
  * stepErrors), but done enough that the platform should point at Next.
  */
-export function stepReady(draft: ProjectDraft, step: WizardStep): boolean {
-  const errors = stepErrors(draft)
+export function stepReady(draft: ProjectDraft, step: WizardStep, opts: StepOptions = {}): boolean {
+  const errors = stepErrors(draft, opts)
   switch (step) {
     case 'client':
       return !errors.client

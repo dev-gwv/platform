@@ -20,5 +20,7 @@ describe('the assistant\'s language', () => {
 
   it('reads back from the person\'s row', () => {
     expect(userHints.parse({ assistant_lang: { lang: 'hinglish' } }).assistant_lang).toEqual({ lang: 'hinglish' })
+    // The requirements question's remembered answer (owner, 5 Nov) is kept as itself too.
+    expect(setHintRequest.parse({ value: { choice: 'later' } }).value).toEqual({ choice: 'later' })
   })
 })

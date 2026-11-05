@@ -882,7 +882,12 @@ export const authRouter = new Hono<AppEnv>()
     const v = parsed.data.value
     // Each key takes its own shape: the videos list for 'learn', the language
     // for 'assistant_lang', and the plain shown/closed note for the rest.
-    if (v !== null && ((key.data === 'learn') !== 'watched' in v || (key.data === 'assistant_lang') !== 'lang' in v)) {
+    if (
+      v !== null &&
+      ((key.data === 'learn') !== 'watched' in v ||
+        (key.data === 'assistant_lang') !== 'lang' in v ||
+        (key.data === 'requirements_choice') !== 'choice' in v)
+    ) {
       fail(422, 'Invalid note.')
     }
     const a = c.get('auth')

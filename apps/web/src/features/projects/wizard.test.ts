@@ -39,6 +39,7 @@ import {
   recallDueDays,
   rememberDueDays,
   stepErrors,
+  onlyRequirementsMissing,
   toProjectRequest,
   toShootRequests,
   shootDeliverables,
@@ -96,6 +97,11 @@ describe('stepErrors', () => {
     expect(
       stepErrors(named({ shoots: [{ ...long, requirements: [{ name: 'Candid', quantity: '1' }] }] })).shoots,
     ).toBeUndefined()
+    // Owner, 5 Nov: requirements can be left for later; the hours cannot.
+    expect(stepErrors(named({ shoots: [long] }), { requirementsLater: true }).shoots).toBeUndefined()
+    expect(stepErrors(named({ shoots: [timed] }), { requirementsLater: true }).shoots).toBe('Pick how long Haldi runs.')
+    expect(onlyRequirementsMissing(named({ shoots: [long, { ...long, name: 'Reception' }] }))).toEqual(['Haldi', 'Reception'])
+    expect(onlyRequirementsMissing(named({ shoots: [long, timed] }))).toEqual([])
     expect(stepErrors(named({ deliverables: [newDeliverable()] })).deliverables).toBe(
       'Every deliverable needs a title.',
     )
