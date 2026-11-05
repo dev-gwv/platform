@@ -113,8 +113,8 @@ Day, Reception.
     day. Read what each person's line says ("Free all day", "Busy 3-6 PM").
 16. **Post-Production**: give the Wedding Teaser to someone with
     **Start editing**, set a due date, then move it on the board.
-17. **Post-Production → Gallery** (and **Gallery** under Post-Production in
-    the left menu): is the "New" badge easy to see? Read **How it works**. Do
+17. **Post-Production → Gallery** (and the **Photo gallery** button on the
+    Post-Production page): is the "New" badge easy to see? Read **How it works**. Do
     not create a gallery unless I wrote `create gallery: yes` here: `<yes/no>`.
     Note whether the page explains the photo sharing app, Google Drive import
     and the PIN in plain words, and what a studio would not understand.

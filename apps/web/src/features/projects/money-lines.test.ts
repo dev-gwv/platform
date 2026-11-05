@@ -13,7 +13,7 @@ describe('project money lines', () => {
     expect(toCollectLine({ total: 0, due: 0, promised: 0 })).toBeUndefined()
   })
   it('reads the margin, and says plainly when costs are over', () => {
-    expect(marginOf({ income: 100000, profit: 32000, margin: 32 })).toEqual({ value: '32%', sub: 'after crew & expenses', negative: false })
+    expect(marginOf({ income: 100000, profit: 32000, margin: 32 })).toEqual({ value: '32%', sub: 'after crew & expenses so far', negative: false })
     expect(marginOf({ income: 100000, profit: -5000, margin: -5 })?.negative).toBe(true)
     expect(marginOf({ income: 0, profit: 0, margin: null })?.value).toBe('—')
     expect(marginOf(null)).toBeNull()
