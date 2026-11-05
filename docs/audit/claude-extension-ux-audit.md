@@ -2,7 +2,7 @@
 
 Paste everything below the line into the Claude extension in Chrome while you
 are signed in to https://studioautopilot.in as the studio owner. It takes about
-an hour. Change only the three values in `<angle brackets>` first.
+an hour. Change only the four values in `<angle brackets>` first.
 
 ---
 
@@ -113,29 +113,35 @@ Day, Reception.
     day. Read what each person's line says ("Free all day", "Busy 3-6 PM").
 16. **Post-Production**: give the Wedding Teaser to someone with
     **Start editing**, set a due date, then move it on the board.
-17. **Terms**: open it and look (do not send). **Finance**: Billing,
+17. **Post-Production → Gallery** (and **Gallery** under Post-Production in
+    the left menu): is the "New" badge easy to see? Read **How it works**. Do
+    not create a gallery unless I wrote `create gallery: yes` here: `<yes/no>`.
+    Note whether the page explains the photo sharing app, Google Drive import
+    and the PIN in plain words, and what a studio would not understand.
+18. **Terms**: open it and look (do not send). **Finance**: Billing,
     Expenses (add a ₹500 `AUDIT TEST` expense), Cost sheet, Payouts.
     **Data**: record cards for one past-dated test shoot if possible.
     **Referrals** and **Wishes**: look only.
-18. Overview: do the four money boxes agree with the invoice and the advance?
+19. Overview: do the four money boxes agree with the invoice and the advance?
     Is every number explained in words?
 
 **E. The rest of the studio.**
-19. Shoots → Team Booking: the Shoots list, **Calendar**, People and
+20. Shoots → Team Booking: the Shoots list, **Calendar**, People and
     Conflicts. Find the test project's days.
-20. Post-Production (People, Stages, List), Tasks, Data & Backup.
-21. Money: Payments (the four tiles), Invoices, Expenses, Profit & Loss; try
+21. Post-Production (People, Stages, List), Tasks, Data & Backup.
+22. Money: Payments (the four tiles), Invoices, Expenses, Profit & Loss; try
     the period switch.
-22. Team: People, Attendance & leave, Pay, Roles & terms (look, do not save).
-23. Reports, Settings (open every line of the rail, save nothing), Plan &
+23. Team: People, Attendance & leave, Pay, Roles & terms (look, do not save).
+24. Reports, Settings (open every line of the rail, save nothing), Plan &
     billing.
-24. The help bubble and the sidebar Help: open them, open one tutorial, check
+25. The help bubble and the sidebar Help: open them, open one tutorial, check
     **Book a support call** opens the booking page (do not book).
 
 **F. Clean up.**
-25. Delete or archive everything named `AUDIT TEST` that you made: the
+26. Delete or archive everything named `AUDIT TEST` that you made: the
     expense, the invoice (if it lets you; if not, cancel it), the project, the
-    lead and client, and `AUDIT TEST Crew`. List anything you could not remove.
+    lead and client, `AUDIT TEST Crew`, and the test gallery if you made one.
+    List anything you could not remove.
 
 ## The report
 
