@@ -200,15 +200,15 @@ export function ShootsTab({
       {/* One slim row, nothing else above the days: add a day, or book one
           person across many days. */}
       {canEdit && hasShoots && (
-        <div className="flex flex-wrap items-center justify-between gap-1.5">
-          <Button size="sm" variant={addOpen ? 'outline' : 'default'} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen}>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Bulk first, full size and solid (owner, 5 Nov: "Bulk should be
+              clearly visible"): one person booked across every day at once. */}
+          <Button onClick={() => setBulkOpen(true)}>
+            <Users /> Bulk assign team
+          </Button>
+          <Button variant="outline" onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen}>
             <Plus /> Add event
           </Button>
-          {(data?.length ?? 0) > 1 && (
-            <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-              <Users /> Bulk assign
-            </Button>
-          )}
         </div>
       )}
       {bulkOpen && <BulkAssignDialog projectId={projectId} onClose={() => setBulkOpen(false)} />}
@@ -563,7 +563,12 @@ function ShootPlanner({
             <div className="flex flex-wrap items-center gap-1.5">
               {/* Solid, first: the owner could not see it as an outline. It
                   pulses when the journey ("Book the team") brought them here. */}
-              <Button size="sm" className={marked && shoot.requirements.length > 0 ? 'ipc-nudge' : undefined} onClick={() => setAssign({})} disabled={shoot.requirements.length === 0}>
+              {/* Full size (owner, 5 Nov: "the Assign Team button has to be bigger"). */}
+              <Button
+                className={cn('px-5', marked && shoot.requirements.length > 0 && 'ipc-nudge')}
+                onClick={() => setAssign({})}
+                disabled={shoot.requirements.length === 0}
+              >
                 <UserPlus /> Assign team
               </Button>
               <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>

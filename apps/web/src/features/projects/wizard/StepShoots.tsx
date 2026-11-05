@@ -463,7 +463,10 @@ function ShootCard({
             }
           >
             {shoot.requirements.length === 0 ? (
-              <Band tone="warning">No requirements yet — tap “Add requirements” to plan the team.</Band>
+              <Band tone="warning">
+                Who will shoot {shoot.name.trim() || 'this day'}? Tap <strong>Add requirements</strong> — every function needs
+                its team before you go on.
+              </Band>
             ) : (
               // A summary, not an editor: changes happen in the dialog, so the card
               // stays readable when a wedding day needs eight people.

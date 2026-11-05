@@ -42,7 +42,9 @@ export function HelpBubble() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  // Above the phone's bottom bar; in the corner on a wider screen.
+  // Above the phone's bottom bar; in the corner on a wider screen. A page's
+  // sticky Save / Next bar (`data-sticky-actions`, styles.css) keeps a lane
+  // free for it, so it never sits on the button the page is waiting for.
   const corner = 'right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:right-5 md:bottom-5'
 
   return (
@@ -107,7 +109,9 @@ export function HelpBubble() {
         aria-expanded={open}
         title="Help"
         className={cn(
-          'fixed z-30 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform',
+          // Teal like Book a support call, with a white ring: never the
+          // purple of the page's own buttons (owner, 5 Nov: it merged into Next).
+          'fixed z-30 flex size-12 items-center justify-center rounded-full bg-tone-teal text-white shadow-lg ring-2 ring-white transition-transform',
           'hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           corner,
         )}

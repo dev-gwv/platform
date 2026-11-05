@@ -97,9 +97,17 @@ export function RequirementsDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm">
-          <SlidersHorizontal /> {requirements.length ? 'Edit requirements' : 'Add requirements'}
-        </Button>
+        {/* Empty, it is the one thing left on the card (owner, 5 Nov: "not
+            clearly visible ... getting missed"): full size, amber, nudging. */}
+        {requirements.length ? (
+          <Button size="sm">
+            <SlidersHorizontal /> Edit requirements
+          </Button>
+        ) : (
+          <Button className="ipc-nudge bg-tone-amber text-white shadow-md hover:bg-tone-amber/90">
+            <SlidersHorizontal /> Add requirements
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent
         className="max-w-4xl"
