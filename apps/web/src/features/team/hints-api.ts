@@ -5,6 +5,7 @@ import {
   type HintKey,
   type HintNote,
   type LearnNote,
+  type RequirementsChoiceNote,
   type UserHints,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -26,7 +27,7 @@ export function useHints() {
 export function useSetHint() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ key, value }: { key: HintKey; value: HintNote | LearnNote | AssistantLangNote | null }) =>
+    mutationFn: ({ key, value }: { key: HintKey; value: HintNote | LearnNote | AssistantLangNote | RequirementsChoiceNote | null }) =>
       callApi(`/auth/hints/${key}`, { method: 'PUT', body: { value }, responseSchema: userHints }),
     onMutate: ({ key, value }) => {
       // The count moves the moment the note shows, not after the round trip.

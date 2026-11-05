@@ -39,6 +39,7 @@ import {
   recallDueDays,
   rememberDueDays,
   stepErrors,
+  onlyRequirementsMissing,
   toProjectRequest,
   toShootRequests,
   shootDeliverables,
@@ -84,12 +85,23 @@ describe('stepErrors', () => {
   it('catches half-filled rows in each section', () => {
     expect(stepErrors(named({ shoots: [newShoot()] })).shoots).toBe('Every shoot needs a name.')
     // Owner, 5 Nov: a function with nobody planned for it cannot go on.
-    expect(stepErrors(named({ shoots: [{ ...newShoot(), name: 'Haldi' }] })).shoots).toBe(
-      'Add requirements to Haldi: who will shoot it?',
-    )
+    // Audit, 5 Nov: the date, start time and duration are asked for too.
+    const haldi = { ...newShoot(), name: 'Haldi' }
+    expect(stepErrors(named({ shoots: [haldi] })).shoots).toBe('Set the date for Haldi.')
+    const dated = { ...haldi, shoot_date: '2026-12-01' }
+    expect(stepErrors(named({ shoots: [dated] })).shoots).toBe('Set the start time for Haldi.')
+    const timed = { ...dated, start_time: '10:00' }
+    expect(stepErrors(named({ shoots: [timed] })).shoots).toBe('Pick how long Haldi runs.')
+    const long = { ...timed, hours: '4' }
+    expect(stepErrors(named({ shoots: [long] })).shoots).toBe('Add requirements to Haldi: who will shoot it?')
     expect(
-      stepErrors(named({ shoots: [{ ...newShoot(), name: 'Haldi', requirements: [{ name: 'Candid', quantity: '1' }] }] })).shoots,
+      stepErrors(named({ shoots: [{ ...long, requirements: [{ name: 'Candid', quantity: '1' }] }] })).shoots,
     ).toBeUndefined()
+    // Owner, 5 Nov: requirements can be left for later; the hours cannot.
+    expect(stepErrors(named({ shoots: [long] }), { requirementsLater: true }).shoots).toBeUndefined()
+    expect(stepErrors(named({ shoots: [timed] }), { requirementsLater: true }).shoots).toBe('Pick how long Haldi runs.')
+    expect(onlyRequirementsMissing(named({ shoots: [long, { ...long, name: 'Reception' }] }))).toEqual(['Haldi', 'Reception'])
+    expect(onlyRequirementsMissing(named({ shoots: [long, timed] }))).toEqual([])
     expect(stepErrors(named({ deliverables: [newDeliverable()] })).deliverables).toBe(
       'Every deliverable needs a title.',
     )

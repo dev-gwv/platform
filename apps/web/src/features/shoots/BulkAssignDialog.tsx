@@ -100,6 +100,10 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const [rows, setRows] = useState<Record<string, Row>>({})
   /** Who was just booked, for the "they see it on their own login" note. */
   const [justBooked, setJustBooked] = useState<TeamMember | null>(null)
+  // What the last Assign booked, said in a sentence until someone else is
+  // picked; it turns Done into the next thing (audit, 5 Nov: the dialog sat
+  // open saying "cannot take any of these" after a booking that worked).
+  const [booked, setBooked] = useState<{ name: string; n: number } | null>(null)
   const [showBlocked, setShowBlocked] = useState(false)
   // Ticked shoots and their times and payouts survive a refresh or a closed
   // tab until they are booked. Kept once at least one shoot is ticked.
@@ -185,6 +189,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const patchRow = (s: ShootListItem, p: Partial<Row>) => setRows((prev) => ({ ...prev, [s.id]: { ...rowOf(s), ...p } }))
 
   function pickMember(id: string) {
+    setBooked(null)
     setMemberId(id)
     setPicked(new Set())
     const m = (members.data ?? []).find((x) => x.user_id === id)
@@ -225,6 +230,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
       else toast.error('None of those could be booked — they clash with other bookings.')
       if (ok > 0 && skipped === 0) draft.clear()
       if (ok > 0) setJustBooked(member)
+      setBooked(ok > 0 ? { name: member.name, n: ok } : null)
       setPicked(new Set(results.filter((r) => !r.id).map((r) => ready[r.index]!.shoot.id)))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'We could not book these.')
@@ -308,6 +314,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                 value={role}
                 onChange={(e) => {
                   setRole(e.target.value)
+                  setBooked(null)
                   setPicked(new Set())
                 }}
               >
@@ -352,7 +359,27 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                 </span>
               </div>
               {available.length > 0 && (
-                <div className="flex gap-1">
+                <div className="flex flex-wrap items-center gap-1">
+                  {/* One payout typed once for every ticked day, rather than
+                      day by day (audit, 5 Nov); a row can still differ. */}
+                  {picked.size > 1 && (
+                    <label className="mr-1 inline-flex items-center gap-1.5 text-xs font-medium">
+                      Payout for each ticked day
+                      <Input
+                        inputMode="numeric"
+                        placeholder="₹"
+                        className="h-7 w-24 border-tone-amber/60 text-xs"
+                        onChange={(e) => {
+                          const cost = e.target.value.replace(/[^\d.]/g, '')
+                          setRows((prev) => {
+                            const next = { ...prev }
+                            for (const c of cands) if (picked.has(c.shoot.id)) next[c.shoot.id] = { ...rowOf(c.shoot), cost }
+                            return next
+                          })
+                        }}
+                      />
+                    </label>
+                  )}
                   <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setPicked(new Set(available.map((c) => c.shoot.id)))}>
                     Select all available
                   </Button>
@@ -376,7 +403,12 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {available.length === 0 && (
+                  {booked && (
+                    <p className="rounded-md border border-success/40 bg-success/10 p-3 text-center text-sm font-medium text-success">
+                      {booked.name} is booked on {booked.n} shoot{booked.n === 1 ? '' : 's'}. Pick someone else, or press Done.
+                    </p>
+                  )}
+                  {available.length === 0 && !booked && (
                     <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
                       {member.name} cannot take any of these — every one is filled, already theirs, or clashes. See below.
                     </p>
@@ -451,10 +483,18 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
           <p className="mr-auto self-center text-xs text-muted-foreground">
             {ready.length > 0 ? `${ready.length} shoot${ready.length === 1 ? '' : 's'} ready to book` : 'Tick the shoots to assign'}
           </p>
-          <Button variant="outline" onClick={onClose}>
-            Close
+          <Button
+            variant={booked && ready.length === 0 ? 'success' : 'outline'}
+            className={cn(booked && ready.length === 0 && 'ipc-nudge')}
+            onClick={onClose}
+          >
+            {booked ? 'Done' : 'Close'}
           </Button>
-          <Button disabled={ready.length === 0 || book.isPending} onClick={() => void submit()}>
+          <Button
+            variant={booked && ready.length === 0 ? 'outline' : 'default'}
+            disabled={ready.length === 0 || book.isPending}
+            onClick={() => void submit()}
+          >
             {book.isPending ? <Loader2 className="animate-spin" /> : <UserPlus />} Assign selected
           </Button>
         </DialogFooter>

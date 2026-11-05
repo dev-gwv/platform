@@ -861,3 +861,13 @@ body {
     padding-right: 5.5rem !important;
   }
 }
+
+/* Room under the last row of a page, so a button at the foot of a list (a
+   payout's Set payout, a question's Must answer) can be scrolled clear of the
+   help bubble instead of sitting under it (audit, 5 Nov). A page that ends in
+   a sticky Save / Next bar already keeps the bubble's lane free. */
+.page-enter:not(:has([data-sticky-actions]))::after {
+  content: '';
+  display: block;
+  height: 4.5rem;
+}

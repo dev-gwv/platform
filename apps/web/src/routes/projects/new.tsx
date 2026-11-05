@@ -38,6 +38,7 @@ import {
   prevStep,
   saveDraft,
   stepErrors,
+  onlyRequirementsMissing,
   stepIndex,
   toNewClientRequest,
   toProjectRequest,
@@ -49,6 +50,11 @@ import {
 } from '@/features/projects/wizard'
 import { ClientStep } from '@/features/projects/wizard/StepClient'
 import { ShootsStep } from '@/features/projects/wizard/StepShoots'
+import {
+  RememberedChoiceLine,
+  RequirementsChoiceDialog,
+  useRequirementsChoice,
+} from '@/features/projects/wizard/RequirementsChoice'
 import { AddShootMenu } from '@/features/projects/wizard/ShootMenus'
 import { DeliverablesStep } from '@/features/projects/wizard/StepDeliverables'
 import { BillingStep } from '@/features/projects/wizard/StepBilling'
@@ -85,6 +91,7 @@ function NewProject() {
   const [step, setStep] = useState<WizardStep>('client')
   const [visited, setVisited] = useState<Set<WizardStep>>(new Set(['client']))
   const [showErrors, setShowErrors] = useState(false)
+  const [refused, setRefused] = useState(0)
   /** This step's how-to video: told when Next is refused, or a step is done. */
   const learn = useRef<Learn | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -95,11 +102,17 @@ function NewProject() {
   const loaded = useRef(false)
   const sectionRef = useRef<HTMLDivElement>(null)
 
-  const errors = stepErrors(draft)
+  // Requirements now or later (owner, 5 Nov): the remembered answer, or
+  // "later" picked for this project in the question Next asks.
+  const remembered = useRequirementsChoice()
+  const [laterThisTime, setLaterThisTime] = useState(false)
+  const [asking, setAsking] = useState<string[] | null>(null)
+  const opts = { requirementsLater: laterThisTime || remembered === 'later' }
+  const errors = stepErrors(draft, opts)
   const totals = draftTotals(draft)
   const stepError = errors[step]
-  const ready = stepReady(draft, step)
-  const submittable = canSubmit(draft)
+  const ready = stepReady(draft, step, opts)
+  const submittable = canSubmit(draft, opts)
 
   // The platform points at the next thing to press: when an edit finishes a
   // step, Next turns green, names where it goes, and rings three times. Only
@@ -165,9 +178,22 @@ function NewProject() {
     scrollIntoView(sectionRef.current)
   }
 
+  function refuse() {
+    setShowErrors(true)
+    setRefused((n) => n + 1)
+    learn.current?.refused()
+  }
+
   function onNext() {
+    // Only requirements missing: ask now or later, unless already answered.
+    const bare = step === 'shoots' && stepError ? onlyRequirementsMissing(draft) : []
+    if (bare.length > 0 && remembered !== 'now') {
+      setAsking(bare)
+      return
+    }
     if (stepError) {
       setShowErrors(true)
+      setRefused((n) => n + 1)
       learn.current?.refused()
       return
     }
@@ -341,11 +367,30 @@ function NewProject() {
         </StatusBadge>
       </div>
 
-      <div ref={sectionRef} className="mt-3 scroll-mt-4">
+      {/* Tall enough that the Next bar sits at the foot of the screen on a short
+          step, never halfway up it (audit, 5 Nov). */}
+      <div ref={sectionRef} className="mt-3 min-h-[calc(100dvh-17rem)] scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
           <StepLearn key={step} step={step} into={learn} />
           {step === 'client' && <ClientStep draft={draft} patch={patch} onSendForm={busy ? undefined : () => void sendForm()} />}
-          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} />}
+          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} refused={refused} />}
+          {step === 'shoots' && remembered && <RememberedChoiceLine choice={remembered} />}
+          {asking && (
+            <RequirementsChoiceDialog
+              names={asking}
+              onClose={() => setAsking(null)}
+              onNow={() => {
+                setAsking(null)
+                refuse()
+              }}
+              onLater={() => {
+                setAsking(null)
+                setLaterThisTime(true)
+                learn.current?.progress()
+                goTo(nextStep(step))
+              }}
+            />
+          )}
           {step === 'deliverables' && (
             <DeliverablesStep draft={draft} patch={patch} />
           )}

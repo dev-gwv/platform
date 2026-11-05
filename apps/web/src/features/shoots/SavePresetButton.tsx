@@ -55,6 +55,9 @@ export function SavePresetButton({
         <div className="ipc-menu absolute right-0 top-full z-40 mt-2 flex w-64 items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
           <Input
             autoFocus
+            // The suggested name is selected, so typing replaces it rather
+            // than adding to it ("HaldiHaldi", audit 5 Nov).
+            onFocus={(e) => e.currentTarget.select()}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {

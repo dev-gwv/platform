@@ -3033,7 +3033,7 @@ if (listed) {
   const cl = await api('/clients', { token: aToken, method: 'POST', body: { name: 'Wish Test Couple', phone: '9811122233' } })
   const cid = cl.json?.id ?? cl.json?.existing_client?.id
   const bday = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Priya', month: 3, day: 14 } })
-  const ann = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 12, day: 12, year: 2026 } })
+  const ann = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 12, day: 12, year: 2024 } })
   const twice = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'anniversary', month: 1, day: 1 } })
   const feb31 = await api('/wishes/occasions', { token: aToken, method: 'POST', body: { client_id: cid, kind: 'birthday', person_name: 'Rahul', month: 2, day: 31 } })
   check(

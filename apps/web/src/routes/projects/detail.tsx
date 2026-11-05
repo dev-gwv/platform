@@ -233,7 +233,24 @@ function ProjectDetail() {
       confirmLabel: 'Delete project',
       destructive: true,
     })
-    if (yes) removeProject.mutate(id, { onSuccess: () => void navigate({ to: '/projects' }) })
+    if (!yes) return
+    removeProject.mutate(id, {
+      onSuccess: () => void navigate({ to: '/projects' }),
+      // Refused because money or a quotation is on it: offer the one thing
+      // that can be done instead (audit, 5 Nov: Delete was offered, then
+      // simply refused).
+      onError: (err) => {
+        if (!(err instanceof Error) || !err.message.includes('Cancel it instead')) return
+        void confirm({
+          title: 'This project cannot be deleted',
+          description: `${err.message} A cancelled project keeps its payments and papers.`,
+          confirmLabel: 'Cancel the project',
+          destructive: true,
+        }).then((cancel) => {
+          if (cancel) update.mutate({ status: 'cancelled' })
+        })
+      },
+    })
   }
 
   return (

@@ -201,7 +201,16 @@ export type LearnNote = z.infer<typeof learnNote>
 export const assistantLangNote = z.object({ lang: z.enum(['en', 'hi', 'hinglish']) })
 export type AssistantLangNote = z.infer<typeof assistantLangNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang'] as const
+/**
+ * What Next does on Event days when a function has no requirements yet (owner,
+ * 5 Nov): ask each time (no note), or the person's remembered answer -- add
+ * them now, or go on and add them later. Kept on their row, changed back from
+ * the step itself.
+ */
+export const requirementsChoiceNote = z.object({ choice: z.enum(['now', 'later']) })
+export type RequirementsChoiceNote = z.infer<typeof requirementsChoiceNote>
+
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang', 'requirements_choice'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
@@ -215,6 +224,7 @@ export const userHints = z
     // The "Learn Studio AutoPilot step by step" note: gone once closed or the guide is opened.
     guide: hintNote.optional(),
     assistant_lang: assistantLangNote.optional(),
+    requirements_choice: requirementsChoiceNote.optional(),
   })
   .passthrough()
 export type UserHints = z.infer<typeof userHints>
@@ -236,7 +246,7 @@ export type LearnSignals = z.infer<typeof learnSignals>
 // The strict shapes first: hintNote fills its own defaults and drops unknown
 // keys, so { lang: 'hi' } tried against it first would be saved as a blank note.
 export const setHintRequest = z.object({
-  value: z.union([learnNote.strict(), assistantLangNote.strict(), hintNote]).nullable(),
+  value: z.union([learnNote.strict(), assistantLangNote.strict(), requirementsChoiceNote.strict(), hintNote]).nullable(),
 })
 export type SetHintRequest = z.infer<typeof setHintRequest>
 

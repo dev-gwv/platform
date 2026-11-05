@@ -9,6 +9,11 @@ describe('wishes', () => {
     expect(nextOccurrence({ month: 2, day: 29 }, '2027-10-03')).toBe('2028-02-29')
   })
 
+  it('never puts an anniversary on or before the wedding itself', () => {
+    expect(nextOccurrence({ month: 12, day: 20, year: 2026 }, '2026-11-05')).toBe('2027-12-20')
+    expect(nextOccurrence({ month: 3, day: 1, year: 2020 }, '2026-11-05')).toBe('2027-03-01')
+  })
+
   it('says when in plain words', () => {
     expect(daysUntil('2026-10-08', '2026-10-03')).toBe(5)
     expect([whenWords(0), whenWords(1), whenWords(5)]).toEqual(['Today', 'Tomorrow', 'In 5 days'])

@@ -68,16 +68,36 @@ function activeTarget(entries: NavEntry[], pathname: string): string | null {
   return best
 }
 
+/**
+ * The pages an indented line (Gallery under Post-Production) owns. Projects'
+ * tab row holds Galleries too, but on a gallery page only Gallery is lit
+ * (audit, 5 Nov: both lit, and Projects looked like the place).
+ */
+function subTargets(entries: NavEntry[]): ReadonlySet<string> {
+  const out = new Set<string>()
+  const add = (l: NavLeaf) => {
+    if (!l.sub) return
+    out.add(l.to)
+    for (const t of l.hub ?? []) out.add(t.to)
+  }
+  for (const e of entries) {
+    if (e.kind === 'leaf') add(e)
+    else e.children.forEach(add)
+  }
+  return out
+}
+
 /** The entry that is lit: the one whose own address or hub holds the active page. */
-const isActive = (l: NavLeaf, active: string | null) =>
-  active !== null && (l.to === active || !!l.hub?.some((t) => t.to === active))
+const isActive = (l: NavLeaf, active: string | null, subs: ReadonlySet<string> = new Set()) =>
+  active !== null &&
+  (l.to === active || (!!l.hub?.some((t) => t.to === active) && (!!l.sub || !subs.has(active))))
 
 /** The group holding the page you are on, if it sits inside one. */
 function groupHolding(entries: NavEntry[], pathname: string): string | null {
   const active = activeTarget(entries, pathname)
   if (!active) return null
   for (const e of entries) {
-    if (e.kind === 'group' && e.children.some((c) => isActive(c, active))) return e.label
+    if (e.kind === 'group' && e.children.some((c) => isActive(c, active, subTargets(entries)))) return e.label
   }
   return null
 }
@@ -297,6 +317,7 @@ function Sidebar({
 }) {
   const { pathname } = useLocation()
   const active = activeTarget(entries, pathname)
+  const subs = subTargets(entries)
   const navRef = useRef<HTMLElement>(null)
 
   // Restore the scroll offset this sidebar had before the route change tore it
@@ -369,7 +390,7 @@ function Sidebar({
               to={e.to}
               label={e.label}
               icon={e.icon}
-              active={isActive(e, active)}
+              active={isActive(e, active, subs)}
               collapsed={collapsed}
               badge={e.badge}
               sub={e.sub}
@@ -380,6 +401,7 @@ function Sidebar({
               key={e.label}
               group={e}
               active={active}
+              subs={subs}
               collapsed={collapsed}
               open={openGroup === e.label}
               onToggle={() => onToggleGroup(e.label)}
@@ -405,6 +427,7 @@ function Sidebar({
 function Group({
   group,
   active,
+  subs,
   collapsed,
   open,
   onToggle,
@@ -412,12 +435,13 @@ function Group({
 }: {
   group: NavGroup
   active: string | null
+  subs: ReadonlySet<string>
   collapsed: boolean
   open: boolean
   onToggle: () => void
   onExpand?: (() => void) | undefined
 }) {
-  const hasActive = group.children.some((c) => isActive(c, active))
+  const hasActive = group.children.some((c) => isActive(c, active, subs))
   const Icon = group.icon
 
   // Collapsed: the group icon is a stub — clicking it reopens the rail with the
@@ -457,7 +481,7 @@ function Group({
               to={c.to}
               label={c.label}
               icon={c.icon}
-              active={isActive(c, active)}
+              active={isActive(c, active, subs)}
               collapsed={false}
               badge={c.badge}
             />
