@@ -95,7 +95,9 @@ export const shootsRouter = new Hono<AppEnv>()
           where s.status <> 'cancelled'
             and exists (
               select 1 from team_assignment_slots t
-              where t.shoot_id = s.id and t.user_id = ${auth.userId} and t.status <> 'cancelled'
+              -- Only bookings that stand: someone taken off a shoot (released)
+              -- no longer sees it (bug sweep, 6 Nov).
+              where t.shoot_id = s.id and t.user_id = ${auth.userId} and t.status = 'booked'
             )
           order by s.shoot_date asc nulls last`,
       ),
@@ -324,18 +326,51 @@ export const shootsRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         // requirements-only patch: no scalar columns to SET, but the row must
         // still exist (and belong to this studio) before its crew is replaced.
+        const [before] = await sql<{ start_at: string | null; shoot_date: string | null }[]>`
+          select start_at::text, shoot_date::text from shoots where id = ${id}`
         const updated =
           Object.keys(fields).length > 0
             ? await sql<{ id: string }[]>`
                 update shoots set ${sql(fields)} where id = ${id} returning id`
             : await sql<{ id: string }[]>`select id from shoots where id = ${id}`
         if (!updated.length) return updated
+        // The crew moves with the day (bug sweep, 6 Nov): a booking left on
+        // the old date marked them absent on the new one and blocked the old
+        // hours. A move that clashes with another booking is refused (409).
+        if (before && (fields.start_at !== undefined || fields.shoot_date !== undefined)) {
+          await sql`
+            update team_assignment_slots t
+               set start_at = t.start_at + d.delta, end_at = t.end_at + d.delta
+              from (
+                select case
+                         when ${before.start_at}::timestamptz is not null and s.start_at is not null
+                           then s.start_at - ${before.start_at}::timestamptz
+                         when ${before.shoot_date}::date is not null and s.shoot_date is not null
+                           then make_interval(days => s.shoot_date - ${before.shoot_date}::date)
+                       end as delta
+                  from shoots s where s.id = ${id}
+              ) d
+             where t.shoot_id = ${id} and t.status = 'booked'
+               and d.delta is not null and d.delta <> interval '0'`
+        }
+        // A cancelled day frees its crew for other work at those hours.
+        if (fields.status === 'cancelled') {
+          await sql`
+            update team_assignment_slots set status = 'released', released_at = now()
+             where shoot_id = ${id} and status = 'booked'`
+        }
         if (requirements !== undefined) {
           await sql`delete from shoot_services where shoot_id = ${id}`
           await saveRequirements(sql, c.get('auth').companyId, id, requirements)
         }
         return updated
       }),
+      {
+        onCode: (code, err) =>
+          code === '23P01' || String((err as { message?: string })?.message ?? '').includes('double_booking')
+            ? fail(409, 'Someone booked on this day is already booked elsewhere at the new time. Move or free them first.')
+            : undefined,
+      },
     )
     if (!rows) fail(400, 'We could not update the shoot.')
     if (!rows.length) fail(404, 'That shoot was not found.')

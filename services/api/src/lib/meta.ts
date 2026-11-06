@@ -150,7 +150,8 @@ export function mapGraphLead(lead: GraphLead): MetaLead {
 /** Fetch one lead's fields with the page's token. Throws on any non-2xx so attempt() logs it. */
 export async function fetchMetaLead(pageToken: string, leadgenId: string): Promise<MetaLead> {
   const url = `${GRAPH}/${encodeURIComponent(leadgenId)}?fields=id,created_time,field_data&access_token=${encodeURIComponent(pageToken)}`
-  const res = await fetch(url)
+  // A hung Graph call held the webhook open until Meta gave up (bug sweep).
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
     throw new Error(`meta lead fetch failed ${res.status}: ${detail.slice(0, 200)}`)

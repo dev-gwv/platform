@@ -10,6 +10,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { seesMoney } from '../../lib/scope'
 
 /** The overlap guard's two spellings: 23P01 on Postgres, the trigger's text on pglite. */
 const isDoubleBooking = (code: string, err: unknown) =>
@@ -140,6 +141,9 @@ export const allocationRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, 'Please check the dates.')
     const auth = c.get('auth')
     const canPlan = auth.access.hasAction('projects', 'edit')
+    // Crew pay is money: a Project Manager plans the day without it (bug
+    // sweep, 6 Nov); whoever pays the team or sees money keeps it.
+    const seesPay = canPlan && (seesMoney(c) || auth.access.hasModule('team_payouts'))
     const { from, to } = parsed.data
     const onlyUser = canPlan ? (parsed.data.user_id ?? null) : auth.userId
     const rows = await attempt(c, 'allocation.list', () =>
@@ -148,10 +152,10 @@ export const allocationRouter = new Hono<AppEnv>()
         auth.userId,
         (sql) => sql`
           select s.id, s.user_id, s.shoot_id, s.service_name, s.start_at, s.end_at, s.status,
-                 ${canPlan ? sql`s.estimated_cost` : sql`null::numeric`} as estimated_cost,
-                 ${canPlan ? sql`s.final_cost` : sql`null::numeric`} as final_cost,
-                 ${canPlan ? sql`s.cost_status` : sql`'not_decided'`} as cost_status,
-                 ${canPlan ? sql`s.cost_notes` : sql`null::text`} as cost_notes,
+                 ${seesPay ? sql`s.estimated_cost` : sql`null::numeric`} as estimated_cost,
+                 ${seesPay ? sql`s.final_cost` : sql`null::numeric`} as final_cost,
+                 ${seesPay ? sql`s.cost_status` : sql`'not_decided'`} as cost_status,
+                 ${seesPay ? sql`s.cost_notes` : sql`null::text`} as cost_notes,
                  coalesce(s.data_required, false) as data_required,
                  s.data_not_required_reason, s.released_at, u.name as user_name,
                  s.response, s.decline_reason, s.arrived_at,

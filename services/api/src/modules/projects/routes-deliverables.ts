@@ -105,6 +105,14 @@ export const deliverableRoutes = new Hono<AppEnv>()
         if (!d) return 'missing' as const
         if (!canEdit && d.assignee_id !== auth.userId) return 'forbidden' as const
         const code = parsed.data.custom_status_code || null
+        // Delivered without a stage the team may use is a reviewer's move:
+        // an editor could otherwise mark their own work done and the client
+        // saw it as delivered (bug sweep, 6 Nov). Sending it for review stays
+        // theirs; until someone checks it the client reads "final checks"
+        // (client_portal_status, 0294).
+        if (!canEdit && !code && parsed.data.status === 'completed') {
+          return 'not_team' as const
+        }
         if (code) {
           const st = await sql<{ stage: string | null; team_allowed: boolean }[]>`
             select stage, team_allowed from company_deliverable_statuses where code = ${code}`

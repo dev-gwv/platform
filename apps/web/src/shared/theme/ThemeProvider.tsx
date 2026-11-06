@@ -9,6 +9,36 @@ import {
 } from './presets'
 import { fontOr, fontStack, loadFont } from './fonts'
 
+/**
+ * Browser storage that never throws: a browser blocking site data, or a full
+ * store, threw here at the app's root and took every page down (bug sweep,
+ * 6 Nov). The theme then simply is not remembered.
+ */
+const store = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  set(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      /* not remembered */
+    }
+  },
+  remove(key: string): void {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      /* nothing to forget */
+    }
+  },
+}
+
+
 type Scheme = 'light' | 'dark'
 
 interface CustomTheme {
@@ -47,7 +77,7 @@ const CUSTOM_KEY = 'ipc.theme.custom'
 
 function readStoredCustom(): CustomTheme {
   try {
-    const raw = localStorage.getItem(CUSTOM_KEY)
+    const raw = store.get(CUSTOM_KEY)
     if (!raw) return EMPTY_CUSTOM
     const parsed = JSON.parse(raw) as Partial<CustomTheme>
     return {
@@ -71,12 +101,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Default to light; only honour an explicit saved choice (ignore OS scheme).
-    const saved = localStorage.getItem(STORAGE_KEY) as Scheme | null
+    const saved = store.get(STORAGE_KEY) as Scheme | null
     setScheme(saved ?? 'light')
     // Re-apply the last theme before the settings query resolves, so the accent
     // does not flash the default on every page load.
-    setPresetKey(localStorage.getItem(PRESET_KEY) ?? DEFAULT_PRESET_KEY)
-    setFontKey(localStorage.getItem(FONT_KEY))
+    setPresetKey(store.get(PRESET_KEY) ?? DEFAULT_PRESET_KEY)
+    setFontKey(store.get(FONT_KEY))
     setCustomThemeState(readStoredCustom())
   }, [])
 
@@ -114,7 +144,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleScheme = useCallback(() => {
     setScheme((s) => {
       const next = s === 'dark' ? 'light' : 'dark'
-      localStorage.setItem(STORAGE_KEY, next)
+      store.set(STORAGE_KEY, next)
       return next
     })
   }, [])
@@ -122,18 +152,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const applyTheme = useCallback((key: string | null, font?: string | null) => {
     const resolved = key ?? DEFAULT_PRESET_KEY
     setPresetKey(resolved)
-    localStorage.setItem(PRESET_KEY, resolved)
+    store.set(PRESET_KEY, resolved)
     if (font === undefined) return
     setFontKey(font)
-    if (font) localStorage.setItem(FONT_KEY, font)
-    else localStorage.removeItem(FONT_KEY)
+    if (font) store.set(FONT_KEY, font)
+    else store.remove(FONT_KEY)
   }, [])
 
   const applyCustom = useCallback((custom: CustomTheme | null) => {
     const resolved = custom ?? EMPTY_CUSTOM
     setCustomThemeState(resolved)
-    if (custom) localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom))
-    else localStorage.removeItem(CUSTOM_KEY)
+    if (custom) store.set(CUSTOM_KEY, JSON.stringify(custom))
+    else store.remove(CUSTOM_KEY)
   }, [])
 
   return (
