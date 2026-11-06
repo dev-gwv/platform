@@ -1,0 +1,2 @@
+-- 0294: bug sweep (owner, 6 Nov: "go deep and find the bugs, then fix them").
+-- Claimed first; the body follows in this same file before it reaches main.
