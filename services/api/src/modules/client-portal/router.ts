@@ -21,7 +21,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { galleryForClient } from '../../lib/gallery-sync'
-import { requireStudioWork } from '../../lib/scope'
+import { requireStudioWork, seesMoney } from '../../lib/scope'
 import { newRawToken, sha256Hex } from '../../lib/auth-token'
 
 /**
@@ -193,7 +193,10 @@ export const clientPortalRouter = new Hono<AppEnv>()
     if ('missing' in doc) fail(404, 'This project has no live client link.')
     if ('old' in doc) fail(409, 'This link was made before previews existed. Make a new link to see it as the client.')
     if (!doc.doc) fail(404, 'This project has no live client link.')
-    return c.json(publicClientPortal.parse(doc.doc))
+    const page = publicClientPortal.parse(doc.doc)
+    // A Project Manager sees the client's page without its money (bug sweep,
+    // 6 Nov): the preview used to carry the total, paid and every invoice.
+    return c.json(seesMoney(c) ? page : { ...page, money: null })
   })
 
   /** Stop the link. The client sees "this link no longer works". */

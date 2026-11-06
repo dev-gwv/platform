@@ -1,3 +1,4 @@
+import { localIso } from '@/shared/ui/days-left'
 import { useEffect, useState } from 'react'
 import type { CrmStatsQuery } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -12,7 +13,7 @@ function ahead(days: number): CrmStatsQuery {
   const from = new Date()
   const to = new Date()
   to.setDate(to.getDate() + days)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const iso = (d: Date) => localIso(d)
   return { from: iso(from), to: iso(to) }
 }
 

@@ -40,6 +40,12 @@ describe('a platform admin named by email (0291)', () => {
   it('becomes one once the inbox is proven, and the studio opens for life (0288)', async () => {
     await q(`insert into companies (id, name, owner_user_id) values ($1, 'Nisha Studio', $2)`, [STUDIO, NISHA])
     await q(`insert into users (user_id, company_id, role, name, email, login_enabled) values ($1, $2, 'super_admin', 'Nisha', 'nishagraham11@gmail.com', true)`, [NISHA, STUDIO])
+    // 0294: a login a studio made carries the email but not the proof.
+    const [refused] = await q<{ ok: boolean }>(`select claim_platform_admin($1) as ok`, [NISHA])
+    expect(refused!.ok).toBe(false)
+    expect(await isAdmin(NISHA)).toBe(false)
+    // The confirmation link, a reset or Google proves it (the API sets this).
+    await q(`update auth.users set email_proven_at = now() where id = $1`, [NISHA])
     const [r] = await q<{ ok: boolean }>(`select claim_platform_admin($1) as ok`, [NISHA])
     expect(r!.ok).toBe(true)
     expect(await isAdmin(NISHA)).toBe(true)

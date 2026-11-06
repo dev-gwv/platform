@@ -170,6 +170,15 @@ async function captureMetaPost(
       log.warn({ requestId: c.get('requestId'), pageId }, 'meta lead for a page no studio has connected')
       continue
     }
+    // Meta sends a notification again when an earlier answer was lost or slow:
+    // a lead already brought in is not brought in twice (bug sweep, 6 Nov).
+    const seen = await withService(c.env, (sql) => sql<{ n: number }[]>`
+      select count(*)::int as n from fb_lead_imports
+       where leadgen_id = ${item.leadgen_id} and status = 'imported'`).catch(() => [{ n: 0 }])
+    if ((seen[0]?.n ?? 0) > 0) {
+      skipped += 1
+      continue
+    }
     const fetched = await attempt(c, 'webhooks.meta_fetch', () => fetchMetaLead(target.token, item.leadgen_id))
     if (!fetched) {
       // Meta told us about a lead we could not read (token revoked, page
@@ -513,9 +522,15 @@ async function savePages(
           on conflict (company_id, page_id) do update
             set page_name = excluded.page_name, category = excluded.category, connected_via = excluded.connected_via,
                 last_synced_at = now(), last_error = null`
-        // A page belongs to one studio: a token from another studio's login
-        // moves it, which is what the person with the page's login asked for.
-        await sql`delete from fb_page_tokens where page_id = ${p.id} and company_id <> ${auth.companyId}`
+        // A page belongs to one studio. Another studio's token for it goes
+        // only while that studio does not have the page connected: one login
+        // that runs two brands listed the page here, and the studio actually
+        // receiving its leads lost them without a word (bug sweep, 6 Nov).
+        await sql`
+          delete from fb_page_tokens t
+           where t.page_id = ${p.id} and t.company_id <> ${auth.companyId}
+             and not exists (select 1 from fb_pages fp
+                              where fp.company_id = t.company_id and fp.page_id = t.page_id and fp.is_connected)`
         await sql`
           insert into fb_page_tokens (company_id, page_id, token_enc, fb_user_id, connected_by)
           values (${auth.companyId}, ${p.id}, ${sealed[i]!}, ${found.fb_user_id}, ${auth.userId})

@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import type { CreateReceivedPaymentRequest, ReceivedPayment, UpdateReceivedPaymentRequest } from '@ipc/contracts'
 
 /**
@@ -88,7 +89,7 @@ export function moreLabel(q: ReturnType<typeof paymentQuestions>): string {
 
 /** The first thing wrong with the form, in words, or null. */
 export function checkPaymentForm(form: PaymentForm, { needsLink }: { needsLink: boolean }): string | null {
-  const amount = Number(form.amount)
+  const amount = parseAmount(form.amount)
   if (!Number.isFinite(amount) || amount <= 0) return 'Enter the amount.'
   // Since 0145 a payment may be against an invoice instead of a project, but
   // it must be against something, or nothing can ever reconcile it.
@@ -103,7 +104,7 @@ export function ledgerCreateBody(form: PaymentForm): CreateReceivedPaymentReques
     ...(form.projectId ? { project_id: form.projectId } : {}),
     ...(form.invoiceId ? { invoice_id: form.invoiceId } : {}),
     ...(form.clientId ? { client_id: form.clientId } : {}),
-    amount: Number(form.amount),
+    amount: parseAmount(form.amount),
     description: form.description.trim() || null,
     status: form.received ? 'paid' : 'pending',
     is_gst: form.isGst,
@@ -130,7 +131,7 @@ export function ledgerPatchBody(
     ...((form.projectId || null) !== (was.project_id ?? null) ? { project_id: form.projectId || null } : {}),
     ...((form.invoiceId || null) !== (was.invoice_id ?? null) ? { invoice_id: form.invoiceId || null } : {}),
     ...(form.clientId && form.clientId !== was.client_id ? { client_id: form.clientId } : {}),
-    amount: Number(form.amount),
+    amount: parseAmount(form.amount),
     description: form.description.trim() || null,
     status: form.received ? 'paid' : 'pending',
     is_gst: form.isGst,

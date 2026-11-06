@@ -48,15 +48,22 @@ export function QuoteRow({
   const canDelete = access.hasAction('crm', 'delete')
 
   function deliver(channel: 'none' | 'whatsapp' | 'email') {
+    // Opened at the press, pointed once the link is ready (bug sweep, 6 Nov).
+    const tab = channel === 'none' ? null : window.open('', '_blank')
     send.mutate(
       { id: q.id, channel },
       {
+        onError: () => tab?.close(),
         onSuccess: (r) => {
-          if (r.delivery === 'api') toast.success('Sent on WhatsApp')
-          else if (r.open_url) {
-            const w = window.open(r.open_url, '_blank', 'noopener')
-            if (!w) toast.message('Pop-up blocked — copy the link instead.')
-          }
+          if (r.delivery === 'api') {
+            tab?.close()
+            toast.success('Sent on WhatsApp')
+          } else if (r.open_url) {
+            if (tab) {
+              tab.opener = null
+              tab.location.href = r.open_url
+            } else toast.message('Pop-up blocked — copy the link instead.')
+          } else tab?.close()
           void navigator.clipboard.writeText(r.url).then(() => toast.message('Quote link copied'))
         },
       },

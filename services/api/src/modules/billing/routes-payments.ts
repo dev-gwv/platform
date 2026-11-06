@@ -286,6 +286,10 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
           invoiceClient = inv[0].client_id
           invoiceProject = inv[0].project_id
         }
+        // The same rule PATCH keeps: money on an invoice belongs to that
+        // invoice's project, never another one (bug sweep, 6 Nov: it counted
+        // toward one project while settling another's invoice).
+        if (d.invoice_id && d.project_id && invoiceProject && d.project_id !== invoiceProject) return 'mismatch' as const
         if (d.client_id) {
           const cl = await sql<{ id: string }[]>`
             select id from clients where id = ${d.client_id} and company_id = ${auth.companyId}`
@@ -312,6 +316,7 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
     if (row === 'bad_project') fail(422, 'Selected project does not belong to this studio.')
     if (row === 'bad_invoice') fail(422, 'Selected invoice does not belong to this studio.')
     if (row === 'bad_client') fail(422, 'Selected client does not belong to this studio.')
+    if (row === 'mismatch') fail(422, 'That invoice belongs to another project.')
     if (!row) fail(400, 'We could not save this payment.')
     await audit(c, { action: 'received_payment.create', entityType: 'received_payment', entityId: row.id, after: d })
     return c.json({ id: row.id }, 201)

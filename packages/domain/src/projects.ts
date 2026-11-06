@@ -142,9 +142,12 @@ export interface NamedShootDate extends ShootDate {
 export function findWeddingShoot(
   shoots: ReadonlyArray<NamedShootDate>,
 ): NamedShootDate | null {
+  // A Pre-Wedding shoot is not the wedding (bug sweep, 6 Nov: "45 days after
+  // the wedding" counted from a pre-wedding shoot weeks earlier).
+  const notPre = (s: NamedShootDate) => !/pre[-\s]?wedding/i.test(s.name)
   return (
-    shoots.find((s) => /wedding\s*day/i.test(s.name)) ??
-    shoots.find((s) => /wedding/i.test(s.name)) ??
+    shoots.find((s) => notPre(s) && /wedding\s*day/i.test(s.name)) ??
+    shoots.find((s) => notPre(s) && /wedding/i.test(s.name)) ??
     null
   )
 }
