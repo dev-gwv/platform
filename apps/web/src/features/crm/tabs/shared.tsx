@@ -1,3 +1,4 @@
+import { localIso } from '@/shared/ui/days-left'
 import type { ReactNode } from 'react'
 import { PartnerChip } from '../PartnerChip'
 import { Archive, Flame } from 'lucide-react'
@@ -38,7 +39,7 @@ const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'sho
 export const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
 
 /** Today's date as the API wants it. */
-export const isoDay = (d: Date) => d.toISOString().slice(0, 10)
+export const isoDay = (d: Date) => localIso(d)
 
 /**
  * Never called, and it shows.

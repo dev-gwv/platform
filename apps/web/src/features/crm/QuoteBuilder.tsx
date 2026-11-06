@@ -1,3 +1,5 @@
+import { localIso } from '@/shared/ui/days-left'
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { createQuoteRequest, updateQuoteRequest, type CreateQuoteRequest, type CrmLead, type CrmQuote } from '@ipc/contracts'
@@ -23,13 +25,10 @@ interface Line {
 
 const SLABS: GstSlab[] = [0, 5, 12, 18, 28]
 const blank = (): Line => ({ description: '', quantity: '1', unit: '', rate: '', days: '', gst_rate: 18 })
-const num = (v: string | undefined) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
+const num = (v: string | undefined) => parseAmount(v)
 
 function iso(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  return localIso(d)
 }
 
 /**

@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import {
   deliverableDueDate,
   deliverableTimings,
@@ -257,10 +258,7 @@ export const newDeliverable = (): DeliverableDraft => ({
 export const newPayment = (): PaymentDraft => ({ amount: '', paid_on: '', mode: '', reference: '', status: 'paid', description: '', is_gst: false, gst_number: '', notes: '' })
 
 /** '' → 0, so a blank money field never becomes NaN in a total. */
-export const money = (v: string): number => {
-  const n = Number(v)
-  return v.trim() === '' || Number.isNaN(n) ? 0 : n
-}
+export const money = (v: string): number => parseAmount(v)
 
 const days = (v: string): number | undefined => {
   const n = Number(v)
@@ -1025,7 +1023,17 @@ export function isDirty(draft: ProjectDraft): boolean {
   )
 }
 
-const DRAFT_KEY = 'ipc.project.draft'
+const DRAFT_BASE = 'ipc.project.draft'
+let draftScope = ''
+/**
+ * Whose draft it is: the person and the studio (bug sweep, 6 Nov: one key for
+ * the whole browser restored brand A's client into brand B's wizard, and
+ * showed one team login the last person's client).
+ */
+export function setDraftScope(userId: string | null | undefined, companyId: string | null | undefined): void {
+  draftScope = userId && companyId ? `${userId}:${companyId}` : ''
+}
+const draftKey = () => (draftScope ? `${DRAFT_BASE}:${draftScope}` : DRAFT_BASE)
 
 interface StoredDraft {
   draft: ProjectDraft
@@ -1039,10 +1047,10 @@ interface StoredDraft {
 export function saveDraft(draft: ProjectDraft, now: string): void {
   try {
     if (!isDirty(draft)) {
-      localStorage.removeItem(DRAFT_KEY)
+      localStorage.removeItem(draftKey())
       return
     }
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, savedAt: now } satisfies StoredDraft))
+    localStorage.setItem(draftKey(), JSON.stringify({ draft, savedAt: now } satisfies StoredDraft))
   } catch {
     // A full or blocked localStorage must never take the form down with it.
   }
@@ -1050,7 +1058,7 @@ export function saveDraft(draft: ProjectDraft, now: string): void {
 
 export function loadDraft(): StoredDraft | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = localStorage.getItem(draftKey())
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<StoredDraft>
     if (!parsed?.draft || typeof parsed.savedAt !== 'string') return null
@@ -1077,7 +1085,7 @@ export function loadDraft(): StoredDraft | null {
 
 export function clearDraft(): void {
   try {
-    localStorage.removeItem(DRAFT_KEY)
+    localStorage.removeItem(draftKey())
   } catch {
     // Nothing to do — the draft simply outlives this attempt.
   }

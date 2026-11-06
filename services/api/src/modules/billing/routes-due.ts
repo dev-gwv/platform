@@ -63,7 +63,12 @@ export const billingDueRoutes = new Hono<AppEnv>()
     const lines: DueLineRow[] = []
     const byProject = <T extends { project_id: string | null }>(xs: readonly T[], id: string) => xs.filter((x) => x.project_id === id)
     for (const p of data.projects) {
-      const outstanding = Math.max(0, p.total - p.received)
+      // An invoice can be more than the project's value (GST on top, extra
+      // lines), so what its open invoices still ask for is owed even when the
+      // value is fully paid (bug sweep, 6 Nov: an ₹18,000 GST balance never
+      // showed as due, and Home and Invoices disagreed on Overdue).
+      const openInvoices = byProject(data.invoices, p.id).reduce((n, i) => n + i.balance, 0)
+      const outstanding = Math.max(0, p.total - p.received, openInvoices)
       if (outstanding <= 0.5) continue
       const plan = data.plans.find((x) => x.project_id === p.id)
       const parts = plan ? planInstalmentsFrom(plan.payment_terms) : []
@@ -84,8 +89,10 @@ export const billingDueRoutes = new Hono<AppEnv>()
       })
       for (const l of allocated) lines.push({ ...l, project_id: p.id, project_name: p.name, client_name: p.client_name })
     }
-    // An invoice with no project still has to be collected.
-    for (const i of data.invoices.filter((x) => !x.project_id)) {
+    // An invoice with no project still has to be collected...
+    // ...and so does one on a cancelled project, which the loop above skips.
+    const live = new Set(data.projects.map((p) => p.id))
+    for (const i of data.invoices.filter((x) => !x.project_id || !live.has(x.project_id))) {
       lines.push({ kind: 'invoice', label: i.label, amount: i.balance, due_on: i.due_on, bucket: dueBucket(i.due_on, today), invoice_id: i.id, project_id: null, project_name: null, client_name: i.client_name })
     }
     const tile = (b: DueLineRow['bucket']) => {

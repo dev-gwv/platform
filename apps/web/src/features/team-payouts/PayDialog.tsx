@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -31,12 +32,12 @@ export function PayDialog({
   const inr = useINR()
   const pay = usePaySlot()
   const [total, setTotal] = useState(amount > 0 ? String(amount) : '')
-  const totalN = Number(total) || 0
+  const totalN = parseAmount(total)
   const [now, setNow] = useState(String(Math.max(0, amount - paid)))
   const [paidOn, setPaidOn] = useState(() => todayInIndia())
   const [mode, setMode] = useState('')
   const [reference, setReference] = useState('')
-  const nowN = Number(now) || 0
+  const nowN = parseAmount(now)
   const left = Math.max(0, totalN - paid - nowN)
   const over = paid + nowN > totalN + 0.001
 
