@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   ArrowDown,
@@ -13,6 +12,7 @@ import {
   Loader2,
   Palette,
   Plus,
+  Send,
   Trash2,
   X,
 } from 'lucide-react'
@@ -37,8 +37,13 @@ import {
   useDesign,
   useDuplicateDesign,
   useSaveDesign,
+  useWriteDesign,
 } from '@/features/designer/api'
-import { DesignPageView, PAGE_H, PAGE_W } from '@/features/designer/DesignPageView'
+import { DesignPageView } from '@/features/designer/DesignPageView'
+import { PrintCopy, Scaled } from '@/features/designer/Sheets'
+import { SendDesignDialog } from '@/features/designer/SendDesignDialog'
+import type { Writer } from '@/features/designer/WriteButton'
+import { useCompanyProfile } from '@/features/settings/api'
 import { loadDesignerFonts } from '@/features/designer/fonts'
 import {
   BODY_FONTS,
@@ -72,6 +77,7 @@ function Editor({ id }: { id: string }) {
     <Workspace
       id={id}
       initial={{ title: q.data.title, template: q.data.template, doc: q.data.doc }}
+      projectName={q.data.project_name}
     />
   )
 }
@@ -82,7 +88,7 @@ interface Draft {
   doc: DesignDoc
 }
 
-function Workspace({ id, initial }: { id: string; initial: Draft }) {
+function Workspace({ id, initial, projectName }: { id: string; initial: Draft; projectName: string | null }) {
   const navigate = useNavigate()
   const confirm = useConfirm()
   const save = useSaveDesign(id)
@@ -91,6 +97,17 @@ function Workspace({ id, initial }: { id: string; initial: Draft }) {
   const [draft, setDraft] = useState<Draft>(initial)
   const [state, setState] = useState<SaveState>('saved')
   const [lookOpen, setLookOpen] = useState(false)
+  const [sending, setSending] = useState(false)
+  const company = useCompanyProfile()
+  const write = useWriteDesign()
+  // A refusal (no AI key yet, the day's allowance used) is said by the app's own mutation toast.
+  const writer: Writer = (ask) =>
+    write.mutateAsync({
+        ...ask,
+        studio: company.data?.display_name || company.data?.name || '',
+        project: projectName ?? '',
+      client: draft.doc.pages.find((p) => p.kind === 'cover')?.data.subtitle.replace(/^For\s+/i, '') ?? '',
+    })
   const pending = useRef<Draft | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -180,8 +197,17 @@ function Workspace({ id, initial }: { id: string; initial: Draft }) {
           >
             <Palette /> Look
           </Button>
-          <Button size="sm" onClick={print}>
+          <Button variant="outline" size="sm" onClick={print}>
             <Download /> Download PDF
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              flush()
+              setSending(true)
+            }}
+          >
+            <Send /> Send to client
           </Button>
           <RowMenu
             label="More"
@@ -281,6 +307,7 @@ function Workspace({ id, initial }: { id: string; initial: Draft }) {
                   page={p}
                   theme={doc.theme}
                   editable
+                  writer={writer}
                   onChange={(data: DesignPageData) => setPage(i, { ...p, data })}
                 />
               </Scaled>
@@ -292,25 +319,8 @@ function Workspace({ id, initial }: { id: string; initial: Draft }) {
         </div>
       </div>
 
-      {/* What Download PDF prints: the shown pages, full size, nothing to edit.
-          On <body> itself, in normal flow, so each page takes its own margin-free sheet. */}
-      {createPortal(
-        <div className="designer-print" aria-hidden>
-          {doc.pages
-            .filter((p) => !p.hidden)
-            .map((p) => (
-              <div key={p.id} className="designer-print-page">
-                <DesignPageView
-                  page={p}
-                  theme={doc.theme}
-                  editable={false}
-                  onChange={() => undefined}
-                />
-              </div>
-            ))}
-        </div>,
-        document.body,
-      )}
+      <PrintCopy doc={doc} />
+      {sending && <SendDesignDialog id={id} title={draft.title} client={draft.doc.pages.find((p) => p.kind === 'cover')?.data.subtitle.replace(/^For\s+/i, '') ?? ''} studio={company.data?.display_name || company.data?.name || ''} onClose={() => setSending(false)} />}
     </div>
   )
 }
@@ -335,43 +345,6 @@ function SaveLine({ state, onRetry }: { state: SaveState; onRetry: () => void })
       )}
       {state === 'saved' ? 'Saved' : 'Saving…'}
     </span>
-  )
-}
-
-/** The page drawn at A4 and scaled down to the column's width. */
-function Scaled({ hidden, children }: { hidden: boolean; children: React.ReactNode }) {
-  const box = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(1)
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el) return
-    const fit = () => setScale(Math.min(1, el.clientWidth / PAGE_W))
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  return (
-    <div ref={box} className="relative w-full">
-      <div
-        className={cn(
-          'relative overflow-hidden rounded-sm shadow-lg ring-1 ring-black/10',
-          hidden && 'opacity-40',
-        )}
-        style={{ width: PAGE_W * scale, height: PAGE_H * scale }}
-      >
-        <div
-          style={{
-            width: PAGE_W,
-            height: PAGE_H,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -462,7 +435,7 @@ function PageBar({
   )
 }
 
-const KINDS: DesignPageKind[] = ['event', 'about', 'deliverables', 'addons', 'thanks', 'cover']
+const KINDS: DesignPageKind[] = ['event', 'packages', 'deliverables', 'addons', 'team', 'testimonial', 'about', 'thanks', 'cover']
 
 function AddPage({ onAdd }: { onAdd: (k: DesignPageKind) => void }) {
   return (

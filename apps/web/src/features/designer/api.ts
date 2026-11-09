@@ -1,5 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { designCreated, designDeleted, designDetail, designSaved, designSummary, type CreateDesignRequest, type UpdateDesignRequest } from '@ipc/contracts'
+import {
+  designCreated,
+  designDeleted,
+  designDetail,
+  designLink,
+  designSaved,
+  designSummary,
+  designWriteReply,
+  publicDesign,
+  type CreateDesignRequest,
+  type DesignWriteRequest,
+  type UpdateDesignRequest,
+} from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 
 /** Quotation Designer (0295): the studio's designs. */
@@ -51,3 +63,44 @@ export function useDeleteDesign() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY, exact: true }),
   })
 }
+
+// ── step 2 (0296): the client's link and "Write it for me" ──────────
+
+export function useDesignLink(id: string) {
+  return useQuery({ queryKey: [...KEY, id, 'link'], queryFn: () => callApi(`/designs/${id}/link`, { responseSchema: designLink }) })
+}
+
+export function useMakeDesignLink(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => callApi(`/designs/${id}/link`, { method: 'POST', responseSchema: designLink }),
+    onSuccess: (l) => qc.setQueryData([...KEY, id, 'link'], l),
+  })
+}
+
+export function useStopDesignLink(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => callApi(`/designs/${id}/link`, { method: 'DELETE', responseSchema: designLink }),
+    onSuccess: (l) => qc.setQueryData([...KEY, id, 'link'], l),
+  })
+}
+
+export function useWriteDesign() {
+  return useMutation({
+    mutationFn: (body: DesignWriteRequest) => callApi('/designs/write', { method: 'POST', body, responseSchema: designWriteReply }),
+  })
+}
+
+/** The client's page reads the design by its link. */
+export function usePublicDesign(token: string) {
+  return useQuery({
+    queryKey: ['public-design', token],
+    queryFn: () => callApi(`/public/designs/${encodeURIComponent(token)}`, { responseSchema: publicDesign }),
+    retry: false,
+    staleTime: 60_000,
+  })
+}
+
+/** "/d/<token>" on this site: what the studio sends. */
+export const designLinkUrl = (token: string) => `${window.location.origin}/d/${token}`

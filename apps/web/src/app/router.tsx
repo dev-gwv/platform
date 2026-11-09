@@ -50,6 +50,7 @@ const GalleryAppPage = lazyRouteComponent(() => import('@/routes/gallery-app'), 
 const AiPage = lazyRouteComponent(() => import('@/routes/ai'), 'AiPage')
 const AiDesignerPage = lazyRouteComponent(() => import('@/routes/ai-designer'), 'AiDesignerPage')
 const AiDesignerEditPage = lazyRouteComponent(() => import('@/routes/ai-designer-edit'), 'AiDesignerEditPage')
+const DesignPublicPage = lazyRouteComponent(() => import('@/routes/design-public'), 'DesignPublicPage')
 const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
 const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
 const ProductionBoardPage = lazyRouteComponent(() => import('@/routes/production-board'), 'ProductionBoardPage')
@@ -237,6 +238,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/enquiry-view/$token', EnquiryViewPage),
   // The client portal: one private link per project (0184).
   publicRoute('/p/$token', ClientPortalPage),
+  publicRoute('/d/$token', DesignPublicPage),
   publicRoute('/p/$token/invoice/$invoiceId', ClientPortalInvoicePage),
   publicRoute('/p/$token/terms/$docId', ClientPortalTermsPage),
   // The details form a client fills (0244).

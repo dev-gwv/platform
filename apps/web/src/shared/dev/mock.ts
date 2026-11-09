@@ -325,7 +325,7 @@ const payrollMonthFx = {
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
-  if (path.startsWith('/designs')) return designMock(path, method)
+  if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method)
   if (method === 'POST' && path === '/auth/forgot-password') return { ok: true }
   if (method === 'POST' && (path === '/auth/logout' || path === '/auth/logout-all'))
     return { ok: true }
@@ -4160,6 +4160,10 @@ function designMock(path: string, method: string): unknown {
   })
   const now = new Date().toISOString()
   const summary = { id: DESIGN_ID, title: 'Akshay & Riya Wedding – Quotation', template: 'ivory', project_id: null, project_name: 'Akshay & Riya Wedding', cover_url: null, pages: designDocFx.pages.length, created_at: now, updated_at: now }
+  if (path === '/designs/write')
+    return { text: 'At Cine World Weddings we tell your story the way you lived it: the quiet glances, the loud laughter and every ritual in between, captured with care so you can live your day again.', lines: ['400+ hand-edited photographs in high resolution', 'A cinematic wedding film of 8-10 minutes', 'A 60-second teaser for Instagram'] }
+  if (path.endsWith('/link')) return method === 'DELETE' ? { token: null } : { token: '0295d000-0000-4000-8000-0000000000010295d000-0000-4000-8000-000000000001', views: 3, first_viewed_at: now, last_viewed_at: now }
+  if (path.startsWith('/public/designs/')) return { title: summary.title, studio: 'Cine World Weddings', doc: designDocFx }
   if (method === 'GET' && path === '/designs') return [summary]
   if (method === 'GET') return { ...summary, doc: designDocFx }
   if (method === 'PATCH') return { ok: true, updated_at: now }

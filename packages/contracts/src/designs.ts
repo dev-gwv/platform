@@ -8,7 +8,7 @@ import { isoDateTime, uuid } from './shared/primitives'
  * kind looks, never what it holds.
  */
 
-export const DESIGN_PAGE_KINDS = ['cover', 'about', 'event', 'deliverables', 'addons', 'thanks'] as const
+export const DESIGN_PAGE_KINDS = ['cover', 'about', 'event', 'deliverables', 'addons', 'thanks', 'packages', 'team', 'testimonial'] as const
 export const designPageKind = z.enum(DESIGN_PAGE_KINDS)
 export type DesignPageKind = z.infer<typeof designPageKind>
 
@@ -27,6 +27,14 @@ export type DesignPhoto = z.infer<typeof designPhoto>
 
 export const designStat = z.object({ value: text(20), label: text(60) })
 export const designAddon = z.object({ name: text(80), lines: z.array(text(200)).max(12).default([]) })
+/** One package to choose from (0296): Silver / Gold / Platinum side by side. */
+export const designPackage = z.object({ name: text(60), price: text(60), lines: z.array(text(200)).max(10).default([]) })
+/** One person on the Our team page. */
+export const designPerson = z.object({
+  name: text(80),
+  role: text(80),
+  photo: designPhoto.default({}),
+})
 
 /** Every field a page can carry; a kind uses the ones it needs. */
 export const designPageData = z.object({
@@ -46,6 +54,8 @@ export const designPageData = z.object({
   addons: z.array(designAddon).max(12).default([]),
   photo: designPhoto.default({}),
   photos: z.array(designPhoto).max(6).default([]),
+  packages: z.array(designPackage).max(3).default([]),
+  people: z.array(designPerson).max(8).default([]),
 })
 export type DesignPageData = z.infer<typeof designPageData>
 
@@ -114,3 +124,41 @@ export type UpdateDesignRequest = z.infer<typeof updateDesignRequest>
 export const designCreated = z.object({ id: uuid })
 export const designSaved = z.object({ ok: z.boolean(), updated_at: z.string() })
 export const designDeleted = z.object({ ok: z.boolean() })
+
+// ── step 2 (0296): the client's link, and "Write it for me" ─────────
+
+/** The design's live link for the client, and whether they opened it. */
+export const designLink = z.object({
+  token: z.string().nullable(),
+  views: z.number().int().default(0),
+  first_viewed_at: z.string().nullable().default(null),
+  last_viewed_at: z.string().nullable().default(null),
+})
+export type DesignLink = z.infer<typeof designLink>
+
+/** What the client's page reads: the design, never the studio's other data. */
+export const publicDesign = z.object({
+  title: z.string(),
+  studio: z.string().nullable(),
+  doc: designDoc,
+})
+export type PublicDesign = z.infer<typeof publicDesign>
+
+export const DESIGN_WRITE_KINDS = ['about', 'tagline', 'deliverables', 'addon', 'event', 'thanks', 'testimonial'] as const
+export const DESIGN_TONES = ['warm', 'premium', 'fun', 'hinglish'] as const
+export const designWriteRequest = z.object({
+  kind: z.enum(DESIGN_WRITE_KINDS),
+  tone: z.enum(DESIGN_TONES).default('warm'),
+  studio: z.string().trim().max(120).default(''),
+  project: z.string().trim().max(200).default(''),
+  client: z.string().trim().max(200).default(''),
+  /** What is on the page now: the model improves it rather than starting blank. */
+  current: z.string().max(3000).default(''),
+  lines: z.array(z.string().max(400)).max(30).default([]),
+  /** A line from the studio: "we are known for candid", "mention drone". */
+  hint: z.string().trim().max(300).default(''),
+})
+export type DesignWriteRequest = z.infer<typeof designWriteRequest>
+
+export const designWriteReply = z.object({ text: z.string(), lines: z.array(z.string()) })
+export type DesignWriteReply = z.infer<typeof designWriteReply>

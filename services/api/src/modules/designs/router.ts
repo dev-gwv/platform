@@ -1,5 +1,18 @@
-import { Hono } from 'hono'
-import { createDesignRequest, designCreated, designDeleted, designDetail, designSaved, designSummary, updateDesignRequest, type DesignDoc } from '@ipc/contracts'
+import { Hono, type Context } from 'hono'
+import {
+  createDesignRequest,
+  designCreated,
+  designDeleted,
+  designDetail,
+  designLink,
+  designSaved,
+  designSummary,
+  designWriteReply,
+  designWriteRequest,
+  publicDesign,
+  updateDesignRequest,
+  type DesignDoc,
+} from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -9,6 +22,12 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { requireStudioWork } from '../../lib/scope'
+import { withService } from '../../lib/db'
+import { newRawToken, verifyToken } from '../../lib/auth-token'
+import { cleanDesignWriting, designWriterMessages } from '../../lib/design-writer'
+import { logAsk } from '../../lib/assistant'
+import { budgetUsed, budgetVerdict, DEFAULT_DAY_TOKENS, DEFAULT_MINUTE_TOKENS } from '../../lib/ai-budget'
+import { providersFor, readSettings } from '../assistant/router'
 
 /**
  * Quotation Designer (0295): the studio's premium quotation designs, each a
@@ -55,6 +74,41 @@ const SELECT = `d.id, d.title, d.template, d.project_id, p.name as project_name,
 export const designsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
   .use('*', requireStudioWork)
+
+  /**
+   * "Write it for me": one part of a design in the studio's chosen tone,
+   * through the assistant's own engine and budget (lib/ai.ts). Counted in
+   * the studio's daily AI allowance like a question to the assistant.
+   */
+  .post('/write', requireAction('projects', 'edit'), async (c) => {
+    const parsed = designWriteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check what to write.')
+    if (!c.env.AI_API_KEY) fail(503, 'AI writing is not switched on yet. Please ask us to switch it on.')
+    const auth = c.get('auth')
+    const row = await attempt(c, 'designs.write_settings', () => readSettings(c.env))
+    const spent = await budgetUsed(c.env)
+    if (spent) {
+      const verdict = budgetVerdict(
+        spent,
+        { minute: row?.assistant_minute_tokens ?? DEFAULT_MINUTE_TOKENS, day: row?.assistant_day_tokens ?? DEFAULT_DAY_TOKENS },
+        900,
+        'en',
+      )
+      if (!verdict.ok) fail(429, verdict.why)
+    }
+    const reply = await providersFor(c.env, row ?? null).chat({ messages: designWriterMessages(parsed.data), maxTokens: 700, temperature: 0.7 })
+    await logAsk(
+      c.env,
+      { companyId: auth.companyId, userId: auth.userId, question: `[designer:${parsed.data.kind}] ${parsed.data.hint || parsed.data.project}`.slice(0, 300) },
+      reply.ok
+        ? { status: 'answered', answer: reply.text, sources: [], callUrl: null, model: reply.model, promptTokens: reply.usage.promptTokens, completionTokens: reply.usage.completionTokens, cachedTokens: reply.usage.cachedTokens, error: null }
+        : { status: 'failed', answer: '', sources: [], callUrl: null, model: null, promptTokens: null, completionTokens: null, cachedTokens: null, error: reply.error },
+    )
+    if (!reply.ok) fail(503, reply.error || 'The AI could not write just now. Try again in a minute.')
+    const out = cleanDesignWriting(parsed.data.kind, reply.text)
+    if (!out.text && out.lines.length === 0) fail(503, 'The AI came back empty. Try again.')
+    return c.json(designWriteReply.parse(out))
+  })
 
   .get('/', requireAction('projects', 'view'), async (c) => {
     const projectId = c.req.query('project_id') || null
@@ -146,3 +200,96 @@ export const designsRouter = new Hono<AppEnv>()
     await audit(c, { action: 'design.delete', entityType: 'quotation_design', entityId: id, before: rows[0] })
     return c.json(designDeleted.parse({ ok: true }))
   })
+
+  /** The client's link: whether there is one, and when they opened it. */
+  .get('/:id/link', requireAction('projects', 'view'), async (c) => {
+    const id = uuidParam(c)
+    await mustSee(c, id)
+    const row = await attempt(c, 'designs.link', () => readLink(c.env, id))
+    return c.json(designLink.parse(row ?? { token: null }))
+  })
+
+  /** Make the link (or hand back the live one). */
+  .post('/:id/link', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    await mustSee(c, id)
+    const row = await attempt(c, 'designs.link_make', () =>
+      withService(c.env, async (sql) => {
+        await sql`insert into quotation_design_links (design_id, token) values (${id}, ${newRawToken()}) on conflict (design_id) do nothing`
+        return readLinkWith(sql, id)
+      }),
+    )
+    if (!row) fail(400, 'We could not make the link.')
+    await audit(c, { action: 'design.share', entityType: 'quotation_design', entityId: id })
+    return c.json(designLink.parse(row))
+  })
+
+  /** Stop sharing: the old link stops at once. */
+  .delete('/:id/link', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    await mustSee(c, id)
+    await attempt(c, 'designs.link_stop', () => withService(c.env, (sql) => sql`delete from quotation_design_links where design_id = ${id}`))
+    await audit(c, { action: 'design.unshare', entityType: 'quotation_design', entityId: id })
+    return c.json(designLink.parse({ token: null }))
+  })
+
+type Sql = Parameters<Parameters<typeof withService>[1]>[0]
+
+interface LinkRow {
+  token: string
+  views: number
+  first_viewed_at: string | null
+  last_viewed_at: string | null
+}
+
+const readLinkWith = async (sql: Sql, id: string) => {
+  const [row] = await sql<LinkRow[]>`
+    select token, views,
+           ${sql.unsafe(iso('first_viewed_at'))} as first_viewed_at,
+           ${sql.unsafe(iso('last_viewed_at'))} as last_viewed_at
+      from quotation_design_links where design_id = ${id}`
+  return row ?? null
+}
+const readLink = (env: AppEnv['Bindings'], id: string) => withService(env, (sql) => readLinkWith(sql, id))
+
+/** The link is read as the service, so the caller's own sight of the design is checked first (RLS). */
+async function mustSee(c: Context<AppEnv>, id: string) {
+  const rows = await attempt(c, 'designs.see', () =>
+    withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`select id from quotation_designs where id = ${id}`),
+  )
+  if (!rows?.[0]) fail(404, 'This design is not here any more.')
+}
+
+/**
+ * The client's page (/d/<token>): the design and the studio's name, nothing
+ * else. An open is counted once per ten minutes, never by the studio's own
+ * people signed in on the same browser.
+ */
+export const publicDesignsRouter = new Hono<AppEnv>().get('/designs/:token', async (c) => {
+  const token = c.req.param('token')
+  if (!/^[0-9a-f-]{20,80}$/i.test(token)) fail(404, 'This link is not available.')
+  const row = await attempt(c, 'designs.public', () =>
+    withService(c.env, async (sql) => {
+      const [r] = await sql<{ title: string; doc: DesignDoc; studio: string | null; company_id: string }[]>`
+        select d.title, d.doc, coalesce(nullif(co.display_name, ''), co.name) as studio, d.company_id
+          from quotation_design_links l
+          join quotation_designs d on d.id = l.design_id
+          join companies co on co.id = d.company_id
+         where l.token = ${token}`
+      return r ?? null
+    }),
+  )
+  if (!row) fail(404, 'This link is not available. Ask the studio for a new one.')
+  const out = publicDesign.parse({ title: row.title, studio: row.studio, doc: row.doc })
+  try {
+    const h = c.req.header('Authorization') ?? ''
+    const uid = h.startsWith('Bearer ') ? ((await verifyToken(c.env, h.slice(7)))?.uid ?? null) : null
+    await withService(c.env, async (sql) => {
+      const own = uid ? (await sql`select 1 from users where user_id = ${uid} and company_id = ${row.company_id} limit 1`).length > 0 : false
+      if (!own) await sql`select design_link_opened(${token})`
+    })
+  } catch {
+    // Counting an open must never break the page.
+  }
+  return c.json(out)
+})
