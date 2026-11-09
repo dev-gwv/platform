@@ -10,6 +10,8 @@ import {
   designWriteReply,
   designWriteRequest,
   publicDesign,
+  addDesignPhotoRequest,
+  designLibraryPhoto,
   updateDesignRequest,
   type DesignDoc,
 } from '@ipc/contracts'
@@ -38,6 +40,7 @@ import { providersFor, readSettings } from '../assistant/router'
 const iso = (col: string) => `to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`
 
 interface Row {
+  is_template: boolean
   id: string
   title: string
   template: string
@@ -64,11 +67,12 @@ const summary = (r: Row) =>
     project_name: r.project_name,
     cover_url: coverOf(r.doc),
     pages: r.doc?.pages?.length ?? 0,
+    is_template: r.is_template,
     created_at: r.created_at,
     updated_at: r.updated_at,
   })
 
-const SELECT = `d.id, d.title, d.template, d.project_id, p.name as project_name, d.doc,
+const SELECT = `d.id, d.is_template, d.title, d.template, d.project_id, p.name as project_name, d.doc,
   ${iso('d.created_at')} as created_at, ${iso('d.updated_at')} as updated_at`
 
 export const designsRouter = new Hono<AppEnv>()
@@ -110,14 +114,51 @@ export const designsRouter = new Hono<AppEnv>()
     return c.json(designWriteReply.parse(out))
   })
 
+  /** The studio's photo library: every photo put into a design, newest first. */
+  .get('/photos', requireAction('projects', 'view'), async (c) => {
+    const rows = await attempt(c, 'designs.photos', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        select id, url, name, width, height, size_bytes, ${sql.unsafe(iso('created_at'))} as created_at
+          from design_photos order by created_at desc limit 500`),
+    )
+    if (!rows) fail(400, 'We could not load your photos.')
+    return c.json(designLibraryPhoto.array().parse(rows))
+  })
+
+  .post('/photos', requireAction('projects', 'edit'), async (c) => {
+    const parsed = addDesignPhotoRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please check the photo.')
+    const v = parsed.data
+    const rows = await attempt(c, 'designs.photo_add', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`
+        insert into design_photos (url, name, width, height, size_bytes)
+        values (${v.url}, ${v.name}, ${v.width ?? null}, ${v.height ?? null}, ${v.size_bytes ?? null})
+        returning id, url, name, width, height, size_bytes, ${sql.unsafe(iso('created_at'))} as created_at`),
+    )
+    if (!rows?.[0]) fail(400, 'We could not keep this photo.')
+    return c.json(designLibraryPhoto.parse(rows[0]), 201)
+  })
+
+  /** Out of the library only: a design that shows it keeps it. */
+  .delete('/photos/:id', requireAction('projects', 'edit'), async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'designs.photo_remove', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`delete from design_photos where id = ${id} returning id`),
+    )
+    if (!rows?.[0]) fail(404, 'This photo is not here any more.')
+    return c.json(designDeleted.parse({ ok: true }))
+  })
+
   .get('/', requireAction('projects', 'view'), async (c) => {
     const projectId = c.req.query('project_id') || null
+    const templates = c.req.query('templates') === '1'
     const rows = await attempt(c, 'designs.list', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql<Row[]>`
         select ${sql.unsafe(SELECT)}
           from quotation_designs d
           left join projects p on p.id = d.project_id
          where (${projectId}::uuid is null or d.project_id = ${projectId}::uuid)
+           and d.is_template = ${templates}
          order by d.updated_at desc
          limit 300`),
     )
@@ -145,13 +186,13 @@ export const designsRouter = new Hono<AppEnv>()
     const v = parsed.data
     const rows = await attempt(c, 'designs.create', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
-        insert into quotation_designs (title, template, project_id, doc)
-        values (${v.title}, ${v.template}, ${v.project_id ?? null}, ${sql.json(v.doc as never)})
+        insert into quotation_designs (title, template, project_id, doc, is_template)
+        values (${v.title}, ${v.template}, ${v.is_template ? null : (v.project_id ?? null)}, ${sql.json(v.doc as never)}, ${v.is_template ?? false})
         returning id`),
     )
     const id = rows?.[0]?.id
     if (!id) fail(400, 'We could not make this design.')
-    await audit(c, { action: 'design.create', entityType: 'quotation_design', entityId: id, after: { title: v.title, template: v.template, project_id: v.project_id ?? null } })
+    await audit(c, { action: v.is_template ? 'design.save_template' : 'design.create', entityType: 'quotation_design', entityId: id, after: { title: v.title, template: v.template, project_id: v.project_id ?? null } })
     return c.json(designCreated.parse({ id }), 201)
   })
 
@@ -180,8 +221,8 @@ export const designsRouter = new Hono<AppEnv>()
     const id = uuidParam(c)
     const rows = await attempt(c, 'designs.duplicate', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql<{ id: string }[]>`
-        insert into quotation_designs (title, template, project_id, doc)
-        select left(title || ' (copy)', 160), template, project_id, doc from quotation_designs where id = ${id}
+        insert into quotation_designs (title, template, project_id, doc, is_template)
+        select left(title || ' (copy)', 160), template, project_id, doc, is_template from quotation_designs where id = ${id}
         returning id`),
     )
     const copy = rows?.[0]?.id

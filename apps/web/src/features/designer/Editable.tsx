@@ -9,6 +9,8 @@ import { cn } from '@/shared/ui/cn'
  * `onEnter` (a list adds the next line) and Backspace on an empty line to
  * `onEmptyBackspace` (a list drops it).
  */
+export type EditableProps = Parameters<typeof Editable>[0]
+
 export function Editable({
   value,
   onChange,
@@ -21,6 +23,8 @@ export function Editable({
   onEnter,
   onEmptyBackspace,
   autoFocus,
+  onFocus,
+  active,
 }: {
   value: string
   onChange: (v: string) => void
@@ -33,6 +37,10 @@ export function Editable({
   onEnter?: (() => void) | undefined
   onEmptyBackspace?: (() => void) | undefined
   autoFocus?: boolean | undefined
+  /** Told when the text takes the cursor: the editor shows its style bar. */
+  onFocus?: (() => void) | undefined
+  /** Highlighted while its style bar is open. */
+  active?: boolean | undefined
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -90,7 +98,12 @@ export function Editable({
       contentEditable="plaintext-only"
       suppressContentEditableWarning
       data-placeholder={placeholder}
-      className={cn('designer-editable whitespace-pre-line', className)}
+      className={cn(
+        'designer-editable whitespace-pre-line',
+        active && 'designer-editable-active',
+        className,
+      )}
+      onFocus={onFocus}
       style={style}
       onInput={read}
       onBlur={read}

@@ -36,6 +36,21 @@ export const designPerson = z.object({
   photo: designPhoto.default({}),
 })
 
+/**
+ * How one piece of text on a page is set (0297, Canva's text bar): bigger or
+ * smaller than the layout's size, its alignment, its own colour, bold and
+ * italic. Keyed by the text's place on the page ("title", "body",
+ * "lines.2", "packages.1.price").
+ */
+export const designTextStyle = z.object({
+  scale: z.number().min(0.4).max(2.5).optional(),
+  align: z.enum(['left', 'center', 'right']).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+})
+export type DesignTextStyle = z.infer<typeof designTextStyle>
+
 /** Every field a page can carry; a kind uses the ones it needs. */
 export const designPageData = z.object({
   title: text(120),
@@ -56,6 +71,12 @@ export const designPageData = z.object({
   photos: z.array(designPhoto).max(6).default([]),
   packages: z.array(designPackage).max(3).default([]),
   people: z.array(designPerson).max(8).default([]),
+  /** 0297: per-text settings, and this page's own background ('' = the look's). */
+  styles: z
+    .record(z.string().max(60), designTextStyle)
+    .refine((v) => Object.keys(v).length <= 120, { message: 'Too many text settings on one page.' })
+    .default({}),
+  background: z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)]).default(''),
 })
 export type DesignPageData = z.infer<typeof designPageData>
 
@@ -95,6 +116,8 @@ export const designSummary = z.object({
   project_name: z.string().nullable(),
   cover_url: z.string().nullable().default(null),
   pages: z.number().int().default(0),
+  /** 0297: a saved template starts new designs and is not counted as a design. */
+  is_template: z.boolean().default(false),
   created_at: isoDateTime,
   updated_at: isoDateTime,
 })
@@ -108,6 +131,7 @@ export const createDesignRequest = z.object({
   template: templateKey,
   project_id: uuid.nullable().optional(),
   doc: designDoc,
+  is_template: z.boolean().optional(),
 })
 export type CreateDesignRequest = z.infer<typeof createDesignRequest>
 
@@ -162,3 +186,25 @@ export type DesignWriteRequest = z.infer<typeof designWriteRequest>
 
 export const designWriteReply = z.object({ text: z.string(), lines: z.array(z.string()) })
 export type DesignWriteReply = z.infer<typeof designWriteReply>
+
+// ── step 3 (0297): the studio's photo library ───────────────────────
+
+export const designLibraryPhoto = z.object({
+  id: uuid,
+  url: z.string(),
+  name: z.string(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  size_bytes: z.number().int().nullable(),
+  created_at: isoDateTime,
+})
+export type DesignLibraryPhoto = z.infer<typeof designLibraryPhoto>
+
+export const addDesignPhotoRequest = z.object({
+  url: z.string().url().max(2000),
+  name: z.string().max(200).default(''),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
+  size_bytes: z.number().int().nonnegative().nullable().optional(),
+})
+export type AddDesignPhotoRequest = z.infer<typeof addDesignPhotoRequest>

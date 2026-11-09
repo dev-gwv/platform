@@ -1,59 +1,69 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  BookmarkPlus,
   Check,
   Copy,
   Download,
   Eye,
   EyeOff,
+  LayoutGrid,
   Loader2,
-  Palette,
+  Maximize,
+  Minus,
+  PaintBucket,
   Plus,
+  Redo2,
+  Rows3,
   Send,
   Trash2,
-  X,
+  Undo2,
 } from 'lucide-react'
 import type {
   DesignDoc,
   DesignPage,
   DesignPageData,
-  DesignPageKind,
-  DesignTheme,
+  DesignPhoto,
+  DesignTextStyle,
 } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
-import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { Input } from '@/shared/ui/input'
-import { Select } from '@/shared/ui/select'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { useConfirm } from '@/shared/ui/confirm'
+import { uploadFile } from '@/shared/api/client'
 import {
+  useAddDesignPhoto,
   useDeleteDesign,
   useDesign,
   useDuplicateDesign,
+  useSaveAsTemplate,
   useSaveDesign,
   useWriteDesign,
 } from '@/features/designer/api'
-import { DesignPageView } from '@/features/designer/DesignPageView'
-import { PrintCopy, Scaled } from '@/features/designer/Sheets'
+import { DesignPageView, PAGE_H, PAGE_W } from '@/features/designer/DesignPageView'
+import { PrintCopy } from '@/features/designer/Sheets'
 import { SendDesignDialog } from '@/features/designer/SendDesignDialog'
+import { SidePanel, SideRail, type PanelKey } from '@/features/designer/SidePanel'
+import { TextBar } from '@/features/designer/TextBar'
+import { Thumb } from '@/features/designer/Thumb'
+import {
+  DesignerContext,
+  type ActiveText,
+  type DesignerCtx,
+  type PickedFrame,
+} from '@/features/designer/context'
+import { loadDesignerFonts } from '@/features/designer/fonts'
+import { record, redo, startHistory, undo, type History } from '@/features/designer/history'
+import { shrinkPhoto, sizeWords } from '@/features/designer/shrink'
+import { PAGE_KIND_NAMES, pageId } from '@/features/designer/templates'
 import type { Writer } from '@/features/designer/WriteButton'
 import { useCompanyProfile } from '@/features/settings/api'
-import { loadDesignerFonts } from '@/features/designer/fonts'
-import {
-  BODY_FONTS,
-  HEADING_FONTS,
-  PAGE_KIND_NAMES,
-  TEMPLATES,
-  blankPage,
-  pageId,
-  templateFor,
-} from '@/features/designer/templates'
 
 export function AiDesignerEditPage() {
   const { id } = useParams({ from: '/authed/ai/designer/$id' })
@@ -78,6 +88,7 @@ function Editor({ id }: { id: string }) {
       id={id}
       initial={{ title: q.data.title, template: q.data.template, doc: q.data.doc }}
       projectName={q.data.project_name}
+      isTemplate={q.data.is_template}
     />
   )
 }
@@ -88,29 +99,57 @@ interface Draft {
   doc: DesignDoc
 }
 
-function Workspace({ id, initial, projectName }: { id: string; initial: Draft; projectName: string | null }) {
+const ZOOMS = [25, 33, 50, 67, 75, 100, 125, 150, 200] as const
+const clientOf = (doc: DesignDoc) =>
+  doc.pages.find((p) => p.kind === 'cover')?.data.subtitle.replace(/^For\s+/i, '') ?? ''
+
+/**
+ * The Quotation Designer's editor, laid out like Canva's (owner, 9 Nov: "everything
+ * that is there in Canva"): the whole screen, a dark workspace with the pages on
+ * it, Templates · Uploads · Pages · Look on the left, a text bar while a text
+ * has the cursor, undo and redo, zoom and grid view at the foot, and it saves by
+ * itself.
+ */
+function Workspace({
+  id,
+  initial,
+  projectName,
+  isTemplate,
+}: {
+  id: string
+  initial: Draft
+  projectName: string | null
+  isTemplate: boolean
+}) {
   const navigate = useNavigate()
   const confirm = useConfirm()
   const save = useSaveDesign(id)
   const dup = useDuplicateDesign()
   const del = useDeleteDesign()
-  const [draft, setDraft] = useState<Draft>(initial)
-  const [state, setState] = useState<SaveState>('saved')
-  const [lookOpen, setLookOpen] = useState(false)
-  const [sending, setSending] = useState(false)
+  const asTemplate = useSaveAsTemplate()
+  const addPhoto = useAddDesignPhoto()
   const company = useCompanyProfile()
   const write = useWriteDesign()
-  // A refusal (no AI key yet, the day's allowance used) is said by the app's own mutation toast.
-  const writer: Writer = (ask) =>
-    write.mutateAsync({
-        ...ask,
-        studio: company.data?.display_name || company.data?.name || '',
-        project: projectName ?? '',
-      client: draft.doc.pages.find((p) => p.kind === 'cover')?.data.subtitle.replace(/^For\s+/i, '') ?? '',
-    })
+  const studio = company.data?.display_name || company.data?.name || ''
+
+  const [hist, setHist] = useState<History<Draft>>(() => startHistory(initial))
+  const draft = hist.present
+  const [state, setState] = useState<SaveState>('saved')
+  const [panel, setPanel] = useState<PanelKey | null>(() =>
+    window.innerWidth >= 1100 ? 'uploads' : null,
+  )
+  const [sending, setSending] = useState(false)
+  const [zoom, setZoom] = useState<number | 'fit'>('fit')
+  const [view, setView] = useState<'scroll' | 'grid'>('scroll')
+  const [activeText, setActiveText] = useState<ActiveText | null>(null)
+  const [picked, setPicked] = useState<PickedFrame | null>(null)
+  const [current, setCurrent] = useState(0)
   const pending = useRef<Draft | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const canvas = useRef<HTMLDivElement>(null)
+  const [canvasW, setCanvasW] = useState(900)
 
+  // ── saving ────────────────────────────────────────────────────────
   const flush = useCallback(() => {
     if (timer.current) clearTimeout(timer.current)
     timer.current = null
@@ -130,9 +169,8 @@ function Workspace({ id, initial, projectName }: { id: string; initial: Draft; p
     )
   }, [save])
 
-  const change = useCallback(
+  const queueSave = useCallback(
     (next: Draft) => {
-      setDraft(next)
       pending.current = next
       setState('waiting')
       if (timer.current) clearTimeout(timer.current)
@@ -141,7 +179,25 @@ function Workspace({ id, initial, projectName }: { id: string; initial: Draft; p
     [flush],
   )
 
-  // Leaving the page saves what is waiting; closing the tab with it unsaved asks first.
+  const change = useCallback(
+    (next: Draft) => {
+      setHist((h) => record(h, next, Date.now()))
+      queueSave(next)
+    },
+    [queueSave],
+  )
+
+  const step = useCallback(
+    (dir: 'undo' | 'redo') => {
+      setHist((h) => {
+        const n = dir === 'undo' ? undo(h) : redo(h)
+        if (n !== h) queueSave(n.present)
+        return n
+      })
+    },
+    [queueSave],
+  )
+
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (pending.current) e.preventDefault()
@@ -153,8 +209,61 @@ function Workspace({ id, initial, projectName }: { id: string; initial: Draft; p
     }
   }, [flush])
 
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, outside a text being typed (which keeps its own undo).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))
+        return
+      if (!(e.ctrlKey || e.metaKey)) return
+      const k = e.key.toLowerCase()
+      if (k === 'z') {
+        e.preventDefault()
+        step(e.shiftKey ? 'redo' : 'undo')
+      } else if (k === 'y') {
+        e.preventDefault()
+        step('redo')
+      } else if (k === 's') {
+        e.preventDefault()
+        flush()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [step, flush])
+
+  // ── the canvas's width, for Fit ───────────────────────────────────
+  useLayoutEffect(() => {
+    const el = canvas.current
+    if (!el) return
+    const fit = () => setCanvasW(el.clientWidth)
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const fitScale = Math.min(1, Math.max(0.2, (canvasW - 64) / PAGE_W))
+  const scale = zoom === 'fit' ? fitScale : zoom / 100
+
+  // The page in view, for "Page 3 of 9".
+  useEffect(() => {
+    const root = canvas.current
+    if (!root || view !== 'scroll') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries)
+          if (e.isIntersecting) setCurrent(Number((e.target as HTMLElement).dataset['index'] ?? 0))
+      },
+      { root, threshold: 0.5 },
+    )
+    root.querySelectorAll('[data-page-index]').forEach((n) => io.observe(n))
+    return () => io.disconnect()
+  }, [view, draft.doc.pages.length, scale])
+
+  // ── the document ──────────────────────────────────────────────────
   const doc = draft.doc
-  const setDoc = (d: DesignDoc) => change({ ...draft, doc: d })
+  const setDoc = (d: DesignDoc, template?: string) =>
+    change({ ...draft, doc: d, template: template ?? draft.template })
   const setPages = (pages: DesignPage[]) => setDoc({ ...doc, pages })
   const setPage = (i: number, p: DesignPage) => setPages(doc.pages.map((x, j) => (j === i ? p : x)))
   const move = (i: number, by: -1 | 1) => {
@@ -164,165 +273,480 @@ function Workspace({ id, initial, projectName }: { id: string; initial: Draft; p
     ;[pages[i], pages[j]] = [pages[j]!, pages[i]!]
     setPages(pages)
   }
+  const goTo = (pid: string) => {
+    setView('scroll')
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`page-${pid}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    )
+  }
+
+  const activePageIndex = activeText ? doc.pages.findIndex((p) => p.id === activeText.pageId) : -1
+  const activeStyle: DesignTextStyle | null =
+    activeText && activePageIndex >= 0
+      ? (doc.pages[activePageIndex]!.data.styles[activeText.key] ?? {})
+      : null
+  const setActiveStyle = (s: DesignTextStyle) => {
+    if (!activeText || activePageIndex < 0) return
+    const p = doc.pages[activePageIndex]!
+    const styles = { ...p.data.styles }
+    if (Object.keys(s).length === 0) delete styles[activeText.key]
+    else styles[activeText.key] = s
+    setPage(activePageIndex, { ...p, data: { ...p.data, styles } })
+  }
+
+  // ── photos: made small, uploaded, kept in Uploads ────────────────
+  const uploadPhoto = useCallback(
+    async (file: File): Promise<DesignPhoto | null> => {
+      try {
+        const small = await shrinkPhoto(file)
+        const stored = await uploadFile(small.file, { isPublic: true })
+        addPhoto.mutate({
+          url: stored.url,
+          name: file.name.slice(0, 200),
+          width: small.width,
+          height: small.height,
+          size_bytes: small.after,
+        })
+        if (small.after < small.before * 0.9)
+          toast.success(
+            `${file.name}: made smaller, ${sizeWords(small.before)} → ${sizeWords(small.after)}`,
+          )
+        return { url: stored.url, x: 50, y: 50, zoom: 1 }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'The photo did not upload. Try again.')
+        return null
+      }
+    },
+    [addPhoto],
+  )
+
+  const ctx = useMemo<DesignerCtx>(
+    () => ({
+      activeText,
+      setActiveText,
+      pickedFrame: picked?.id ?? null,
+      pickFrame: setPicked,
+      applyToPicked: (p) => {
+        picked?.apply(p)
+      },
+      uploadPhoto,
+    }),
+    [activeText, picked, uploadPhoto],
+  )
+
+  const writer: Writer = (ask) =>
+    write.mutateAsync({ ...ask, studio, project: projectName ?? '', client: clientOf(doc) })
 
   function print() {
     flush()
     window.print()
   }
 
-  return (
-    <div className="designer-root">
-      <div
-        data-sticky-actions
-        className="designer-screen no-print sticky top-0 z-20 -mx-4 mb-4 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur"
-      >
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/ai/designer">
-            <ArrowLeft /> Designs
-          </Link>
-        </Button>
-        <Input
-          value={draft.title}
-          maxLength={160}
-          onChange={(e) => change({ ...draft, title: e.target.value })}
-          className="h-9 w-56 max-w-full flex-1 font-medium sm:flex-none"
-          aria-label="Design name"
-        />
-        <SaveLine state={state} onRetry={flush} />
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant={lookOpen ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setLookOpen((o) => !o)}
-          >
-            <Palette /> Look
-          </Button>
-          <Button variant="outline" size="sm" onClick={print}>
-            <Download /> Download PDF
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              flush()
-              setSending(true)
-            }}
-          >
-            <Send /> Send to client
-          </Button>
-          <RowMenu
-            label="More"
-            items={[
-              {
-                label: 'Make a copy',
-                icon: <Copy className="size-4" />,
-                onSelect: () => {
-                  flush()
-                  dup.mutate(id, {
-                    onSuccess: (r) =>
-                      void navigate({ to: '/ai/designer/$id', params: { id: r.id } }),
-                  })
-                },
-              },
-              {
-                label: 'Delete design',
-                icon: <Trash2 className="size-4" />,
-                danger: true,
-                divider: true,
-                onSelect: async () => {
-                  if (
-                    !(await confirm({
-                      title: `Delete “${draft.title}”?`,
-                      description: 'The design and its pages go for good.',
-                      destructive: true,
-                      confirmLabel: 'Delete',
-                    }))
-                  )
-                    return
-                  pending.current = null
-                  del.mutate(id, { onSuccess: () => void navigate({ to: '/ai/designer' }) })
-                },
-              },
-            ]}
-          />
-        </div>
-      </div>
+  function saveTemplate() {
+    flush()
+    const title =
+      `${draft.title.replace(/\s*[–-]\s*Quotation$/i, '') || 'My template'} template`.slice(0, 160)
+    asTemplate.mutate(
+      { title, template: draft.template, doc },
+      {
+        onSuccess: () =>
+          toast.success('Saved as a template. Start a new design from it under Templates.'),
+      },
+    )
+  }
 
-      <div
-        className={cn(
-          'designer-screen grid gap-6',
-          lookOpen && 'lg:grid-cols-[minmax(0,1fr)_300px]',
-        )}
-      >
-        {lookOpen && (
-          <div className="no-print lg:order-2">
-            <LookPanel
-              template={draft.template}
-              theme={doc.theme}
-              onTemplate={(key) =>
-                change({
-                  ...draft,
-                  template: key,
-                  doc: { ...doc, theme: { ...templateFor(key).theme } },
-                })
-              }
-              onTheme={(theme) => setDoc({ ...doc, theme })}
-              onClose={() => setLookOpen(false)}
+  return (
+    <DesignerContext value={ctx}>
+      <div className="designer-screen fixed inset-0 z-40 flex flex-col bg-[#0e0f11] text-white">
+        {/* ── top bar ── */}
+        <header className="flex h-14 shrink-0 items-center gap-2 bg-gradient-to-r from-[#1e2a5a] via-[#24205a] to-[#3b1f5c] px-3">
+          <Link
+            to="/ai/designer"
+            className="flex h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium hover:bg-white/10"
+            onClick={() => flush()}
+          >
+            <ArrowLeft className="size-4" /> <span className="hidden sm:inline">Designs</span>
+          </Link>
+          <span className="mx-1 h-6 w-px bg-white/20" />
+          <button
+            type="button"
+            onClick={() => step('undo')}
+            disabled={hist.past.length === 0}
+            className="flex size-9 items-center justify-center rounded-md hover:bg-white/10 disabled:opacity-30"
+            aria-label="Undo"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="size-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => step('redo')}
+            disabled={hist.future.length === 0}
+            className="flex size-9 items-center justify-center rounded-md hover:bg-white/10 disabled:opacity-30"
+            aria-label="Redo"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="size-5" />
+          </button>
+          <SaveLine state={state} onRetry={flush} />
+          <input
+            value={draft.title}
+            maxLength={160}
+            onChange={(e) => change({ ...draft, title: e.target.value })}
+            className="mx-auto hidden h-9 w-[min(360px,40vw)] rounded-md md:block border border-transparent bg-transparent px-2 text-center text-sm font-medium hover:border-white/30 focus:border-white/60 focus:bg-black/20 focus:outline-none"
+            aria-label="Design name"
+          />
+          {isTemplate && (
+            <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs">Template</span>
+          )}
+          <div className="ml-auto flex items-center gap-2 md:ml-0">
+            <button
+              type="button"
+              onClick={saveTemplate}
+              disabled={asTemplate.isPending}
+              className="hidden h-9 items-center gap-1.5 rounded-md px-3 text-sm hover:bg-white/10 lg:flex"
+              title="Save these pages and this look as a template"
+            >
+              <BookmarkPlus className="size-4" /> Save as template
+            </button>
+            <button
+              type="button"
+              onClick={print}
+              className="flex h-9 items-center gap-1.5 rounded-md bg-white/10 px-3 text-sm hover:bg-white/20"
+            >
+              <Download className="size-4" /> <span className="hidden sm:inline">Download PDF</span>
+            </button>
+            {!isTemplate && (
+              <button
+                type="button"
+                onClick={() => {
+                  flush()
+                  setSending(true)
+                }}
+                className="flex h-9 items-center gap-1.5 rounded-md bg-white px-3 text-sm font-semibold text-[#24205a] hover:bg-white/90"
+              >
+                <Send className="size-4" /> <span className="hidden sm:inline">Send to client</span>
+              </button>
+            )}
+            <RowMenu
+              label="More"
+              className="text-white hover:bg-white/10"
+              items={[
+                {
+                  label: 'Save as template',
+                  icon: <BookmarkPlus className="size-4" />,
+                  onSelect: saveTemplate,
+                },
+                {
+                  label: 'Make a copy',
+                  icon: <Copy className="size-4" />,
+                  onSelect: () => {
+                    flush()
+                    dup.mutate(id, {
+                      onSuccess: (r) =>
+                        void navigate({ to: '/ai/designer/$id', params: { id: r.id } }),
+                    })
+                  },
+                },
+                {
+                  label: isTemplate ? 'Delete template' : 'Delete design',
+                  icon: <Trash2 className="size-4" />,
+                  danger: true,
+                  divider: true,
+                  onSelect: async () => {
+                    if (
+                      !(await confirm({
+                        title: `Delete “${draft.title}”?`,
+                        description: 'It and its pages go for good. Your photos stay in Uploads.',
+                        destructive: true,
+                        confirmLabel: 'Delete',
+                      }))
+                    )
+                      return
+                    pending.current = null
+                    del.mutate(id, { onSuccess: () => void navigate({ to: '/ai/designer' }) })
+                  },
+                },
+              ]}
             />
           </div>
-        )}
-        <div className="flex min-w-0 flex-col items-center gap-6 pb-16">
-          {doc.pages.map((p, i) => (
-            <div key={p.id} className="flex w-full max-w-[794px] flex-col gap-2">
-              <PageBar
-                n={i + 1}
-                page={p}
-                first={i === 0}
-                last={i === doc.pages.length - 1}
-                only={doc.pages.length === 1}
-                onUp={() => move(i, -1)}
-                onDown={() => move(i, 1)}
-                onHide={() => setPage(i, { ...p, hidden: !p.hidden })}
-                onCopy={() =>
-                  doc.pages.length < 30 &&
-                  setPages([
-                    ...doc.pages.slice(0, i + 1),
-                    { ...structuredClone(p), id: pageId() },
-                    ...doc.pages.slice(i + 1),
-                  ])
-                }
-                onDelete={async () => {
-                  if (
-                    await confirm({
-                      title: `Delete page ${i + 1}?`,
-                      description: 'Its words and photos go with it.',
-                      destructive: true,
-                      confirmLabel: 'Delete',
-                    })
-                  )
-                    setPages(doc.pages.filter((_, j) => j !== i))
+        </header>
+
+        <div className="relative flex min-h-0 flex-1">
+          <SideRail open={panel} onOpen={setPanel} />
+          {panel && (
+            // Beside the pages on a wide screen; over them on a phone or a small laptop.
+            <div className="absolute inset-y-0 left-[72px] z-20 flex shadow-2xl lg:static lg:shadow-none">
+              <SidePanel
+                panel={panel}
+                doc={doc}
+                template={draft.template}
+                studio={studio}
+                onClose={() => setPanel(null)}
+                onDoc={setDoc}
+                onGoTo={(pid) => {
+                  if (window.innerWidth < 1024) setPanel(null)
+                  goTo(pid)
                 }}
               />
-              <Scaled hidden={p.hidden}>
-                <DesignPageView
-                  page={p}
-                  theme={doc.theme}
-                  editable
-                  writer={writer}
-                  onChange={(data: DesignPageData) => setPage(i, { ...p, data })}
-                />
-              </Scaled>
             </div>
-          ))}
-          {doc.pages.length < 30 && (
-            <AddPage onAdd={(kind) => setPages([...doc.pages, blankPage(kind)])} />
           )}
+
+          <main className="relative flex min-w-0 flex-1 flex-col bg-[#18191b]">
+            {/* the text bar, while a text has the cursor */}
+            <div className="flex min-h-12 shrink-0 items-center justify-center px-3 py-1">
+              {activeStyle ? (
+                <TextBar style={activeStyle} theme={doc.theme} onStyle={setActiveStyle} />
+              ) : (
+                <p className="hidden text-xs text-white/50 sm:block">
+                  {picked
+                    ? 'Photo frame picked: tap a photo in Uploads to put it here, or drag the photo to move it.'
+                    : 'Tap any text to change it. Drag photos from Uploads onto the frames.'}
+                </p>
+              )}
+            </div>
+
+            <div
+              ref={canvas}
+              className="min-h-0 flex-1 overflow-auto"
+              onMouseDown={(e) => {
+                // A press on empty space must not put the cursor in the nearest text (Chrome does).
+                const el = e.target as HTMLElement
+                if (
+                  !el.closest(
+                    '.designer-editable, input, button, label, select, [data-photo-frame], [role="textbox"]',
+                  )
+                )
+                  e.preventDefault()
+              }}
+              onPointerDown={(e) => {
+                const el = e.target as HTMLElement
+                // Like Canva: a tap anywhere but a text closes the text bar, and anywhere but a frame lets the frame go.
+                if (!el.closest('.designer-editable')) {
+                  setActiveText(null)
+                  const focused = document.activeElement
+                  if (
+                    focused instanceof HTMLElement &&
+                    focused.classList.contains('designer-editable')
+                  ) {
+                    // The caret must go too, or Chrome puts the cursor back in the text on mouse-up.
+                    window.getSelection()?.removeAllRanges()
+                    focused.blur()
+                  }
+                }
+                if (!el.closest('[data-photo-frame]')) setPicked(null)
+              }}
+            >
+              {view === 'grid' ? (
+                <div
+                  data-canvas-bg
+                  className="grid gap-6 p-8"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}
+                >
+                  {doc.pages.map((p, i) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => goTo(p.id)}
+                      className={cn(
+                        'flex flex-col items-center gap-2 text-xs text-white/70 hover:text-white',
+                        p.hidden && 'opacity-40',
+                      )}
+                    >
+                      <span className="rounded ring-2 ring-transparent hover:ring-violet-400">
+                        <Thumb page={p} theme={doc.theme} width={180} />
+                      </span>
+                      {i + 1}. {PAGE_KIND_NAMES[p.kind]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  data-canvas-bg
+                  className="flex min-w-fit flex-col items-center gap-8 px-8 py-6"
+                >
+                  {doc.pages.map((p, i) => (
+                    <section
+                      key={p.id}
+                      id={`page-${p.id}`}
+                      data-page-index={i}
+                      data-index={i}
+                      className="flex flex-col gap-2"
+                      style={{ width: PAGE_W * scale }}
+                    >
+                      <PageBar
+                        n={i + 1}
+                        page={p}
+                        first={i === 0}
+                        last={i === doc.pages.length - 1}
+                        only={doc.pages.length === 1}
+                        onUp={() => move(i, -1)}
+                        onDown={() => move(i, 1)}
+                        onHide={() => setPage(i, { ...p, hidden: !p.hidden })}
+                        onColour={(c) => setPage(i, { ...p, data: { ...p.data, background: c } })}
+                        background={p.data.background || doc.theme.background}
+                        onCopy={() =>
+                          doc.pages.length < 30 &&
+                          setPages([
+                            ...doc.pages.slice(0, i + 1),
+                            { ...structuredClone(p), id: pageId() },
+                            ...doc.pages.slice(i + 1),
+                          ])
+                        }
+                        onDelete={async () => {
+                          if (
+                            await confirm({
+                              title: `Delete page ${i + 1}?`,
+                              description: 'Its words and photos go with it. Undo brings it back.',
+                              destructive: true,
+                              confirmLabel: 'Delete',
+                            })
+                          )
+                            setPages(doc.pages.filter((_, j) => j !== i))
+                        }}
+                      />
+                      <div
+                        className={cn(
+                          'relative overflow-hidden shadow-2xl',
+                          p.hidden && 'opacity-40',
+                        )}
+                        style={{ width: PAGE_W * scale, height: PAGE_H * scale }}
+                      >
+                        <div
+                          style={{
+                            width: PAGE_W,
+                            height: PAGE_H,
+                            transform: `scale(${scale})`,
+                            transformOrigin: 'top left',
+                          }}
+                        >
+                          <DesignPageView
+                            page={p}
+                            theme={doc.theme}
+                            editable
+                            writer={writer}
+                            onChange={(data: DesignPageData) => setPage(i, { ...p, data })}
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                  {doc.pages.length < 30 && (
+                    <button
+                      type="button"
+                      onClick={() => setPanel('pages')}
+                      className="flex h-12 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-white/25 px-6 text-sm text-white/80 hover:bg-white/10"
+                      style={{ width: PAGE_W * scale }}
+                    >
+                      <Plus className="size-4" /> Add a page
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── zoom and view, Canva's foot bar ── */}
+            <footer className="flex h-11 shrink-0 items-center gap-3 border-t border-white/10 bg-[#18191b] px-4 text-xs text-white/80">
+              <span className="tabular-nums">
+                Page {Math.min(current + 1, doc.pages.length)} of {doc.pages.length}
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoom(stepZoom(scale, -1))}
+                  className="flex size-7 items-center justify-center rounded hover:bg-white/10"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <input
+                  type="range"
+                  min={20}
+                  max={200}
+                  step={1}
+                  value={Math.round(scale * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="hidden w-32 accent-violet-400 sm:block"
+                  aria-label="Zoom"
+                />
+                <button
+                  type="button"
+                  onClick={() => setZoom(stepZoom(scale, 1))}
+                  className="flex size-7 items-center justify-center rounded hover:bg-white/10"
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <Plus className="size-4" />
+                </button>
+                <span className="w-10 text-right tabular-nums">{Math.round(scale * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setZoom('fit')}
+                  className={cn(
+                    'flex h-7 items-center gap-1 rounded px-2 hover:bg-white/10',
+                    zoom === 'fit' && 'bg-white/15',
+                  )}
+                  title="Fit the page to the screen"
+                >
+                  <Maximize className="size-3.5" /> Fit
+                </button>
+                <span className="mx-1 h-5 w-px bg-white/15" />
+                <button
+                  type="button"
+                  onClick={() => setView('scroll')}
+                  className={cn(
+                    'flex size-7 items-center justify-center rounded hover:bg-white/10',
+                    view === 'scroll' && 'bg-white/15',
+                  )}
+                  aria-label="Scroll view"
+                  title="Scroll view"
+                >
+                  <Rows3 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveText(null)
+                    setPicked(null)
+                    setView('grid')
+                  }}
+                  className={cn(
+                    'flex size-7 items-center justify-center rounded hover:bg-white/10',
+                    view === 'grid' && 'bg-white/15',
+                  )}
+                  aria-label="Grid view"
+                  title="Grid view"
+                >
+                  <LayoutGrid className="size-4" />
+                </button>
+              </div>
+            </footer>
+          </main>
         </div>
       </div>
 
       <PrintCopy doc={doc} />
-      {sending && <SendDesignDialog id={id} title={draft.title} client={draft.doc.pages.find((p) => p.kind === 'cover')?.data.subtitle.replace(/^For\s+/i, '') ?? ''} studio={company.data?.display_name || company.data?.name || ''} onClose={() => setSending(false)} />}
-    </div>
+      {sending && (
+        <SendDesignDialog
+          id={id}
+          title={draft.title}
+          client={clientOf(doc)}
+          studio={studio}
+          onClose={() => setSending(false)}
+        />
+      )}
+    </DesignerContext>
   )
+}
+
+/** The next zoom stop up or down from where the page is now. */
+export function stepZoom(scale: number, dir: 1 | -1): number {
+  const now = Math.round(scale * 100)
+  if (dir === 1) return ZOOMS.find((z) => z > now) ?? 200
+  return [...ZOOMS].reverse().find((z) => z < now) ?? 25
 }
 
 function SaveLine({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
@@ -331,19 +755,19 @@ function SaveLine({ state, onRetry }: { state: SaveState; onRetry: () => void })
       <button
         type="button"
         onClick={onRetry}
-        className="text-xs font-medium text-destructive underline-offset-2 hover:underline"
+        className="ml-1 text-xs font-medium text-red-300 underline-offset-2 hover:underline"
       >
         Not saved · Try again
       </button>
     )
   return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <span className="ml-1 flex items-center gap-1 text-xs text-white/70">
       {state === 'saved' ? (
-        <Check className="size-3.5 text-success" />
+        <Check className="size-3.5 text-emerald-300" />
       ) : (
         <Loader2 className="size-3.5 animate-spin" />
       )}
-      {state === 'saved' ? 'Saved' : 'Saving…'}
+      <span className="hidden sm:inline">{state === 'saved' ? 'Saved' : 'Saving…'}</span>
     </span>
   )
 }
@@ -354,35 +778,63 @@ function PageBar({
   first,
   last,
   only,
+  background,
   onUp,
   onDown,
   onHide,
   onCopy,
   onDelete,
+  onColour,
 }: {
   n: number
   page: DesignPage
   first: boolean
   last: boolean
   only: boolean
+  background: string
   onUp: () => void
   onDown: () => void
   onHide: () => void
   onCopy: () => void
   onDelete: () => void
+  onColour: (c: string) => void
 }) {
   const btn =
-    'flex size-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40'
+    'flex size-8 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30'
   return (
-    <div className="no-print flex items-center gap-1.5">
-      <span className="mr-auto text-sm font-medium">
+    <div className="flex items-center gap-1 text-white">
+      <span className="mr-auto truncate text-sm font-medium text-white/85">
         Page {n} · {PAGE_KIND_NAMES[page.kind]}
         {page.hidden && (
-          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
             Hidden from the PDF
           </span>
         )}
       </span>
+      <label className={cn(btn, 'relative cursor-pointer')} title="Page colour">
+        <PaintBucket className="size-4" />
+        <span
+          className="absolute bottom-1 right-1 size-2 rounded-full ring-1 ring-white/50"
+          style={{ background }}
+        />
+        <input
+          type="color"
+          value={background}
+          onChange={(e) => onColour(e.target.value.toUpperCase())}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          aria-label="Page colour"
+        />
+      </label>
+      {page.data.background && (
+        <button
+          type="button"
+          className={cn(btn, 'w-auto px-2 text-xs')}
+          onClick={() => onColour('')}
+          title="Back to the look's colour"
+        >
+          Reset
+        </button>
+      )}
       <button
         type="button"
         className={btn}
@@ -423,7 +875,7 @@ function PageBar({
       </button>
       <button
         type="button"
-        className={cn(btn, 'hover:text-destructive')}
+        className={cn(btn, 'hover:text-red-300')}
         onClick={onDelete}
         disabled={only}
         aria-label="Delete page"
@@ -431,124 +883,6 @@ function PageBar({
       >
         <Trash2 className="size-4" />
       </button>
-    </div>
-  )
-}
-
-const KINDS: DesignPageKind[] = ['event', 'packages', 'deliverables', 'addons', 'team', 'testimonial', 'about', 'thanks', 'cover']
-
-function AddPage({ onAdd }: { onAdd: (k: DesignPageKind) => void }) {
-  return (
-    <div className="no-print flex w-full max-w-[794px] flex-wrap items-center gap-2 rounded-xl border-2 border-dashed border-border p-3">
-      <span className="text-sm font-medium">
-        <Plus className="mr-1 inline size-4" aria-hidden />
-        Add a page:
-      </span>
-      {KINDS.map((k) => (
-        <Button key={k} variant="outline" size="sm" onClick={() => onAdd(k)}>
-          {PAGE_KIND_NAMES[k]}
-        </Button>
-      ))}
-    </div>
-  )
-}
-
-function LookPanel({
-  template,
-  theme,
-  onTemplate,
-  onTheme,
-  onClose,
-}: {
-  template: string
-  theme: DesignTheme
-  onTemplate: (k: string) => void
-  onTheme: (t: DesignTheme) => void
-  onClose: () => void
-}) {
-  const colour = (k: 'background' | 'ink' | 'accent' | 'panel', label: string) => (
-    <label className="flex items-center justify-between gap-2 text-sm">
-      {label}
-      <input
-        type="color"
-        value={theme[k]}
-        onChange={(e) => onTheme({ ...theme, [k]: e.target.value.toUpperCase() })}
-        className="h-8 w-12 cursor-pointer rounded border border-border bg-card"
-      />
-    </label>
-  )
-  return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:sticky lg:top-16">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold">Look</p>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {TEMPLATES.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => onTemplate(t.key)}
-            aria-pressed={template === t.key}
-            className={cn(
-              'overflow-hidden rounded-lg border-2 text-left',
-              template === t.key ? 'border-primary' : 'border-border hover:border-primary/50',
-            )}
-          >
-            <div
-              className="flex h-12 items-center justify-center"
-              style={{ background: t.theme.background }}
-            >
-              <span
-                style={{
-                  fontFamily: `'${t.theme.heading}', cursive`,
-                  color: t.theme.accent,
-                  fontSize: 22,
-                }}
-              >
-                Aa
-              </span>
-            </div>
-            <p className="px-2 py-1 text-xs font-medium">{t.name}</p>
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-col gap-2">
-        {colour('background', 'Page')}
-        {colour('accent', 'Headings & lines')}
-        {colour('ink', 'Words')}
-        {colour('panel', 'Boxes')}
-      </div>
-      <label className="flex flex-col gap-1 text-sm">
-        Heading font
-        <Select
-          value={theme.heading}
-          onChange={(e) => onTheme({ ...theme, heading: e.target.value })}
-        >
-          {HEADING_FONTS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Words font
-        <Select value={theme.body} onChange={(e) => onTheme({ ...theme, body: e.target.value })}>
-          {BODY_FONTS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </Select>
-      </label>
     </div>
   )
 }

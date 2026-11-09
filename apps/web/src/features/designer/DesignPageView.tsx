@@ -1,7 +1,14 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { createContext, use, useState, type CSSProperties, type ReactNode } from 'react'
 import { Plus, X } from 'lucide-react'
-import type { DesignPage, DesignPageData, DesignPhoto, DesignTheme } from '@ipc/contracts'
-import { Editable } from './Editable'
+import type {
+  DesignPage,
+  DesignPageData,
+  DesignPhoto,
+  DesignTextStyle,
+  DesignTheme,
+} from '@ipc/contracts'
+import { Editable, type EditableProps } from './Editable'
+import { useDesigner } from './context'
 import { PhotoFrame } from './PhotoFrame'
 import { isScript } from './templates'
 import { WriteButton, type Writer } from './WriteButton'
@@ -19,7 +26,8 @@ interface Props {
   writer?: Writer | undefined
 }
 
-const fontStack = (family: string, script = false) => `'${family}', ${script ? 'cursive' : 'Georgia, serif'}`
+const fontStack = (family: string, script = false) =>
+  `'${family}', ${script ? 'cursive' : 'Georgia, serif'}`
 
 /**
  * One page of a quotation design, drawn from its kind (Quotation Designer,
@@ -29,17 +37,56 @@ const fontStack = (family: string, script = false) => `'${family}', ${script ? '
  */
 export function DesignPageView({ page, theme, editable, onChange, writer }: Props) {
   const d = page.data
-  const set = <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => onChange({ ...d, [k]: v })
+  const set = <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) =>
+    onChange({ ...d, [k]: v })
   const t = useType(theme)
-  const photo = (p: DesignPhoto, onP: (p: DesignPhoto) => void, style: CSSProperties, className?: string) => (
-    <PhotoFrame photo={p} onChange={onP} editable={editable} accent={theme.accent} style={style} className={className} />
+  const photo = (
+    p: DesignPhoto,
+    onP: (p: DesignPhoto) => void,
+    style: CSSProperties,
+    name = 'photo',
+  ) => (
+    <PhotoFrame
+      frameId={`${page.id}:${name}`}
+      photo={p}
+      onChange={onP}
+      editable={editable}
+      accent={theme.accent}
+      style={style}
+    />
   )
-  const text = (k: 'title' | 'subtitle' | 'body' | 'studio' | 'tagline' | 'event' | 'location' | 'date' | 'team' | 'total' | 'payments', style: CSSProperties, opts: { placeholder: string; max: number; multiline?: boolean; className?: string }) => (
-    <Editable value={d[k]} onChange={(v) => set(k, v)} editable={editable} style={style} {...opts} />
+  const text = (
+    k:
+      | 'title'
+      | 'subtitle'
+      | 'body'
+      | 'studio'
+      | 'tagline'
+      | 'event'
+      | 'location'
+      | 'date'
+      | 'team'
+      | 'total'
+      | 'payments',
+    style: CSSProperties,
+    opts: { placeholder: string; max: number; multiline?: boolean; className?: string },
+  ) => (
+    <SE
+      k={k}
+      value={d[k]}
+      onChange={(v) => set(k, v)}
+      editable={editable}
+      style={style}
+      {...opts}
+    />
   )
 
   /** A "Write it for me" for one part, only while editing and when AI is offered. */
-  const ai = (ask: Parameters<typeof WriteButton>[0]['ask'], apply: (r: { text: string; lines: string[] }) => void, style?: CSSProperties) =>
+  const ai = (
+    ask: Parameters<typeof WriteButton>[0]['ask'],
+    apply: (r: { text: string; lines: string[] }) => void,
+    style?: CSSProperties,
+  ) =>
     editable && writer ? (
       <div style={{ margin: '6px 0', ...style }}>
         <WriteButton ask={ask} writer={writer} onWritten={apply} />
@@ -51,14 +98,30 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
     case 'cover':
       body = (
         <div className="flex h-full flex-col items-center" style={{ padding: '110px 80px 90px' }}>
-          {text('studio', { ...t.heading(96), textAlign: 'center', lineHeight: 1.05 }, { placeholder: 'Your studio name', max: 120 })}
+          {text(
+            'studio',
+            { ...t.heading(96), textAlign: 'center', lineHeight: 1.05 },
+            { placeholder: 'Your studio name', max: 120 },
+          )}
           <div style={{ height: 50 }} />
-          {photo(d.photo, (p) => set('photo', p), { width: 500, height: 620, borderRadius: '250px 250px 8px 8px' })}
+          {photo(d.photo, (p) => set('photo', p), {
+            width: 500,
+            height: 620,
+            borderRadius: '250px 250px 8px 8px',
+          })}
           <div style={{ height: 48 }} />
-          {text('tagline', { ...t.body(30), fontStyle: 'italic', textAlign: 'center' }, { placeholder: 'A line about your work', max: 200 })}
+          {text(
+            'tagline',
+            { ...t.body(30), fontStyle: 'italic', textAlign: 'center' },
+            { placeholder: 'A line about your work', max: 200 },
+          )}
           {ai({ kind: 'tagline', current: d.tagline, lines: [] }, (r) => set('tagline', r.text))}
           <div style={{ flex: 1 }} />
-          {text('subtitle', { ...t.label(18), textAlign: 'center' }, { placeholder: 'For the couple', max: 300 })}
+          {text(
+            'subtitle',
+            { ...t.label(18), textAlign: 'center' },
+            { placeholder: 'For the couple', max: 300 },
+          )}
         </div>
       )
       break
@@ -69,12 +132,20 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
           <div className="flex flex-1 flex-col" style={{ padding: '44px 72px 60px' }}>
             {text('title', { ...t.heading(76) }, { placeholder: 'About Us', max: 120 })}
             <div style={{ height: 18 }} />
-            {text('body', { ...t.body(22), fontStyle: 'italic', lineHeight: 1.6, opacity: 0.85 }, { placeholder: 'Your story, in a few lines', max: 3000, multiline: true })}
+            {text(
+              'body',
+              { ...t.body(22), fontStyle: 'italic', lineHeight: 1.6, opacity: 0.85 },
+              { placeholder: 'Your story, in a few lines', max: 3000, multiline: true },
+            )}
             {ai({ kind: 'about', current: d.body, lines: [] }, (r) => set('body', r.text))}
             <div style={{ flex: 1, minHeight: 30 }} />
             <Stats d={d} set={set} editable={editable} t={t} accent={theme.accent} />
             <div style={{ height: 22 }} />
-            {text('subtitle', { ...t.body(20), fontStyle: 'italic', opacity: 0.8 }, { placeholder: 'Where you shoot', max: 300 })}
+            {text(
+              'subtitle',
+              { ...t.body(20), fontStyle: 'italic', opacity: 0.8 },
+              { placeholder: 'Where you shoot', max: 300 },
+            )}
           </div>
         </div>
       )
@@ -86,13 +157,37 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
           <div className="flex flex-1 flex-col" style={{ padding: '44px 72px 60px' }}>
             {text('title', { ...t.heading(70) }, { placeholder: 'Event Details', max: 120 })}
             <div style={{ height: 26 }} />
-            <Row label="Event" t={t}>{text('event', t.body(24), { placeholder: 'Haldi', max: 120 })}</Row>
-            <Row label="Location" t={t}>{text('location', t.body(24), { placeholder: 'Venue', max: 160 })}</Row>
-            <Row label="Date" t={t}>{text('date', t.body(24), { placeholder: 'Date', max: 80 })}</Row>
-            <Row label="Team Size" t={t}>{text('team', t.body(24), { placeholder: '3 Shooters with Assistants', max: 160 })}</Row>
+            <Row label="Event" t={t}>
+              {text('event', t.body(24), { placeholder: 'Haldi', max: 120 })}
+            </Row>
+            <Row label="Location" t={t}>
+              {text('location', t.body(24), { placeholder: 'Venue', max: 160 })}
+            </Row>
+            <Row label="Date" t={t}>
+              {text('date', t.body(24), { placeholder: 'Date', max: 80 })}
+            </Row>
+            <Row label="Team Size" t={t}>
+              {text('team', t.body(24), { placeholder: '3 Shooters with Assistants', max: 160 })}
+            </Row>
             <div style={{ height: 14 }} />
-            <Lines lines={d.lines} onChange={(v) => set('lines', v)} editable={editable} style={{ ...t.body(22), fontStyle: 'italic' }} accent={theme.accent} placeholder="1 Candid Photographer" max={30} />
-            {ai({ kind: 'event', current: [d.event, d.team].filter(Boolean).join(' · '), lines: d.lines }, (r) => set('lines', r.lines))}
+            <Lines
+              k="lines"
+              lines={d.lines}
+              onChange={(v) => set('lines', v)}
+              editable={editable}
+              style={{ ...t.body(22), fontStyle: 'italic' }}
+              accent={theme.accent}
+              placeholder="1 Candid Photographer"
+              max={30}
+            />
+            {ai(
+              {
+                kind: 'event',
+                current: [d.event, d.team].filter(Boolean).join(' · '),
+                lines: d.lines,
+              },
+              (r) => set('lines', r.lines),
+            )}
           </div>
         </div>
       )
@@ -100,18 +195,51 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
     case 'deliverables':
       body = (
         <div className="flex h-full flex-col" style={{ padding: '90px 72px 72px' }}>
-          {text('title', { ...t.heading(80), textAlign: 'center' }, { placeholder: 'Deliverables', max: 120 })}
+          {text(
+            'title',
+            { ...t.heading(80), textAlign: 'center' },
+            { placeholder: 'Deliverables', max: 120 },
+          )}
           <div style={{ height: 34 }} />
-          <Lines lines={d.lines} onChange={(v) => set('lines', v)} editable={editable} style={{ ...t.body(23), lineHeight: 1.5 }} accent={theme.accent} placeholder="Edited high-resolution photographs" max={30} />
+          <Lines
+            k="lines"
+            lines={d.lines}
+            onChange={(v) => set('lines', v)}
+            editable={editable}
+            style={{ ...t.body(23), lineHeight: 1.5 }}
+            accent={theme.accent}
+            placeholder="Edited high-resolution photographs"
+            max={30}
+          />
           {ai({ kind: 'deliverables', current: '', lines: d.lines }, (r) => set('lines', r.lines))}
           <div style={{ flex: 1, minHeight: 30 }} />
-          <div style={{ background: theme.panel, border: `2px solid ${theme.accent}`, borderRadius: 14, padding: '26px 30px', textAlign: 'center' }}>
-            {text('total', { ...t.body(30), fontWeight: 700 }, { placeholder: 'Total Investment: INR 0/-', max: 200 })}
+          <div
+            style={{
+              background: theme.panel,
+              border: `2px solid ${theme.accent}`,
+              borderRadius: 14,
+              padding: '26px 30px',
+              textAlign: 'center',
+            }}
+          >
+            {text(
+              'total',
+              { ...t.body(30), fontWeight: 700 },
+              { placeholder: 'Total Investment: INR 0/-', max: 200 },
+            )}
           </div>
           <div style={{ height: 22 }} />
           <div style={{ background: theme.panel, borderRadius: 14, padding: '24px 30px' }}>
             <div style={{ ...t.label(16), marginBottom: 10 }}>Payments T&amp;C</div>
-            {text('payments', { ...t.body(21), fontStyle: 'italic', lineHeight: 1.5 }, { placeholder: 'Advance at booking, the rest before the wedding', max: 600, multiline: true })}
+            {text(
+              'payments',
+              { ...t.body(21), fontStyle: 'italic', lineHeight: 1.5 },
+              {
+                placeholder: 'Advance at booking, the rest before the wedding',
+                max: 600,
+                multiline: true,
+              },
+            )}
           </div>
         </div>
       )
@@ -123,28 +251,61 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
           <div className="flex flex-1 flex-col" style={{ padding: '40px 72px 60px' }}>
             {text('title', { ...t.heading(72) }, { placeholder: 'Add Ons', max: 120 })}
             <div style={{ height: 14 }} />
-            <Addons d={d} set={set} editable={editable} t={t} accent={theme.accent} writer={editable ? writer : undefined} />
+            <Addons
+              d={d}
+              set={set}
+              editable={editable}
+              t={t}
+              accent={theme.accent}
+              writer={editable ? writer : undefined}
+            />
           </div>
         </div>
       )
       break
     case 'thanks': {
       const photos = [0, 1, 2, 3, 4].map((i) => d.photos[i] ?? { url: '', x: 50, y: 50, zoom: 1 })
-      const setPhoto = (i: number, p: DesignPhoto) => set('photos', photos.map((x, j) => (j === i ? p : x)))
+      const setPhoto = (i: number, p: DesignPhoto) =>
+        set(
+          'photos',
+          photos.map((x, j) => (j === i ? p : x)),
+        )
       body = (
         <div className="flex h-full flex-col" style={{ padding: '80px 60px 70px' }}>
-          {text('title', { ...t.heading(96), textAlign: 'center' }, { placeholder: 'Thank You', max: 120 })}
+          {text(
+            'title',
+            { ...t.heading(96), textAlign: 'center' },
+            { placeholder: 'Thank You', max: 120 },
+          )}
           <div style={{ height: 36 }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '300px 300px', gap: 12 }}>
-            {photo(photos[0]!, (p) => setPhoto(0, p), { gridRow: 'span 2', borderRadius: 6 })}
-            {photo(photos[1]!, (p) => setPhoto(1, p), { borderRadius: 6 })}
-            {photo(photos[2]!, (p) => setPhoto(2, p), { borderRadius: 6 })}
-            {photo(photos[3]!, (p) => setPhoto(3, p), { borderRadius: 6 })}
-            {photo(photos[4]!, (p) => setPhoto(4, p), { borderRadius: 6 })}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gridTemplateRows: '300px 300px',
+              gap: 12,
+            }}
+          >
+            {photo(
+              photos[0]!,
+              (p) => setPhoto(0, p),
+              { gridRow: 'span 2', borderRadius: 6 },
+              'photos.0',
+            )}
+            {photo(photos[1]!, (p) => setPhoto(1, p), { borderRadius: 6 }, 'photos.1')}
+            {photo(photos[2]!, (p) => setPhoto(2, p), { borderRadius: 6 }, 'photos.2')}
+            {photo(photos[3]!, (p) => setPhoto(3, p), { borderRadius: 6 }, 'photos.3')}
+            {photo(photos[4]!, (p) => setPhoto(4, p), { borderRadius: 6 }, 'photos.4')}
           </div>
           <div style={{ flex: 1, minHeight: 30 }} />
-          {text('subtitle', { ...t.body(28), fontStyle: 'italic', textAlign: 'center' }, { placeholder: 'Looking forward to your wedding', max: 300 })}
-          {ai({ kind: 'thanks', current: d.subtitle, lines: [] }, (r) => set('subtitle', r.text), { textAlign: 'center' })}
+          {text(
+            'subtitle',
+            { ...t.body(28), fontStyle: 'italic', textAlign: 'center' },
+            { placeholder: 'Looking forward to your wedding', max: 300 },
+          )}
+          {ai({ kind: 'thanks', current: d.subtitle, lines: [] }, (r) => set('subtitle', r.text), {
+            textAlign: 'center',
+          })}
         </div>
       )
       break
@@ -152,20 +313,36 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
     case 'packages':
       body = (
         <div className="flex h-full flex-col" style={{ padding: '90px 50px 70px' }}>
-          {text('title', { ...t.heading(80), textAlign: 'center' }, { placeholder: 'Our Packages', max: 120 })}
+          {text(
+            'title',
+            { ...t.heading(80), textAlign: 'center' },
+            { placeholder: 'Our Packages', max: 120 },
+          )}
           <div style={{ height: 40 }} />
           <Packages d={d} set={set} editable={editable} t={t} theme={theme} />
           <div style={{ flex: 1, minHeight: 24 }} />
-          {text('subtitle', { ...t.body(20), fontStyle: 'italic', textAlign: 'center', opacity: 0.8 }, { placeholder: 'A line under the packages', max: 300 })}
+          {text(
+            'subtitle',
+            { ...t.body(20), fontStyle: 'italic', textAlign: 'center', opacity: 0.8 },
+            { placeholder: 'A line under the packages', max: 300 },
+          )}
         </div>
       )
       break
     case 'team':
       body = (
         <div className="flex h-full flex-col" style={{ padding: '90px 60px 70px' }}>
-          {text('title', { ...t.heading(80), textAlign: 'center' }, { placeholder: 'Our Team', max: 120 })}
+          {text(
+            'title',
+            { ...t.heading(80), textAlign: 'center' },
+            { placeholder: 'Our Team', max: 120 },
+          )}
           <div style={{ height: 14 }} />
-          {text('body', { ...t.body(22), fontStyle: 'italic', textAlign: 'center', opacity: 0.85 }, { placeholder: 'A line about your team', max: 3000, multiline: true })}
+          {text(
+            'body',
+            { ...t.body(22), fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },
+            { placeholder: 'A line about your team', max: 3000, multiline: true },
+          )}
           <div style={{ height: 40 }} />
           <People d={d} set={set} editable={editable} t={t} accent={theme.accent} />
         </div>
@@ -174,24 +351,80 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
     case 'testimonial':
       body = (
         <div className="flex h-full flex-col items-center" style={{ padding: '90px 80px 80px' }}>
-          {text('title', { ...t.heading(80), textAlign: 'center' }, { placeholder: 'Kind Words', max: 120 })}
+          {text(
+            'title',
+            { ...t.heading(80), textAlign: 'center' },
+            { placeholder: 'Kind Words', max: 120 },
+          )}
           <div style={{ height: 40 }} />
           {photo(d.photo, (p) => set('photo', p), { width: 360, height: 360, borderRadius: 360 })}
           <div style={{ height: 50 }} />
-          <div aria-hidden style={{ ...t.heading(110), lineHeight: 0.6, opacity: 0.5 }}>“</div>
-          {text('body', { ...t.body(28), fontStyle: 'italic', textAlign: 'center', lineHeight: 1.55 }, { placeholder: 'What a couple said about you', max: 3000, multiline: true })}
+          <div aria-hidden style={{ ...t.heading(110), lineHeight: 0.6, opacity: 0.5 }}>
+            “
+          </div>
+          {text(
+            'body',
+            { ...t.body(28), fontStyle: 'italic', textAlign: 'center', lineHeight: 1.55 },
+            { placeholder: 'What a couple said about you', max: 3000, multiline: true },
+          )}
           {ai({ kind: 'testimonial', current: d.body, lines: [] }, (r) => set('body', r.text))}
           <div style={{ height: 24 }} />
-          {text('subtitle', { ...t.label(17), textAlign: 'center' }, { placeholder: 'Their names, their city', max: 300 })}
+          {text(
+            'subtitle',
+            { ...t.label(17), textAlign: 'center' },
+            { placeholder: 'Their names, their city', max: 300 },
+          )}
         </div>
       )
       break
   }
 
   return (
-    <div className="designer-sheet relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: theme.background, color: theme.ink }}>
-      {body}
-    </div>
+    <PageCtx value={{ pageId: page.id, styles: d.styles }}>
+      <div
+        className="designer-sheet relative overflow-hidden"
+        style={{
+          width: PAGE_W,
+          height: PAGE_H,
+          background: d.background || theme.background,
+          color: theme.ink,
+        }}
+      >
+        {body}
+      </div>
+    </PageCtx>
+  )
+}
+
+/** The page being drawn: its id (for the style bar) and its text settings. */
+const PageCtx = createContext<{ pageId: string; styles: Record<string, DesignTextStyle> } | null>(
+  null,
+)
+
+/** A layout's text style with the studio's own settings on top (Canva's text bar). */
+export function withTextStyle(base: CSSProperties, ts: DesignTextStyle | undefined): CSSProperties {
+  if (!ts) return base
+  const out: CSSProperties = { ...base }
+  if (ts.scale && typeof base.fontSize === 'number')
+    out.fontSize = Math.round(base.fontSize * ts.scale * 10) / 10
+  if (ts.align) out.textAlign = ts.align
+  if (ts.color) out.color = ts.color
+  if (ts.bold !== undefined) out.fontWeight = ts.bold ? 700 : 400
+  if (ts.italic !== undefined) out.fontStyle = ts.italic ? 'italic' : 'normal'
+  return out
+}
+
+/** A text on the page that takes its own style and tells the editor when it has the cursor. */
+function SE({ k, style, ...rest }: Omit<EditableProps, 'onFocus' | 'active'> & { k: string }) {
+  const page = use(PageCtx)
+  const ed = useDesigner()
+  return (
+    <Editable
+      {...rest}
+      style={withTextStyle(style ?? {}, page?.styles[k])}
+      onFocus={page && ed ? () => ed.setActiveText({ pageId: page.pageId, key: k }) : undefined}
+      active={!!page && ed?.activeText?.pageId === page.pageId && ed.activeText.key === k}
+    />
   )
 }
 
@@ -200,9 +433,22 @@ type Type = ReturnType<typeof useType>
 function useType(theme: DesignTheme) {
   const script = isScript(theme.heading)
   return {
-    heading: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.heading, script), fontSize: script ? px : Math.round(px * 0.72), lineHeight: 1.1, color: theme.accent, fontWeight: script ? 400 : 600 }),
+    heading: (px: number): CSSProperties => ({
+      fontFamily: fontStack(theme.heading, script),
+      fontSize: script ? px : Math.round(px * 0.72),
+      lineHeight: 1.1,
+      color: theme.accent,
+      fontWeight: script ? 400 : 600,
+    }),
     body: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.body), fontSize: px }),
-    label: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.body), fontSize: px, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 600, color: theme.accent }),
+    label: (px: number): CSSProperties => ({
+      fontFamily: fontStack(theme.body),
+      fontSize: px,
+      letterSpacing: '0.22em',
+      textTransform: 'uppercase',
+      fontWeight: 600,
+      color: theme.accent,
+    }),
   }
 }
 
@@ -216,15 +462,44 @@ function Row({ label, t, children }: { label: string; t: Type; children: ReactNo
 }
 
 /** A bulleted list typed in place: Enter adds the next line, Backspace on an empty one removes it. */
-function Lines({ lines, onChange, editable, style, accent, placeholder, max }: { lines: string[]; onChange: (v: string[]) => void; editable: boolean; style: CSSProperties; accent: string; placeholder: string; max: number }) {
+function Lines({
+  k,
+  lines,
+  onChange,
+  editable,
+  style,
+  accent,
+  placeholder,
+  max,
+}: {
+  k: string
+  lines: string[]
+  onChange: (v: string[]) => void
+  editable: boolean
+  style: CSSProperties
+  accent: string
+  placeholder: string
+  max: number
+}) {
   const [focus, setFocus] = useState<number | null>(null)
   const shown = editable ? lines : lines.filter((l) => l.trim())
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
       {shown.map((line, i) => (
         <div key={i} className="flex items-baseline" style={{ gap: 14 }}>
-          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 8, background: accent, flexShrink: 0, transform: 'translateY(-4px)' }} />
-          <Editable
+          <span
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 8,
+              background: accent,
+              flexShrink: 0,
+              transform: 'translateY(-4px)',
+            }}
+          />
+          <SE
+            k={k}
             value={line}
             editable={editable}
             max={400}
@@ -245,46 +520,158 @@ function Lines({ lines, onChange, editable, style, accent, placeholder, max }: {
         </div>
       ))}
       {editable && lines.length < max && (
-        <AddButton onClick={() => { onChange([...lines, '']); setFocus(lines.length) }}>Add a line</AddButton>
+        <AddButton
+          onClick={() => {
+            onChange([...lines, ''])
+            setFocus(lines.length)
+          }}
+        >
+          Add a line
+        </AddButton>
       )}
     </div>
   )
 }
 
-function Stats({ d, set, editable, t, accent }: { d: DesignPageData; set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void; editable: boolean; t: Type; accent: string }) {
+function Stats({
+  d,
+  set,
+  editable,
+  t,
+  accent,
+}: {
+  d: DesignPageData
+  set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void
+  editable: boolean
+  t: Type
+  accent: string
+}) {
   const stats = editable ? d.stats : d.stats.filter((s) => s.value || s.label)
   return (
     <div className="flex flex-wrap items-start" style={{ gap: 40 }}>
       {stats.map((s, i) => (
         <div key={i} className="group/stat relative" style={{ minWidth: 150 }}>
-          <Editable value={s.value} editable={editable} max={20} placeholder="8+" style={{ ...t.body(52), fontWeight: 700, color: accent, lineHeight: 1 }} onChange={(v) => set('stats', d.stats.map((x, j) => (j === i ? { ...x, value: v } : x)))} />
-          <Editable value={s.label} editable={editable} max={60} placeholder="Years of Experience" style={{ ...t.body(18), fontStyle: 'italic', marginTop: 6 }} onChange={(v) => set('stats', d.stats.map((x, j) => (j === i ? { ...x, label: v } : x)))} />
-          {editable && <RemoveButton label="Remove this figure" onClick={() => set('stats', d.stats.filter((_, j) => j !== i))} />}
+          <SE
+            k="stats.value"
+            value={s.value}
+            editable={editable}
+            max={20}
+            placeholder="8+"
+            style={{ ...t.body(52), fontWeight: 700, color: accent, lineHeight: 1 }}
+            onChange={(v) =>
+              set(
+                'stats',
+                d.stats.map((x, j) => (j === i ? { ...x, value: v } : x)),
+              )
+            }
+          />
+          <SE
+            k="stats.label"
+            value={s.label}
+            editable={editable}
+            max={60}
+            placeholder="Years of Experience"
+            style={{ ...t.body(18), fontStyle: 'italic', marginTop: 6 }}
+            onChange={(v) =>
+              set(
+                'stats',
+                d.stats.map((x, j) => (j === i ? { ...x, label: v } : x)),
+              )
+            }
+          />
+          {editable && (
+            <RemoveButton
+              label="Remove this figure"
+              onClick={() =>
+                set(
+                  'stats',
+                  d.stats.filter((_, j) => j !== i),
+                )
+              }
+            />
+          )}
         </div>
       ))}
-      {editable && d.stats.length < 4 && <AddButton onClick={() => set('stats', [...d.stats, { value: '', label: '' }])}>Add a figure</AddButton>}
+      {editable && d.stats.length < 4 && (
+        <AddButton onClick={() => set('stats', [...d.stats, { value: '', label: '' }])}>
+          Add a figure
+        </AddButton>
+      )}
     </div>
   )
 }
 
-function Addons({ d, set, editable, t, accent, writer }: { d: DesignPageData; set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void; editable: boolean; t: Type; accent: string; writer?: Writer | undefined }) {
-  const put = (i: number, a: DesignPageData['addons'][number]) => set('addons', d.addons.map((x, j) => (j === i ? a : x)))
+function Addons({
+  d,
+  set,
+  editable,
+  t,
+  accent,
+  writer,
+}: {
+  d: DesignPageData
+  set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void
+  editable: boolean
+  t: Type
+  accent: string
+  writer?: Writer | undefined
+}) {
+  const put = (i: number, a: DesignPageData['addons'][number]) =>
+    set(
+      'addons',
+      d.addons.map((x, j) => (j === i ? a : x)),
+    )
   return (
     <div className="flex flex-col" style={{ gap: 20 }}>
       {d.addons.map((a, i) => (
         <div key={i} className="group/stat relative">
-          <Editable value={a.name} editable={editable} max={80} placeholder="Pre Wedding Shoot" style={{ ...t.heading(44) }} onChange={(v) => put(i, { ...a, name: v })} />
+          <SE
+            k="addons.name"
+            value={a.name}
+            editable={editable}
+            max={80}
+            placeholder="Pre Wedding Shoot"
+            style={{ ...t.heading(44) }}
+            onChange={(v) => put(i, { ...a, name: v })}
+          />
           <div style={{ height: 6 }} />
-          <Lines lines={a.lines} onChange={(lines) => put(i, { ...a, lines })} editable={editable} style={{ ...t.body(20), fontStyle: 'italic' }} accent={accent} placeholder="1 day, 2 locations · INR 25,000/-" max={12} />
+          <Lines
+            k="addons.lines"
+            lines={a.lines}
+            onChange={(lines) => put(i, { ...a, lines })}
+            editable={editable}
+            style={{ ...t.body(20), fontStyle: 'italic' }}
+            accent={accent}
+            placeholder="1 day, 2 locations · INR 25,000/-"
+            max={12}
+          />
           {editable && writer && a.name.trim() && (
             <div style={{ marginTop: 6 }}>
-              <WriteButton ask={{ kind: 'addon', current: a.name, lines: a.lines }} writer={writer} onWritten={(r) => put(i, { ...a, lines: r.lines })} />
+              <WriteButton
+                ask={{ kind: 'addon', current: a.name, lines: a.lines }}
+                writer={writer}
+                onWritten={(r) => put(i, { ...a, lines: r.lines })}
+              />
             </div>
           )}
-          {editable && <RemoveButton label="Remove this add-on" onClick={() => set('addons', d.addons.filter((_, j) => j !== i))} />}
+          {editable && (
+            <RemoveButton
+              label="Remove this add-on"
+              onClick={() =>
+                set(
+                  'addons',
+                  d.addons.filter((_, j) => j !== i),
+                )
+              }
+            />
+          )}
         </div>
       ))}
-      {editable && d.addons.length < 12 && <AddButton onClick={() => set('addons', [...d.addons, { name: '', lines: [''] }])}>Add an add-on</AddButton>}
+      {editable && d.addons.length < 12 && (
+        <AddButton onClick={() => set('addons', [...d.addons, { name: '', lines: [''] }])}>
+          Add an add-on
+        </AddButton>
+      )}
     </div>
   )
 }
@@ -319,8 +706,24 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
 type Setter = <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void
 
 /** Two or three packages side by side, the middle one raised. */
-function Packages({ d, set, editable, t, theme }: { d: DesignPageData; set: Setter; editable: boolean; t: Type; theme: DesignTheme }) {
-  const put = (i: number, p: DesignPageData['packages'][number]) => set('packages', d.packages.map((x, j) => (j === i ? p : x)))
+function Packages({
+  d,
+  set,
+  editable,
+  t,
+  theme,
+}: {
+  d: DesignPageData
+  set: Setter
+  editable: boolean
+  t: Type
+  theme: DesignTheme
+}) {
+  const put = (i: number, p: DesignPageData['packages'][number]) =>
+    set(
+      'packages',
+      d.packages.map((x, j) => (j === i ? p : x)),
+    )
   const n = d.packages.length
   return (
     <div className="flex items-stretch" style={{ gap: 18 }}>
@@ -339,18 +742,67 @@ function Packages({ d, set, editable, t, theme }: { d: DesignPageData; set: Sett
               border: raised ? 'none' : `1.5px solid ${theme.accent}55`,
             }}
           >
-            <Editable value={p.name} editable={editable} max={60} placeholder="Gold" style={{ ...t.label(18), color: raised ? theme.background : theme.accent, textAlign: 'center' }} onChange={(v) => put(i, { ...p, name: v })} />
+            <SE
+              k="packages.name"
+              value={p.name}
+              editable={editable}
+              max={60}
+              placeholder="Gold"
+              style={{
+                ...t.label(18),
+                color: raised ? theme.background : theme.accent,
+                textAlign: 'center',
+              }}
+              onChange={(v) => put(i, { ...p, name: v })}
+            />
             <div style={{ height: 12 }} />
-            <Editable value={p.price} editable={editable} max={60} placeholder="INR 1,85,000/-" style={{ ...t.body(24), fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }} onChange={(v) => put(i, { ...p, price: v })} />
-            <div style={{ height: 1, background: raised ? `${theme.background}55` : `${theme.accent}44`, margin: '20px 0' }} />
-            <Lines lines={p.lines} onChange={(lines) => put(i, { ...p, lines })} editable={editable} style={{ ...t.body(18), lineHeight: 1.4 }} accent={raised ? theme.background : theme.accent} placeholder="What it includes" max={10} />
-            {editable && <RemoveButton label="Remove this package" onClick={() => set('packages', d.packages.filter((_, j) => j !== i))} />}
+            <SE
+              k="packages.price"
+              value={p.price}
+              editable={editable}
+              max={60}
+              placeholder="INR 1,85,000/-"
+              style={{ ...t.body(24), fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}
+              onChange={(v) => put(i, { ...p, price: v })}
+            />
+            <div
+              style={{
+                height: 1,
+                background: raised ? `${theme.background}55` : `${theme.accent}44`,
+                margin: '20px 0',
+              }}
+            />
+            <Lines
+              k="packages.lines"
+              lines={p.lines}
+              onChange={(lines) => put(i, { ...p, lines })}
+              editable={editable}
+              style={{ ...t.body(18), lineHeight: 1.4 }}
+              accent={raised ? theme.background : theme.accent}
+              placeholder="What it includes"
+              max={10}
+            />
+            {editable && (
+              <RemoveButton
+                label="Remove this package"
+                onClick={() =>
+                  set(
+                    'packages',
+                    d.packages.filter((_, j) => j !== i),
+                  )
+                }
+              />
+            )}
           </div>
         )
       })}
       {editable && n < 3 && (
         <div className="flex items-center">
-          <AddButton onClick={() => set('packages', [...d.packages, { name: '', price: '', lines: [''] }])}>Add a package</AddButton>
+          <AddButton
+            onClick={() => set('packages', [...d.packages, { name: '', price: '', lines: [''] }])}
+          >
+            Add a package
+          </AddButton>
         </div>
       )}
     </div>
@@ -358,22 +810,84 @@ function Packages({ d, set, editable, t, theme }: { d: DesignPageData; set: Sett
 }
 
 /** Up to eight people, round photos, name and role. */
-function People({ d, set, editable, t, accent }: { d: DesignPageData; set: Setter; editable: boolean; t: Type; accent: string }) {
-  const put = (i: number, p: DesignPageData['people'][number]) => set('people', d.people.map((x, j) => (j === i ? p : x)))
+function People({
+  d,
+  set,
+  editable,
+  t,
+  accent,
+}: {
+  d: DesignPageData
+  set: Setter
+  editable: boolean
+  t: Type
+  accent: string
+}) {
+  const put = (i: number, p: DesignPageData['people'][number]) =>
+    set(
+      'people',
+      d.people.map((x, j) => (j === i ? p : x)),
+    )
   return (
     <div className="flex flex-wrap justify-center" style={{ gap: '36px 30px' }}>
       {d.people.map((p, i) => (
-        <div key={i} className="group/stat relative flex flex-col items-center" style={{ width: 200 }}>
-          <PhotoFrame photo={p.photo} onChange={(photo) => put(i, { ...p, photo })} editable={editable} accent={accent} style={{ width: 180, height: 180, borderRadius: 180 }} />
+        <div
+          key={i}
+          className="group/stat relative flex flex-col items-center"
+          style={{ width: 200 }}
+        >
+          <PhotoFrame
+            frameId={`${use(PageCtx)?.pageId}:people.${i}`}
+            photo={p.photo}
+            onChange={(photo) => put(i, { ...p, photo })}
+            editable={editable}
+            accent={accent}
+            style={{ width: 180, height: 180, borderRadius: 180 }}
+          />
           <div style={{ height: 14 }} />
-          <Editable value={p.name} editable={editable} max={80} placeholder="Name" style={{ ...t.body(24), fontWeight: 700, textAlign: 'center' }} onChange={(v) => put(i, { ...p, name: v })} />
-          <Editable value={p.role} editable={editable} max={80} placeholder="Role" style={{ ...t.label(14), textAlign: 'center', marginTop: 4 }} onChange={(v) => put(i, { ...p, role: v })} />
-          {editable && <RemoveButton label="Remove this person" onClick={() => set('people', d.people.filter((_, j) => j !== i))} />}
+          <SE
+            k="people.name"
+            value={p.name}
+            editable={editable}
+            max={80}
+            placeholder="Name"
+            style={{ ...t.body(24), fontWeight: 700, textAlign: 'center' }}
+            onChange={(v) => put(i, { ...p, name: v })}
+          />
+          <SE
+            k="people.role"
+            value={p.role}
+            editable={editable}
+            max={80}
+            placeholder="Role"
+            style={{ ...t.label(14), textAlign: 'center', marginTop: 4 }}
+            onChange={(v) => put(i, { ...p, role: v })}
+          />
+          {editable && (
+            <RemoveButton
+              label="Remove this person"
+              onClick={() =>
+                set(
+                  'people',
+                  d.people.filter((_, j) => j !== i),
+                )
+              }
+            />
+          )}
         </div>
       ))}
       {editable && d.people.length < 8 && (
         <div className="flex items-center">
-          <AddButton onClick={() => set('people', [...d.people, { name: '', role: '', photo: { url: '', x: 50, y: 50, zoom: 1 } }])}>Add a person</AddButton>
+          <AddButton
+            onClick={() =>
+              set('people', [
+                ...d.people,
+                { name: '', role: '', photo: { url: '', x: 50, y: 50, zoom: 1 } },
+              ])
+            }
+          >
+            Add a person
+          </AddButton>
         </div>
       )}
     </div>

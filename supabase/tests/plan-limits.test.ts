@@ -317,6 +317,23 @@ describe('quotation designs (0295)', () => {
     expect(u!.v.designs).toBe(30)
   })
 
+  it('never counts or stops a saved template (0297)', async () => {
+    await q(`insert into quotation_designs (company_id, title, doc, is_template) values ($1, 'My layout', '{}'::jsonb, true)`, [DESIGNER])
+    const [u] = await q<{ v: { designs: number } }>(`select company_usage($1) as v`, [DESIGNER])
+    expect(u!.v.designs).toBe(30)
+    await expect(design(DESIGNER, 'Design 32')).rejects.toThrow(/designs 30 quotations/)
+  })
+
+  it('keeps a photo library per studio, out of sight of others', async () => {
+    await q(`insert into design_photos (company_id, url, name) values ($1, 'https://x/p.jpg', 'p.jpg')`, [DESIGNER])
+    const [n] = await q<{ n: number }>(`select count(*)::int as n from design_photos where company_id = $1`, [DESIGNER])
+    expect(n!.n).toBe(1)
+    const [g] = await q<{ a: boolean; b: boolean }>(
+      `select has_table_privilege('anon', 'design_photos', 'select') as a, has_table_privilege('authenticated', 'design_photos', 'update') as b`,
+    )
+    expect(g).toEqual({ a: false, b: false })
+  })
+
   it('never stops a trial or Pro', async () => {
     for (let i = 1; i <= 32; i++) await design(TRIAL, `Design ${i}`)
     for (let i = 1; i <= 32; i++) await design(PRO, `Design ${i}`)

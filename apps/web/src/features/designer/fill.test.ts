@@ -21,7 +21,11 @@ describe('quotation designer fill', () => {
   })
 
   it('says the team from the roles', () => {
-    const reqs = [{ name: 'Candid Photographer', quantity: 2 }, { name: 'Cinematographer', quantity: 1 }, { name: 'Drone', quantity: 0 }]
+    const reqs = [
+      { name: 'Candid Photographer', quantity: 2 },
+      { name: 'Cinematographer', quantity: 1 },
+      { name: 'Drone', quantity: 0 },
+    ]
     expect(teamLine(reqs)).toBe('3 Shooters with Assistants')
     expect(teamLine([])).toBe('')
     expect(roleLines(reqs)).toEqual(['2 Candid Photographer', '1 Cinematographer'])
@@ -54,7 +58,12 @@ describe('quotation designer fill', () => {
         ],
       },
       shoots: [
-        { name: 'Haldi', shoot_date: '2026-12-04', location: 'Jaipur', requirements: [{ name: 'Candid Photographer', quantity: 1 }] },
+        {
+          name: 'Haldi',
+          shoot_date: '2026-12-04',
+          location: 'Jaipur',
+          requirements: [{ name: 'Candid Photographer', quantity: 1 }],
+        },
         { name: 'Old', shoot_date: null, location: null, status: 'cancelled', requirements: [] },
         { name: 'Wedding', shoot_date: '2026-12-05', location: 'Jaipur', requirements: [] },
       ],
@@ -62,18 +71,39 @@ describe('quotation designer fill', () => {
     })
     expect(designDoc.parse(doc)).toBeTruthy()
     expect(doc.theme).toEqual(templateFor('midnight').theme)
-    expect(doc.pages.map((p) => p.kind)).toEqual(['cover', 'about', 'event', 'event', 'deliverables', 'addons', 'thanks'])
+    expect(doc.pages.map((p) => p.kind)).toEqual([
+      'cover',
+      'about',
+      'event',
+      'event',
+      'deliverables',
+      'addons',
+      'thanks',
+    ])
     expect(doc.pages[0]!.data.subtitle).toBe('For Priya')
-    expect(doc.pages[2]!.data).toMatchObject({ event: 'Haldi', date: '4 December 2026', team: '1 Shooter with Assistants' })
+    expect(doc.pages[2]!.data).toMatchObject({
+      event: 'Haldi',
+      date: '4 December 2026',
+      team: '1 Shooter with Assistants',
+    })
     expect(doc.pages[4]!.data.lines).toEqual(['Wedding film: 8-10 minutes'])
     expect(doc.pages[4]!.data.total).toBe('Total Investment: INR 85,000/-')
-    expect(doc.pages[5]!.data.addons).toEqual([{ name: 'Pre Wedding Shoot', lines: ['INR 25,000/-'] }])
+    expect(doc.pages[5]!.data.addons).toEqual([
+      { name: 'Pre Wedding Shoot', lines: ['INR 25,000/-'] },
+    ])
   })
 
   it('reuses the cover, about and thank-you pages of the last design, with their theme', () => {
     const previous = blankDoc('blush', 'Cine World')
     previous.pages[1]!.data.body = 'Our own story.'
-    const doc = fillDesign({ template: 'ivory', studio: 'X', project: null, shoots: [], instalments: [], previous })
+    const doc = fillDesign({
+      template: 'ivory',
+      studio: 'X',
+      project: null,
+      shoots: [],
+      instalments: [],
+      previous,
+    })
     expect(doc.pages[1]!.data.body).toBe('Our own story.')
     expect(doc.pages[1]!.id).not.toBe(previous.pages[1]!.id)
     expect(doc.theme).toEqual(previous.theme)

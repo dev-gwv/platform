@@ -31,7 +31,12 @@ export interface FillDeliverable {
 export interface FillInput {
   template: string
   studio: string
-  project: { name: string; client_name: string | null; total_cost: number; deliverables: readonly FillDeliverable[] } | null
+  project: {
+    name: string
+    client_name: string | null
+    total_cost: number
+    deliverables: readonly FillDeliverable[]
+  } | null
   shoots: readonly FillShoot[]
   instalments: readonly PlanInstalment[]
   /** The studio's latest design: its cover, about and thank-you pages are reused. */
@@ -42,7 +47,12 @@ export interface FillInput {
 export const inr = (n: number) => `INR ${Math.round(n).toLocaleString('en-IN')}/-`
 
 const longDate = (iso: string) =>
-  new Date(`${iso}T00:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+  new Date(`${iso}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  })
 
 /** "3 Shooters with Assistants" from the shoot's roles; empty when none are planned. */
 export function teamLine(reqs: readonly { quantity: number }[]): string {
@@ -58,13 +68,21 @@ export const roleLines = (reqs: readonly { name: string; quantity: number }[]) =
 export function paymentsLine(plan: readonly PlanInstalment[], total: number): string {
   return plan
     .map((p) => {
-      const amount = p.mode === 'percent' ? (total > 0 ? inr((total * p.value) / 100) : `${p.value}%`) : inr(p.value)
+      const amount =
+        p.mode === 'percent'
+          ? total > 0
+            ? inr((total * p.value) / 100)
+            : `${p.value}%`
+          : inr(p.value)
       return `${p.label}: ${amount}`
     })
     .join(', ')
 }
 
-const reuse = (previous: DesignDoc | null | undefined, kind: DesignPage['kind']): DesignPage | null => {
+const reuse = (
+  previous: DesignDoc | null | undefined,
+  kind: DesignPage['kind'],
+): DesignPage | null => {
   const p = previous?.pages.find((x) => x.kind === kind)
   return p ? { ...structuredClone(p), id: pageId(), hidden: false } : null
 }
@@ -91,12 +109,17 @@ export function fillDesign(input: FillInput): DesignDoc {
     )
   }
 
-  const shown = (project?.deliverables ?? []).filter((d) => d.visibility_scope === 'client' && d.show_on_quotation && d.status !== 'cancelled')
+  const shown = (project?.deliverables ?? []).filter(
+    (d) => d.visibility_scope === 'client' && d.show_on_quotation && d.status !== 'cancelled',
+  )
   const main = shown.filter((d) => d.list_key === 'primary')
   const extras = shown.filter((d) => d.list_key !== 'primary')
   const deliverables = blankPage('deliverables')
   if (project) {
-    if (main.length > 0) deliverables.data.lines = main.map((d) => (d.description ? `${d.title}: ${d.description}` : d.title))
+    if (main.length > 0)
+      deliverables.data.lines = main.map((d) =>
+        d.description ? `${d.title}: ${d.description}` : d.title,
+      )
     deliverables.data.total = `Total Investment: ${inr(project.total_cost)}`
     const pay = paymentsLine(input.instalments, project.total_cost)
     if (pay) deliverables.data.payments = pay
@@ -109,7 +132,10 @@ export function fillDesign(input: FillInput): DesignDoc {
         title: 'Add Ons',
         addons: extras.slice(0, 12).map((d) => ({
           name: d.title,
-          lines: [d.description || '', d.additional_charge_amount > 0 ? inr(d.additional_charge_amount) : ''].filter(Boolean),
+          lines: [
+            d.description || '',
+            d.additional_charge_amount > 0 ? inr(d.additional_charge_amount) : '',
+          ].filter(Boolean),
         })),
       }),
     )
