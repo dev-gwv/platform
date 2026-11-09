@@ -1,0 +1,259 @@
+import { useState, type CSSProperties, type ReactNode } from 'react'
+import { Plus, X } from 'lucide-react'
+import type { DesignPage, DesignPageData, DesignPhoto, DesignTheme } from '@ipc/contracts'
+import { Editable } from './Editable'
+import { PhotoFrame } from './PhotoFrame'
+import { isScript } from './templates'
+
+/** A4 at 96 dpi: the size every page is drawn at, then scaled to the screen. */
+export const PAGE_W = 794
+export const PAGE_H = 1123
+
+interface Props {
+  page: DesignPage
+  theme: DesignTheme
+  editable: boolean
+  onChange: (data: DesignPageData) => void
+}
+
+const fontStack = (family: string, script = false) => `'${family}', ${script ? 'cursive' : 'Georgia, serif'}`
+
+/**
+ * One page of a quotation design, drawn from its kind (Quotation Designer,
+ * 0295). The layouts follow the owner's Canva quotation: an arched photo on
+ * the cover, a photo over each section, script headings, italic words, the
+ * total and the payment terms in soft panels.
+ */
+export function DesignPageView({ page, theme, editable, onChange }: Props) {
+  const d = page.data
+  const set = <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => onChange({ ...d, [k]: v })
+  const t = useType(theme)
+  const photo = (p: DesignPhoto, onP: (p: DesignPhoto) => void, style: CSSProperties, className?: string) => (
+    <PhotoFrame photo={p} onChange={onP} editable={editable} accent={theme.accent} style={style} className={className} />
+  )
+  const text = (k: 'title' | 'subtitle' | 'body' | 'studio' | 'tagline' | 'event' | 'location' | 'date' | 'team' | 'total' | 'payments', style: CSSProperties, opts: { placeholder: string; max: number; multiline?: boolean; className?: string }) => (
+    <Editable value={d[k]} onChange={(v) => set(k, v)} editable={editable} style={style} {...opts} />
+  )
+
+  let body: ReactNode
+  switch (page.kind) {
+    case 'cover':
+      body = (
+        <div className="flex h-full flex-col items-center" style={{ padding: '110px 80px 90px' }}>
+          {text('studio', { ...t.heading(96), textAlign: 'center', lineHeight: 1.05 }, { placeholder: 'Your studio name', max: 120 })}
+          <div style={{ height: 50 }} />
+          {photo(d.photo, (p) => set('photo', p), { width: 500, height: 620, borderRadius: '250px 250px 8px 8px' })}
+          <div style={{ height: 48 }} />
+          {text('tagline', { ...t.body(30), fontStyle: 'italic', textAlign: 'center' }, { placeholder: 'A line about your work', max: 200 })}
+          <div style={{ flex: 1 }} />
+          {text('subtitle', { ...t.label(18), textAlign: 'center' }, { placeholder: 'For the couple', max: 300 })}
+        </div>
+      )
+      break
+    case 'about':
+      body = (
+        <div className="flex h-full flex-col">
+          {photo(d.photo, (p) => set('photo', p), { width: '100%', height: 470 })}
+          <div className="flex flex-1 flex-col" style={{ padding: '44px 72px 60px' }}>
+            {text('title', { ...t.heading(76) }, { placeholder: 'About Us', max: 120 })}
+            <div style={{ height: 18 }} />
+            {text('body', { ...t.body(22), fontStyle: 'italic', lineHeight: 1.6, opacity: 0.85 }, { placeholder: 'Your story, in a few lines', max: 3000, multiline: true })}
+            <div style={{ flex: 1, minHeight: 30 }} />
+            <Stats d={d} set={set} editable={editable} t={t} accent={theme.accent} />
+            <div style={{ height: 22 }} />
+            {text('subtitle', { ...t.body(20), fontStyle: 'italic', opacity: 0.8 }, { placeholder: 'Where you shoot', max: 300 })}
+          </div>
+        </div>
+      )
+      break
+    case 'event':
+      body = (
+        <div className="flex h-full flex-col">
+          {photo(d.photo, (p) => set('photo', p), { width: '100%', height: 520 })}
+          <div className="flex flex-1 flex-col" style={{ padding: '44px 72px 60px' }}>
+            {text('title', { ...t.heading(70) }, { placeholder: 'Event Details', max: 120 })}
+            <div style={{ height: 26 }} />
+            <Row label="Event" t={t}>{text('event', t.body(24), { placeholder: 'Haldi', max: 120 })}</Row>
+            <Row label="Location" t={t}>{text('location', t.body(24), { placeholder: 'Venue', max: 160 })}</Row>
+            <Row label="Date" t={t}>{text('date', t.body(24), { placeholder: 'Date', max: 80 })}</Row>
+            <Row label="Team Size" t={t}>{text('team', t.body(24), { placeholder: '3 Shooters with Assistants', max: 160 })}</Row>
+            <div style={{ height: 14 }} />
+            <Lines lines={d.lines} onChange={(v) => set('lines', v)} editable={editable} style={{ ...t.body(22), fontStyle: 'italic' }} accent={theme.accent} placeholder="1 Candid Photographer" max={30} />
+          </div>
+        </div>
+      )
+      break
+    case 'deliverables':
+      body = (
+        <div className="flex h-full flex-col" style={{ padding: '90px 72px 72px' }}>
+          {text('title', { ...t.heading(80), textAlign: 'center' }, { placeholder: 'Deliverables', max: 120 })}
+          <div style={{ height: 34 }} />
+          <Lines lines={d.lines} onChange={(v) => set('lines', v)} editable={editable} style={{ ...t.body(23), lineHeight: 1.5 }} accent={theme.accent} placeholder="Edited high-resolution photographs" max={30} />
+          <div style={{ flex: 1, minHeight: 30 }} />
+          <div style={{ background: theme.panel, border: `2px solid ${theme.accent}`, borderRadius: 14, padding: '26px 30px', textAlign: 'center' }}>
+            {text('total', { ...t.body(30), fontWeight: 700 }, { placeholder: 'Total Investment: INR 0/-', max: 200 })}
+          </div>
+          <div style={{ height: 22 }} />
+          <div style={{ background: theme.panel, borderRadius: 14, padding: '24px 30px' }}>
+            <div style={{ ...t.label(16), marginBottom: 10 }}>Payments T&amp;C</div>
+            {text('payments', { ...t.body(21), fontStyle: 'italic', lineHeight: 1.5 }, { placeholder: 'Advance at booking, the rest before the wedding', max: 600, multiline: true })}
+          </div>
+        </div>
+      )
+      break
+    case 'addons':
+      body = (
+        <div className="flex h-full flex-col">
+          {photo(d.photo, (p) => set('photo', p), { width: '100%', height: 380 })}
+          <div className="flex flex-1 flex-col" style={{ padding: '40px 72px 60px' }}>
+            {text('title', { ...t.heading(72) }, { placeholder: 'Add Ons', max: 120 })}
+            <div style={{ height: 14 }} />
+            <Addons d={d} set={set} editable={editable} t={t} accent={theme.accent} />
+          </div>
+        </div>
+      )
+      break
+    case 'thanks': {
+      const photos = [0, 1, 2, 3, 4].map((i) => d.photos[i] ?? { url: '', x: 50, y: 50, zoom: 1 })
+      const setPhoto = (i: number, p: DesignPhoto) => set('photos', photos.map((x, j) => (j === i ? p : x)))
+      body = (
+        <div className="flex h-full flex-col" style={{ padding: '80px 60px 70px' }}>
+          {text('title', { ...t.heading(96), textAlign: 'center' }, { placeholder: 'Thank You', max: 120 })}
+          <div style={{ height: 36 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '300px 300px', gap: 12 }}>
+            {photo(photos[0]!, (p) => setPhoto(0, p), { gridRow: 'span 2', borderRadius: 6 })}
+            {photo(photos[1]!, (p) => setPhoto(1, p), { borderRadius: 6 })}
+            {photo(photos[2]!, (p) => setPhoto(2, p), { borderRadius: 6 })}
+            {photo(photos[3]!, (p) => setPhoto(3, p), { borderRadius: 6 })}
+            {photo(photos[4]!, (p) => setPhoto(4, p), { borderRadius: 6 })}
+          </div>
+          <div style={{ flex: 1, minHeight: 30 }} />
+          {text('subtitle', { ...t.body(28), fontStyle: 'italic', textAlign: 'center' }, { placeholder: 'Looking forward to your wedding', max: 300 })}
+        </div>
+      )
+      break
+    }
+  }
+
+  return (
+    <div className="designer-sheet relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: theme.background, color: theme.ink }}>
+      {body}
+    </div>
+  )
+}
+
+type Type = ReturnType<typeof useType>
+
+function useType(theme: DesignTheme) {
+  const script = isScript(theme.heading)
+  return {
+    heading: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.heading, script), fontSize: script ? px : Math.round(px * 0.72), lineHeight: 1.1, color: theme.accent, fontWeight: script ? 400 : 600 }),
+    body: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.body), fontSize: px }),
+    label: (px: number): CSSProperties => ({ fontFamily: fontStack(theme.body), fontSize: px, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 600, color: theme.accent }),
+  }
+}
+
+function Row({ label, t, children }: { label: string; t: Type; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline" style={{ gap: 16, padding: '7px 0' }}>
+      <span style={{ ...t.label(15), width: 150, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1 }}>{children}</div>
+    </div>
+  )
+}
+
+/** A bulleted list typed in place: Enter adds the next line, Backspace on an empty one removes it. */
+function Lines({ lines, onChange, editable, style, accent, placeholder, max }: { lines: string[]; onChange: (v: string[]) => void; editable: boolean; style: CSSProperties; accent: string; placeholder: string; max: number }) {
+  const [focus, setFocus] = useState<number | null>(null)
+  const shown = editable ? lines : lines.filter((l) => l.trim())
+  return (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+      {shown.map((line, i) => (
+        <div key={i} className="flex items-baseline" style={{ gap: 14 }}>
+          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 8, background: accent, flexShrink: 0, transform: 'translateY(-4px)' }} />
+          <Editable
+            value={line}
+            editable={editable}
+            max={400}
+            placeholder={placeholder}
+            style={{ ...style, flex: 1 }}
+            autoFocus={focus === i}
+            onChange={(v) => onChange(lines.map((x, j) => (j === i ? v : x)))}
+            onEnter={() => {
+              if (lines.length >= max) return
+              onChange([...lines.slice(0, i + 1), '', ...lines.slice(i + 1)])
+              setFocus(i + 1)
+            }}
+            onEmptyBackspace={() => {
+              onChange(lines.filter((_, j) => j !== i))
+              setFocus(Math.max(0, i - 1))
+            }}
+          />
+        </div>
+      ))}
+      {editable && lines.length < max && (
+        <AddButton onClick={() => { onChange([...lines, '']); setFocus(lines.length) }}>Add a line</AddButton>
+      )}
+    </div>
+  )
+}
+
+function Stats({ d, set, editable, t, accent }: { d: DesignPageData; set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void; editable: boolean; t: Type; accent: string }) {
+  const stats = editable ? d.stats : d.stats.filter((s) => s.value || s.label)
+  return (
+    <div className="flex flex-wrap items-start" style={{ gap: 40 }}>
+      {stats.map((s, i) => (
+        <div key={i} className="group/stat relative" style={{ minWidth: 150 }}>
+          <Editable value={s.value} editable={editable} max={20} placeholder="8+" style={{ ...t.body(52), fontWeight: 700, color: accent, lineHeight: 1 }} onChange={(v) => set('stats', d.stats.map((x, j) => (j === i ? { ...x, value: v } : x)))} />
+          <Editable value={s.label} editable={editable} max={60} placeholder="Years of Experience" style={{ ...t.body(18), fontStyle: 'italic', marginTop: 6 }} onChange={(v) => set('stats', d.stats.map((x, j) => (j === i ? { ...x, label: v } : x)))} />
+          {editable && <RemoveButton label="Remove this figure" onClick={() => set('stats', d.stats.filter((_, j) => j !== i))} />}
+        </div>
+      ))}
+      {editable && d.stats.length < 4 && <AddButton onClick={() => set('stats', [...d.stats, { value: '', label: '' }])}>Add a figure</AddButton>}
+    </div>
+  )
+}
+
+function Addons({ d, set, editable, t, accent }: { d: DesignPageData; set: <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) => void; editable: boolean; t: Type; accent: string }) {
+  const put = (i: number, a: DesignPageData['addons'][number]) => set('addons', d.addons.map((x, j) => (j === i ? a : x)))
+  return (
+    <div className="flex flex-col" style={{ gap: 20 }}>
+      {d.addons.map((a, i) => (
+        <div key={i} className="group/stat relative">
+          <Editable value={a.name} editable={editable} max={80} placeholder="Pre Wedding Shoot" style={{ ...t.heading(44) }} onChange={(v) => put(i, { ...a, name: v })} />
+          <div style={{ height: 6 }} />
+          <Lines lines={a.lines} onChange={(lines) => put(i, { ...a, lines })} editable={editable} style={{ ...t.body(20), fontStyle: 'italic' }} accent={accent} placeholder="1 day, 2 locations · INR 25,000/-" max={12} />
+          {editable && <RemoveButton label="Remove this add-on" onClick={() => set('addons', d.addons.filter((_, j) => j !== i))} />}
+        </div>
+      ))}
+      {editable && d.addons.length < 12 && <AddButton onClick={() => set('addons', [...d.addons, { name: '', lines: [''] }])}>Add an add-on</AddButton>}
+    </div>
+  )
+}
+
+function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="designer-chrome inline-flex w-fit items-center gap-2 rounded-full border-2 border-dashed border-amber-500/70 bg-amber-50/80 px-4 py-1.5 text-amber-800 hover:bg-amber-100"
+      style={{ fontFamily: 'system-ui, sans-serif', fontSize: 15, fontWeight: 600 }}
+    >
+      <Plus className="size-4" aria-hidden /> {children}
+    </button>
+  )
+}
+
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="designer-chrome absolute -right-2 -top-2 flex size-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground opacity-0 shadow transition-opacity hover:text-destructive group-hover/stat:opacity-100 focus:opacity-100"
+    >
+      <X className="size-4" />
+    </button>
+  )
+}

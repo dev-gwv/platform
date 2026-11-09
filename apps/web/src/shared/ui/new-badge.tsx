@@ -15,6 +15,8 @@ export const NEW_UNTIL = {
   galleryDrive: '2026-11-07',
   /** Frameline's studio app inside the dashboard, Projects → Gallery app (4 Nov). */
   galleryApp: '2026-11-11',
+  /** The AI menu and its Quotation Designer (9 Nov). */
+  aiDesigner: '2026-11-16',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

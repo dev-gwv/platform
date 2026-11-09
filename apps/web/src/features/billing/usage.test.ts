@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PlanUsage } from '@ipc/contracts'
 import { nearestLimit, perDay, usageBars, windowLine } from './usage'
 
-const used = { projects: 25, leads: 12, invoices: 10, team_logins: 1, team_members: 6, enquiry_forms: 1, facebook_pages: 0, packages: 1, storage_mb: 300 }
+const used = { projects: 25, leads: 12, invoices: 10, team_logins: 1, team_members: 6, enquiry_forms: 1, facebook_pages: 0, packages: 1, storage_mb: 300, designs: 4 }
 const starter: PlanUsage = {
   plan_key: 'starter_yearly',
   plan_name: 'Starter',

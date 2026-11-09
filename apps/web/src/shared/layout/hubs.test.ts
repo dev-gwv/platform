@@ -82,7 +82,7 @@ describe('the staff menu', () => {
 })
 
 describe('the studio menu', () => {
-  it('is twelve lines, one word for each thing', () => {
+  it('is thirteen lines, one word for each thing', () => {
     const every = [
       ...ALL, 'dashboard', 'crm', 'clients', 'projects', 'tasks', 'billing', 'company_expenses', 'financials',
       'reports', 'settings',
@@ -90,7 +90,7 @@ describe('the studio menu', () => {
     const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
     expect(lines).toEqual([
       'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Tasks', 'Data & Backup', 'Money',
-      'Team', 'Reports', 'Settings',
+      'Team', 'Reports', 'AI', 'Settings',
     ])
     // Owner, 5 Nov (later): the Gallery is on the Post-Production page itself, not a menu line.
     expect(lines).not.toContain('Gallery')

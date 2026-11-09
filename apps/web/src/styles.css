@@ -239,6 +239,58 @@
   }
 }
 
+/* Quotation Designer (0295): text typed on the page, and what prints. */
+.designer-editable {
+  outline: none;
+  border-radius: 4px;
+  cursor: text;
+  min-width: 2ch;
+}
+.designer-editable:hover {
+  box-shadow: 0 0 0 2px rgb(217 119 6 / 0.35);
+}
+.designer-editable:focus {
+  box-shadow: 0 0 0 2px rgb(217 119 6 / 0.8);
+}
+.designer-editable:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.4;
+}
+.designer-print {
+  display: none;
+}
+@media print {
+  .designer-print-page {
+    page: designer;
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    break-after: page;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .designer-print-page:last-child {
+    break-after: auto;
+  }
+  /* The print copy is a child of <body> (a portal); everything else goes. */
+  body:has(> .designer-print) > :not(.designer-print) {
+    display: none !important;
+  }
+  body:has(> .designer-print) .designer-print {
+    display: block !important;
+  }
+  body:has(> .designer-print) {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  /* A4 at 96 dpi, to the pixel the page is drawn at: "A4" is half a pixel
+     shorter and Chrome shrank every page to fit, leaving a strip. */
+  @page designer {
+    size: 794px 1123px;
+    margin: 0;
+  }
+}
+
 /* Print: hide the app shell + anything marked no-print; show only the page. */
 @media print {
   aside,

@@ -29,6 +29,8 @@ const PAGES = [
   ['/billing/payments', 'Money'],
   ['/employees', 'Team'],
   ['/reports', 'Reports'],
+  ['/ai', 'AI'],
+  ['/ai/designer', 'Quotation Designer'],
   ['/settings/subscription', 'Plan & billing'],
   ['/settings/company', 'Settings'],
   ['/profile', 'My profile'],

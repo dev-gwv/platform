@@ -9,6 +9,7 @@ import { deriveStage } from '@/features/data/stage'
  * so production builds never carry it.
  */
 import { NOT_MOCKED } from './mock-flag'
+import { fillDesign } from '@/features/designer/fill'
 
 
 /**
@@ -323,6 +324,8 @@ const payrollMonthFx = {
 
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
+  // Quotation Designer (0295).
+  if (path.startsWith('/designs')) return designMock(path, method)
   if (method === 'POST' && path === '/auth/forgot-password') return { ok: true }
   if (method === 'POST' && (path === '/auth/logout' || path === '/auth/logout-all'))
     return { ok: true }
@@ -4127,4 +4130,39 @@ const publicPartnerFx = {
     { name: 'Meera Joshi', phone: '+919810000001', email: 'meera@example.com', city: 'Jaipur', enquired_on: '2026-10-18T09:00:00Z', event_type: 'Wedding', event_date: '2027-02-14', status: 'New' },
     { name: 'Neha Gupta', phone: '+919822200011', email: null, city: 'Udaipur', enquired_on: '2026-10-02T09:00:00Z', event_type: 'Engagement / Roka', event_date: '2026-12-02', status: 'Booked' },
   ],
+}
+
+const DESIGN_ID = '0295d000-0000-4000-8000-000000000001'
+let designDocFx: ReturnType<typeof fillDesign> | null = null
+function designMock(path: string, method: string): unknown {
+  designDocFx ??= fillDesign({
+    template: 'ivory',
+    studio: 'Cine World Weddings',
+    project: {
+      name: 'Akshay & Riya Wedding',
+      client_name: 'Akshay & Riya',
+      total_cost: 85000,
+      deliverables: [
+        { title: 'Candid & traditional photographs', description: 'all edited, in high resolution', list_key: 'primary', visibility_scope: 'client', show_on_quotation: true, status: 'pending', additional_charge_amount: 0 },
+        { title: 'Cinematic wedding film', description: '8-10 minutes', list_key: 'primary', visibility_scope: 'client', show_on_quotation: true, status: 'pending', additional_charge_amount: 0 },
+        { title: 'Pre Wedding Shoot', description: '1 day, 2 locations', list_key: 'additional', visibility_scope: 'client', show_on_quotation: true, status: 'pending', additional_charge_amount: 25000 },
+      ],
+    },
+    shoots: [
+      { name: 'Haldi', shoot_date: '2027-04-18', location: 'Taj Lake Palace, Udaipur', requirements: [{ name: 'Candid Photographer', quantity: 1 }, { name: 'Cinematographer', quantity: 1 }] },
+      { name: 'Wedding', shoot_date: '2027-04-19', location: 'Taj Lake Palace, Udaipur', requirements: [{ name: 'Candid Photographer', quantity: 2 }, { name: 'Cinematographer', quantity: 1 }] },
+    ],
+    instalments: [
+      { label: 'Advance', mode: 'amount', value: 25000, due_trigger: null },
+      { label: 'On Engagement', mode: 'amount', value: 10000, due_trigger: null },
+      { label: 'Before the Wedding', mode: 'amount', value: 50000, due_trigger: null },
+    ],
+  })
+  const now = new Date().toISOString()
+  const summary = { id: DESIGN_ID, title: 'Akshay & Riya Wedding – Quotation', template: 'ivory', project_id: null, project_name: 'Akshay & Riya Wedding', cover_url: null, pages: designDocFx.pages.length, created_at: now, updated_at: now }
+  if (method === 'GET' && path === '/designs') return [summary]
+  if (method === 'GET') return { ...summary, doc: designDocFx }
+  if (method === 'PATCH') return { ok: true, updated_at: now }
+  if (method === 'DELETE') return { ok: true }
+  return { id: DESIGN_ID }
 }
