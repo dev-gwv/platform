@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { TransactionSql } from 'postgres'
-import { enrollRequest, leadSequence, sequence, sequenceInput, sequencePatch, sequenceSend, type SequenceSend } from '@ipc/contracts'
+import { enrollRequest, leadSequence, sequence, sequenceDraft, sequenceDraftRequest, sequenceInput, sequencePatch, sequenceSend, type SequenceSend } from '@ipc/contracts'
 import { fillSequenceText } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -11,6 +11,8 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { loadStudioBrand } from '../../lib/studio-brand'
+import { writeWithAi } from '../../lib/ai-write'
+import { parseSequenceDraft, sequenceWriterMessages } from '../../lib/sequence-writer'
 
 /**
  * Sequences (0202), under /crm: the follow-up plans whose steps write a
@@ -200,6 +202,29 @@ export const crmSequencesRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not add the starter sequences.')
     return c.json({ added: rows[0]?.n ?? 0 })
+  })
+
+  /**
+   * The sequence maker (owner, 9 Nov): AI writes a whole sequence from what
+   * happened with the lead. Only a draft: the editor opens on it and the
+   * studio saves (or not). One more try when the first answer will not parse.
+   */
+  .post('/sequences/write', edit, async (c) => {
+    const parsed = sequenceDraftRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick what happened with the lead.')
+    const r = parsed.data
+    for (let i = 0; i < 2; i++) {
+      const raw = await writeWithAi(c, {
+        kind: `sequence:${r.goal}`,
+        messages: sequenceWriterMessages(r),
+        maxTokens: 1800,
+        temperature: i === 0 ? 0.7 : 0.4,
+        cost: 2500,
+      })
+      const draft = parseSequenceDraft(raw, r)
+      if (draft) return c.json(sequenceDraft.parse(draft))
+    }
+    return fail(503, 'The AI could not write a clean sequence. Try again.')
   })
 
   .post('/sequences/:id/enroll', edit, async (c) => {

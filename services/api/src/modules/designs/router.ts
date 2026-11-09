@@ -27,9 +27,7 @@ import { requireStudioWork } from '../../lib/scope'
 import { withService } from '../../lib/db'
 import { newRawToken, verifyToken } from '../../lib/auth-token'
 import { cleanDesignWriting, designWriterMessages } from '../../lib/design-writer'
-import { logAsk } from '../../lib/assistant'
-import { budgetUsed, budgetVerdict, DEFAULT_DAY_TOKENS, DEFAULT_MINUTE_TOKENS } from '../../lib/ai-budget'
-import { providersFor, readSettings } from '../assistant/router'
+import { writeWithAi } from '../../lib/ai-write'
 
 /**
  * Quotation Designer (0295): the studio's premium quotation designs, each a
@@ -87,29 +85,13 @@ export const designsRouter = new Hono<AppEnv>()
   .post('/write', requireAction('projects', 'edit'), async (c) => {
     const parsed = designWriteRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check what to write.')
-    if (!c.env.AI_API_KEY) fail(503, 'AI writing is not switched on yet. Please ask us to switch it on.')
-    const auth = c.get('auth')
-    const row = await attempt(c, 'designs.write_settings', () => readSettings(c.env))
-    const spent = await budgetUsed(c.env)
-    if (spent) {
-      const verdict = budgetVerdict(
-        spent,
-        { minute: row?.assistant_minute_tokens ?? DEFAULT_MINUTE_TOKENS, day: row?.assistant_day_tokens ?? DEFAULT_DAY_TOKENS },
-        900,
-        'en',
-      )
-      if (!verdict.ok) fail(429, verdict.why)
-    }
-    const reply = await providersFor(c.env, row ?? null).chat({ messages: designWriterMessages(parsed.data), maxTokens: 700, temperature: 0.7 })
-    await logAsk(
-      c.env,
-      { companyId: auth.companyId, userId: auth.userId, question: `[designer:${parsed.data.kind}] ${parsed.data.hint || parsed.data.project}`.slice(0, 300) },
-      reply.ok
-        ? { status: 'answered', answer: reply.text, sources: [], callUrl: null, model: reply.model, promptTokens: reply.usage.promptTokens, completionTokens: reply.usage.completionTokens, cachedTokens: reply.usage.cachedTokens, error: null }
-        : { status: 'failed', answer: '', sources: [], callUrl: null, model: null, promptTokens: null, completionTokens: null, cachedTokens: null, error: reply.error },
-    )
-    if (!reply.ok) fail(503, reply.error || 'The AI could not write just now. Try again in a minute.')
-    const out = cleanDesignWriting(parsed.data.kind, reply.text)
+    const text = await writeWithAi(c, {
+      kind: `designer:${parsed.data.kind}`,
+      messages: designWriterMessages(parsed.data),
+      maxTokens: 700,
+      temperature: 0.7,
+    })
+    const out = cleanDesignWriting(parsed.data.kind, text)
     if (!out.text && out.lines.length === 0) fail(503, 'The AI came back empty. Try again.')
     return c.json(designWriteReply.parse(out))
   })

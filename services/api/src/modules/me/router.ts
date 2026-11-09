@@ -23,6 +23,9 @@ import { selectMyDeliverables } from '../../lib/my-work'
 import { studioWork, worksOn } from '../../lib/scope'
 import { todayInIndia } from '../../lib/dates'
 import { summarizeCrewOwed } from '@ipc/domain'
+import { leadMessagedRequest } from '@ipc/contracts'
+import { loadReplyData, recordReply } from '../../lib/lead-reply'
+import { writeLeadReply } from '../crm/routes-ai'
 
 /**
  * A person's own things that live in other people's areas -- today, the CRM
@@ -156,6 +159,39 @@ export const meRouter = new Hono<AppEnv>()
     if (out === null) fail(404, 'That lead is not given to you.')
     if (!out) fail(400, 'We could not load this lead.')
     return c.json(myLeadDetail.parse(out))
+  })
+
+  // "Reply with AI" on my own lead (owner, 9 Nov): the same writer as the CRM's.
+  .post('/leads/:id/reply', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const data = await attempt(c, 'me.lead_reply_read', () =>
+      withService(c.env, (sql) => loadReplyData(sql, auth.companyId, id, { assignedTo: auth.userId })),
+    )
+    if (data === null) fail(404, 'That lead is not given to you.')
+    if (!data) fail(400, 'We could not read this lead.')
+    // My leads opens WhatsApp from the person's own phone; the studio number is the CRM's.
+    return writeLeadReply(c, { ...data, canDirect: false })
+  })
+
+  .post('/leads/:id/reply/sent', async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam(c)
+    const parsed = leadMessagedRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'There is no message to keep.')
+    const ok = await attempt(c, 'me.lead_reply_sent', () =>
+      withService(c.env, async (sql) => {
+        const [l] = await sql`
+          select 1 from crm_leads where id = ${id} and company_id = ${auth.companyId} and assigned_to = ${auth.userId}`
+        if (!l) return false
+        await recordReply(sql, auth.companyId, id, auth.userId, parsed.data.text, 'manual')
+        return true
+      }),
+    )
+    if (ok === false) fail(404, 'That lead is not given to you.')
+    if (ok === null) fail(400, 'We could not keep the message on the lead.')
+    await audit(c, { action: 'lead.ai_reply', entityType: 'crm_lead', entityId: id, after: { via: parsed.data.via } })
+    return c.json({ ok: true })
   })
 
   // What was said, written on my lead.

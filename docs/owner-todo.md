@@ -52,10 +52,10 @@ What is waiting, and on whom. Update this file when an item is done.
 
 ## On Claude (ready to build once the owner says)
 
-0. **Quotation Designer, step 2** (step 1 live 9 Nov): send the design to the client as a
-   link (and see when they open it), more looks, more page kinds (packages table, team,
-   testimonials), drag-to-reorder, and the **AI writing** cards on `/ai` ("Write it for me",
-   "Reply to a lead") through the assistant's engine, `lib/ai.ts`.
+0. **Quotation Designer is done (steps 1-5 live 9 Nov); Reply with AI and the Follow-up
+   sequence maker are built.** All AI writing (the designer's Write it for me, Reply with AI,
+   the sequence maker) needs `AI_API_KEY` on the server -- until then each says "AI writing is
+   not switched on yet". Next AI ideas: referral message cards, a review collector.
 
 1. **Email + WhatsApp message credits** in every plan (about two days; claim a migration
    number first). Needs items 2 and 6 above.

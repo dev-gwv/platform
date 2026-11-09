@@ -12,6 +12,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { cn } from '@/shared/ui/cn'
 import { useAddStarters, useDeleteSequence, useHasFeature, usePatchSequence, useSequences } from './api'
 import { SequenceEditor } from './SequenceEditor'
+import { NewBadge } from '@/shared/ui/new-badge'
 
 export const CHANNEL: Record<SequenceChannel, { label: string; icon: typeof Bell; tone: string }> = {
   whatsapp: { label: 'WhatsApp', icon: MessageCircle, tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
@@ -49,11 +50,12 @@ export function SequencesSection() {
         <div className="min-w-0">
           <h3 className="font-semibold tracking-tight">Follow-up sequences</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Messages a lead gets on its day. {auto ? 'Emails go out by themselves; ' : ''}WhatsApp messages wait in{' '}
+            Messages a lead gets on its day. They wait in{' '}
             <Link to="/follow-ups/send" className="font-medium text-primary hover:underline">
               Send now
             </Link>{' '}
-            for one tap from your phone. A reply stops it.
+            for one tap from your phone{auto ? ', or go from your own WhatsApp number when WhatsApp allows it' : ''}. A
+            reply stops it.
           </p>
         </div>
         {canEdit && (
@@ -63,7 +65,14 @@ export function SequencesSection() {
                 <Sparkles /> Add ready-made
               </Button>
             )}
-            <Button onClick={() => setEditing('new')}>
+            <Link
+              to="/ai/sequences"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-violet-600 px-3 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
+            >
+              <Sparkles className="size-4" /> Write with AI
+              <NewBadge feature="aiSequences" className="border-white/40 bg-white/20 text-white" />
+            </Link>
+            <Button variant="outline" onClick={() => setEditing('new')}>
               <Plus /> New sequence
             </Button>
           </div>
@@ -96,12 +105,6 @@ export function SequencesSection() {
             <SequenceRow key={s.id} s={s} canEdit={canEdit} canDelete={canDelete} onEdit={() => setEditing(s)} />
           ))}
         </ul>
-      )}
-
-      {!auto && list.some((s) => s.steps.some((st) => st.channel === 'email')) && (
-        <p className="text-xs text-muted-foreground">
-          Emails wait in Send now too. Sending them by themselves, from your studio’s name, comes with the higher plan.
-        </p>
       )}
 
       {editing && <SequenceEditor sequence={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}

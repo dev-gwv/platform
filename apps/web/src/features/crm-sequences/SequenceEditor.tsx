@@ -58,7 +58,16 @@ const blank = (day: number, channel: SequenceChannel = 'whatsapp'): StepDraft =>
  * One sequence, written as a timeline: each step is a day, a channel and the
  * words. The preview under each message is what Riya would get.
  */
-export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | null; onClose: () => void }) {
+export function SequenceEditor({
+  sequence,
+  draft,
+  onClose,
+}: {
+  sequence: Sequence | null
+  /** A new sequence the AI wrote (the sequence maker): opens filled, saved only when the studio saves. */
+  draft?: SequenceInput | null
+  onClose: () => void
+}) {
   const save = useSaveSequence()
   // With the studio's own number connected, a WhatsApp step can name an
   // approved template and go out by itself (0203).
@@ -66,9 +75,9 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
   const connected = !!wa.data?.connection
   const templates = (useWhatsappTemplates(connected).data?.items ?? []).filter((t) => t.status === 'APPROVED')
   const pipelines = usePipelines()
-  const [name, setName] = useState(sequence?.name ?? '')
+  const [name, setName] = useState(sequence?.name ?? draft?.name ?? '')
   const [starts, setStarts] = useState<'hand' | 'new' | 'stage'>(
-    !sequence?.auto_start ? (sequence ? 'hand' : 'new') : sequence.stage_filter ? 'stage' : 'new',
+    !sequence?.auto_start ? (sequence || draft ? 'hand' : 'new') : sequence.stage_filter ? 'stage' : 'new',
   )
   const [stage, setStage] = useState(sequence?.stage_filter ?? '')
   const [source, setSource] = useState(sequence?.source_filter ?? '')
@@ -86,7 +95,19 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
           template: s.wa_template_name ? `${s.wa_template_name}|${s.wa_template_lang ?? 'en'}` : '',
           params: s.wa_params ?? [],
         }))
-      : [blank(0), blank(2, 'reminder')],
+      : draft
+        ? draft.steps.map((s) => ({
+            key: nextKey++,
+            day: String(s.day_offset),
+            channel: s.channel,
+            hour: s.send_hour ?? 10,
+            subject: s.subject ?? '',
+            body: s.body ?? '',
+            note: s.note ?? '',
+            template: '',
+            params: [],
+          }))
+        : [blank(0), blank(2, 'reminder')],
   )
   const [error, setError] = useState<string | null>(null)
 
@@ -107,7 +128,7 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
     const ordered = [...steps].sort((a, b) => Number(a.day) - Number(b.day))
     const input: SequenceInput = {
       name: name.trim(),
-      description: sequence?.description ?? null,
+      description: sequence?.description ?? draft?.description ?? null,
       is_active: sequence?.is_active ?? true,
       auto_start: starts !== 'hand',
       stage_filter: starts === 'stage' ? stage : null,
@@ -132,7 +153,10 @@ export function SequenceEditor({ sequence, onClose }: { sequence: Sequence | nul
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={sequence ? 'Edit sequence' : 'New sequence'} className="max-w-2xl">
+      <DialogContent
+        title={sequence ? 'Edit sequence' : draft ? 'Check your new sequence' : 'New sequence'}
+        className="max-w-2xl"
+      >
         <div className="flex flex-col gap-4">
           <div>
             <Label htmlFor="seq-name">Name</Label>
