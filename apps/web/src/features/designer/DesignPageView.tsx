@@ -1,4 +1,4 @@
-import { createContext, use, useState, type CSSProperties, type ReactNode } from 'react'
+import { use, useState, type CSSProperties, type ReactNode } from 'react'
 import { Plus, X } from 'lucide-react'
 import type {
   DesignPage,
@@ -9,13 +9,14 @@ import type {
 } from '@ipc/contracts'
 import { Editable, type EditableProps } from './Editable'
 import { useDesigner } from './context'
+import { Movable } from './Movable'
+import { PAGE_H, PAGE_W, PageCtx } from './page-context'
+import type { Guide } from './snap'
 import { PhotoFrame } from './PhotoFrame'
 import { isScript } from './templates'
 import { WriteButton, type Writer } from './WriteButton'
 
-/** A4 at 96 dpi: the size every page is drawn at, then scaled to the screen. */
-export const PAGE_W = 794
-export const PAGE_H = 1123
+export { PAGE_H, PAGE_W } from './page-context'
 
 interface Props {
   page: DesignPage
@@ -40,21 +41,34 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
   const set = <K extends keyof DesignPageData>(k: K, v: DesignPageData[K]) =>
     onChange({ ...d, [k]: v })
   const t = useType(theme)
+  const [guides, setGuides] = useState<Guide[]>([])
+  const ed = useDesigner()
   const photo = (
     p: DesignPhoto,
     onP: (p: DesignPhoto) => void,
     style: CSSProperties,
     name = 'photo',
-  ) => (
-    <PhotoFrame
-      frameId={`${page.id}:${name}`}
-      photo={p}
-      onChange={onP}
-      editable={editable}
-      accent={theme.accent}
-      style={style}
-    />
-  )
+  ) => {
+    // A grid cell's placement stays on the moving wrapper; the frame fills it.
+    const { gridRow, ...frame } = style
+    return (
+      <Movable
+        k={name}
+        kind="photo"
+        style={gridRow ? { gridRow } : undefined}
+        onTap={() => ed?.pickFrame({ id: `${page.id}:${name}`, apply: onP })}
+      >
+        <PhotoFrame
+          frameId={`${page.id}:${name}`}
+          photo={p}
+          onChange={onP}
+          editable={editable}
+          accent={theme.accent}
+          style={gridRow ? { ...frame, height: '100%' } : frame}
+        />
+      </Movable>
+    )
+  }
   const text = (
     k:
       | 'title'
@@ -71,14 +85,16 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
     style: CSSProperties,
     opts: { placeholder: string; max: number; multiline?: boolean; className?: string },
   ) => (
-    <SE
-      k={k}
-      value={d[k]}
-      onChange={(v) => set(k, v)}
-      editable={editable}
-      style={style}
-      {...opts}
-    />
+    <Movable k={k} kind="text">
+      <SE
+        k={k}
+        value={d[k]}
+        onChange={(v) => set(k, v)}
+        editable={editable}
+        style={style}
+        {...opts}
+      />
+    </Movable>
   )
 
   /** A "Write it for me" for one part, only while editing and when AI is offered. */
@@ -380,7 +396,21 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
   }
 
   return (
-    <PageCtx value={{ pageId: page.id, styles: d.styles }}>
+    <PageCtx
+      value={{
+        pageId: page.id,
+        editable,
+        styles: d.styles,
+        layout: d.layout,
+        setBox: (k, box) => {
+          const layout = { ...d.layout }
+          if (box) layout[k] = box
+          else delete layout[k]
+          onChange({ ...d, layout })
+        },
+        setGuides,
+      }}
+    >
       <div
         className="designer-sheet relative overflow-hidden"
         style={{
@@ -391,15 +421,23 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
         }}
       >
         {body}
+        {/* Canva's pink guides while an item is dragged onto the centre or a margin. */}
+        {guides.map((g, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="pointer-events-none absolute z-30"
+            style={
+              g.axis === 'x'
+                ? { left: g.at - 1, top: 0, bottom: 0, width: 2, background: '#ff3ea5' }
+                : { top: g.at - 1, left: 0, right: 0, height: 2, background: '#ff3ea5' }
+            }
+          />
+        ))}
       </div>
     </PageCtx>
   )
 }
-
-/** The page being drawn: its id (for the style bar) and its text settings. */
-const PageCtx = createContext<{ pageId: string; styles: Record<string, DesignTextStyle> } | null>(
-  null,
-)
 
 /** A layout's text style with the studio's own settings on top (Canva's text bar). */
 export function withTextStyle(base: CSSProperties, ts: DesignTextStyle | undefined): CSSProperties {
@@ -422,8 +460,15 @@ function SE({ k, style, ...rest }: Omit<EditableProps, 'onFocus' | 'active'> & {
     <Editable
       {...rest}
       style={withTextStyle(style ?? {}, page?.styles[k])}
-      onFocus={page && ed ? () => ed.setActiveText({ pageId: page.pageId, key: k }) : undefined}
-      active={!!page && ed?.activeText?.pageId === page.pageId && ed.activeText.key === k}
+      onFocus={
+        page && ed
+          ? () => {
+              ed.setActiveText({ pageId: page.pageId, key: k })
+              ed.select(`${page.pageId}:${k}`)
+            }
+          : undefined
+      }
+      active={!!page && ed?.activeText?.pageId === page.pageId && ed?.activeText?.key === k}
     />
   )
 }
@@ -836,14 +881,16 @@ function People({
           className="group/stat relative flex flex-col items-center"
           style={{ width: 200 }}
         >
-          <PhotoFrame
-            frameId={`${use(PageCtx)?.pageId}:people.${i}`}
-            photo={p.photo}
-            onChange={(photo) => put(i, { ...p, photo })}
-            editable={editable}
-            accent={accent}
-            style={{ width: 180, height: 180, borderRadius: 180 }}
-          />
+          <Movable k={`people.${i}`} kind="photo">
+            <PhotoFrame
+              frameId={`${use(PageCtx)?.pageId}:people.${i}`}
+              photo={p.photo}
+              onChange={(photo) => put(i, { ...p, photo })}
+              editable={editable}
+              accent={accent}
+              style={{ width: 180, height: 180, borderRadius: 180 }}
+            />
+          </Movable>
           <div style={{ height: 14 }} />
           <SE
             k="people.name"

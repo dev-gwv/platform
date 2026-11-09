@@ -26,6 +26,13 @@ export interface DesignerCtx {
   applyToPicked: (p: DesignPhoto) => void
   /** A photo file dropped on a frame: compressed, uploaded, kept in the library. */
   uploadPhoto: (file: File) => Promise<DesignPhoto | null>
+  /** Step 4: the item picked to move or resize ("<pageId>:<key>"), and the photo being cropped. */
+  selected: string | null
+  select: (id: string | null) => void
+  cropping: string | null
+  setCropping: (id: string | null) => void
+  /** How big the pages are drawn now (zoom), to turn a mouse move into page pixels. */
+  scale: number
 }
 
 export const DesignerContext = createContext<DesignerCtx | null>(null)
