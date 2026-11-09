@@ -1,3 +1,4 @@
+import { ReplyWithAiButton } from '@/features/crm-ai/ReplySheet'
 import { useEffect, useRef, useState } from 'react'
 import { PartnerChip } from './PartnerChip'
 import { AssigneeChip } from './AssigneeChip'
@@ -392,6 +393,14 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 </span>
               )}
             </Button>
+            <ReplyWithAiButton
+              leadId={lead.id}
+              name={lead.name}
+              phone={lead.phone}
+              status={lead.status}
+              contactedStatus={lead.contacted_status}
+              className="h-8"
+            />
             <Button variant="outline" size="sm" disabled={!lead.email} asChild={!!lead.email}>
               {lead.email ? (
                 <a href={`mailto:${lead.email}`}>

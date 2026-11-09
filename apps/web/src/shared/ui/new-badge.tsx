@@ -17,6 +17,8 @@ export const NEW_UNTIL = {
   galleryApp: '2026-11-11',
   /** The AI menu and its Quotation Designer (9 Nov). */
   aiDesigner: '2026-11-16',
+  aiReply: '2026-11-16',
+  aiSequences: '2026-11-16',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

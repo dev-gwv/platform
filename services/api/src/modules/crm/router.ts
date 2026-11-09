@@ -15,10 +15,14 @@ import { crmConvertRoutes } from './routes-convert'
 import { crmCadenceRoutes } from './routes-cadences'
 import { crmSettingsRoutes } from './routes-settings'
 import { crmSourceRoutes } from './routes-sources'
+import { crmAiRoutes } from './routes-ai'
 
 export const crmRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
   .use('*', requireModule('crm'))
+
+  // AI: a WhatsApp reply written for one lead (owner, 9 Nov).
+  .route('/', crmAiRoutes)
 
   // Leads: list, add, change.
   .route('/', crmLeadRoutes)

@@ -326,6 +326,30 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
   if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method)
+  // AI for leads (owner, 9 Nov): a reply and a sequence, as the server would write them.
+  if (method === 'POST' && /\/leads\/[^/]+\/reply$/.test(path))
+    return {
+      text: 'Hi Priya! Thank you so much for reaching out to Cine World Weddings 🌸\nWe would love to capture your wedding in Jaipur.\nCould you share the venue and which functions you are planning, so we can suggest the right team?',
+      can_send_direct: path.startsWith('/crm/'),
+    }
+  if (method === 'POST' && /\/leads\/[^/]+\/reply\/(sent|send)$/.test(path)) return { ok: true }
+  if (method === 'POST' && path === '/crm/sequences/write')
+    return {
+      name: 'Quotation sent, gone quiet',
+      description: null,
+      is_active: true,
+      auto_start: false,
+      stage_filter: null,
+      source_filter: null,
+      stop_on_reply: true,
+      steps: [
+        { day_offset: 1, channel: 'whatsapp', send_hour: 11, body: 'Hi {{first_name}}! Did you get a chance to look at the quotation for your {{event_type}}? Happy to walk you through it 😊', subject: null },
+        { day_offset: 3, channel: 'reminder', send_hour: 18, note: 'Call them: ask what they liked and what to change', body: null, subject: null },
+        { day_offset: 6, channel: 'whatsapp', send_hour: 11, body: 'Hi {{first_name}}, a little peek at a wedding we shot recently: {{website}}\nWe would love to make yours just as special.', subject: null },
+        { day_offset: 10, channel: 'whatsapp', send_hour: 12, body: 'Hi {{first_name}}, is {{event_date}} still the plan? Dates fill up fast in the season, so do tell us if we should hold yours.', subject: null },
+        { day_offset: 14, channel: 'whatsapp', send_hour: 11, body: 'Hi {{first_name}}, just checking in one last time. If now is not the right time, no worries at all. We are here whenever you need us. – {{studio}}', subject: null },
+      ],
+    }
   if (method === 'POST' && path === '/auth/forgot-password') return { ok: true }
   if (method === 'POST' && (path === '/auth/logout' || path === '/auth/logout-all'))
     return { ok: true }

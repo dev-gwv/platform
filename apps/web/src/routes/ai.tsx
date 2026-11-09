@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { FileImage, MessageSquareText, PenLine, Sparkles, type LucideIcon } from 'lucide-react'
+import { FileImage, ListChecks, MessageSquareText, PenLine, Sparkles, type LucideIcon } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -18,7 +18,9 @@ interface Tool {
   title: string
   line: string
   icon: LucideIcon
-  to?: '/ai/designer'
+  to?: '/ai/designer' | '/ai/sequences' | '/leads'
+  /** A word under the button, when the tool opens somewhere else. */
+  how?: string
 }
 
 /**
@@ -28,8 +30,20 @@ interface Tool {
  */
 const TOOLS: Tool[] = [
   { title: 'Quotation Designer', line: 'A premium quotation in your own photos, filled from the project.', icon: FileImage, to: '/ai/designer' },
+  {
+    title: 'Reply to a lead',
+    line: 'A WhatsApp reply to an enquiry, ready to send.',
+    icon: MessageSquareText,
+    to: '/leads',
+    how: 'Open any lead and press Reply with AI.',
+  },
+  {
+    title: 'Follow-up sequences',
+    line: 'A whole series of follow-ups, written for what happened with the lead.',
+    icon: ListChecks,
+    to: '/ai/sequences',
+  },
   { title: 'Write it for me', line: 'Your About Us and deliverables, written in your words.', icon: PenLine },
-  { title: 'Reply to a lead', line: 'A WhatsApp reply to an enquiry, ready to send.', icon: MessageSquareText },
 ]
 
 function AiHub() {
@@ -45,6 +59,7 @@ function AiHub() {
               <div className="flex-1">
                 <p className="font-semibold">{t.title}</p>
                 <p className="text-sm text-muted-foreground">{t.line}</p>
+                {t.how && <p className="mt-1 text-xs font-medium text-primary">{t.how}</p>}
               </div>
               {t.to ? (
                 <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground">

@@ -1,3 +1,4 @@
+import { ReplyWithAiButton } from '@/features/crm-ai/ReplySheet'
 import { useMemo, useState } from 'react'
 import { AlarmClock, Check, MessageCircle, Moon, Phone, Search, StickyNote } from 'lucide-react'
 import type { MyLead, MyLeadDetail } from '@ipc/contracts'
@@ -201,6 +202,7 @@ function LeadBody({ lead: l }: { lead: MyLeadDetail }) {
               <MessageCircle /> WhatsApp
             </a>
           </Button>
+          <ReplyWithAiButton leadId={l.id} name={l.name} phone={l.phone} status={l.status} mine />
         </div>
       )}
 

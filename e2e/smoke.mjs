@@ -31,6 +31,7 @@ const PAGES = [
   ['/reports', 'Reports'],
   ['/ai', 'AI'],
   ['/ai/designer', 'Quotation Designer'],
+  ['/ai/sequences', 'Follow-up sequence maker'],
   ['/settings/subscription', 'Plan & billing'],
   ['/settings/company', 'Settings'],
   ['/profile', 'My profile'],

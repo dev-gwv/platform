@@ -1,7 +1,7 @@
 import { fillSequenceText } from '@ipc/domain'
 import type { Env } from '../context'
 import { withService } from './db'
-import { sendStudioEmail } from './email'
+import { AUTOMATIC_OFF_NOTE, sendStudioEmail } from './email'
 import { loadStudioBrand } from './studio-brand'
 import { open } from './secret-box'
 import { sendWhatsAppTemplate, sendWhatsAppText } from './whatsapp'
@@ -96,6 +96,8 @@ export async function runSequenceSends(env: Env, dryRun: boolean): Promise<Seque
         const subject = fillSequenceText(row.subject ?? `A note from ${brand.name}`, lead, studio)
         const r = await sendStudioEmail(env, { to: lead.email, subject, text, brand })
         if (r.status === 'sent') return { ok: true as const, id: r.id ?? null, subject, text }
+        // No email goes out by itself (owner, 26 Oct): the step waits in Send now for a tap, not "failed".
+        if (r.error === AUTOMATIC_OFF_NOTE) return { manual: true as const, reason: 'Emails wait for a tap in Send now' }
         return { ok: false as const, error: r.status === 'provider_missing' ? 'Email is not set up on the server' : (r.error ?? 'Email could not be sent') }
       })
     } catch (err) {
