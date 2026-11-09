@@ -172,6 +172,7 @@ const EMPTY: DesignPageData = {
   people: [],
   styles: {},
   background: '',
+  layout: {},
 }
 
 export function page(kind: DesignPageKind, data: Partial<DesignPageData> = {}): DesignPage {

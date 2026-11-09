@@ -143,6 +143,9 @@ function Workspace({
   const [view, setView] = useState<'scroll' | 'grid'>('scroll')
   const [activeText, setActiveText] = useState<ActiveText | null>(null)
   const [picked, setPicked] = useState<PickedFrame | null>(null)
+  // Step 4: the item picked to move or resize, and the photo being cropped.
+  const [selected, setSelected] = useState<string | null>(null)
+  const [cropping, setCropping] = useState<string | null>(null)
   const [current, setCurrent] = useState(0)
   const pending = useRef<Draft | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -332,8 +335,13 @@ function Workspace({
         picked?.apply(p)
       },
       uploadPhoto,
+      selected,
+      select: setSelected,
+      cropping,
+      setCropping,
+      scale,
     }),
-    [activeText, picked, uploadPhoto],
+    [activeText, picked, uploadPhoto, selected, cropping, scale],
   )
 
   const writer: Writer = (ask) =>
@@ -516,7 +524,7 @@ function Workspace({
                 const el = e.target as HTMLElement
                 if (
                   !el.closest(
-                    '.designer-editable, input, button, label, select, [data-photo-frame], [role="textbox"]',
+                    '.designer-editable, input, button, label, select, [data-photo-frame], [data-movable], [role="textbox"]',
                   )
                 )
                   e.preventDefault()
@@ -536,7 +544,12 @@ function Workspace({
                     focused.blur()
                   }
                 }
-                if (!el.closest('[data-photo-frame]')) setPicked(null)
+                const item = el.closest('[data-movable]')?.getAttribute('data-movable') ?? null
+                if (!item) {
+                  setPicked(null)
+                  setSelected(null)
+                }
+                if (item !== cropping) setCropping(null)
               }}
             >
               {view === 'grid' ? (

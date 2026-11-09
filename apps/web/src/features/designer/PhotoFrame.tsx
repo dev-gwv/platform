@@ -1,10 +1,18 @@
-import { useRef, useState, type CSSProperties, type DragEvent, type PointerEvent } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type PointerEvent,
+  type WheelEvent,
+} from 'react'
 import { toast } from 'sonner'
-import { ImagePlus, Loader2, Move, Trash2, Upload } from 'lucide-react'
+import { Crop, ImagePlus, Loader2, Trash2, Upload } from 'lucide-react'
 import type { DesignPhoto } from '@ipc/contracts'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { cn } from '@/shared/ui/cn'
 import { PHOTO_DRAG_TYPE, useDesigner } from './context'
+import { panPhoto, placePhoto } from './photo-math'
 
 /**
  * A frame on the page that holds one photo (Quotation Designer), the way a
@@ -12,8 +20,10 @@ import { PHOTO_DRAG_TYPE, useDesigner } from './context'
  * - drop a photo on it: from Uploads, or straight from the computer (a big
  *   camera file is made small first);
  * - tap it to pick it, then tap a photo in Uploads to put it there;
- * - drag the photo inside the frame to choose what shows, and zoom it from
- *   Move and zoom.
+ * - press and drag moves the whole photo on the page (Movable around it);
+ * - double-tap or Crop: the whole photo shows faded around the frame, and
+ *   dragging moves the picture inside the frame, the wheel or the slider
+ *   zooms it, Done or a tap outside ends it.
  * An empty frame says "Add your photo"; on paper and on the client's copy an
  * empty frame is a quiet tint.
  */
@@ -66,46 +76,104 @@ export function PhotoFrame({
     else if (e.dataTransfer.files.length) toast.error('Drop a photo (JPG, PNG or WebP).')
   }
 
-  // Dragging the photo inside its frame moves what shows, like Canva's crop.
+  const cropping = !!ctx && ctx.cropping === frameId
+  const [natFor, setNat] = useState<{ url: string; w: number; h: number } | null>(null)
+  // The size read belongs to one photo: a new photo is measured afresh.
+  const nat = natFor && natFor.url === photo.url ? natFor : null
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    const read = () => setSize({ w: el.clientWidth, h: el.clientHeight })
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const place =
+    nat && size && size.w > 0
+      ? placePhoto(size.w, size.h, nat.w, nat.h, photo.x, photo.y, photo.zoom)
+      : null
+
+  // In crop view, dragging moves the picture inside the frame and follows the hand.
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).closest('button')) return
+    if (!cropping || (e.target as HTMLElement).closest('button, input')) return
+    e.stopPropagation()
     pan.current = { x: photo.x, y: photo.y, px: e.clientX, py: e.clientY, moved: false }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     const p = pan.current
     const el = box.current
-    if (!p || !el || !photo.url) return
-    const dx = e.clientX - p.px
-    const dy = e.clientY - p.py
-    if (!p.moved && Math.abs(dx) + Math.abs(dy) < 4) return
+    if (!p || !el || !place || !size || !nat) return
+    const ratio = el.getBoundingClientRect().width / el.clientWidth || 1
     p.moved = true
-    const r = el.getBoundingClientRect()
-    const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)))
+    // Measured from where the drag started, so the picture stays under the hand.
+    const start = placePhoto(size.w, size.h, nat!.w, nat!.h, p.x, p.y, photo.zoom)
     onChange({
       ...photo,
-      x: clamp(p.x - ((dx / r.width) * 100) / photo.zoom),
-      y: clamp(p.y - ((dy / r.height) * 100) / photo.zoom),
+      ...panPhoto(
+        start,
+        size.w,
+        size.h,
+        p.x,
+        p.y,
+        (e.clientX - p.px) / ratio,
+        (e.clientY - p.py) / ratio,
+      ),
     })
   }
   function onPointerUp() {
-    const p = pan.current
     pan.current = null
-    if (p && !p.moved) ctx?.pickFrame(picked ? null : { id: frameId, apply: onChange })
+  }
+  function onWheel(e: WheelEvent<HTMLDivElement>) {
+    if (!cropping) return
+    e.preventDefault()
+    const zoom = Math.min(3, Math.max(1, Math.round((photo.zoom - e.deltaY / 500) * 100) / 100))
+    if (zoom !== photo.zoom) onChange({ ...photo, zoom })
   }
 
+  const imgAt = (faded: boolean) =>
+    place ? (
+      <img
+        src={photo.url}
+        alt=""
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={{
+          left: place.left,
+          top: place.top,
+          width: place.width,
+          height: place.height,
+          opacity: faded ? 0.35 : 1,
+        }}
+      />
+    ) : null
+
   const img = photo.url ? (
-    <img
-      src={photo.url}
-      alt=""
-      draggable={false}
-      className="pointer-events-none absolute inset-0 size-full select-none object-cover"
-      style={{
-        objectPosition: `${photo.x}% ${photo.y}%`,
-        transform: `scale(${photo.zoom})`,
-        transformOrigin: `${photo.x}% ${photo.y}%`,
-      }}
-    />
+    place ? (
+      imgAt(false)
+    ) : (
+      // Until its size is known (or on paper before it loads): the same look by CSS.
+      <img
+        src={photo.url}
+        alt=""
+        draggable={false}
+        onLoad={(e) =>
+          setNat({
+            url: photo.url,
+            w: e.currentTarget.naturalWidth,
+            h: e.currentTarget.naturalHeight,
+          })
+        }
+        className="pointer-events-none absolute inset-0 size-full select-none object-cover"
+        style={{
+          objectPosition: `${photo.x}% ${photo.y}%`,
+          transform: `scale(${photo.zoom})`,
+          transformOrigin: `${photo.x}% ${photo.y}%`,
+        }}
+      />
+    )
   ) : (
     <div
       className="absolute inset-0 flex flex-col items-center justify-center gap-2"
@@ -127,7 +195,7 @@ export function PhotoFrame({
 
   if (!editable) {
     return (
-      <div className={cn('relative overflow-hidden', className)} style={style}>
+      <div ref={box} className={cn('relative overflow-hidden', className)} style={style}>
         {img}
       </div>
     )
@@ -138,8 +206,8 @@ export function PhotoFrame({
       ref={box}
       data-photo-frame
       className={cn(
-        'group/photo relative touch-none overflow-hidden',
-        photo.url && 'cursor-grab active:cursor-grabbing',
+        'group/photo relative touch-none',
+        cropping ? 'z-20 cursor-grab overflow-visible active:cursor-grabbing' : 'overflow-hidden',
         className,
       )}
       style={{
@@ -161,8 +229,36 @@ export function PhotoFrame({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onWheel={onWheel}
     >
-      {img}
+      {cropping && photo.url ? (
+        <>
+          {/* Canva's crop view: the whole photo faded around the frame, the frame's part clear. */}
+          {imgAt(true)}
+          <div className="absolute inset-0 overflow-hidden" style={{ borderRadius: 'inherit' }}>
+            {imgAt(false)}
+          </div>
+          <div
+            className="designer-chrome absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/75 px-3 py-1.5 text-white"
+            style={{ fontFamily: 'system-ui, sans-serif', fontSize: 13 }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Zoom
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.01}
+              value={photo.zoom}
+              onChange={(e) => onChange({ ...photo, zoom: Number(e.target.value) })}
+              className="w-28 accent-violet-400"
+              aria-label="Zoom the photo"
+            />
+          </div>
+        </>
+      ) : (
+        img
+      )}
       <input
         ref={input}
         type="file"
@@ -188,7 +284,7 @@ export function PhotoFrame({
           Upload a photo
         </button>
       )}
-      {!busy && photo.url && (
+      {!busy && photo.url && !cropping && (
         <div
           className={cn(
             'designer-chrome absolute right-3 top-3 flex gap-2 transition-opacity focus-within:opacity-100 group-hover/photo:opacity-100',
@@ -198,42 +294,9 @@ export function PhotoFrame({
           <FrameButton label="Change photo" onClick={() => input.current?.click()}>
             <Upload className="size-5" />
           </FrameButton>
-          <Popover>
-            <PopoverTrigger asChild>
-              <FrameButton label="Move and zoom">
-                <Move className="size-5" />
-              </FrameButton>
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-              <div className="flex flex-col gap-3 text-sm">
-                <p className="text-xs text-muted-foreground">Or drag the photo inside its frame.</p>
-                <Slider
-                  label="Zoom"
-                  min={1}
-                  max={3}
-                  step={0.05}
-                  value={photo.zoom}
-                  onChange={(zoom) => onChange({ ...photo, zoom })}
-                />
-                <Slider
-                  label="Left – right"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={photo.x}
-                  onChange={(x) => onChange({ ...photo, x })}
-                />
-                <Slider
-                  label="Up – down"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={photo.y}
-                  onChange={(y) => onChange({ ...photo, y })}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+          <FrameButton label="Crop: move and zoom the photo inside" onClick={() => ctx?.setCropping(frameId)}>
+            <Crop className="size-5" />
+          </FrameButton>
           <FrameButton
             label="Remove photo"
             onClick={() => onChange({ url: '', x: 50, y: 50, zoom: 1 })}
@@ -261,32 +324,5 @@ function FrameButton({
     >
       {children}
     </button>
-  )
-}
-
-function Slider({
-  label,
-  value,
-  onChange,
-  ...range
-}: {
-  label: string
-  value: number
-  onChange: (v: number) => void
-  min: number
-  max: number
-  step: number
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <input
-        type="range"
-        className="accent-primary"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        {...range}
-      />
-    </label>
   )
 }

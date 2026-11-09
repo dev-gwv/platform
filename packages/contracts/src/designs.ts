@@ -51,6 +51,14 @@ export const designTextStyle = z.object({
 })
 export type DesignTextStyle = z.infer<typeof designTextStyle>
 
+/** A moved or resized item: offset from its place in page pixels, and its size against the layout's. */
+export const designBox = z.object({
+  dx: z.number().min(-1200).max(1200).default(0),
+  dy: z.number().min(-1600).max(1600).default(0),
+  s: z.number().min(0.2).max(4).default(1),
+})
+export type DesignBox = z.infer<typeof designBox>
+
 /** Every field a page can carry; a kind uses the ones it needs. */
 export const designPageData = z.object({
   title: text(120),
@@ -77,6 +85,15 @@ export const designPageData = z.object({
     .refine((v) => Object.keys(v).length <= 120, { message: 'Too many text settings on one page.' })
     .default({}),
   background: z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)]).default(''),
+  /**
+   * Step 4 (Canva's move and resize): where the studio dragged a photo or a
+   * text away from its place in the layout, in page pixels, and how much it
+   * was grown or shrunk. Keyed like `styles` ("photo", "photos.2", "title").
+   */
+  layout: z
+    .record(z.string().max(60), designBox)
+    .refine((v) => Object.keys(v).length <= 120, { message: 'Too many moved items on one page.' })
+    .default({}),
 })
 export type DesignPageData = z.infer<typeof designPageData>
 
