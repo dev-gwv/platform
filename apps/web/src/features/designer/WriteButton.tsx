@@ -6,16 +6,33 @@ import { cn } from '@/shared/ui/cn'
 
 export type WriteAsk = Pick<DesignWriteRequest, 'kind' | 'current' | 'lines'>
 /** Supplied by the editor: the design's studio, project and client are added there. */
-export type Writer = (ask: WriteAsk & { tone: DesignWriteRequest['tone']; hint: string }) => Promise<DesignWriteReply>
+export type Writer = (
+  ask: WriteAsk & { tone: DesignWriteRequest['tone']; hint: string },
+) => Promise<DesignWriteReply>
 
-const TONE_NAMES: Record<(typeof DESIGN_TONES)[number], string> = { warm: 'Warm', premium: 'Premium', fun: 'Fun', hinglish: 'Hinglish' }
+const TONE_NAMES: Record<(typeof DESIGN_TONES)[number], string> = {
+  warm: 'Warm',
+  premium: 'Premium',
+  fun: 'Fun',
+  hinglish: 'Hinglish',
+}
 
 /**
  * "Write it for me" beside a part of the page (Quotation Designer, 0296): a
  * tone, an optional line from the studio, then the AI's words go straight
  * onto the page, where they can be typed over like anything else.
  */
-export function WriteButton({ ask, writer, onWritten, className }: { ask: WriteAsk; writer: Writer; onWritten: (r: DesignWriteReply) => void; className?: string }) {
+export function WriteButton({
+  ask,
+  writer,
+  onWritten,
+  className,
+}: {
+  ask: WriteAsk
+  writer: Writer
+  onWritten: (r: DesignWriteReply) => void
+  className?: string
+}) {
   const [open, setOpen] = useState(false)
   const [tone, setTone] = useState<(typeof DESIGN_TONES)[number]>(() => {
     try {
@@ -67,7 +84,12 @@ export function WriteButton({ ask, writer, onWritten, className }: { ask: WriteA
                 type="button"
                 onClick={() => setTone(t)}
                 aria-pressed={tone === t}
-                className={cn('rounded-full border px-3 py-1 text-xs font-medium', tone === t ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-muted')}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium',
+                  tone === t
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card hover:bg-muted',
+                )}
               >
                 {TONE_NAMES[t]}
               </button>
@@ -86,9 +108,12 @@ export function WriteButton({ ask, writer, onWritten, className }: { ask: WriteA
             disabled={busy}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} {busy ? 'Writing…' : 'Write'}
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{' '}
+            {busy ? 'Writing…' : 'Write'}
           </button>
-          <p className="text-xs text-muted-foreground">It replaces the words here. Prices and numbers are kept as they are.</p>
+          <p className="text-xs text-muted-foreground">
+            It replaces the words here. Prices and numbers are kept as they are.
+          </p>
         </div>
       </PopoverContent>
     </Popover>

@@ -252,12 +252,21 @@
 .designer-editable:focus {
   box-shadow: 0 0 0 2px rgb(217 119 6 / 0.8);
 }
+.designer-editable-active {
+  box-shadow: 0 0 0 2px rgb(139 92 246 / 0.95) !important;
+}
 .designer-editable:empty::before {
   content: attr(data-placeholder);
   opacity: 0.4;
 }
 .designer-print {
   display: none;
+}
+/* The designer's text bar sits where toasts drop in (top centre): while the
+   full-screen editor is open they rise from above its foot bar instead. */
+body:has(.designer-screen.fixed) [data-sonner-toaster][data-y-position='top'] {
+  top: auto !important;
+  bottom: 56px !important;
 }
 @media print {
   .designer-print-page {

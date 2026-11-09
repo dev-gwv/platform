@@ -20,10 +20,22 @@ export function Scaled({ hidden = false, children }: { hidden?: boolean; childre
   return (
     <div ref={box} className="relative w-full">
       <div
-        className={cn('relative overflow-hidden rounded-sm shadow-lg ring-1 ring-black/10', hidden && 'opacity-40')}
+        className={cn(
+          'relative overflow-hidden rounded-sm shadow-lg ring-1 ring-black/10',
+          hidden && 'opacity-40',
+        )}
         style={{ width: PAGE_W * scale, height: PAGE_H * scale }}
       >
-        <div style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
+        <div
+          style={{
+            width: PAGE_W,
+            height: PAGE_H,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -41,7 +53,12 @@ export function PrintCopy({ doc }: { doc: DesignDoc }) {
         .filter((p) => !p.hidden)
         .map((p) => (
           <div key={p.id} className="designer-print-page">
-            <DesignPageView page={p} theme={doc.theme} editable={false} onChange={() => undefined} />
+            <DesignPageView
+              page={p}
+              theme={doc.theme}
+              editable={false}
+              onChange={() => undefined}
+            />
           </div>
         ))}
     </div>,

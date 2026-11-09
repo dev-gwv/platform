@@ -4133,6 +4133,15 @@ const publicPartnerFx = {
 }
 
 const DESIGN_ID = '0295d000-0000-4000-8000-000000000001'
+const designPhotosFx = ['assign', 'board', 'client', 'data', 'attendance', 'details-form'].map((n, i) => ({
+  id: `0297d000-0000-4000-8000-00000000000${i}`,
+  url: `/help/${n}.jpg`,
+  name: `${n}.jpg`,
+  width: 1600,
+  height: 1067,
+  size_bytes: 900000,
+  created_at: new Date().toISOString(),
+}))
 let designDocFx: ReturnType<typeof fillDesign> | null = null
 function designMock(path: string, method: string): unknown {
   designDocFx ??= fillDesign({
@@ -4160,6 +4169,9 @@ function designMock(path: string, method: string): unknown {
   })
   const now = new Date().toISOString()
   const summary = { id: DESIGN_ID, title: 'Akshay & Riya Wedding – Quotation', template: 'ivory', project_id: null, project_name: 'Akshay & Riya Wedding', cover_url: null, pages: designDocFx.pages.length, created_at: now, updated_at: now }
+  if (path === '/designs/photos') return method === 'GET' ? designPhotosFx : { id: uid(0xd9), url: '/help/check-in.jpg', name: 'new.jpg', width: 1200, height: 800, size_bytes: 400000, created_at: now }
+  if (path.startsWith('/designs/photos/')) return { ok: true }
+  if (path === '/designs?templates=1') return [{ ...summary, id: '0295d000-0000-4000-8000-000000000002', title: 'Our wedding template', is_template: true }]
   if (path === '/designs/write')
     return { text: 'At Cine World Weddings we tell your story the way you lived it: the quiet glances, the loud laughter and every ritual in between, captured with care so you can live your day again.', lines: ['400+ hand-edited photographs in high resolution', 'A cinematic wedding film of 8-10 minutes', 'A 60-second teaser for Instagram'] }
   if (path.endsWith('/link')) return method === 'DELETE' ? { token: null } : { token: '0295d000-0000-4000-8000-0000000000010295d000-0000-4000-8000-000000000001', views: 3, first_viewed_at: now, last_viewed_at: now }
