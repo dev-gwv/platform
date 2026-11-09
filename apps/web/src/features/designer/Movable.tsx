@@ -23,13 +23,17 @@ export function Movable({
   onTap,
   className,
   style,
+  actions,
 }: {
   k: string
-  kind: 'photo' | 'text'
+  /** A shape moves like a photo (press and drag on it) but has nothing to crop. */
+  kind: 'photo' | 'text' | 'shape'
   children: ReactNode
   onTap?: (() => void) | undefined
   className?: string | undefined
   style?: CSSProperties | undefined
+  /** More buttons on its bar while picked (an added item's colour, copy and delete). */
+  actions?: ReactNode
 }) {
   const page = use(PageCtx)
   const ed = useDesigner()
@@ -51,6 +55,7 @@ export function Movable({
   const id = page ? `${page.pageId}:${k}` : k
   const selected = live && ed?.selected === id
   const cropping = live && ed?.cropping === id
+  const dragsBody = kind !== 'text'
 
   if (!live || !page || !ed) {
     return (
@@ -147,20 +152,20 @@ export function Movable({
       data-movable={id}
       className={cn(
         'group/move relative',
-        kind === 'photo' && !cropping && 'cursor-move',
+        dragsBody && !cropping && 'cursor-move',
         className,
       )}
       style={{ ...style, transform, transformOrigin: 'center', zIndex: selected ? 5 : undefined }}
       onPointerDown={
-        kind === 'photo' && !cropping
+        dragsBody && !cropping
           ? (e) => {
               if ((e.target as HTMLElement).closest('button, input, label')) return
               start(e, 'move')
             }
           : undefined
       }
-      onPointerMove={kind === 'photo' ? move : undefined}
-      onPointerUp={kind === 'photo' ? end : undefined}
+      onPointerMove={dragsBody ? move : undefined}
+      onPointerUp={dragsBody ? end : undefined}
       onDoubleClick={kind === 'photo' ? () => ed.setCropping(id) : undefined}
     >
       {children}
@@ -194,7 +199,7 @@ export function Movable({
           <Move className="size-4" />
         </button>
       )}
-      {(selected || cropping) && (
+      {(cropping || (selected && (kind === 'photo' || b || actions))) && (
         <div
           className="designer-chrome absolute -top-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-[#1f2023] px-1.5 py-1 text-white shadow-lg"
           style={{ fontFamily: 'system-ui, sans-serif' }}
@@ -219,6 +224,7 @@ export function Movable({
               <RotateCcw className="size-4" /> Reset
             </button>
           )}
+          {!cropping && actions}
         </div>
       )}
     </div>

@@ -173,6 +173,7 @@ const EMPTY: DesignPageData = {
   styles: {},
   background: '',
   layout: {},
+  elements: [],
 }
 
 export function page(kind: DesignPageKind, data: Partial<DesignPageData> = {}): DesignPage {

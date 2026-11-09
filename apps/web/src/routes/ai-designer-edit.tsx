@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type {
   DesignDoc,
+  DesignElementKind,
   DesignPage,
   DesignPageData,
   DesignPhoto,
@@ -58,6 +59,14 @@ import {
   type DesignerCtx,
   type PickedFrame,
 } from '@/features/designer/context'
+import {
+  addElement,
+  duplicateElement,
+  elementKey,
+  newElement,
+  nudge,
+  removeElement,
+} from '@/features/designer/elements'
 import { loadDesignerFonts } from '@/features/designer/fonts'
 import { record, redo, startHistory, undo, type History } from '@/features/designer/history'
 import { shrinkPhoto, sizeWords } from '@/features/designer/shrink'
@@ -218,9 +227,34 @@ function Workspace({
       const el = e.target as HTMLElement | null
       if (el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))
         return
-      if (!(e.ctrlKey || e.metaKey)) return
       const k = e.key.toLowerCase()
-      if (k === 'z') {
+      // The picked item: Escape lets go, the arrows move it, Delete takes an added one off.
+      const sel = selected ? selected.split(/:(.*)/s) : null
+      const pi = sel ? doc.pages.findIndex((p) => p.id === sel[0]) : -1
+      const pg = pi >= 0 ? doc.pages[pi]! : null
+      const key = sel?.[1] ?? ''
+      const added = pg && key.startsWith('el.') ? key.slice(3) : null
+      if (!(e.ctrlKey || e.metaKey)) {
+        if (k === 'escape') {
+          setSelected(null)
+          setCropping(null)
+          setPicked(null)
+        } else if (pg && (k === 'delete' || k === 'backspace') && added) {
+          e.preventDefault()
+          setSelected(null)
+          setPage(pi, { ...pg, data: removeElement(pg.data, added) })
+        } else if (pg && !cropping && ARROWS[k]) {
+          e.preventDefault()
+          const [x, y] = ARROWS[k]!
+          const n = e.shiftKey ? 10 : 1
+          setPage(pi, { ...pg, data: nudge(pg.data, key, x * n, y * n) })
+        }
+        return
+      }
+      if (k === 'd' && pg && added) {
+        e.preventDefault()
+        setPage(pi, { ...pg, data: duplicateElement(pg.data, added) })
+      } else if (k === 'z') {
         e.preventDefault()
         step(e.shiftKey ? 'redo' : 'undo')
       } else if (k === 'y') {
@@ -233,7 +267,7 @@ function Workspace({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [step, flush])
+  })
 
   // ── the canvas's width, for Fit ───────────────────────────────────
   useLayoutEffect(() => {
@@ -283,6 +317,22 @@ function Workspace({
         .getElementById(`page-${pid}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     )
+  }
+
+  /** A new text, photo frame or shape, on the page in view, picked at once. */
+  const addItem = (kind: DesignElementKind) => {
+    const i = Math.min(current, doc.pages.length - 1)
+    const p = doc.pages[i]
+    if (!p) return
+    if (p.data.elements.length >= 40) {
+      toast.error('A page holds 40 added items. Put this one on another page.')
+      return
+    }
+    const el = newElement(kind, p.data.elements.length)
+    setPage(i, { ...p, data: addElement(p.data, el) })
+    setSelected(`${p.id}:${elementKey(el.id)}`)
+    if (view === 'grid') goTo(p.id)
+    if (window.innerWidth < 1024) setPanel(null)
   }
 
   const activePageIndex = activeText ? doc.pages.findIndex((p) => p.id === activeText.pageId) : -1
@@ -498,6 +548,8 @@ function Workspace({
                   if (window.innerWidth < 1024) setPanel(null)
                   goTo(pid)
                 }}
+                onAdd={addItem}
+                pageNumber={Math.min(current + 1, doc.pages.length)}
               />
             </div>
           )}
@@ -756,6 +808,14 @@ function Workspace({
 }
 
 /** The next zoom stop up or down from where the page is now. */
+/** Arrow keys → which way an item moves. */
+const ARROWS: Record<string, [number, number]> = {
+  arrowleft: [-1, 0],
+  arrowright: [1, 0],
+  arrowup: [0, -1],
+  arrowdown: [0, 1],
+}
+
 export function stepZoom(scale: number, dir: 1 | -1): number {
   const now = Math.round(scale * 100)
   if (dir === 1) return ZOOMS.find((z) => z > now) ?? 200

@@ -59,6 +59,29 @@ export const designBox = z.object({
 })
 export type DesignBox = z.infer<typeof designBox>
 
+/**
+ * Something the studio added to a page itself (Canva's Text and Elements):
+ * a heading, a subheading or a line of text, a photo, a line, a box or a
+ * circle. It stands where it was put (x, y: its top-left in page pixels,
+ * w and h: its size) and moves, resizes and takes a text style like any
+ * other item, keyed "el.<id>" in `layout` and `styles`.
+ */
+export const DESIGN_ELEMENT_KINDS = ['heading', 'subheading', 'text', 'photo', 'line', 'box', 'circle'] as const
+export type DesignElementKind = (typeof DESIGN_ELEMENT_KINDS)[number]
+export const designElement = z.object({
+  id: z.string().regex(/^[a-z0-9]{1,16}$/),
+  kind: z.enum(DESIGN_ELEMENT_KINDS),
+  text: text(1000),
+  photo: designPhoto.default({}),
+  /** A shape's fill ('' = the look's accent). */
+  color: z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)]).default(''),
+  x: z.number().min(-800).max(1600).default(200),
+  y: z.number().min(-1100).max(2200).default(400),
+  w: z.number().min(4).max(1600).default(300),
+  h: z.number().min(2).max(2200).default(100),
+})
+export type DesignElement = z.infer<typeof designElement>
+
 /** Every field a page can carry; a kind uses the ones it needs. */
 export const designPageData = z.object({
   title: text(120),
@@ -94,6 +117,8 @@ export const designPageData = z.object({
     .record(z.string().max(60), designBox)
     .refine((v) => Object.keys(v).length <= 120, { message: 'Too many moved items on one page.' })
     .default({}),
+  /** What the studio added to this page itself (texts, photos, shapes). */
+  elements: z.array(designElement).max(40).default([]),
 })
 export type DesignPageData = z.infer<typeof designPageData>
 
