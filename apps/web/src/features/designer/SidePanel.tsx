@@ -1,7 +1,12 @@
 import { useRef, useState, type DragEvent } from 'react'
 import { toast } from 'sonner'
 import {
+  Circle,
   GripVertical,
+  Minus,
+  Shapes,
+  Square,
+  Type,
   ImagePlus,
   LayoutTemplate,
   Loader2,
@@ -12,7 +17,13 @@ import {
   X,
   Files,
 } from 'lucide-react'
-import type { DesignDoc, DesignPage, DesignPageKind, DesignTheme } from '@ipc/contracts'
+import type {
+  DesignDoc,
+  DesignElementKind,
+  DesignPage,
+  DesignPageKind,
+  DesignTheme,
+} from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Select } from '@/shared/ui/select'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -24,10 +35,12 @@ import { STARTERS, pourProject, starterDoc } from './starters'
 import { BODY_FONTS, HEADING_FONTS, PAGE_KIND_NAMES, TEMPLATES, blankPage } from './templates'
 import { Thumb } from './Thumb'
 
-export type PanelKey = 'templates' | 'uploads' | 'pages' | 'look'
+export type PanelKey = 'templates' | 'text' | 'elements' | 'uploads' | 'pages' | 'look'
 
 export const PANELS: { key: PanelKey; label: string; icon: typeof Palette }[] = [
   { key: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { key: 'text', label: 'Text', icon: Type },
+  { key: 'elements', label: 'Elements', icon: Shapes },
   { key: 'uploads', label: 'Uploads', icon: Upload },
   { key: 'pages', label: 'Pages', icon: Files },
   { key: 'look', label: 'Look', icon: Palette },
@@ -73,6 +86,10 @@ interface PanelProps {
   onClose: () => void
   onDoc: (doc: DesignDoc, template?: string) => void
   onGoTo: (pageId: string) => void
+  /** Put a new text, photo frame or shape on the page in view. */
+  onAdd: (kind: DesignElementKind) => void
+  /** The page new things go on, for "Adds to page 3". */
+  pageNumber: number
 }
 
 export function SidePanel(props: PanelProps) {
@@ -92,6 +109,8 @@ export function SidePanel(props: PanelProps) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {props.panel === 'templates' && <TemplatesPanel {...props} />}
+        {props.panel === 'text' && <TextPanel {...props} />}
+        {props.panel === 'elements' && <ElementsPanel {...props} />}
         {props.panel === 'uploads' && <UploadsPanel />}
         {props.panel === 'pages' && <PagesPanel {...props} />}
         {props.panel === 'look' && <LookPanel {...props} />}
@@ -499,6 +518,70 @@ function LookPanel({ doc, template, onDoc }: PanelProps) {
       </label>
       <p className="text-xs text-white/50">
         A page can have its own colour: use Page colour above that page.
+      </p>
+    </div>
+  )
+}
+
+/** Canva's Text panel: a heading, a subheading or a line of text, put on the page in view. */
+function TextPanel({ doc, onAdd, pageNumber }: PanelProps) {
+  const heading = doc.theme.heading
+  const body = doc.theme.body
+  const row =
+    'w-full rounded-lg border border-white/15 bg-white/5 px-4 text-left hover:border-violet-400 hover:bg-white/10'
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-white/60">Adds to page {pageNumber}. Drag it where you want it.</p>
+      <button type="button" onClick={() => onAdd('heading')} className={cn(row, 'py-3')}>
+        <span style={{ fontFamily: `'${heading}', serif`, fontSize: 30, lineHeight: 1.1 }}>
+          Add a heading
+        </span>
+      </button>
+      <button type="button" onClick={() => onAdd('subheading')} className={cn(row, 'py-2.5')}>
+        <span
+          style={{ fontFamily: `'${body}', serif`, fontSize: 15, letterSpacing: '0.18em' }}
+          className="font-semibold uppercase"
+        >
+          Add a subheading
+        </span>
+      </button>
+      <button type="button" onClick={() => onAdd('text')} className={cn(row, 'py-2.5')}>
+        <span style={{ fontFamily: `'${body}', serif`, fontSize: 14 }}>
+          Add a little bit of text
+        </span>
+      </button>
+    </div>
+  )
+}
+
+/** Canva's Elements panel: a photo frame, a line, a box, a circle. */
+function ElementsPanel({ doc, onAdd, pageNumber }: PanelProps) {
+  const accent = doc.theme.accent
+  const tile =
+    'flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 text-xs text-white/80 hover:border-violet-400 hover:bg-white/10'
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-white/60">Adds to page {pageNumber}. Drag it where you want it.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => onAdd('photo')} className={tile}>
+          <ImagePlus className="size-9" style={{ color: accent }} aria-hidden />
+          Photo frame
+        </button>
+        <button type="button" onClick={() => onAdd('line')} className={tile}>
+          <Minus className="size-10" style={{ color: accent }} aria-hidden />
+          Line
+        </button>
+        <button type="button" onClick={() => onAdd('box')} className={tile}>
+          <Square className="size-9" style={{ color: accent, fill: accent }} aria-hidden />
+          Box
+        </button>
+        <button type="button" onClick={() => onAdd('circle')} className={tile}>
+          <Circle className="size-9" style={{ color: accent, fill: accent }} aria-hidden />
+          Circle
+        </button>
+      </div>
+      <p className="text-xs text-white/50">
+        Picked on the page, a shape has Colour, Copy and Delete above it.
       </p>
     </div>
   )

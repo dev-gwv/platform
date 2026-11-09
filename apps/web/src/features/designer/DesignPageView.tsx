@@ -1,6 +1,7 @@
-import { use, useState, type CSSProperties, type ReactNode } from 'react'
-import { Plus, X } from 'lucide-react'
+import { use, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { Copy, Plus, Trash2, X } from 'lucide-react'
 import type {
+  DesignElement,
   DesignPage,
   DesignPageData,
   DesignPhoto,
@@ -8,6 +9,14 @@ import type {
   DesignTheme,
 } from '@ipc/contracts'
 import { Editable, type EditableProps } from './Editable'
+import {
+  ELEMENT_NAMES,
+  duplicateElement,
+  elementKey,
+  isTextElement,
+  removeElement,
+  updateElement,
+} from './elements'
 import { useDesigner } from './context'
 import { Movable } from './Movable'
 import { PAGE_H, PAGE_W, PageCtx } from './page-context'
@@ -421,6 +430,18 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
         }}
       >
         {body}
+        {d.elements.map((el) => (
+          <AddedItem
+            key={el.id}
+            el={el}
+            pageId={page.id}
+            t={t}
+            accent={theme.accent}
+            editable={editable}
+            onData={onChange}
+            data={d}
+          />
+        ))}
         {/* Canva's pink guides while an item is dragged onto the centre or a margin. */}
         {guides.map((g, i) => (
           <span
@@ -436,6 +457,167 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
         ))}
       </div>
     </PageCtx>
+  )
+}
+
+/**
+ * Something the studio added to the page itself (Canva's Text and Elements):
+ * it stands where it was put, moves and resizes like everything else, and
+ * while picked its bar has its colour (a shape), Copy and Delete.
+ */
+function AddedItem({
+  el,
+  pageId,
+  t,
+  accent,
+  editable,
+  data,
+  onData,
+}: {
+  el: DesignElement
+  pageId: string
+  t: Type
+  accent: string
+  editable: boolean
+  data: DesignPageData
+  onData: (d: DesignPageData) => void
+}) {
+  const ed = useDesigner()
+  const key = elementKey(el.id)
+  const patch = (p: Partial<DesignElement>) => onData(updateElement(data, el.id, p))
+  const at: CSSProperties = { position: 'absolute', left: el.x, top: el.y, width: el.w }
+  const bar = editable ? (
+    <>
+      {(el.kind === 'line' || el.kind === 'box' || el.kind === 'circle') && (
+        <label
+          className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/15"
+          title="Colour"
+        >
+          <span
+            className="size-4 rounded-full border border-white/60"
+            style={{ background: el.color || accent }}
+          />
+          Colour
+          <input
+            type="color"
+            value={el.color || accent}
+            onChange={(e) => patch({ color: e.target.value })}
+            className="sr-only"
+          />
+        </label>
+      )}
+      <button
+        type="button"
+        onClick={() => onData(duplicateElement(data, el.id))}
+        className="flex h-8 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/15"
+        title="Make a copy (Ctrl+D)"
+      >
+        <Copy className="size-4" /> Copy
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          ed?.select(null)
+          onData(removeElement(data, el.id))
+        }}
+        className="flex h-8 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-red-500/80"
+        title="Delete (Delete key)"
+        aria-label={`Delete this ${ELEMENT_NAMES[el.kind].toLowerCase()}`}
+      >
+        <Trash2 className="size-4" />
+      </button>
+    </>
+  ) : null
+
+  if (isTextElement(el.kind)) {
+    const style =
+      el.kind === 'heading'
+        ? { ...t.heading(64), textAlign: 'center' as const }
+        : el.kind === 'subheading'
+          ? { ...t.label(22), textAlign: 'center' as const }
+          : { ...t.body(20), textAlign: 'center' as const, lineHeight: 1.5 }
+    return (
+      <Movable k={key} kind="text" style={at} actions={bar}>
+        <SE
+          k={key}
+          value={el.text}
+          onChange={(v) => patch({ text: v })}
+          editable={editable}
+          style={style}
+          placeholder={ELEMENT_NAMES[el.kind]}
+          max={1000}
+          multiline
+        />
+      </Movable>
+    )
+  }
+
+  if (el.kind === 'photo') {
+    return <AddedPhoto el={el} pageId={pageId} accent={accent} editable={editable} bar={bar} patch={patch} />
+  }
+
+  // A line has a wider band to take hold of than the 3 px it draws.
+  const pad = el.kind === 'line' ? 10 : 0
+  return (
+    <Movable
+      k={key}
+      kind="shape"
+      style={{ ...at, top: el.y - pad, padding: `${pad}px 0` }}
+      actions={bar}
+    >
+      <div
+        style={{
+          width: el.w,
+          height: el.h,
+          background: el.color || accent,
+          borderRadius: el.kind === 'circle' ? '50%' : el.kind === 'line' ? 2 : 4,
+        }}
+      />
+    </Movable>
+  )
+}
+
+/** An added photo frame: a new, empty one is picked at once, so a tap in Uploads fills it. */
+function AddedPhoto({
+  el,
+  pageId,
+  accent,
+  editable,
+  bar,
+  patch,
+}: {
+  el: DesignElement
+  pageId: string
+  accent: string
+  editable: boolean
+  bar: ReactNode
+  patch: (p: Partial<DesignElement>) => void
+}) {
+  const ed = useDesigner()
+  const key = elementKey(el.id)
+  const frameId = `${pageId}:${key}`
+  const pick = () => ed?.pickFrame({ id: frameId, apply: (p) => patch({ photo: p }) })
+  const fresh = editable && !el.photo.url && ed?.selected === frameId && ed.pickedFrame !== frameId
+  useEffect(() => {
+    if (fresh) pick()
+  })
+  return (
+    <Movable
+      k={key}
+      kind="photo"
+      style={{ position: 'absolute', left: el.x, top: el.y, width: el.w }}
+      actions={bar}
+      onTap={pick}
+    >
+      <PhotoFrame
+        frameId={frameId}
+        photo={el.photo}
+        onChange={(p) => patch({ photo: p })}
+        editable={editable}
+        accent={accent}
+        style={{ width: el.w, height: el.h, borderRadius: 6 }}
+      />
+    </Movable>
   )
 }
 

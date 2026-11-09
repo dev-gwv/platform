@@ -262,11 +262,16 @@
 .designer-print {
   display: none;
 }
-/* The designer's text bar sits where toasts drop in (top centre): while the
-   full-screen editor is open they rise from above its foot bar instead. */
+/* The designer's text bar sits where toasts drop in (top centre), and its
+   foot bar holds the zoom: while the full-screen editor is open, toasts (a
+   follow-up reminder too) come in at the bottom right, over the canvas and
+   clear of the foot bar and each page's own buttons. */
 body:has(.designer-screen.fixed) [data-sonner-toaster][data-y-position='top'] {
-  top: auto !important;
-  bottom: 56px !important;
+  top: calc(100dvh - 190px) !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: 16px !important;
+  transform: none !important;
 }
 @media print {
   .designer-print-page {
