@@ -1,0 +1,3 @@
+-- 0296: Quotation Designer, step 2 (owner, 9 Nov: "complete the quotation maker
+-- completely"): the client's link to a design and when they opened it.
+-- Claimed; the body follows.
