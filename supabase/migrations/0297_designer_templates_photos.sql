@@ -1,0 +1,2 @@
+-- 0297: Quotation Designer, step 3 (owner, 9 Nov: "everything that is there in Canva"):
+-- the studio's own saved templates and its photo library. Claimed; the body follows.
