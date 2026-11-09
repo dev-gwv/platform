@@ -39,6 +39,18 @@ export const TEMPLATES: readonly DesignTemplate[] = [
     blurb: 'Sage and cream with a magazine serif.',
     theme: { background: '#ECEFE6', ink: '#2E382E', accent: '#647A57', panel: '#F8F9F4', heading: 'Cormorant Garamond', body: 'Nunito Sans' },
   },
+  {
+    key: 'royal',
+    name: 'Royal Maroon',
+    blurb: 'Deep maroon and gold, made for Indian weddings.',
+    theme: { background: '#5C1A24', ink: '#F6E9D2', accent: '#D9B26A', panel: '#6E2430', heading: 'Great Vibes', body: 'Cormorant Garamond' },
+  },
+  {
+    key: 'mono',
+    name: 'Modern Mono',
+    blurb: 'Clean white and black, a modern magazine.',
+    theme: { background: '#FFFFFF', ink: '#1A1A1A', accent: '#1A1A1A', panel: '#F3F3F3', heading: 'Playfair Display', body: 'Montserrat' },
+  },
 ]
 
 export const templateFor = (key: string): DesignTemplate => TEMPLATES.find((t) => t.key === key) ?? TEMPLATES[0]!
@@ -61,6 +73,9 @@ export const PAGE_KIND_NAMES: Record<DesignPageKind, string> = {
   deliverables: 'Deliverables',
   addons: 'Add-ons',
   thanks: 'Thank you',
+  packages: 'Packages',
+  team: 'Our team',
+  testimonial: 'Kind words',
 }
 
 let seq = 0
@@ -84,6 +99,8 @@ const EMPTY: DesignPageData = {
   addons: [],
   photo: { url: '', x: 50, y: 50, zoom: 1 },
   photos: [],
+  packages: [],
+  people: [],
 }
 
 export function page(kind: DesignPageKind, data: Partial<DesignPageData> = {}): DesignPage {
@@ -126,6 +143,32 @@ export function blankPage(kind: DesignPageKind, studio = 'Your Studio'): DesignP
       })
     case 'thanks':
       return page('thanks', { title: 'Thank You', subtitle: 'Looking Forward To Be A Part Of Your Wedding', photos: blankPhotos(5) })
+    case 'packages':
+      return page('packages', {
+        title: 'Our Packages',
+        packages: [
+          { name: 'Silver', price: 'INR 1,25,000/-', lines: ['Candid & traditional photography', 'Highlights film', '1 album'] },
+          { name: 'Gold', price: 'INR 1,85,000/-', lines: ['Everything in Silver', 'Cinematic wedding film', 'Drone coverage', '2 albums'] },
+          { name: 'Platinum', price: 'INR 2,75,000/-', lines: ['Everything in Gold', 'Pre-wedding shoot', 'Same day edit', 'Premium photobook'] },
+        ],
+        subtitle: 'Every package can be changed to fit your wedding.',
+      })
+    case 'team':
+      return page('team', {
+        title: 'Our Team',
+        body: 'The people who will be with you on your day.',
+        people: [
+          { name: 'Name', role: 'Lead Photographer', photo: { url: '', x: 50, y: 50, zoom: 1 } },
+          { name: 'Name', role: 'Cinematographer', photo: { url: '', x: 50, y: 50, zoom: 1 } },
+          { name: 'Name', role: 'Candid Photographer', photo: { url: '', x: 50, y: 50, zoom: 1 } },
+        ],
+      })
+    case 'testimonial':
+      return page('testimonial', {
+        title: 'Kind Words',
+        body: 'They captured every little moment we did not even know happened. Watching our film still makes our parents cry.',
+        subtitle: 'Riya & Akshay, Udaipur',
+      })
   }
 }
 

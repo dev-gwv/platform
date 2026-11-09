@@ -30,6 +30,7 @@ import {
   Send,
   Star,
   Eye,
+  Sparkles,
 } from 'lucide-react'
 import { callApi } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -474,6 +475,14 @@ function ProjectQuotation() {
           <Button size="sm" variant="outline" onClick={onPrint}>
             <Printer /> Print / PDF
           </Button>
+          {canEdit && (
+            // The same quotation as a premium designed one (Quotation Designer, 0295/0296).
+            <Button asChild size="sm" variant="outline" className="border-violet-300 text-violet-800 hover:bg-violet-50">
+              <Link to="/ai/designer" search={{ project: id } as never}>
+                <Sparkles /> Premium design
+              </Link>
+            </Button>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" aria-label="More">

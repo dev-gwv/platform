@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Copy, FileImage, Loader2, Plus, Trash2 } from 'lucide-react'
 import type { DesignSummary } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -16,6 +17,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { callApi } from '@/shared/api/client'
 import { designDetail, projectBilling, projectDetail, shootListItem } from '@ipc/contracts'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
+import { useProject } from '@/features/projects/api'
 import { useCompanyProfile } from '@/features/settings/api'
 import { useCreateDesign, useDeleteDesign, useDesigns, useDuplicateDesign } from '@/features/designer/api'
 import { fillDesign } from '@/features/designer/fill'
@@ -23,7 +25,9 @@ import { TEMPLATES, templateFor } from '@/features/designer/templates'
 import { loadDesignerFonts } from '@/features/designer/fonts'
 
 export function AiDesignerPage() {
-  const [making, setMaking] = useState(false)
+  // From a project's quotation page (Premium design): the New dialog opens on that project.
+  const [fromProject, setFromProject] = useUrlParam('project')
+  const [making, setMaking] = useState(!!fromProject)
   useEffect(() => {
     loadDesignerFonts()
   }, [])
@@ -38,7 +42,15 @@ export function AiDesignerPage() {
         }
       />
       <Designs onNew={() => setMaking(true)} />
-      {making && <NewDesignDialog onClose={() => setMaking(false)} />}
+      {making && (
+        <NewDesignDialog
+          projectId={fromProject}
+          onClose={() => {
+            setMaking(false)
+            if (fromProject) setFromProject('')
+          }}
+        />
+      )}
     </AuthedPage>
   )
 }
@@ -125,12 +137,13 @@ function DesignCard({ d, menu }: { d: DesignSummary; menu: React.ReactNode }) {
 }
 
 /** Pick a project (or none) and a look; the pages are filled before the editor opens. */
-function NewDesignDialog({ onClose }: { onClose: () => void }) {
+function NewDesignDialog({ projectId: startOn, onClose }: { projectId: string; onClose: () => void }) {
   const navigate = useNavigate()
   const company = useCompanyProfile()
   const designs = useDesigns()
   const create = useCreateDesign()
-  const [projectId, setProjectId] = useState('')
+  const [projectId, setProjectId] = useState(startOn)
+  const started = useProject(startOn)
   const [projectName, setProjectName] = useState<string | null>(null)
   const [template, setTemplate] = useState(TEMPLATES[0]!.key)
   const [filling, setFilling] = useState(false)
@@ -173,7 +186,7 @@ function NewDesignDialog({ onClose }: { onClose: () => void }) {
             <Label>Project</Label>
             <ProjectPicker
               value={projectId}
-              label={projectName}
+              label={projectName ?? (projectId === startOn ? (started.data?.name ?? null) : null)}
               noneLabel="No project (start blank)"
               onChange={(id, name) => {
                 setProjectId(id)

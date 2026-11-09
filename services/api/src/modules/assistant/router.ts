@@ -77,7 +77,7 @@ interface SettingsRow {
   assistant_day_tokens: number | null
 }
 
-const readSettings = (env: AppEnv['Bindings']) =>
+export const readSettings = (env: AppEnv['Bindings']) =>
   withService(env, async (sql) => {
     const [row] = await sql<SettingsRow[]>`
       select assistant_enabled, assistant_prompt, assistant_model, assistant_base_url,
@@ -101,7 +101,7 @@ const readSettings = (env: AppEnv['Bindings']) =>
  * full 25 s would outlast the browser and the studio would be shown a timeout
  * for an answer the server was still fetching.
  */
-function providersFor(env: AppEnv['Bindings'], row: SettingsRow | null) {
+export function providersFor(env: AppEnv['Bindings'], row: SettingsRow | null) {
   const second =
     env.AI_FALLBACK_API_KEY && row?.assistant_fallback_base_url
       ? openAiCompatible({
