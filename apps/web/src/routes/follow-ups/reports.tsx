@@ -1,3 +1,4 @@
+import { localIso } from '@/shared/ui/days-left'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
@@ -74,7 +75,7 @@ function CrmReports() {
     const to = new Date()
     const from = new Date(to)
     from.setDate(from.getDate() - (days - 1))
-    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    const iso = (d: Date) => localIso(d)
     return { from: iso(from), to: iso(to) }
   }, [days])
 

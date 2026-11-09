@@ -439,9 +439,10 @@ export const financialsRouter = new Hono<AppEnv>()
           select coalesce(sum(p.total_cost), 0)::text as revenue,
                  coalesce((select sum(rp.amount) from received_payments rp
                    where rp.company_id = ${c.get('auth').companyId}
+                     and rp.status = 'paid'
                      and (${startDate}::date is null or rp.paid_on >= ${startDate}::date)
                      and (${endDate}::date is null or rp.paid_on <= ${endDate}::date)), 0)::text as received
-            from projects p where p.company_id = ${c.get('auth').companyId}`
+            from projects p where p.company_id = ${c.get('auth').companyId} and p.status <> 'cancelled'`
         const exp = await sql<{ company: string; rcm: string; uncategorized: string; missing: string }[]>`
           select coalesce(sum(amount), 0)::text as company,
                  coalesce(sum(amount) filter (where reverse_charge = true), 0)::text as rcm,

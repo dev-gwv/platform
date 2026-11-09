@@ -212,6 +212,16 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
           const [cur] = await sql<{ amount: number }[]>`
             select coalesce(final_cost, estimated_cost, 0)::float8 as amount from team_assignment_slots where id = ${slotId}`
           if (!cur) return 'missing' as const
+          // Lock the booking so two payments at once cannot both pass the
+          // "more than is due" check (bug sweep, 6 Nov).
+          await sql`select id from team_assignment_slots where id = ${slotId} for update`
+          // The agreed amount never drops below what has already been paid:
+          // the overpayment would vanish from every screen.
+          if (d.amount !== undefined) {
+            const [p] = await sql<{ paid: number }[]>`
+              select coalesce(sum(amount_paid), 0)::float8 as paid from team_slot_settlements where slot_id = ${slotId}`
+            if ((p?.paid ?? 0) > d.amount + 0.001) return { below_paid: p!.paid } as const
+          }
           if (d.amount !== undefined && Math.abs(d.amount - cur.amount) > 0.001) {
             await sql`select set_slot_cost(p_slot_id => ${slotId}, p_final_cost => ${d.amount}, p_cost_status => 'final')`
           }
@@ -247,6 +257,9 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
       },
     )
     if (row === 'missing') fail(404, 'That booking was not found.')
+    if (row && typeof row === 'object' && 'below_paid' in row) {
+      fail(409, `₹${Math.round(row.below_paid as number).toLocaleString('en-IN')} is already paid on this booking, so it cannot pay less than that.`)
+    }
     if (!row) fail(400, 'We could not save the payout.')
     await audit(c, { action: 'payout.pay', entityType: 'team_assignment_slot', entityId: slotId, after: d })
     return c.json(slotPayStatus.parse(row))

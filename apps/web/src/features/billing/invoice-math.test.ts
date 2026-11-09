@@ -21,7 +21,11 @@ describe('toAmount', () => {
 
   it('is 0 for anything that is not a number', () => {
     expect(toAmount('abc')).toBe(0)
-    expect(toAmount('1,500')).toBe(0)
+  })
+
+  it('reads an amount typed with Indian commas (bug sweep, 6 Nov)', () => {
+    expect(toAmount('1,500')).toBe(1500)
+    expect(toAmount('1,50,000')).toBe(150000)
   })
 
   it('reads a quantity of 0 as 0 rather than falling back to 1', () => {

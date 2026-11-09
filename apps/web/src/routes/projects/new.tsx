@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw } from 'lucide-react'
 import { z, type CreateShootRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -37,6 +38,7 @@ import {
   nextStep,
   prevStep,
   saveDraft,
+  setDraftScope,
   stepErrors,
   onlyRequirementsMissing,
   stepIndex,
@@ -87,6 +89,7 @@ function NewProject() {
       callApi('/shoots', { method: 'POST', body: input, responseSchema: z.object({ id: z.string() }) }),
   })
 
+  const { session } = useAuth()
   const [draft, setDraft] = useState<ProjectDraft>(EMPTY_DRAFT)
   const [step, setStep] = useState<WizardStep>('client')
   const [visited, setVisited] = useState<Set<WizardStep>>(new Set(['client']))
@@ -137,6 +140,7 @@ function NewProject() {
   // Restore before the first save runs, or the empty initial draft would
   // overwrite the thing we are about to offer back.
   useEffect(() => {
+    setDraftScope(session?.user_id, session?.company_id)
     const stored = loadDraft()
     let base = EMPTY_DRAFT
     if (stored && isDirty(stored.draft)) {

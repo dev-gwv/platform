@@ -248,7 +248,7 @@ function ClientsList() {
                     <Button variant="outline" size="icon" aria-label={`View ${c.name}`} onClick={() => setViewing(c)}>
                       <Eye />
                     </Button>
-                    {canEdit && <ClientFormDialog client={c} />}
+                    {canEdit && <ClientFormDialog key={editKey(c)} client={c} />}
                     {canDelete && (
                       <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
                         <Trash2 />
@@ -304,7 +304,7 @@ function ClientsList() {
                         <Button variant="outline" size="icon" aria-label={`View ${c.name}`} onClick={() => setViewing(c)}>
                           <Eye />
                         </Button>
-                        {canEdit && <ClientFormDialog client={c} />}
+                        {canEdit && <ClientFormDialog key={editKey(c)} client={c} />}
                         {canDelete && (
                           <Button variant="outline" size="icon" aria-label={`Delete ${c.name}`} onClick={() => void onDelete(c.id, c.name)}>
                             <Trash2 />
@@ -350,4 +350,13 @@ function Tick({ checked, onToggle, label }: { checked: boolean; onToggle: () => 
       {checked && <Check className="size-3" aria-hidden />}
     </button>
   )
+}
+
+/**
+ * Remounts a row's edit dialog whenever the client changes, so it opens on
+ * what is saved now (bug sweep, 6 Nov: the fields were filled once when the
+ * row first drew, and saving put an older city or phone back).
+ */
+function editKey(c: { id: string; name: string; phone?: string | null; alternate_phone?: string | null; email?: string | null; city?: string | null; address?: string | null; relation?: string | null; gstin?: string | null; notes?: string | null }): string {
+  return [c.id, c.name, c.phone, c.alternate_phone, c.email, c.city, c.address, c.relation, c.gstin, c.notes].map((v) => v ?? '').join('|')
 }

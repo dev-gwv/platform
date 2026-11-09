@@ -44,6 +44,8 @@ export const PLAN_LIMIT_KEYS = [
   'facebook_pages',
   'packages',
   'storage_mb',
+  // 0295: quotation designs made in the plan year (Starter 30).
+  'designs',
 ] as const
 export type PlanLimitKey = (typeof PLAN_LIMIT_KEYS)[number]
 export const planLimits = z

@@ -36,6 +36,7 @@ import {
   type LucideIcon,
   MessageCircle,
   Headphones,
+  Sparkles,
 } from 'lucide-react'
 
 export interface NavLeaf {
@@ -145,6 +146,8 @@ export const NAV: NavEntry[] = [
   },
   // How the studio is doing for a period: sales, money, delivery, team.
   leaf('Reports', '/reports', BarChart3, { module: 'reports' }),
+  // Studio AutoPilot's AI tools (owner, 9 Nov): the Quotation Designer first.
+  leaf('AI', '/ai', Sparkles, { module: 'projects', studioWork: true, fresh: 'aiDesigner' }),
 
   // The plan in sight (owner, 10 Oct): its own line for the owner, the only
   // one who can change it (settings_subscription is the owner's), above

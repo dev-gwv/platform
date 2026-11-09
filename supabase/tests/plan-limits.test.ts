@@ -295,3 +295,39 @@ describe('plan limits from the billing date (0242)', () => {
     expect(rows.every((r) => r.is_active)).toBe(true)
   })
 })
+
+describe('quotation designs (0295)', () => {
+  const design = (company: string, title: string) =>
+    q(`insert into quotation_designs (company_id, title, doc) values ($1, $2, '{}'::jsonb)`, [company, title])
+
+  // Its own Starter studio: the one above was upgraded to Pro.
+  const DESIGN_OWNER = 'f4000000-0000-4000-8000-000000000006'
+  const DESIGNER = 'f4000000-0000-4000-8000-0000000000ff'
+
+  it('gives Starter 30 designs a plan year, and says so', async () => {
+    await q(`insert into auth.users (id, email) values ($1, 'd@s.test')`, [DESIGN_OWNER])
+    await q(
+      `insert into companies (id, name, owner_user_id, plan, plan_expiry, plan_period_start)
+       values ($1, 'Design Studio', $2, 'starter_yearly_regular', now() + interval '200 days', now() - interval '165 days')`,
+      [DESIGNER, DESIGN_OWNER],
+    )
+    for (let i = 1; i <= 30; i++) await design(DESIGNER, `Design ${i}`)
+    await expect(design(DESIGNER, 'Design 31')).rejects.toThrow(/Starter plan designs 30 quotations a year/)
+    const [u] = await q<{ v: { designs: number } }>(`select company_usage($1) as v`, [DESIGNER])
+    expect(u!.v.designs).toBe(30)
+  })
+
+  it('never stops a trial or Pro', async () => {
+    for (let i = 1; i <= 32; i++) await design(TRIAL, `Design ${i}`)
+    for (let i = 1; i <= 32; i++) await design(PRO, `Design ${i}`)
+    const [n] = await q<{ n: number }>(`select count(*)::int as n from quotation_designs where company_id in ($1, $2)`, [TRIAL, PRO])
+    expect(n!.n).toBe(64)
+  })
+
+  it('never attaches another studio’s project', async () => {
+    const [p] = await q<{ id: string }>(`select id from projects where company_id = $1 limit 1`, [TRIAL])
+    await expect(
+      q(`insert into quotation_designs (company_id, project_id, title) values ($1, $2, 'X')`, [PRO, p!.id]),
+    ).rejects.toThrow(/not in this studio/)
+  })
+})

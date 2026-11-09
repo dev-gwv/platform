@@ -149,6 +149,12 @@ export const projectRoutes = new Hono<AppEnv>()
           const quoted = await sql<{ n: number }[]>`
             select count(*)::int as n from project_quotations where project_id = ${id}`
           if ((quoted[0]?.n ?? 0) > 0) return 'has_quotations' as const
+          // Its crew bookings are released first, the way deleting one shoot
+          // does (bug sweep, 6 Nov): left booked, they blocked those people
+          // at those hours for good and showed as money owed.
+          await sql`
+            update team_assignment_slots set status = 'released', released_at = now()
+             where status = 'booked' and shoot_id in (select id from shoots where project_id = ${id})`
           const rows = await sql<{ id: string }[]>`
             delete from projects where id = ${id} returning id`
           return rows.length ? ('deleted' as const) : ('missing' as const)

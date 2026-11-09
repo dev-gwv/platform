@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 /**
  * The arithmetic and the two derivations the invoice form does, kept out of
  * the component so they can be tested without rendering a dialog.
@@ -29,10 +30,7 @@ export interface InvoiceLineDraft {
 }
 
 /** Blank and half-typed values ("", "12.") are 0 so far — not an error. */
-export const toAmount = (v: string): number => {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
+export const toAmount = (v: string): number => parseAmount(v)
 
 /**
  * The studio's own state, matched from its free-text address to a GST code.

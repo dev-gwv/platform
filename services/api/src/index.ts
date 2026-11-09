@@ -26,6 +26,7 @@ import { webhooksRouter, metaRouter } from './modules/webhooks/router'
 import { framelineWebhookRouter } from './modules/webhooks/frameline'
 import { platformSupportCallsRouter } from './modules/support-calls/router'
 import { galleriesRouter } from './modules/galleries/router'
+import { designsRouter } from './modules/designs/router'
 import { hrRouter } from './modules/hr/router'
 import { performanceRouter } from './modules/performance/router'
 import { meRouter } from './modules/me/router'
@@ -127,6 +128,7 @@ const CREDENTIAL_PATHS = [
   '/auth/accept-invite',
   '/auth/invite',
 ]
+const generalWebhookLimit = rateLimit({ windowMs: 60_000, limit: 60 })
 const credentialLimiter = rateLimit({ windowMs: 60_000, limit: 30, scope: 'ip' })
 for (const path of CREDENTIAL_PATHS) app.use(path, credentialLimiter)
 app.use('/auth/session', rateLimit({ windowMs: 60_000, limit: 120 }))
@@ -162,7 +164,19 @@ const formSendLimiter = rateLimit({
   message: 'Too many enquiries from this device. Please try again later.',
 })
 app.use('/public/forms/:key', async (c, next) => (c.req.method === 'POST' ? formSendLimiter(c, next) : next()))
-app.use('/webhooks/*', rateLimit({ windowMs: 60_000, limit: 60 }))
+// Meta, WhatsApp and Razorpay sign every post (checked in the router), and
+// every studio's traffic arrives from the same few Meta addresses to one
+// path: 60 a minute dropped receipts and leads after one broadcast (bug
+// sweep, 6 Nov). A far higher ceiling there, the old one for the rest.
+app.use('/webhooks/meta', rateLimit({ windowMs: 60_000, limit: 3000 }))
+app.use('/webhooks/whatsapp', rateLimit({ windowMs: 60_000, limit: 3000 }))
+app.use('/webhooks/whatsapp/*', rateLimit({ windowMs: 60_000, limit: 3000 }))
+app.use('/webhooks/razorpay', rateLimit({ windowMs: 60_000, limit: 600 }))
+app.use('/webhooks/*', async (c, next) => {
+  const p = new URL(c.req.url).pathname
+  if (p === '/webhooks/meta' || p === '/webhooks/razorpay' || p === '/webhooks/whatsapp' || p.startsWith('/webhooks/whatsapp/')) return next()
+  return generalWebhookLimit(c, next)
+})
 app.use('/health', rateLimit({ windowMs: 60_000, limit: 60 }))
 // Crash reports are public by necessity; keep the abuse ceiling low and explicit.
 app.use('/health/client-errors', rateLimit({ windowMs: 60_000, limit: 20 }))
@@ -193,6 +207,7 @@ app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)
 app.route('/webhooks', framelineWebhookRouter)
 app.route('/galleries', galleriesRouter)
+app.route('/designs', designsRouter)
 app.route('/meta', metaRouter)
 app.route('/hr', hrRouter)
 app.route('/performance', performanceRouter)

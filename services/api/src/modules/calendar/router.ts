@@ -99,6 +99,9 @@ export const publicCalendarRouter = new Hono<AppEnv>().get('/calendar/:file', as
           from calendar_feed_tokens t
           join companies co on co.id = t.company_id
           join users u on u.user_id = t.user_id and u.company_id = t.company_id and u.deleted_at is null
+                      -- Sign-in turned off, or the person switched off: no more
+                      -- shoots, venues and client names (bug sweep, 6 Nov).
+                      and u.status = 'active' and not coalesce(u.sign_in_off, false)
          where t.token = ${token} and t.revoked_at is null`
       if (!t) return null
       if (t.scope === 'studio' && !['super_admin', 'admin', 'manager'].includes(t.role)) return null

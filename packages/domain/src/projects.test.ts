@@ -154,6 +154,14 @@ describe('due basis — what the client was promised', () => {
     const loose = [{ name: 'Wedding Reception', shoot_date: '2026-11-23' }]
     expect(findWeddingShoot(loose)?.shoot_date).toBe('2026-11-23')
     expect(findWeddingShoot([{ name: 'Haldi', shoot_date: '2026-11-20' }])).toBeNull()
+    // A Pre-Wedding shoot is never taken for the wedding (bug sweep, 6 Nov).
+    expect(
+      findWeddingShoot([
+        { name: 'Pre-Wedding Shoot', shoot_date: '2027-01-05' },
+        { name: 'Wedding', shoot_date: '2027-02-14' },
+      ])?.shoot_date,
+    ).toBe('2027-02-14')
+    expect(findWeddingShoot([{ name: 'Pre Wedding', shoot_date: '2027-01-05' }])).toBeNull()
   })
 
   it('counts from today when the basis is the project itself', () => {

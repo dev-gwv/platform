@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useBillingOverview } from '@/features/billing/api'
 import { useExpenseSummary, useOverCollected } from './api'
+import { useCanPay, useCrewOwed } from '@/features/team-payouts/pay'
 import { useINR } from '@/shared/money/MoneyMask'
 
 /**
@@ -24,11 +25,16 @@ export function NeedsAttention({ data }: { data: ProfitAndLoss }) {
   const expenses = useExpenseSummary({ reimbursement: 'pending' })
   const noCategory = useExpenseSummary({ missing: 'category' })
   const overCollected = useOverCollected()
+  const canPay = useCanPay()
+  const crewOwed = useCrewOwed(canPay)
   const [all, setAll] = useState(false)
 
   const overdue = overview.data?.overdue
   const reimburse = access.hasModule('company_expenses') ? (expenses.data?.to_reimburse ?? 0) : 0
-  const owed = data.rail.owed_to_team
+  // The same Owed now as Team payouts and Who you owe: shoots already done,
+  // India's today, cancelled shoots left out (bug sweep, 6 Nov: the P&L rail
+  // also counted shoots still to come, so the two pages disagreed).
+  const owed = canPay ? (crewOwed.data?.owed_now ?? 0) : data.rail.owed_to_team
   const losing = data.projects.filter((p) => p.profit < 0).length
   // Under 20% kept, but not losing: worth a look before the next quote.
   const thin = data.projects.filter((p) => p.income > 0 && p.profit >= 0 && p.margin != null && p.margin < 20).length

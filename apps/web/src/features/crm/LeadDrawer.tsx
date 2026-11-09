@@ -194,21 +194,28 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
   const sendable = (templates ?? []).filter((t) => t.kind !== 'note')
 
   function sendTemplate(templateId: string, channel: 'whatsapp' | 'email') {
+    // The tab opens at the press and is pointed at WhatsApp once the message
+    // is ready (bug sweep, 6 Nov): opened after the wait it was blocked on
+    // iPhone, and "noopener" made every open look blocked.
+    const tab = window.open('', '_blank')
     send.mutate(
       { leadId: lead.id, template_id: templateId, channel },
       {
         onSuccess: (r) => {
-          if (r.delivery === 'api') {
-            toast.success('Sent on WhatsApp')
+          if (r.delivery === 'api' || !r.url) {
+            tab?.close()
+            if (r.delivery === 'api') toast.success('Sent on WhatsApp')
             return
           }
-          if (!r.url) return
-          const w = window.open(r.url, '_blank', 'noopener')
-          if (!w) {
+          if (tab) {
+            tab.opener = null
+            tab.location.href = r.url
+          } else {
             void navigator.clipboard.writeText(r.rendered)
             toast.message('Pop-up blocked — the message is on your clipboard.')
           }
         },
+        onError: () => tab?.close(),
       },
     )
   }

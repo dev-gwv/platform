@@ -43,3 +43,8 @@ export const DUE_TONE_CLASS: Record<DueTone, string> = {
   soon: 'bg-warning/15 text-warning border-warning/40',
   calm: 'bg-muted text-foreground/80 border-border',
 }
+
+/** A browser date as YYYY-MM-DD in its own (India) day, never UTC's. */
+export function localIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}

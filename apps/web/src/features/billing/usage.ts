@@ -17,10 +17,11 @@ const WORDS: Record<PlanLimitKey, (n: number, period: 'year' | 'month') => strin
   facebook_pages: (n) => `Facebook Page${n === 1 ? '' : 's'}`,
   packages: (n) => `saved package${n === 1 ? '' : 's'}`,
   storage_mb: () => 'GB of uploads',
+  designs: (n, p) => `designed quotation${n === 1 ? '' : 's'} this ${p}`,
 }
 
 /** The keys that count in the plan year; the rest count what stands now. */
-export const PER_PERIOD: ReadonlySet<PlanLimitKey> = new Set(['projects', 'invoices'])
+export const PER_PERIOD: ReadonlySet<PlanLimitKey> = new Set(['projects', 'invoices', 'designs'])
 
 interface UsageBar {
   key: PlanLimitKey

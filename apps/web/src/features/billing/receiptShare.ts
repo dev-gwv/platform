@@ -97,7 +97,10 @@ export async function sendReceiptEmails(
 
 export function openReceiptWhatsApp(phone: string | null | undefined, text: string): void {
   const url = buildWhatsAppUrl(phone, text)
-  const opened = window.open(url, '_blank', 'noopener,noreferrer')
+  // "noopener" makes window.open answer null even when the tab opened, so
+  // every share read as blocked (bug sweep, 6 Nov).
+  const opened = window.open(url, '_blank')
+  if (opened) opened.opener = null
   if (!opened) {
     void copyToClipboard(text).then((ok) => {
       toast[ok ? 'success' : 'error'](ok ? 'Message copied — paste into WhatsApp.' : 'Unable to open WhatsApp.')
