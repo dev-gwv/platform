@@ -44,7 +44,18 @@ What is waiting, and on whom. Update this file when an item is done.
    goes" (it still points at the old booking app until then).
    Messages to the person who booked wait for Meta's API.
 
+9. **Sample photos for the Quotation Designer**: send 8-10 wedding photos you are happy to
+   show every studio (stock photo sites cannot be reached from Claude's machine).
+10. **Decide (from the 6 Nov bug sweep)**: the refresh-token window, the database grants the
+    API alone guards today, phone numbers typed with a leading 0, a no-login member using
+    Forgot password, a server-side seat count on bookings.
+
 ## On Claude (ready to build once the owner says)
+
+0. **Quotation Designer, step 2** (step 1 live 9 Nov): send the design to the client as a
+   link (and see when they open it), more looks, more page kinds (packages table, team,
+   testimonials), drag-to-reorder, and the **AI writing** cards on `/ai` ("Write it for me",
+   "Reply to a lead") through the assistant's engine, `lib/ai.ts`.
 
 1. **Email + WhatsApp message credits** in every plan (about two days; claim a migration
    number first). Needs items 2 and 6 above.
