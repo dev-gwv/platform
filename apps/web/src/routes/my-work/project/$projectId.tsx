@@ -181,6 +181,7 @@ function WorkView({ p }: { p: MyProject }) {
                 project_id: open.project_id,
                 title: open.title,
                 description: open.description ?? null,
+                internal_notes: open.internal_notes ?? null,
                 list_key: 'primary',
                 is_additional_charge: false,
                 additional_charge_amount: 0,

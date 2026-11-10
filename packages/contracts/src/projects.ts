@@ -275,6 +275,16 @@ export const createDeliverableNoteRequest = z.discriminatedUnion('kind', [
 ])
 export type CreateDeliverableNoteRequest = z.infer<typeof createDeliverableNoteRequest>
 
+/**
+ * PATCH /projects/deliverables/:did/note: the deliverable's note for the team
+ * ("Album 40 sheets instead of 30, agreed on call"), kept in internal_notes.
+ * The editor on it or anyone who can edit projects; null or "" clears it.
+ */
+export const setDeliverableTeamNoteRequest = z.object({
+  note: z.string().trim().max(2000).nullable(),
+})
+export type SetDeliverableTeamNoteRequest = z.infer<typeof setDeliverableTeamNoteRequest>
+
 /** A deliverable on someone's own list: what, for whom, and by when. */
 export const myDeliverable = z.object({
   id: uuid,
@@ -283,6 +293,8 @@ export const myDeliverable = z.object({
   client_name: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
+  /** The note for the team (internal_notes): what was agreed differently. Never shown to the client. */
+  internal_notes: z.string().nullish(),
   status: z.string(),
   estimated_date: isoDate.nullish(),
   shoot_name: z.string().nullish(),

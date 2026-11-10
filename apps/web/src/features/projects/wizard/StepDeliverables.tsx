@@ -3,7 +3,7 @@ import { Bookmark, CalendarDays, ChevronDown, Package, Pencil, Plus, Save, Spark
 import { DUE_BASIS_OPTIONS } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { Input, Select } from '@/shared/ui/input'
+import { Input, Select, Textarea } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Switch } from '@/shared/ui/switch'
 import { ToneChip, toneAt } from '@/shared/ui/tone-chip'
@@ -450,6 +450,19 @@ function DeliverableRow({
               </Field>
             </div>
           )}
+
+          <div className="mt-3">
+            <Field label="Note for your team">
+              <Textarea
+                rows={2}
+                maxLength={2000}
+                value={item.internal_notes ?? ''}
+                onChange={(e) => set({ internal_notes: e.target.value })}
+                placeholder="Anything agreed differently? e.g. Album 40 sheets instead of 30, agreed on call 12 Nov"
+                className={cn((item.internal_notes ?? '').trim() && 'border-warning/60 bg-warning/5')}
+              />
+            </Field>
+          </div>
 
           <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
             <Switch

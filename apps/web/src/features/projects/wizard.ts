@@ -73,6 +73,11 @@ export interface DeliverableDraft {
   /** The brief for whoever picks the work up. Never printed for the client. */
   description: string
   /**
+   * The note for the team (internal_notes): what was agreed differently with
+   * the client. Optional so drafts saved before it still load.
+   */
+  internal_notes?: string
+  /**
    * The client-facing promise: this many days after the basis below. Separate
    * from `lead_days`, which is production's clock — "45 days after the wedding"
    * and "7 days after the footage lands" are different sentences, and a studio
@@ -412,6 +417,7 @@ function toDeliverableInput(draft: ProjectDraft, d: DeliverableDraft): Deliverab
     title: d.title.trim(),
     list_key: 'primary',
     ...(d.description.trim() ? { description: d.description.trim() } : {}),
+    ...(d.internal_notes?.trim() ? { internal_notes: d.internal_notes.trim() } : {}),
     is_additional_charge: d.is_additional_charge,
     additional_charge_amount: d.is_additional_charge ? money(d.additional_charge_amount) : 0,
     visibility_scope: d.visibility_scope,

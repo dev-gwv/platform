@@ -65,10 +65,12 @@ export function DeliverableDialog({
   const [charged, setCharged] = useState(deliverable?.is_additional_charge ?? false)
   const [amount, setAmount] = useState(deliverable?.additional_charge_amount ? String(deliverable.additional_charge_amount) : '')
   const [brief, setBrief] = useState(deliverable?.description ?? '')
+  // The note for the team (internal_notes): what was agreed differently. Never on the quotation.
+  const [teamNote, setTeamNote] = useState(deliverable?.internal_notes ?? '')
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
     `deliverable:${deliverable?.id ?? `new:${projectId}${defaultShootId ? `:${defaultShootId}` : ''}`}`,
-    { title, shootIds, scope, assigneeId, due, status, link, charged, amount, brief },
+    { title, shootIds, scope, assigneeId, due, status, link, charged, amount, brief, teamNote },
     (v) => {
       setTitle(v.title)
       setShootIds(Array.isArray(v.shootIds) ? v.shootIds : [])
@@ -80,6 +82,7 @@ export function DeliverableDialog({
       setCharged(v.charged)
       setAmount(v.amount)
       setBrief(v.brief)
+      setTeamNote(typeof v.teamNote === 'string' ? v.teamNote : '')
     },
   )
 
@@ -95,6 +98,7 @@ export function DeliverableDialog({
     setCharged(deliverable?.is_additional_charge ?? false)
     setAmount(deliverable?.additional_charge_amount ? String(deliverable.additional_charge_amount) : '')
     setBrief(deliverable?.description ?? '')
+    setTeamNote(deliverable?.internal_notes ?? '')
   }
 
   const busy = add.isPending || update.isPending
@@ -115,6 +119,7 @@ export function DeliverableDialog({
       is_additional_charge: extra,
       additional_charge_amount: extra ? Number(amount) || 0 : 0,
       description: brief.trim() || null,
+      internal_notes: teamNote.trim() || null,
     }
     const saved = () => {
       draft.clear()
@@ -130,6 +135,7 @@ export function DeliverableDialog({
           start_rule: 'whole_project',
           estimated_date: due || undefined,
           description: brief.trim() || undefined,
+          internal_notes: teamNote.trim() || undefined,
         },
         { onSuccess: saved },
       )
@@ -253,6 +259,20 @@ export function DeliverableDialog({
               onChange={(e) => setBrief(e.target.value)}
               placeholder="Songs, colour, anything the editor should know"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dl-team-note">Note for your team</Label>
+            <Textarea
+              id="dl-team-note"
+              rows={2}
+              maxLength={2000}
+              value={teamNote}
+              onChange={(e) => setTeamNote(e.target.value)}
+              placeholder="Anything agreed differently? e.g. Album 40 sheets instead of 30, agreed on call 12 Nov"
+              className={teamNote.trim() ? 'border-warning/60 bg-warning/5' : undefined}
+            />
+            <p className="text-xs text-muted-foreground">Only the studio and the team see this, never the client.</p>
           </div>
         </div>
         <DialogFooter>

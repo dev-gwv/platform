@@ -161,6 +161,23 @@ export function useUpdateDeliverable(id: string) {
   })
 }
 
+/**
+ * A deliverable's note for the team (internal_notes). The editor on it can
+ * write it too, so it has its own route rather than the project's PATCH.
+ */
+export function useSetDeliverableTeamNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ deliverableId, note }: { deliverableId: string; note: string | null }) =>
+      callApi(`/projects/deliverables/${deliverableId}/note`, { method: 'PATCH', body: { note }, responseSchema: anySchema }),
+    onSuccess: (_r, v) => {
+      toast.success(v.note ? 'Note saved' : 'Note removed')
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+      void qc.invalidateQueries({ queryKey: ['me'] })
+    },
+  })
+}
+
 export function useDeleteDeliverable(id: string) {
   return useMutation({
     mutationFn: (deliverableId: string) =>

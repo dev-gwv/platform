@@ -29,7 +29,7 @@ export function selectMyDeliverables(
               or (${done} > 0 and coalesce(d.delivered_at, d.updated_at) > now() - make_interval(days => ${done})))
     )
     select d.id, d.project_id, p.name as project_name, cl.name as client_name,
-           d.title, d.description, d.status, d.estimated_date, s.name as shoot_name,
+           d.title, d.description, d.internal_notes, d.status, d.estimated_date, s.name as shoot_name,
            d.delivery_link, d.visibility_scope, d.custom_status_code,
            (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind <> 'event') as notes_count,
            (select count(*)::int from deliverable_notes n where n.deliverable_id = d.id and n.kind = 'voice') as voice_count,

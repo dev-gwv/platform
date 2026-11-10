@@ -33,6 +33,7 @@ import { deliverableKind, type DeliverableKind } from './deliverable-kind'
 import { DELIVERABLE_ICON } from '@/shared/ui/icon-tile'
 import { STAGE_STYLE, StageStepper } from './StageStepper'
 import { GiveWorkDialog } from './GiveWorkDialog'
+import { TeamNoteChip } from './TeamNoteChip'
 import { useINR } from '@/shared/money/MoneyMask'
 
 const KIND_ICON: Record<DeliverableKind, LucideIcon> = DELIVERABLE_ICON
@@ -450,8 +451,9 @@ export function DeliverableCard({
             </div>
             {noteFor && <AssignedNote members={[noteFor]} onClose={() => setNoteFor(null)} className="mt-2" />}
 
-            {(d.description || activity || d.notes_count > 0) && (
+            {(d.description || d.internal_notes || activity || d.notes_count > 0) && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <TeamNoteChip note={d.internal_notes} />
                 {d.description && (
                   <span className="line-clamp-1 max-w-full">
                     <span className="font-medium text-foreground">Brief:</span> {d.description}
