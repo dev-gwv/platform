@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { AlarmClock, BarChart3, CalendarClock, Download, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
+import { AlarmClock, BarChart3, CalendarClock, Download, Ellipsis, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { LeadLimitLine } from '@/features/billing/LeadLimitLine'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -25,7 +25,8 @@ import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { DownloadButtons } from '@/features/enquiry-forms/parts'
 import { useOpenFollowUps } from '@/features/crm/FollowUpOnRow'
 import { followUpBucket } from '@/features/crm/follow-ups'
-import { Dialog, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
+import { Dialog, DialogContent } from '@/shared/ui/dialog'
+import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { NO_EXTRAS, NO_FACETS, activeExtrasCount, activeFacetCount, applyExtras, applyFacets, type LeadExtras, type LeadFacets } from '@/features/crm/board-filters'
@@ -232,31 +233,29 @@ function Crm() {
       <PageHeader
         title="Leads"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button asChild>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              * Minimal (owner, 10 Nov: "a lot of buttons... only the relevant
+              * ones, yet all the things present"): the day's work, the form
+              * and QR -- made to stand out -- and Add lead; Reports, Setup,
+              * Import and Download one tap away under More.
+              */}
+            <Button variant="outline" asChild>
               <Link to="/follow-ups/queue">
                 <PhoneCall /> Today's calls
               </Link>
             </Button>
             <FollowUpsButton />
-            <Button variant="outline" asChild>
-              <Link to="/follow-ups/reports">
-                <BarChart3 /> Reports
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/follow-ups/setup">
-                <Settings2 /> Setup
-              </Link>
-            </Button>
-            <ImportLeadsButton />
-            <DownloadLeadsButton count={allOpen.length} />
-            {/* The enquiry form and its QR codes, one tap from Leads (0274). */}
-            <Button variant="outline" asChild>
-              <Link to="/follow-ups/form">
-                <QrCode /> Form & QR
-              </Link>
-            </Button>
+            <Link
+              to="/follow-ups/form"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-tone-teal px-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              <span className="flex size-6 items-center justify-center rounded bg-white/20">
+                <QrCode className="size-4" aria-hidden />
+              </span>
+              Enquiry form & QR
+            </Link>
+            <MoreLeadTools count={allOpen.length} />
             <AddLeadDialog onAdded={(id) => setOpenLead(id)} />
           </div>
         }
@@ -567,28 +566,46 @@ function MoreFilters({
 }
 
 /**
- * Every lead as Excel or CSV, from the Leads page itself (owner, 21 Oct: the
- * download lived only on Form & QR, Reports and the bulk bar, so it looked
- * missing). The same server file as Form & QR (/leads-export, sixteen
- * columns), so it needs CRM Export; archived leads stay out.
+ * The lead tools a studio opens now and then, under one "More": Reports,
+ * Setup, Import leads (it once lived only on Setup, where the owner could not
+ * find it) and Download leads (every lead as Excel or CSV -- the same server
+ * file as Form & QR, /leads-export; it needs CRM Export).
  */
-function DownloadLeadsButton({ count }: { count: number }) {
-  const canExport = useAccess().hasModule('crm_export')
-  if (!canExport) return null
+function MoreLeadTools({ count }: { count: number }) {
+  const navigate = useNavigate()
+  const access = useAccess()
+  const canExport = access.hasModule('crm_export')
+  const canCreate = access.hasAction('crm', 'create')
+  const [open, setOpen] = useState<'import' | 'download' | null>(null)
+  const items: RowMenuItem[] = [
+    { label: 'Reports', icon: <BarChart3 className="size-4" />, onSelect: () => void navigate({ to: '/follow-ups/reports' }) },
+    { label: 'Setup', icon: <Settings2 className="size-4" />, onSelect: () => void navigate({ to: '/follow-ups/setup' }) },
+    ...(canCreate
+      ? [{ label: 'Import leads', icon: <FileUp className="size-4" />, onSelect: () => setOpen('import'), divider: true }]
+      : []),
+    ...(canExport
+      ? [{ label: 'Download leads', icon: <Download className="size-4" />, onSelect: () => setOpen('download'), divider: !canCreate }]
+      : []),
+  ]
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Download /> Download leads
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Download all your leads" description={`Every lead${count ? ` (${count} open now)` : ''}, won and lost too, with phone, email, event, source and stage.`}>
-        <DownloadButtons query={{}} />
-        <p className="text-sm text-muted-foreground">
-          <strong>Google Sheets</strong> saves the file and opens a new sheet: there press <strong>File → Import → Upload</strong>.
-        </p>
-      </DialogContent>
-    </Dialog>
+    <>
+      <RowMenu label="More lead tools" variant="outline" items={items}>
+        <Ellipsis /> More
+      </RowMenu>
+      <Dialog open={open === 'import'} onOpenChange={(v) => setOpen(v ? 'import' : null)}>
+        <DialogContent title="Import leads" description="Upload a CSV from Excel or Google Sheets. You see every row before anything is saved." className="sm:max-w-3xl">
+          <CsvImport />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={open === 'download'} onOpenChange={(v) => setOpen(v ? 'download' : null)}>
+        <DialogContent title="Download all your leads" description={`Every lead${count ? ` (${count} open now)` : ''}, won and lost too, with phone, email, event, source and stage.`}>
+          <DownloadButtons query={{}} />
+          <p className="text-sm text-muted-foreground">
+            <strong>Google Sheets</strong> saves the file and opens a new sheet: there press <strong>File → Import → Upload</strong>.
+          </p>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -612,23 +629,3 @@ function FollowUpsButton() {
   )
 }
 
-/**
- * Import a spreadsheet of leads from the Leads page itself. It lived only
- * on Setup, where nobody looked for it; the owner could not find it at all.
- */
-function ImportLeadsButton() {
-  const canCreate = useAccess().hasAction('crm', 'create')
-  if (!canCreate) return null
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <FileUp /> Import leads
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Import leads" description="Upload a CSV from Excel or Google Sheets. You see every row before anything is saved." className="sm:max-w-3xl">
-        <CsvImport />
-      </DialogContent>
-    </Dialog>
-  )
-}

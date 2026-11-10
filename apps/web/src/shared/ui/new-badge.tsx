@@ -19,6 +19,7 @@ export const NEW_UNTIL = {
   aiDesigner: '2026-11-16',
   aiReply: '2026-11-16',
   aiSequences: '2026-11-16',
+  referralCards: '2026-11-17',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

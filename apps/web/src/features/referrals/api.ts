@@ -4,8 +4,11 @@ import {
   referralCampaign,
   referralCampaignList,
   referralSubmissionList,
+  referralOffer,
+  referralSettings,
   z,
   type CreateReferralCampaignRequest,
+  type ReferralSettingsInput,
   type ReferralCampaignStatus,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -141,5 +144,35 @@ export function useUpdateSubmissionStatus() {
       toast.success('Status updated')
       void qc.invalidateQueries({ queryKey: ['referrals'] })
     },
+  })
+}
+
+/** The studio's referral defaults (0298): what a new client's card offers and earns. */
+export function useReferralSettings() {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['referrals', 'settings'],
+    queryFn: () => callApi('/referrals/settings', { responseSchema: referralSettings }),
+    enabled: !!session && access.hasModule('referrals'),
+    staleTime: 60_000,
+  })
+}
+
+export function useSaveReferralSettings() {
+  return useReferralMutation(
+    (body: ReferralSettingsInput) => callApi('/referrals/settings', { method: 'PUT', body, responseSchema: referralSettings }),
+    'Referral defaults saved',
+  )
+}
+
+/** The friend's offer a project's invoice should carry, when a referral card brought it (0298). */
+export function useReferralOffer(projectId: string | null | undefined) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['referrals', 'offer', projectId],
+    queryFn: () => callApi(`/referrals/offer/${projectId}`, { responseSchema: referralOffer.nullable() }),
+    enabled: !!session && !!projectId,
+    staleTime: 60_000,
   })
 }
