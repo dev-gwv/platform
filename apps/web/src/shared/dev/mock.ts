@@ -4246,6 +4246,39 @@ function designMock(path: string, method: string, body?: unknown): unknown {
   if (path === '/designs/photos') return method === 'GET' ? designPhotosFx : { id: uid(0xd9), url: '/help/check-in.jpg', name: 'new.jpg', width: 1200, height: 800, size_bytes: 400000, created_at: now }
   if (path.startsWith('/designs/photos/')) return { ok: true }
   if (path === '/designs?templates=1') return [{ ...summary, id: '0295d000-0000-4000-8000-000000000002', title: 'Our wedding template', is_template: true }]
+  if (path === '/designs/ad-scripts')
+    return {
+      scripts: [
+        {
+          angle: 'how_to_choose',
+          title: "Don't judge by Instagram",
+          hook: 'शादी के लिए फोटोग्राफर ढूँढ रहे हैं? रुकिए, ये 10 सेकंड सुन लीजिए।',
+          parts: [
+            { at: '3–15 s', text: 'आजकल हर फोटोग्राफर के इंस्टाग्राम पर सुंदर तस्वीरें होती हैं। पर शादी एक दिन की नहीं, पूरे परिवार की कहानी है।' },
+            { at: '15–45 s', text: 'इसलिए पूछिए: हल्दी से विदाई तक कौन कवर करेगा? फिल्म कैसी बनेगी? Cine World Weddings 500 से ज्यादा शादियाँ पूरी टीम के साथ कवर कर चुका है।' },
+            { at: '45–60 s', text: 'नीचे Get Quote दबाइए, अपनी जानकारी भेजिए। हमारी टीम आपको कॉल करके आपके लिए पैकेज बनाएगी।' },
+          ],
+          on_screen: ['500+ शादियाँ', 'हल्दी से विदाई तक', 'Get Quote ↓'],
+          model_notes: 'Warm smile, lean in on the hook, pause after "पूरे परिवार की कहानी है". Cut to the bride\'s entry and a family hug.',
+          words: 92,
+          seconds: 42,
+        },
+        {
+          angle: 'invite',
+          title: 'Your wedding, your story',
+          hook: 'Jaipur में शादी है? तो ये वीडियो आपके लिए है।',
+          parts: [
+            { at: '3–15 s', text: 'हम हैं Cine World Weddings: कैंडिड फोटो, सिनेमैटिक फिल्म और ड्रोन, सब एक टीम में।' },
+            { at: '15–45 s', text: 'हर शादी अलग होती है, इसलिए हर पैकेज भी आपकी शादी के हिसाब से बनता है।' },
+            { at: '45–60 s', text: 'Get Quote दबाइए। बस दो मिनट, और आपका पर्सनलाइज्ड पैकेज तैयार।' },
+          ],
+          on_screen: ['Candid · Films · Drone', 'Get Quote ↓'],
+          model_notes: 'Confident and quick. Cut to the drone shot on "ड्रोन".',
+          words: 64,
+          seconds: 29,
+        },
+      ],
+    }
   if (path === '/designs/captions')
     return {
       captions: [

@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, FileImage, Gift, Instagram, ListChecks, MessageSquareText, Sparkles, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Clapperboard, FileImage, Gift, Instagram, ListChecks, MessageSquareText, Sparkles, type LucideIcon } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { NewBadge, type NewFeature } from '@/shared/ui/new-badge'
 import { cn } from '@/shared/ui/cn'
@@ -16,7 +16,7 @@ interface Tool {
   title: string
   line: string
   icon: LucideIcon
-  to: '/ai/designer' | '/ai/sequences' | '/ai/captions' | '/ai/referrals' | '/leads'
+  to: '/ai/designer' | '/ai/sequences' | '/ai/captions' | '/ai/ad-scripts' | '/ai/referrals' | '/leads'
   /** Where it is used, when the tool lives on another page. */
   how?: string
   /** The icon tile's colours. */
@@ -36,6 +36,14 @@ const TOOLS: Tool[] = [
     icon: FileImage,
     to: '/ai/designer',
     tint: 'from-violet-600 to-indigo-600',
+  },
+  {
+    title: 'Ad scripts',
+    line: 'Scripts under a minute for a model to read to camera in your Meta ads, made to bring enquiries. Hindi or English.',
+    icon: Clapperboard,
+    to: '/ai/ad-scripts',
+    tint: 'from-rose-500 to-fuchsia-600',
+    fresh: 'aiAdScripts',
   },
   {
     title: 'Social media captions',
@@ -83,7 +91,7 @@ function AiHub() {
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Your studio's writing team</h1>
         <p className="mt-1 max-w-xl text-sm text-white/80">
-          Quotations, captions, replies and follow-ups in your words. You read every one before it goes out.
+          Quotations, ad scripts, captions, replies and follow-ups in your words. You read every one before it goes out.
         </p>
       </header>
 

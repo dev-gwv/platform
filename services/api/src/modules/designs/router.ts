@@ -13,6 +13,8 @@ import {
   addDesignPhotoRequest,
   designLibraryPhoto,
   updateDesignRequest,
+  adScriptReply,
+  adScriptRequest,
   captionReply,
   captionRequest,
   type DesignDoc,
@@ -31,6 +33,7 @@ import { newRawToken, verifyToken } from '../../lib/auth-token'
 import { cleanDesignWriting, designWriterMessages } from '../../lib/design-writer'
 import { writeWithAi } from '../../lib/ai-write'
 import { captionMessages, parseCaptions } from '../../lib/caption-writer'
+import { adScriptMessages, parseAdScripts } from '../../lib/ad-script-writer'
 
 /**
  * Quotation Designer (0295): the studio's premium quotation designs, each a
@@ -122,6 +125,25 @@ export const designsRouter = new Hono<AppEnv>()
     const captions = parseCaptions(text)
     if (captions.length === 0) fail(503, 'The AI came back empty. Try again.')
     return c.json(captionReply.parse({ captions }))
+  })
+
+  /**
+   * Ad scripts (owner, 10 Nov): one to three scripts a model reads to camera
+   * for a Meta ad, from the studio's own facts. Same engine, allowance and log.
+   */
+  .post('/ad-scripts', requireAction('projects', 'view'), async (c) => {
+    const parsed = adScriptRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, "Please check your studio's name and the numbers (rating 1 to 5).")
+    const text = await writeWithAi(c, {
+      kind: `ad_script:${parsed.data.angle}`,
+      messages: adScriptMessages(parsed.data),
+      maxTokens: 900 * parsed.data.count + 300,
+      temperature: 0.9,
+      cost: 1200 * parsed.data.count,
+    })
+    const scripts = parseAdScripts(text, parsed.data)
+    if (scripts.length === 0) fail(503, 'The AI came back empty. Try again.')
+    return c.json(adScriptReply.parse({ scripts }))
   })
 
   /** The studio's photo library: every photo put into a design, newest first. */
