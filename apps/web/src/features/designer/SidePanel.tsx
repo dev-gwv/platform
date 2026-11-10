@@ -24,6 +24,8 @@ import type {
   DesignPageKind,
   DesignTheme,
 } from '@ipc/contracts'
+import { ColourPicker } from './ColourPicker'
+import { cssPaint } from './paint'
 import { cn } from '@/shared/ui/cn'
 import { Select } from '@/shared/ui/select'
 import { useConfirm } from '@/shared/ui/confirm'
@@ -444,17 +446,27 @@ function PagesPanel({ doc, studio, onDoc, onGoTo }: PanelProps) {
 function LookPanel({ doc, template, onDoc }: PanelProps) {
   const theme = doc.theme
   const setTheme = (t: DesignTheme) => onDoc({ ...doc, theme: t })
+  const themeColours = [theme.background, theme.accent, theme.ink, theme.panel]
   const colour = (k: 'background' | 'ink' | 'accent' | 'panel', label: string) => (
-    <label className="flex items-center justify-between gap-2 text-sm">
+    <div className="flex items-center justify-between gap-2 text-sm">
       {label}
-      <input
-        type="color"
-        value={theme[k]}
-        onChange={(e) => setTheme({ ...theme, [k]: e.target.value.toUpperCase() })}
-        className="h-8 w-12 cursor-pointer rounded border border-white/20 bg-transparent"
-      />
-    </label>
+      <ColourPicker value={theme[k]} onChange={(c) => setTheme({ ...theme, [k]: c })} theme={themeColours} label={label}>
+        <button
+          type="button"
+          className="h-8 w-12 rounded border border-white/20"
+          style={{ background: theme[k] }}
+          aria-label={label}
+          title={label}
+        />
+      </ColourPicker>
+    </div>
   )
+  // One background, colour or gradient, for every page at once.
+  const pages = doc.pages
+  const first = pages[0]?.data.background ?? ''
+  const allSame = pages.every((p) => p.data.background === first)
+  const setAllBackgrounds = (paint: string) =>
+    onDoc({ ...doc, pages: pages.map((p) => ({ ...p, data: { ...p.data, background: paint } })) })
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-2">
@@ -487,6 +499,30 @@ function LookPanel({ doc, template, onDoc }: PanelProps) {
           </button>
         ))}
       </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-white/15 p-2.5">
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span>
+            Every page's background
+            <span className="block text-[11px] text-white/50">Colours and gradients</span>
+          </span>
+          <ColourPicker
+            value={allSame ? first : ''}
+            onChange={setAllBackgrounds}
+            gradients
+            theme={themeColours}
+            onReset={pages.some((p) => p.data.background) ? () => setAllBackgrounds('') : undefined}
+            label="Every page's background"
+          >
+            <button
+              type="button"
+              className="h-8 w-12 rounded border border-white/20"
+              style={{ background: cssPaint(allSame ? first : '', theme.background) }}
+              aria-label="Every page's background"
+            />
+          </ColourPicker>
+        </div>
+        <p className="text-[11px] text-white/50">One page only: its Background button above the page.</p>
+      </div>
       <div className="flex flex-col gap-2">
         {colour('background', 'Page')}
         {colour('accent', 'Headings & lines')}
@@ -498,6 +534,7 @@ function LookPanel({ doc, template, onDoc }: PanelProps) {
         <Select
           value={theme.heading}
           onChange={(e) => setTheme({ ...theme, heading: e.target.value })}
+          className="text-slate-900"
         >
           {HEADING_FONTS.map((f) => (
             <option key={f} value={f}>
@@ -508,7 +545,7 @@ function LookPanel({ doc, template, onDoc }: PanelProps) {
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Words font
-        <Select value={theme.body} onChange={(e) => setTheme({ ...theme, body: e.target.value })}>
+        <Select value={theme.body} onChange={(e) => setTheme({ ...theme, body: e.target.value })} className="text-slate-900">
           {BODY_FONTS.map((f) => (
             <option key={f} value={f}>
               {f}
@@ -517,7 +554,7 @@ function LookPanel({ doc, template, onDoc }: PanelProps) {
         </Select>
       </label>
       <p className="text-xs text-white/50">
-        A page can have its own colour: use Page colour above that page.
+        Each page has its own Background button above it, for a colour or a gradient on that page alone.
       </p>
     </div>
   )

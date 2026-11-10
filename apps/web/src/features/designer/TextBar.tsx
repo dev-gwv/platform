@@ -9,6 +9,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import type { DesignTextStyle, DesignTheme } from '@ipc/contracts'
+import { ColourPicker } from './ColourPicker'
 import { cn } from '@/shared/ui/cn'
 
 /**
@@ -118,19 +119,20 @@ export function TextBar({
           style={{ background: c }}
         />
       ))}
-      <label
-        className="relative size-6 cursor-pointer overflow-hidden rounded-full border-2 border-white/30"
-        title="Any colour"
-        style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
+      <ColourPicker
+        value={style.color ?? ''}
+        onChange={(c) => onStyle({ ...style, color: c })}
+        theme={[theme.ink, theme.accent, theme.background, theme.panel]}
+        label="Text colour"
       >
-        <input
-          type="color"
-          className="absolute inset-0 cursor-pointer opacity-0"
-          value={style.color ?? theme.ink}
-          onChange={(e) => onStyle({ ...style, color: e.target.value.toUpperCase() })}
-          aria-label="Any colour"
+        <button
+          type="button"
+          className="size-6 rounded-full border-2 border-white/30"
+          title="More colours"
+          aria-label="More colours"
+          style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
         />
-      </label>
+      </ColourPicker>
       <span className="mx-1 h-5 w-px bg-white/15" />
       <button
         type="button"
