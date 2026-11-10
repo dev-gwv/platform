@@ -51,6 +51,7 @@ const AiPage = lazyRouteComponent(() => import('@/routes/ai'), 'AiPage')
 const AiDesignerPage = lazyRouteComponent(() => import('@/routes/ai-designer'), 'AiDesignerPage')
 const AiDesignerEditPage = lazyRouteComponent(() => import('@/routes/ai-designer-edit'), 'AiDesignerEditPage')
 const AiSequencesPage = lazyRouteComponent(() => import('@/routes/ai-sequences'), 'AiSequencesPage')
+const AiCaptionsPage = lazyRouteComponent(() => import('@/routes/ai-captions'), 'AiCaptionsPage')
 const DesignPublicPage = lazyRouteComponent(() => import('@/routes/design-public'), 'DesignPublicPage')
 const LeadSourcesPage = lazyRouteComponent(() => import('@/routes/lead-sources'), 'LeadSourcesPage')
 const ClientsListPage = lazyRouteComponent(() => import('@/routes/clients/list'), 'ClientsListPage')
@@ -288,6 +289,7 @@ const routeTree = rootRoute.addChildren([
   route('/ai', AiPage),
   route('/ai/designer', AiDesignerPage),
   route('/ai/sequences', AiSequencesPage),
+  route('/ai/captions', AiCaptionsPage),
   route('/ai/designer/$id', AiDesignerEditPage),
   route('/project-documents', ProjectDocumentsPage),
   route('/team/work-preview', TeamWorkPreviewPage),

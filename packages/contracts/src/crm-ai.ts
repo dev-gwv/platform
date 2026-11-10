@@ -87,3 +87,40 @@ export type SequenceDraftAsk = z.infer<typeof sequenceDraftRequest>
 /** A sequence as the AI wrote it: what the editor opens with, never saved by itself. */
 export const sequenceDraft = sequenceInput
 export type SequenceDraft = z.input<typeof sequenceDraft>
+
+// ── Social media captions (owner, 10 Nov) ───────────────────────────
+
+export const CAPTION_PLATFORMS = ['instagram', 'facebook', 'whatsapp_status'] as const
+export const CAPTION_KINDS = [
+  'wedding_post',
+  'pre_wedding',
+  'reel',
+  'behind_the_scenes',
+  'testimonial',
+  'offer',
+  'dates_open',
+  'custom',
+] as const
+export type CaptionKind = (typeof CAPTION_KINDS)[number]
+export type CaptionPlatform = (typeof CAPTION_PLATFORMS)[number]
+
+export const captionRequest = z.object({
+  platform: z.enum(CAPTION_PLATFORMS).default('instagram'),
+  kind: z.enum(CAPTION_KINDS),
+  /** What the post is: couple, place, the moment, an offer -- the studio's own words. */
+  details: z.string().trim().max(600).default(''),
+  studio: z.string().trim().max(120).default(''),
+  /** The studio's handle or city for a sign-off and local hashtags. */
+  city: z.string().trim().max(80).default(''),
+  language: aiLang.default('en'),
+  tone: aiTone.default('warm'),
+  hashtags: z.boolean().default(true),
+  emojis: z.boolean().default(true),
+})
+export type CaptionRequest = z.input<typeof captionRequest>
+export type CaptionAsk = z.infer<typeof captionRequest>
+
+export const caption = z.object({ text: z.string(), hashtags: z.array(z.string()) })
+export type Caption = z.infer<typeof caption>
+export const captionReply = z.object({ captions: z.array(caption) })
+export type CaptionReply = z.infer<typeof captionReply>

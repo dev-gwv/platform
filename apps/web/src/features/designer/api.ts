@@ -75,6 +75,16 @@ export function useDeleteDesign() {
   })
 }
 
+/** A design's or template's name, changed from the list. */
+export function useRenameDesign() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      callApi(`/designs/${id}`, { method: 'PATCH', body: { title }, responseSchema: designSaved }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY, refetchType: 'active' }),
+  })
+}
+
 // ── step 2 (0296): the client's link and "Write it for me" ──────────
 
 export function useDesignLink(id: string) {

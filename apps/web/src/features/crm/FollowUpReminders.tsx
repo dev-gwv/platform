@@ -52,6 +52,7 @@ export function FollowUpReminders() {
         const phone = t.lead_phone
         toast(`${t.subject ?? 'Follow-up'} ${mins === 0 ? 'now' : `in ${mins} min`} · ${t.lead_name ?? 'a lead'}`, {
           id: `follow-up:${t.id}`,
+          toasterId: 'reminders',
           description: [phone, t.body].filter(Boolean).join(' · ') || undefined,
           duration: Number.POSITIVE_INFINITY,
           closeButton: true,

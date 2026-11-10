@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import '@/styles.css'
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
-import { Toaster, toast } from 'sonner'
+import { Toaster, toast, type ToasterProps } from 'sonner'
 import { CheckCircle2, XCircle, AlertTriangle, Info, Loader2 } from 'lucide-react'
 import { AuthProvider } from '@/shared/auth/AuthProvider'
 import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
@@ -124,6 +124,38 @@ captureStudioRef()
 const el = document.getElementById('root')
 if (!el) throw new Error('#root not found')
 
+/** The look every toast shares (both toasters). */
+const TOASTER = {
+  closeButton: true,
+  icons: {
+    success: <CheckCircle2 className="size-5 text-success" />,
+    error: <XCircle className="size-5 text-destructive" />,
+    warning: <AlertTriangle className="size-5 text-warning" />,
+    info: <Info className="size-5 text-primary" />,
+    loading: <Loader2 className="size-5 animate-spin text-muted-foreground" />,
+  },
+  toastOptions: {
+    unstyled: false,
+    // Every side of the border is set with its own directional utility
+    // (never the `border`/`border-color` shorthand) so the left-side
+    // accent color below can never lose a same-property cascade tie to it.
+    classNames: {
+      toast:
+        'rounded-xl border-t border-r border-b border-l-4 border-t-border border-r-border border-b-border bg-card text-foreground shadow-lg p-4 gap-3 items-start',
+      title: 'font-semibold text-sm leading-snug',
+      description: 'text-sm text-muted-foreground mt-0.5',
+      icon: 'mt-0.5',
+      closeButton: 'border-border bg-card text-muted-foreground hover:text-foreground',
+      actionButton: 'bg-primary text-primary-foreground',
+      cancelButton: 'bg-secondary text-secondary-foreground',
+      success: 'border-l-success',
+      error: 'border-l-destructive',
+      warning: 'border-l-warning',
+      info: 'border-l-primary',
+    },
+  },
+} satisfies ToasterProps
+
 createRoot(el, {
   // React 19 hands the framework these instead of letting them reach
   // window.onerror. Without them a render crash is reported by React to the
@@ -142,38 +174,11 @@ createRoot(el, {
             {/* Top centre, under the top bar: on the right a toast sat on the
                 bell and the account menu, and on a drawer's close button
                 (audit, 5 Nov); the bottom right is the help bubble's. */}
-            <Toaster
-              position="top-center"
-              offset={{ top: 68 }}
-              closeButton
-              icons={{
-                success: <CheckCircle2 className="size-5 text-success" />,
-                error: <XCircle className="size-5 text-destructive" />,
-                warning: <AlertTriangle className="size-5 text-warning" />,
-                info: <Info className="size-5 text-primary" />,
-                loading: <Loader2 className="size-5 animate-spin text-muted-foreground" />,
-              }}
-              toastOptions={{
-                unstyled: false,
-                // Every side of the border is set with its own directional utility
-                // (never the `border`/`border-color` shorthand) so the left-side
-                // accent color below can never lose a same-property cascade tie to it.
-                classNames: {
-                  toast:
-                    'rounded-xl border-t border-r border-b border-l-4 border-t-border border-r-border border-b-border bg-card text-foreground shadow-lg p-4 gap-3 items-start',
-                  title: 'font-semibold text-sm leading-snug',
-                  description: 'text-sm text-muted-foreground mt-0.5',
-                  icon: 'mt-0.5',
-                  closeButton: 'border-border bg-card text-muted-foreground hover:text-foreground',
-                  actionButton: 'bg-primary text-primary-foreground',
-                  cancelButton: 'bg-secondary text-secondary-foreground',
-                  success: 'border-l-success',
-                  error: 'border-l-destructive',
-                  warning: 'border-l-warning',
-                  info: 'border-l-primary',
-                },
-              }}
-            />
+            <Toaster position="top-center" offset={{ top: 68 }} {...TOASTER} />
+            {/* Follow-up reminders stay until acted on, so they sit bottom right,
+                above the help bubble -- at the top they covered every page's
+                header and its buttons (owner audit, 10 Nov). */}
+            <Toaster id="reminders" position="bottom-right" offset={{ bottom: 92, right: 16 }} mobileOffset={{ bottom: 140 }} {...TOASTER} />
           </ConfirmProvider>
         </AuthProvider>
       </ThemeProvider>

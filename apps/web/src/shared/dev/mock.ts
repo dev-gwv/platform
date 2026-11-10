@@ -4224,6 +4224,14 @@ function designMock(path: string, method: string): unknown {
   if (path === '/designs/photos') return method === 'GET' ? designPhotosFx : { id: uid(0xd9), url: '/help/check-in.jpg', name: 'new.jpg', width: 1200, height: 800, size_bytes: 400000, created_at: now }
   if (path.startsWith('/designs/photos/')) return { ok: true }
   if (path === '/designs?templates=1') return [{ ...summary, id: '0295d000-0000-4000-8000-000000000002', title: 'Our wedding template', is_template: true }]
+  if (path === '/designs/captions')
+    return {
+      captions: [
+        { text: 'Forever started with a glance across the mandap ✨\nPriya & Rahul, Udaipur. Thank you for letting us tell your story.', hashtags: ['#WeddingPhotography', '#UdaipurWedding', '#IndianWedding', '#CandidMoments'] },
+        { text: 'Some moments are louder than the baraat 💛\nA palace, a sunset and two families becoming one.', hashtags: ['#WeddingStories', '#PalaceWedding', '#BrideAndGroom'] },
+        { text: 'Pheras at golden hour. Need we say more? 🌅\nDates for 2027 are opening -- DM us.', hashtags: ['#WeddingSeason', '#Udaipur', '#Photography'] },
+      ],
+    }
   if (path === '/designs/write')
     return { text: 'At Cine World Weddings we tell your story the way you lived it: the quiet glances, the loud laughter and every ritual in between, captured with care so you can live your day again.', lines: ['400+ hand-edited photographs in high resolution', 'A cinematic wedding film of 8-10 minutes', 'A 60-second teaser for Instagram'] }
   if (path.endsWith('/link')) return method === 'DELETE' ? { token: null } : { token: '0295d000-0000-4000-8000-0000000000010295d000-0000-4000-8000-000000000001', views: 3, first_viewed_at: now, last_viewed_at: now }
