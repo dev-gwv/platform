@@ -181,6 +181,29 @@ export const CHAPTERS: readonly GuideChapter[] = [
     },
   },
   {
+    key: 'designer',
+    part: 1,
+    video: 'designer',
+    to: '/ai/designer',
+    title: { en: 'Design a premium quotation', hi: 'प्रीमियम कोटेशन डिज़ाइन करें' },
+    steps: {
+      en: [
+        'Open **AI → Quotation Designer** and press **New design**.',
+        'Pick the project and a template, then **Make the design**: its events, deliverables and price fill the pages.',
+        '**Upload photos**, tap a frame on the page, then tap a photo.',
+        "A page's **Background** gives it a colour or a gradient; tap any text to change it.",
+        'Press **Send to client** or **Download PDF**.',
+      ],
+      hi: [
+        '**AI → Quotation Designer** खोलें और **New design** दबाएँ।',
+        'प्रोजेक्ट और टेम्पलेट चुनें, फिर **Make the design**: उसके इवेंट, डिलिवरेबल और कीमत पेजों में भर जाते हैं।',
+        '**Upload photos** दबाएँ, पेज पर किसी फ़्रेम पर टैप करें, फिर फ़ोटो पर।',
+        'पेज का **Background** उसे रंग या ग्रेडिएंट देता है; किसी भी लिखावट पर टैप करके उसे बदलें।',
+        '**Send to client** या **Download PDF** दबाएँ।',
+      ],
+    },
+  },
+  {
     key: 'leads',
     part: 2,
     video: 'leads',

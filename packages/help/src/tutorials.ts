@@ -38,6 +38,7 @@ export const TUTORIALS: readonly Tutorial[] = [
   { key: 'project-billing', title: 'Project step 4: the price', blurb: 'The package price, the advance, then Create.', seconds: 29, section: 'Get started', pages: [], hi: { title: 'प्रोजेक्ट स्टेप 4: कीमत', blurb: 'पैकेज की कीमत, एडवांस, फिर Create।' } },
   { key: 'leads', title: 'Add a lead and book it', blurb: 'From enquiry to booked project in one go.', seconds: 54, section: 'Clients & sales', pages: ['/follow-ups'], hi: { title: 'लीड जोड़ें और बुक करें', blurb: 'इन्क्वायरी से बुक हुए प्रोजेक्ट तक, एक बार में।' } },
   { key: 'quotation', title: 'Send your quotation', blurb: 'See it as the client, then send it.', seconds: 49, section: 'Clients & sales', pages: [/^\/projects\/[^/]+\/quotation$/], hi: { title: 'अपना कोटेशन भेजें', blurb: 'क्लाइंट की नज़र से देखें, फिर भेजें।' } },
+  { key: 'designer', title: 'Design a premium quotation', blurb: 'Your project poured into a Canva-style design: photos, colours, words.', seconds: 63, section: 'Clients & sales', pages: [/^\/ai\/designer$/], hi: { title: 'प्रीमियम कोटेशन डिज़ाइन करें', blurb: 'आपका प्रोजेक्ट एक Canva जैसे डिज़ाइन में: फ़ोटो, रंग, शब्द।' } },
   { key: 'assign', title: 'Book your team for a shoot', blurb: 'Who is free, what they cost, booked in a few taps.', seconds: 49, section: 'Shoots & team', pages: ['/team-allocation', '/shoots'], views: ['shoots'], hi: { title: 'शूट के लिए टीम बुक करें', blurb: 'कौन फ़्री है, कितना पेमेंट, कुछ टैप में बुक।' } },
   { key: 'give-work', title: 'Give editing work', blurb: 'Pick the editor with the least on their plate.', seconds: 39, section: 'Editing', pages: [], views: ['deliverables'], hi: { title: 'एडिटिंग का काम दें', blurb: 'जिस एडिटर के पास सबसे कम काम है, उसे दें।' } },
   { key: 'board', title: 'Run the production board', blurb: 'Every edit by stage, late work first.', seconds: 56, section: 'Editing', pages: ['/production-board'], hi: { title: 'प्रोडक्शन बोर्ड चलाएँ', blurb: 'हर एडिट स्टेज के हिसाब से, लेट काम सबसे ऊपर।' } },
@@ -108,7 +109,7 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave', 'studio', 'terms', 'details-form', 'enquiry-form', 'facebook', 'data', 'salaries', 'check-in', 'ask-leave', 'hand-in']
+export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'designer', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave', 'studio', 'terms', 'details-form', 'enquiry-form', 'facebook', 'data', 'salaries', 'check-in', 'ask-leave', 'hand-in']
 
 /** Which of them also have a Hindi recording, in apps/web/public/help/hi. */
 export const SHIPPED_HI: readonly string[] = SHIPPED
