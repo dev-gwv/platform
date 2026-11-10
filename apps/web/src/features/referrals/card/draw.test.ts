@@ -12,7 +12,8 @@ describe('referral card', () => {
   it('reads the date and the code the way people do', () => {
     expect(validWords('2027-03-31')).toBe('31 Mar 2027')
     expect(validWords(null)).toBeNull()
-    expect(cardCode('priya-wedding-referrals-a1b2c3')).toBe('PRIYA-WEDDING-REFERRALS-A1B2')
+    expect(cardCode('priya-wedding-referrals-a1b2c3')).toBe('A1B2C3')
+    expect(cardCode('old')).toBe('OLD')
   })
 
   it('wraps to the width and cuts the last line', () => {
@@ -34,7 +35,8 @@ describe('referral card', () => {
     })
     expect(t).toContain('Priya & Rahul is inviting you to Cine World')
     expect(t).toContain('₹10,000 off your booking')
-    expect(t).toContain('PRIYA-ABC123')
+    expect(t).toContain('Gift code: ABC123')
+    expect(t).toContain('Tap to claim it: https://studioautopilot.in/refer/priya-abc123')
     expect(t).toContain('Valid till 31 Mar 2027.')
   })
 })

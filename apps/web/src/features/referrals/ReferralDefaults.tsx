@@ -10,6 +10,8 @@ import { TEMPLATES } from '@/features/designer/templates'
 import { useReferralSettings, useSaveReferralSettings } from './api'
 import { FRIEND_KINDS } from './card/ReferralCard'
 import { offerHeadline } from './card/draw'
+import { CardPreview, sampleCard } from './card/CardPreview'
+import { useCompanyProfile } from '@/features/settings/api'
 
 const CLIENT_KINDS: { key: ReferralRewardType; label: string }[] = [
   { key: 'fixed', label: '₹ cashback' },
@@ -32,6 +34,7 @@ export function ReferralDefaults({ canEdit }: { canEdit: boolean }) {
   const [f, setF] = useState<ReferralSettingsInput | null>(null)
   const [friendValue, setFriendValue] = useState('')
   const [clientValue, setClientValue] = useState('')
+  const company = useCompanyProfile()
 
   useEffect(() => {
     if (q.data && !f) {
@@ -62,13 +65,14 @@ export function ReferralDefaults({ canEdit }: { canEdit: boolean }) {
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-5 p-4">
+      <CardContent className="grid gap-6 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+        <div className="flex min-w-0 flex-col gap-5">
         <div>
           <p className="flex items-center gap-2 font-semibold">
             <Sparkles className="size-4 text-primary" aria-hidden /> Referral cards for every client
           </p>
           <p className="text-sm text-muted-foreground">
-            Each booked client gets a card to forward. Change a client’s own card on their project’s Referrals tab.
+            Each booked client gets a card to forward, starting from these. Change one client’s own card under AI → Referral cards, or on their project.
           </p>
         </div>
 
@@ -185,6 +189,20 @@ export function ReferralDefaults({ canEdit }: { canEdit: boolean }) {
             </Button>
           </div>
         )}
+        </div>
+        <div className="flex flex-col gap-2 lg:sticky lg:top-4 lg:self-start">
+          <p className="text-sm font-medium">How the card looks</p>
+          <CardPreview
+            look={f.card_look}
+            data={sampleCard(company.data?.display_name || company.data?.name || 'Your studio', {
+              friendType,
+              friendValue: parseAmount(friendValue) ?? 0,
+              friendTitle: f.friend_reward_title ?? null,
+              validDays: f.valid_days,
+            })}
+          />
+          <p className="text-xs text-muted-foreground">Drawn for a sample couple. Each client’s card carries their own name.</p>
+        </div>
       </CardContent>
     </Card>
   )

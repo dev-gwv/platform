@@ -45,8 +45,15 @@ export function validWords(iso: string | null): string | null {
     : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
-/** The code as people read it: upper case, the slug's own dashes kept. */
-export const cardCode = (slug: string) => slug.toUpperCase().slice(0, 28)
+/**
+ * The gift code as people read it: the six characters every slug ends with
+ * (0067: name + "-" + 6 random), upper case, so it can be said on a call. An
+ * older slug without that ending shows whole, cut to fit.
+ */
+export function cardCode(slug: string): string {
+  const tail = slug.split('-').pop() ?? ''
+  return (/^[a-z0-9]{6}$/i.test(tail) ? tail : slug).toUpperCase().slice(0, 16)
+}
 
 /** The message that goes with the picture on WhatsApp. */
 export function shareText(d: CardData): string {
@@ -55,7 +62,8 @@ export function shareText(d: CardData): string {
   return [
     `${d.from} is inviting you to ${d.studio} ✨`,
     `${offer} when you book through this card.`,
-    `Use code ${cardCode(d.code)} or tap: ${d.link}`,
+    `Tap to claim it: ${d.link}`,
+    `Gift code: ${cardCode(d.code)}`,
     valid ? `Valid till ${valid}.` : '',
   ]
     .filter(Boolean)
@@ -87,7 +95,54 @@ export function wrap(measure: (s: string) => number, text: string, width: number
 const isScript = (font: string) => /vibes|allura|script/i.test(font)
 const face = (font: string) => `'${font}', ${isScript(font) ? 'cursive' : 'Georgia, serif'}`
 
-/** Draws the card on a 1080 × 1080 context. The logo is drawn when given and loaded. */
+/** A hex colour lightened or darkened toward white/black by `amount` (−1…1). */
+function shade(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  const mix = (c: number) => Math.round(amount >= 0 ? c + (255 - c) * amount : c * (1 + amount))
+  const r = mix((n >> 16) & 255)
+  const g = mix((n >> 8) & 255)
+  const b = mix(n & 255)
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+/** A thin line with a small diamond in the middle, in the accent. */
+function ornament(ctx: CanvasRenderingContext2D, cx: number, y: number, half: number, colour: string) {
+  ctx.strokeStyle = colour
+  ctx.fillStyle = colour
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(cx - half, y)
+  ctx.lineTo(cx - 18, y)
+  ctx.moveTo(cx + 18, y)
+  ctx.lineTo(cx + half, y)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(cx, y - 9)
+  ctx.lineTo(cx + 9, y)
+  ctx.lineTo(cx, y + 9)
+  ctx.lineTo(cx - 9, y)
+  ctx.closePath()
+  ctx.fill()
+}
+
+/**
+ * Draws the card on a 1080 × 1080 context (owner audit, 10 Nov: the first
+ * card was plain and half empty). Top to bottom: the studio's logo or name;
+ * "A GIFT FROM" and who sends it, in the look's script; the offer in a band
+ * of the accent colour so it is the first thing read; "when you book …";
+ * then a panel with the three steps to claim it, the valid-till date and the
+ * gift code beside a large QR. The logo is drawn when given and loaded.
+ */
 export function drawReferralCard(
   ctx: CanvasRenderingContext2D,
   d: CardData,
@@ -95,90 +150,122 @@ export function drawReferralCard(
   logo?: HTMLImageElement | null,
 ) {
   const W = CARD
+  const measure = (s: string) => ctx.measureText(s).width
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
+
+  // Ground: the look's colour with a soft glow of its panel at the top.
   ctx.fillStyle = t.background
   ctx.fillRect(0, 0, W, W)
-  // A double frame in the look's accent.
+  const glow = ctx.createRadialGradient(W / 2, 120, 40, W / 2, 120, 760)
+  glow.addColorStop(0, `${t.panel}cc`)
+  glow.addColorStop(1, `${t.panel}00`)
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, W)
   ctx.strokeStyle = t.accent
-  ctx.lineWidth = 4
-  ctx.strokeRect(36, 36, W - 72, W - 72)
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(52, 52, W - 104, W - 104)
+  ctx.lineWidth = 3
+  roundRect(ctx, 32, 32, W - 64, W - 64, 28)
+  ctx.stroke()
 
-  let y = 150
+  // The studio.
+  let y: number
   if (logo && logo.naturalWidth > 0) {
-    const h = 110
-    const w = Math.min(420, (logo.naturalWidth / logo.naturalHeight) * h)
-    ctx.drawImage(logo, (W - w) / 2, 88, w, h)
-    y = 250
+    const h = 96
+    const w = Math.min(380, (logo.naturalWidth / logo.naturalHeight) * h)
+    ctx.drawImage(logo, (W - w) / 2, 76, w, h)
+    y = 228
   } else {
     ctx.fillStyle = t.ink
     ctx.font = `600 34px ${face(t.body)}`
-    ctx.fillText(d.studio.toUpperCase().slice(0, 40), W / 2, y)
-    y = 225
+    ctx.fillText(d.studio.toUpperCase().slice(0, 40).split('').join('\u200A'), W / 2, 136)
+    y = 200
   }
 
+  // Who it is from.
   ctx.fillStyle = t.accent
-  ctx.font = `600 26px ${face(t.body)}`
-  ctx.fillText('A GIFT FROM', W / 2, y)
-  y += 90
+  ctx.font = `700 24px ${face(t.body)}`
+  ctx.fillText('A  GIFT  FROM', W / 2, y)
   const script = isScript(t.heading)
-  ctx.font = `${script ? 400 : 700} ${script ? 92 : 64}px ${face(t.heading)}`
-  for (const l of wrap((s) => ctx.measureText(s).width, d.from, 860, 2)) {
+  ctx.font = `${script ? 400 : 700} ${script ? 96 : 66}px ${face(t.heading)}`
+  y += script ? 92 : 78
+  for (const l of wrap(measure, d.from, 860, 2)) {
     ctx.fillText(l, W / 2, y)
-    y += script ? 88 : 72
+    y += script ? 86 : 70
   }
+  ornament(ctx, W / 2, y - 18, 150, t.accent)
 
-  y += 30
-  ctx.fillStyle = t.ink
-  ctx.font = `700 60px ${face(t.body)}`
-  for (const l of wrap((s) => ctx.measureText(s).width, offerHeadline(d.friendType, d.friendValue, d.friendTitle), 880, 3)) {
-    ctx.fillText(l, W / 2, y)
-    y += 70
+  // The offer, on a band of the accent.
+  const offer = offerHeadline(d.friendType, d.friendValue, d.friendTitle)
+  let px = 66
+  ctx.font = `700 ${px}px ${face(t.body)}`
+  let lines = wrap(measure, offer, 800, 2)
+  while (px > 46 && (lines.length > 2 || lines.some((l) => measure(l) > 800))) {
+    px -= 4
+    ctx.font = `700 ${px}px ${face(t.body)}`
+    lines = wrap(measure, offer, 800, 2)
   }
-  ctx.font = `italic 32px ${face(t.body)}`
+  const lh = Math.round(px * 1.15)
+  const bandTop = y + 22
+  const bandH = lines.length * lh + 64
+  ctx.fillStyle = t.accent
+  roundRect(ctx, 92, bandTop, W - 184, bandH, 26)
+  ctx.fill()
+  ctx.fillStyle = t.background
+  let ly = bandTop + 32 + lh * 0.8
+  for (const l of lines) {
+    ctx.fillText(l, W / 2, ly)
+    ly += lh
+  }
   ctx.fillStyle = t.ink
-  ctx.globalAlpha = 0.8
-  ctx.fillText(d.line?.trim() || `when you book ${d.studio}`, W / 2, y + 4)
+  ctx.globalAlpha = 0.85
+  ctx.font = `italic 34px ${face(t.body)}`
+  ctx.fillText(d.line?.trim() || `when you book ${d.studio}`, W / 2, bandTop + bandH + 56)
   ctx.globalAlpha = 1
 
-  // The code on the left, the QR on the right, on the look's panel colour.
-  const boxY = 760
+  // How to claim it, beside the QR, on the look's panel.
+  const boxY = 724
+  const boxH = 290
   ctx.fillStyle = t.panel
-  ctx.fillRect(110, boxY, W - 220, 230)
+  roundRect(ctx, 92, boxY, W - 184, boxH, 24)
+  ctx.fill()
+  ctx.strokeStyle = shade(t.panel, -0.12)
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
   ctx.textAlign = 'left'
-  ctx.fillStyle = t.accent
-  ctx.font = `600 24px ${face(t.body)}`
-  ctx.fillText('YOUR CODE', 150, boxY + 62)
-  ctx.fillStyle = t.ink
-  // A long code gets a smaller type until it fits beside the QR.
-  const code = cardCode(d.code)
-  let px = 44
-  ctx.font = `700 ${px}px ${face(t.body)}`
-  while (px > 24 && ctx.measureText(code).width > 520) {
-    px -= 2
-    ctx.font = `700 ${px}px ${face(t.body)}`
+  const steps = ['Scan the code', 'Share your details', 'Book, and the gift is yours']
+  let sy = boxY + 66
+  for (const [i, step] of steps.entries()) {
+    ctx.fillStyle = t.accent
+    ctx.beginPath()
+    ctx.arc(152, sy - 10, 24, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = t.panel
+    ctx.font = `700 30px Georgia, serif`
+    ctx.textAlign = 'center'
+    ctx.fillText(String(i + 1), 152, sy)
+    ctx.textAlign = 'left'
+    ctx.fillStyle = t.ink
+    ctx.font = `600 30px ${face(t.body)}`
+    ctx.fillText(step, 190, sy)
+    sy += 62
   }
-  let shown = code
-  while (shown.length > 4 && ctx.measureText(shown).width > 520) shown = shown.slice(0, -1)
-  ctx.fillText(shown === code ? code : `${shown.slice(0, -1)}…`, 150, boxY + 118)
-  ctx.font = `26px ${face(t.body)}`
+  ctx.font = `24px ${face(t.body)}`
   ctx.globalAlpha = 0.8
-  ctx.fillText('Scan the code or tap the link', 150, boxY + 166)
   const valid = validWords(d.validUntil)
-  if (valid) ctx.fillText(`Valid till ${valid}`, 150, boxY + 202)
+  ctx.fillText([`Gift code ${cardCode(d.code)}`, valid && `valid till ${valid}`].filter(Boolean).join(' · '), 130, boxY + boxH - 34)
   ctx.globalAlpha = 1
 
   const qr = qrcode(0, 'M')
   qr.addData(d.link)
   qr.make()
   const n = qr.getModuleCount()
-  const size = 190
-  const qx = W - 110 - size - 20
-  const qy = boxY + 20
+  const size = 226
+  const qx = W - 92 - size - 32
+  const qy = boxY + (boxH - size) / 2
   ctx.fillStyle = '#FFFFFF'
-  ctx.fillRect(qx - 10, qy - 10, size + 20, size + 20)
+  roundRect(ctx, qx - 14, qy - 14, size + 28, size + 28, 16)
+  ctx.fill()
   ctx.fillStyle = '#111111'
   const cell = size / n
   for (let r = 0; r < n; r++)

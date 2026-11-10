@@ -16,7 +16,7 @@ interface Tool {
   title: string
   line: string
   icon: LucideIcon
-  to: '/ai/designer' | '/ai/sequences' | '/ai/captions' | '/leads' | '/referrals'
+  to: '/ai/designer' | '/ai/sequences' | '/ai/captions' | '/ai/referrals' | '/leads'
   /** Where it is used, when the tool lives on another page. */
   how?: string
   /** The icon tile's colours. */
@@ -66,7 +66,7 @@ const TOOLS: Tool[] = [
     title: 'Referral cards',
     line: 'A WhatsApp card each client sends friends: the friend gets an offer, your client a reward.',
     icon: Gift,
-    to: '/referrals',
+    to: '/ai/referrals',
     tint: 'from-amber-500 to-rose-500',
     fresh: 'referralCards',
   },
