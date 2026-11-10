@@ -128,6 +128,8 @@ export const crmLead = z.object({
   /** The partner or vendor whose QR code brought this lead in (0274), and their name. */
   partner_id: uuid.nullable().default(null),
   partner_name: z.string().nullable().default(null),
+  /** 0299: 'wedding' when it came through a QR placed at a wedding the studio shot. */
+  partner_kind: z.enum(['partner', 'wedding']).nullish().catch(null),
   /** 0281: what the partner's QR was for ("Priya & Rahul's wedding"), and the answers to its own questions. */
   /** The client whose referral card brought this lead (0298). */
   referred_by_name: z.string().nullable().default(null),
@@ -1894,6 +1896,7 @@ export const myLead = z.object({
   event_date: isoDate.nullable(),
   city: z.string().nullable(),
   partner_name: z.string().nullable(),
+  partner_kind: z.enum(['partner', 'wedding']).nullish().catch(null),
   enquiry_occasion: z.string().nullable(),
   follow_up_at: isoDateTime.nullable(),
   next_subject: z.string().nullable(),

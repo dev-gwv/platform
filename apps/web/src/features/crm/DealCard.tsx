@@ -133,7 +133,7 @@ export function DealCard({
         className="block w-full text-left"
       >
         {lead.partner_name ? (
-          <PartnerChip name={lead.partner_name} className="mb-1" />
+          <PartnerChip name={lead.partner_name} kind={lead.partner_kind} className="mb-1" />
         ) : (
           origin && <span className="micro-label mb-1 block truncate">{origin}</span>
         )}

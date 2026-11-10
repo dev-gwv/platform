@@ -138,7 +138,8 @@ export function EnquiryFormView({
         )}
         <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{look.studio}</h1>
         {look.city && <p className="text-sm text-muted-foreground">{look.city}</p>}
-        {look.partner && (
+        {/* A wedding QR (0299) is named after its wedding: the occasion line says it once. */}
+        {look.partner && look.partner !== look.occasion && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-card/80 px-3 py-1 text-sm font-semibold text-primary ring-1 ring-brand/50">
             <Handshake className="size-4" aria-hidden /> Sent via {look.partner}
           </span>

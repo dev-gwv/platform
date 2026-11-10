@@ -251,7 +251,7 @@ export function LeadTable({
               {l.phone ?? '—'}
               {l.crm_company_name ? ` · ${l.crm_company_name}` : ''}
             </span>
-            {l.partner_name && <PartnerChip name={l.partner_name} className="mt-1" />}
+            {l.partner_name && <PartnerChip name={l.partner_name} kind={l.partner_kind} className="mt-1" />}
             {/*
               * What Privyr's row carries and ours did not: a line of the notes.
               * A list of names answers "who"; the question a studio actually

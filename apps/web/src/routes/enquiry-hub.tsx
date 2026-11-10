@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, ChevronRight, Code2, Copy, ExternalLink, Handshake, ListChecks, MessageCircle, Pencil, Plus, QrCode, Send, Store } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Code2, Copy, ExternalLink, Handshake, Heart, ListChecks, MessageCircle, Pencil, Plus, QrCode, Send, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryForm, EnquiryHub } from '@ipc/contracts'
 import { formShareText, partnerCounts, topPartnerId, whatsappUrl } from '@ipc/domain'
@@ -27,6 +27,7 @@ import { AfterSendCard } from '@/features/enquiry-forms/AfterSendCard'
 import { QuestionsCard } from '@/features/enquiry-forms/QuestionsCard'
 import { FormBuilderDialog } from '@/features/enquiry-forms/FormBuilderDialog'
 import { PartnerDialog } from '@/features/enquiry-forms/PartnerDialog'
+import { WeddingQrSection } from '@/features/enquiry-forms/WeddingQr'
 import {
   DownloadButtons,
   LeadsDownloadStrip,
@@ -52,8 +53,8 @@ export function EnquiryHubPage() {
   return <Hub hub={hub.data} />
 }
 
-type Tab = 'qr' | 'partners' | 'after' | 'questions'
-const TABS: Tab[] = ['qr', 'partners', 'after', 'questions']
+type Tab = 'qr' | 'wedding' | 'partners' | 'after' | 'questions'
+const TABS: Tab[] = ['qr', 'wedding', 'partners', 'after', 'questions']
 
 function Hub({ hub }: { hub: EnquiryHub }) {
   const { form, studio, can_manage: canManage } = hub
@@ -95,6 +96,8 @@ function Hub({ hub }: { hub: EnquiryHub }) {
           onChange={setTab}
           tabs={[
             { value: 'qr', label: 'Your QR code', icon: QrCode },
+            // At a client's wedding, for the guests (0299); partners are shops and vendors.
+            { value: 'wedding', label: 'Wedding QR codes', icon: Heart },
             { value: 'partners', label: live ? `Partners · ${live}` : 'Partners', icon: Handshake },
             { value: 'after', label: 'After they send', icon: Send },
             { value: 'questions', label: 'Questions', icon: ListChecks },
@@ -102,6 +105,7 @@ function Hub({ hub }: { hub: EnquiryHub }) {
         />
       )}
       {tab === 'qr' && <YourQrCard hub={hub} />}
+      {tab === 'wedding' && <WeddingQrSection studio={hub.studio} />}
       {tab === 'partners' && (
         <div className="flex flex-col gap-6">
           <PartnersSection hub={hub} onAdd={() => setAdding(true)} />

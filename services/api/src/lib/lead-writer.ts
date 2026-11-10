@@ -23,6 +23,8 @@ export interface ReplyLead {
   deal_value?: number | null
   source?: string | null
   partner_name?: string | null
+  /** 0299: 'wedding' = a QR the studio placed at a wedding it shot. */
+  partner_kind?: string | null
   enquiry_occasion?: string | null
   enquiry_answers?: { question: string; answer: string }[] | null
   functions?: { event_type: string | null; event_date: string | null; location: string | null; guests?: number | null }[] | null
@@ -116,7 +118,8 @@ export function leadFacts(l: ReplyLead): string[] {
   }
   if (l.city) out.push(`City: ${l.city}`)
   if (l.enquiry_occasion) out.push(`They found the studio through: ${l.enquiry_occasion}`)
-  if (l.partner_name) out.push(`Referred by: ${l.partner_name}`)
+  if (l.partner_name && l.partner_kind === 'wedding') out.push(`They saw the studio's work at a wedding it shot: ${l.partner_name}`)
+  else if (l.partner_name) out.push(`Referred by: ${l.partner_name}`)
   if (l.source) out.push(`Came from: ${l.source}`)
   if (l.deal_value && l.deal_value > 0)
     out.push(`Their budget: ${inr(l.deal_value)} (context only; do not repeat it unless they asked about price)`)

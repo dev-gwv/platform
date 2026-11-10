@@ -54,6 +54,7 @@ import { ClientActivityCard } from '@/features/projects/ClientActivityCard'
 import { DataTab } from '@/features/projects/tabs/DataTab'
 import { GalleryTab } from '@/features/gallery/GalleryTab'
 import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
+import { ProjectWeddingQrLine } from '@/features/enquiry-forms/WeddingQr'
 import { WishesTab } from '@/features/wishes/WishesTab'
 import { WatchHow } from '@/features/help/WatchHow'
 import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
@@ -479,6 +480,8 @@ function ProjectDetail() {
       {tab === 'payouts' && <PayoutsTab projectId={id} />}
       {tab === 'data' && <DataTab projectId={id} />}
       {tab === 'gallery' && <GalleryTab projectId={id} projectName={data.name} />}
+      {/* A QR for the guests at this wedding (0299), one line. */}
+      {tab === 'referrals' && <ProjectWeddingQrLine projectId={id} projectName={data.name} />}
       {tab === 'referrals' && (
         <ReferralsTab
           projectId={id}

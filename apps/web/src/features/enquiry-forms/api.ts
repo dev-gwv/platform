@@ -10,6 +10,7 @@ import {
   z,
   type CreateEnquiryFormRequest,
   type CreateEnquiryPartnerRequest,
+  type CreateWeddingQrRequest,
   type UpdateEnquiryFormRequest,
   type UpdateEnquiryPartnerRequest,
 } from '@ipc/contracts'
@@ -121,11 +122,16 @@ export function useSetEnquiryServices() {
   })
 }
 
-export function usePartners(archived = false, enabled = true) {
+/**
+ * Partner QR codes; `kind` 'wedding' for the wedding QR codes (0299), 'all'
+ * for both (the lead's "Came through" picker). Partners alone by default.
+ */
+export function usePartners(archived = false, enabled = true, kind: 'partner' | 'wedding' | 'all' = 'partner') {
   const { session } = useAuth()
+  const qs = new URLSearchParams({ ...(archived ? { archived: 'true' } : {}), ...(kind !== 'partner' ? { kind } : {}) }).toString()
   return useQuery({
-    queryKey: [...PARTNERS, archived ? 'archived' : 'live'],
-    queryFn: () => callApi(`/enquiry-partners${archived ? '?archived=true' : ''}`, { responseSchema: enquiryPartner.array() }),
+    queryKey: [...PARTNERS, archived ? 'archived' : 'live', kind],
+    queryFn: () => callApi(`/enquiry-partners${qs ? `?${qs}` : ''}`, { responseSchema: enquiryPartner.array() }),
     enabled: !!session && enabled,
     staleTime: 30_000,
   })
@@ -192,6 +198,17 @@ export function usePartnerSharing(id: string) {
       callApi(`/enquiry-partners/${id}/sharing`, { method: 'POST', body: { on }, responseSchema: enquiryPartner }),
     onSuccess: () => partnerDone(qc),
     onError: (e) => toast.error(errorText(e, 'We could not change the page link.')),
+  })
+}
+
+/** "Add wedding QR" (0299): one per project; asking again gives the same one back. */
+export function useCreateWeddingQr() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateWeddingQrRequest) =>
+      callApi('/enquiry-partners/wedding', { method: 'POST', body, responseSchema: enquiryPartner }),
+    onSuccess: () => partnerDone(qc),
+    onError: (e) => toast.error(errorText(e, 'We could not make the wedding QR.')),
   })
 }
 

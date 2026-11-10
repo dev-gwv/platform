@@ -41,6 +41,7 @@ const selectMyLead = (sql: TransactionSql, detail = false) => sql`
   select l.id, l.name, l.phone, l.email, l.status, s.name as stage_name, s.color as stage_color, l.quality,
          l.event_type, l.event_date, l.city,
          (select pt.name from enquiry_partners pt where pt.id = l.partner_id) as partner_name,
+         (select pt.kind from enquiry_partners pt where pt.id = l.partner_id) as partner_kind,
          l.enquiry_occasion, l.follow_up_at,
          (select a.subject from crm_activities a
            where a.lead_id = l.id and a.type = 'task' and a.done_at is null and a.due_at is not null
