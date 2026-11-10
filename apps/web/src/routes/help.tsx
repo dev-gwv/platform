@@ -10,6 +10,7 @@ import { mailLink, whatsappLink } from '@/features/help/support'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
 import { Wordmark } from '@/shared/ui/wordmark'
+import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 
 const SECTIONS: Tutorial['section'][] = ['Get started', 'Clients & sales', 'Shoots & team', 'Editing', 'Money', 'Team']
 
@@ -55,7 +56,10 @@ export function HelpPage() {
           <LangSwitch lang={lang} onChange={setLang} />
         </div>
         <p className="mt-1 text-muted-foreground">Short videos of the real app. Each one is under a minute.</p>
-        <GuideLink className="mt-5 max-w-xl" />
+        <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-2">
+          <SetupVideosLink card />
+          <GuideLink />
+        </div>
 
         <div className="mt-8 flex flex-col gap-10">
           {SECTIONS.map((section) => {

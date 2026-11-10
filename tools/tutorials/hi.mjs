@@ -36,6 +36,7 @@ export const HI = {
   'Days, deliverables and price in one place': 'दिन, डिलिवरेबल्स और कीमत, सब एक जगह',
   'Name the project and pick the client': 'प्रोजेक्ट का नाम लिखें और क्लाइंट चुनें',
   'Tap Haldi, then its date, time and hours': '“Haldi” पर टैप करें, फिर तारीख, समय और घंटे',
+  'Tap Haldi: date, time, hours and its team': '“Haldi” पर टैप करें: तारीख, समय, घंटे और टीम',
   'Then the Wedding the same way': 'फिर “Wedding” भी इसी तरह',
   'Tap what the client gets': 'क्लाइंट को जो मिलेगा, उस पर टैप करें',
   'Enter the price and any advance paid': 'कीमत और मिला हुआ एडवांस डालें',

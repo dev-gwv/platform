@@ -16,6 +16,10 @@ await p.getByLabel('Type a date').fill('21/11/2026'); await p.getByLabel('Type a
 await p.getByRole('button', { name: 'Pick a time' }).last().click(); await sleep(300)
 await p.getByRole('dialog').last().getByRole('button', { name: '6:00 PM', exact: true }).click(); await sleep(300)
 await main.getByRole('button', { name: '6', exact: true }).last().click(); await sleep(500)
+// Each day is asked for its team before the wizard goes on (owner, 5 Nov).
+await main.getByRole('button', { name: 'Add requirements' }).last().click(); await sleep(600)
+await p.getByRole('dialog').last().getByRole('button', { name: 'Candid Photographer', exact: true }).click(); await sleep(200)
+await p.getByRole('dialog').last().getByRole('button', { name: /^Save / }).click(); await sleep(500)
 await next.click()
 await main.getByText('Step 3 of 5').waitFor({ timeout: 8000 })
 await sleep(1200)

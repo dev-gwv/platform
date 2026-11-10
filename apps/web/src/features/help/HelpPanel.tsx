@@ -10,6 +10,7 @@ import { TutorialPlayer } from './TutorialPlayer'
 import { lengthLabel, tutorialFor, type Tutorial } from './tutorials'
 import { mailLink, supportMessage, whatsappLink } from './support'
 import { BookCallButton } from './BookCall'
+import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 
 const ROLE: Record<string, string> = {
   super_admin: 'Owner',
@@ -61,7 +62,8 @@ function HelpPanelBody({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
-      <GuideLink onNavigate={onNavigate} />
+      <SetupVideosLink card onNavigate={onNavigate} />
+      <GuideLink onNavigate={onNavigate} className="-mt-3" />
 
       <div className="flex flex-col gap-3">
         <div>

@@ -31,6 +31,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label } from '@/shared/ui/input'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { DesignerCredit } from '@/shared/ui/designer-credit'
+import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 import { Wordmark } from '@/shared/ui/wordmark'
 
 type Mode = 'signin' | 'register' | 'forgot'
@@ -681,6 +682,7 @@ export function LoginPage() {
                 </>
               )}
             </p>
+            <SetupVideosLink className="mt-5" />
             <LegalLinks className="mt-6" />
           </>
         )}

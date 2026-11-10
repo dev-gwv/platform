@@ -39,8 +39,8 @@ export const VO = {
     title: L("Let's book your first project: days, deliverables and price, all in one place.", 'चलिए, आपका पहला प्रोजेक्ट बनाते हैं: दिन, डिलिवरेबल्स और कीमत, सब एक जगह।'),
     steps: [
       L('Name the project, and pick the client.', 'प्रोजेक्ट का नाम लिखिए, और क्लाइंट चुनिए।'),
-      L('Tap Haldi, then its date, start time and how many hours.', 'Haldi पर टैप कीजिए, फिर उसकी तारीख, शुरू होने का समय और कितने घंटे।'),
-      L('Then the Wedding, the same way.', 'फिर Wedding, बिल्कुल इसी तरह।'),
+      L('Tap Haldi, then its date, start time, how many hours, and who will shoot it.', 'Haldi पर टैप कीजिए, फिर उसकी तारीख, शुरू होने का समय, कितने घंटे, और कौन शूट करेगा।'),
+      L('Then the Wedding, the same way, with its team.', 'फिर Wedding, बिल्कुल इसी तरह, अपनी टीम के साथ।'),
       L('Tap what the client gets: teaser, film, album.', 'क्लाइंट को जो मिलेगा, उस पर टैप कीजिए: टीज़र, फ़िल्म, एल्बम।'),
       L('Enter the package price, and any advance already paid.', 'पैकेज की कीमत डालिए, और जो एडवांस मिल चुका है वह भी।'),
       L('Check it all, then press Create project.', 'सब एक बार देख लीजिए, फिर Create project दबाइए।'),
