@@ -326,6 +326,34 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
   if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method)
+  // Referral cards (0298).
+  if (path.startsWith('/referrals') || path.startsWith('/public/referrals')) {
+    const camp = {
+      id: '02980000-0000-4000-8000-000000000001', company_id: '00000000-0000-4000-8000-000000000001',
+      name: 'Akshay & Riya Wedding referrals', slug: 'akshay-riya-wedding-a1b2c3', description: null,
+      reward_type: 'fixed', reward_value: 5000, reward_description: null, reward_title: '₹5,000 cashback',
+      project_id: null, project_name: 'Akshay & Riya Wedding', client_id: null, client_name: 'Akshay & Riya',
+      view_token: 'ab12cd34ef56ab78', friend_reward_type: 'fixed', friend_reward_value: 10000,
+      friend_reward_title: '₹10,000 off your wedding photography', valid_until: '2027-05-31', views: 4,
+      status: 'active', created_at: '2026-11-01T10:00:00Z',
+    }
+    if (path === '/referrals/campaigns/for-project') return camp
+    if (path === '/referrals/campaigns')
+      return { campaigns: [camp], summary: { total_campaigns: 1, active_campaigns: 1, total_submissions: 2, converted_submissions: 1, total_rewards: 0 } }
+    if (path === '/referrals/settings')
+      return method === 'PUT' && body ? body : { is_on: true, reward_type: 'fixed', reward_value: 5000, reward_title: '₹5,000 cashback', friend_reward_type: 'fixed', friend_reward_value: 10000, friend_reward_title: '₹10,000 off your wedding photography', valid_days: 180, card_look: 'ivory' }
+    if (path.startsWith('/referrals/offer/'))
+      return { referrer: 'Akshay & Riya', friend_reward_type: 'fixed', friend_reward_value: 10000, friend_reward_title: '₹10,000 off your wedding photography' }
+    if (path.startsWith('/referrals/submissions')) return { items: [], next_cursor: null }
+    if (path.startsWith('/public/referrals/campaign/') && !path.includes('/referrals?'))
+      return {
+        campaign_id: camp.id, name: camp.name, description: null, reward_type: 'fixed', reward_value: 5000,
+        reward_description: null, studio_name: 'Cine World Weddings', logo_url: null, referring_client_name: 'Akshay & Riya',
+        reward_title: null, friend_reward_type: 'fixed', friend_reward_value: 10000,
+        friend_reward_title: '₹10,000 off your wedding photography', valid_until: '2027-05-31', card_look: 'ivory',
+      }
+    return { ok: true }
+  }
   // AI for leads (owner, 9 Nov): a reply and a sequence, as the server would write them.
   if (method === 'POST' && /\/leads\/[^/]+\/reply$/.test(path))
     return {

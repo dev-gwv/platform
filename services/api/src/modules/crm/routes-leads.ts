@@ -38,6 +38,8 @@ const selectLead = (sql: TransactionSql) => sql`
          -- The partner whose QR code it came through (0274), named on the card.
          l.partner_id,
          (select pt.name from enquiry_partners pt where pt.id = l.partner_id) as partner_name,
+         -- The client whose referral card brought this lead (0298).
+         l.referred_by_name,
          -- What that QR was for and the answers to its own questions (0281).
          l.enquiry_occasion, l.enquiry_answers,
          -- Is the studio free on this lead's date? Derived in one pass by

@@ -27,6 +27,7 @@ const lead = (name: string, over: Partial<CrmLead> = {}): CrmLead => ({
   partner_id: null,
   partner_name: null,
   enquiry_occasion: null,
+  referred_by_name: null,
   enquiry_answers: null,
   notes: null,
   follow_up_at: null,

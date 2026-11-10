@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-generator'
 import type { DesignTheme, FriendRewardType } from '@ipc/contracts'
+import { designerFontsReady } from '@/features/designer/fonts'
 
 /**
  * The referral card (owner, 10 Nov): one 1080 × 1080 picture a client
@@ -151,8 +152,17 @@ export function drawReferralCard(
   ctx.font = `600 24px ${face(t.body)}`
   ctx.fillText('YOUR CODE', 150, boxY + 62)
   ctx.fillStyle = t.ink
-  ctx.font = `700 44px ${face(t.body)}`
-  ctx.fillText(wrap((s) => ctx.measureText(s).width, cardCode(d.code), 520, 1)[0] ?? '', 150, boxY + 118)
+  // A long code gets a smaller type until it fits beside the QR.
+  const code = cardCode(d.code)
+  let px = 44
+  ctx.font = `700 ${px}px ${face(t.body)}`
+  while (px > 24 && ctx.measureText(code).width > 520) {
+    px -= 2
+    ctx.font = `700 ${px}px ${face(t.body)}`
+  }
+  let shown = code
+  while (shown.length > 4 && ctx.measureText(shown).width > 520) shown = shown.slice(0, -1)
+  ctx.fillText(shown === code ? code : `${shown.slice(0, -1)}…`, 150, boxY + 118)
   ctx.font = `26px ${face(t.body)}`
   ctx.globalAlpha = 0.8
   ctx.fillText('Scan the code or tap the link', 150, boxY + 166)
@@ -195,6 +205,7 @@ export async function renderReferralCard(d: CardData, t: DesignTheme, logoUrl?: 
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('This browser cannot draw the card.')
   try {
+    await designerFontsReady()
     await Promise.all([
       document.fonts.load(`92px '${t.heading}'`),
       document.fonts.load(`700 60px '${t.body}'`),

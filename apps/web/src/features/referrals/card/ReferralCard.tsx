@@ -10,7 +10,7 @@ import { parseAmount } from '@/shared/money/parse-amount'
 import { NewBadge } from '@/shared/ui/new-badge'
 import { useCompanyProfile } from '@/features/settings/api'
 import { TEMPLATES } from '@/features/designer/templates'
-import { loadDesignerFonts } from '@/features/designer/fonts'
+import { designerFontsReady, loadDesignerFonts } from '@/features/designer/fonts'
 import { useReferralSettings, useSaveReferralCampaign } from '../api'
 import { CARD, drawReferralCard, offerHeadline, renderReferralCard, saveBlob, shareCard, shareText, type CardData } from './draw'
 
@@ -72,8 +72,26 @@ export function ReferralCard({
 
   useEffect(() => {
     loadDesignerFonts()
-    void document.fonts?.ready.then(() => setFontsReady((n) => n + 1))
   }, [])
+
+  // The look's two faces, loaded before the preview is drawn again in them.
+  useEffect(() => {
+    // Until the stylesheet is read, load() finds no face and resolves at once.
+    let live = true
+    const faces = [`92px '${theme.heading}'`, `700 60px '${theme.body}'`, `italic 32px '${theme.body}'`]
+    void (async () => {
+      await designerFontsReady()
+      try {
+        await Promise.all(faces.map((f) => document.fonts.load(f)))
+      } catch {
+        /* drawn in the fallback face */
+      }
+      if (live) setFontsReady((n) => n + 1)
+    })()
+    return () => {
+      live = false
+    }
+  }, [theme.heading, theme.body])
 
   // The preview, drawn live (without the logo, which the download waits for).
   useEffect(() => {
