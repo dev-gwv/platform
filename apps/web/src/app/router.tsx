@@ -254,6 +254,8 @@ const routeTree = rootRoute.addChildren([
   publicRoute('/data-deletion', DataDeletionPage),
   // Setup tutorials; the setup emails link here, often opened signed out.
   publicRoute('/help/setup', HelpSetupPage),
+  // The short link to share: the same setup videos.
+  publicRoute('/start', HelpSetupPage),
   publicRoute('/help/whatsapp', HelpWhatsAppPage),
   // Every tutorial, the questions studios ask, and how to reach us (0236).
   publicRoute('/help', HelpPage),

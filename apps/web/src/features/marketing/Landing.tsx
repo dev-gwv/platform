@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { plan } from '@ipc/contracts'
@@ -68,6 +69,7 @@ export function Landing() {
               Sign in
             </Link>
           </div>
+          <SetupVideosLink className="mt-4 items-start" />
         </div>
 
         <Section title="What it does">

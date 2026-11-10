@@ -127,7 +127,7 @@ export function SetupGuideBar() {
             hash={step.key}
             className="whitespace-nowrap text-xs font-medium text-primary underline-offset-2 hover:underline"
           >
-            Watch how (under a minute)
+            Watch the setup video
           </Link>
         </p>
         <button

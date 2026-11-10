@@ -201,7 +201,7 @@ export class Tutorial {
     return c.secs
   }
 
-  async open({ email, password }) {
+  async open({ email, password } = {}, { signIn = true } = {}) {
     // Make every clip before the screen starts, so no line waits on the network.
     if (this.vo) for (const l of [this.vo.title, ...this.vo.steps, this.vo.end]) if (l) await say(l[LANG], LANG)
     this.browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
@@ -210,6 +210,12 @@ export class Tutorial {
     // A tutorial never shows a cookie or confirm-email strip it does not teach.
     this.page = await this.ctx.newPage()
     this.page.on('pageerror', (e) => console.log('pageerror', e.message))
+    if (!signIn) {
+      // A first visit: nobody signed in (the sign-up tutorial).
+      await this.page.goto(WEB + '/')
+      await sleep(1500)
+      return this.page
+    }
     await this.page.goto(WEB + '/login')
     await this.page.locator('input[type=email]').fill(email)
     await this.page.locator('input[type=password]').fill(password)

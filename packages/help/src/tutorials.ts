@@ -28,6 +28,7 @@ export interface Tutorial {
 export type HelpLang = 'en' | 'hi'
 
 export const TUTORIALS: readonly Tutorial[] = [
+  { key: 'signup', title: 'Create your account', blurb: 'Sign up in two minutes, where the app opens, and signing in next time.', seconds: 52, section: 'Get started', pages: [], hi: { title: 'अपना अकाउंट बनाएँ', blurb: 'दो मिनट में साइन अप, ऐप कहाँ खुलता है, और अगली बार साइन इन।' } },
   { key: 'team', title: 'Add one person to your team', blurb: 'Name, phone, job role -- and a login if they need one.', seconds: 40, section: 'Get started', pages: ['/employees'], hi: { title: 'टीम में एक व्यक्ति जोड़ें', blurb: 'नाम, फ़ोन, काम -- और ज़रूरत हो तो लॉगिन।' } },
   { key: 'team-bulk', title: 'Add your whole team at once', blurb: 'One row per person, or paste them from a sheet.', seconds: 45, section: 'Get started', pages: [], hi: { title: 'पूरी टीम एक साथ जोड़ें', blurb: 'हर व्यक्ति की एक लाइन, या शीट से पेस्ट करें।' } },
   { key: 'client', title: 'Add your first client', blurb: 'Name and number is enough to start.', seconds: 29, section: 'Get started', pages: ['/clients'], hi: { title: 'अपना पहला क्लाइंट जोड़ें', blurb: 'शुरू करने के लिए नाम और नंबर काफ़ी है।' } },
@@ -109,7 +110,7 @@ export function lengthLabel(seconds: number): string {
 }
 
 /** Which recordings are in apps/web/public/help. */
-export const SHIPPED: readonly string[] = ['team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'designer', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave', 'studio', 'terms', 'details-form', 'enquiry-form', 'facebook', 'data', 'salaries', 'check-in', 'ask-leave', 'hand-in']
+export const SHIPPED: readonly string[] = ['signup', 'team', 'team-bulk', 'client', 'project', 'project-client', 'project-shoots', 'project-deliverables', 'project-billing', 'leads', 'quotation', 'designer', 'assign', 'give-work', 'payments', 'payouts', 'attendance', 'board', 'team-day', 'invoices', 'expenses', 'leave', 'studio', 'terms', 'details-form', 'enquiry-form', 'facebook', 'data', 'salaries', 'check-in', 'ask-leave', 'hand-in']
 
 /** Which of them also have a Hindi recording, in apps/web/public/help/hi. */
 export const SHIPPED_HI: readonly string[] = SHIPPED
