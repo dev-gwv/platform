@@ -21,6 +21,7 @@ import { STAGE_LABEL, STAGE_TONE, optedOut } from '@/features/data/stage'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { SlotAnswer } from '@/features/allocation/SlotAnswer'
 import { todayInIndia } from '@/shared/ui/days-left'
+import { SlotNoteLine } from '@/features/booking/SlotNote'
 
 /** A booking whose shoot is over, owes data, and has not been handed over. */
 const owesData = (sl: TeamSlot, rec: DataRecord | undefined, now: string) =>
@@ -204,6 +205,8 @@ function Section({
                             </Button>
                           )}
                           <DataLine slot={sl} record={data.records.get(sl.id)} now={data.now} onHandover={() => data.onHandover(sl, s.name)} />
+                          {/* The studio's note on this booking, for the person it is about. */}
+                          <SlotNoteLine slot={sl} className="w-full text-xs" />
                         </li>
                       ))}
                     </ul>

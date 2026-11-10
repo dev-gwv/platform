@@ -190,14 +190,14 @@ export const CHAPTERS: readonly GuideChapter[] = [
       en: [
         'Open **AI → Quotation Designer** and press **New design**.',
         'Pick the project and a template, then **Make the design**: its events, deliverables and price fill the pages.',
-        '**Upload photos**, tap a frame on the page, then tap a photo.',
+        'A template\'s photos are samples: tap one, then **From the library** or **Upload your own**.',
         "A page's **Background** gives it a colour or a gradient; tap any text to change it.",
         'Press **Send to client** or **Download PDF**.',
       ],
       hi: [
         '**AI → Quotation Designer** खोलें और **New design** दबाएँ।',
         'प्रोजेक्ट और टेम्पलेट चुनें, फिर **Make the design**: उसके इवेंट, डिलिवरेबल और कीमत पेजों में भर जाते हैं।',
-        '**Upload photos** दबाएँ, पेज पर किसी फ़्रेम पर टैप करें, फिर फ़ोटो पर।',
+        'टेम्पलेट की फ़ोटो सिर्फ़ नमूना हैं: एक पर टैप करें, फिर **From the library** या **Upload your own**।',
         'पेज का **Background** उसे रंग या ग्रेडिएंट देता है; किसी भी लिखावट पर टैप करके उसे बदलें।',
         '**Send to client** या **Download PDF** दबाएँ।',
       ],

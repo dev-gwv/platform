@@ -31,6 +31,7 @@ export async function loadReplyData(
     select l.name, l.status, s.name as stage_name, l.event_type, l.event_date, l.city, l.deal_value,
            l.source, l.phone_norm, l.enquiry_occasion, l.enquiry_answers, l.notes,
            (select pt.name from enquiry_partners pt where pt.id = l.partner_id) as partner_name,
+           (select pt.kind from enquiry_partners pt where pt.id = l.partner_id) as partner_kind,
            coalesce((select jsonb_agg(jsonb_build_object('event_type', f.event_type, 'event_date', f.event_date,
                                                          'location', f.location, 'guests', f.guests)
                                       order by f.event_date nulls last)

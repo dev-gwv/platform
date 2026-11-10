@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { TransactionSql } from 'postgres'
 import type { BookSlotRequest } from '@ipc/contracts'
-import { arrivedRequest, respondSlotRequest, bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
+import { arrivedRequest, respondSlotRequest, bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, setSlotNoteRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
@@ -159,11 +159,13 @@ export const allocationRouter = new Hono<AppEnv>()
                  coalesce(s.data_required, false) as data_required,
                  s.data_not_required_reason, s.released_at, u.name as user_name,
                  s.response, s.decline_reason, s.arrived_at,
+                 s.note, nb.name as note_by_name, s.note_at,
                  sh.name as shoot_name, sh.shoot_date, sh.status as shoot_status,
                  sh.location, sh.map_link,
                  p.id as project_id, p.name as project_name, cl.name as client_name
           from team_assignment_slots s
           left join users u on u.user_id = s.user_id
+          left join users nb on nb.user_id = s.note_by
           left join shoots sh on sh.id = s.shoot_id
           left join projects p on p.id = sh.project_id
           left join clients cl on cl.id = p.client_id
@@ -322,6 +324,29 @@ export const allocationRouter = new Hono<AppEnv>()
     if (outcome === 'missing') fail(404, 'We could not find that booking.')
     if (!outcome) fail(400, 'We could not update the booking.')
     await audit(c, { action: 'allocation.update', entityType: 'team_assignment_slot', entityId: id, after: d })
+    return c.body(null, 204)
+  })
+
+  // A note on the person booked, like a comment on a cell (0299). Whoever
+  // plans crew writes it; everyone who sees the booking reads it.
+  .post('/:id/note', requireAction('projects', 'edit'), async (c) => {
+    const parsed = setSlotNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the note.')
+    const id = uuidParam(c)
+    const me = c.get('auth').userId
+    const note = parsed.data.note?.trim() || null
+    const rows = await attempt(c, 'allocation.note', () =>
+      withUser(c.env, me, (sql) => sql<{ id: string }[]>`
+        update team_assignment_slots
+           set note = ${note},
+               note_by = ${note ? me : null},
+               note_at = ${note ? sql`now()` : null}
+         where id = ${id}
+         returning id`),
+    )
+    if (!rows) fail(400, 'We could not save the note.')
+    if (!rows.length) fail(404, 'We could not find that booking.')
+    await audit(c, { action: 'allocation.note', entityType: 'team_assignment_slot', entityId: id, after: { cleared: note === null } })
     return c.body(null, 204)
   })
 

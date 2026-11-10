@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   createEnquiryPartnerRequest,
+  createWeddingQrRequest,
   enquiryFormLead,
   enquiryPartner,
   enquiryVendor,
@@ -30,9 +31,11 @@ const selectPartners = (sql: TransactionSql) => sql`
   select p.id, p.name, p.label, p.party_id, v.name as vendor_name, p.phone, p.notes, p.code, p.view_token,
          p.show_phone, p.scans, coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
          st.last_enquiry_at, p.page_viewed_at, p.archived_at, p.created_at,
-         p.after_submit, p.whatsapp_phone, p.whatsapp_text, p.redirect_url, p.thank_you, p.occasion, p.questions
+         p.after_submit, p.whatsapp_phone, p.whatsapp_text, p.redirect_url, p.thank_you, p.occasion, p.questions,
+         p.kind, p.project_id, pr.name as project_name
     from enquiry_partners p
     left join parties v on v.id = p.party_id
+    left join projects pr on pr.id = p.project_id
     left join enquiry_partner_stats st on st.partner_id = p.id`
 
 type Row = Record<string, unknown> & { code: string; view_token: string | null }
@@ -53,6 +56,22 @@ const toPartner = (appUrl: string | undefined, formUrl: string, r: Row) => {
 
 const pageToken = () => newRawToken().replace(/-/g, '')
 
+/** ?kind=partner (the default, as every caller before 0299 meant), wedding or all. */
+const kindOf = (raw: string | undefined): 'partner' | 'wedding' | 'all' =>
+  raw === 'wedding' || raw === 'all' ? raw : 'partner'
+
+/**
+ * A wedding QR (0299) for one of the studio's projects: one per project,
+ * named after it, with no partner page. create_wedding_qr refuses another
+ * studio's project (22023 -> 422).
+ */
+async function makeWeddingQr(sql: TransactionSql, appUrl: string | undefined, projectId: string, name: string | null) {
+  const [made] = await sql<{ id: string }[]>`select (create_wedding_qr(${projectId}, ${name})).id`
+  const formUrl = await formUrlOf(sql, appUrl)
+  const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${made!.id}`
+  return { formUrl, row: rows[0]! }
+}
+
 /** A Postgres error raised by create_enquiry_partner, in its own words. */
 const clash = (pg: string | undefined, err: unknown) =>
   pg === '23505' || pg === '22023' ? fail(pg === '23505' ? 409 : 422, (err as { message?: string }).message ?? 'Please check the partner.') : undefined
@@ -65,15 +84,20 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
     await next()
   })
 
-  /** Live partners, busiest first; ?archived=true for the ended ones. */
+  /**
+   * Live partners, busiest first; ?archived=true for the ended ones.
+   * ?kind=wedding for the wedding QR codes (0299), ?kind=all for both.
+   */
   .get('/', async (c) => {
     const archived = c.req.query('archived') === 'true'
+    const kind = kindOf(c.req.query('kind'))
     const out = await attempt(c, 'enquiry_partners.list', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const formUrl = await formUrlOf(sql, c.env.APP_URL)
         const rows = await sql<Row[]>`
           ${selectPartners(sql)}
            where (p.archived_at is not null) = ${archived}
+             ${kind === 'all' ? sql`` : sql`and p.kind = ${kind}`}
            order by coalesce(st.enquiries, 0) desc, p.scans desc, lower(p.name)`
         return { formUrl, rows }
       }),
@@ -100,6 +124,19 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
     const parsed = createEnquiryPartnerRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the partner.')
     const d = parsed.data
+    if (d.kind === 'wedding') {
+      if (!d.project_id) fail(422, 'Pick whose wedding this QR is for.')
+      const wedding = await attempt(
+        c,
+        'enquiry_partners.create_wedding',
+        () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, d.project_id!, d.name)),
+        { onCode: clash },
+      )
+      if (!wedding) fail(400, 'We could not make the wedding QR.')
+      const made = toPartner(c.env.APP_URL, wedding.formUrl, wedding.row)
+      await audit(c, { action: 'enquiry_partner.create_wedding', entityType: 'enquiry_partner', entityId: made.id, after: { project_id: d.project_id } })
+      return c.json(made, 201)
+    }
     const phone = d.phone ? toIndianMobile(d.phone) : null
     if (d.phone && !phone) fail(422, 'Enter a valid 10-digit mobile number')
     const out = await attempt(
@@ -126,6 +163,25 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
     const partner = toPartner(c.env.APP_URL, out.formUrl, out.row)
     await audit(c, { action: 'enquiry_partner.create', entityType: 'enquiry_partner', entityId: partner.id, after: { name: partner.name } })
     return c.json(partner, 201)
+  })
+
+  /**
+   * "Add wedding QR" (0299): a QR the studio prints for a client's wedding so
+   * guests can enquire. One per project; asking again gives the same one back.
+   */
+  .post('/wedding', async (c) => {
+    const parsed = createWeddingQrRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Pick whose wedding this QR is for.')
+    const out = await attempt(
+      c,
+      'enquiry_partners.create_wedding',
+      () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, parsed.data.project_id, parsed.data.name ?? null)),
+      { onCode: clash },
+    )
+    if (!out) fail(400, 'We could not make the wedding QR.')
+    const made = toPartner(c.env.APP_URL, out.formUrl, out.row)
+    await audit(c, { action: 'enquiry_partner.create_wedding', entityType: 'enquiry_partner', entityId: made.id, after: { project_id: parsed.data.project_id } })
+    return c.json(made, 201)
   })
 
   /** "Make QR" on a vendor: a partner with the vendor's name, phone and kinds. */
@@ -248,12 +304,22 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
         }
       }
     }
+    // A wedding QR's project (0299) must be one of the studio's (row security hides the rest).
+    if (typeof patch.project_id === 'string') {
+      const projectId = patch.project_id
+      const found = await attempt(c, 'enquiry_partners.project_check', () =>
+        withUser(c.env, c.get('auth').userId, (sql) => sql`select 1 from projects where id = ${projectId}`),
+      )
+      if (!found?.length) fail(422, 'That project was not found.')
+    }
     if (typeof patch.name === 'string') {
       const name = patch.name
+      // Names are unique among partners and, apart, among wedding QRs (0299).
       const dupes = await attempt(c, 'enquiry_partners.name_check', () =>
         withUser(c.env, c.get('auth').userId, (sql) => sql<{ archived_at: string | null }[]>`
           select archived_at from enquiry_partners
-           where company_id = get_current_company_id() and lower(name) = lower(${name}) and id <> ${id}`),
+           where company_id = get_current_company_id() and lower(name) = lower(${name}) and id <> ${id}
+             and kind = (select kind from enquiry_partners where id = ${id})`),
       )
       const dupe = dupes?.[0]
       if (dupe) fail(409, dupe.archived_at ? 'An archived partner has this name. Bring them back instead.' : 'You already have a partner with this name.')

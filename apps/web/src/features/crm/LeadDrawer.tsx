@@ -1,6 +1,6 @@
 import { ReplyWithAiButton } from '@/features/crm-ai/ReplySheet'
 import { useEffect, useRef, useState } from 'react'
-import { PartnerChip } from './PartnerChip'
+import { PartnerChip, partnerLabel } from './PartnerChip'
 import { AssigneeChip } from './AssigneeChip'
 import { FormAnswersCard } from './drawer/FormAnswersCard'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -261,7 +261,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             {lead.partner_id && lead.partner_name && (
               <span className="flex flex-wrap items-center gap-1.5">
                 <Link to="/follow-ups/partners/$id" params={{ id: lead.partner_id }} className="w-fit hover:opacity-80">
-                  <PartnerChip name={lead.partner_name} />
+                  <PartnerChip name={lead.partner_name} kind={lead.partner_kind} />
                 </Link>
                 {canEdit && (
                   <button
@@ -820,7 +820,8 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
  * one, or to one when it walked in by itself: changed or cleared here.
  */
 function PartnerField({ lead, disabled, onChange }: { lead: CrmLead; disabled: boolean; onChange: (id: string | null) => void }) {
-  const { data: partners } = usePartners(false, !disabled)
+  // Partners and wedding QRs (0299) both credit a lead.
+  const { data: partners } = usePartners(false, !disabled, 'all')
   const list = partners ?? []
   // A partner since archived still shows as the current value.
   const known = !lead.partner_id || list.some((p) => p.id === lead.partner_id)
@@ -840,7 +841,7 @@ function PartnerField({ lead, disabled, onChange }: { lead: CrmLead; disabled: b
         {!known && lead.partner_id && <option value={lead.partner_id}>{lead.partner_name ?? 'Partner'}</option>}
         {list.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.name}
+            {partnerLabel(p.name, p.kind)}
           </option>
         ))}
       </Select>

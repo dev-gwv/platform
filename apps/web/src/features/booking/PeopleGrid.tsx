@@ -8,6 +8,7 @@ import { cn } from '@/shared/ui/cn'
 import { clockRange, hoursLabel } from '@/features/shoots/assign'
 import { PersonDayCard } from '@/features/shoots/PersonDay'
 import { hasClash, monthDays, monthGrid, todayLocal, type PersonMonth } from './booking-model'
+import { SlotNoteLine, notesCount } from './SlotNote'
 
 /**
  * The month for everyone at once: a row per person, a column per day, a
@@ -160,6 +161,7 @@ function DayCell({
   const booked = list.filter((s) => s.status === 'booked')
   // Red only when two bookings really overlap; two shoots on one day are fine.
   const clash = hasClash(booked)
+  const noted = notesCount(list) > 0
   const label = new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -168,7 +170,7 @@ function DayCell({
           type="button"
           aria-label={`${person}, ${label}: ${list.map((s) => `${clockRange(s.start_at, s.end_at)} ${s.shoot_name ?? 'booked'}`).join(', ')}`}
           className={cn(
-            'flex h-full min-h-9 w-full flex-col gap-0.5 rounded-md px-1 py-1 text-left text-[10px] font-semibold leading-tight transition-colors',
+            'relative flex h-full min-h-9 w-full flex-col gap-0.5 rounded-md px-1 py-1 text-left text-[10px] font-semibold leading-tight transition-colors',
             clash
               ? 'bg-tone-rose-soft text-tone-rose ring-1 ring-tone-rose/40'
               : booked.length > 0
@@ -183,11 +185,20 @@ function DayCell({
             </span>
           ))}
           {list.length > 2 && <span className="block">+{list.length - 2}</span>}
+          {/* A note on a booking: the cell's corner, as in the studio's old sheet. */}
+          {noted && (
+            <span
+              aria-hidden
+              title="Has a note"
+              className="absolute right-0 top-0 size-2 rounded-tr-md bg-tone-amber"
+              style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-2">
         <div className="px-1 pb-2">
-          <PersonDayCard name={person} userId={userId} day={day} slots={booked} />
+          <PersonDayCard name={person} userId={userId} day={day} slots={booked} showNotes={false} />
           {clash && <p className="mt-1 text-xs font-semibold text-tone-rose">Booked twice at the same time.</p>}
         </div>
         <ul className="flex flex-col gap-2">
@@ -198,6 +209,7 @@ function DayCell({
                 {[s.service_name, hoursLabel(s), s.project_name].filter(Boolean).join(' · ')}
                 {s.status !== 'booked' && <span className="ml-1 font-semibold">· {s.status}</span>}
               </p>
+              <SlotNoteLine slot={s} className="mt-1" />
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {menuFor(s).map((m) => (
                   <button

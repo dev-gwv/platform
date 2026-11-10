@@ -120,7 +120,7 @@ function LeadRow({ lead: l, now, onOpen }: { lead: MyLead; now: Date; onOpen: ()
           {l.stage_name && (
             <span className={cn('rounded-full border px-2 py-0.5 text-[0.7rem] font-medium', TONE_CHIP[toneOf(l.stage_color)])}>{l.stage_name}</span>
           )}
-          {l.partner_name && <PartnerChip name={l.partner_name} />}
+          {l.partner_name && <PartnerChip name={l.partner_name} kind={l.partner_kind} />}
         </span>
         {facts && <span className="mt-0.5 block truncate text-sm text-muted-foreground">{facts}</span>}
         <span className="mt-1 flex flex-wrap items-center gap-2 text-xs">
@@ -184,7 +184,7 @@ function LeadBody({ lead: l }: { lead: MyLeadDetail }) {
     <>
       <div className="flex flex-col gap-1 pr-8 pt-1">
         <h2 className="text-xl font-semibold leading-tight">{l.name ?? 'Unnamed lead'}</h2>
-        {l.partner_name && <PartnerChip name={l.partner_name} />}
+        {l.partner_name && <PartnerChip name={l.partner_name} kind={l.partner_kind} />}
         {l.enquiry_occasion && <p className="text-sm font-semibold text-primary">For {l.enquiry_occasion}</p>}
         {l.phone && <p className="text-lg font-semibold tabular-nums">{l.phone}</p>}
         {l.email && <p className="text-sm text-muted-foreground">{l.email}</p>}

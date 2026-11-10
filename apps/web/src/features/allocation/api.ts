@@ -139,4 +139,17 @@ export function useSetSlotCost() {
   })
 }
 
+/** A booking's note, like a comment on a cell (0299); null clears it. */
+export function useSetSlotNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string | null }) =>
+      callApi(`/allocation/${id}/note`, { method: 'POST', body: { note }, responseSchema: z.unknown() }),
+    onSuccess: (_r, v) => {
+      toast.success(v.note ? 'Note saved' : 'Note removed')
+      refreshBookings(qc)
+    },
+  })
+}
+
 export { ApiError }

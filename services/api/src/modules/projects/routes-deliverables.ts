@@ -6,6 +6,7 @@ import {
   deliverableNote,
   createDeliverableNoteRequest,
   updateDeliverableNoteRequest,
+  setDeliverableTeamNoteRequest,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
@@ -211,6 +212,37 @@ export const deliverableRoutes = new Hono<AppEnv>()
     if (!outcome) fail(400, 'We could not save the note.')
     await audit(c, { action: `deliverable.note.${n.kind}`, entityType: 'deliverable', entityId: did })
     return c.json(deliverableNote.parse({ ...outcome, author_name: null }), 201)
+  })
+
+  /**
+   * The deliverable's note for the team (owner, 10 Nov: "an option to add a
+   * custom note ... if any different conversation has been done"), kept in
+   * internal_notes and never shown to the client. The editor on it or anyone
+   * who can edit projects, the same rule as notes. The editor cannot write
+   * the row under its policy, so the write is a service one, scoped here.
+   */
+  .patch('/deliverables/:did/note', async (c) => {
+    const parsed = setDeliverableTeamNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the note.')
+    const did = uuidParam(c, 'did')
+    const auth = c.get('auth')
+    const canEdit = auth.access.hasAction('projects', 'edit')
+    const note = parsed.data.note?.trim() || null
+    const outcome = await attempt(c, 'projects.deliverable_team_note', async () => {
+      const found = await withUser(c.env, auth.userId, (sql) => sql<{ assignee_id: string | null }[]>`
+        select assignee_id from deliverables where id = ${did} and company_id = ${auth.companyId}`)
+      const d = found[0]
+      if (!d) return 'missing' as const
+      if (!canEdit && d.assignee_id !== auth.userId) return 'forbidden' as const
+      await withService(c.env, (sql) => sql`
+        update deliverables set internal_notes = ${note} where id = ${did} and company_id = ${auth.companyId}`)
+      return 'ok' as const
+    })
+    if (outcome === 'missing') fail(404, 'That deliverable was not found.')
+    if (outcome === 'forbidden') fail(403, 'Only the editor on it, or a manager, can change its note.')
+    if (!outcome) fail(400, 'We could not save the note.')
+    await audit(c, { action: 'deliverable.team_note', entityType: 'deliverable', entityId: did, after: { cleared: note === null } })
+    return c.json({ internal_notes: note })
   })
 
   /** Change a written note's words: its author only (0285). Voice notes and events stay as they are. */

@@ -213,6 +213,9 @@ export const enquiryQuestions = z
   .max(10, 'Up to ten questions.')
   .refine((qs) => qs.every((q) => q.kind === 'text' || q.options.length >= 2), 'Give each list at least two choices.')
 
+export const enquiryPartnerKind = z.enum(['partner', 'wedding'])
+export type EnquiryPartnerKind = z.infer<typeof enquiryPartnerKind>
+
 export const enquiryPartner = z.object({
   id: uuid,
   name: z.string(),
@@ -244,6 +247,14 @@ export const enquiryPartner = z.object({
   /** 0281: what this QR is for ("Priya & Rahul's wedding"), and its own questions. */
   occasion: z.string().nullable().default(null),
   questions: z.array(enquiryQuestion).catch([]).default([]),
+  /**
+   * 0299: 'partner' is a shop or vendor keeping the studio's QR; 'wedding' is a
+   * QR the studio prints for a client's wedding, so guests can enquire. A
+   * wedding QR belongs to the project it was made for.
+   */
+  kind: enquiryPartnerKind.default('partner'),
+  project_id: uuid.nullable().default(null),
+  project_name: z.string().nullable().default(null),
 })
 export type EnquiryPartner = z.infer<typeof enquiryPartner>
 
@@ -256,8 +267,18 @@ export const createEnquiryPartnerRequest = z.object({
   notes: text(1000).nullish(),
   occasion: text(120).nullish(),
   questions: enquiryQuestions.optional(),
+  /** 0299: 'wedding' needs the project it is for; its name comes from the project when none is given. */
+  kind: enquiryPartnerKind.optional(),
+  project_id: uuid.nullish(),
 })
 export type CreateEnquiryPartnerRequest = z.input<typeof createEnquiryPartnerRequest>
+
+/** POST /enquiry-partners with kind 'wedding', in the app's words: whose wedding. */
+export const createWeddingQrRequest = z.object({
+  project_id: uuid,
+  name: z.string().trim().min(2).max(70).nullish(),
+})
+export type CreateWeddingQrRequest = z.infer<typeof createWeddingQrRequest>
 
 export const updateEnquiryPartnerRequest = z
   .object({
@@ -277,6 +298,8 @@ export const updateEnquiryPartnerRequest = z
     thank_you: text(300).nullable(),
     occasion: text(120).nullable(),
     questions: enquiryQuestions,
+    /** 0299: a wedding QR's project (one of the studio's). */
+    project_id: uuid.nullable(),
   })
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'Nothing to change.')

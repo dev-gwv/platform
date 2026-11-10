@@ -3,6 +3,7 @@ import type { TeamSlot } from '@ipc/contracts'
 import { HoverPopover } from '@/shared/ui/hover-popover'
 import { cn } from '@/shared/ui/cn'
 import { alsoBookedText, bookingText, bookingsOn, localDay, personDay, type AvailabilityLine } from './assign'
+import { SlotNoteLine } from '@/features/booking/SlotNote'
 
 const dayLabel = (day: string) =>
   new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -26,6 +27,7 @@ export function PersonDayCard({
   slots,
   highlightId,
   leave,
+  showNotes = true,
 }: {
   name: string
   userId: string
@@ -34,6 +36,8 @@ export function PersonDayCard({
   /** The booking being looked at, marked "(this shoot)". */
   highlightId?: string | undefined
   leave?: 'full' | 'half' | null | undefined
+  /** Each booking's note under it (0299); off where the notes are drawn beside it already. */
+  showNotes?: boolean
 }) {
   const d = personDay(userId, day, slots)
   return (
@@ -51,6 +55,7 @@ export function PersonDayCard({
               <span>
                 {bookingText(s)}
                 {s.id === highlightId && <span className="text-muted-foreground"> (this shoot)</span>}
+                {showNotes && <SlotNoteLine slot={s} className="mt-0.5" />}
               </span>
             </li>
           ))}

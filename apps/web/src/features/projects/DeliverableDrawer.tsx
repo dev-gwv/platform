@@ -13,7 +13,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
-import { useSetDeliverableStage, useUpdateDeliverable } from '@/features/projects/api'
+import { useSetDeliverableStage, useSetDeliverableTeamNote, useUpdateDeliverable } from '@/features/projects/api'
 import { fromLabel, isLate, stageOf } from './deliverable-stage'
 import { DueChip, DueEditor, EditorName, EditorPicker, KindTile, MoveToMenu, NextStageButton, activityWhat } from './DeliverableCard'
 import { StageStepper } from './StageStepper'
@@ -160,6 +160,7 @@ function DrawerBody({
       {/* ── Brief, link, conversation ────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <Brief d={d} canEdit={canEdit} />
+        <TeamNote d={d} canWrite={canWrite} />
         {/* The link is changed through the project (projects edit); an editor
             hands in a new one with "Hand in work" instead. */}
         <DeliveryLink d={d} canEdit={canEdit} />
@@ -223,6 +224,41 @@ function Brief({ d, canEdit }: { d: Deliverable; canEdit: boolean }) {
       ) : (
         <p className="mt-1.5 whitespace-pre-wrap text-sm">{d.description || <span className="text-muted-foreground">No brief.</span>}</p>
       )}
+    </section>
+  )
+}
+
+/**
+ * The note for the team (internal_notes): what was agreed differently with
+ * the client. The editor on it can write it as well as the studio; it never
+ * reaches the client. Saved when you click away.
+ */
+function TeamNote({ d, canWrite }: { d: Deliverable; canWrite: boolean }) {
+  const save = useSetDeliverableTeamNote()
+  const [text, setText] = useState(d.internal_notes ?? '')
+  useEffect(() => { setText(d.internal_notes ?? '') }, [d.internal_notes])
+  const blur = () => {
+    const next = text.trim()
+    if (next !== (d.internal_notes ?? '').trim()) save.mutate({ deliverableId: d.id, note: next || null })
+  }
+  if (!canWrite && !d.internal_notes) return null
+  return (
+    <section>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Note for your team</h3>
+      {canWrite ? (
+        <Textarea
+          rows={2}
+          maxLength={2000}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={blur}
+          placeholder="Anything agreed differently? e.g. Album 40 sheets instead of 30, agreed on call 12 Nov"
+          className={cn('mt-1.5 resize-y text-sm', text.trim() ? 'border-warning/60 bg-warning/5' : 'bg-card')}
+        />
+      ) : (
+        <p className="mt-1.5 whitespace-pre-wrap rounded-md border border-warning/40 bg-warning/5 p-2 text-sm">{d.internal_notes}</p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">The client never sees this.</p>
     </section>
   )
 }

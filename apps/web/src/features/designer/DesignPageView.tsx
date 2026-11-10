@@ -22,6 +22,7 @@ import { Movable } from './Movable'
 import { PAGE_H, PAGE_W, PageCtx } from './page-context'
 import type { Guide } from './snap'
 import { PhotoFrame } from './PhotoFrame'
+import { isSample } from './samples'
 import { ColourPicker } from './ColourPicker'
 import { cssPaint } from './paint'
 import { isScript } from './templates'
@@ -67,7 +68,12 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
         k={name}
         kind="photo"
         style={gridRow ? { gridRow } : undefined}
-        onTap={() => ed?.pickFrame({ id: `${page.id}:${name}`, apply: onP })}
+        onTap={() => {
+          // A sample photo tapped says whose it is and offers the library or an upload.
+          const f = { id: `${page.id}:${name}`, apply: onP }
+          if (isSample(p)) ed?.askReplace(f)
+          else ed?.pickFrame(f)
+        }}
       >
         <PhotoFrame
           frameId={`${page.id}:${name}`}
@@ -319,10 +325,10 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
               { gridRow: 'span 2', borderRadius: 6 },
               'photos.0',
             )}
-            {photo(photos[1]!, (p) => setPhoto(1, p), { borderRadius: 6 }, 'photos.1')}
-            {photo(photos[2]!, (p) => setPhoto(2, p), { borderRadius: 6 }, 'photos.2')}
-            {photo(photos[3]!, (p) => setPhoto(3, p), { borderRadius: 6 }, 'photos.3')}
-            {photo(photos[4]!, (p) => setPhoto(4, p), { borderRadius: 6 }, 'photos.4')}
+            {photo(photos[1]!, (p) => setPhoto(1, p), { borderRadius: 6, height: '100%' }, 'photos.1')}
+            {photo(photos[2]!, (p) => setPhoto(2, p), { borderRadius: 6, height: '100%' }, 'photos.2')}
+            {photo(photos[3]!, (p) => setPhoto(3, p), { borderRadius: 6, height: '100%' }, 'photos.3')}
+            {photo(photos[4]!, (p) => setPhoto(4, p), { borderRadius: 6, height: '100%' }, 'photos.4')}
           </div>
           <div style={{ flex: 1, minHeight: 30 }} />
           {text(
@@ -613,7 +619,11 @@ function AddedPhoto({
       kind="photo"
       style={{ position: 'absolute', left: el.x, top: el.y, width: el.w }}
       actions={bar}
-      onTap={pick}
+      onTap={() =>
+        isSample(el.photo)
+          ? ed?.askReplace({ id: frameId, apply: (p) => patch({ photo: p }) })
+          : pick()
+      }
     >
       <PhotoFrame
         frameId={frameId}

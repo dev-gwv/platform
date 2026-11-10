@@ -12,6 +12,7 @@ import { useCreateStage, useCreateTag, useCrmPrefs, usePipelines, useTags } from
 import { UNSET, activeFacetCount, facetCounts, type LeadFacets } from './board-filters'
 import { EVENT_TYPE_DEFAULTS } from './event-types'
 import { prettyWord, useLookupOptions } from './fields'
+import { partnerLabel } from './PartnerChip'
 
 const LABEL: Record<keyof LeadFacets, string> = {
   stage: 'stages',
@@ -120,7 +121,7 @@ export function BoardFilters({
       // Partners as the leads name them; "Not from a partner" for the rest.
       partner: withNone(
         'partner',
-        [...new Map(leads.filter((l) => l.partner_id && l.partner_name).map((l) => [l.partner_id!, l.partner_name!])).entries()]
+        [...new Map(leads.filter((l) => l.partner_id && l.partner_name).map((l) => [l.partner_id!, partnerLabel(l.partner_name!, l.partner_kind)])).entries()]
           .map(([value, label]) => ({ value, label, color: toneVar('teal') }))
           .sort((a, b) => a.label.localeCompare(b.label)),
         'Not from a partner',

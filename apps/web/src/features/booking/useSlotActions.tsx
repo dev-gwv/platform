@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react'
-import { CalendarPlus, IndianRupee, MessageCircle, Pencil, RotateCcw, Undo2, UserRoundPen, XCircle } from 'lucide-react'
+import { CalendarPlus, IndianRupee, MessageCircle, Pencil, RotateCcw, StickyNote, Undo2, UserRoundPen, XCircle } from 'lucide-react'
 import type { TeamMember, TeamSlot } from '@ipc/contracts'
 import type { RowMenuItem } from '@/shared/ui/row-menu'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useSetSlotStatus, useUnmarkArrived } from '@/features/allocation/api'
 import { SlotCostDialog, SlotEditDialog } from './SlotDialogs'
+import { SlotNoteDialog } from './SlotNote'
 import { downloadIcs, shareOnWhatsApp } from './share'
 
-type Open = { slot: TeamSlot; kind: 'person' | 'hours' | 'cost' } | null
+type Open = { slot: TeamSlot; kind: 'person' | 'hours' | 'cost' | 'note' } | null
 
 /**
  * Everything that can be done to one booking, in one place, so a person on a
@@ -56,6 +57,14 @@ export function useSlotActions({ canPlan, members }: { canPlan: boolean; members
       items.push({ label: 'Change person', icon: <UserRoundPen className="size-4" />, onSelect: () => setOpen({ slot: s, kind: 'person' }) })
       items.push({ label: 'Edit hours or role', icon: <Pencil className="size-4" />, onSelect: () => setOpen({ slot: s, kind: 'hours' }) })
     }
+    // A note on the person, like a comment on a cell (0299).
+    if (canPlan && s.status !== 'cancelled') {
+      items.push({
+        label: s.note?.trim() ? 'Edit note' : 'Add note',
+        icon: <StickyNote className="size-4" />,
+        onSelect: () => setOpen({ slot: s, kind: 'note' }),
+      })
+    }
     if (canPlan && s.status !== 'cancelled') {
       items.push({ label: 'Payout…', icon: <IndianRupee className="size-4" />, onSelect: () => setOpen({ slot: s, kind: 'cost' }) })
     }
@@ -83,10 +92,12 @@ export function useSlotActions({ canPlan, members }: { canPlan: boolean; members
   const dialogs: ReactNode = open ? (
     open.kind === 'cost' ? (
       <SlotCostDialog key={`cost-${open.slot.id}`} slot={open.slot} onClose={() => setOpen(null)} />
+    ) : open.kind === 'note' ? (
+      <SlotNoteDialog key={`note-${open.slot.id}`} slot={open.slot} onClose={() => setOpen(null)} />
     ) : (
       <SlotEditDialog key={`edit-${open.slot.id}`} slot={open.slot} focus={open.kind} onClose={() => setOpen(null)} />
     )
   ) : null
 
-  return { menuFor, dialogs, edit: (slot: TeamSlot) => setOpen({ slot, kind: 'hours' }), release, cancel }
+  return { menuFor, dialogs, edit: (slot: TeamSlot) => setOpen({ slot, kind: 'hours' }), note: (slot: TeamSlot) => setOpen({ slot, kind: 'note' }), release, cancel }
 }

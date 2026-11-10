@@ -1,8 +1,15 @@
 import type { ShootListItem, TeamSlot } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { calendarWeeks, dayFill, todayLocal } from './booking-model'
+import { notesCount } from './SlotNote'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+/** "Haldi · Mehta Wedding · 2 notes on the team": a shoot's hover title. */
+function shootTitle(s: ShootListItem, slots: readonly TeamSlot[]): string {
+  const notes = notesCount(slots.filter((x) => x.shoot_id === s.id && x.status === 'booked'))
+  return [s.name, s.project_name, notes ? `${notes} note${notes === 1 ? '' : 's'} on the team` : null].filter(Boolean).join(' · ')
+}
 
 /**
  * Team Booking's month on a calendar: each day lists its shoots. A day stays
@@ -69,7 +76,7 @@ export function CalendarView({
                   key={s.id}
                   type="button"
                   onClick={() => onOpen(s)}
-                  title={[s.name, s.project_name].filter(Boolean).join(' · ')}
+                  title={shootTitle(s, slots)}
                   className="truncate rounded-md border border-border bg-background px-1.5 py-0.5 text-left text-xs hover:border-primary/50 hover:bg-primary/5"
                 >
                   <span className="font-medium">{s.name}</span>

@@ -16,6 +16,7 @@ import { DeliverableDrawer } from '@/features/projects/DeliverableDrawer'
 import { StageStepper, STAGE_STYLE } from '@/features/projects/StageStepper'
 import { isLate, stageOf } from '@/features/projects/deliverable-stage'
 import { RemindMe } from '@/features/reminders/RemindMe'
+import { TeamNoteChip } from './TeamNoteChip'
 import { changesFirst } from '@/features/projects/revisions'
 
 /** An item on my list, in the shape the panel reads. I am its editor. */
@@ -25,6 +26,7 @@ function asDeliverable(d: MyDeliverable, me: { id: string | null; name: string |
     project_id: d.project_id,
     title: d.title,
     description: d.description ?? null,
+    internal_notes: d.internal_notes ?? null,
     list_key: 'primary',
     is_additional_charge: false,
     additional_charge_amount: 0,
@@ -150,6 +152,7 @@ export function MyEditRow({ d, onOpen, showProject = true }: { d: MyDeliverable;
             </span>
           )}
           {!done && <DueChip d={d} />}
+          <TeamNoteChip note={d.internal_notes} />
           {/* Tapping a count opens the notes, to listen and reply. */}
           {d.voice_count > 0 && (
             <button

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Check, Clock, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, UserRound, X } from 'lucide-react'
+import { Check, Clock, Loader2, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ShootListItem, SlotCostStatus, TeamMember, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -44,6 +44,7 @@ import { ShootWhenFields, whenToPatch, type WhenFields } from './ShootWhenFields
 import { guestsLabel } from './guests'
 import { QuickAddMemberDialog } from './QuickAddMemberDialog'
 import { AlsoBookedLine, PersonDayLine } from './PersonDay'
+import { InlineSlotNoteEditor, SlotNoteLine } from '@/features/booking/SlotNote'
 import { useLeave } from '@/features/hr/leave-api'
 import { RoleTile } from '@/shared/ui/icon-tile'
 import { AssignedNote } from '@/features/team/AssignedNote'
@@ -612,6 +613,8 @@ function RoleRow({
   const [menuFor, setMenuFor] = useState<string | null>(null)
   /** Whose hours are being edited: a booking's id or a pick's user id. */
   const [hoursFor, setHoursFor] = useState<string | null>(null)
+  /** Whose note is open for writing (a booking's id). */
+  const [noteFor, setNoteFor] = useState<string | null>(null)
   return (
     <li className="p-3">
       <div className="flex items-center justify-between gap-2">
@@ -658,6 +661,7 @@ function RoleRow({
                 </div>
                 <div className="pl-9">
                   <AlsoBookedLine userId={s.user_id} name={s.user_name ?? 'Someone'} day={localDay(s.start_at)} slots={slots} ignoreSlotId={s.id} />
+                  {noteFor !== s.id && <SlotNoteLine slot={s} className="mt-1" />}
                 </div>
                 {/* Inline, not a floating menu: a popover portalled out of the
                     dialog cannot be clicked while the dialog is open. */}
@@ -667,6 +671,7 @@ function RoleRow({
                       [
                         ['Change person', UserRound, () => onChange(s)],
                         ['Change hours', Clock, () => setHoursFor(s.id)],
+                        [s.note?.trim() ? 'Edit note' : 'Add note', StickyNote, () => setNoteFor(s.id)],
                         ['Edit payout', Pencil, () => onEditPayout(s)],
                         ['Remove', Trash2, () => onRemove(s)],
                       ] as const
@@ -686,6 +691,7 @@ function RoleRow({
                     ))}
                   </div>
                 )}
+                {noteFor === s.id && <InlineSlotNoteEditor slot={s} onClose={() => setNoteFor(null)} className="ml-9" />}
                 {hoursFor === s.id && (
                   <HoursEditor
                     initial={{ start: new Date(s.start_at).toTimeString().slice(0, 5), hours: Math.round(((Date.parse(s.end_at) - Date.parse(s.start_at)) / 3_600_000) * 2) / 2 }}

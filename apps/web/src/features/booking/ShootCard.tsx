@@ -9,6 +9,7 @@ import { useINR } from '@/shared/money/MoneyMask'
 import { cn } from '@/shared/ui/cn'
 import { hoursLabel, rangeLabel, shootHours, timeLabel } from '@/features/shoots/assign'
 import { AlsoBookedLine, dayOfSlot } from '@/features/shoots/PersonDay'
+import { SlotNoteCorner } from './SlotNote'
 import { mapHref } from '@/features/shoots/map-link'
 import { roleCards, staffing, type Fill, type RoleCard } from './booking-model'
 import { EventTile } from '@/shared/ui/icon-tile'
@@ -256,7 +257,8 @@ function BookedPerson({
   const inr = useINR()
   const pay = slot.final_cost ?? slot.estimated_cost
   return (
-    <li className="flex items-center gap-2 rounded-lg bg-card/90 px-2 py-1.5 shadow-sm">
+    <li className="relative flex items-center gap-2 rounded-lg bg-card/90 px-2 py-1.5 shadow-sm">
+      <SlotNoteCorner slot={slot} name={slot.user_name} />
       <Avatar name={slot.user_name} size="sm" />
       <div className="min-w-0 flex-1">
         <Link

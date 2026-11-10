@@ -1,4 +1,4 @@
-import type { ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
+import type { DesignDoc, ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
 import type { Client } from '@ipc/contracts'
 import { deriveStage } from '@/features/data/stage'
 
@@ -325,7 +325,7 @@ const payrollMonthFx = {
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
-  if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method)
+  if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method, body)
   // Referral cards (0298).
   if (path.startsWith('/referrals') || path.startsWith('/public/referrals')) {
     const camp = {
@@ -389,7 +389,9 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && path.startsWith('/enquiry-partners/vendors')) return enquiryVendorsFx
   if (method === 'GET' && /^\/enquiry-partners\/[^/]+\/leads$/.test(path)) return enquiryLeadsFx
   if (method === 'GET' && /^\/enquiry-partners\/[0-9a-f-]{36}$/.test(path)) return enquiryPartnersFx[0]
-  if (method === 'GET' && path.startsWith('/enquiry-partners')) return path.includes('archived') ? [] : enquiryPartnersFx
+  if (method === 'POST' && path === '/enquiry-partners/wedding') return weddingQrsFx[0]
+  if (method === 'GET' && path.startsWith('/enquiry-partners'))
+    return path.includes('archived') ? [] : path.includes('kind=wedding') ? weddingQrsFx : path.includes('kind=all') ? [...enquiryPartnersFx, ...weddingQrsFx] : enquiryPartnersFx
   if (method === 'GET' && path.startsWith('/public/forms/'))
     return path.includes('?p=')
       ? { ...publicEnquiryFx, partner: 'Riya Boutique', occasion: enquiryPartnersFx[0]!.occasion, questions: enquiryPartnersFx[0]!.questions }
@@ -1028,6 +1030,10 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { results: items.map((_, index) => ({ index, id: uid(0x5b0 + index), error: null })) }
   }
   if (method === 'POST' && /^\/allocation\/[^/]+\/status$/.test(path)) return {}
+  if (method === 'POST' && /^\/allocation\/[^/]+\/note$/.test(path)) return {}
+  if (method === 'PATCH' && /^\/projects\/deliverables\/[^/]+\/note$/.test(path)) {
+    return { internal_notes: (body as { note?: string | null } | undefined)?.note ?? null }
+  }
   if (method === 'GET' && path === '/data/locations') return storageLocationsFx
   if (method === 'POST' && path === '/data/locations') {
     const created = { id: uid(0x77 + storageLocationsFx.length), name: 'New location', kind: 'drive', ...(body as object) }
@@ -3180,6 +3186,9 @@ const slots = [
     final_cost: null,
     cost_status: 'tentative',
     cost_notes: null,
+    note: 'Bring the 70-200 and a spare battery',
+    note_by_name: 'Asha Rao',
+    note_at: daysFromNow(-1, 16),
   },
   {
     id: uid(0x52),
@@ -4161,6 +4170,15 @@ const enquiryPartnersFx = [
     archived_at: null, created_at: '2026-10-01T10:00:00Z', form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=k1r2n3', page_url: null,
   },
 ]
+// Wedding QR codes (0299): a QR placed at a client's wedding for the guests.
+const weddingQrsFx = [
+  {
+    id: '00000000-0000-4000-8000-0000000008f9', name: "Priya & Rahul's Wedding", label: null, party_id: null, vendor_name: null,
+    phone: null, notes: null, code: 'w3d4p5', show_phone: false, scans: 42, enquiries: 6, booked: 1, last_enquiry_at: '2026-11-02T09:00:00Z',
+    archived_at: null, created_at: '2026-10-20T10:00:00Z', form_url: 'https://studioautopilot.in/f/asha-studio-649a72?p=w3d4p5', page_url: null,
+    occasion: "Priya & Rahul's Wedding", kind: 'wedding', project_id: PROJ.p1, project_name: "Priya & Rahul's Wedding",
+  },
+]
 const enquiryVendorsFx = [
   { id: uid(0x8f3), name: 'Kiran Flowers', phone: null, categories: ['Decorator'], state: 'Rajasthan', partner_id: '00000000-0000-4000-8000-0000000008f2' },
   { id: uid(0x8f4), name: 'Lens Lab Album Printers', phone: '9812300000', categories: ['Album printer'], state: 'Rajasthan', partner_id: null },
@@ -4194,8 +4212,12 @@ const designPhotosFx = ['assign', 'board', 'client', 'data', 'attendance', 'deta
   size_bytes: 900000,
   created_at: new Date().toISOString(),
 }))
-let designDocFx: ReturnType<typeof fillDesign> | null = null
-function designMock(path: string, method: string): unknown {
+let designDocFx: DesignDoc | null = null
+function designMock(path: string, method: string, body?: unknown): unknown {
+  // A new design or a save keeps its pages, so the editor opens what was made.
+  const sent = (body as { doc?: DesignDoc } | undefined)?.doc
+  if (sent && (method === 'POST' || method === 'PATCH') && path.startsWith('/designs') && !path.includes('/link'))
+    designDocFx = sent
   designDocFx ??= fillDesign({
     template: 'ivory',
     studio: 'Cine World Weddings',
