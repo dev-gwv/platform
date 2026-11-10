@@ -1,5 +1,6 @@
 import type { DesignDoc, DesignPage, PlanInstalment } from '@ipc/contracts'
 import { blankPage, page, pageId, templateFor } from './templates'
+import { withoutSamples } from './samples'
 
 /**
  * A new design filled from its project (Quotation Designer, 0295): one Event
@@ -84,10 +85,20 @@ const reuse = (
   kind: DesignPage['kind'],
 ): DesignPage | null => {
   const p = previous?.pages.find((x) => x.kind === kind)
-  return p ? { ...structuredClone(p), id: pageId(), hidden: false } : null
+  return p
+    ? { ...structuredClone(p), data: withoutSamples(p.data), id: pageId(), hidden: false }
+    : null
 }
 
-export function fillDesign(input: FillInput): DesignDoc {
+/**
+ * A filled design, and what the project really had of its own: a layout keeps
+ * its own events, deliverables and add-ons where the project has none.
+ */
+export type FilledDesign = DesignDoc & {
+  has: { shoots: boolean; deliverables: boolean; extras: boolean; price: boolean }
+}
+
+export function fillDesign(input: FillInput): FilledDesign {
   const { project, studio } = input
   const theme = input.previous?.theme ?? templateFor(input.template).theme
   const cover = reuse(input.previous, 'cover') ?? blankPage('cover', studio)
@@ -144,5 +155,15 @@ export function fillDesign(input: FillInput): DesignDoc {
   }
 
   pages.push(reuse(input.previous, 'thanks') ?? blankPage('thanks'))
-  return { version: 1, theme: { ...theme }, pages: pages.slice(0, 30) }
+  return {
+    version: 1,
+    theme: { ...theme },
+    pages: pages.slice(0, 30),
+    has: {
+      shoots: shoots.length > 0,
+      deliverables: main.length > 0,
+      extras: extras.length > 0,
+      price: !!project && project.total_cost > 0,
+    },
+  }
 }

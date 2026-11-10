@@ -1,4 +1,4 @@
-import type { ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
+import type { DesignDoc, ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
 import type { Client } from '@ipc/contracts'
 import { deriveStage } from '@/features/data/stage'
 
@@ -325,7 +325,7 @@ const payrollMonthFx = {
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
-  if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method)
+  if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method, body)
   // Referral cards (0298).
   if (path.startsWith('/referrals') || path.startsWith('/public/referrals')) {
     const camp = {
@@ -4212,8 +4212,12 @@ const designPhotosFx = ['assign', 'board', 'client', 'data', 'attendance', 'deta
   size_bytes: 900000,
   created_at: new Date().toISOString(),
 }))
-let designDocFx: ReturnType<typeof fillDesign> | null = null
-function designMock(path: string, method: string): unknown {
+let designDocFx: DesignDoc | null = null
+function designMock(path: string, method: string, body?: unknown): unknown {
+  // A new design or a save keeps its pages, so the editor opens what was made.
+  const sent = (body as { doc?: DesignDoc } | undefined)?.doc
+  if (sent && (method === 'POST' || method === 'PATCH') && path.startsWith('/designs') && !path.includes('/link'))
+    designDocFx = sent
   designDocFx ??= fillDesign({
     template: 'ivory',
     studio: 'Cine World Weddings',

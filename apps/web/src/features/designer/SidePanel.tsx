@@ -16,6 +16,7 @@ import {
   Upload,
   X,
   Files,
+  Images,
 } from 'lucide-react'
 import type {
   DesignDoc,
@@ -33,7 +34,8 @@ import { callApi } from '@/shared/api/client'
 import { designDetail } from '@ipc/contracts'
 import { useDeleteTemplate, useDesignPhotos, useDesignTemplates, useRemoveDesignPhoto } from './api'
 import { PHOTO_DRAG_TYPE, useDesigner } from './context'
-import { STARTERS, pourProject, starterDoc } from './starters'
+import { STARTERS, asFilled, pourProject, starterDoc } from './starters'
+import { LIBRARY_MOODS, libraryFor, type LibraryMood } from './library'
 import { BODY_FONTS, HEADING_FONTS, PAGE_KIND_NAMES, TEMPLATES, blankPage } from './templates'
 import { Thumb } from './Thumb'
 
@@ -43,7 +45,7 @@ export const PANELS: { key: PanelKey; label: string; icon: typeof Palette }[] = 
   { key: 'templates', label: 'Templates', icon: LayoutTemplate },
   { key: 'text', label: 'Text', icon: Type },
   { key: 'elements', label: 'Elements', icon: Shapes },
-  { key: 'uploads', label: 'Uploads', icon: Upload },
+  { key: 'uploads', label: 'Photos', icon: Images },
   { key: 'pages', label: 'Pages', icon: Files },
   { key: 'look', label: 'Look', icon: Palette },
 ]
@@ -92,7 +94,12 @@ interface PanelProps {
   onAdd: (kind: DesignElementKind) => void
   /** The page new things go on, for "Adds to page 3". */
   pageNumber: number
+  /** Photos: the studio's own uploads or the free library. */
+  photoTab: PhotoTab
+  onPhotoTab: (t: PhotoTab) => void
 }
+
+export type PhotoTab = 'mine' | 'library'
 
 export function SidePanel(props: PanelProps) {
   const title = PANELS.find((p) => p.key === props.panel)!.label
@@ -113,7 +120,7 @@ export function SidePanel(props: PanelProps) {
         {props.panel === 'templates' && <TemplatesPanel {...props} />}
         {props.panel === 'text' && <TextPanel {...props} />}
         {props.panel === 'elements' && <ElementsPanel {...props} />}
-        {props.panel === 'uploads' && <UploadsPanel />}
+        {props.panel === 'uploads' && <PhotosPanel {...props} />}
         {props.panel === 'pages' && <PagesPanel {...props} />}
         {props.panel === 'look' && <LookPanel {...props} />}
       </div>
@@ -136,7 +143,7 @@ function TemplatesPanel({ doc, studio, onDoc }: PanelProps) {
       confirmLabel: 'Use this template',
     })
     if (!ok) return
-    onDoc(pourProject(layout, doc), template)
+    onDoc(pourProject(layout, asFilled(doc)), template)
   }
 
   return (
@@ -222,7 +229,100 @@ function TemplatesPanel({ doc, studio, onDoc }: PanelProps) {
   )
 }
 
-// ── Uploads ─────────────────────────────────────────────────────────
+// ── Photos: the studio's own and the library ────────────────────────
+
+/**
+ * Photos (owner, 10 Nov): two tabs, **Your photos** (the studio's uploads)
+ * and **Library** (edited photos any studio may use, `library.ts`), both
+ * dragged onto a frame or tapped once a frame is picked.
+ */
+function PhotosPanel({ photoTab, onPhotoTab }: PanelProps) {
+  const tab = (t: PhotoTab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={photoTab === t}
+      onClick={() => onPhotoTab(t)}
+      className={cn(
+        'h-9 flex-1 rounded-md text-sm font-medium',
+        photoTab === t ? 'bg-white text-[#24205a]' : 'text-white/70 hover:bg-white/10 hover:text-white',
+      )}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <div className="flex flex-col gap-3">
+      <div role="tablist" className="flex gap-1 rounded-lg bg-white/10 p-1">
+        {tab('mine', 'Your photos')}
+        {tab('library', 'Library')}
+      </div>
+      {photoTab === 'library' ? <LibraryPanel /> : <UploadsPanel />}
+    </div>
+  )
+}
+
+const notPicked = () =>
+  toast('Tap a photo frame on the page first, or drag this photo onto one.')
+
+function LibraryPanel() {
+  const ctx = useDesigner()
+  const [mood, setMood] = useState<LibraryMood | 'all'>('all')
+  const list = libraryFor(mood)
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-white/60">
+        Edited wedding photos you are free to use in your designs. Drag one onto a frame, or tap a
+        frame and then a photo.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {LIBRARY_MOODS.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            aria-pressed={mood === m.key}
+            onClick={() => setMood(m.key)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium',
+              mood === m.key
+                ? 'border-violet-300 bg-violet-500 text-white'
+                : 'border-white/25 text-white/80 hover:bg-white/10',
+            )}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {list.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(PHOTO_DRAG_TYPE, p.url)
+              e.dataTransfer.effectAllowed = 'copy'
+            }}
+            onClick={() => {
+              if (!ctx?.pickedFrame) return notPicked()
+              ctx.applyToPicked({ url: p.url, x: 50, y: 50, zoom: 1 })
+            }}
+            className="block aspect-square w-full cursor-grab overflow-hidden rounded-md bg-white/10 ring-2 ring-transparent hover:ring-violet-400 active:cursor-grabbing"
+            title="Library photo"
+          >
+            <img
+              src={p.thumb}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+              draggable={false}
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function UploadsPanel() {
   const ctx = useDesigner()
@@ -312,10 +412,7 @@ function UploadsPanel() {
                 e.dataTransfer.effectAllowed = 'copy'
               }}
               onClick={() => {
-                if (!ctx?.pickedFrame)
-                  return void toast(
-                    'Tap a photo frame on the page first, or drag this photo onto one.',
-                  )
+                if (!ctx?.pickedFrame) return notPicked()
                 ctx.applyToPicked({ url: p.url, x: 50, y: 50, zoom: 1 })
               }}
               className="block aspect-square w-full cursor-grab overflow-hidden rounded-md bg-white/10 ring-2 ring-transparent hover:ring-violet-400 active:cursor-grabbing"

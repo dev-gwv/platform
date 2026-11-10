@@ -52,10 +52,16 @@ interface Row {
   updated_at: string
 }
 
-/** The first photo with a picture on the first page shown: the card's thumbnail. */
+/**
+ * The first photo with a picture on the first page shown: the card's
+ * thumbnail. A template's sample photo (The Mulberry Weddings', 10 Nov) is
+ * never a card's picture.
+ */
 function coverOf(doc: DesignDoc | null | undefined): string | null {
   const page = doc?.pages?.find((p) => !p.hidden)
-  const url = page?.data?.photo?.url || page?.data?.photos?.find((p) => p.url)?.url
+  const own = (p: { url: string; sample?: boolean | undefined } | undefined) =>
+    p?.url && !p.sample ? p.url : ''
+  const url = own(page?.data?.photo) || page?.data?.photos?.map(own).find(Boolean)
   return url || null
 }
 
