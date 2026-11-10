@@ -107,7 +107,8 @@ function layerInit() {
   // A tutorial never shows the owner's confirm-email strip: it is not what is being taught.
   const hideStrip = () => {
     for (const el of document.querySelectorAll('div,section,aside')) {
-      if (el.childElementCount < 8 && /^\s*Confirm your email/.test(el.textContent || '') && el.offsetHeight < 90) el.style.display = 'none'
+      // Only the strip itself: a short wrapper can also hold a full-screen overlay (the designer), whose fixed box adds no height.
+      if (el.childElementCount < 8 && /^\s*Confirm your email/.test(el.textContent || '') && (el.textContent || '').length < 240 && el.offsetHeight < 90) el.style.display = 'none'
     }
   }
   const watch = () => { try { new MutationObserver(hideStrip).observe(document.body, { childList: true, subtree: true }); hideStrip() } catch { /* the page is still loading */ } }
