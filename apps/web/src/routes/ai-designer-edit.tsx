@@ -50,7 +50,9 @@ import {
 import { DesignPageView, PAGE_H, PAGE_W } from '@/features/designer/DesignPageView'
 import { PrintCopy } from '@/features/designer/Sheets'
 import { SendDesignDialog } from '@/features/designer/SendDesignDialog'
-import { SidePanel, SideRail, type PanelKey } from '@/features/designer/SidePanel'
+import { SidePanel, SideRail, type PanelKey, type PhotoTab } from '@/features/designer/SidePanel'
+import { ReplaceSampleDialog, SamplesLeftDialog } from '@/features/designer/SampleDialogs'
+import { samplePhotos } from '@/features/designer/samples'
 import { TextBar } from '@/features/designer/TextBar'
 import { ColourPicker } from '@/features/designer/ColourPicker'
 import { cssPaint } from '@/features/designer/paint'
@@ -150,6 +152,11 @@ function Workspace({
     window.innerWidth >= 1100 ? 'uploads' : null,
   )
   const [sending, setSending] = useState(false)
+  const [photoTab, setPhotoTab] = useState<PhotoTab>('mine')
+  // A sample photo being replaced, and Send / Download refused while samples remain.
+  const [replacing, setReplacing] = useState<PickedFrame | null>(null)
+  const [refused, setRefused] = useState<'send' | 'print' | null>(null)
+  const replaceInput = useRef<HTMLInputElement>(null)
   const [zoom, setZoom] = useState<number | 'fit'>('fit')
   const [view, setView] = useState<'scroll' | 'grid'>('scroll')
   const [activeText, setActiveText] = useState<ActiveText | null>(null)
@@ -386,6 +393,15 @@ function Workspace({
       applyToPicked: (p) => {
         picked?.apply(p)
       },
+      openLibrary: (f) => {
+        setPicked(f)
+        setPhotoTab('library')
+        setPanel('uploads')
+      },
+      askReplace: (f) => {
+        setPicked(f)
+        setReplacing(f)
+      },
       uploadPhoto,
       selected,
       select: setSelected,
@@ -399,9 +415,24 @@ function Workspace({
   const writer: Writer = (ask) =>
     write.mutateAsync({ ...ask, studio, project: projectName ?? '', client: clientOf(doc) })
 
+  const samples = samplePhotos(doc)
   function print() {
     flush()
+    if (samples.length) return setRefused('print')
     window.print()
+  }
+  function send() {
+    flush()
+    if (samples.length) return setRefused('send')
+    setSending(true)
+  }
+  /** "Show me": the first sample photo, in view and picked. */
+  function showFirstSample() {
+    setRefused(null)
+    const first = samples[0]
+    if (!first) return
+    goTo(first.pageId)
+    setSelected(`${first.pageId}:${first.where}`)
   }
 
   function saveTemplate() {
@@ -481,10 +512,7 @@ function Workspace({
             {!isTemplate && (
               <button
                 type="button"
-                onClick={() => {
-                  flush()
-                  setSending(true)
-                }}
+                onClick={send}
                 className="flex h-9 items-center gap-1.5 rounded-md bg-white px-3 text-sm font-semibold text-[#24205a] hover:bg-white/90"
               >
                 <Send className="size-4" /> <span className="hidden sm:inline">Send to client</span>
@@ -552,6 +580,8 @@ function Workspace({
                 }}
                 onAdd={addItem}
                 pageNumber={Math.min(current + 1, doc.pages.length)}
+                photoTab={photoTab}
+                onPhotoTab={setPhotoTab}
               />
             </div>
           )}
@@ -564,8 +594,10 @@ function Workspace({
               ) : (
                 <p className="hidden text-xs text-white/50 sm:block">
                   {picked
-                    ? 'Photo frame picked: tap a photo in Uploads to put it here, or drag the photo to move it.'
-                    : 'Tap any text to change it. Drag photos from Uploads onto the frames.'}
+                    ? 'Photo frame picked: tap a photo in Photos to put it here, or drag the photo to move it.'
+                    : samples.length
+                      ? `${samples.length} sample ${samples.length === 1 ? 'photo' : 'photos'} to replace: tap one to put yours in its place.`
+                      : 'Tap any text to change it. Drag photos from Photos onto the frames.'}
                 </p>
               )}
             </div>
@@ -797,6 +829,41 @@ function Workspace({
       </div>
 
       <PrintCopy doc={doc} />
+      <input
+        ref={replaceInput}
+        type="file"
+        accept="image/*,.heic,.heif"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          const frame = replacing
+          e.target.value = ''
+          setReplacing(null)
+          if (file && frame)
+            void uploadPhoto(file).then((p) => {
+              if (p) frame.apply(p)
+            })
+        }}
+      />
+      {replacing && (
+        <ReplaceSampleDialog
+          onClose={() => setReplacing(null)}
+          onUpload={() => replaceInput.current?.click()}
+          onLibrary={() => {
+            setPhotoTab('library')
+            setPanel('uploads')
+            setReplacing(null)
+          }}
+        />
+      )}
+      {refused && (
+        <SamplesLeftDialog
+          spots={samples}
+          doing={refused}
+          onShow={showFirstSample}
+          onClose={() => setRefused(null)}
+        />
+      )}
       {sending && (
         <SendDesignDialog
           id={id}

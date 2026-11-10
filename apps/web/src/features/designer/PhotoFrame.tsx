@@ -8,11 +8,12 @@ import {
   type WheelEvent,
 } from 'react'
 import { toast } from 'sonner'
-import { Crop, ImagePlus, Loader2, Trash2, Upload } from 'lucide-react'
+import { Crop, ImagePlus, Images, Loader2, Trash2, Upload } from 'lucide-react'
 import type { DesignPhoto } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { PHOTO_DRAG_TYPE, useDesigner } from './context'
 import { panPhoto, placePhoto } from './photo-math'
+import { isSample } from './samples'
 
 /**
  * A frame on the page that holds one photo (Quotation Designer), the way a
@@ -24,8 +25,10 @@ import { panPhoto, placePhoto } from './photo-math'
  * - double-tap or Crop: the whole photo shows faded around the frame, and
  *   dragging moves the picture inside the frame, the wheel or the slider
  *   zooms it, Done or a tap outside ends it.
- * An empty frame says "Add your photo"; on paper and on the client's copy an
- * empty frame is a quiet tint.
+ * An empty frame says "Add your photo" with From the library and Upload your
+ * own; on paper and on the client's copy an empty frame is a quiet tint.
+ * A template's sample photo (The Mulberry Weddings', 10 Nov) carries an amber
+ * "Sample · replace" that says whose it is and offers the same two.
  */
 export function PhotoFrame({
   frameId,
@@ -90,6 +93,7 @@ export function PhotoFrame({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  const small = !!size && size.w < 300
   const place =
     nat && size && size.w > 0
       ? placePhoto(size.w, size.h, nat.w, nat.h, photo.x, photo.y, photo.zoom)
@@ -179,16 +183,16 @@ export function PhotoFrame({
       className="absolute inset-0 flex flex-col items-center justify-center gap-2"
       style={{ background: `linear-gradient(135deg, ${accent}22, ${accent}44)`, color: accent }}
     >
-      {editable && (
-        <>
+      {editable && !small && (
+        <div className="flex -translate-y-6 flex-col items-center gap-2">
           <ImagePlus className="size-10" aria-hidden />
           <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 18, fontWeight: 600 }}>
             Add your photo
           </span>
           <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 13, opacity: 0.8 }}>
-            Drop one here, or tap
+            Drop one here, or pick one below
           </span>
-        </>
+        </div>
       )}
     </div>
   )
@@ -274,14 +278,41 @@ export function PhotoFrame({
           </span>
         </div>
       )}
-      {!busy && !photo.url && (
+      {!busy && !photo.url && ctx && (
+        <div
+          className="designer-chrome absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2"
+          style={{
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: small ? 12 : 15,
+            fontWeight: 600,
+            flexDirection: small ? 'column' : 'row',
+          }}
+        >
+          <button
+            type="button"
+            className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-white/60 bg-black/65 px-3 py-1.5 text-white shadow hover:bg-black/80"
+            onClick={() => ctx.openLibrary({ id: frameId, apply: onChange })}
+          >
+            <Images className={small ? 'size-3.5' : 'size-4'} aria-hidden /> From the library
+          </button>
+          <button
+            type="button"
+            className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-white/60 bg-black/65 px-3 py-1.5 text-white shadow hover:bg-black/80"
+            onClick={() => input.current?.click()}
+          >
+            <Upload className={small ? 'size-3.5' : 'size-4'} aria-hidden /> Upload your own
+          </button>
+        </div>
+      )}
+      {!busy && isSample(photo) && !cropping && ctx && (
         <button
           type="button"
-          className="designer-chrome absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/60 bg-black/60 px-4 py-2 text-white shadow hover:bg-black/80"
-          style={{ fontFamily: 'system-ui, sans-serif', fontSize: 15, fontWeight: 600 }}
-          onClick={() => input.current?.click()}
+          className="designer-chrome absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-400 px-3 py-1 text-amber-950 shadow hover:bg-amber-300"
+          style={{ fontFamily: 'system-ui, sans-serif', fontSize: small ? 11 : 14, fontWeight: 700 }}
+          onClick={() => ctx.askReplace({ id: frameId, apply: onChange })}
+          title="A sample photo: replace it with yours"
         >
-          Upload a photo
+          Sample · replace
         </button>
       )}
       {!busy && photo.url && !cropping && (

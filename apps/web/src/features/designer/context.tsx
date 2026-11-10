@@ -24,6 +24,10 @@ export interface DesignerCtx {
   pickFrame: (f: PickedFrame | null) => void
   /** Put a photo in the picked frame (a tap in Uploads). */
   applyToPicked: (p: DesignPhoto) => void
+  /** Pick a frame and open Photos on the library, so a tap there fills it. */
+  openLibrary: (f: PickedFrame) => void
+  /** A sample photo tapped: say whose it is and offer the library or an upload. */
+  askReplace: (f: PickedFrame) => void
   /** A photo file dropped on a frame: compressed, uploaded, kept in the library. */
   uploadPhoto: (file: File) => Promise<DesignPhoto | null>
   /** Step 4: the item picked to move or resize ("<pageId>:<key>"), and the photo being cropped. */

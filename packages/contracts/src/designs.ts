@@ -31,6 +31,12 @@ export const designPhoto = z.object({
   y: z.number().min(0).max(100).default(50),
   /** 1 = fills the frame; up to 3 zooms in. */
   zoom: z.number().min(1).max(3).default(1),
+  /**
+   * A template's preview photo (owner, 10 Nov): The Mulberry Weddings' own,
+   * shown only so the studio sees the look. It must be replaced before the
+   * design is sent or printed.
+   */
+  sample: z.boolean().optional(),
 })
 export type DesignPhoto = z.infer<typeof designPhoto>
 
