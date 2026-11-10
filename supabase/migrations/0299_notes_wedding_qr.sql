@@ -1,0 +1,2 @@
+-- 0299: a note on a booked person (like a cell comment), and wedding QR codes
+-- apart from partners (enquiry_partners.kind + project_id). Claimed; body follows.
