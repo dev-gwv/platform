@@ -22,7 +22,8 @@ import { toast } from 'sonner'
 import { RewardsBoard } from '@/features/referrals/RewardsBoard'
 import { ReferralDefaults } from '@/features/referrals/ReferralDefaults'
 import { useAccess } from '@/shared/auth/useAccess'
-import { Plus, Trash2, Pencil, Copy, Trophy, Users, TrendingUp, Target } from 'lucide-react'
+import { Plus, Trash2, Pencil, Copy, Trophy, Users, TrendingUp, Target, Gift } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 
 function ReferralsContent() {
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -89,11 +90,18 @@ function ReferralsContent() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Referral Campaigns"
+        title="Referrals"
         actions={
-          <Button onClick={openCreate} size="sm">
-            <Plus className="mr-1 h-4 w-4" /> New Campaign
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild className="bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:opacity-90">
+              <Link to="/ai/referrals">
+                <Gift className="h-4 w-4" /> Make a referral card
+              </Link>
+            </Button>
+            <Button onClick={openCreate} size="sm" variant="outline">
+              <Plus className="mr-1 h-4 w-4" /> New campaign
+            </Button>
+          </div>
         }
       />
 

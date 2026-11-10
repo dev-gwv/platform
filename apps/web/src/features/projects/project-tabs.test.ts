@@ -8,7 +8,7 @@ const staff = { module: (m: string) => !['company_expenses', 'tasks', 'team_payo
 describe('project tabs', () => {
   it('is eight groups across the top, every view under exactly one of them', () => {
     expect(PROJECT_GROUPS.map((g) => g.label)).toEqual([
-      'Overview', 'Quotation', 'Shoots', 'Post-Production', 'Terms', 'Finance', 'Data', 'Wishes',
+      'Overview', 'Quotation', 'Shoots', 'Post-Production', 'Terms', 'Finance', 'Data', 'Referrals & wishes',
     ])
     const placed = PROJECT_GROUPS.flatMap((g) => [...g.views])
     expect([...placed].sort()).toEqual(PROJECT_TABS.map((t) => t.value).sort())

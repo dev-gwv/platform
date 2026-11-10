@@ -50,7 +50,7 @@ export const PROJECT_TABS = [
   // As in the old app: this project's data and its referrals, each also a
   // page of its own in the sidebar (Data & Backup, Referrals).
   { value: 'data', label: 'Data', icon: Database },
-  { value: 'referrals', label: 'Referrals', icon: Gift },
+  { value: 'referrals', label: 'Referral card', icon: Gift, fresh: 'referralCards' },
   // The client's birthdays and anniversary, and the wish for each (0243).
   { value: 'wishes', label: 'Wishes', icon: Cake },
 ] as const
@@ -70,9 +70,11 @@ export const PROJECT_GROUPS = [
   { value: 'terms', label: 'Terms', icon: FileSignature, views: ['terms'] },
   { value: 'finance', label: 'Finance', icon: Wallet, views: ['billing', 'expenses', 'costs', 'payouts'] },
   { value: 'data', label: 'Data', icon: Database, views: ['data'] },
-  // Keeping the client close: their wishes, and the friends they send. Still
-  // eight across the top; ?tab=referrals opens here as before.
-  { value: 'wishes', label: 'Wishes', icon: Cake, views: ['wishes', 'referrals'] },
+  // Keeping the client close: the friends they send and their wishes. Still
+  // eight across the top; ?tab=referrals opens here as before. Named for both
+  // and opening on the referral card (owner audit, 10 Nov: under "Wishes"
+  // nobody found the card).
+  { value: 'wishes', label: 'Referrals & wishes', icon: Gift, views: ['referrals', 'wishes'] },
 ] as const satisfies ReadonlyArray<{ value: string; label: string; icon: LucideIcon; views: readonly ProjectTab[] }>
 type ProjectGroup = (typeof PROJECT_GROUPS)[number]['value']
 
