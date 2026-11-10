@@ -2,6 +2,26 @@
 
 What is waiting, and on whom. Update this file when an item is done.
 
+## Morning checklist (10 Nov) -- everything that waits on the owner, in order
+
+1. **Claude GitHub app** on the repository: https://github.com/apps/claude/installations/select_target
+   (so Claude hears CI results and review comments on its pull requests).
+2. **Meta Access Verification** -- deadline **26 Dec 2026**. Ask Meta developer support, quoting
+   App ID 4492691704338819 and the 29 Sept submission (item 3 below has the detail).
+3. **Sample photos** for the Quotation Designer: 8-10 wedding photos you are happy to show every studio.
+4. **Aditya's login**: Studio Access Manager → **Find a login** → adityaagarwal843113@gmail.com (item 1 below).
+5. **Support call alerts**: the iCal address, `WA_BOT_SECRET`, the bot QR, the appointment-schedule
+   link -- step by step in `docs/support-calls.md` (item 8 below).
+6. **Android release key**: `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASSWORD` as GitHub secrets.
+7. **Decide**: the Resend paid plan (automatic emails), and WhatsApp from our own number via Meta.
+8. **Decide** the five open points from the 6 Nov bug sweep (item 10 below).
+9. **After referral cards ship**: Settings → Referrals → **Defaults** -- what a friend gets and what
+   your client gets for each friend who books.
+
+The AI key (`AI_API_KEY`) is already on the server (owner, 10 Nov): the assistant, the designer's
+Write it for me, Reply with AI and the sequence maker all use that one key. To confirm, Platform →
+Help console shows the assistant as ready.
+
 ## On the owner (needs a dashboard, money or a key Claude cannot reach)
 
 1. **Aditya (adityaagarwal843113@gmail.com) cannot open his studio.** OMS Wedding Studio
@@ -52,10 +72,10 @@ What is waiting, and on whom. Update this file when an item is done.
 
 ## On Claude (ready to build once the owner says)
 
-0. **Quotation Designer is done (steps 1-5 live 9 Nov); Reply with AI and the Follow-up
-   sequence maker are built.** All AI writing (the designer's Write it for me, Reply with AI,
-   the sequence maker) needs `AI_API_KEY` on the server -- until then each says "AI writing is
-   not switched on yet". Next AI ideas: referral message cards, a review collector.
+0. **AI tools live (9 Nov)**: the Quotation Designer (steps 1-5), Reply with AI and the
+   Follow-up sequence maker. **Building now (10 Nov): referral cards** (0298) -- a WhatsApp
+   card per booked client with the friend's offer, code and QR; the friend's offer on their
+   invoice by itself; the client's reward due when the friend books. Next: a review collector.
 
 1. **Email + WhatsApp message credits** in every plan (about two days; claim a migration
    number first). Needs items 2 and 6 above.
