@@ -20,7 +20,7 @@ export function WatchHow({ tutorialKey }: { tutorialKey?: string } = {}) {
   if (!tutorial) return null
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className="border-primary/40 text-primary" onClick={() => setPlaying(tutorial)}>
+      <Button type="button" variant="ghost" size="sm" className="text-primary hover:bg-primary/10 hover:text-primary" onClick={() => setPlaying(tutorial)}>
         <PlayCircle /> Watch how{tutorial.seconds ? ` · ${lengthLabel(tutorial.seconds)}` : ''}
       </Button>
       <TutorialPlayer tutorial={playing} onClose={() => setPlaying(null)} />

@@ -13,6 +13,8 @@ import {
   addDesignPhotoRequest,
   designLibraryPhoto,
   updateDesignRequest,
+  captionReply,
+  captionRequest,
   type DesignDoc,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -28,6 +30,7 @@ import { withService } from '../../lib/db'
 import { newRawToken, verifyToken } from '../../lib/auth-token'
 import { cleanDesignWriting, designWriterMessages } from '../../lib/design-writer'
 import { writeWithAi } from '../../lib/ai-write'
+import { captionMessages, parseCaptions } from '../../lib/caption-writer'
 
 /**
  * Quotation Designer (0295): the studio's premium quotation designs, each a
@@ -94,6 +97,25 @@ export const designsRouter = new Hono<AppEnv>()
     const out = cleanDesignWriting(parsed.data.kind, text)
     if (!out.text && out.lines.length === 0) fail(503, 'The AI came back empty. Try again.')
     return c.json(designWriteReply.parse(out))
+  })
+
+  /**
+   * Social media captions (owner, 10 Nov): three captions for one post, on
+   * the same engine, allowance and log as every AI writer.
+   */
+  .post('/captions', requireAction('projects', 'view'), async (c) => {
+    const parsed = captionRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Please say what the post is about.')
+    if (parsed.data.kind === 'custom' && !parsed.data.details) fail(422, 'Say what the post is about.')
+    const text = await writeWithAi(c, {
+      kind: `captions:${parsed.data.kind}`,
+      messages: captionMessages(parsed.data),
+      maxTokens: 900,
+      temperature: 0.85,
+    })
+    const captions = parseCaptions(text)
+    if (captions.length === 0) fail(503, 'The AI came back empty. Try again.')
+    return c.json(captionReply.parse({ captions }))
   })
 
   /** The studio's photo library: every photo put into a design, newest first. */

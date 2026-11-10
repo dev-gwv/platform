@@ -240,12 +240,14 @@ function Crm() {
               * and QR -- made to stand out -- and Add lead; Reports, Setup,
               * Import and Download one tap away under More.
               */}
-            <Button variant="outline" asChild>
-              <Link to="/follow-ups/queue">
-                <PhoneCall /> Today's calls
+            {/* The day's two lists, joined as one control. */}
+            <div className="inline-flex h-9 items-stretch overflow-hidden rounded-md border border-border bg-card shadow-sm">
+              <Link to="/follow-ups/queue" className="inline-flex items-center gap-1.5 px-3 text-sm font-medium hover:bg-muted">
+                <PhoneCall className="size-4" aria-hidden /> Today's calls
               </Link>
-            </Button>
-            <FollowUpsButton />
+              <span className="w-px bg-border" aria-hidden />
+              <FollowUpsButton />
+            </div>
             <Link
               to="/follow-ups/form"
               className="inline-flex h-9 items-center gap-2 rounded-md bg-tone-teal px-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
@@ -618,14 +620,12 @@ function FollowUpsButton() {
   const now = useMemo(() => new Date(), [mine.dataUpdatedAt])
   const late = (mine.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
   return (
-    <Button variant="outline" asChild>
-      <Link to="/follow-ups/board">
-        <AlarmClock /> Follow-ups
-        {late > 0 && (
-          <span className="rounded-full bg-tone-amber px-1.5 text-[0.7rem] font-bold text-card tabular-nums">{late} late</span>
-        )}
-      </Link>
-    </Button>
+    <Link to="/follow-ups/board" className="inline-flex items-center gap-1.5 px-3 text-sm font-medium hover:bg-muted">
+      <AlarmClock className="size-4" aria-hidden /> Follow-ups
+      {late > 0 && (
+        <span className="rounded-full bg-tone-amber px-1.5 text-[0.7rem] font-bold text-card tabular-nums">{late} late</span>
+      )}
+    </Link>
   )
 }
 
