@@ -37,8 +37,22 @@ export const teamSlot = z.object({
   response: z.enum(['pending', 'confirmed', 'declined']).default('confirmed'),
   decline_reason: z.string().nullable().default(null),
   arrived_at: isoDateTime.nullable().default(null),
+  /**
+   * A note on this person for this booking, like a comment on a cell (0299):
+   * "Bring the 70-200", "Leaves at 9 for another event". Not money: whoever
+   * sees the booking reads it, the person booked included.
+   */
+  note: z.string().nullable().default(null),
+  note_by_name: z.string().nullable().default(null),
+  note_at: isoDateTime.nullable().default(null),
 })
 export type TeamSlot = z.infer<typeof teamSlot>
+
+/** POST /allocation/:id/note: write or clear (null or "") a booking's note. */
+export const setSlotNoteRequest = z.object({
+  note: z.string().trim().max(500, 'Keep the note under 500 characters.').nullable(),
+})
+export type SetSlotNoteRequest = z.infer<typeof setSlotNoteRequest>
 
 /** POST /allocation/:id/respond: the person booked answers. */
 export const respondSlotRequest = z

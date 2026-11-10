@@ -1028,6 +1028,10 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { results: items.map((_, index) => ({ index, id: uid(0x5b0 + index), error: null })) }
   }
   if (method === 'POST' && /^\/allocation\/[^/]+\/status$/.test(path)) return {}
+  if (method === 'POST' && /^\/allocation\/[^/]+\/note$/.test(path)) return {}
+  if (method === 'PATCH' && /^\/projects\/deliverables\/[^/]+\/note$/.test(path)) {
+    return { internal_notes: (body as { note?: string | null } | undefined)?.note ?? null }
+  }
   if (method === 'GET' && path === '/data/locations') return storageLocationsFx
   if (method === 'POST' && path === '/data/locations') {
     const created = { id: uid(0x77 + storageLocationsFx.length), name: 'New location', kind: 'drive', ...(body as object) }
@@ -3180,6 +3184,9 @@ const slots = [
     final_cost: null,
     cost_status: 'tentative',
     cost_notes: null,
+    note: 'Bring the 70-200 and a spare battery',
+    note_by_name: 'Asha Rao',
+    note_at: daysFromNow(-1, 16),
   },
   {
     id: uid(0x52),

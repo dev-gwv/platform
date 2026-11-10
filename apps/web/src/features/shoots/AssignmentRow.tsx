@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, Database, FileSignature, Pencil, X } from 'lucide-react'
+import { CalendarDays, Database, FileSignature, Pencil, StickyNote, X } from 'lucide-react'
 import type { DataRecord, ShootListItem, TeamSlot, TeamTermsSend } from '@ipc/contracts'
 import { Avatar } from '@/shared/ui/avatar'
 import { Button } from '@/shared/ui/button'
@@ -12,6 +12,7 @@ import { useINR } from '@/shared/money/MoneyMask'
 import { useSetSlotData } from '@/features/allocation/api'
 import { SendTermsDialog } from '@/features/team-terms/SendTermsDialog'
 import { DataRecordDialog } from '@/features/data/DataRecordDialog'
+import { SlotNoteCorner, SlotNoteDialog } from '@/features/booking/SlotNote'
 import { AlsoBookedLine, dayOfSlot } from './PersonDay'
 import { STAGE_LABEL, STAGE_TONE, dataRowTone, optedOut, slotDay, slotStage, whenLabel } from '@/features/data/stage'
 
@@ -50,6 +51,7 @@ export function AssignmentRow({
   const inr = useINR()
   const [editing, setEditing] = useState(false)
   const [optingOut, setOptingOut] = useState(false)
+  const [noting, setNoting] = useState(false)
   const setSlotData = useSetSlotData()
   const stage = slotStage(slot, record)
   const payout = slot.final_cost ?? slot.estimated_cost
@@ -76,10 +78,11 @@ export function AssignmentRow({
   return (
     <li
       className={cn(
-        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2',
+        'relative flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2',
         row === 'green' ? 'border-success/50 bg-success/15' : row === 'red' ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card',
       )}
     >
+      <SlotNoteCorner slot={slot} name={slot.user_name} />
       <Avatar name={slot.user_name ?? '?'} size="md" />
       <div className="min-w-[12rem] flex-1">
         <p className="truncate text-sm font-semibold">{slot.user_name ?? 'Unknown'}</p>
@@ -143,6 +146,7 @@ export function AssignmentRow({
                     onSelect: () => setSlotData.mutate({ id: slot.id, data_required: true, data_not_required_reason: null }),
                   }
                 : { label: 'No data needed from them…', onSelect: () => setOptingOut(true), disabled: !!record },
+              { label: slot.note?.trim() ? 'Edit note' : 'Add note', icon: <StickyNote className="size-4" />, onSelect: () => setNoting(true) },
               { label: 'Remove from shoot', icon: <X className="size-4" />, onSelect: onRemove },
             ]}
           />
@@ -152,6 +156,7 @@ export function AssignmentRow({
       {editing && (
         <DataRecordDialog projectId={projectId} shoot={shoot} slot={slot} record={record} onClose={() => setEditing(false)} />
       )}
+      {noting && <SlotNoteDialog slot={slot} onClose={() => setNoting(false)} />}
       {optingOut && (
         <NoDataDialog
           name={slot.user_name ?? 'this person'}
