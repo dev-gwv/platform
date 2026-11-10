@@ -52,6 +52,8 @@ import { PrintCopy } from '@/features/designer/Sheets'
 import { SendDesignDialog } from '@/features/designer/SendDesignDialog'
 import { SidePanel, SideRail, type PanelKey } from '@/features/designer/SidePanel'
 import { TextBar } from '@/features/designer/TextBar'
+import { ColourPicker } from '@/features/designer/ColourPicker'
+import { cssPaint } from '@/features/designer/paint'
 import { Thumb } from '@/features/designer/Thumb'
 import {
   DesignerContext,
@@ -651,7 +653,8 @@ function Workspace({
                         onDown={() => move(i, 1)}
                         onHide={() => setPage(i, { ...p, hidden: !p.hidden })}
                         onColour={(c) => setPage(i, { ...p, data: { ...p.data, background: c } })}
-                        background={p.data.background || doc.theme.background}
+                        background={doc.theme.background}
+                        themeColours={[doc.theme.background, doc.theme.accent, doc.theme.ink, doc.theme.panel]}
                         onCopy={() =>
                           doc.pages.length < 30 &&
                           setPages([
@@ -858,7 +861,9 @@ function PageBar({
   onCopy,
   onDelete,
   onColour,
+  themeColours,
 }: {
+  themeColours: string[]
   n: number
   page: DesignPage
   first: boolean
@@ -884,30 +889,25 @@ function PageBar({
           </span>
         )}
       </span>
-      <label className={cn(btn, 'relative cursor-pointer')} title="Page colour">
-        <PaintBucket className="size-4" />
-        <span
-          className="absolute bottom-1 right-1 size-2 rounded-full ring-1 ring-white/50"
-          style={{ background }}
-        />
-        <input
-          type="color"
-          value={background}
-          onChange={(e) => onColour(e.target.value.toUpperCase())}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-label="Page colour"
-        />
-      </label>
-      {page.data.background && (
+      <ColourPicker
+        value={page.data.background}
+        onChange={onColour}
+        gradients
+        theme={themeColours}
+        onReset={page.data.background ? () => onColour('') : undefined}
+        label="Page background"
+      >
         <button
           type="button"
-          className={cn(btn, 'w-auto px-2 text-xs')}
-          onClick={() => onColour('')}
-          title="Back to the look's colour"
+          className={cn(btn, 'w-auto gap-1.5 px-2 text-xs')}
+          title="Page background: colours and gradients"
+          aria-label="Page background"
         >
-          Reset
+          <PaintBucket className="size-4" />
+          <span className="size-4 rounded ring-1 ring-white/50" style={{ background: cssPaint(page.data.background, background) }} />
+          Background
         </button>
-      )}
+      </ColourPicker>
       <button
         type="button"
         className={btn}

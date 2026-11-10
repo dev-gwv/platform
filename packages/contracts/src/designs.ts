@@ -15,6 +15,15 @@ export type DesignPageKind = z.infer<typeof designPageKind>
 const text = (max: number) => z.string().max(max).default('')
 
 /** A photo placed in a frame: where it is, how far it is zoomed and which part shows. */
+/**
+ * A fill: a plain colour (#RRGGBB) or a gradient of two or three colours,
+ * written "lg:<angle>:#A:#B[:#C]" (straight, angle in degrees) or
+ * "rg:#A:#B[:#C]" (round, from the centre). '' means the look's own colour.
+ * Owner, 10 Nov: "a lot of colour options ... including gradient".
+ */
+export const PAINT_RE = /^(#[0-9a-fA-F]{6}|(lg:(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9])|rg)(:#[0-9a-fA-F]{6}){2,3})$/
+export const designPaint = z.union([z.literal(''), z.string().max(60).regex(PAINT_RE)])
+
 export const designPhoto = z.object({
   url: z.string().max(2000).default(''),
   /** 0-100: the point of the photo kept in view. */
@@ -74,7 +83,7 @@ export const designElement = z.object({
   text: text(1000),
   photo: designPhoto.default({}),
   /** A shape's fill ('' = the look's accent). */
-  color: z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)]).default(''),
+  color: designPaint.default(''),
   x: z.number().min(-800).max(1600).default(200),
   y: z.number().min(-1100).max(2200).default(400),
   w: z.number().min(4).max(1600).default(300),
@@ -107,7 +116,7 @@ export const designPageData = z.object({
     .record(z.string().max(60), designTextStyle)
     .refine((v) => Object.keys(v).length <= 120, { message: 'Too many text settings on one page.' })
     .default({}),
-  background: z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)]).default(''),
+  background: designPaint.default(''),
   /**
    * Step 4 (Canva's move and resize): where the studio dragged a photo or a
    * text away from its place in the layout, in page pixels, and how much it

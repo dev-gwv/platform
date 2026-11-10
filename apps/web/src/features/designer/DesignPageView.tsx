@@ -22,6 +22,8 @@ import { Movable } from './Movable'
 import { PAGE_H, PAGE_W, PageCtx } from './page-context'
 import type { Guide } from './snap'
 import { PhotoFrame } from './PhotoFrame'
+import { ColourPicker } from './ColourPicker'
+import { cssPaint } from './paint'
 import { isScript } from './templates'
 import { WriteButton, type Writer } from './WriteButton'
 
@@ -425,7 +427,7 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
         style={{
           width: PAGE_W,
           height: PAGE_H,
-          background: d.background || theme.background,
+          background: cssPaint(d.background, theme.background),
           color: theme.ink,
         }}
       >
@@ -437,6 +439,7 @@ export function DesignPageView({ page, theme, editable, onChange, writer }: Prop
             pageId={page.id}
             t={t}
             accent={theme.accent}
+            themeColours={[theme.background, theme.ink, theme.panel]}
             editable={editable}
             onData={onChange}
             data={d}
@@ -473,11 +476,13 @@ function AddedItem({
   editable,
   data,
   onData,
+  themeColours = [],
 }: {
   el: DesignElement
   pageId: string
   t: Type
   accent: string
+  themeColours?: string[]
   editable: boolean
   data: DesignPageData
   onData: (d: DesignPageData) => void
@@ -489,22 +494,23 @@ function AddedItem({
   const bar = editable ? (
     <>
       {(el.kind === 'line' || el.kind === 'box' || el.kind === 'circle') && (
-        <label
-          className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/15"
-          title="Colour"
+        <ColourPicker
+          value={el.color}
+          onChange={(c) => patch({ color: c })}
+          gradients
+          theme={[accent, ...themeColours]}
+          onReset={el.color ? () => patch({ color: '' }) : undefined}
+          label="Shape colour"
         >
-          <span
-            className="size-4 rounded-full border border-white/60"
-            style={{ background: el.color || accent }}
-          />
-          Colour
-          <input
-            type="color"
-            value={el.color || accent}
-            onChange={(e) => patch({ color: e.target.value })}
-            className="sr-only"
-          />
-        </label>
+          <button
+            type="button"
+            className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/15"
+            title="Colour"
+          >
+            <span className="size-4 rounded-full border border-white/60" style={{ background: cssPaint(el.color, accent) }} />
+            Colour
+          </button>
+        </ColourPicker>
       )}
       <button
         type="button"
@@ -569,7 +575,7 @@ function AddedItem({
         style={{
           width: el.w,
           height: el.h,
-          background: el.color || accent,
+          background: cssPaint(el.color, accent),
           borderRadius: el.kind === 'circle' ? '50%' : el.kind === 'line' ? 2 : 4,
         }}
       />
