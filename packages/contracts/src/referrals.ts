@@ -32,6 +32,14 @@ export type ReferralSubmissionStatus = z.infer<typeof referralSubmissionStatus>
 export const referralRewardStatus = z.enum(['not_due', 'due', 'given', 'cancelled'])
 export type ReferralRewardStatus = z.infer<typeof referralRewardStatus>
 
+/**
+ * What the friend gets for booking through a client's referral card (0298):
+ * nothing, rupees off, a percent off, or something free ("Free pre-wedding
+ * shoot"). It rides onto the friend's first invoice by itself.
+ */
+export const friendRewardType = z.enum(['none', 'fixed', 'percentage', 'free_addon'])
+export type FriendRewardType = z.infer<typeof friendRewardType>
+
 export const referralCampaign = z.object({
   id: uuid,
   company_id: uuid,
@@ -49,6 +57,13 @@ export const referralCampaign = z.object({
   client_name: z.string().nullable().default(null),
   /** The client's private link to see their referrals (0284). */
   view_token: z.string().nullable().default(null),
+  /** The friend's offer and how long the card is good for (0298). */
+  friend_reward_type: friendRewardType.default('none'),
+  friend_reward_value: money.default(0),
+  friend_reward_title: z.string().nullable().default(null),
+  valid_until: isoDate.nullable().default(null),
+  /** How many times the card's page was opened. */
+  views: z.number().int().default(0),
   status: referralCampaignStatus,
   created_at: isoDateTime,
 })
@@ -110,6 +125,11 @@ export const createReferralCampaignRequest = z.object({
   reward_title: z.string().trim().max(160).nullish(),
   project_id: uuid.nullish(),
   client_id: uuid.nullish(),
+  /** Left as they are when not sent. */
+  friend_reward_type: friendRewardType.optional(),
+  friend_reward_value: money.optional(),
+  friend_reward_title: z.string().trim().max(120).nullish(),
+  valid_until: isoDate.nullish(),
 })
 export type CreateReferralCampaignRequest = z.infer<typeof createReferralCampaignRequest>
 
@@ -154,6 +174,12 @@ export const publicReferralCampaign = z.object({
   logo_url: z.string().nullable().nullish(),
   referring_client_name: z.string().nullable().nullish(),
   reward_title: z.string().nullable().nullish(),
+  /** The friend's offer, which the page leads with (0298). */
+  friend_reward_type: friendRewardType.default('none'),
+  friend_reward_value: money.default(0),
+  friend_reward_title: z.string().nullable().default(null),
+  valid_until: isoDate.nullable().default(null),
+  card_look: z.string().default('ivory'),
 })
 export type PublicReferralCampaign = z.infer<typeof publicReferralCampaign>
 
@@ -199,3 +225,31 @@ export const publicReferralRow = z.object({
   created_at: z.string(),
 })
 export type PublicReferralRow = z.infer<typeof publicReferralRow>
+
+/**
+ * The studio's referral defaults (0298): what every new client's card offers
+ * a friend, what the client gets when a friend books, how long a card is good
+ * for and how it looks. A project's campaign starts from these.
+ */
+export const referralSettings = z.object({
+  is_on: z.boolean().default(true),
+  reward_type: referralRewardType.default('fixed'),
+  reward_value: money.default(0),
+  reward_title: z.string().trim().max(120).nullable().default(null),
+  friend_reward_type: friendRewardType.default('fixed'),
+  friend_reward_value: money.default(0),
+  friend_reward_title: z.string().trim().max(120).nullable().default(null),
+  valid_days: z.number().int().min(7).max(1095).default(180),
+  card_look: z.string().trim().max(30).default('ivory'),
+})
+export type ReferralSettings = z.infer<typeof referralSettings>
+export type ReferralSettingsInput = z.input<typeof referralSettings>
+
+/** The friend's offer a project's first invoice should carry, when a card brought it. */
+export const referralOffer = z.object({
+  referrer: z.string().nullable(),
+  friend_reward_type: friendRewardType,
+  friend_reward_value: money,
+  friend_reward_title: z.string().nullable(),
+})
+export type ReferralOffer = z.infer<typeof referralOffer>

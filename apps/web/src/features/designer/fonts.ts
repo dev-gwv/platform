@@ -20,3 +20,15 @@ export function loadDesignerFonts() {
   link.href = HREF
   document.head.appendChild(link)
 }
+
+/** Resolves once the designer's stylesheet has been read (its faces are known to the page). */
+export function designerFontsReady(): Promise<void> {
+  loadDesignerFonts()
+  const link = document.getElementById('designer-fonts') as HTMLLinkElement | null
+  if (!link || link.sheet) return Promise.resolve()
+  return new Promise((resolve) => {
+    link.addEventListener('load', () => resolve(), { once: true })
+    link.addEventListener('error', () => resolve(), { once: true })
+    setTimeout(resolve, 5000)
+  })
+}

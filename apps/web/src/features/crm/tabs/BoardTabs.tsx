@@ -263,7 +263,6 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
         )}
         <p className="text-sm text-muted-foreground">
           {inPipeline.length} deal{inPipeline.length === 1 ? '' : 's'} · {inr(total)} in {current.name}
-          {canEdit ? ' · drag a card to move it, tick cards to change many at once' : ''}
         </p>
       </div>
 

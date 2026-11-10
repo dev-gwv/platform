@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { FileImage, ListChecks, MessageSquareText, PenLine, Sparkles, type LucideIcon } from 'lucide-react'
+import { FileImage, Gift, ListChecks, MessageSquareText, PenLine, Sparkles, type LucideIcon } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -18,7 +18,7 @@ interface Tool {
   title: string
   line: string
   icon: LucideIcon
-  to?: '/ai/designer' | '/ai/sequences' | '/leads'
+  to?: '/ai/designer' | '/ai/sequences' | '/leads' | '/referrals'
   /** A word under the button, when the tool opens somewhere else. */
   how?: string
 }
@@ -42,6 +42,12 @@ const TOOLS: Tool[] = [
     line: 'A whole series of follow-ups, written for what happened with the lead.',
     icon: ListChecks,
     to: '/ai/sequences',
+  },
+  {
+    title: 'Referral cards',
+    line: 'A WhatsApp card for each client to send friends: their friend gets an offer, they get a reward.',
+    icon: Gift,
+    to: '/referrals',
   },
   { title: 'Write it for me', line: 'Your About Us and deliverables, written in your words.', icon: PenLine },
 ]

@@ -20,6 +20,8 @@ import {
 import { type CreateReferralCampaignRequest, type ReferralCampaignStatus } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { RewardsBoard } from '@/features/referrals/RewardsBoard'
+import { ReferralDefaults } from '@/features/referrals/ReferralDefaults'
+import { useAccess } from '@/shared/auth/useAccess'
 import { Plus, Trash2, Pencil, Copy, Trophy, Users, TrendingUp, Target } from 'lucide-react'
 
 function ReferralsContent() {
@@ -44,6 +46,7 @@ function ReferralsContent() {
   const updateCampaignStatus = useUpdateReferralCampaignStatus()
   const updateStatus = useUpdateSubmissionStatus()
 
+  const canEdit = useAccess().hasAction('referrals', 'edit')
   const campaigns = campaignData?.campaigns ?? []
   const summary = campaignData?.summary
   const submissions = submissionData?.pages.flatMap((p) => p.items) ?? []
@@ -103,12 +106,17 @@ function ReferralsContent() {
         </div>
       )}
 
-      <Tabs defaultValue="campaigns">
+      <Tabs defaultValue="cards">
         <TabsList>
+          <TabsTrigger value="cards">Cards & offers</TabsTrigger>
           <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
           <TabsTrigger value="submissions">Submissions</TabsTrigger>
           <TabsTrigger value="rewards">Rewards</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="cards">
+          <ReferralDefaults canEdit={canEdit} />
+        </TabsContent>
 
         <TabsContent value="rewards">
           <RewardsBoard campaigns={campaigns} />

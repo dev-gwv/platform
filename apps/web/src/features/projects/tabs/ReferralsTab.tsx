@@ -12,6 +12,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { useCompanyProfile } from '@/features/settings/api'
+import { ReferralCard } from '@/features/referrals/card/ReferralCard'
 import {
   useProjectCampaign,
   useReferralSubmissions,
@@ -90,6 +91,7 @@ export function ReferralsTab({
   }
   return (
     <div className="mt-4 flex flex-col gap-4">
+      <ReferralCard campaign={campaign.data} clientName={clientName} canEdit={canEdit} />
       <RewardCard campaign={campaign.data} canEdit={canEdit} />
       <ShareCard campaign={campaign.data} projectName={projectName} clientName={clientName} clientPhone={clientPhone} />
       <Received campaign={campaign.data} canEdit={canEdit} />

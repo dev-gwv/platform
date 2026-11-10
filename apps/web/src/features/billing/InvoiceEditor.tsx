@@ -50,6 +50,7 @@ import {
   type InvoiceFormValues,
 } from './InvoiceForm'
 import { matchStudioState, deriveIntraState, toAmount, type InvoiceLineDraft } from './invoice-math'
+import { useReferralOffer } from '@/features/referrals/api'
 import { useInvoiceItems, useInvoiceTemplates, useSaveInvoiceItem, useStates } from './api'
 import { HsnSearchDialog } from './HsnSearchDialog'
 import { DaysInput, UnitInput } from './LineUnitFields'
@@ -137,6 +138,11 @@ export function InvoiceEditor({
     staleTime: 60_000,
   })
   const linkedProject = useProject(values.project_id)
+  // A friend who came by a client's referral card (0298): their offer rides
+  // onto their first invoice by itself, once per project, and says so.
+  const referral = useReferralOffer(!isEdit && values.project_id ? values.project_id : null)
+  const [referralFor, setReferralFor] = useState<string | null>(null)
+  const [referralNote, setReferralNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hsnFor, setHsnFor] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -168,6 +174,26 @@ export function InvoiceEditor({
     if (isEdit || values.project_id || !projectChoice.loaded || projectChoice.count !== 1) return
     set('project_id', projectChoice.options[0]!.id)
   }, [projectChoice.loaded, projectChoice.count, values.client_id])
+
+  useEffect(() => {
+    const o = referral.data
+    if (isEdit || !o || !values.project_id || referralFor === values.project_id) return
+    setReferralFor(values.project_id)
+    const via = o.referrer ? ` via ${o.referrer}'s card` : ''
+    if ((o.friend_reward_type === 'fixed' || o.friend_reward_type === 'percentage') && o.friend_reward_value > 0) {
+      if (values.discount_type !== 'none' && toAmount(values.discount) > 0) return
+      set('discount_type', o.friend_reward_type === 'fixed' ? 'flat' : 'percent')
+      set('discount', String(o.friend_reward_value))
+      setReferralNote(`Referral discount added${via}`)
+    } else if (o.friend_reward_type === 'free_addon') {
+      const title = o.friend_reward_title?.trim() || 'Referral gift'
+      set('lines', [
+        ...values.lines.filter((l) => l.description.trim() || toAmount(l.rate)),
+        { description: `${title} (referral gift${o.referrer ? ` via ${o.referrer}` : ''})`, quantity: '1', rate: '0', gst_rate: values.no_gst ? 0 : 18 },
+      ])
+      setReferralNote(`Referral gift added${via}`)
+    }
+  }, [referral.data, values.project_id])
 
   // Place of supply starts at the studio's own state.
   useEffect(() => {
@@ -700,7 +726,27 @@ export function InvoiceEditor({
             <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
               <TotalRow label="Sub total" value={formatINR(totals.subtotal)} strong />
               <div className="mt-3 flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Discount</span>
+                <span className="text-muted-foreground">
+                  Discount
+                  {referralNote && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (referral.data?.friend_reward_type === 'free_addon') {
+                          set('lines', values.lines.filter((l) => !l.description.includes('(referral gift')))
+                        } else {
+                          set('discount', '')
+                          set('discount_type', 'none')
+                        }
+                        setReferralNote(null)
+                      }}
+                      className="ml-2 inline-flex items-center gap-1 rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 text-xs font-medium text-tone-amber"
+                      title="Take the referral offer off this invoice"
+                    >
+                      {referralNote} ×
+                    </button>
+                  )}
+                </span>
                 <div className="flex items-center gap-1.5">
                   <Input
                     inputMode="decimal"

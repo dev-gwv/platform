@@ -21,6 +21,7 @@ import {
   RotateCcw,
   Square,
   Undo2,
+  Gift,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, type CrmLead, type CrmQuote } from '@ipc/contracts'
@@ -273,6 +274,12 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                     <Pencil className="size-3" />
                   </button>
                 )}
+              </span>
+            )}
+            {/* Whose referral card brought them (0298): their offer goes on the invoice. */}
+            {lead.referred_by_name && (
+              <span className="inline-flex w-fit items-center gap-1 rounded-full border border-tone-violet/40 bg-tone-violet-soft px-2 py-0.5 text-xs font-semibold text-tone-violet">
+                <Gift className="size-3" aria-hidden /> Referred by {lead.referred_by_name}
               </span>
             )}
             {/* What that QR was for: "Priya & Rahul's wedding" (0281). */}

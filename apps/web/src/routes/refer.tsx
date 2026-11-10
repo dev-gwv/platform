@@ -1,3 +1,4 @@
+import { offerHeadline, validWords } from '@/features/referrals/card/draw'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { Gift, CheckCircle2, Share2, MessageCircle, Mail, Copy } from 'lucide-react'
@@ -111,6 +112,9 @@ export function ReferPage() {
     }
   }
 
+  // Opened from a client's referral card (0298): the friend is the one filling it in.
+  const fromCard = !!campaign && campaign.friend_reward_type !== 'none' && !!campaign.referring_client_name
+
   // The link to pass on never carries the private ?view=.
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''
 
@@ -152,24 +156,43 @@ export function ReferPage() {
           ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               {campaign.description && <p className="text-sm text-muted-foreground">{campaign.description}</p>}
-              <p className="rounded-lg bg-muted/30 p-3 text-sm">
-                {campaign.reward_description ?? `Refer a friend and get ${REWARD_LABEL[campaign.reward_type](campaign.reward_value)}, once they book.`}
-              </p>
+              {campaign.friend_reward_type !== 'none' ? (
+                // A client's referral card (0298): the friend reads what they get first.
+                <div className="rounded-xl border border-tone-amber/40 bg-tone-amber-soft p-4 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-tone-amber">
+                    {campaign.referring_client_name ? `A gift from ${campaign.referring_client_name}` : 'A gift for you'}
+                  </p>
+                  <p className="mt-1 text-xl font-bold">
+                    {offerHeadline(campaign.friend_reward_type, campaign.friend_reward_value, campaign.friend_reward_title)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    when you book {campaign.studio_name ?? 'the studio'}
+                    {validWords(campaign.valid_until) ? ` · valid till ${validWords(campaign.valid_until)}` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-lg bg-muted/30 p-3 text-sm">
+                  {campaign.reward_description ?? `Refer a friend and get ${REWARD_LABEL[campaign.reward_type](campaign.reward_value)}, once they book.`}
+                </p>
+              )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Your name</Label>
-                  <Input value={referrerName} onChange={(e) => setReferrerName(e.target.value)} placeholder="Optional" />
+              {/* From a client's card the friend fills in their own details; the client is already known. */}
+              {!fromCard && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Your name</Label>
+                    <Input value={referrerName} onChange={(e) => setReferrerName(e.target.value)} placeholder="Optional" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Your phone</Label>
+                    <Input value={referrerPhone} onChange={(e) => setReferrerPhone(e.target.value)} placeholder="Optional" />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Your phone</Label>
-                  <Input value={referrerPhone} onChange={(e) => setReferrerPhone(e.target.value)} placeholder="Optional" />
-                </div>
-              </div>
+              )}
 
               <div className="flex flex-col gap-1.5">
                 <Label>
-                  Your friend's name <span className="text-destructive">*</span>
+                  {fromCard ? 'Your name' : "Your friend's name"} <span className="text-destructive">*</span>
                 </Label>
                 <Input value={clientName} onChange={(e) => setClientName(e.target.value)} required />
               </div>
@@ -177,12 +200,12 @@ export function ReferPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>
-                    Their phone <span className="text-destructive">*</span>
+                    {fromCard ? 'Your phone' : 'Their phone'} <span className="text-destructive">*</span>
                   </Label>
                   <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="98765 43210" required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Their email</Label>
+                  <Label>{fromCard ? 'Your email' : 'Their email'}</Label>
                   <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Optional" />
                 </div>
               </div>

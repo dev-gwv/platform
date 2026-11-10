@@ -129,6 +129,8 @@ export const crmLead = z.object({
   partner_id: uuid.nullable().default(null),
   partner_name: z.string().nullable().default(null),
   /** 0281: what the partner's QR was for ("Priya & Rahul's wedding"), and the answers to its own questions. */
+  /** The client whose referral card brought this lead (0298). */
+  referred_by_name: z.string().nullable().default(null),
   enquiry_occasion: z.string().nullable().default(null),
   enquiry_answers: z.array(z.object({ question: z.string(), answer: z.string() })).nullable().catch(null).default(null),
   notes: z.string().nullable(),

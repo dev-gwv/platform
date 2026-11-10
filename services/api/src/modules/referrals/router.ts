@@ -12,6 +12,8 @@ import {
   submitReferralRequest,
   z,
   publicReferralRow,
+  referralOffer,
+  referralSettings,
 } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -41,7 +43,8 @@ export const referralsRouter = new Hono<AppEnv>()
         const campaigns = await sql`
           select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,
                  rc.reward_description, rc.reward_title, rc.project_id, p.name as project_name,
-                 rc.client_id, cl.name as client_name, rc.view_token, rc.status, rc.created_at
+                 rc.client_id, cl.name as client_name, rc.view_token, rc.friend_reward_type, rc.friend_reward_value, rc.friend_reward_title,
+                 to_char(rc.valid_until, 'YYYY-MM-DD') as valid_until, rc.views, rc.status, rc.created_at
             from referral_campaigns rc
             left join projects p on p.id = rc.project_id
             left join clients cl on cl.id = rc.client_id
@@ -97,15 +100,28 @@ export const referralsRouter = new Hono<AppEnv>()
           select name, client_id from projects where id = ${pid} and company_id = ${auth.companyId}`
         if (!project) return null
         const name = `${project.name} referrals`.slice(0, 160)
+        // A new client's card starts from the studio's referral defaults (0298).
+        const [d] = await sql<{
+          reward_type: string; reward_value: number; reward_title: string | null
+          friend_reward_type: string; friend_reward_value: number; friend_reward_title: string | null; valid_days: number
+        }[]>`
+          select reward_type, reward_value, reward_title, friend_reward_type, friend_reward_value,
+                 friend_reward_title, valid_days
+            from referral_settings where company_id = ${auth.companyId} and is_on`
         await sql`
           insert into referral_campaigns
-            (company_id, name, reward_type, reward_value, project_id, client_id, created_by, slug)
-          values (${auth.companyId}, ${name}, 'custom', 0, ${pid}, ${project.client_id}, ${auth.userId}, generate_referral_slug(${name}))
+            (company_id, name, reward_type, reward_value, reward_title, project_id, client_id, created_by, slug,
+             friend_reward_type, friend_reward_value, friend_reward_title, valid_until)
+          values (${auth.companyId}, ${name}, ${d?.reward_type ?? 'custom'}, ${d?.reward_value ?? 0}, ${d?.reward_title ?? null},
+                  ${pid}, ${project.client_id}, ${auth.userId}, generate_referral_slug(${name}),
+                  ${d?.friend_reward_type ?? 'none'}, ${d?.friend_reward_value ?? 0}, ${d?.friend_reward_title ?? null},
+                  ${d ? sql`current_date + ${d.valid_days}::int` : null})
           on conflict (company_id, project_id) where project_id is not null do nothing`
         const [made] = await sql`
           select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,
                  rc.reward_description, rc.reward_title, rc.project_id, p.name as project_name,
-                 rc.client_id, cl.name as client_name, rc.status, rc.created_at
+                 rc.client_id, cl.name as client_name, rc.view_token, rc.friend_reward_type, rc.friend_reward_value, rc.friend_reward_title,
+                 to_char(rc.valid_until, 'YYYY-MM-DD') as valid_until, rc.views, rc.status, rc.created_at
             from referral_campaigns rc
             left join projects p on p.id = rc.project_id
             left join clients cl on cl.id = rc.client_id
@@ -115,6 +131,60 @@ export const referralsRouter = new Hono<AppEnv>()
     )
     if (!row) fail(404, 'That project was not found.')
     return c.json(referralCampaign.parse(row))
+  })
+
+  // ── The studio's referral defaults (0298) ───────────────────────────
+  .get('/settings', requireModule('referrals'), async (c) => {
+    const auth = c.get('auth')
+    const row = await attempt(c, 'referrals.settings', () =>
+      withUser(c.env, auth.userId, async (sql) => {
+        const [r] = await sql`
+          select is_on, reward_type, reward_value, reward_title, friend_reward_type, friend_reward_value,
+                 friend_reward_title, valid_days, card_look
+            from referral_settings where company_id = ${auth.companyId}`
+        return r ?? {}
+      }),
+    )
+    if (!row) fail(400, 'We could not load your referral settings.')
+    return c.json(referralSettings.parse(row))
+  })
+
+  .put('/settings', requireAction('referrals', 'edit'), async (c) => {
+    const parsed = referralSettings.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the referral settings.')
+    if (parsed.data.friend_reward_type === 'percentage' && parsed.data.friend_reward_value > 100)
+      fail(422, 'A percent off cannot be more than 100.')
+    const auth = c.get('auth')
+    const d = parsed.data
+    const ok = await attempt(c, 'referrals.settings_save', () =>
+      withUser(c.env, auth.userId, (sql) => sql`
+        insert into referral_settings (company_id, is_on, reward_type, reward_value, reward_title, friend_reward_type,
+                                       friend_reward_value, friend_reward_title, valid_days, card_look, updated_at)
+        values (${auth.companyId}, ${d.is_on}, ${d.reward_type}, ${d.reward_value}, ${d.reward_title}, ${d.friend_reward_type},
+                ${d.friend_reward_value}, ${d.friend_reward_title}, ${d.valid_days}, ${d.card_look}, now())
+        on conflict (company_id) do update set
+          is_on = excluded.is_on, reward_type = excluded.reward_type, reward_value = excluded.reward_value,
+          reward_title = excluded.reward_title, friend_reward_type = excluded.friend_reward_type,
+          friend_reward_value = excluded.friend_reward_value, friend_reward_title = excluded.friend_reward_title,
+          valid_days = excluded.valid_days, card_look = excluded.card_look, updated_at = now()
+        returning company_id`),
+    )
+    if (!ok?.length) fail(400, 'We could not save your referral settings.')
+    await audit(c, { action: 'referral_settings.update', entityType: 'company', entityId: auth.companyId, after: d })
+    return c.json(referralSettings.parse(d))
+  })
+
+  /**
+   * The friend's offer for a project's invoice (0298): set when the lead that
+   * became the project came by a client's referral card. RLS keeps it in-studio.
+   */
+  .get('/offer/:id', async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'referrals.offer', () =>
+      withUser(c.env, c.get('auth').userId, (sql) => sql`select * from referral_offer_for_project(${id})`),
+    )
+    if (!rows) fail(400, 'We could not read the referral offer.')
+    return c.json(rows[0] ? referralOffer.parse(rows[0]) : null)
   })
 
   .patch('/:id', requireAction('referrals', 'edit'), async (c) => {
@@ -131,7 +201,11 @@ export const referralsRouter = new Hono<AppEnv>()
                  reward_type = ${d.reward_type}, reward_value = ${d.reward_value},
                  reward_description = ${d.reward_description ?? null},
                  -- Left alone when not sent: the Referrals page's form has no title field.
-                 reward_title = ${d.reward_title === undefined ? sql`reward_title` : d.reward_title}
+                 reward_title = ${d.reward_title === undefined ? sql`reward_title` : d.reward_title},
+                 friend_reward_type = ${d.friend_reward_type === undefined ? sql`friend_reward_type` : d.friend_reward_type},
+                 friend_reward_value = ${d.friend_reward_value === undefined ? sql`friend_reward_value` : d.friend_reward_value},
+                 friend_reward_title = ${d.friend_reward_title === undefined ? sql`friend_reward_title` : d.friend_reward_title},
+                 valid_until = ${d.valid_until === undefined ? sql`valid_until` : d.valid_until}
            where id = ${id} and company_id = ${auth.companyId}
            returning id`
       }),
@@ -284,20 +358,32 @@ publicReferralsRouter.get('/referrals/campaign/:slug', async (c) => {
     const r = await withService(c.env, async (sql) => {
       const base = row as { campaign_id?: string }
       if (!base?.campaign_id) return null
+      // The card is the client's (0298): their name leads it, never whoever
+      // filled the form last; the friend's offer and the studio's look ride along.
       const rows = await sql<Record<string, unknown>[]>`select rc.name as campaign_name,
           (select co.logo_url from companies co
             join referral_campaigns rc2 on rc2.company_id = co.id
            where rc2.id = ${base.campaign_id}::uuid limit 1) as logo_url,
-          (select rs.referrer_name from referral_submissions rs
-            where rs.campaign_id = ${base.campaign_id}::uuid and rs.referrer_name is not null
-            order by rs.created_at desc limit 1) as referring_client_name
+          coalesce((select cl.name from clients cl where cl.id = rc.client_id),
+                   (select rs.referrer_name from referral_submissions rs
+                     where rs.campaign_id = ${base.campaign_id}::uuid and rs.referrer_name is not null
+                     order by rs.created_at desc limit 1)) as referring_client_name,
+          rc.friend_reward_type, rc.friend_reward_value, rc.friend_reward_title,
+          to_char(rc.valid_until, 'YYYY-MM-DD') as valid_until,
+          coalesce((select st.card_look from referral_settings st where st.company_id = rc.company_id), 'ivory') as card_look
         from referral_campaigns rc where rc.id = ${base.campaign_id}::uuid`
+      await sql`select referral_card_opened(${slug})`
       return rows[0] ?? null
     })
     if (r) {
       extra = {
         logo_url: (r['logo_url'] as string | null) ?? null,
         referring_client_name: (r['referring_client_name'] as string | null) ?? null,
+        friend_reward_type: r['friend_reward_type'] ?? 'none',
+        friend_reward_value: Number(r['friend_reward_value'] ?? 0),
+        friend_reward_title: (r['friend_reward_title'] as string | null) ?? null,
+        valid_until: (r['valid_until'] as string | null) ?? null,
+        card_look: (r['card_look'] as string | null) ?? 'ivory',
       }
     }
   } catch {
@@ -388,17 +474,38 @@ publicReferralsRouter.post('/referrals/submit', async (c) => {
   // + notify studio admins. Failures are swallowed — the referral itself won.
   try {
     await withService(c.env, async (sql) => {
-      const camp = await sql<{ company_id: string; owner_user_id: string | null }[]>`
-        select rc.company_id, co.owner_user_id
+      const camp = await sql<{
+        company_id: string; owner_user_id: string | null; project_id: string | null
+        client_name: string | null; offer: string | null
+      }[]>`
+        select rc.company_id, co.owner_user_id, rc.project_id,
+               (select cl.name from clients cl where cl.id = rc.client_id) as client_name,
+               case when rc.friend_reward_type = 'none' then null else rc.friend_reward_title end as offer
           from referral_campaigns rc join companies co on co.id = rc.company_id
          where rc.id = ${campaignId}::uuid`
       const companyId = camp[0]?.company_id
       if (!companyId) return
-      await sql`insert into crm_leads (company_id, name, phone, email, source, notes)
+      // Who sent the friend: the card's own client, else the name typed.
+      const referrer = camp[0]?.client_name || d.referrer_name || null
+      const [lead] = await sql<{ id: string }[]>`insert into crm_leads (company_id, name, phone, email, source, notes,
+                                                    event_type, event_date, referral_submission_id, referred_by_name)
         values (${companyId}, ${d.client_name}, ${d.client_phone ?? null},
                 ${d.client_email ?? null}, 'referral',
-                ${[`Event: ${d.event_type ?? '—'}`, `Date: ${d.event_date ?? '—'}`,
-                   d.notes ?? null].filter(Boolean).join(' · ')})`
+                ${[referrer ? `Referred by ${referrer}` : null, camp[0]?.offer ? `Offer: ${camp[0].offer}` : null,
+                   d.event_type ? `Event: ${d.event_type}` : null, d.event_date ? `Date: ${d.event_date}` : null,
+                   d.notes ?? null].filter(Boolean).join(' · ')},
+                ${d.event_type ?? null}, ${d.event_date ?? null}, ${submissionId}, ${referrer})
+        returning id`
+      // The referral knows its lead and its project (0298): booking the lead
+      // makes the client's reward due.
+      await sql`update referral_submissions
+                   set crm_lead_id = ${lead?.id ?? null}, linked_lead_id = ${lead?.id ?? null},
+                       project_id = coalesce(project_id, ${camp[0]?.project_id ?? null}),
+                       referring_client_name = coalesce(referring_client_name, ${referrer}),
+                       referred_name = coalesce(referred_name, ${d.client_name}),
+                       referred_phone = coalesce(referred_phone, ${d.client_phone ?? null}),
+                       status = case when status = 'pending' then 'new' else status end
+                 where id = ${submissionId}`
       // The owner hears of it. (This insert named columns the table never had,
       // so the bell stayed silent for every referral until now.)
       const owner = camp[0]?.owner_user_id
