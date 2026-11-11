@@ -113,7 +113,7 @@ function Board() {
           access.hasAction('projects', 'edit') ? (
             <Button asChild className="bg-tone-teal text-white shadow-md hover:bg-tone-teal/90">
               <Link to="/galleries">
-                <Images /> Photo gallery <NewBadge feature="galleryDrive" className="ml-1 bg-white" />
+                <Images /> Photo gallery <NewBadge feature="galleryApp" loud className="ml-1" />
               </Link>
             </Button>
           ) : undefined

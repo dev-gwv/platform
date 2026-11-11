@@ -21,6 +21,7 @@ import { GoogleDriveIcon } from '@/features/gallery/GoogleDriveIcon'
 import { useFramelineAccount, useGalleries, useOpenFramelineHome, useOpenGallery } from '@/features/gallery/api'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { DriveCard } from '@/routes/settings/gallery'
+import { useCountPhotoSharingVisit, useMarkPhotoSharingUsed } from '@/shared/ui/new-badge'
 
 export function GalleriesPage() {
   return (
@@ -43,6 +44,8 @@ const n = (v: number) => v.toLocaleString('en-IN')
  */
 function PhotoSharingApp() {
   const q = useGalleries()
+  // Each open counts towards this person's "New" going (five, or once they use a gallery).
+  useCountPhotoSharingVisit()
   const [creating, setCreating] = useState(false)
   const items = q.data?.items ?? []
   const photos = items.reduce((s, g) => s + g.photo_count, 0)
@@ -127,7 +130,9 @@ function GalleryCard({ g }: { g: GalleryListItem }) {
   const open = useOpenGallery(g.project_id)
   const days = g.expires_at ? daysUntil(g.expires_at.slice(0, 10)) : null
   const empty = g.photo_count === 0
+  const used = useMarkPhotoSharingUsed()
   async function copy() {
+    used()
     try {
       await navigator.clipboard.writeText(shareText(g))
       toast.success('Link and PIN copied.')
@@ -169,7 +174,7 @@ function GalleryCard({ g }: { g: GalleryListItem }) {
             {open.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />} Open gallery
           </Button>
           <Button size="sm" className="bg-[#25D366] text-white hover:bg-[#1ebe5b]" asChild>
-            <a href={`https://wa.me/?text=${encodeURIComponent(shareText(g))}`} target="_blank" rel="noopener noreferrer">
+            <a href={`https://wa.me/?text=${encodeURIComponent(shareText(g))}`} target="_blank" rel="noopener noreferrer" onClick={() => void used()}>
               <MessageCircle /> WhatsApp
             </a>
           </Button>
@@ -180,7 +185,10 @@ function GalleryCard({ g }: { g: GalleryListItem }) {
             size="sm"
             variant="outline"
             aria-label={`Download QR for ${g.project_name}`}
-            onClick={() => void downloadQrPng(g.gallery_url, `${g.project_name} gallery QR`, g.project_name, g.pin ? `PIN ${g.pin}` : 'Scan to see the photos')}
+            onClick={() => {
+              used()
+              void downloadQrPng(g.gallery_url, `${g.project_name} gallery QR`, g.project_name, g.pin ? `PIN ${g.pin}` : 'Scan to see the photos')
+            }}
           >
             <QrCode />
           </Button>
@@ -197,12 +205,14 @@ function CreateGalleryDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const used = useMarkPhotoSharingUsed()
   async function create() {
     if (!projectId) return
     setBusy(true)
     try {
       await callApi(`/projects/${projectId}/gallery`, { method: 'POST', body: {}, responseSchema: projectGallery })
       void qc.invalidateQueries({ queryKey: ['galleries'] })
+      used()
       toast.success(`Gallery ready for ${name ?? 'the project'}. Upload the photos or bring them from Google Drive.`)
       onClose()
       void navigate({ to: '/projects/$id', params: { id: projectId }, search: { tab: 'gallery' } as never })

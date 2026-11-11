@@ -141,7 +141,11 @@ jobs:
           mkdir -p /tmp/pw && cd /tmp/pw
           npm init -y > /dev/null
           npm i --no-audit --no-fund playwright@1.56.1
-          npx playwright install --with-deps chromium
+          # The runner image already carries Chromium's libraries; --with-deps only
+          # adds extra fonts from Ubuntu's mirrors. When those mirrors cannot be
+          # reached (11 Nov: DNS failures on every run), install Chromium alone so
+          # the smoke test still runs.
+          npx playwright install --with-deps chromium || npx playwright install chromium
 
       - name: Boot API + web, run the browser smoke test
         env:

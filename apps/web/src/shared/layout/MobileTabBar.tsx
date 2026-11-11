@@ -3,6 +3,7 @@ import { Camera, ClipboardList, Home, Inbox, MapPin, Menu, PhoneCall } from 'luc
 import { seesStudioWork } from '@ipc/permissions'
 import { useAccess } from '../auth/useAccess'
 import { cn } from '../ui/cn'
+import { NewDot } from '../ui/new-badge'
 import { useAttendanceMe } from '@/features/attendance/api'
 
 /**
@@ -46,7 +47,9 @@ export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
           </Link>
         )
       })}
-      <button type="button" onClick={onMenu} className={cn(item, 'text-muted-foreground')}>
+      <button type="button" onClick={onMenu} className={cn(item, 'relative text-muted-foreground')}>
+        {/* Photo sharing's "New" lives in the menu; the dot says so from the bar. */}
+        {access.hasAction('projects', 'edit') && <NewDot feature="galleryApp" className="right-[calc(50%-14px)]" />}
         <Menu className="size-5" aria-hidden />
         Menu
       </button>

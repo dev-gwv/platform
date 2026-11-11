@@ -12,6 +12,7 @@ import { downloadQrPng, qrSvg } from '@/shared/ui/qr-download'
 import { BookCallButton } from '@/features/help/BookCall'
 import { SupportButtons } from '@/features/help/HelpPanel'
 import { daysUntil } from '@/shared/ui/days-left'
+import { useMarkPhotoSharingUsed } from '@/shared/ui/new-badge'
 import { ApiError } from '@/shared/api/client'
 import type { ProjectGallery } from '@ipc/contracts'
 import { useCreateGallery, useOpenGallery, useProjectGallery } from './api'
@@ -159,7 +160,9 @@ function GalleryReady({
   // Green once there are photos to see; amber while the next thing is uploading them.
   const done = photos > 0
 
+  const used = useMarkPhotoSharingUsed()
   const copy = async (text: string, what: string) => {
+    used()
     try {
       await navigator.clipboard.writeText(text)
       toast.success(`${what} copied`)
@@ -258,18 +261,19 @@ function GalleryReady({
                   </Button>
                 )}
                 <Button variant="outline" size="sm" asChild>
-                  <a href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer noopener">
+                  <a href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer noopener" onClick={() => void used()}>
                     <MessageCircle /> Send on WhatsApp
                   </a>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
+                  onClick={() => {
+                    used()
                     void downloadQrPng(gallery.gallery_url, `${projectName} gallery`, projectName, gallery.pin ? `Scan for your photos · PIN ${gallery.pin}` : 'Scan for your photos').catch(() =>
                       toast.error('Could not make the QR image.'),
                     )
-                  }
+                  }}
                 >
                   <Download /> Download QR
                 </Button>
