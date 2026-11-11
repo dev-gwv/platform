@@ -167,6 +167,8 @@ export const adScriptRequest = z.object({
   seconds: z.coerce.number().refine((n) => (AD_LENGTHS as readonly number[]).includes(n)).default(60),
   cta: z.enum(AD_CTAS).default('get_quote'),
   offer: z.string().trim().max(200).default(''),
+  /** Hooks already on screen, so "Write again" opens differently. */
+  avoid_hooks: z.array(z.string().trim().max(160)).max(6).default([]),
 })
 export type AdScriptRequest = z.input<typeof adScriptRequest>
 export type AdScriptAsk = z.infer<typeof adScriptRequest>

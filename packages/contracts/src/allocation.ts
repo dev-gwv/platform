@@ -128,6 +128,8 @@ export const bookSlotsBatchResult = z.object({
       error: z.enum(['double_booked', 'failed']).nullable(),
     }),
   ),
+  /** Rates saved because the person had none (owner, 11 Nov: "it should remember"). */
+  rates_saved: z.array(z.object({ user_id: uuid, name: z.string().nullable(), amount: z.number() })).default([]),
 })
 export type BookSlotsBatchResult = z.infer<typeof bookSlotsBatchResult>
 
@@ -192,3 +194,18 @@ export const calendarScope = z.enum(['mine', 'studio'])
 export type CalendarScope = z.infer<typeof calendarScope>
 export const calendarLink = z.object({ scope: calendarScope, url: z.string() })
 export type CalendarLink = z.infer<typeof calendarLink>
+
+/**
+ * What the studio has paid before, for one-tap payouts in Assign team (owner,
+ * 11 Nov: "I should not be using any keyboard"). Each list is newest or most
+ * used first; empty for anyone who cannot see crew pay.
+ */
+export const payoutMemory = z.object({
+  people: z.record(z.string(), z.array(z.number())),
+  roles: z.record(z.string(), z.array(z.number())),
+})
+export type PayoutMemory = z.infer<typeof payoutMemory>
+
+/** A saved rate the book step reports back. */
+export const rateSaved = z.object({ user_id: uuid, name: z.string().nullable(), amount: z.number() })
+export type RateSaved = z.infer<typeof rateSaved>

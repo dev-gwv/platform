@@ -33,7 +33,7 @@ import { newRawToken, verifyToken } from '../../lib/auth-token'
 import { cleanDesignWriting, designWriterMessages } from '../../lib/design-writer'
 import { writeWithAi } from '../../lib/ai-write'
 import { captionMessages, parseCaptions } from '../../lib/caption-writer'
-import { adScriptMessages, parseAdScripts } from '../../lib/ad-script-writer'
+import { adScriptMessages, languageProblem, languageRetry, parseAdScripts } from '../../lib/ad-script-writer'
 
 /**
  * Quotation Designer (0295): the studio's premium quotation designs, each a
@@ -134,14 +134,37 @@ export const designsRouter = new Hono<AppEnv>()
   .post('/ad-scripts', requireAction('projects', 'view'), async (c) => {
     const parsed = adScriptRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, "Please check your studio's name and the numbers (rating 1 to 5).")
-    const text = await writeWithAi(c, {
-      kind: `ad_script:${parsed.data.angle}`,
-      messages: adScriptMessages(parsed.data),
-      maxTokens: 900 * parsed.data.count + 300,
-      temperature: 0.9,
-      cost: 1200 * parsed.data.count,
-    })
-    const scripts = parseAdScripts(text, parsed.data)
+    const ask = parsed.data
+    const messages = adScriptMessages(ask)
+    const write = (msgs: typeof messages, cost = 1200 * ask.count) =>
+      writeWithAi(c, {
+        kind: `ad_script:${ask.angle}`,
+        messages: msgs,
+        maxTokens: 900 * ask.count + 300,
+        temperature: 0.75,
+        cost,
+      })
+    const first = await write(messages)
+    let scripts = parseAdScripts(first, ask)
+    // Live test, 11 Nov: English came back Hinglish and Hindi in Roman letters.
+    // One more try, naming the scripts that missed; keep it if it is better.
+    const missed = (list: typeof scripts) =>
+      list.flatMap((s, i) => {
+        const why = languageProblem(s, ask.language, ask.studio)
+        return why ? [{ n: i + 1, why }] : []
+      })
+    const problems = missed(scripts)
+    if (problems.length > 0 || scripts.length === 0) {
+      // Best effort: a refused or failed retry (budget, allowance, the model)
+      // never costs the person the scripts already written.
+      const again = await write([
+        ...messages,
+        { role: 'assistant', content: first },
+        languageRetry(problems.length ? problems : [{ n: 1, why: 'did not come back in the shape asked for' }], ask.language),
+      ], 900 * ask.count).catch(() => null)
+      const second = again ? parseAdScripts(again, ask) : []
+      if (second.length > 0 && missed(second).length <= problems.length) scripts = second
+    }
     if (scripts.length === 0) fail(503, 'The AI came back empty. Try again.')
     return c.json(adScriptReply.parse({ scripts }))
   })

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
-import { bookSlotsBatchResult, teamSlot, teamMember, type BookSlotRequest, type SetSlotDataRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
+import { bookSlotsBatchResult, payoutMemory, teamSlot, teamMember, type BookSlotRequest, type SetSlotDataRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -57,7 +57,29 @@ export function useBookSlots() {
         body: { items },
         responseSchema: bookSlotsBatchResult,
       }),
+    // A payout given to someone with no usual rate is kept as their rate, so
+    // the next booking fills itself (owner, 11 Nov). Say so once.
+    onSuccess: ({ rates_saved }) => {
+      if (rates_saved.length === 0) return
+      const one = rates_saved[0]!
+      toast.success(
+        rates_saved.length === 1
+          ? `Saved ₹${one.amount.toLocaleString('en-IN')} as ${one.name ?? 'their'}'s usual rate. Next time it fills itself.`
+          : `Saved the usual rate for ${rates_saved.length} people. Next time it fills itself.`,
+      )
+      void qc.invalidateQueries({ queryKey: ['team', 'members'] })
+    },
     onSettled: () => refreshBookings(qc),
+  })
+}
+
+/** What was paid before, per person and per role, for one-tap payouts. Empty for anyone who cannot see pay. */
+export function usePayoutMemory(enabled = true) {
+  return useQuery({
+    queryKey: ['allocation', 'payout-memory'],
+    queryFn: () => callApi('/allocation/payout-memory', { responseSchema: payoutMemory }),
+    enabled,
+    staleTime: 5 * 60_000,
   })
 }
 

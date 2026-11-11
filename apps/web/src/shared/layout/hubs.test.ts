@@ -82,18 +82,19 @@ describe('the staff menu', () => {
 })
 
 describe('the studio menu', () => {
-  it('is thirteen lines, one word for each thing', () => {
+  it('is fourteen lines, one for each thing', () => {
     const every = [
       ...ALL, 'dashboard', 'crm', 'clients', 'projects', 'tasks', 'billing', 'company_expenses', 'financials',
       'reports', 'settings',
     ] as ModuleKey[]
     const lines = filterNav(NAV, 'admin', access(every), false).map((e) => e.label)
     expect(lines).toEqual([
-      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Tasks', 'Data & Backup', 'Money',
+      'Home', 'Leads', 'Clients', 'Projects', 'Shoots', 'Post-Production', 'Photo sharing', 'Tasks', 'Data & Backup', 'Money',
       'Team', 'Reports', 'AI', 'Settings',
     ])
-    // Owner, 5 Nov (later): the Gallery is on the Post-Production page itself, not a menu line.
-    expect(lines).not.toContain('Gallery')
+    // Owner, 11 Nov: the Photo sharing app is its own line, right under Post-Production.
+    const photos = filterNav(NAV, 'admin', access(every), false).find((e) => e.label === 'Photo sharing') as NavLeaf
+    expect(photos.to).toBe('/galleries')
   })
 
   it('gives the owner a Plan & billing line just above Settings', () => {
@@ -110,16 +111,17 @@ describe('the studio menu', () => {
 
   it('opens Money on what is due, and Projects with its Needs attention tab', () => {
     expect(hubFor('/billing/invoices')?.map((t) => t.label)).toEqual(['Payments', 'Invoices', 'Expenses', 'Profit & Loss'])
-    expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking', '/galleries', '/galleries/app'])
+    expect(hubFor('/project-tracking')?.map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
     const money = filterNav(NAV, 'admin', access(['company_expenses']), false).find((e) => e.label === 'Money') as NavLeaf
     expect(money.to).toBe('/company-expenses')
   })
 
-  it('shows Galleries only to people who can edit projects, as its API asks', () => {
-    const projects = (writes: string[]) =>
-      filterNav(NAV, 'admin', access(['projects', 'billing'], writes), false).find((e) => e.label === 'Projects') as NavLeaf
-    expect(projects(['projects.edit']).hub?.map((t) => t.to)).toContain('/galleries')
-    expect(projects([]).hub?.map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
+  it('shows the Photo sharing app only to people who can edit projects, as its API asks', () => {
+    const photos = (writes: string[]) =>
+      filterNav(NAV, 'admin', access(['projects', 'billing'], writes), false).find((e) => e.label === 'Photo sharing') as NavLeaf | undefined
+    expect(photos(['projects.edit'])?.hub?.map((t) => t.to)).toEqual(['/galleries', '/galleries/app'])
+    expect(photos([])).toBeUndefined()
+    expect(hubFor('/galleries/app')?.map((t) => t.label)).toEqual(['Galleries', 'Studio app'])
     const viewer = (m: ModuleKey, a: string) => m === 'projects' && a === 'view'
     expect(hubFor('/projects', viewer)?.filter((t) => tabAllowed(t, viewer)).map((t) => t.to)).toEqual(['/projects', '/project-tracking'])
   })

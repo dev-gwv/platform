@@ -118,6 +118,8 @@ export const galleryList = z.object({
   /** False when Frameline did not answer just now: the list is what was last known. */
   fresh: z.boolean(),
   items: z.array(galleryListItem),
+  /** Import from Google Drive is open on this plan (Pro and above, and a trial; 0292). */
+  drive_import: z.boolean().default(true),
 })
 export type GalleryList = z.infer<typeof galleryList>
 
