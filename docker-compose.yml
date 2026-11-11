@@ -14,6 +14,20 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    # Stock Postgres keeps 128 MB of pages in memory and plans for a spinning
+    # disk. The VPS has an SSD and more memory to spare (speed audit, 11 Nov):
+    # keep more of the studios' data in memory and let the planner use indexes
+    # freely. Modest on purpose, because other projects share the box.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - work_mem=8MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

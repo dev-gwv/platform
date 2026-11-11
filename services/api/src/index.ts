@@ -106,6 +106,12 @@ app.use('*', (c, next) => {
     // origin above is always echoed from the allowlist, never '*', which is
     // what makes credentials safe to allow.
     credentials: true,
+    // Every call from the app is cross-origin with an Authorization header, so
+    // the browser asks permission (an OPTIONS round trip to the VPS) before
+    // each one. Without a max age Chrome remembers the answer for 5 seconds,
+    // which doubled the wait on every page (speed audit, 11 Nov). Chrome caps
+    // this at 2 hours.
+    maxAge: 7200,
   })(c, next)
 })
 

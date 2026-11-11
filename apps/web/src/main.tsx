@@ -18,6 +18,7 @@ import { ApiError } from '@/shared/api/client'
 import { z } from '@ipc/contracts'
 import { registerPwa } from '@/shared/pwa/install'
 import { watchForNewRelease } from '@/shared/pwa/update'
+import { setQueryClient } from '@/shared/api/query-client-ref'
 
 /** "Check the email: Invalid email" from a form's ZodError. */
 function checkMessage(error: z.ZodError): string {
@@ -71,9 +72,15 @@ const queryClient = new QueryClient({
   }),
   defaultOptions: {
     // Surface errors immediately in dev instead of masking them as long loads.
-    queries: { retry: import.meta.env.DEV ? false : 2, refetchOnWindowFocus: false },
+    // Data counts as fresh for 30 s, so going back to a page shows it at once
+    // without asking again, and is kept 30 minutes instead of 5, so a page
+    // opened earlier draws from memory while it refreshes (speed audit, 11 Nov).
+    // Every save still invalidates what it changed.
+    queries: { retry: import.meta.env.DEV ? false : 2, refetchOnWindowFocus: false, staleTime: 30_000, gcTime: 30 * 60_000 },
   },
 })
+
+setQueryClient(queryClient)
 
 // Sentry first, so a crash while the tree is mounting is still reported. It
 // needs the router to name transactions after routes rather than URLs.

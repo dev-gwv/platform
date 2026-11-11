@@ -696,7 +696,7 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     }
   if (method === 'POST' && /^\/projects\/[^/]+\/gallery\/open$/.test(path)) return { url: 'https://frameline-admin.pages.dev/events' }
   // Projects → Galleries and Settings → Gallery (0264).
-  if (method === 'GET' && path === '/galleries')
+  if (method === 'GET' && (path === '/galleries' || path === '/galleries?quick=1'))
     return {
       connected: true,
       fresh: true,

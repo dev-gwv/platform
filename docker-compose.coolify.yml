@@ -22,6 +22,10 @@ services:
       - traefik.http.routers.ipcapi.entrypoints=https
       - traefik.http.routers.ipcapi.tls=true
       - traefik.http.routers.ipcapi.tls.certresolver=letsencrypt
+      # Lists of leads and projects are JSON; compress them on the way out
+      # (Cloudflare does too on the brand's address, this covers both).
+      - traefik.http.routers.ipcapi.middlewares=ipcapi-gz
+      - traefik.http.middlewares.ipcapi-gz.compress=true
       # http router -> redirect to https (also serves the ACME http-01 challenge)
       - "traefik.http.routers.ipcapi-http.rule=Host(`${API_DOMAIN}`)"
       - traefik.http.routers.ipcapi-http.entrypoints=http
@@ -41,6 +45,7 @@ services:
       - traefik.http.routers.ipcapi-alt.tls=true
       - traefik.http.routers.ipcapi-alt.tls.certresolver=letsencrypt
       - traefik.http.routers.ipcapi-alt.service=ipcapi
+      - traefik.http.routers.ipcapi-alt.middlewares=ipcapi-gz
       - "traefik.http.routers.ipcapi-alt-http.rule=Host(`${API_ALT_DOMAIN:-api.studioautopilot.in}`)"
       - traefik.http.routers.ipcapi-alt-http.entrypoints=http
       - traefik.http.routers.ipcapi-alt-http.middlewares=ipcapi-redirect

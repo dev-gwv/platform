@@ -53,7 +53,10 @@ const TYPES = pgTypes
 export function db(env: Env): Sql {
   if (!_sql) {
     _sql = postgres(env.DATABASE_URL, {
-      max: 10,
+      // Every request holds a connection for its auth check and then its own
+      // work, and a page fires several at once; 10 queued under bursts
+      // (speed audit, 11 Nov). Postgres allows 100.
+      max: 20,
       // Function-heavy workload with dynamic SQL; skip the prepared-statement
       // cache to avoid plan-cache surprises across SET ROLE boundaries.
       prepare: false,

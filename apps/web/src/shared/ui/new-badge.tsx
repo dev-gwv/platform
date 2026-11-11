@@ -80,8 +80,9 @@ function useStudioHasGallery(enabled: boolean): boolean | null {
   const access = useAccess()
   const allowed = enabled && access.hasAction('projects', 'edit')
   const q = useQuery({
-    queryKey: ['galleries'],
-    queryFn: () => callApi('/galleries', { responseSchema: galleryList }),
+    // The quick list: our own rows, without waiting on Frameline.
+    queryKey: ['galleries-exists'],
+    queryFn: () => callApi('/galleries?quick=1', { responseSchema: galleryList }),
     staleTime: 5 * 60_000,
     enabled: allowed,
   })

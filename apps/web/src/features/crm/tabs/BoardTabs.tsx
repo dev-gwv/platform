@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, EyeOff, Eye, GripVertical, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -162,6 +162,13 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     })
     setAnchor(id)
   }
+
+  // Steady handlers, so a card redraws only when its own lead or tick changes,
+  // not every card on every keystroke or tick (speed audit, 11 Nov).
+  const latest = useRef({ tick, onOpen })
+  latest.current = { tick, onOpen }
+  const stableTick = useCallback((id: string, range: boolean) => latest.current.tick(id, range), [])
+  const stableOpen = useCallback((id: string) => latest.current.onOpen(id), [])
 
   function tickColumn(stageId: string, on: boolean) {
     const ids = inPipeline.filter((l) => l.stage_id === stageId).map((l) => l.id)
@@ -329,12 +336,12 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
                     key={l.id}
                     lead={l}
                     now={now}
-                    onOpen={onOpen}
+                    onOpen={stableOpen}
                     draggable={canEdit && !move.isPending && !bulk.isPending}
                     stageProbability={s.probability_default}
                     ticked={ticked.has(l.id)}
                     ticking={ticked.size > 0}
-                    onTick={canEdit ? tick : undefined}
+                    onTick={canEdit ? stableTick : undefined}
                   />
                 ))}
               </DroppableStage>

@@ -39,7 +39,11 @@ export const galleriesRouter = new Hono<AppEnv>()
     const auth = c.get('auth')
     const connected = framelineConnected(c.env)
     let fresh = false
-    if (connected) {
+    // ?quick=1 answers from the kept rows without asking Frameline first: the
+    // "New" sign only needs to know whether a gallery exists, and it is asked
+    // on many pages (speed audit, 11 Nov). Webhooks keep the rows current.
+    const quick = c.req.query('quick') === '1'
+    if (connected && !quick) {
       const r = await listFramelineGalleries(c.env, await personOf(c))
       if (r.ok) {
         fresh = true

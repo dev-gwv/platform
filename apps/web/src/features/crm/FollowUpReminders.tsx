@@ -37,7 +37,6 @@ export function FollowUpReminders() {
         : callApi('/me/follow-ups', { responseSchema: myFollowUp.array() }),
     enabled: !!session,
     refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
     staleTime: 30_000,
   })
 

@@ -212,6 +212,7 @@ function CreateGalleryDialog({ onClose }: { onClose: () => void }) {
     try {
       await callApi(`/projects/${projectId}/gallery`, { method: 'POST', body: {}, responseSchema: projectGallery })
       void qc.invalidateQueries({ queryKey: ['galleries'] })
+      void qc.invalidateQueries({ queryKey: ['galleries-exists'] })
       used()
       toast.success(`Gallery ready for ${name ?? 'the project'}. Upload the photos or bring them from Google Drive.`)
       onClose()

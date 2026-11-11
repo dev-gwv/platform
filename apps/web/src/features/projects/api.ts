@@ -10,7 +10,6 @@ import {
   deliverableType,
   myDeliverable,
   issuedQuotation,
-  projectDetail,
   projectListItem,
   projectListPage,
   type CreateProjectRequest,
@@ -32,6 +31,7 @@ import { callApi } from '@/shared/api/client'
 import { invalidateMoney } from '@/features/billing/invalidate'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { projectQuery } from './project-query'
 
 const projectsList = projectListItem.array()
 const createResponse = z.object({ id: z.string().uuid() })
@@ -82,8 +82,7 @@ export function useProjectsPage(query: Required<Pick<ProjectsQuery, 'page' | 'pa
 export function useProject(id: string) {
   const { session } = useAuth()
   return useQuery({
-    queryKey: ['projects', id],
-    queryFn: () => callApi(`/projects/${id}`, { responseSchema: projectDetail }),
+    ...projectQuery(id),
     enabled: !!session && !!id,
   })
 }
