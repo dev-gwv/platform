@@ -3,8 +3,8 @@
  * time it is meant to be spoken, made slower or faster by the reader.
  */
 
-export const SPEEDS = [0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5] as const
-export const DEFAULT_SPEED_INDEX = 3
+export const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const
+export const DEFAULT_SPEED_INDEX = 2
 
 /** Pixels a second so `scrollable` pixels pass in `seconds`, at a speed (1 = as written). */
 export function pxPerSecond(scrollable: number, seconds: number, speed: number): number {

@@ -13,7 +13,8 @@ describe('teleprompter', () => {
     expect(SPEEDS[DEFAULT_SPEED_INDEX]).toBe(1)
     expect(stepSpeed(0, -1)).toBe(0)
     expect(stepSpeed(SPEEDS.length - 1, 1)).toBe(SPEEDS.length - 1)
-    expect(stepSpeed(3, 1)).toBe(4)
+    expect(stepSpeed(2, 1)).toBe(3)
+    expect(SPEEDS[3]! - SPEEDS[2]!).toBeGreaterThanOrEqual(0.25)
   })
 
   it('reads the hook first, then each part', () => {

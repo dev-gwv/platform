@@ -108,6 +108,22 @@ interface Facts {
   strengths: string[]
   extra: string
 }
+/** The choices, kept with the facts so leaving the page loses nothing. */
+interface Choices {
+  speaker: AdSpeaker
+  angle: AdAsk
+  lang: AiLang
+  tone: AiTone
+  seconds: number
+  cta: AdCta
+  offer: string
+}
+/** A batch of scripts and the length and language they were written for. */
+interface Batch {
+  scripts: AdScript[]
+  seconds: number
+}
+const CHOICES_KEY = 'ad-scripts:choices'
 const FACTS_KEY = 'ad-scripts:facts'
 const LAST_KEY = 'ad-scripts:last'
 
@@ -140,15 +156,38 @@ function ScriptMaker() {
   const [facts, setFacts] = useState<Facts>(
     saved ?? { studio: '', city: '', weddings: '', years: '', rating: '', strengths: [], extra: '' },
   )
-  const [speaker, setSpeaker] = useState<AdSpeaker>('female')
-  const [angle, setAngle] = useState<AdAsk>('mix')
-  const [lang, setLang] = useState<AiLang>('hi')
-  const [tone, setTone] = useState<AiTone>('warm')
-  const [seconds, setSeconds] = useState<number>(60)
-  const [cta, setCta] = useState<AdCta>('get_quote')
-  const [offer, setOffer] = useState('')
+  const [choices, setChoices] = useState<Choices>(() => ({
+    speaker: 'female',
+    angle: 'mix',
+    lang: 'hi',
+    tone: 'warm',
+    seconds: 60,
+    cta: 'get_quote',
+    offer: '',
+    ...(readStored<Partial<Choices>>(CHOICES_KEY) ?? {}),
+  }))
+  const { speaker, angle, lang, tone, seconds, cta, offer } = choices
+  const choose = (patch: Partial<Choices>) =>
+    setChoices((c) => {
+      const next = { ...c, ...patch }
+      store(CHOICES_KEY, next)
+      return next
+    })
+  const setSpeaker = (v: AdSpeaker) => choose({ speaker: v })
+  const setAngle = (v: AdAsk) => choose({ angle: v })
+  const setLang = (v: AiLang) => choose({ lang: v })
+  const setTone = (v: AiTone) => choose({ tone: v })
+  const setSeconds = (v: number) => choose({ seconds: v })
+  const setCta = (v: AdCta) => choose({ cta: v })
+  const setOffer = (v: string) => choose({ offer: v })
   const [adding, setAdding] = useState('')
-  const [scripts, setScripts] = useState<AdScript[] | null>(() => readStored<AdScript[]>(LAST_KEY))
+  const [batch, setBatch] = useState<Batch | null>(() => {
+    const stored = readStored<Batch | AdScript[]>(LAST_KEY)
+    // Before 11 Nov the last scripts were kept without their length.
+    if (Array.isArray(stored)) return { scripts: stored, seconds: 60 }
+    return stored?.scripts ? stored : null
+  })
+  const scripts = batch?.scripts ?? null
   const [again, setAgain] = useState<number | null>(null)
   const ownWords = usePersonalWords('ad_strength')
   const strengths = useMemo(() => [...new Set([...STRENGTHS, ...ownWords, ...facts.strengths])], [ownWords, facts.strengths])
@@ -201,8 +240,9 @@ function ScriptMaker() {
   function run() {
     write.mutate(ask(), {
       onSuccess: (r) => {
-        setScripts(r.scripts)
-        store(LAST_KEY, r.scripts)
+        const next = { scripts: r.scripts, seconds }
+        setBatch(next)
+        store(LAST_KEY, next)
       },
       onError: fail,
     })
@@ -210,12 +250,15 @@ function ScriptMaker() {
 
   function writeAgain(i: number, s: AdScript) {
     setAgain(i)
-    write.mutate(ask({ angle: s.angle, count: 1 }), {
+    // The other scripts' hooks go along, so this one opens differently (live test, 11 Nov).
+    const others = (scripts ?? []).filter((_, j) => j !== i).map((x) => x.hook.slice(0, 160)).slice(0, 6)
+    write.mutate(ask({ angle: s.angle, count: 1, seconds: batch?.seconds ?? seconds, avoid_hooks: [...others, s.hook.slice(0, 160)].slice(0, 6) }), {
       onSuccess: (r) => {
         const fresh = r.scripts[0]
         if (!fresh) return
-        setScripts((all) => {
-          const next = (all ?? []).map((x, j) => (j === i ? fresh : x))
+        setBatch((b) => {
+          if (!b) return b
+          const next = { ...b, scripts: b.scripts.map((x, j) => (j === i ? fresh : x)) }
           store(LAST_KEY, next)
           return next
         })
@@ -384,7 +427,7 @@ function ScriptMaker() {
                 key={`${i}-${s.hook.slice(0, 24)}`}
                 n={i + 1}
                 script={s}
-                target={seconds}
+                target={batch?.seconds ?? seconds}
                 rewriting={again === i}
                 onAgain={() => writeAgain(i, s)}
                 disabled={write.isPending}
