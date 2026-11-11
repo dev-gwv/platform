@@ -1,0 +1,2 @@
+-- 0302: speed (audit, 11 Nov). Row-level security policies call the studio
+-- helpers once per query instead of once per row. Claimed; body follows.
