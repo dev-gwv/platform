@@ -76,3 +76,26 @@ Templates (Utility, English), if and when:
 - `support_call_reminder`: "Hi {{1}}, a reminder that your Studio AutoPilot support call is at {{2}}. Join here: {{3}}. Reply STOP to stop these messages."
 - `support_call_cancelled`: "Hi {{1}}, your Studio AutoPilot support call on {{2}} has been cancelled. You can book another from Support call in the app."
 - `support_call_team`: "Support call {{1}}: {{2}} from {{3}} on {{4}}. Join: {{5}}"
+
+## Tickets and the assistant (0300)
+
+Every booking opens a ticket, and an assistant keeps it so the one person who
+takes the calls has almost nothing to write:
+
+1. **75 minutes before the call** it writes a three-line brief from the
+   studio's own data (plan and days left, what it has made, how often it is in
+   the app, where it got stuck, earlier calls, what they wrote when booking)
+   and posts it in the support group with a link to the ticket. With the AI
+   down, the plain facts are posted instead.
+2. **10 minutes after the call** it posts "How did the call go?" with the link.
+3. **On the ticket page** you record one voice note (Hindi or English) or type
+   it. Groq's Whisper hears it with the same `AI_API_KEY` as the assistant;
+   the AI writes the summary, the type of call, where it stands, the next step
+   and a date. Every part can be changed with a tap; a later note adds to the
+   first and the ticket is written again from both.
+4. **At 9 am** the group post adds how many tickets are open and which steps
+   wait on you, late ones marked ⏰.
+
+AI text only ever reaches your own support group, never a studio, and it is
+counted against the platform's token budget, not a studio's allowance. Only
+booked calls make tickets: there is still no support inbox (0273).

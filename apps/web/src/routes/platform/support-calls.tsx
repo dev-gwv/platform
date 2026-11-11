@@ -25,6 +25,7 @@ import { Switch } from '@/shared/ui/switch'
 import { cn } from '@/shared/ui/cn'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { TicketsCard } from '@/features/support/TicketsCard'
 
 /**
  * Platform -> Support calls (0280): who booked a support call and the WhatsApp
@@ -85,6 +86,7 @@ function Loaded({ data }: { data: SupportWhatsappOverview }) {
     <>
       <PageHeader title="Support calls" description={summary} />
       <div className="flex flex-col gap-4">
+        <TicketsCard />
         <CalendarsCard calendars={data.calendars} />
         <ReadyCard ready={data.ready} />
         <BotCard data={data} s={s} patch={patch} onTest={() => test.mutate('group')} testing={test.isPending} />

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { saveSupportCalendarRequest, supportWhatsappOverview, supportWhatsappSettings } from '@ipc/contracts'
+import { saveSupportCalendarRequest, supportTicketNoteRequest, supportWhatsappOverview, supportWhatsappSettings, updateSupportTicketRequest } from '@ipc/contracts'
 import { z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -14,6 +14,11 @@ import { maskNumber, sampleNotice } from '../../lib/support-calls'
 import { looksLikeIcal, maskIcal, refPrefix } from '../../lib/support-calendar'
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
+import { uuidParam } from '../../lib/params'
+import { applyNote, briefTicket, getTicket, listTickets, transcribe, updateTicket } from '../../lib/support-ticket-store'
+
+/** A voice note this long is plenty; Whisper takes 25 MB, most phones send under 2. */
+const MAX_VOICE_BYTES = 20 * 1024 * 1024
 
 /** Send what is due now, without holding up the answer to whoever asked. */
 function drainSoon(env: AppEnv['Bindings']) {
@@ -188,6 +193,80 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     await audit(c, { action: 'platform.support_calls_sample', entityType: 'platform_settings', entityId: null })
     drainSoon(c.env)
     return c.json({ ok: true })
+  })
+
+  // ── tickets (0300): one per booked call, kept by the assistant ───────────
+
+  .get('/support-calls/tickets', async (c) => {
+    const rows = await attempt(c, 'platform.support_tickets', () => listTickets(c.env))
+    if (!rows) fail(400, 'We could not load the tickets.')
+    return c.json(rows)
+  })
+
+  .get('/support-calls/tickets/:id', async (c) => {
+    const id = uuidParam(c)
+    const t = await attempt(c, 'platform.support_ticket', () => getTicket(c.env, id))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  .patch('/support-calls/tickets/:id', async (c) => {
+    const id = uuidParam(c)
+    const parsed = updateSupportTicketRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the ticket.')
+    const t = await attempt(c, 'platform.support_ticket_update', () => updateTicket(c.env, id, parsed.data))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // The owner's words after the call, typed.
+  .post('/support-calls/tickets/:id/note', async (c) => {
+    const id = uuidParam(c)
+    const parsed = supportTicketNoteRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Say a few words about the call.')
+    const t = await attempt(c, 'platform.support_ticket_note', () => applyNote(c.env, id, parsed.data.text))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // The owner's words after the call, spoken: heard by Whisper, then read like a typed note.
+  .post('/support-calls/tickets/:id/voice', async (c) => {
+    const id = uuidParam(c)
+    const body = await c.req.parseBody().catch(() => null)
+    const file = body?.['audio']
+    if (!(file instanceof File) || file.size === 0) fail(422, 'The voice note did not arrive. Record it again.')
+    if (file.size > MAX_VOICE_BYTES) fail(422, 'That voice note is too long. Keep it under ten minutes.')
+    const heard = await transcribe(c.env, file, file.name || 'note.webm')
+    if (!heard.ok) fail(422, heard.error)
+    const t = await attempt(c, 'platform.support_ticket_voice', () => applyNote(c.env, id, heard.text))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // Write the brief again now (it is written by itself an hour before the call).
+  .post('/support-calls/tickets/:id/brief', async (c) => {
+    const id = uuidParam(c)
+    const t = await attempt(c, 'platform.support_ticket_brief', () => getTicket(c.env, id))
+    if (!t) fail(404, 'That ticket was not found.')
+    const brief = await attempt(c, 'platform.support_ticket_brief_write', async () => {
+      const [b] = await withService(c.env, (sql) => sql<{ booking_id: string; page: string | null }[]>`
+        select t.booking_id, b.page from support_tickets t join support_call_bookings b on b.id = t.booking_id where t.id = ${id}`)
+      return briefTicket(c.env, {
+        ticket_id: id,
+        booking_id: b!.booking_id,
+        company_id: t.company_id,
+        starts_at: new Date(t.starts_at),
+        ends_at: t.ends_at ? new Date(t.ends_at) : null,
+        name: t.name,
+        email: t.email,
+        notes: t.booking_notes,
+        page: b!.page,
+        studio_name: t.studio_name,
+      })
+    })
+    if (brief === null) fail(400, 'We could not write the brief.')
+    drainSoon(c.env)
+    return c.json(await getTicket(c.env, id))
   })
 
   .post('/support-calls/test', async (c) => {

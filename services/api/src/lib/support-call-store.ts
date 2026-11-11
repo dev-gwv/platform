@@ -13,6 +13,7 @@ import { withService } from './db'
 import { describeError, log } from './log'
 import { sendWhatsAppTemplate, whatsappConfigured } from './whatsapp'
 import { bookingFromNotice, groupHasRoom, planMessages, summaryText, type Booking, type PlannedMessage } from './support-calls'
+import { followBooking, ticketsSummary } from './support-ticket-store'
 
 /**
  * Support call bookings and their WhatsApp messages (0280): the database and
@@ -172,6 +173,8 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
         page = coalesce(excluded.page, support_call_bookings.page), raw = excluded.raw, updated_at = now()
       returning id`
     const bookingId = row!.id
+    // Every booking has its ticket (0300): opened, moved or closed with it.
+    await followBooking(sql, bookingId, company?.id ?? null, b.status)
 
     // A moved or cancelled call's reminder for the old time must not go out.
     if (notice.event !== 'booking.created') {
@@ -329,7 +332,10 @@ function indiaNow(now: number): { date: string; hour: number } {
   return { date: `${p('year')}-${p('month')}-${p('day')}`, hour: Number(p('hour')) }
 }
 
-/** From 9 am India time, once a day, the day's calls in the group -- only when there are any. */
+/**
+ * From 9 am India time, once a day, the day's calls in the group and the
+ * tickets still open (0300) -- only when there is something to say.
+ */
 export async function queueDailySummary(env: Env, now = Date.now()): Promise<boolean> {
   const { date, hour } = indiaNow(now)
   if (hour < 9) return false
@@ -340,8 +346,14 @@ export async function queueDailySummary(env: Env, now = Date.now()): Promise<boo
       select starts_at, name, studio_name from support_call_bookings
        where status <> 'cancelled' and (starts_at at time zone 'Asia/Kolkata')::date = ${date}::date
        order by starts_at`
-    if (!calls.length) return false
-    const body = summaryText(calls.map((c) => ({ startsAt: new Date(c.starts_at).toISOString(), name: c.name, studioName: c.studio_name })))
+    const tickets = await ticketsSummary(sql, now)
+    if (!calls.length && !tickets) return false
+    const body = [
+      calls.length ? summaryText(calls.map((c) => ({ startsAt: new Date(c.starts_at).toISOString(), name: c.name, studioName: c.studio_name }))) : null,
+      tickets,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
     const rows = await sql`
       insert into support_call_outbox (channel, audience, to_number, body, dedupe_key)
       values ('group', 'group', ${s.group_jid}, ${body}, ${`summary:${date}`})

@@ -154,3 +154,65 @@ export type SupportWhatsappOverview = z.infer<typeof supportWhatsappOverview>
 
 export const supportBotGroup = z.object({ jid: z.string(), name: z.string(), size: z.number().int() })
 export type SupportBotGroup = z.infer<typeof supportBotGroup>
+
+// ── support tickets (0300): one per booked call, kept by the assistant ──────
+
+export const SUPPORT_TICKET_STATUSES = ['booked', 'open', 'waiting_us', 'waiting_them', 'solved', 'cancelled'] as const
+export const supportTicketStatus = z.enum(SUPPORT_TICKET_STATUSES)
+export type SupportTicketStatus = z.infer<typeof supportTicketStatus>
+
+export const SUPPORT_TICKET_KINDS = ['training', 'bug', 'billing', 'feature', 'other'] as const
+export const supportTicketKind = z.enum(SUPPORT_TICKET_KINDS)
+export type SupportTicketKind = z.infer<typeof supportTicketKind>
+
+/** How each status and kind reads on screen. */
+export const SUPPORT_TICKET_STATUS_LABEL: Record<SupportTicketStatus, string> = {
+  booked: 'Call booked',
+  open: 'Open',
+  waiting_us: 'Waiting on you',
+  waiting_them: 'Waiting on them',
+  solved: 'Solved',
+  cancelled: 'Cancelled',
+}
+export const SUPPORT_TICKET_KIND_LABEL: Record<SupportTicketKind, string> = {
+  training: 'Showing how',
+  bug: 'Bug',
+  billing: 'Plan & billing',
+  feature: 'Feature request',
+  other: 'Other',
+}
+
+export const supportTicket = z.object({
+  id: z.string(),
+  status: supportTicketStatus,
+  kind: supportTicketKind.nullable(),
+  starts_at: z.string(),
+  ends_at: z.string().nullable(),
+  name: z.string(),
+  email: z.string().nullable(),
+  studio_name: z.string().nullable(),
+  company_id: z.string().nullable(),
+  meeting_url: z.string().nullable(),
+  booking_notes: z.string().nullable(),
+  brief: z.string().nullable(),
+  transcript: z.string().nullable(),
+  summary: z.string().nullable(),
+  next_action: z.string().nullable(),
+  due_on: z.string().nullable(),
+  solved_at: z.string().nullable(),
+  updated_at: z.string(),
+})
+export type SupportTicket = z.infer<typeof supportTicket>
+
+/** What the owner said after the call, typed instead of spoken. */
+export const supportTicketNoteRequest = z.object({ text: z.string().trim().min(3, 'Say a few words about the call.').max(8000) })
+
+/** Changing a ticket by hand: any of these. */
+export const updateSupportTicketRequest = z.object({
+  status: supportTicketStatus.optional(),
+  kind: supportTicketKind.nullable().optional(),
+  summary: z.string().trim().max(4000).nullable().optional(),
+  next_action: z.string().trim().max(1000).nullable().optional(),
+  due_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+})
+export type UpdateSupportTicketRequest = z.infer<typeof updateSupportTicketRequest>

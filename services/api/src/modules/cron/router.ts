@@ -21,6 +21,7 @@ import { pruneIdlePageTokens } from '../../lib/meta'
 import { runSequenceSends } from '../../lib/sequence-sender'
 import { drainSupportCalls, queueDailySummary } from '../../lib/support-call-store'
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
+import { runTicketAssistant } from '../../lib/support-ticket-store'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -290,7 +291,9 @@ export const cronRouter = new Hono<AppEnv>()
       // New, moved and removed entries on the support calls calendar (0283).
       const calendar = await syncSupportCalendar(c.env)
       const summary = await queueDailySummary(c.env)
-      return { calendar, summary, ...(await drainSupportCalls(c.env)) }
+      // The ticket assistant (0300): a brief before each call, a nudge after it.
+      const tickets = await runTicketAssistant(c.env).catch((err: unknown) => ({ error: String(err instanceof Error ? err.message : err) }))
+      return { calendar, summary, tickets, ...(await drainSupportCalls(c.env)) }
     })
     log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
