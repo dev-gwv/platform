@@ -22,6 +22,7 @@ import { runSequenceSends } from '../../lib/sequence-sender'
 import { drainSupportCalls, queueDailySummary } from '../../lib/support-call-store'
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { runTicketAssistant } from '../../lib/support-ticket-store'
+import { autoCloseTickets, queueWeeklySummary } from '../../lib/support-ticket-followups'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -293,7 +294,10 @@ export const cronRouter = new Hono<AppEnv>()
       const summary = await queueDailySummary(c.env)
       // The ticket assistant (0300): a brief before each call, a nudge after it.
       const tickets = await runTicketAssistant(c.env).catch((err: unknown) => ({ error: String(err instanceof Error ? err.message : err) }))
-      return { calendar, summary, tickets, ...(await drainSupportCalls(c.env)) }
+      // 0301: tickets the studio's own data shows done, and Monday's summary.
+      const selfClosed = await autoCloseTickets(c.env).catch(() => 0)
+      const weekly = await queueWeeklySummary(c.env).catch(() => false)
+      return { calendar, summary, tickets, selfClosed, weekly, ...(await drainSupportCalls(c.env)) }
     })
     log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))

@@ -69,6 +69,8 @@ export const supportWhatsappSettings = z.object({
   tpl_reminder: templateName,
   tpl_cancelled: templateName,
   tpl_team: templateName,
+  /** A follow-up after the call (0301), once the official API is connected. */
+  tpl_followup: templateName,
 })
 export type SupportWhatsappSettings = z.infer<typeof supportWhatsappSettings>
 
@@ -182,6 +184,21 @@ export const SUPPORT_TICKET_KIND_LABEL: Record<SupportTicketKind, string> = {
   other: 'Other',
 }
 
+/** Something the studio was to do that its own data shows once done (0301). */
+export const SUPPORT_TICKET_WATCHES = ['project', 'invoice', 'team', 'lead', 'shoot', 'client', 'gallery', 'plan'] as const
+export const supportTicketWatch = z.enum(SUPPORT_TICKET_WATCHES)
+export type SupportTicketWatch = z.infer<typeof supportTicketWatch>
+export const SUPPORT_TICKET_WATCH_LABEL: Record<SupportTicketWatch, string> = {
+  project: 'make a project',
+  invoice: 'make an invoice',
+  team: 'add their team',
+  lead: 'add a lead',
+  shoot: 'add a shoot day',
+  client: 'add a client',
+  gallery: 'make a photo gallery',
+  plan: 'buy or renew their plan',
+}
+
 export const supportTicket = z.object({
   id: z.string(),
   status: supportTicketStatus,
@@ -201,6 +218,20 @@ export const supportTicket = z.object({
   due_on: z.string().nullable(),
   solved_at: z.string().nullable(),
   updated_at: z.string(),
+  /** 0301: what the studio was to do, watched in its data; 'assistant' when it closed itself. */
+  watch: supportTicketWatch.nullable(),
+  closed_by: z.string().nullable(),
+  /** 0301: the follow-up message to the studio, and how it went. */
+  followup: z.string().nullable(),
+  followup_sent_at: z.string().nullable(),
+  followup_via: z.enum(['whatsapp_link', 'official', 'copied']).nullable(),
+  issue_opened_at: z.string().nullable(),
+  /** A bug's GitHub issue, opened prefilled from the ticket (no studio phone or email in it). */
+  issue_url: z.string().nullable(),
+  /** The number to message: the booking's, else the studio owner's. Digits, country code first. */
+  contact_phone: z.string().nullable(),
+  /** The official API is connected and switched on, so a follow-up can go from our number. */
+  official_ready: z.boolean(),
 })
 export type SupportTicket = z.infer<typeof supportTicket>
 
@@ -216,3 +247,9 @@ export const updateSupportTicketRequest = z.object({
   due_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 })
 export type UpdateSupportTicketRequest = z.infer<typeof updateSupportTicketRequest>
+
+/** Sending the follow-up: a WhatsApp link (the owner presses Send), the official API, or copied. */
+export const supportTicketFollowupRequest = z.object({
+  text: z.string().trim().min(5).max(3000),
+  via: z.enum(['whatsapp_link', 'official', 'copied']),
+})

@@ -432,7 +432,7 @@ function OfficialCard({
     if (!s.team_numbers.includes(n)) patch({ team_numbers: [...s.team_numbers, n].slice(0, 10) })
     setDraft('')
   }
-  const tpl = (key: 'tpl_booked' | 'tpl_reminder' | 'tpl_cancelled' | 'tpl_team', label: string) => (
+  const tpl = (key: 'tpl_booked' | 'tpl_reminder' | 'tpl_cancelled' | 'tpl_team' | 'tpl_followup', label: string) => (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
       <Input className="font-mono text-xs" value={s[key]} onChange={(e) => patch({ [key]: e.target.value.trim() })} />
@@ -482,6 +482,7 @@ function OfficialCard({
             {tpl('tpl_reminder', 'Reminder an hour before')}
             {tpl('tpl_cancelled', 'Cancelled')}
             {tpl('tpl_team', 'Team alert')}
+            {tpl('tpl_followup', 'Follow-up after a call')}
           </div>
         </details>
         <div>

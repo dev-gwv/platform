@@ -26,6 +26,16 @@ export function HelpPage() {
   const [playing, setPlaying] = useState<Tutorial | null>(null)
   const [lang, setLang] = useHelpLang()
 
+  // `?play=<key>` opens that video at once: the link a support follow-up sends (0301).
+  const [asked, setAsked] = useState(() => new URLSearchParams(window.location.search).get('play'))
+  useEffect(() => {
+    if (!asked) return
+    const t = tutorials.find((x) => x.key === asked)
+    if (!t) return
+    setPlaying(t)
+    setAsked(null)
+  }, [asked, tutorials])
+
   useEffect(() => {
     const before = document.title
     document.title = 'Help & tutorials · Studio AutoPilot'

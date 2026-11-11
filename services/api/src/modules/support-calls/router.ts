@@ -1,5 +1,12 @@
 import { Hono } from 'hono'
-import { saveSupportCalendarRequest, supportTicketNoteRequest, supportWhatsappOverview, supportWhatsappSettings, updateSupportTicketRequest } from '@ipc/contracts'
+import {
+  saveSupportCalendarRequest,
+  supportTicketFollowupRequest,
+  supportTicketNoteRequest,
+  supportWhatsappOverview,
+  supportWhatsappSettings,
+  updateSupportTicketRequest,
+} from '@ipc/contracts'
 import { z } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -16,6 +23,7 @@ import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
 import { uuidParam } from '../../lib/params'
 import { applyNote, briefTicket, getTicket, listTickets, transcribe, updateTicket } from '../../lib/support-ticket-store'
+import { draftFollowup, markIssueOpened, sendFollowup } from '../../lib/support-ticket-followups'
 
 /** A voice note this long is plenty; Whisper takes 25 MB, most phones send under 2. */
 const MAX_VOICE_BYTES = 20 * 1024 * 1024
@@ -113,7 +121,8 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
           support_wa_team_numbers = ${numbers}, support_wa_group_jid = ${d.group_jid}, support_wa_group_name = ${d.group_name},
           support_wa_hourly_cap = ${d.hourly_cap}, support_wa_daily_cap = ${d.daily_cap}, support_wa_daily_summary = ${d.daily_summary},
           support_wa_tpl_booked = ${d.tpl_booked}, support_wa_tpl_reminder = ${d.tpl_reminder},
-          support_wa_tpl_cancelled = ${d.tpl_cancelled}, support_wa_tpl_team = ${d.tpl_team}, updated_at = now()`),
+          support_wa_tpl_cancelled = ${d.tpl_cancelled}, support_wa_tpl_team = ${d.tpl_team},
+          support_wa_tpl_followup = ${d.tpl_followup}, updated_at = now()`),
     )
     if (!ok) fail(400, 'We could not save the settings.')
     // Numbers are said by count, never written into the audit trail.
@@ -239,6 +248,34 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     const heard = await transcribe(c.env, file, file.name || 'note.webm')
     if (!heard.ok) fail(422, heard.error)
     const t = await attempt(c, 'platform.support_ticket_voice', () => applyNote(c.env, id, heard.text))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // 0301: the assistant drafts the follow-up to the studio (kept until sent).
+  .post('/support-calls/tickets/:id/followup/draft', async (c) => {
+    const id = uuidParam(c)
+    const t = await attempt(c, 'platform.support_ticket_followup_draft', () => draftFollowup(c.env, id))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // 0301: the follow-up went -- from the owner's WhatsApp, copied, or from our official number.
+  .post('/support-calls/tickets/:id/followup/send', async (c) => {
+    const id = uuidParam(c)
+    const parsed = supportTicketFollowupRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Write the message first.')
+    const r = await attempt(c, 'platform.support_ticket_followup_send', () => sendFollowup(c.env, id, parsed.data.text, parsed.data.via))
+    if (!r?.ticket) fail(404, 'That ticket was not found.')
+    if (r.error) fail(422, r.error)
+    if (parsed.data.via === 'official') drainSoon(c.env)
+    return c.json(r.ticket)
+  })
+
+  // 0301: a bug's GitHub issue was opened from the ticket.
+  .post('/support-calls/tickets/:id/issue', async (c) => {
+    const id = uuidParam(c)
+    const t = await attempt(c, 'platform.support_ticket_issue', () => markIssueOpened(c.env, id))
     if (!t) fail(404, 'That ticket was not found.')
     return c.json(t)
   })

@@ -1,5 +1,5 @@
-import type { SupportTicketKind, SupportTicketStatus } from '@ipc/contracts'
-import { SUPPORT_TICKET_KINDS } from '@ipc/contracts'
+import type { SupportTicketKind, SupportTicketStatus, SupportTicketWatch } from '@ipc/contracts'
+import { SUPPORT_TICKET_KINDS, SUPPORT_TICKET_WATCHES, SUPPORT_TICKET_WATCH_LABEL } from '@ipc/contracts'
 import type { ChatMessage } from './ai'
 import { istWhen } from './support-calls'
 
@@ -122,7 +122,8 @@ export function noteMessages(transcript: string, context: string): ChatMessage[]
         '(training = showed them how; bug = something in the app is broken; billing = plan, payment, access; feature = they want something new), ' +
         '"status": "solved" if nothing is left to do, "waiting_us" if the support person still has to do something, "waiting_them" if the studio has to do something, ' +
         '"next_action": "the one next step, short, or empty when solved", ' +
-        '"due_in_days": a whole number of days for the next step (0 = today, 1 = tomorrow), or null}\n' +
+        '"due_in_days": a whole number of days for the next step (0 = today, 1 = tomorrow), or null, ' +
+        `"watch": if the studio is now to do one of these in the app, which one: ${SUPPORT_TICKET_WATCHES.map((w) => `"${w}" (${SUPPORT_TICKET_WATCH_LABEL[w]})`).join(', ')}; otherwise null}\n` +
         'Use only what the note says. Never invent promises or dates.',
     },
     { role: 'user', content: `About the call:\n${context}\n\nThe note:\n${transcript}` },
@@ -135,6 +136,8 @@ export interface NoteReading {
   status: Extract<SupportTicketStatus, 'open' | 'waiting_us' | 'waiting_them' | 'solved'>
   nextAction: string | null
   dueInDays: number | null
+  /** What the studio is to do that its own data will show (0301). */
+  watch: SupportTicketWatch | null
 }
 
 const STATUSES = ['open', 'waiting_us', 'waiting_them', 'solved'] as const
@@ -145,7 +148,7 @@ const STATUSES = ['open', 'waiting_us', 'waiting_them', 'solved'] as const
  * and the ticket stays open, so a bad answer never loses what was said.
  */
 export function readNoteReply(text: string, transcript: string): NoteReading {
-  const fallback: NoteReading = { summary: transcript.trim().slice(0, 1200), kind: 'other', status: 'open', nextAction: null, dueInDays: null }
+  const fallback: NoteReading = { summary: transcript.trim().slice(0, 1200), kind: 'other', status: 'open', nextAction: null, dueInDays: null, watch: null }
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start < 0 || end <= start) return fallback
@@ -166,7 +169,138 @@ export function readNoteReply(text: string, transcript: string): NoteReading {
     status,
     nextAction: status === 'solved' ? null : next.slice(0, 500) || null,
     dueInDays: status === 'solved' ? null : days,
+    watch: status === 'solved' ? null : (SUPPORT_TICKET_WATCHES.find((w) => w === str(raw.watch)) ?? null),
   }
+}
+
+// ── step 2 (0301): the follow-up, the bug issue, the Monday summary ────────
+
+/** A tutorial the follow-up may point to. */
+export interface TutorialPick {
+  key: string
+  title: string
+}
+
+/**
+ * Asking the AI for the follow-up to the studio: short, warm, in the language
+ * the call was in. It picks tutorials by key from the list; we add the links,
+ * so it can never invent an address.
+ */
+export function followupMessages(ctx: { name: string; summary: string; nextAction: string | null; transcript: string | null }, tutorials: readonly TutorialPick[]): ChatMessage[] {
+  return [
+    {
+      role: 'system',
+      content:
+        'You write the WhatsApp message that Studio AutoPilot support sends a photography studio after a support call. ' +
+        'Reply with JSON only: {"message": "...", "tutorials": ["key", ...]}. ' +
+        'The message: greet them by first name, thank them for the call in one line, recap what was shown or fixed in one or two lines, ' +
+        'say what happens next (what they should do, or what we will do) in one line. At most 6 short lines, plain text, no markdown, at most one emoji. ' +
+        'Write in the language of the call: Hinglish (Hindi in English letters) if the notes are Hindi or Hinglish, else simple English. Button and menu names stay in English. ' +
+        'Never promise anything the notes do not say; no prices, no dates beyond the notes. Do not sign off with a name. ' +
+        'tutorials: up to 2 keys from the list that would help them do it themselves next time, or [] if none fits. Do not put links in the message.',
+    },
+    {
+      role: 'user',
+      content:
+        `Studio contact: ${ctx.name}\nWhat happened: ${ctx.summary}\n${ctx.nextAction ? `Next step: ${ctx.nextAction}\n` : ''}` +
+        `${ctx.transcript ? `Notes from the call: ${ctx.transcript.slice(0, 1500)}\n` : ''}` +
+        `\nTutorials:\n${tutorials.map((t) => `${t.key}: ${t.title}`).join('\n')}`,
+    },
+  ]
+}
+
+/** The follow-up's words and tutorial keys, read forgivingly; null when nothing usable came back. */
+export function readFollowupReply(text: string, known: readonly TutorialPick[]): { message: string; tutorials: TutorialPick[] } | null {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  let message = ''
+  let keys: unknown[] = []
+  if (start >= 0 && end > start) {
+    try {
+      const raw = JSON.parse(text.slice(start, end + 1)) as { message?: unknown; tutorials?: unknown }
+      message = typeof raw.message === 'string' ? raw.message.trim() : ''
+      keys = Array.isArray(raw.tutorials) ? raw.tutorials : []
+    } catch {
+      message = ''
+    }
+  } else {
+    message = text.trim()
+  }
+  if (message.length < 5) return null
+  const picked = keys.flatMap((k) => known.filter((t) => t.key === k)).slice(0, 2)
+  return { message: message.slice(0, 1500), tutorials: picked }
+}
+
+/** The message as it is sent: the words, then each tutorial with its link. */
+export function followupText(message: string, tutorials: readonly TutorialPick[], appUrl: string): string {
+  const base = appUrl.replace(/\/+$/, '')
+  const links = tutorials.map((t) => `▶️ ${t.title}: ${base}/help?play=${encodeURIComponent(t.key)}`)
+  return [message.trim(), ...(links.length ? ['', ...links] : [])].join('\n')
+}
+
+/** A WhatsApp chat with the message written, for the owner to press Send. */
+export function waLink(phone: string | null, text: string): string {
+  const to = (phone ?? '').replace(/\D/g, '')
+  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`
+}
+
+/**
+ * A new GitHub issue, filled in from a bug ticket. Never the studio's phone
+ * or email: an issue is read by whoever works on the code.
+ */
+export function issueUrl(
+  repo: string,
+  t: { studio: string | null; plan: string | null; when: string; summary: string | null; nextAction: string | null; bookingNotes: string | null; link: string },
+): string {
+  const title = `Support: ${(t.summary ?? 'bug from a support call').replace(/\s+/g, ' ').slice(0, 90)}`
+  const body = [
+    `**From a support call** · ${t.studio ?? 'unknown studio'}${t.plan ? ` (${t.plan})` : ''} · ${t.when}`,
+    '',
+    '### What happened',
+    t.summary ?? '-',
+    ...(t.bookingNotes ? ['', '### What they wrote when booking', t.bookingNotes] : []),
+    ...(t.nextAction ? ['', '### Next step', t.nextAction] : []),
+    '',
+    `Ticket: ${t.link}`,
+  ].join('\n')
+  return `https://github.com/${repo}/issues/new?labels=${encodeURIComponent('bug,support')}&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`
+}
+
+export interface WeekStats {
+  calls: number
+  solved: number
+  open: number
+  closedByThemselves: number
+  kinds: { kind: SupportTicketKind; n: number }[]
+  bugsOpen: number
+  stuck: { flow: string; studios: number }[]
+  repeat: { name: string; calls: number }[]
+}
+
+const KIND_WORD: Record<SupportTicketKind, string> = {
+  training: 'showing how',
+  bug: 'bugs',
+  billing: 'plan & billing',
+  feature: 'feature requests',
+  other: 'other',
+}
+
+/** The Monday post: last week in a few lines, and what to fix so the same calls stop. Null in an empty week. */
+export function weeklyText(w: WeekStats): string | null {
+  if (!w.calls && !w.open) return null
+  const lines = [`📊 Support last week: ${plural(w.calls, 'call')}, ${w.solved} solved${w.closedByThemselves ? ` (${w.closedByThemselves} closed by themselves)` : ''}, ${w.open} still open`]
+  if (w.kinds.length) lines.push(`By type: ${w.kinds.map((k) => `${k.n} ${KIND_WORD[k.kind]}`).join(' · ')}`)
+  if (w.bugsOpen) lines.push(`🐞 ${plural(w.bugsOpen, 'bug')} still open`)
+  if (w.stuck.length) lines.push(`Where studios got stuck: ${w.stuck.map((s) => `${s.flow} (${plural(s.studios, 'studio')})`).join(', ')}`)
+  if (w.repeat.length) lines.push(`Called more than once this month: ${w.repeat.map((r) => `${r.name} (${r.calls})`).join(', ')}`)
+  const top = w.kinds.find((k) => k.kind === 'training')
+  if (top && w.stuck[0] && top.n >= 2) lines.push(`Fix first: ${w.stuck[0].flow} -- the screen behind most "show me how" calls.`)
+  return lines.join('\n')
+}
+
+/** The line when a ticket closes itself. */
+export function closedPost(name: string, studio: string | null, did: SupportTicketWatch): string {
+  return `✅ Closed by itself: ${who(name, studio)} went on to ${SUPPORT_TICKET_WATCH_LABEL[did]} after the call.`
 }
 
 /** India's date `days` from now, as YYYY-MM-DD. */

@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { briefDue, factsText, indiaDatePlus, nudgeDue, nudgePost, readNoteReply, speechModelFor, ticketsLine, type StudioFacts } from './support-tickets'
+import {
+  briefDue,
+  closedPost,
+  factsText,
+  followupText,
+  indiaDatePlus,
+  issueUrl,
+  nudgeDue,
+  nudgePost,
+  readFollowupReply,
+  readNoteReply,
+  speechModelFor,
+  ticketsLine,
+  waLink,
+  weeklyText,
+  type StudioFacts,
+} from './support-tickets'
 
 const at = (iso: string) => Date.parse(iso)
 const facts: StudioFacts = {
@@ -67,7 +83,7 @@ describe('reading the voice note', () => {
       '```json\n{"summary":"Showed how to add the haldi.","kind":"training","status":"waiting_us","next_action":"Send the invoice video","due_in_days":1}\n```',
       said,
     )
-    expect(r).toEqual({ summary: 'Showed how to add the haldi.', kind: 'training', status: 'waiting_us', nextAction: 'Send the invoice video', dueInDays: 1 })
+    expect(r).toEqual({ summary: 'Showed how to add the haldi.', kind: 'training', status: 'waiting_us', nextAction: 'Send the invoice video', dueInDays: 1, watch: null })
   })
 
   it('drops the next step once it is solved', () => {
@@ -111,5 +127,58 @@ describe('posts and small helpers', () => {
   it("uses Groq's Whisper unless the provider is OpenAI", () => {
     expect(speechModelFor('https://api.groq.com/openai/v1')).toBe('whisper-large-v3-turbo')
     expect(speechModelFor('https://api.openai.com/v1')).toBe('whisper-1')
+  })
+})
+
+describe('step 2: follow-ups, issues, the Monday post', () => {
+  const tutorials = [
+    { key: 'project-shoots', title: 'Project step 2: the event days' },
+    { key: 'invoices', title: 'Make an invoice' },
+  ]
+
+  it('reads what the studio is to do, and drops it once solved', () => {
+    expect(readNoteReply('{"summary":"s","kind":"training","status":"waiting_them","watch":"project"}', 'x').watch).toBe('project')
+    expect(readNoteReply('{"summary":"s","kind":"training","status":"solved","watch":"project"}', 'x').watch).toBeNull()
+    expect(readNoteReply('{"summary":"s","kind":"training","status":"open","watch":"album"}', 'x').watch).toBeNull()
+  })
+
+  it('takes only tutorials we ship, at most two, and adds the links itself', () => {
+    const r = readFollowupReply('{"message":"Hi Asha, thank you for the call.","tutorials":["invoices","made-up","project-shoots","invoices"]}', tutorials)!
+    expect(r.tutorials.map((t) => t.key)).toEqual(['invoices', 'project-shoots'])
+    const text = followupText(r.message, r.tutorials, 'https://studioautopilot.in/')
+    expect(text).toContain('▶️ Make an invoice: https://studioautopilot.in/help?play=invoices')
+    expect(readFollowupReply('{"message":""}', tutorials)).toBeNull()
+  })
+
+  it('opens a WhatsApp chat with the message written', () => {
+    expect(waLink('919876543210', 'Hi & bye')).toBe('https://wa.me/919876543210?text=Hi%20%26%20bye')
+  })
+
+  it("never puts a phone or email in the GitHub issue", () => {
+    const url = issueUrl('dev-gwv/platform', { studio: 'Mehta Studio', plan: 'Pro', when: 'Mon 2 Nov', summary: 'Invoice total wrong', nextAction: null, bookingNotes: null, link: 'https://x/t/1' })
+    const body = decodeURIComponent(url.split('body=')[1]!)
+    expect(url.startsWith('https://github.com/dev-gwv/platform/issues/new?')).toBe(true)
+    expect(body).toContain('Mehta Studio (Pro)')
+    expect(body).not.toMatch(/@|\d{10}/)
+  })
+
+  it('says nothing on Monday after an empty week, and names what to fix', () => {
+    expect(weeklyText({ calls: 0, solved: 0, open: 0, closedByThemselves: 0, kinds: [], bugsOpen: 0, stuck: [], repeat: [] })).toBeNull()
+    const t = weeklyText({
+      calls: 5,
+      solved: 4,
+      open: 1,
+      closedByThemselves: 2,
+      kinds: [{ kind: 'training', n: 3 }, { kind: 'bug', n: 1 }],
+      bugsOpen: 1,
+      stuck: [{ flow: 'Create project: event days', studios: 3 }],
+      repeat: [{ name: 'Mehta Studio', calls: 2 }],
+    })!
+    expect(t).toContain('5 calls, 4 solved (2 closed by themselves), 1 still open')
+    expect(t).toContain('Fix first: Create project: event days')
+  })
+
+  it('says how a ticket closed itself', () => {
+    expect(closedPost('Asha', 'Mehta Studio', 'project')).toBe('✅ Closed by itself: Asha · Mehta Studio went on to make a project after the call.')
   })
 })

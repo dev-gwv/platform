@@ -1,11 +1,18 @@
 import type { TransactionSql } from 'postgres'
-import { ASSISTANT_DEFAULT_BASE_URL, supportTicket, type SupportTicket, type UpdateSupportTicketRequest } from '@ipc/contracts'
+import {
+  ASSISTANT_DEFAULT_BASE_URL,
+  normalizePhoneForWhatsApp,
+  supportTicket,
+  type SupportTicket,
+  type UpdateSupportTicketRequest,
+} from '@ipc/contracts'
 import type { Env } from '../context'
 import type { ChatMessage } from './ai'
 import { budgetUsed, budgetVerdict, DEFAULT_DAY_TOKENS, DEFAULT_MINUTE_TOKENS } from './ai-budget'
 import { logAsk } from './assistant'
 import { withService } from './db'
 import { describeError, log } from './log'
+import { whatsappConfigured } from './whatsapp'
 import { readSupportSettings } from './support-call-store'
 import { istWhen } from './support-calls'
 import {
@@ -14,6 +21,7 @@ import {
   briefPost,
   factsText,
   indiaDatePlus,
+  issueUrl,
   noteMessages,
   nudgeDue,
   nudgePost,
@@ -61,7 +69,7 @@ export async function followBooking(sql: TransactionSql, bookingId: string, comp
  * daily allowance: these are the owner's own tickets. Null when the AI is not
  * set up, out of budget or down -- every caller has a plain fallback.
  */
-async function askAi(env: Env, kind: string, messages: ChatMessage[], maxTokens: number): Promise<string | null> {
+export async function askAi(env: Env, kind: string, messages: ChatMessage[], maxTokens: number): Promise<string | null> {
   if (!env.AI_API_KEY) return null
   const row = await readSettings(env).catch(() => null)
   const spent = await budgetUsed(env)
@@ -131,7 +139,7 @@ const FLOW_NAME: Record<string, string> = {
   'project-deliverables': 'Create project: deliverables',
   'project-billing': 'Create project: price',
 }
-const flowName = (f: string) => FLOW_NAME[f] ?? f.replace(/[-_]/g, ' ')
+export const flowName = (f: string) => FLOW_NAME[f] ?? f.replace(/[-_]/g, ' ')
 
 const daysAgo = (d: Date | null, now: number) => (d ? Math.max(0, Math.floor((now - new Date(d).getTime()) / 86_400_000)) : null)
 
@@ -203,7 +211,7 @@ interface DueRow {
   studio_name: string | null
 }
 
-async function postToGroup(env: Env, bookingId: string, body: string, dedupeKey: string): Promise<boolean> {
+export async function postToGroup(env: Env, bookingId: string, body: string, dedupeKey: string): Promise<boolean> {
   return withService(env, async (sql) => {
     const s = await readSupportSettings(sql)
     if (!s.bot_on || !s.group_jid) return false
@@ -293,12 +301,49 @@ const TICKET_COLUMNS = `
   t.id, t.status, t.kind, b.starts_at::text as starts_at, b.ends_at::text as ends_at, b.name, b.email,
   coalesce(c.display_name, c.name, b.studio_name) as studio_name, coalesce(t.company_id, b.company_id) as company_id,
   b.meeting_url, b.notes as booking_notes, t.brief, t.transcript, t.summary, t.next_action, t.due_on::text as due_on,
-  t.solved_at::text as solved_at, t.updated_at::text as updated_at`
+  t.solved_at::text as solved_at, t.updated_at::text as updated_at,
+  t.watch, t.closed_by, t.followup, t.followup_sent_at::text as followup_sent_at, t.followup_via,
+  t.issue_opened_at::text as issue_opened_at, p.name as plan_name,
+  coalesce(b.phone,
+           (select u.phone from users u where u.user_id = c.owner_user_id and u.company_id = c.id and u.phone is not null limit 1),
+           c.invoice_phone) as raw_phone`
 
 const TICKET_FROM = `
   from support_tickets t
   join support_call_bookings b on b.id = t.booking_id
-  left join companies c on c.id = coalesce(t.company_id, b.company_id)`
+  left join companies c on c.id = coalesce(t.company_id, b.company_id)
+  left join plans p on p.key = c.plan`
+
+/** The repository a bug's issue is opened in. */
+const ISSUE_REPO = 'dev-gwv/platform'
+
+/** A row as the screen gets it: a usable number, whether official sending works, a bug's issue link. */
+function shape(env: Env, officialReady: boolean) {
+  return (r: Record<string, unknown>): SupportTicket => {
+    const phone = normalizePhoneForWhatsApp((r.raw_phone as string | null) ?? '')
+    const base = { ...r, contact_phone: /^\d{10,15}$/.test(phone) ? phone : null, official_ready: officialReady, issue_url: null }
+    const t = supportTicket.parse(base)
+    return t.kind === 'bug'
+      ? {
+          ...t,
+          issue_url: issueUrl(ISSUE_REPO, {
+            studio: t.studio_name,
+            plan: (r.plan_name as string | null) ?? null,
+            when: istWhen(t.starts_at, t.ends_at),
+            summary: t.summary,
+            nextAction: t.next_action,
+            bookingNotes: t.booking_notes,
+            link: ticketLink(env, t.id),
+          }),
+        }
+      : t
+  }
+}
+
+async function officialReady(env: Env, sql: TransactionSql): Promise<boolean> {
+  if (!whatsappConfigured(env)) return false
+  return (await readSupportSettings(sql)).official_on
+}
 
 export async function listTickets(env: Env): Promise<SupportTicket[]> {
   return withService(env, async (sql) => {
@@ -310,14 +355,14 @@ export async function listTickets(env: Env): Promise<SupportTicket[]> {
                 case when t.status = 'booked' then b.starts_at end asc,
                 b.starts_at desc
        limit 200`)
-    return supportTicket.array().parse(rows)
+    return rows.map(shape(env, await officialReady(env, sql)))
   })
 }
 
 export async function getTicket(env: Env, id: string): Promise<SupportTicket | null> {
   return withService(env, async (sql) => {
     const rows = await sql.unsafe(`select ${TICKET_COLUMNS} ${TICKET_FROM} where t.id = $1`, [id])
-    return rows[0] ? supportTicket.parse(rows[0]) : null
+    return rows[0] ? shape(env, await officialReady(env, sql))(rows[0]) : null
   })
 }
 
@@ -344,7 +389,10 @@ export async function applyNote(env: Env, id: string, words: string, now = Date.
       transcript = ${transcript}, summary = ${r.summary}, kind = ${r.kind}, status = ${r.status},
       next_action = ${r.nextAction}, due_on = ${r.dueInDays === null ? null : indiaDatePlus(now, r.dueInDays)},
       solved_at = case when ${r.status} = 'solved' then coalesce(solved_at, now()) else null end,
-      nudged_at = coalesce(nudged_at, now()), updated_at = now()
+      -- What they are to do is watched from the start of the call: done on the call counts.
+      watch = ${r.watch}, watch_from = case when ${r.watch}::text is null then null
+                                            else (select b.starts_at from support_call_bookings b where b.id = support_tickets.booking_id) end,
+      closed_by = null, nudged_at = coalesce(nudged_at, now()), updated_at = now()
     where id = ${id}`)
   return getTicket(env, id)
 }

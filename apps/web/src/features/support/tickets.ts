@@ -106,3 +106,22 @@ export function dueWords(due: string | null): string | null {
   if (days > 1) return `Due in ${days} days`
   return days === -1 ? '1 day late' : `${-days} days late`
 }
+
+// ── step 2 (0301) ────────────────────────────────────────────────────────────
+
+export const useFollowupDraft = (id: string) =>
+  useTicketWrite(id, () => callApi(`/platform/support-calls/tickets/${id}/followup/draft`, { method: 'POST', responseSchema: supportTicket }))
+
+export const useFollowupSend = (id: string) =>
+  useTicketWrite(
+    id,
+    (body: { text: string; via: 'whatsapp_link' | 'official' | 'copied' }) =>
+      callApi(`/platform/support-calls/tickets/${id}/followup/send`, { method: 'POST', body, responseSchema: supportTicket }),
+    (t) => toast.success(t.followup_via === 'official' ? 'Sent from the official number.' : 'Marked as sent.'),
+  )
+
+export const useIssueOpened = (id: string) =>
+  useTicketWrite(id, () => callApi(`/platform/support-calls/tickets/${id}/issue`, { method: 'POST', responseSchema: supportTicket }))
+
+/** A WhatsApp chat with the message written; with no number, WhatsApp asks who to send it to. */
+export const waLink = (phone: string | null, text: string) => `https://wa.me/${(phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`

@@ -99,3 +99,37 @@ takes the calls has almost nothing to write:
 AI text only ever reaches your own support group, never a studio, and it is
 counted against the platform's token budget, not a studio's allowance. Only
 booked calls make tickets: there is still no support inbox (0273).
+
+## Step 2: follow-ups, bugs, tickets that close themselves, Monday (0301)
+
+- **Message to the studio.** On a ticket with notes, **Write the follow-up for
+  me** drafts a short WhatsApp in the call's language (Hinglish if you spoke
+  Hindi): thanks, what was done, what is next, and up to two how-to videos,
+  each a link that opens the video at once (`/help?play=<key>`). Read it,
+  change it, then **Send on WhatsApp** (your own WhatsApp opens with it
+  written, to the booking's number, else the studio owner's) or **Copy**.
+- **Bugs.** A ticket of type Bug has **Create GitHub issue**: a new issue in
+  dev-gwv/platform, filled in with the studio, plan, what happened and a link
+  back -- never the studio's phone or email.
+- **Tickets that close themselves.** When your note says the studio is to do
+  something the app can see (make a project, an invoice, a lead, a shoot day,
+  a client, a gallery, add their team, buy their plan), the ticket watches
+  for it from the start of the call and, once their data shows it, closes
+  itself and says so in the group.
+- **Monday from 9 am**, one post: last week's calls, solved (and how many
+  closed by themselves), still open, by type, open bugs, the screens studios
+  got stuck on, studios that called more than once, and the screen to fix
+  first.
+
+### When the official WhatsApp API is connected
+
+Set `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN`, switch on
+**Official messages**, and get these Utility templates approved in Meta
+(English). Then:
+
+- the person who booked gets the confirmation, the reminder an hour before
+  and a note if it moves or is cancelled (when they ticked WhatsApp);
+- every ticket's follow-up shows **Send from our number**, which sends:
+  - `support_call_followup`: "Hi {{1}}, following up on your Studio AutoPilot support call: {{2}}"
+
+  ({{2}} is the drafted message on one line, links included).

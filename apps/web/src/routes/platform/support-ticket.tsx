@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
-import { ArrowLeft, ExternalLink, Keyboard, RefreshCw, Sparkles } from 'lucide-react'
+import { ArrowLeft, Bug, CheckCircle2, Copy, ExternalLink, Eye, Keyboard, MessageCircle, RefreshCw, Send, Sparkles } from 'lucide-react'
 import {
   SUPPORT_TICKET_KIND_LABEL,
   SUPPORT_TICKET_KINDS,
   SUPPORT_TICKET_STATUS_LABEL,
+  SUPPORT_TICKET_WATCH_LABEL,
   type SupportTicket,
   type SupportTicketStatus,
 } from '@ipc/contracts'
@@ -18,7 +19,20 @@ import { ErrorState } from '@/shared/ui/states'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
 import { VoiceNoteRecorder } from '@/features/projects/VoiceNoteRecorder'
-import { callWhen, dueWords, STATUS_TONE, useSupportTicket, useTicketBrief, useTicketNote, useTicketVoice, useUpdateTicket } from '@/features/support/tickets'
+import {
+  callWhen,
+  dueWords,
+  STATUS_TONE,
+  useFollowupDraft,
+  useFollowupSend,
+  useIssueOpened,
+  useSupportTicket,
+  useTicketBrief,
+  useTicketNote,
+  useTicketVoice,
+  useUpdateTicket,
+  waLink,
+} from '@/features/support/tickets'
 
 /**
  * One support ticket (0300). The group's brief and "how did it go?" posts link
@@ -110,6 +124,16 @@ function Loaded({ t }: { t: SupportTicket }) {
                   </label>
                 </div>
               )}
+              {t.status !== 'solved' && t.watch && (
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Eye className="size-4 text-primary" /> Closes by itself once they {SUPPORT_TICKET_WATCH_LABEL[t.watch]}.
+                </p>
+              )}
+              {t.status === 'solved' && t.closed_by === 'assistant' && (
+                <p className="flex items-center gap-1.5 text-sm font-medium text-success">
+                  <CheckCircle2 className="size-4" /> Closed by itself: their data shows they did it after the call.
+                </p>
+              )}
               {t.status !== 'solved' && (
                 <Button className="self-start" variant="outline" onClick={() => update.mutate({ status: 'solved' })}>
                   Mark solved
@@ -118,6 +142,9 @@ function Loaded({ t }: { t: SupportTicket }) {
             </CardContent>
           </Card>
         )}
+
+        {noted && t.status !== 'cancelled' && <FollowupCard t={t} />}
+        {t.kind === 'bug' && t.issue_url && <IssueCard t={t} />}
 
         <BriefCard t={t} />
 
@@ -184,6 +211,111 @@ function NoteCard({ t }: { t: SupportTicket }) {
             </button>
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * The message to the studio after the call (0301): the assistant drafts it in
+ * the call's language with the right tutorial links; you read it, change it if
+ * you like, and send it. From your own WhatsApp today; from the official
+ * number once the WhatsApp API is connected.
+ */
+function FollowupCard({ t }: { t: SupportTicket }) {
+  const draft = useFollowupDraft(t.id)
+  const send = useFollowupSend(t.id)
+  const [text, setText] = useState(t.followup ?? '')
+  useEffect(() => {
+    setText(t.followup ?? '')
+  }, [t.followup])
+  const sent = !!t.followup_sent_at
+  const via = t.followup_via === 'official' ? 'from the official number' : t.followup_via === 'copied' ? 'copied' : 'from your WhatsApp'
+
+  return (
+    <Card className={cn(!sent && t.followup && 'border-warning/50')}>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Message to {t.name.includes('@') ? 'the studio' : t.name.split(/\s+/)[0]}</h2>
+          {sent && (
+            <span className="flex items-center gap-1.5 text-sm text-success">
+              <CheckCircle2 className="size-4" /> Sent {via} · {callWhen(t.followup_sent_at!)}
+            </span>
+          )}
+        </div>
+        {!t.followup && !draft.isPending ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => draft.mutate(undefined)} className="bg-violet-600 text-white hover:bg-violet-700">
+              <Sparkles /> Write the follow-up for me
+            </Button>
+            <span className="text-sm text-muted-foreground">A thank-you, what was done, what is next, and the right how-to videos.</span>
+          </div>
+        ) : draft.isPending ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-primary">
+            <Sparkles className="size-4 animate-pulse" /> Writing the message…
+          </p>
+        ) : (
+          <>
+            <Textarea rows={7} value={text} onChange={(e) => setText(e.target.value)} />
+            <div className="flex flex-wrap items-center gap-2">
+              {t.official_ready && t.contact_phone && (
+                <Button disabled={send.isPending || text.trim().length < 5} onClick={() => send.mutate({ text, via: 'official' })}>
+                  <Send /> Send from our number
+                </Button>
+              )}
+              <Button
+                variant={t.official_ready && t.contact_phone ? 'outline' : 'default'}
+                className={cn(!(t.official_ready && t.contact_phone) && 'bg-green-600 text-white hover:bg-green-700')}
+                disabled={send.isPending || text.trim().length < 5}
+                onClick={() => {
+                  window.open(waLink(t.contact_phone, text), '_blank', 'noopener')
+                  send.mutate({ text, via: 'whatsapp_link' })
+                }}
+              >
+                <MessageCircle /> {t.contact_phone ? 'Send on WhatsApp' : 'Pick the chat on WhatsApp'}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={send.isPending}
+                onClick={() => {
+                  void navigator.clipboard.writeText(text).then(() => send.mutate({ text, via: 'copied' }))
+                }}
+              >
+                <Copy /> Copy
+              </Button>
+              <Button variant="ghost" disabled={draft.isPending} onClick={() => draft.mutate(undefined)}>
+                <RefreshCw /> Write it again
+              </Button>
+            </div>
+            {!t.contact_phone && <p className="text-xs text-muted-foreground">No WhatsApp number on the booking or the studio, so WhatsApp will ask who to send it to.</p>}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** A bug becomes a GitHub issue in one tap, filled in from the ticket (0301). Never their phone or email. */
+function IssueCard({ t }: { t: SupportTicket }) {
+  const opened = useIssueOpened(t.id)
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <h2 className="font-semibold">Bug for the code</h2>
+          <p className="text-sm text-muted-foreground">
+            {t.issue_opened_at ? `Issue opened ${callWhen(t.issue_opened_at)}.` : 'Open a GitHub issue with the studio, what happened and a link back here.'}
+          </p>
+        </div>
+        <Button
+          variant={t.issue_opened_at ? 'outline' : 'default'}
+          onClick={() => {
+            window.open(t.issue_url!, '_blank', 'noopener')
+            opened.mutate(undefined)
+          }}
+        >
+          <Bug /> {t.issue_opened_at ? 'Open another issue' : 'Create GitHub issue'}
+        </Button>
       </CardContent>
     </Card>
   )
