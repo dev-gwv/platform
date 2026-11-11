@@ -70,15 +70,16 @@ export const TEAM_SETUP: readonly HubTab[] = [
 export const PROJECTS_HUB: readonly HubTab[] = [
   { to: '/projects', label: 'All projects', module: 'projects' },
   { to: '/project-tracking', label: 'Needs attention', module: 'projects' },
-  // Every project's Frameline gallery in one list (0264). GET /galleries asks
-  // projects edit, so a viewer would only meet a refusal there.
-  { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit', fresh: 'galleryDrive' },
-  // Frameline's own studio app inside the dashboard (signed in by POST /galleries/app/open, projects edit).
-  { to: '/galleries/app', label: 'Gallery app', module: 'projects', action: 'edit', fresh: 'galleryApp' },
 ]
 
-/** The Gallery line under Post-Production (owner, 5 Nov): the galleries list and Frameline's app. */
-export const GALLERY_HUB: readonly HubTab[] = PROJECTS_HUB.filter((t) => t.to.startsWith('/galleries'))
+/**
+ * The Photo sharing app's line (owner, 11 Nov): every gallery, and Frameline's
+ * own studio app inside the dashboard. Both ask projects edit, as their APIs do.
+ */
+export const GALLERY_HUB: readonly HubTab[] = [
+  { to: '/galleries', label: 'Galleries', module: 'projects', action: 'edit', fresh: 'galleryDrive' },
+  { to: '/galleries/app', label: 'Studio app', module: 'projects', action: 'edit', fresh: 'galleryApp' },
+]
 
 /**
  * The studio's money under one menu line. Payments comes first: it is the one
@@ -92,7 +93,7 @@ export const MONEY: readonly HubTab[] = [
 ]
 
 /** The hubs that draw their own tab row (not the settings ones). */
-const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME, PROJECTS_HUB, MONEY]
+const TAB_HUBS: readonly (readonly HubTab[])[] = [TEAM_PEOPLE, TEAM_TIME, TEAM_PAY, MY_TIME, PROJECTS_HUB, GALLERY_HUB, MONEY]
 
 /**
  * The hub whose tab row belongs on this exact page, if any. A page in two

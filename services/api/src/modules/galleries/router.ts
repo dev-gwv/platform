@@ -62,7 +62,14 @@ export const galleriesRouter = new Hono<AppEnv>()
          limit 500`),
     )
     if (!rows) fail(400, 'We could not load the galleries.')
-    return c.json(galleryList.parse({ connected, fresh, items: rows }))
+    // The Photo sharing app shows the Drive lock on Starter (owner, 11 Nov).
+    const driveImport = await attempt(c, 'galleries.drive_import', () =>
+      withService(c.env, async (sql) => {
+        const [r] = await sql<{ ok: boolean }[]>`select company_drive_import(${auth.companyId}) as ok`
+        return r?.ok ?? true
+      }),
+    )
+    return c.json(galleryList.parse({ connected, fresh, items: rows, drive_import: driveImport ?? true }))
   })
 
   /** The Frameline studio: linked yet, plan, wallet and photos used. The owner's (the wallet is theirs). */

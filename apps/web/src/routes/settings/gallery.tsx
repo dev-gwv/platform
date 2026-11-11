@@ -138,7 +138,7 @@ function OwnerView() {
  * Google Drive in Frameline: the owner connects it there (Google's own page),
  * then projects import shoots from it and can keep full-size photos in it.
  */
-function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: () => void; opening: boolean }) {
+export function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: () => void; opening: boolean }) {
   const label = opening ? 'Opening…' : drive.connected ? 'Manage in Frameline' : drive.needs_reconnect ? 'Connect again' : 'Connect Google Drive'
   return (
     <Card className={drive.connected ? 'border-success/40' : drive.needs_reconnect ? 'border-warning/50' : undefined}>

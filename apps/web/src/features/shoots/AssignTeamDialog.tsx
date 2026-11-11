@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Check, Clock, Loader2, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ShootListItem, SlotCostStatus, TeamMember, TeamSlot } from '@ipc/contracts'
+import type { PayoutMemory, ShootListItem, SlotCostStatus, TeamMember, TeamSlot } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +12,8 @@ import { DurationField } from '@/shared/ui/duration-field'
 import { cn } from '@/shared/ui/cn'
 import { useINR } from '@/shared/money/MoneyMask'
 import { useConfirm } from '@/shared/ui/confirm'
-import { useBookSlots, useMembers, useReleaseSlot, useSetSlotCost, useSlots, useUpdateSlot } from '@/features/allocation/api'
+import { useBookSlots, useMembers, usePayoutMemory, useReleaseSlot, useSetSlotCost, useSlots, useUpdateSlot } from '@/features/allocation/api'
+import { PayoutButton, PayoutPanel } from './PayoutPicker'
 import { NO_PAYOUT, costClears } from '@/features/allocation/cost-clear'
 import { useUpdateShoot } from './api'
 import {
@@ -142,6 +143,7 @@ function AssignBoard({
   onClose: () => void
 }) {
   const { session } = useAuth()
+  const payoutMemoryQ = usePayoutMemory()
   const bookMany = useBookSlots()
   const update = useUpdateSlot()
   const release = useReleaseSlot()
@@ -221,14 +223,15 @@ function AssignBoard({
     })
   }
 
-  function patchPick(role: string, id: string, patch: { payout?: string; start?: string | undefined; hours?: number | undefined }) {
+  function patchPick(role: string, id: string, patch: { payout?: string; why?: string; start?: string | undefined; hours?: number | undefined }) {
     setPicks((p) => ({
       ...p,
       [role]: (p[role] ?? []).map((x): SeatPick => {
         if (x.id !== id) return x
         const next: SeatPick = { id: x.id, payout: patch.payout ?? x.payout }
-        // A typed payout is the studio's own number, not a usual rate any more.
-        if (x.why && patch.payout === undefined) next.why = x.why
+        // A picked chip says why ("paid Asha before"); a typed figure is the studio's own.
+        if (patch.why) next.why = patch.why
+        else if (x.why && patch.payout === undefined) next.why = x.why
         const start = 'start' in patch ? patch.start : x.start
         const hours = 'hours' in patch ? patch.hours : x.hours
         if (start) next.start = start
@@ -374,7 +377,8 @@ function AssignBoard({
             open={picker?.role === r.name}
             onOpen={() => setPicker(picker?.role === r.name && !picker.replacing ? null : { role: r.name })}
             onUnpick={(id) => unpick(r.name, id)}
-            onPayout={(id, v) => patchPick(r.name, id, { payout: v })}
+            onPayout={(id, v, why) => patchPick(r.name, id, { payout: v, ...(why ? { why } : {}) })}
+            memory={payoutMemoryQ.data}
             onOverride={(id, o) => patchPick(r.name, id, o)}
             onChange={(slot) => setPicker({ role: r.name, replacing: slot })}
             onChangeHours={(slot, w) => void changeHours(slot, w)}
@@ -580,6 +584,7 @@ function RoleRow({
   onOpen,
   onUnpick,
   onPayout,
+  memory,
   onOverride,
   onChange,
   onChangeHours,
@@ -598,7 +603,8 @@ function RoleRow({
   open: boolean
   onOpen: () => void
   onUnpick: (id: string) => void
-  onPayout: (id: string, v: string) => void
+  onPayout: (id: string, v: string, why?: string) => void
+  memory: PayoutMemory | undefined
   onOverride: (id: string, o: { start?: string | undefined; hours?: number | undefined }) => void
   onChange: (slot: TeamSlot) => void
   onChangeHours: (slot: TeamSlot, w: TimeWindow) => void
@@ -613,6 +619,7 @@ function RoleRow({
   const [menuFor, setMenuFor] = useState<string | null>(null)
   /** Whose hours are being edited: a booking's id or a pick's user id. */
   const [hoursFor, setHoursFor] = useState<string | null>(null)
+  const [payFor, setPayFor] = useState<string | null>(null)
   /** Whose note is open for writing (a booking's id). */
   const [noteFor, setNoteFor] = useState<string | null>(null)
   return (
@@ -722,23 +729,8 @@ function RoleRow({
                 >
                   <Avatar name={m?.name ?? '?'} size="sm" />
                   <span className="min-w-0 flex-1 truncate">{m?.name ?? 'Someone'}</span>
-                  {/* An empty payout asks to be filled (amber); a filled one reads settled (green). */}
-                  <label
-                    className={cn(
-                      'flex h-8 items-center gap-1 rounded-md border px-2 text-sm shadow-sm transition-colors focus-within:ring-2 focus-within:ring-ring',
-                      p.payout ? 'border-success/50 bg-success/10' : 'border-warning/60 bg-warning/10',
-                    )}
-                  >
-                    <span className={cn('font-medium', p.payout ? 'text-success' : 'text-warning')}>₹</span>
-                    <input
-                      aria-label={`Payout for ${m?.name ?? 'this person'}`}
-                      inputMode="decimal"
-                      placeholder="Add payout"
-                      value={p.payout}
-                      onChange={(e) => onPayout(p.id, e.target.value.replace(/[^\d.]/g, ''))}
-                      className="w-20 bg-transparent text-right text-sm font-medium tabular-nums outline-none placeholder:font-normal placeholder:text-foreground/60"
-                    />
-                  </label>
+                  {/* One-tap payout (owner, 11 Nov): amber while empty, green once set; tapping opens the amounts below. */}
+                  <PayoutButton value={p.payout} open={payFor === p.id} onToggle={() => setPayFor(payFor === p.id ? null : p.id)} name={m?.name ?? 'this person'} />
                   <HoursChip window={w} own={own} name={m?.name ?? 'this person'} onEdit={() => setHoursFor(hoursFor === p.id ? null : p.id)} />
                   <button
                     type="button"
@@ -749,6 +741,21 @@ function RoleRow({
                     <X className="size-3.5" />
                   </button>
                 </div>
+                {payFor === p.id && (
+                  <div className="pl-9">
+                    <PayoutPanel
+                      value={p.payout}
+                      member={{ name: m?.name ?? null, freelancer_rate: m?.freelancer_rate ?? null, rate_wedding_day: m?.rate_wedding_day ?? null, rate_half_day: m?.rate_half_day ?? null }}
+                      role={role.name}
+                      userId={p.id}
+                      memory={memory}
+                      onPick={(v, why) => {
+                        onPayout(p.id, v, why)
+                        setPayFor(null)
+                      }}
+                    />
+                  </div>
+                )}
                 {p.why && p.payout && (
                   <p className="pl-9 text-xs text-muted-foreground">
                     Pay {inr(Number(p.payout))} ({p.why})
@@ -954,6 +961,10 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
   })
   const [status, setStatus] = useState<SlotCostStatus>(slot.cost_status)
   const [note, setNote] = useState(slot.cost_notes ?? '')
+  // Tap an amount instead of typing it (owner, 11 Nov).
+  const memory = usePayoutMemory()
+  const members = useMembers()
+  const payee = members.data?.find((m) => m.user_id === slot.user_id)
 
   function save() {
     const n = amount.trim() === '' ? null : Number(amount)
@@ -995,7 +1006,6 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
                 value={amount}
                 disabled={status === 'not_decided'}
                 onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
-                autoFocus
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -1011,6 +1021,21 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
               </Select>
             </div>
           </div>
+          {status !== 'not_decided' && (
+            <PayoutPanel
+              value={amount}
+              member={{
+                name: slot.user_name ?? null,
+                freelancer_rate: payee?.freelancer_rate ?? null,
+                rate_wedding_day: payee?.rate_wedding_day ?? null,
+                rate_half_day: payee?.rate_half_day ?? null,
+              }}
+              role={slot.service_name ?? 'this role'}
+              userId={slot.user_id}
+              memory={memory.data}
+              onPick={(v) => setAmount(v)}
+            />
+          )}
           <div className="flex flex-col gap-1">
             <Label htmlFor="pay-note" className="text-xs">
               Note

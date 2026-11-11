@@ -383,7 +383,7 @@ export function personDay(
   return { bookings, hours: bookedHours(bookings, day), free: freeText(freeGaps(bookings, day), timeZone) }
 }
 
-type RateMember = Pick<TeamMember, 'freelancer_rate' | 'payout_type' | 'engagement_type'> &
+export type RateMember = Pick<TeamMember, 'freelancer_rate' | 'payout_type' | 'engagement_type'> &
   Partial<Pick<TeamMember, 'rate_wedding_day' | 'rate_half_day'>>
 
 /** What the booking is, for choosing which of a person's usual rates applies. */

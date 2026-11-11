@@ -1,7 +1,7 @@
 import type { ModuleKey } from '@ipc/permissions'
 import type { useAccess } from '../auth/useAccess'
 import { SETTINGS_PAGES } from '@/features/settings/SettingsNav'
-import { MONEY, MY_TIME, PLAN_BILLING, PROJECTS_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, tabAllowed, type HubTab } from './hubs'
+import { MONEY, MY_TIME, PLAN_BILLING, PROJECTS_HUB, GALLERY_HUB, TEAM_PAY, TEAM_PEOPLE, TEAM_SETUP, TEAM_TIME, tabAllowed, type HubTab } from './hubs'
 import { seesStudioWork, type AppRole } from '@ipc/permissions'
 import type { NewFeature } from '../ui/new-badge'
 import {
@@ -18,6 +18,7 @@ import {
   Briefcase,
   ListChecks,
   Camera,
+  Images,
   ListTodo,
   CreditCard,
   Banknote,
@@ -124,8 +125,10 @@ export const NAV: NavEntry[] = [
   // One shoots page: Team Booking (Shoots · Calendar · People · Conflicts).
   leaf('Shoots', '/team-allocation', CalendarClock, { module: 'projects', studioWork: true }),
   leaf('Post-Production', '/production-board', KanbanSquare, { module: 'projects', studioWork: true }),
-  // The photo sharing gallery (Frameline), right under it where studios look
-  // (owner, 5 Nov). Its "New" stays until the studio makes its first gallery.
+  // The Photo sharing app (Frameline + Google Drive), right under it (owner,
+  // 11 Nov: "it is too underrated ... it should come up on the left sidebar").
+  // Its "New" stays until the studio makes its first gallery.
+  leaf('Photo sharing', '/galleries', Images, { module: 'projects', studioWork: true, fresh: 'galleryApp', hub: GALLERY_HUB }),
   // Reminders are a view of it now (?view=reminders).
   leaf('Tasks', '/tasks', ListChecks, { module: 'tasks' }),
   leaf('Data & Backup', '/data-management', Database, { module: 'projects', studioWork: true }),

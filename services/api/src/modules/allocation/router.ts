@@ -1,16 +1,19 @@
 import { Hono } from 'hono'
 import type { TransactionSql } from 'postgres'
 import type { BookSlotRequest } from '@ipc/contracts'
-import { arrivedRequest, respondSlotRequest, bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, setSlotNoteRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
+import { arrivedRequest, payoutMemory, respondSlotRequest, bookSlotRequest, bookSlotsBatchRequest, bookSlotsBatchResult, setSlotStatusRequest, setSlotCostRequest, setSlotDataRequest, setSlotNoteRequest, slotListQuery, teamSlot, updateSlotRequest } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { seesMoney } from '../../lib/scope'
+import { mayTouchPay } from '../team/shared'
+import { lastAmounts, usualAmounts } from '../../lib/payout-memory'
+import type { Context } from 'hono'
 
 /** The overlap guard's two spellings: 23P01 on Postgres, the trigger's text on pglite. */
 const isDoubleBooking = (code: string, err: unknown) =>
@@ -40,6 +43,37 @@ async function bookOne(sql: TransactionSql, d: BookSlotRequest): Promise<string 
     )`
   }
   return id
+}
+
+
+/**
+ * The first payout booked for someone with no usual rate becomes their day
+ * rate (owner, 11 Nov: "whatever payouts I am submitting, the system should
+ * auto-save it"). Only for whoever may set pay, never over a saved rate, never
+ * for a salaried person. Best effort: a failure here never undoes a booking.
+ */
+async function rememberRates(c: Context<AppEnv>, booked: { user_id: string; estimated_cost?: number | null | undefined }[]) {
+  if (!mayTouchPay(c)) return []
+  const first = new Map<string, number>()
+  for (const b of booked) if (b.estimated_cost && b.estimated_cost > 0 && !first.has(b.user_id)) first.set(b.user_id, b.estimated_cost)
+  if (first.size === 0) return []
+  const company = c.get('auth').companyId
+  const saved = await attempt(c, 'allocation.remember_rate', () =>
+    withService(c.env, async (sql) => {
+      const out: { user_id: string; name: string | null; amount: number }[] = []
+      for (const [userId, amount] of first) {
+        const rows = await sql<{ user_id: string; name: string | null }[]>`
+          update users set freelancer_rate = ${amount}
+           where user_id = ${userId} and company_id = ${company}
+             and coalesce(freelancer_rate, 0) = 0
+             and coalesce(payout_type, '') <> 'salary'
+          returning user_id, name`
+        if (rows[0]) out.push({ user_id: rows[0].user_id, name: rows[0].name, amount })
+      }
+      return out
+    }),
+  )
+  return saved ?? []
 }
 
 const reason = (err: unknown): string => String((err as { message?: string })?.message ?? '')
@@ -132,6 +166,36 @@ export const allocationRouter = new Hono<AppEnv>()
    * `user_id` narrow it. Payout is bookkeeping for whoever plans crew: anyone
    * who cannot edit projects gets only their own bookings, and no money.
    */
+  // One-tap payouts: what was paid to each person and for each role, newest
+  // first, over the last year. Crew pay is money, so only whoever sees it.
+  .get('/payout-memory', requireAction('projects', 'view'), async (c) => {
+    const auth = c.get('auth')
+    const seesPay = auth.access.hasAction('projects', 'edit') && (seesMoney(c) || auth.access.hasModule('team_payouts'))
+    if (!seesPay) return c.json(payoutMemory.parse({ people: {}, roles: {} }))
+    const rows = await attempt(c, 'allocation.payout_memory', () =>
+      withUser(c.env, auth.userId, (sql) => sql<{ user_id: string; role: string | null; amount: number }[]>`
+        select s.user_id, s.service_name as role, coalesce(s.final_cost, s.estimated_cost)::float8 as amount
+          from team_assignment_slots s
+         where coalesce(s.final_cost, s.estimated_cost) > 0
+           and s.start_at > now() - interval '12 months'
+         order by s.start_at desc
+         limit 3000`),
+    )
+    if (!rows) fail(400, 'We could not load past payouts.')
+    const byPerson = new Map<string, { amount: number }[]>()
+    const byRole = new Map<string, { amount: number }[]>()
+    for (const r of rows) {
+      byPerson.set(r.user_id, [...(byPerson.get(r.user_id) ?? []), r])
+      if (r.role) byRole.set(r.role, [...(byRole.get(r.role) ?? []), r])
+    }
+    return c.json(
+      payoutMemory.parse({
+        people: Object.fromEntries([...byPerson].map(([k, v]) => [k, lastAmounts(v)])),
+        roles: Object.fromEntries([...byRole].map(([k, v]) => [k, usualAmounts(v)])),
+      }),
+    )
+  })
+
   .get('/', requireAction('projects', 'view'), async (c) => {
     const parsed = slotListQuery.safeParse({
       from: c.req.query('from') || undefined,
@@ -199,7 +263,8 @@ export const allocationRouter = new Hono<AppEnv>()
     if (id === 'double_booked') fail(409, 'That member is already booked during this time.')
     if (!id) fail(400, 'We could not create the booking.')
     await audit(c, { action: 'allocation.book', entityType: 'team_assignment_slot', entityId: id, after: d })
-    return c.json({ id }, 201)
+    const rates_saved = await rememberRates(c, [d])
+    return c.json({ id, rates_saved }, 201)
   })
 
   // Bulk assign: many people onto one shoot, or one person onto many. Each
@@ -234,7 +299,8 @@ export const allocationRouter = new Hono<AppEnv>()
         after: { booked: booked.length, skipped: results.length - booked.length },
       })
     }
-    return c.json(bookSlotsBatchResult.parse({ results }), 201)
+    const rates_saved = await rememberRates(c, results.filter((r) => r.id).map((r) => items[r.index]!))
+    return c.json(bookSlotsBatchResult.parse({ results, rates_saved }), 201)
   })
 
   .post('/:id/status', requireAction('projects', 'edit'), async (c) => {

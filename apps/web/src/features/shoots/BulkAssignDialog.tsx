@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { Avatar } from '@/shared/ui/avatar'
 import { cn } from '@/shared/ui/cn'
-import { useBookSlots, useMembers, useSlots } from '@/features/allocation/api'
+import { useBookSlots, useMembers, usePayoutMemory, useSlots } from '@/features/allocation/api'
+import { PayoutButton, PayoutPanel } from './PayoutPicker'
 import { AssignedNote } from '@/features/team/AssignedNote'
 import {
   clashFor,
@@ -124,6 +125,10 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
 
   const all = slots.data ?? []
   const member = (members.data ?? []).find((m) => m.user_id === memberId) ?? null
+  // One tap sets the payout for every ticked day (owner, 11 Nov: no keyboard).
+  const payoutMemoryQ = usePayoutMemory()
+  const [allPay, setAllPay] = useState('')
+  const [allPayOpen, setAllPayOpen] = useState(false)
   const inRange = (shoots.data ?? []).filter(
     (s) => s.status !== 'cancelled' && s.shoot_date && s.shoot_date >= dateFrom && s.shoot_date <= dateTo,
   )
@@ -363,22 +368,10 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                   {/* One payout typed once for every ticked day, rather than
                       day by day (audit, 5 Nov); a row can still differ. */}
                   {picked.size > 1 && (
-                    <label className="mr-1 inline-flex items-center gap-1.5 text-xs font-medium">
+                    <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-medium">
                       Payout for each ticked day
-                      <Input
-                        inputMode="numeric"
-                        placeholder="₹"
-                        className="h-7 w-24 border-tone-amber/60 text-xs"
-                        onChange={(e) => {
-                          const cost = e.target.value.replace(/[^\d.]/g, '')
-                          setRows((prev) => {
-                            const next = { ...prev }
-                            for (const c of cands) if (picked.has(c.shoot.id)) next[c.shoot.id] = { ...rowOf(c.shoot), cost }
-                            return next
-                          })
-                        }}
-                      />
-                    </label>
+                      <PayoutButton value={allPay} open={allPayOpen} onToggle={() => setAllPayOpen((v) => !v)} name={member?.name ?? 'them'} />
+                    </span>
                   )}
                   <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setPicked(new Set(available.map((c) => c.shoot.id)))}>
                     Select all available
@@ -386,6 +379,26 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
                   <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setPicked(new Set())}>
                     Clear
                   </Button>
+                </div>
+              )}
+              {picked.size > 1 && allPayOpen && member && (
+                <div className="w-full">
+                  <PayoutPanel
+                    value={allPay}
+                    member={member}
+                    role={member.role_names[0] ?? 'this role'}
+                    userId={member.user_id}
+                    memory={payoutMemoryQ.data}
+                    onPick={(cost) => {
+                      setAllPay(cost)
+                      setAllPayOpen(false)
+                      setRows((prev) => {
+                        const next = { ...prev }
+                        for (const c of cands) if (picked.has(c.shoot.id)) next[c.shoot.id] = { ...rowOf(c.shoot), cost }
+                        return next
+                      })
+                    }}
+                  />
                 </div>
               )}
             </div>

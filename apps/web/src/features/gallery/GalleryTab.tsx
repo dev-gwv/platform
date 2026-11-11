@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { Copy, Download, ExternalLink, Images, KeyRound, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -72,7 +73,12 @@ export function GalleryTab({ projectId, projectName }: { projectId: string; proj
             <p className="flex items-center gap-2 text-sm font-semibold">
               <Images className="size-4 text-tone-violet" aria-hidden /> Photo gallery
             </p>
-            <GalleryGuide />
+            <span className="flex items-center gap-3">
+              <Link to="/galleries" className="text-sm font-medium text-primary hover:underline">
+                See all galleries
+              </Link>
+              <GalleryGuide />
+            </span>
           </div>
           <p className="text-sm text-muted-foreground">
             One link for {projectName}: guests open it, type the PIN, and see and download the photos.
@@ -181,7 +187,12 @@ function GalleryReady({
             )}
           </p>
           <div className="flex flex-wrap gap-2">
-            <GalleryGuide />
+            <span className="flex items-center gap-3">
+              <Link to="/galleries" className="text-sm font-medium text-primary hover:underline">
+                See all galleries
+              </Link>
+              <GalleryGuide />
+            </span>
             <DriveImportButton projectId={projectId} projectName={projectName} drive={drive} allowed={driveImport} />
             <Button onClick={onOpen} disabled={opening} className={done ? undefined : 'ipc-nudge'}>
               <ExternalLink /> {opening ? 'Opening…' : done ? 'Open gallery' : 'Open gallery to upload'}

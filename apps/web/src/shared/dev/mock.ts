@@ -1024,7 +1024,8 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
     return { ...themeState }
   }
   if (method === 'GET' && path === '/allocation') return atStage(slots, 'full')
-  if (method === 'POST' && path === '/allocation') return { id: uid(0x5a) }
+  if (method === 'GET' && path === '/allocation/payout-memory') return { people: {}, roles: { 'Candid Photographer': [5000, 6000], 'Reels Editor': [4000] } }
+  if (method === 'POST' && path === '/allocation') return { id: uid(0x5a), rates_saved: [] }
   if (method === 'POST' && path === '/allocation/batch') {
     const items = ((body as { items?: unknown[] } | undefined)?.items ?? []) as unknown[]
     return { results: items.map((_, index) => ({ index, id: uid(0x5b0 + index), error: null })) }
