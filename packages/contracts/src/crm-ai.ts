@@ -124,3 +124,71 @@ export const caption = z.object({ text: z.string(), hashtags: z.array(z.string()
 export type Caption = z.infer<typeof caption>
 export const captionReply = z.object({ captions: z.array(caption) })
 export type CaptionReply = z.infer<typeof captionReply>
+
+// ── Ad scripts (owner, 10 Nov) ──────────────────────────────────────
+// A studio's Meta ad, read to camera by a model in under a minute. The studio
+// gives the facts; the AI writes the words and never invents a number.
+
+export const AD_ANGLES = ['invite', 'how_to_choose', 'mistakes', 'myth', 'story', 'dates_offer'] as const
+export type AdAngle = (typeof AD_ANGLES)[number]
+/** What the studio asks for: one angle, or three different ones. */
+export const AD_ASKS = [...AD_ANGLES, 'mix'] as const
+export type AdAsk = (typeof AD_ASKS)[number]
+export const AD_SPEAKERS = ['female', 'male', 'couple', 'owner'] as const
+export type AdSpeaker = (typeof AD_SPEAKERS)[number]
+export const AD_CTAS = ['get_quote', 'whatsapp', 'call'] as const
+export type AdCta = (typeof AD_CTAS)[number]
+export const AD_LENGTHS = [30, 45, 60] as const
+
+/** The angles three different scripts take when the studio lets the AI pick. */
+export const AD_MIX: readonly AdAngle[] = ['how_to_choose', 'invite', 'story']
+
+const optionalCount = (max: number) =>
+  z.preprocess((v) => (v === '' || v === null ? undefined : v), z.coerce.number().int().min(0).max(max).optional())
+
+export const adScriptRequest = z.object({
+  studio: z.string().trim().min(1).max(120),
+  city: z.string().trim().max(80).default(''),
+  weddings: optionalCount(100000),
+  years: optionalCount(80),
+  rating: z.preprocess(
+    (v) => (v === '' || v === null ? undefined : v),
+    z.coerce.number().min(1).max(5).optional(),
+  ),
+  strengths: z.array(z.string().trim().min(1).max(60)).max(12).default([]),
+  /** Anything else true about the studio, in its own words. */
+  extra: z.string().trim().max(400).default(''),
+  speaker: z.enum(AD_SPEAKERS).default('female'),
+  angle: z.enum(AD_ASKS).default('mix'),
+  /** How many scripts: three, or one when a single script is written again. */
+  count: z.coerce.number().int().min(1).max(3).default(3),
+  language: aiLang.default('hi'),
+  tone: aiTone.default('warm'),
+  seconds: z.coerce.number().refine((n) => (AD_LENGTHS as readonly number[]).includes(n)).default(60),
+  cta: z.enum(AD_CTAS).default('get_quote'),
+  offer: z.string().trim().max(200).default(''),
+})
+export type AdScriptRequest = z.input<typeof adScriptRequest>
+export type AdScriptAsk = z.infer<typeof adScriptRequest>
+
+export const adScriptPart = z.object({ at: z.string(), text: z.string() })
+export type AdScriptPart = z.infer<typeof adScriptPart>
+export const adScript = z.object({
+  angle: z.enum(AD_ANGLES),
+  /** A short name for the script, e.g. "Don't judge by Instagram". */
+  title: z.string(),
+  /** What is said in the first three seconds: the line that stops the scroll. */
+  hook: z.string(),
+  /** The rest, in timed parts ("3–15 s"). */
+  parts: z.array(adScriptPart),
+  /** Short lines the editor puts on screen. */
+  on_screen: z.array(z.string()),
+  /** For the model: expression, pace, pauses, which shots to cut to. */
+  model_notes: z.string(),
+  words: z.number(),
+  /** Spoken length, worked out from the words. */
+  seconds: z.number(),
+})
+export type AdScript = z.infer<typeof adScript>
+export const adScriptReply = z.object({ scripts: z.array(adScript) })
+export type AdScriptReply = z.infer<typeof adScriptReply>

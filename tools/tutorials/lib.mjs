@@ -106,9 +106,17 @@ function layerInit() {
   }
   // A tutorial never shows the owner's confirm-email strip: it is not what is being taught.
   const hideStrip = () => {
-    for (const el of document.querySelectorAll('div,section,aside')) {
-      // Only the strip itself: a short wrapper can also hold a full-screen overlay (the designer), whose fixed box adds no height.
-      if (el.childElementCount < 8 && /^\s*Confirm your email/.test(el.textContent || '') && (el.textContent || '').length < 240 && el.offsetHeight < 90) el.style.display = 'none'
+    // Only the strip itself: from the innermost box holding its text, up to
+    // the first box that holds its close button. A wrapper that
+    // also holds a page still loading (Leads) or a full-screen overlay (the
+    // designer) is never hidden, or the page goes with it.
+    const starts = (el) => /^\s*Confirm your email/.test(el.textContent || '')
+    for (const el of document.querySelectorAll('body *')) {
+      if (!starts(el) || [...el.children].some(starts)) continue
+      let strip = el
+      // The strip is the smallest box that also holds its close button.
+      while (strip.parentElement && starts(strip.parentElement) && !strip.querySelector('button[aria-label="Hide"]')) strip = strip.parentElement
+      if (strip.querySelector('button[aria-label="Hide"]') && (strip.textContent || '').length < 240) strip.style.display = 'none'
     }
   }
   const watch = () => { try { new MutationObserver(hideStrip).observe(document.body, { childList: true, subtree: true }); hideStrip() } catch { /* the page is still loading */ } }
