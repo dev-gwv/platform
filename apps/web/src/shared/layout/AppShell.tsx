@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { useAccess } from '../auth/useAccess'
 import { Button } from '../ui/button'
 import { cn } from '../ui/cn'
-import { NewBadge } from '../ui/new-badge'
+import { NewBadge, NewDot, PER_PERSON } from '../ui/new-badge'
 import { NAV, type NavEntry, type NavGroup, type NavLeaf, filterNav } from './nav'
 import { CommandPalette, openCommandPalette, paletteShortcutHint } from './CommandPalette'
 import { QuickLinks } from './QuickLinks'
@@ -526,7 +526,8 @@ function NavItem({
     >
       {Icon && <Icon className="size-4 shrink-0" />}
       {!collapsed && label}
-      {!collapsed && fresh && <NewBadge feature={fresh} className="ml-auto" />}
+      {!collapsed && fresh && <NewBadge feature={fresh} loud={PER_PERSON.has(fresh)} className="ml-auto" />}
+      {collapsed && fresh && PER_PERSON.has(fresh) && <NewDot feature={fresh} />}
       {badge === 'tasks-overdue' && <TaskOverdueBadge collapsed={collapsed} />}
     </Link>
   )

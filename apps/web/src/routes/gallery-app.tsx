@@ -8,6 +8,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { GalleryGuide } from '@/features/gallery/GalleryGuide'
 import { galleryAppLink } from '@/features/gallery/api'
+import { useMarkPhotoSharingUsed } from '@/shared/ui/new-badge'
 
 export function GalleryAppPage() {
   return (
@@ -42,6 +43,12 @@ type FromFrameline = { source: 'frameline'; type: 'ready' | 'route' | 'open' | '
  * page. Messages are taken only from our own frame.
  */
 function GalleryApp() {
+  // Opening the studio app is using Photo sharing.
+  const markUsed = useMarkPhotoSharingUsed()
+  const marked = useRef(false)
+  useEffect(() => {
+    if (!marked.current) marked.current = markUsed()
+  })
   const frame = useRef<HTMLIFrameElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const [src, setSrc] = useState<string | null>(null)

@@ -12,6 +12,7 @@ import {
   type DriveImportRequest,
 } from '@ipc/contracts'
 import { ApiError, callApi } from '@/shared/api/client'
+import { useMarkPhotoSharingUsed } from '@/shared/ui/new-badge'
 
 /** A project's gallery in Frameline, the gallery add-on (0261). */
 const key = (projectId: string) => ['projects', projectId, 'gallery'] as const
@@ -28,6 +29,7 @@ export function useProjectGallery(projectId: string) {
 /** `inDrive`: keep the gallery's full-size photos in the studio's Google Drive (offered once Drive is connected). */
 export function useCreateGallery(projectId: string) {
   const qc = useQueryClient()
+  const used = useMarkPhotoSharingUsed()
   return useMutation({
     mutationFn: (opts: { inDrive?: boolean } = {}) =>
       callApi(`/projects/${projectId}/gallery`, {
@@ -42,6 +44,7 @@ export function useCreateGallery(projectId: string) {
       void qc.invalidateQueries({ queryKey: key(projectId) })
       // The studio's first gallery takes the "New" off the gallery places.
       void qc.invalidateQueries({ queryKey: ['galleries'], exact: true })
+      used()
       toast.success('Gallery ready. Open it to upload the photos.')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -57,7 +60,7 @@ export function useCreateGallery(projectId: string) {
  * and once, so it is never fetched ahead of the press.
  */
 export function useOpenGallery(projectId: string) {
-  return useOpenFrameline<'gallery' | 'import'>(`/projects/${projectId}/gallery/open`)
+  return useOpenFrameline<'gallery' | 'import'>(`/projects/${projectId}/gallery/open`, true)
 }
 
 /** Projects → Galleries: every project with a gallery. */
@@ -84,7 +87,8 @@ export function useOpenFramelineHome() {
 }
 
 /** `mutate()` opens the default place; `mutate(to)` another one the server knows. */
-function useOpenFrameline<To extends string>(path: string) {
+function useOpenFrameline<To extends string>(path: string, photoSharing = false) {
+  const used = useMarkPhotoSharingUsed()
   return useMutation({
     mutationFn: async (to?: To) => {
       const w = window.open('', '_blank')
@@ -100,6 +104,10 @@ function useOpenFrameline<To extends string>(path: string) {
         w?.close()
         throw e
       }
+    },
+    onSuccess: () => {
+      // Opening a gallery is using Photo sharing: its "New" goes for this person.
+      if (photoSharing) used()
     },
     onError: (e: Error) => toast.error(e.message),
   })

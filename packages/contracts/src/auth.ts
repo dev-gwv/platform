@@ -210,7 +210,7 @@ export type AssistantLangNote = z.infer<typeof assistantLangNote>
 export const requirementsChoiceNote = z.object({ choice: z.enum(['now', 'later']) })
 export type RequirementsChoiceNote = z.infer<typeof requirementsChoiceNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang', 'requirements_choice'] as const
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang', 'requirements_choice', 'photo_sharing'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
@@ -225,6 +225,8 @@ export const userHints = z
     guide: hintNote.optional(),
     assistant_lang: assistantLangNote.optional(),
     requirements_choice: requirementsChoiceNote.optional(),
+    // Photo sharing's "New": shown = visits to the page, closed = this person has started using it.
+    photo_sharing: hintNote.optional(),
   })
   .passthrough()
 export type UserHints = z.infer<typeof userHints>
