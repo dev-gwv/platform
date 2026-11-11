@@ -195,9 +195,10 @@ export function followupMessages(ctx: { name: string; summary: string; nextActio
         'Reply with JSON only: {"message": "...", "tutorials": ["key", ...]}. ' +
         'The message: greet them by first name, thank them for the call in one line, recap what was shown or fixed in one or two lines, ' +
         'say what happens next (what they should do, or what we will do) in one line. At most 6 short lines, plain text, no markdown, at most one emoji. ' +
-        'Write in the language of the call: Hinglish (Hindi in English letters) if the notes are Hindi or Hinglish, else simple English. Button and menu names stay in English. ' +
+        'Language: if the notes from the call contain Hindi or Hinglish words (for example "nahi", "karna", "hai", "unko", "maine"), write the whole message in Hinglish -- Hindi in English letters, the way people text in India; only if the notes are plain English, write simple English. Button and menu names stay in English. ' +
         'Never promise anything the notes do not say; no prices, no dates beyond the notes. Do not sign off with a name. ' +
-        'tutorials: up to 2 keys from the list that would help them do it themselves next time, or [] if none fits. Do not put links in the message.',
+        'tutorials: up to 2 keys from the list that would help them do it themselves next time, or [] if none fits. ' +
+        'The videos are added under the message by us: never mention tutorials, videos, keys or links in the message itself.',
     },
     {
       role: 'user',
@@ -216,16 +217,28 @@ export function readFollowupReply(text: string, known: readonly TutorialPick[]):
   let message = ''
   let keys: unknown[] = []
   if (start >= 0 && end > start) {
-    try {
-      const raw = JSON.parse(text.slice(start, end + 1)) as { message?: unknown; tutorials?: unknown }
-      message = typeof raw.message === 'string' ? raw.message.trim() : ''
-      keys = Array.isArray(raw.tutorials) ? raw.tutorials : []
-    } catch {
-      message = ''
+    const slice = text.slice(start, end + 1)
+    // A model sometimes breaks a line inside the JSON string itself; read it as \n.
+    for (const candidate of [slice, slice.replace(/\r?\n/g, '\\n')]) {
+      try {
+        const raw = JSON.parse(candidate) as { message?: unknown; tutorials?: unknown }
+        message = typeof raw.message === 'string' ? raw.message.trim() : ''
+        keys = Array.isArray(raw.tutorials) ? raw.tutorials : []
+        break
+      } catch {
+        message = ''
+      }
     }
   } else {
     message = text.trim()
   }
+  // A line that names a tutorial key or a link anyway is dropped: the links go under the message.
+  const keyWords = known.map((t) => t.key)
+  message = message
+    .split('\n')
+    .filter((line) => !/https?:\/\//.test(line) && !keyWords.some((k) => new RegExp(`['"\`]${k}['"\`]`).test(line)))
+    .join('\n')
+    .trim()
   if (message.length < 5) return null
   const picked = keys.flatMap((k) => known.filter((t) => t.key === k)).slice(0, 2)
   return { message: message.slice(0, 1500), tutorials: picked }

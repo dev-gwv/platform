@@ -182,3 +182,13 @@ describe('step 2: follow-ups, issues, the Monday post', () => {
     expect(closedPost('Asha', 'Mehta Studio', 'project')).toBe('✅ Closed by itself: Asha · Mehta Studio went on to make a project after the call.')
   })
 })
+
+describe('the follow-up never names a tutorial key or a link itself', () => {
+  it('drops such a line', () => {
+    const r = readFollowupReply(
+      '{"message":"Hi Asha, call ke liye thanks!\nYou can refer to the \'invoices\' tutorial.\nSee https://x.y\nKal video bhejenge.","tutorials":["invoices"]}',
+      [{ key: 'invoices', title: 'Make an invoice' }],
+    )!
+    expect(r.message).toBe('Hi Asha, call ke liye thanks!\nKal video bhejenge.')
+  })
+})
