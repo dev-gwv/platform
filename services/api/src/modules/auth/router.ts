@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import type { TransactionSql } from 'postgres'
 import {
+  LEARN_SHAPED_HINTS,
   QUICK_WORDS_MAX,
   quickHintKey,
   quickWordRequest,
@@ -32,6 +33,7 @@ import {
 import { serializeAccess, resolveAccess, type AppRole } from '@ipc/permissions'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
+import { welcomeRoutes } from './routes-welcome'
 import { fail } from '../../middleware/errors'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
@@ -178,6 +180,7 @@ const resetLink = (env: AppEnv['Bindings'], raw: string) => `${env.APP_URL}/rese
  * and emails a verification link; sign-in is refused until the email is verified.
  */
 export const authRouter = new Hono<AppEnv>()
+  .route('/', welcomeRoutes)
   .post('/register', async (c) => {
     const parsed = registerRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Please check the form and try again.')
@@ -917,7 +920,7 @@ export const authRouter = new Hono<AppEnv>()
     // for 'assistant_lang', and the plain shown/closed note for the rest.
     if (
       v !== null &&
-      ((key.data === 'learn') !== 'watched' in v ||
+      (LEARN_SHAPED_HINTS.includes(key.data) !== 'watched' in v ||
         (key.data === 'assistant_lang') !== 'lang' in v ||
         (key.data === 'requirements_choice') !== 'choice' in v)
     ) {

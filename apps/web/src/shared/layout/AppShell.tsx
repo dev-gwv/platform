@@ -26,6 +26,7 @@ import { Wordmark } from '@/shared/ui/wordmark'
 import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
+import { useWelcomeOnce } from '@/features/onboarding/welcome'
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
@@ -133,6 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const { session, signOut } = useAuth()
   useResumeSetup()
+  useWelcomeOnce()
   const access = useAccess()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(

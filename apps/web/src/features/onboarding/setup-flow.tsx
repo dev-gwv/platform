@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, CheckCircle2, Plus } from 'lucide-react'
 import { companySetupResult } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
@@ -8,6 +8,10 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { checkpointsFor, isSetupAudience, nextStep, SETUP_TOTAL, setupLanding, stepForPath, type JourneyStepKey } from './journey'
 import { SetupCheckpoints } from './SetupCheckpoints'
+import { SETUP_VIDEOS } from './setup-videos'
+import { useTutorials } from '@/features/help/api'
+import { TutorialPlayer } from '@/features/help/TutorialPlayer'
+import type { Tutorial } from '@/features/help/tutorials'
 
 /**
  * Whether this page was opened from setup. Reactive to navigation.
@@ -108,7 +112,12 @@ export function SetupGuideBar() {
   const navigate = useNavigate()
   const closeSetup = useCloseSetup()
   const [skipping, setSkipping] = useState(false)
+  const [playing, setPlaying] = useState<Tutorial | null>(null)
+  const tutorials = useTutorials()
   const step = stepForPath(pathname)
+  // The step's video plays right here: leaving the page mid-step lost the place.
+  const videoKey = SETUP_VIDEOS.find((v) => v.key === step?.key)?.video
+  const video = tutorials.find((t) => t.key === videoKey) ?? null
   const show = fromSetup && !!step && !!session && isSetupAudience(session) && !session.setup_done
   useNudgeOnce(show, pathname)
 
@@ -122,13 +131,15 @@ export function SetupGuideBar() {
             Step {step.step} of {SETUP_TOTAL} · {step.title}
           </span>
           <span className="text-muted-foreground"> — {step.why.charAt(0).toLowerCase() + step.why.slice(1)}</span>{' '}
-          <Link
-            to="/help/setup"
-            hash={step.key}
-            className="whitespace-nowrap text-xs font-medium text-primary underline-offset-2 hover:underline"
-          >
-            Watch the setup video
-          </Link>
+          {video && (
+            <button
+              type="button"
+              onClick={() => setPlaying(video)}
+              className="whitespace-nowrap text-xs font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Watch the setup video
+            </button>
+          )}
         </p>
         <button
           type="button"
@@ -144,6 +155,7 @@ export function SetupGuideBar() {
           Skip setup
         </button>
       </div>
+      <TutorialPlayer tutorial={playing} onClose={() => setPlaying(null)} />
     </div>
   )
 }

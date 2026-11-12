@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -88,7 +89,7 @@ export function StaffHome() {
       <Card>
         <CardContent className="p-4">
           <p className="mb-2 text-sm font-semibold">
-            Today <span className="font-normal text-muted-foreground">· {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
+            Today <span className="font-normal text-muted-foreground">· {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}</span>
           </p>
           {day.loading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
@@ -330,7 +331,8 @@ function CallAction({ call }: { call: NonNullable<TodayItem['call']> }) {
 }
 
 const laterKey = (me: string | undefined) => `profile-nudge-later:${me ?? ''}`
-const todayKey = () => new Date().toDateString()
+// India's day, so "Later" lasts until India's tomorrow, wherever the device's clock is set.
+const todayKey = () => todayInIndia()
 
 /**
  * One line while the profile is unfinished. "Later" hides it until tomorrow;
