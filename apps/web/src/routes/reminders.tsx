@@ -14,31 +14,17 @@ import {
   useUpdateReminderStatus,
   useDeleteReminder,
 } from '@/features/reminders/api'
-import { useLeads } from '@/features/crm/api'
+import { LeadPicker } from '@/features/crm/LeadPicker'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
+import { ShootPicker } from '@/features/shoots/ShootPicker'
 import { useClients } from '@/features/clients/api'
 import { useInvoices } from '@/features/billing/api'
 import { useEnquiries } from '@/features/enquiries/api'
-import { useTasks } from '@/features/tasks/api'
+import { TaskPicker } from '@/features/tasks/TaskPicker'
 import { useMembers } from '@/features/allocation/api'
-import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
-import { useQuery } from '@tanstack/react-query'
-import { shootListItem, type CreateReminderRequest, type ReminderEntityType } from '@ipc/contracts'
+import { type CreateReminderRequest, type ReminderEntityType } from '@ipc/contracts'
 import { Plus, Trash2, CheckCircle, Clock, AlertTriangle, Bell, Link2, RotateCcw } from 'lucide-react'
-
-const shootsList = shootListItem.array()
-
-/** No dedicated hook exists outside the shoots route — a plain picker query is enough here. */
-function useShootsPicker(enabled: boolean) {
-  const { session } = useAuth()
-  return useQuery({
-    queryKey: ['shoots'],
-    queryFn: () => callApi('/shoots', { responseSchema: shootsList }),
-    enabled: !!session && enabled,
-    staleTime: 30_000,
-  })
-}
 
 const ENTITY_LINK: Partial<
   Record<ReminderEntityType, (id: string) => { to: string; params: Record<string, string>; search?: Record<string, string> }>
@@ -57,17 +43,30 @@ function EntityPicker({
   entityId: string | null | undefined
   onChangeId: (id: string | null) => void
 }) {
-  const leads = useLeads()
   const clients = useClients()
   const invoices = useInvoices()
   const enquiries = useEnquiries({})
-  const tasks = useTasks()
-  const shoots = useShootsPicker(entityType === 'shoot')
 
   // A deliverable is linked from its own card ("Remind me"), not picked from
   // a list here; that link is kept as it is. Anything without a list of its
   // own used to fall through to the shoots list below.
   if (!entityType || entityType === 'custom' || entityType === 'general' || entityType === 'deliverable') return null
+  // Shoots: the next 60 days and a search, never every shoot ever.
+  if (entityType === 'shoot')
+    return (
+      <div>
+        <label className="text-sm font-medium">Linked shoot</label>
+        <ShootPicker value={entityId ?? ''} onChange={onChangeId} />
+      </div>
+    )
+  // Tasks are searched as you type, not loaded whole.
+  if (entityType === 'task')
+    return (
+      <div>
+        <label className="text-sm font-medium">Linked task</label>
+        <TaskPicker value={entityId ?? ''} onChange={onChangeId} />
+      </div>
+    )
   // Projects are searched as you type, not loaded whole.
   if (entityType === 'project')
     return (
@@ -77,18 +76,23 @@ function EntityPicker({
       </div>
     )
 
+  // Leads are searched as you type, not loaded whole.
+  if (entityType === 'lead')
+    return (
+      <div>
+        <label className="text-sm font-medium">Linked lead</label>
+        <LeadPicker value={entityId ?? ''} onChange={onChangeId} placeholder="Select…" aria-label="Linked lead" />
+      </div>
+    )
+
   const options =
-    entityType === 'lead'
-      ? (leads.data ?? []).map((l) => ({ id: l.id, label: l.name ?? l.phone ?? 'Unnamed deal' }))
-      : entityType === 'client'
+    entityType === 'client'
           ? (Array.isArray(clients.data) ? clients.data : []).map((c) => ({ id: c.id, label: c.name }))
           : entityType === 'invoice'
             ? (invoices.data?.items ?? []).map((i) => ({ id: i.id, label: i.invoice_number }))
             : entityType === 'enquiry'
               ? (enquiries.data?.pages.flatMap((p) => p.items) ?? []).map((e) => ({ id: e.id, label: e.name }))
-              : entityType === 'task'
-                ? (tasks.data ?? []).map((t) => ({ id: t.id, label: t.title }))
-                : (shoots.data ?? []).map((s) => ({ id: s.id, label: s.name }))
+              : []
 
   return (
     <div>

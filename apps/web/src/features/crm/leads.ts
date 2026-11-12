@@ -1,4 +1,4 @@
-import type { CrmLead, LeadQuality, LeadStatus } from '@ipc/contracts'
+import type { LeadQuality, LeadRow, LeadStatus } from '@ipc/contracts'
 import { LEGACY_STAGES, LEGACY_STAGE_LABEL } from '@ipc/domain'
 
 /**
@@ -15,7 +15,7 @@ export type DueBucket = 'overdue' | 'today' | 'tomorrow' | 'upcoming' | 'none'
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 
-export function dueBucket(lead: CrmLead, now: Date): DueBucket {
+export function dueBucket(lead: LeadRow, now: Date): DueBucket {
   // A closed lead owes nobody a call, whatever date is still on it.
   if (lead.status === 'converted' || lead.status === 'lost') return 'none'
   if (!lead.follow_up_at) return 'none'
@@ -32,16 +32,16 @@ export function dueBucket(lead: CrmLead, now: Date): DueBucket {
   return 'upcoming'
 }
 
-export const isOpen = (l: CrmLead): boolean => l.status !== 'converted' && l.status !== 'lost'
+export const isOpen = (l: LeadRow): boolean => l.status !== 'converted' && l.status !== 'lost'
 
 /** Never contacted: still in 'new' and nothing stamped a conversation. */
-export const isUncontacted = (l: CrmLead): boolean =>
+export const isUncontacted = (l: LeadRow): boolean =>
   l.status === 'new' && l.last_contacted_at === null
 
 /** An open lead with no promised call-back — the quiet way a deal dies. */
-export const hasNoFollowUp = (l: CrmLead): boolean => isOpen(l) && l.follow_up_at === null
+export const hasNoFollowUp = (l: LeadRow): boolean => isOpen(l) && l.follow_up_at === null
 
-export function wonThisMonth(l: CrmLead, now: Date): boolean {
+export function wonThisMonth(l: LeadRow, now: Date): boolean {
   if (l.status !== 'converted' || !l.converted_at) return false
   const at = new Date(l.converted_at)
   return at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth()
@@ -57,7 +57,7 @@ interface LeadSummary {
 }
 
 /** The strip across the top. `total` counts open leads — the working set. */
-export function summarise(leads: readonly CrmLead[], now: Date): LeadSummary {
+export function summarise(leads: readonly LeadRow[], now: Date): LeadSummary {
   return {
     total: leads.filter(isOpen).length,
     uncontacted: leads.filter(isUncontacted).length,
@@ -87,7 +87,7 @@ export const QUICK_FILTERS: ReadonlyArray<{ value: QuickFilter; label: string }>
   { value: 'no_follow_up', label: 'No follow-up' },
 ]
 
-const PREDICATES: Record<QuickFilter, (l: CrmLead, now: Date) => boolean> = {
+const PREDICATES: Record<QuickFilter, (l: LeadRow, now: Date) => boolean> = {
   due_today: (l, now) => dueBucket(l, now) === 'today',
   overdue: (l, now) => dueBucket(l, now) === 'overdue',
   hot: (l) => l.is_hot && isOpen(l),
@@ -98,7 +98,7 @@ const PREDICATES: Record<QuickFilter, (l: CrmLead, now: Date) => boolean> = {
 }
 
 export function countsFor(
-  leads: readonly CrmLead[],
+  leads: readonly LeadRow[],
   now: Date,
 ): Record<QuickFilter, number> {
   const counts = {} as Record<QuickFilter, number>
@@ -147,10 +147,10 @@ export const EMPTY_QUERY: LeadQuery = {
   created: 'all',
 }
 
-function matchesSearch(l: CrmLead, search: string): boolean {
+function matchesSearch(l: LeadRow, search: string): boolean {
   const needle = search.trim().toLowerCase()
   if (!needle) return true
-  return [l.name, l.phone, l.email, l.assignee_name, l.notes]
+  return [l.name, l.phone, l.email, l.assignee_name, l.notes ?? l.notes_preview]
     .filter(Boolean)
     .some((v) => String(v).toLowerCase().includes(needle))
 }
@@ -168,7 +168,7 @@ export const CREATED_RANGES: ReadonlyArray<{ value: LeadQuery['created']; label:
   { value: 'this_month', label: 'This month' },
 ]
 
-function arrivedWithin(l: CrmLead, range: LeadQuery['created'], now: Date): boolean {
+function arrivedWithin(l: LeadRow, range: LeadQuery['created'], now: Date): boolean {
   if (range === 'all') return true
   const at = new Date(l.created_at)
   if (Number.isNaN(at.getTime())) return false
@@ -187,11 +187,11 @@ function arrivedWithin(l: CrmLead, range: LeadQuery['created'], now: Date): bool
   return at >= start
 }
 
-export function applyQuery(
-  leads: readonly CrmLead[],
+export function applyQuery<T extends LeadRow>(
+  leads: readonly T[],
   query: LeadQuery,
   now: Date,
-): CrmLead[] {
+): T[] {
   return leads
     .filter((l) => query.filters.every((f) => PREDICATES[f]!(l, now)))
     .filter((l) => (query.status === 'all' ? true : l.status === query.status))
@@ -214,7 +214,7 @@ export function applyQuery(
  * every level. The desk works top-down, so the order is the priority.
  */
 function byUrgency(now: Date) {
-  const rank = (l: CrmLead): number => {
+  const rank = (l: LeadRow): number => {
     const bucket = dueBucket(l, now)
     if (bucket === 'overdue') return 0
     if (bucket === 'today') return 1
@@ -222,7 +222,7 @@ function byUrgency(now: Date) {
     if (bucket === 'upcoming') return 3
     return 4
   }
-  return (a: CrmLead, b: CrmLead): number => {
+  return (a: LeadRow, b: LeadRow): number => {
     const byRank = rank(a) - rank(b)
     if (byRank !== 0) return byRank
     if (a.is_hot !== b.is_hot) return a.is_hot ? -1 : 1
@@ -251,11 +251,11 @@ export const DUE_COLUMNS: ReadonlyArray<{ key: DueBucket; label: string; hint: s
 ]
 
 /** Group open leads by due bucket, each column already in working order. */
-export function boardColumns(
-  leads: readonly CrmLead[],
+export function boardColumns<T extends LeadRow>(
+  leads: readonly T[],
   now: Date,
-): Record<DueBucket, CrmLead[]> {
-  const columns: Record<DueBucket, CrmLead[]> = { overdue: [], today: [], tomorrow: [], upcoming: [], none: [] }
+): Record<DueBucket, T[]> {
+  const columns: Record<DueBucket, T[]> = { overdue: [], today: [], tomorrow: [], upcoming: [], none: [] }
   for (const lead of leads) {
     if (!isOpen(lead)) continue
     columns[dueBucket(lead, now)].push(lead)

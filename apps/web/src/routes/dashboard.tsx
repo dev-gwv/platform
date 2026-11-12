@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, CalendarClock, PhoneCall, Plus, Receipt, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { projectTrackingRow, shootListItem } from '@ipc/contracts'
+import { projectTrackingRow } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { cn } from '@/shared/ui/cn'
 import {
@@ -37,7 +37,8 @@ import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { greeting, todayLine } from '@/features/dashboard/greeting'
-import { leadsTileLine, moneyTile, shootsTile } from '@/features/dashboard/tiles'
+import { leadsTileLine, moneyTile, shootsTile, shootsWeekEnd } from '@/features/dashboard/tiles'
+import { useShootsWindow } from '@/features/shoots/api'
 import { seesStudioWork } from '@ipc/permissions'
 import { useINR } from '@/shared/money/MoneyMask'
 
@@ -94,13 +95,12 @@ function StudioCommandCenter() {
     enabled: !!session && access.hasModule('projects'),
     staleTime: 30_000,
   })
-  const shoots = useQuery({
-    queryKey: ['shoots'],
-    queryFn: () => callApi('/shoots', { responseSchema: shootListItem.array() }),
-    enabled: !!session && access.hasModule('projects'),
+  const today = todayInIndia()
+  // The week tile reads this week only (India dates), never every shoot ever.
+  const shoots = useShootsWindow(today, shootsWeekEnd(today), {
+    enabled: access.hasModule('projects'),
     staleTime: 30_000,
   })
-  const today = todayInIndia()
   const tracked = track(trackingRows.data ?? [], today)
   const clientCount = Array.isArray(clients.data) ? clients.data.length : 0
   const startShowing = useGettingStartedShowing()

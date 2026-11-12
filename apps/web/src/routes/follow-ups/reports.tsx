@@ -82,7 +82,7 @@ function CrmReports() {
   // Only the funnel reads the rows themselves; the other two are server
   // aggregates, so nothing is fetched for a tab nobody opened.
   const needsLeads = section === 'funnel'
-  const leads = useLeads(false)
+  const leads = useLeads({ enabled: needsLeads })
 
   return (
     <>

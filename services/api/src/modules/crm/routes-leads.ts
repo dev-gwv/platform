@@ -4,7 +4,9 @@ import {
   createLeadRequest,
   createLeadResponse,
   crmLead,
+  crmLeadCard,
   leadsQuery,
+  leadsSummary,
   normalizePhone,
   updateLeadRequest,
   type LeadFunctionInput,
@@ -17,8 +19,10 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { edit } from './shared'
+import { CARD_SELECT, SUMMARY_SQL, outcomeWhere } from './lead-reads'
 
 const list = crmLead.array()
+const cards = crmLeadCard.array()
 
 /** The one projection every lead read uses, so the wire shape cannot drift. */
 const selectLead = (sql: TransactionSql) => sql`
@@ -93,6 +97,8 @@ export const crmLeadRoutes = new Hono<AppEnv>()
   // ── Leads ───────────────────────────────────────────────────
   .get('/leads', async (c) => {
     const q = leadsQuery.safeParse({
+      outcome: c.req.query('outcome'),
+      shape: c.req.query('shape'),
       include_archived: c.req.query('include_archived'),
       limit: c.req.query('limit'),
       pipeline_id: c.req.query('pipeline_id'),
@@ -130,8 +136,9 @@ export const crmLeadRoutes = new Hono<AppEnv>()
         c.env,
         c.get('auth').userId,
         (sql) => sql`
-          ${selectLead(sql)}
+          ${v.shape === 'card' ? sql.unsafe(CARD_SELECT) : selectLead(sql)}
           where ${include_archived ? sql`true` : sql`l.is_archived = false`}
+            and ${sql.unsafe(outcomeWhere(v.outcome))}
             and ${pipeline_id ? sql`l.pipeline_id = ${pipeline_id}` : sql`true`}
             and ${stage_id ? sql`l.stage_id = ${stage_id}` : sql`true`}
             and ${contact_id ? sql`l.contact_id = ${contact_id}` : sql`true`}
@@ -165,7 +172,35 @@ export const crmLeadRoutes = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not load leads.')
-    return c.json(list.parse(rows))
+    return c.json(v.shape === 'card' ? cards.parse(rows) : list.parse(rows))
+  })
+
+  // The pipeline's column heads and header, counted here rather than over
+  // 2,000 cards in the browser. Before /leads/:id, which would swallow it.
+  .get('/leads/summary', async (c) => {
+    const q = leadsQuery.pick({ pipeline_id: true }).safeParse({ pipeline_id: c.req.query('pipeline_id') })
+    if (!q.success) fail(422, 'Invalid pipeline.')
+    const pipelineId = q.data.pipeline_id ?? null
+    const row = await attempt(c, 'crm.leads_summary', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => (await sql.unsafe(SUMMARY_SQL, [pipelineId]))[0] ?? null),
+    )
+    if (!row) fail(400, 'We could not count leads.')
+    return c.json(leadsSummary.parse(row))
+  })
+
+  // One lead, whole: the drawer reads it, so the list can stay slim. RLS keeps
+  // it to the caller's studio; another studio's id is simply not found.
+  .get('/leads/:id', async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(c, 'crm.lead', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [lead] = await sql`${selectLead(sql)} where l.id = ${id}`
+        return lead ?? 'missing'
+      }),
+    )
+    if (row === 'missing') fail(404, 'That lead was not found.')
+    if (!row) fail(400, 'We could not load this lead.')
+    return c.json(crmLead.parse(row))
   })
 
   // Manual entry. add_lead carries the dedupe and round-robin the webhook path

@@ -18,7 +18,7 @@ import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
-import { uuidParam, uuidQuery } from '../../lib/params'
+import { dateQuery, likePattern, searchQuery, uuidParam, uuidQuery } from '../../lib/params'
 import type { TransactionSql } from 'postgres'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
@@ -78,6 +78,12 @@ const selectShoots = (sql: TransactionSql) => sql`
   left join projects p on p.id = s.project_id
   left join clients cl on cl.id = p.client_id`
 
+/** Booked (or asked) on this shoot: what staff are limited to, list and one alike. */
+const onShoot = (sql: TransactionSql, userId: string) => sql`exists (
+  select 1 from team_assignment_slots t
+  where t.shoot_id = s.id and t.user_id = ${userId} and t.status <> 'cancelled'
+)`
+
 export const shootsRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
 
@@ -122,8 +128,17 @@ export const shootsRouter = new Hono<AppEnv>()
     )
   })
 
+  // GET /shoots used to send every shoot the studio ever had, past and
+  // cancelled ones too (~500 KB for a busy studio). Each screen now asks for
+  // what it shows: `from` / `to` (YYYY-MM-DD, inclusive, on shoot_date) for a
+  // month or a week, `q` (project, client or shoot name, at most 20) for a
+  // picker. Without them it answers as it always did, for the project tabs.
   .get('/', requireAction('projects', 'view'), async (c) => {
     const project = uuidQuery(c, 'project_id')
+    const from = dateQuery(c, 'from')
+    const to = dateQuery(c, 'to')
+    const q = searchQuery(c, 'q')
+    if (from && to && from > to) fail(422, 'The start date is after the end date.')
     // Staff see the shoots they are booked on, never the studio's calendar.
     const assignee = studioWork(c) ? uuidQuery(c, 'assignee') : c.get('auth').userId
     const rows = await attempt(c, 'shoots.list', () =>
@@ -133,15 +148,16 @@ export const shootsRouter = new Hono<AppEnv>()
         (sql) => sql`
           ${selectShoots(sql)}
           where ${project ? sql`s.project_id = ${project}` : sql`true`}
+            and ${from ? sql`s.shoot_date >= ${from}::date` : sql`true`}
+            and ${to ? sql`s.shoot_date <= ${to}::date` : sql`true`}
             and ${
-              assignee
-                ? sql`exists (
-                    select 1 from team_assignment_slots t
-                    where t.shoot_id = s.id and t.user_id = ${assignee} and t.status <> 'cancelled'
-                  )`
+              q
+                ? sql`(p.name ilike ${likePattern(q)} or cl.name ilike ${likePattern(q)} or s.name ilike ${likePattern(q)})`
                 : sql`true`
             }
-          order by s.shoot_date asc nulls last`,
+            and ${assignee ? onShoot(sql, assignee) : sql`true`}
+          order by s.shoot_date asc nulls last
+          ${q ? sql`limit 20` : sql``}`,
       ),
     )
     if (!rows) fail(400, 'We could not load shoots.')
@@ -290,6 +306,29 @@ export const shootsRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not delete the preset.')
     if (!rows.length) fail(404, 'That preset was not found.')
     return c.body(null, 204)
+  })
+
+  // One shoot, under the list's own rules: RLS keeps it to the studio, and
+  // staff see it only if they are on it. An old link (/shoots/<id>) reads
+  // this to find the project instead of downloading every shoot. Declared
+  // after the literal paths (/my, /services, /presets).
+  .get('/:id', requireAction('projects', 'view'), async (c) => {
+    const id = uuidParam(c)
+    const me = c.get('auth').userId
+    const assignee = studioWork(c) ? null : me
+    const rows = await attempt(c, 'shoots.one', () =>
+      withUser(
+        c.env,
+        me,
+        (sql) => sql`
+          ${selectShoots(sql)}
+          where s.id = ${id}
+            and ${assignee ? onShoot(sql, assignee) : sql`true`}`,
+      ),
+    )
+    if (!rows) fail(400, 'We could not load this shoot.')
+    if (!rows.length) fail(404, 'That shoot was not found.')
+    return c.json(shootListItem.parse(rows[0]))
   })
 
   .post('/', requireAction('projects', 'edit'), async (c) => {

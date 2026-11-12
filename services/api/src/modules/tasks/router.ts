@@ -15,6 +15,7 @@ import {
   generateTasksRequest,
   setBoardOrderRequest,
   taskBundle,
+  taskDonePage,
   taskListItem,
   updateTaskRequest,
   updateTaskStatusRequest,
@@ -58,6 +59,7 @@ interface RawTask {
   created_by_name: string | null
   latest_submission: { id: string; link: string | null; status: string; submitted_at: string } | null
   updated_at: string | null
+  description_truncated?: boolean
 }
 
 /**
@@ -81,14 +83,81 @@ function toItems(rows: RawTask[], order: Map<string, number>) {
 // deliverable (per-deliverable tasks UI). `id` is one task (the detail dialog).
 // Each row carries who gave it and the newest work handed in against it, so a
 // card can say "by AO" and "Submitted · Open submission" without a second trip.
-interface TaskFilter {
+//
+// A busy studio holds thousands of finished tasks, so the pages ask for a
+// window (speed audit, 12 Nov): `since` is every open task plus what was done
+// or cancelled since then; `before` pages back through the older done ones,
+// newest first. Both send a description cut to 200 characters (the drawer and
+// the edit dialog read the whole task by id).
+export interface TaskFilter {
   assignee?: string | undefined
   project?: string | undefined
   deliverable?: string | undefined
   id?: string | undefined
+  parent?: string | undefined
+  /** Title search for pickers. */
+  q?: string | undefined
+  /** Open tasks only (not completed or cancelled). */
+  openOnly?: boolean | undefined
+  /** Open tasks, and finished ones changed at or after this moment (ISO). */
+  since?: string | undefined
+  /** Only finished tasks changed before this moment, then before this id at the same moment. */
+  before?: DoneCursor | undefined
+  limit?: number | undefined
 }
-const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => sql<RawTask[]>`
-  select t.id, t.title, t.description, t.status, t.priority, t.due_date, t.project_id,
+
+export interface DoneCursor {
+  ts: string
+  id: string | null
+}
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+const MOMENT_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}(:?\d{2})?)$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The start of an India day, as a moment: `2026-10-13` → `2026-10-13T00:00:00+05:30`. */
+const indiaMidnight = (day: string) => `${day}T00:00:00+05:30`
+
+/** `done_since=YYYY-MM-DD` → the moment that India day began, null when absent, 'bad' when malformed. */
+export function readDoneSince(raw: string | undefined): string | null | 'bad' {
+  if (!raw) return null
+  if (!DAY_RE.test(raw) || Number.isNaN(Date.parse(raw))) return 'bad'
+  return indiaMidnight(raw)
+}
+
+/**
+ * `done_before` is a day (the window's edge, for the first page), a moment,
+ * or `<moment>|<task id>` (the `next_cursor` a page hands back, so tasks
+ * finished in the same instant are never skipped).
+ */
+export function readDoneBefore(raw: string | undefined): DoneCursor | null | 'bad' {
+  if (!raw) return null
+  const [ts, id, ...rest] = raw.split('|')
+  if (!ts || rest.length) return 'bad'
+  if (id !== undefined && !UUID_RE.test(id)) return 'bad'
+  if (DAY_RE.test(ts)) return Number.isNaN(Date.parse(ts)) ? 'bad' : { ts: indiaMidnight(ts), id: id ?? null }
+  // Postgres hands back microseconds, which not every Date.parse reads: check
+  // the shape here and let the database read the moment itself.
+  if (!MOMENT_RE.test(ts)) return 'bad'
+  return { ts, id: id ?? null }
+}
+
+/** `limit` within 1..max, else the fallback. */
+export function readLimit(raw: string | undefined, fallback: number, max: number): number {
+  const n = Number(raw ?? fallback)
+  return Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 1), max) : fallback
+}
+
+/** A title search: `%` and `_` are what they say, not wildcards. */
+const likeOf = (q: string) => `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+
+export const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => {
+  const windowed = !!(f.since || f.before)
+  return sql<RawTask[]>`
+  select t.id, t.title,
+         ${windowed ? sql`left(t.description, 200)` : sql`t.description`} as description,
+         ${windowed ? sql`coalesce(char_length(t.description) > 200, false)` : sql`false`} as description_truncated,
+         t.status, t.priority, t.due_date, t.project_id,
          p.name as project_name,
          cp.code as custom_priority_code, cp.label as custom_priority_label, cp.tone as custom_priority_tone,
          t.custom_status_code, cs.label as custom_status_label,
@@ -118,8 +187,40 @@ const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => sql<RawTask[]>`
     and ${f.project ? sql`t.project_id = ${f.project}` : sql`true`}
     and ${f.deliverable ? sql`t.deliverable_id = ${f.deliverable}` : sql`true`}
     and ${f.id ? sql`t.id = ${f.id}` : sql`true`}
+    and ${f.parent ? sql`t.parent_task_id = ${f.parent}` : sql`true`}
+    and ${f.q ? sql`t.title ilike ${likeOf(f.q)}` : sql`true`}
+    and ${f.openOnly ? sql`t.status::text not in ('completed', 'cancelled')` : sql`true`}
+    and ${f.since ? sql`(t.status::text not in ('completed', 'cancelled') or t.updated_at >= ${f.since}::timestamptz)` : sql`true`}
+    and ${
+      f.before
+        ? f.before.id
+          ? sql`t.status::text in ('completed', 'cancelled') and (t.updated_at, t.id) < (${f.before.ts}::timestamptz, ${f.before.id}::uuid)`
+          : sql`t.status::text in ('completed', 'cancelled') and t.updated_at < ${f.before.ts}::timestamptz`
+        : sql`true`
+    }
   group by t.id, p.name, cp.code, cp.label, cp.tone, cs.label
-  order by t.created_at desc`
+  ${f.before ? sql`order by t.updated_at desc, t.id desc` : sql`order by t.created_at desc`}
+  ${f.limit ? sql`limit ${f.limit}` : sql``}`
+}
+
+/** The query string's window, shared by GET /tasks, /tasks/my and /tasks/board. */
+function windowOf(c: { req: { query: (k: string) => string | undefined } }) {
+  const since = readDoneSince(c.req.query('done_since'))
+  if (since === 'bad') fail(422, 'done_since must be a date (YYYY-MM-DD).')
+  const before = readDoneBefore(c.req.query('done_before'))
+  if (before === 'bad') fail(422, 'Invalid done_before cursor.')
+  return { since: since ?? undefined, before: before ?? undefined }
+}
+
+/** One page of older finished tasks, and where the next one starts. */
+function donePage(rows: RawTask[], limit: number) {
+  const items = rows.slice(0, limit)
+  const last = items[items.length - 1]
+  return taskDonePage.parse({
+    items: toItems(items, new Map()),
+    next_cursor: rows.length > limit && last?.updated_at ? `${last.updated_at}|${last.id}` : null,
+  })
+}
 
 /** The task as the caller may see it (RLS decides), with who is on it and who gave it. */
 async function taskAccess(sql: TransactionSql, id: string) {
@@ -232,10 +333,20 @@ export const tasksRouter = new Hono<AppEnv>()
     // assigned tasks anyway, but it lets a manager see all of them, and "My
     // tasks" listed the whole studio's work for a manager as their own.
     // ?project_id narrows to one project (My Work's project page).
+    // ?open=1 is open tasks only (Home, Submit work); ?done_since and
+    // ?done_before window and page the finished ones as on GET /tasks.
     const me = c.get('auth').userId
     const project = uuidQuery(c, 'project_id') ?? undefined
-    const rows = await attempt(c, 'tasks.my', () => withUser(c.env, me, (sql) => selectTasks(sql, { assignee: me, project })))
+    const openOnly = c.req.query('open') === '1'
+    const { since, before } = windowOf(c)
+    const limit = before ? readLimit(c.req.query('limit'), 50, 100) : undefined
+    const rows = await attempt(c, 'tasks.my', () =>
+      withUser(c.env, me, (sql) =>
+        selectTasks(sql, { assignee: me, project, openOnly, since, before, limit: limit === undefined ? undefined : limit + 1 }),
+      ),
+    )
     if (!rows) fail(400, 'We could not load your tasks.')
+    if (before && limit) return c.json(donePage(rows, limit))
     return c.json(list.parse(toItems(rows, new Map())))
   })
 
@@ -301,9 +412,11 @@ export const tasksRouter = new Hono<AppEnv>()
   // ── Board (persisted drag order) ────────────────────────────
   .get('/board', requireAction('tasks', 'view'), async (c) => {
     const view = c.req.query('view') ?? 'default'
+    const since = readDoneSince(c.req.query('done_since'))
+    if (since === 'bad') fail(422, 'done_since must be a date (YYYY-MM-DD).')
     const result = await attempt(c, 'tasks.board', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const tasks = await selectTasks(sql)
+        const tasks = await selectTasks(sql, { since: since ?? undefined })
         const orders = await sql<{ task_id: string; sort_order: number }[]>`
           select task_id, sort_order from production_board_card_order where board_view = ${view}`
         return { tasks, orders }
@@ -368,8 +481,20 @@ export const tasksRouter = new Hono<AppEnv>()
     if (assignee && !ac?.success) fail(422, 'Invalid assignee id.')
     const project = uuidQuery(c, 'project_id') ?? undefined
     const deliverable = uuidQuery(c, 'deliverable_id') ?? undefined
-    const rows = await attempt(c, 'tasks.list', () => withUser(c.env, c.get('auth').userId, (sql) => selectTasks(sql, { assignee, project, deliverable })))
+    const parent = uuidQuery(c, 'parent_id') ?? undefined
+    const { since, before } = windowOf(c)
+    // ?q= searches titles for a picker: twenty at most, never the whole studio.
+    // An empty ?q= is the newest twenty, the picker's first look.
+    const rawQ = c.req.query('q')
+    const q = rawQ?.trim().slice(0, 100) || undefined
+    const limit = before ? readLimit(c.req.query('limit'), 50, 100) : rawQ !== undefined ? readLimit(c.req.query('limit'), 20, 20) : undefined
+    const rows = await attempt(c, 'tasks.list', () =>
+      withUser(c.env, c.get('auth').userId, (sql) =>
+        selectTasks(sql, { assignee, project, deliverable, parent, q, since, before, limit: before && limit ? limit + 1 : limit }),
+      ),
+    )
     if (!rows) fail(400, 'We could not load tasks.')
+    if (before && limit) return c.json(donePage(rows, limit))
     return c.json(list.parse(toItems(rows, new Map())))
   })
 

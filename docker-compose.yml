@@ -15,19 +15,30 @@ services:
     image: postgres:16
     restart: unless-stopped
     # Stock Postgres keeps 128 MB of pages in memory and plans for a spinning
-    # disk. The VPS has an SSD and more memory to spare (speed audit, 11 Nov):
-    # keep more of the studios' data in memory and let the planner use indexes
-    # freely. Modest on purpose, because other projects share the box.
+    # disk. The VPS is a Hostinger KVM 4 (Mumbai): 4 cores, 16 GB of RAM and an
+    # SSD, shared with the other Coolify projects on it (speed audit, 11-12 Nov).
+    # shared_buffers is 2 GB (1/8 of the box rather than the usual 1/4, because
+    # the box is shared), effective_cache_size 8 GB tells the planner about the
+    # OS page cache it can count on, work_mem 16 MB per sort/hash (the API's
+    # pool is 20, so worst case stays well under a gigabyte), 256 MB for
+    # VACUUM / CREATE INDEX, and random_page_cost 1.1 lets it use indexes freely.
     command:
       - postgres
       - -c
-      - shared_buffers=256MB
+      - shared_buffers=2GB
       - -c
-      - effective_cache_size=1GB
+      - effective_cache_size=8GB
       - -c
       - random_page_cost=1.1
       - -c
-      - work_mem=8MB
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+    # shared_buffers is an anonymous mmap on Linux and does not live in
+    # /dev/shm, but parallel query's hash tables and sorts do (dynamic shared
+    # memory). Docker's 64 MB default can fail a parallel hash join with "could
+    # not resize shared memory segment"; 256 MB leaves room at work_mem=16MB.
+    shm_size: 256mb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

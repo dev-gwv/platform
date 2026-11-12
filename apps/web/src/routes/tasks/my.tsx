@@ -9,7 +9,8 @@ import { Input, Label, Select } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
-import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
+import { useMyTasks, useOlderDoneTasks, useUpdateMyTaskStatus, withOlder } from '@/features/tasks/api'
+import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { RemindMe } from '@/features/reminders/RemindMe'
 import {
   PRIORITY_LABEL,
@@ -79,7 +80,10 @@ export function MyTasksPage() {
 }
 
 function MyTasks() {
-  const { data, isLoading, isError, error, refetch } = useMyTasks()
+  // Open tasks and the last 30 days' done; older done ones a page at a time.
+  const { data: windowRows, isLoading, isError, error, refetch } = useMyTasks()
+  const older = useOlderDoneTasks('my')
+  const data = useMemo(() => withOlder(windowRows, older.rows), [windowRows, older.rows])
   const move = useUpdateMyTaskStatus()
   const today = todayISO()
   const [sort, setSort] = useState<SortKey>('due_asc')
@@ -254,6 +258,7 @@ function MyTasks() {
             <Section title="Upcoming" icon={Clock} items={buckets.upcoming} />
             <Section title="No due date" icon={Clock} items={buckets.noDue} />
             <Section title="Completed" icon={CheckCircle2} items={buckets.completed} />
+            {(statusFilter === 'all' || statusFilter === 'completed' || statusFilter === 'cancelled') && <ShowOlderDone older={older} />}
           </div>
         )}
       </div>

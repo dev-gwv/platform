@@ -11,7 +11,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import type { CrmLead, PipelineStage } from '@ipc/contracts'
+import type { LeadRow, PipelineStage } from '@ipc/contracts'
 import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
 import { TONES, TONE_BG, toneVar, type ToneName } from '@/shared/ui/tones'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -27,6 +27,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import {
   useBulkPatch,
   useCreateStage,
+  useLeadsSummary,
   useCrmPrefs,
   useDeleteStage,
   useMoveStage,
@@ -42,6 +43,28 @@ import { DUE_COLUMNS, boardColumns, type DueBucket } from '../leads'
 import { BoardColumn, LeadCard } from './shared'
 import { DealCard } from '../DealCard'
 import { LeadBulkBar } from '../LeadBulkBar'
+import { capped } from '../board-cap'
+
+/** "Show 412 more" under a column that was cut short: bordered, so it reads as a button. */
+function ShowMore({ more, onShow }: { more: number; onShow: () => void }) {
+  if (more <= 0) return null
+  return (
+    <button
+      type="button"
+      onClick={onShow}
+      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
+    >
+      Show {more} more
+    </button>
+  )
+}
+
+/** Which columns have been opened past their first 30 cards. */
+function useExpanded() {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  const expand = useCallback((key: string) => setOpen((prev) => new Set(prev).add(key)), [])
+  return { isOpen: (key: string) => open.has(key), expand }
+}
 
 /**
  * What is owed, by when.
@@ -57,13 +80,14 @@ export function FollowUpBoardTab({
   onOpen,
   omit = [],
 }: {
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   now: Date
   onOpen: (id: string) => void
   omit?: readonly DueBucket[]
 }) {
   const columns = boardColumns(leads, now)
   const shownColumns = DUE_COLUMNS.filter((c) => !omit.includes(c.key))
+  const expanded = useExpanded()
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {shownColumns.map((col) => (
@@ -74,9 +98,17 @@ export function FollowUpBoardTab({
           count={columns[col.key].length}
           tone={col.key === 'overdue' ? 'danger' : col.key === 'today' ? 'warning' : 'neutral'}
         >
-          {columns[col.key].map((l) => (
-            <LeadCard key={l.id} lead={l} onOpen={onOpen} />
-          ))}
+          {(() => {
+            const { shown, more } = capped(columns[col.key], expanded.isOpen(col.key))
+            return (
+              <>
+                {shown.map((l) => (
+                  <LeadCard key={l.id} lead={l} onOpen={onOpen} />
+                ))}
+                <ShowMore more={more} onShow={() => expanded.expand(col.key)} />
+              </>
+            )
+          })()}
         </BoardColumn>
       ))}
     </div>
@@ -88,7 +120,20 @@ export function FollowUpBoardTab({
  * goes through the stage-move endpoint, which enforces each stage's WIP limit
  * and required fields, and asks for a reason before a deal is lost.
  */
-export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOpen: (id: string) => void }) {
+export function PipelineTab({
+  leads,
+  onOpen,
+  serverCounts = false,
+}: {
+  leads: readonly LeadRow[]
+  onOpen: (id: string) => void
+  /**
+   * Nothing narrows the board: the header and the column heads come from
+   * GET /crm/leads/summary, so they stay right past the 2,000 leads the
+   * browser holds. With a filter or search on, they count what is shown.
+   */
+  serverCounts?: boolean
+}) {
   const inr = useINR()
   // One clock for the board, so a card cannot read "due today" while the one
   // beside it reads "overdue" because they asked at different moments.
@@ -119,7 +164,12 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     () => leads.filter((l) => (current ? l.pipeline_id === current.id || (l.pipeline_id === null && current.is_default) : true)),
     [leads, current],
   )
-  const total = useMemo(() => inPipeline.reduce((sum, l) => sum + (l.deal_value ?? 0), 0), [inPipeline])
+  const browserTotal = useMemo(() => inPipeline.reduce((sum, l) => sum + (l.deal_value ?? 0), 0), [inPipeline])
+  const summary = useLeadsSummary(current?.id ?? null, serverCounts && !!current)
+  const counted = serverCounts ? summary.data : undefined
+  const total = counted ? counted.open_value : browserTotal
+  const dealCount = counted ? counted.open_total : inPipeline.length
+  const expanded = useExpanded()
   const unplaced = useMemo(
     () => inPipeline.filter((l) => !stages.some((s) => s.id === l.stage_id)),
     [inPipeline, stages],
@@ -191,7 +241,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
     bulk.mutate({ ids, patch: { stage_id: stage.id } }, { onSuccess: clearTicks })
   }
 
-  function attemptMove(lead: CrmLead, stage: PipelineStage) {
+  function attemptMove(lead: LeadRow, stage: PipelineStage) {
     if (stage.kind === 'lost') {
       setLosing({ leadId: lead.id, stageId: stage.id })
       return
@@ -269,7 +319,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
           </Select>
         )}
         <p className="text-sm text-muted-foreground">
-          {inPipeline.length} deal{inPipeline.length === 1 ? '' : 's'} · {inr(total)} in {current.name}
+          {dealCount} deal{dealCount === 1 ? '' : 's'} · {inr(total)} in {current.name}
         </p>
       </div>
 
@@ -300,14 +350,17 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
         <div className="flex gap-3" style={{ minWidth: (visible.length + (canEdit ? 1 : 0)) * 282 }}>
           {visible.map((s) => {
             const inStage = inPipeline.filter((l) => l.stage_id === s.id)
-            const value = inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
-            const full = s.wip_limit !== null && inStage.length >= s.wip_limit
+            const head = counted?.stages.find((x) => x.stage_id === s.id)
+            const stageCount = counted ? (head?.count ?? 0) : inStage.length
+            const value = counted ? (head?.value ?? 0) : inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
+            const full = s.wip_limit !== null && stageCount >= s.wip_limit
+            const { shown, more } = capped(inStage, expanded.isOpen(s.id))
             const tickedIn = inStage.filter((l) => ticked.has(l.id)).length
             return (
               <DroppableStage
                 key={s.id}
                 stage={s}
-                count={inStage.length}
+                count={stageCount}
                 value={value}
                 full={full}
                 tickAll={
@@ -331,7 +384,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
                 }
                 draggableHeader={canEdit}
               >
-                {inStage.map((l) => (
+                {shown.map((l) => (
                   <DealCard
                     key={l.id}
                     lead={l}
@@ -344,6 +397,7 @@ export function PipelineTab({ leads, onOpen }: { leads: readonly CrmLead[]; onOp
                     onTick={canEdit ? stableTick : undefined}
                   />
                 ))}
+                <ShowMore more={more} onShow={() => expanded.expand(s.id)} />
               </DroppableStage>
             )
           })}

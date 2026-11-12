@@ -15,7 +15,8 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Select } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
-import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
+import { useMyTasks, useOlderDoneTasks, useUpdateMyTaskStatus, withOlder } from '@/features/tasks/api'
+import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { assigneeStatusOptions } from '@/features/tasks/delegation'
 import { useProjects } from '@/features/projects/api'
 import { useRevokeDelivery, useWithdrawSubmission } from '@/features/work/api'
@@ -88,7 +89,9 @@ function MyWork() {
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [sending, setSending] = useState<WorkSubmission | null>(null)
 
-  const tasks = useMemo(() => tasksQ.data ?? [], [tasksQ.data])
+  // Open tasks and the last 30 days' done; older done ones a page at a time.
+  const olderDone = useOlderDoneTasks('my')
+  const tasks = useMemo(() => withOlder(tasksQ.data, olderDone.rows) ?? [], [tasksQ.data, olderDone.rows])
   const submissions = useMemo(() => subsQ.data ?? [], [subsQ.data])
   const shoots = useMemo(() => shootsQ.data ?? [], [shootsQ.data])
 
@@ -299,6 +302,7 @@ function MyWork() {
             <Group title="Upcoming" icon={Clock} items={groups.upcoming} />
             <Group title="No due date" icon={Clock} items={groups.noDate} />
             <Group title="Completed" icon={CheckCircle2} items={groups.completed} />
+            {(statusFilter === 'all' || statusFilter === 'completed') && <ShowOlderDone older={olderDone} />}
           </div>
         )}
       </div>
