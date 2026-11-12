@@ -1,13 +1,15 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { RotateCcw, Sparkles } from 'lucide-react'
 import { SupportButtons } from '@/features/help/HelpPanel'
 import { BookCallButton } from '@/features/help/BookCall'
 import { Sheet, SheetContent } from '@/shared/ui/sheet'
 import { cn } from '@/shared/ui/cn'
-import { AssistantPanel } from './AssistantPanel'
 import { snapshot, startAgain, subscribe } from './thread'
 import { useAssistantState } from './api'
+
+// The chat loads when the panel first opens, not with every page (speed audit, 11 Nov).
+const AssistantPanel = lazy(() => import('./AssistantPanel').then((m) => ({ default: m.AssistantPanel })))
 
 /**
  * The assistant in the top bar, beside Alerts.
@@ -72,7 +74,9 @@ export function AssistantButton() {
               </button>
             )}
           </div>
-          <AssistantPanel callUrl={data.call_url} left={left} />
+          <Suspense fallback={<div className="flex-1" />}>
+            <AssistantPanel callUrl={data.call_url} left={left} />
+          </Suspense>
           {/* Never a dead end: a person is one press away here too. */}
           <div className="flex flex-col gap-2 border-t border-border p-3">
             <p className="text-xs text-muted-foreground">Rather talk to a person?</p>

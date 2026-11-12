@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { MessageCircle, PlayCircle, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
-import { AssistantPanel } from '@/features/assistant/AssistantPanel'
 import { useAssistantState } from '@/features/assistant/api'
 import { COPY } from '@/features/assistant/copy'
 import { useAssistantLang } from '@/features/assistant/lang'
 import { SupportButtons } from './HelpPanel'
 import { BookCallButton } from './BookCall'
+
+// The chat loads when the bubble first opens, not with every page (speed audit, 11 Nov).
+const AssistantPanel = lazy(() => import('@/features/assistant/AssistantPanel').then((m) => ({ default: m.AssistantPanel })))
 
 /**
  * Help in the bottom-right corner, where people look for it on every other
@@ -75,7 +77,9 @@ export function HelpBubble() {
           {aiOn ? (
             <>
               <div className="flex min-h-[18rem] flex-1 flex-col">
-                <AssistantPanel callUrl={ai?.call_url ?? null} left={left} />
+                <Suspense fallback={null}>
+                  <AssistantPanel callUrl={ai?.call_url ?? null} left={left} />
+                </Suspense>
               </div>
               <div className="border-t border-border p-3">
                 <p className="mb-2 text-xs text-muted-foreground">{t.ratherPerson}</p>

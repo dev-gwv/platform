@@ -25,6 +25,13 @@
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net https://checkout.razorpay.com https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: https://accounts.google.com https://oauth2.googleapis.com; frame-src https://www.facebook.com https://web.facebook.com https://api.razorpay.com https://checkout.razorpay.com https://accounts.google.com https://docs.google.com https://drive.google.com https://frameline-api.dev-d9b.workers.dev https://frameline-admin.pages.dev; frame-ancestors *; base-uri 'self'; form-action 'self'; object-src 'none'; media-src 'self' blob: data:; worker-src 'self' blob:
 
+# Vite names every built file by its content, so a file under /assets never
+# changes: the browser may keep it for a year without asking again. Without
+# this every page's file was re-checked on each load (speed audit, 11 Nov).
+# index.html is not under /assets and is still checked every time.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # The service worker must never be served from cache, or a change to it would
 # take a day to reach anyone.
 /sw.js

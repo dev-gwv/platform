@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Briefcase, Inbox, IndianRupee, Plus, Wallet } from 'lucide-react'
 import { useAccess } from '../auth/useAccess'
 import { RowMenu, type RowMenuItem } from '../ui/row-menu'
-import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
-import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
-import { AddExpenseDialog } from '@/features/expenses/ExpenseDialog'
+
+// Each dialog loads when it is first opened, not with every page (speed
+// audit, 11 Nov: they sat in the first download of the whole app).
+const AddLeadDialog = lazy(() => import('@/features/crm/AddLeadDialog').then((m) => ({ default: m.AddLeadDialog })))
+const RecordPaymentDialog = lazy(() =>
+  import('@/features/billing/RecordPaymentDialog').then((m) => ({ default: m.RecordPaymentDialog })),
+)
+const AddExpenseDialog = lazy(() => import('@/features/expenses/ExpenseDialog').then((m) => ({ default: m.AddExpenseDialog })))
 
 type Making = 'lead' | 'payment' | 'expense' | null
 
@@ -38,13 +43,13 @@ export function NewMenu() {
         <Plus aria-hidden />
         <span className="hidden sm:inline">New</span>
       </RowMenu>
-      {making === 'lead' && (
-        <AddLeadDialog hideTrigger open onOpenChange={(o) => !o && setMaking(null)} />
-      )}
-      {making === 'payment' && <RecordPaymentDialog target={{ kind: 'pick' }} onClose={() => setMaking(null)} />}
-      {making === 'expense' && (
-        <AddExpenseDialog defaultOpen trigger={<span hidden />} onClosed={() => setMaking(null)} />
-      )}
+      <Suspense fallback={null}>
+        {making === 'lead' && <AddLeadDialog hideTrigger open onOpenChange={(o) => !o && setMaking(null)} />}
+        {making === 'payment' && <RecordPaymentDialog target={{ kind: 'pick' }} onClose={() => setMaking(null)} />}
+        {making === 'expense' && (
+          <AddExpenseDialog defaultOpen trigger={<span hidden />} onClosed={() => setMaking(null)} />
+        )}
+      </Suspense>
     </>
   )
 }

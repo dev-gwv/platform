@@ -16,6 +16,8 @@ import { PagePending } from '@/shared/layout/PagePending'
 import { LEGACY_AUTHED_PATHS, LEGACY_PUBLIC_PATHS, legacyTarget } from './legacy-links'
 import { RequireAuth } from '@/shared/auth/guards'
 import { AppShell } from '@/shared/layout/AppShell'
+import { getQueryClient } from '@/shared/api/query-client-ref'
+import { projectQuery } from '@/features/projects/project-query'
 
 // Each page is its own chunk, loaded when it is opened: the first load used to
 // carry the whole studio app (3.25 MB), client links and enquiry forms included.
@@ -284,7 +286,15 @@ const routeTree = rootRoute.addChildren([
 
   route('/projects', ProjectsListPage),
   route('/projects/new', NewProjectPage),
-  route('/projects/$id', ProjectDetailPage),
+  // Its data starts with its file when the pointer rests on a link to it.
+  createRoute({
+    getParentRoute: () => authedLayout,
+    path: '/projects/$id',
+    component: ProjectDetailPage,
+    loader: ({ params }) => {
+      void getQueryClient()?.prefetchQuery({ ...projectQuery(params.id), staleTime: 30_000 })
+    },
+  }),
   route('/projects/$id/client-view', ClientPortalPreviewPage),
   route('/projects/$id/edit', ProjectEditPage),
   route('/projects/$id/quotation', ProjectQuotationPage),
@@ -424,6 +434,11 @@ export const router = createRouter({
   // A page whose file is slow to arrive shows a spinner, then Reload -- never
   // a blank white screen.
   defaultPendingComponent: PagePending,
+  // A page's file starts downloading when the pointer rests on its link (or a
+  // finger touches it), so it is usually there by the time of the click
+  // (speed audit, 11 Nov: every first open waited for the file, then the data).
+  defaultPreload: 'intent',
+  defaultPreloadDelay: 50,
 })
 
 function NotFound() {

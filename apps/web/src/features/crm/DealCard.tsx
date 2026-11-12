@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { memo, useState, type CSSProperties } from 'react'
 import { PartnerChip } from './PartnerChip'
 import { useDraggable } from '@dnd-kit/core'
 import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
@@ -39,7 +39,8 @@ const waNumber = (phone: string) => {
   return digits.length === 10 ? `91${digits}` : digits
 }
 
-export function DealCard({
+/** Drawn again only when its own props change: a board can hold hundreds. */
+export const DealCard = memo(function DealCard({
   lead,
   now,
   onOpen,
@@ -272,4 +273,4 @@ export function DealCard({
       </div>
     </div>
   )
-}
+})

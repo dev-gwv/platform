@@ -122,7 +122,16 @@ export default defineConfig({
         // it separate means an app deploy does not invalidate it in everyone's
         // cache — and it makes the cost of the SDK a number you can see in the
         // build output rather than a guess.
-        manualChunks: (id) => (id.includes('node_modules/@sentry') ? 'sentry' : undefined),
+        // React, the router, the query cache and zod likewise: they change only
+        // when a package is bumped, so after each app deploy (several a day)
+        // the browser keeps them and fetches only the app's own code.
+        manualChunks: (id) => {
+          if (id.includes('node_modules/@sentry')) return 'sentry'
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react'
+          if (id.includes('node_modules/@tanstack')) return 'tanstack'
+          if (id.includes('node_modules/zod')) return 'zod'
+          return undefined
+        },
       },
     },
   },

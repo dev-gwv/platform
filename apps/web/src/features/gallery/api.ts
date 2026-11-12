@@ -44,6 +44,7 @@ export function useCreateGallery(projectId: string) {
       void qc.invalidateQueries({ queryKey: key(projectId) })
       // The studio's first gallery takes the "New" off the gallery places.
       void qc.invalidateQueries({ queryKey: ['galleries'], exact: true })
+      void qc.invalidateQueries({ queryKey: ['galleries-exists'] })
       used()
       toast.success('Gallery ready. Open it to upload the photos.')
     },

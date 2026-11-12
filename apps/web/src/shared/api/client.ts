@@ -212,7 +212,8 @@ export async function callApi<TOut extends z.ZodTypeAny>(
       // makes cookie mode work, and it is harmless elsewhere.
       credentials: path.startsWith('/auth/') ? 'include' : 'same-origin',
       headers: {
-        'Content-Type': 'application/json',
+        // Only a request with a body says what it carries.
+        ...(opts.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: opts.body === undefined ? null : JSON.stringify(opts.body),
