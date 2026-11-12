@@ -32,7 +32,7 @@ export const SETTINGS_COLUMNS = `
   support_wa_daily_cap as daily_cap, support_wa_daily_summary as daily_summary,
   support_wa_tpl_booked as tpl_booked, support_wa_tpl_reminder as tpl_reminder,
   support_wa_tpl_cancelled as tpl_cancelled, support_wa_tpl_team as tpl_team,
-  support_wa_tpl_followup as tpl_followup`
+  support_wa_tpl_followup as tpl_followup, support_wa_chat_on as chat_on`
 
 export async function readSupportSettings(sql: TransactionSql): Promise<SupportWhatsappSettings> {
   const [row] = await sql.unsafe<SupportWhatsappSettings[]>(`select ${SETTINGS_COLUMNS} from platform_settings limit 1`)
@@ -175,7 +175,7 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
       returning id`
     const bookingId = row!.id
     // Every booking has its ticket (0300): opened, moved or closed with it.
-    await followBooking(sql, bookingId, company?.id ?? null, b.status)
+    await followBooking(sql, bookingId, company?.id ?? null, b.status, b.phone)
 
     // A moved or cancelled call's reminder for the old time must not go out.
     if (notice.event !== 'booking.created') {

@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Ticket } from 'lucide-react'
+import { ChevronRight, MessageCircle, Ticket } from 'lucide-react'
 import { SUPPORT_TICKET_KIND_LABEL, SUPPORT_TICKET_STATUS_LABEL, type SupportTicket } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -30,7 +30,7 @@ export function TicketsCard() {
           <h2 className="flex items-center gap-2 font-semibold">
             <Ticket className="size-4 text-primary" /> Tickets
           </h2>
-          <p className="text-sm text-muted-foreground">{q.isLoading ? 'Loading…' : said.length ? said.join(' · ') : 'Nothing waiting. Every call gets a ticket by itself.'}</p>
+          <p className="text-sm text-muted-foreground">{q.isLoading ? 'Loading…' : said.length ? said.join(' · ') : 'Nothing waiting. Every call and WhatsApp message gets a ticket by itself.'}</p>
         </div>
         {rows.length > 0 && (
           <ul className="divide-y rounded-lg border">
@@ -45,10 +45,13 @@ export function TicketsCard() {
 }
 
 function TicketRow({ t }: { t: SupportTicket }) {
+  const chat = t.source === 'chat'
   const past = Date.parse(t.starts_at) <= Date.now()
   const needsNote = t.status === 'booked' && past
   const due = t.status !== 'solved' ? dueWords(t.due_on) : null
-  const line = needsNote ? 'Call done? Add a voice note.' : (t.next_action ?? t.summary ?? (t.status === 'booked' ? (t.brief ? 'Brief ready' : 'Brief comes an hour before') : ''))
+  const line = chat && t.status === 'waiting_us' && t.escalate_why
+    ? `Needs you: ${t.escalate_why}`
+    : needsNote ? 'Call done? Add a voice note.' : (t.next_action ?? t.summary ?? (t.status === 'booked' ? (t.brief ? 'Brief ready' : 'Brief comes an hour before') : ''))
   return (
     <li>
       <Link
@@ -60,9 +63,10 @@ function TicketRow({ t }: { t: SupportTicket }) {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-medium">{t.name}</span>
             {t.studio_name && <span className="text-sm text-muted-foreground">· {t.studio_name}</span>}
-            <span className="text-xs text-muted-foreground">{callWhen(t.starts_at)}</span>
+            {chat && <MessageCircle className="size-3.5 text-success" aria-label="WhatsApp" />}
+            <span className="text-xs text-muted-foreground">{callWhen(chat ? (t.last_in_at ?? t.starts_at) : t.starts_at)}</span>
           </div>
-          {line && <p className={cn('truncate text-sm', needsNote ? 'font-medium text-warning' : 'text-muted-foreground')}>{line}</p>}
+          {line && <p className={cn('truncate text-sm', needsNote || line.startsWith('Needs you') ? 'font-medium text-warning' : 'text-muted-foreground')}>{line}</p>}
         </div>
         {due && <span className={cn('shrink-0 text-xs', due.includes('late') ? 'font-semibold text-destructive' : 'text-muted-foreground')}>{due}</span>}
         {t.kind && <StatusBadge tone="neutral" className="hidden shrink-0 sm:inline-flex">{SUPPORT_TICKET_KIND_LABEL[t.kind]}</StatusBadge>}

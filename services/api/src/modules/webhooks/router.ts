@@ -28,8 +28,9 @@ import {
   type MetaPage,
 } from '../../lib/meta'
 import { verifyRazorpaySignature } from '../../lib/razorpay'
-import { GRAPH_VERSION, whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
+import { GRAPH_VERSION, whatsappInboundMessages, whatsappOptChanges, whatsappStatusUpdates } from '../../lib/whatsapp'
 import { routeStudioWhatsapp } from '../../lib/studio-whatsapp-inbound'
+import { receiveSupportChat } from '../../lib/support-chat-store'
 import { open, seal, secretBoxReady } from '../../lib/secret-box'
 import { apiOrigin } from '../../lib/request-origin'
 import { isDevLike } from '../../lib/env'
@@ -350,10 +351,14 @@ export const webhooksRouter = new Hono<AppEnv>()
     // Studios that connected their number through our app (Embedded Signup)
     // post here too: their clients' replies and their receipts (0203).
     const studios = done === null ? null : await attempt(c, 'webhooks.whatsapp_studios', () => routeStudioWhatsapp(c.env, body))
+    // 0304: studios writing to our own support number become support tickets.
+    const ours = c.env.WHATSAPP_PHONE_NUMBER_ID ? whatsappInboundMessages(body).filter((m) => m.phoneNumberId === c.env.WHATSAPP_PHONE_NUMBER_ID) : []
+    const support = ours.length ? await attempt(c, 'webhooks.whatsapp_support', () => receiveSupportChat(c.env, ours)) : 0
+    if (support === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     // Meta retries a non-2xx for days; a database hiccup is worth a retry.
     if (done === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (studios === null) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
-    return c.json({ ok: true, statuses: updates.length, matched: done, opt_changes: opts.length, studios })
+    return c.json({ ok: true, statuses: updates.length, matched: done, opt_changes: opts.length, studios, support })
   })
 
   // A studio whose number lives on its own Meta app points that app here

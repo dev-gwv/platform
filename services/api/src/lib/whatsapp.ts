@@ -175,7 +175,7 @@ export function whatsappOptChanges(body: unknown): Array<{ from: string; out: bo
   return out
 }
 
-interface WhatsAppInbound {
+export interface WhatsAppInbound {
   phoneNumberId: string
   from: string
   name: string | null

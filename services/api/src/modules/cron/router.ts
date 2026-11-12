@@ -23,6 +23,7 @@ import { drainSupportCalls, queueDailySummary } from '../../lib/support-call-sto
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
 import { runTicketAssistant } from '../../lib/support-ticket-store'
 import { autoCloseTickets, queueWeeklySummary } from '../../lib/support-ticket-followups'
+import { sweepSupportChats } from '../../lib/support-chat-store'
 
 /**
  * Cron ingress. Authenticated ONLY by a shared secret compared in constant
@@ -297,7 +298,9 @@ export const cronRouter = new Hono<AppEnv>()
       // 0301: tickets the studio's own data shows done, and Monday's summary.
       const selfClosed = await autoCloseTickets(c.env).catch(() => 0)
       const weekly = await queueWeeklySummary(c.env).catch(() => false)
-      return { calendar, summary, tickets, selfClosed, weekly, ...(await drainSupportCalls(c.env)) }
+      // 0304: WhatsApp chats left unanswered, and quiet ones closed.
+      const chats = await sweepSupportChats(c.env).catch((err: unknown) => ({ error: String(err instanceof Error ? err.message : err) }))
+      return { calendar, summary, tickets, selfClosed, weekly, chats, ...(await drainSupportCalls(c.env)) }
     })
     log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))

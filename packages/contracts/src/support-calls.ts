@@ -71,6 +71,8 @@ export const supportWhatsappSettings = z.object({
   tpl_team: templateName,
   /** A follow-up after the call (0301), once the official API is connected. */
   tpl_followup: templateName,
+  /** 0304: studios write to the official number and the assistant answers what it can. */
+  chat_on: z.boolean().default(false),
 })
 export type SupportWhatsappSettings = z.infer<typeof supportWhatsappSettings>
 
@@ -232,8 +234,31 @@ export const supportTicket = z.object({
   contact_phone: z.string().nullable(),
   /** The official API is connected and switched on, so a follow-up can go from our number. */
   official_ready: z.boolean(),
+  /** 0304: 'chat' when the studio wrote on WhatsApp; a booked call joins it. */
+  source: z.enum(['call', 'chat']).default('call'),
+  /** A booked call is on this ticket (always, for a call ticket). */
+  has_call: z.boolean().default(true),
+  /** Why the assistant handed it to the owner ('Asked for a person', 'Money'). */
+  escalate_why: z.string().nullable().default(null),
+  /** The studio's last WhatsApp message: a free reply is allowed for 24 hours after it. */
+  last_in_at: z.string().nullable().default(null),
 })
 export type SupportTicket = z.infer<typeof supportTicket>
+
+/** One WhatsApp message on a chat ticket (0304). */
+export const supportTicketMessage = z.object({
+  id: z.string(),
+  dir: z.enum(['in', 'out']),
+  author: z.enum(['studio', 'ai', 'owner', 'system']),
+  body: z.string(),
+  status: z.enum(['sent', 'failed']),
+  error: z.string().nullable(),
+  created_at: z.string(),
+})
+export type SupportTicketMessage = z.infer<typeof supportTicketMessage>
+
+/** The owner's reply to a studio, sent from the official number. */
+export const supportChatReplyRequest = z.object({ text: z.string().trim().min(1).max(3000) })
 
 /** What the owner said after the call, typed instead of spoken. */
 export const supportTicketNoteRequest = z.object({ text: z.string().trim().min(3, 'Say a few words about the call.').max(8000) })
