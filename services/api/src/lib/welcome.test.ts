@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 import { daysBetween, welcomeFor } from './welcome'
 
 const base = { isOwner: false, role: 'employee', studioDays: 0, loginDays: 0, studioName: 'Mehta Studios' }
