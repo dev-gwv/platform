@@ -48,6 +48,7 @@ const task = (title: string, over: Partial<TaskListItem> = {}): TaskListItem => 
   created_by_name: 'Asha Owner',
   latest_submission: null,
   updated_at: null,
+  description_truncated: false,
   ...over,
 })
 

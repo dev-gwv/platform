@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Archive, ArchiveRestore, Download, Flame, Tag as TagIcon, Trash2, X } from 'lucide-react'
-import type { BulkLeadPatch, CrmLead, LeadStatus } from '@ipc/contracts'
+import type { BulkLeadPatch, LeadRow, LeadStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Select } from '@/shared/ui/input'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -29,7 +29,7 @@ export function LeadBulkBar({
   showArchived = false,
 }: {
   /** The ticked leads, as they are now. */
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   onClear: () => void
   showArchived?: boolean | undefined
 }) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react'
-import type { CrmLead, SavedView, SavedViewQuery } from '@ipc/contracts'
+import type { LeadRow, SavedView, SavedViewQuery } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { Input } from '@/shared/ui/input'
@@ -38,7 +38,7 @@ export function ViewPicker({
   manage,
 }: {
   /** Open leads, unfiltered — the counts describe the whole desk. */
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   now: Date
   value: ViewChoice
   onChange: (v: ViewChoice) => void

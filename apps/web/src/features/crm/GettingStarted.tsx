@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Rocket } from 'lucide-react'
-import { leadSourceRow, type CrmLead } from '@ipc/contracts'
+import { leadSourceRow, type LeadRow } from '@ipc/contracts'
 import { Card, CardContent } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { Button } from '@/shared/ui/button'
@@ -22,7 +22,7 @@ const sources = leadSourceRow.array()
  * telling a studio to do something it did last month. Collapsible for the
  * week in between, and the count on the pill is the honest one.
  */
-export function GettingStarted({ leads }: { leads: readonly CrmLead[] }) {
+export function GettingStarted({ leads }: { leads: readonly LeadRow[] }) {
   const { session } = useAuth()
   const [open, setOpen] = useState(true)
   const templates = useTemplates()

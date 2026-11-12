@@ -10,7 +10,8 @@ import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { useBoard, useLaneColors, useSetBoardOrder, useSetLaneColor, useUpdateTaskStatus } from '@/features/tasks/api'
+import { useBoard, useLaneColors, useOlderDoneTasks, useSetBoardOrder, useSetLaneColor, useUpdateTaskStatus, withOlder } from '@/features/tasks/api'
+import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { todayISO } from '@/features/tasks/board'
 import { BOARD_LANES } from '@/features/tasks/delegation'
 import { TaskCard } from '@/features/tasks/TaskCard'
@@ -41,6 +42,9 @@ type LaneColor = keyof typeof LANE_COLORS
 
 type Lanes = Record<TaskStatus, TaskListItem[]>
 
+/** Older done tasks sort after every card placed by hand. */
+const OLDER_ORDER = 1_000_000_000
+
 export function TaskBoard({
   project,
   person,
@@ -57,7 +61,11 @@ export function TaskBoard({
   filter?: ((t: TaskListItem) => boolean) | undefined
 }) {
   const board = useBoard()
-  const data = items ?? board.data
+  // The board shows open work and the last 30 days' done; older done tasks
+  // join the Done lane a page at a time, after the hand-ordered ones.
+  const older = useOlderDoneTasks(items ? 'my' : 'studio')
+  const olderRows = useMemo(() => older.rows.map((t, i) => ({ ...t, sort_order: OLDER_ORDER + i })), [older.rows])
+  const data = useMemo(() => withOlder(items ?? board.data, olderRows), [items, board.data, olderRows])
   const { isLoading, isError, refetch } = items ? { isLoading: false, isError: false, refetch: board.refetch } : board
   const today = todayISO()
   const { me, canManage } = useTaskViewer()
@@ -196,6 +204,7 @@ export function TaskBoard({
               tasks={lanes[lane.key]}
               color={(laneColors.data?.[lane.key] as LaneColor | undefined) ?? 'default'}
               onColor={canManage ? (c) => setLaneColor.mutate({ lane: lane.key, color: c }) : undefined}
+              footer={lane.key === 'completed' ? <ShowOlderDone older={older} className="mt-1 flex justify-center" /> : undefined}
             >
               {(t) => (
                 <SortableCard key={t.id} id={t.id} disabled={!canManage}>
@@ -240,6 +249,7 @@ function Lane({
   tasks,
   color,
   onColor,
+  footer,
   children,
 }: {
   laneKey: TaskStatus
@@ -248,6 +258,7 @@ function Lane({
   tasks: TaskListItem[]
   color: LaneColor
   onColor?: ((c: LaneColor) => void) | undefined
+  footer?: ReactNode
   children: (t: TaskListItem) => ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `lane:${laneKey}` })
@@ -303,6 +314,7 @@ function Lane({
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         {tasks.map((t) => children(t))}
       </SortableContext>
+      {footer}
     </div>
   )
 }

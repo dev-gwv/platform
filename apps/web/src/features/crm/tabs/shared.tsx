@@ -2,7 +2,7 @@ import { localIso } from '@/shared/ui/days-left'
 import type { ReactNode } from 'react'
 import { PartnerChip } from '../PartnerChip'
 import { Archive, Flame } from 'lucide-react'
-import type { CrmLead, InboxColumn, LeadStatus } from '@ipc/contracts'
+import type { LeadRow, InboxColumn, LeadStatus } from '@ipc/contracts'
 import { stageLabel } from '@ipc/domain'
 import { Card, CardContent } from '@/shared/ui/card'
 import { useINR } from '@/shared/money/MoneyMask'
@@ -33,7 +33,7 @@ export const STAGE_TONE: Record<LeadStatus, 'info' | 'success' | 'warning' | 'ne
 }
 
 /** The stage a deal shows: its own stage name when the pipeline has one, else the status. */
-const leadStageLabel = (l: CrmLead): string => stageLabel(l.status, l.stage_name)
+const leadStageLabel = (l: LeadRow): string => stageLabel(l.status, l.stage_name)
 
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
 export const prettyDate = (iso: string) => dayFormat.format(new Date(iso))
@@ -49,7 +49,7 @@ export const isoDay = (d: Date) => localIso(d)
  * apart. Privyr answers it with a label and a dot on the row, which is what
  * this is; `isUncontacted` has computed the state all along.
  */
-function UncontactedBadge({ lead }: { lead: CrmLead }) {
+function UncontactedBadge({ lead }: { lead: LeadRow }) {
   if (!isUncontacted(lead)) return null
   return (
     <StatusBadge tone="info" className="gap-1.5">
@@ -60,7 +60,7 @@ function UncontactedBadge({ lead }: { lead: CrmLead }) {
 }
 
 /** "Spoke 3 days ago", or that nobody has. */
-export function lastTouch(lead: CrmLead): string {
+export function lastTouch(lead: LeadRow): string {
   if (!lead.last_contacted_at) return 'Not contacted yet'
   const at = new Date(lead.last_contacted_at)
   if (Number.isNaN(at.getTime())) return 'Not contacted yet'
@@ -79,13 +79,13 @@ export function lastTouch(lead: CrmLead): string {
  * working at all: a date the studio is already shooting cannot be sold twice,
  * however warm the enquiry.
  */
-export function DateBadge({ lead }: { lead: CrmLead }) {
+export function DateBadge({ lead }: { lead: LeadRow }) {
   const v = dateVerdict(lead)
   if (!v.label || !worthFlagging(v)) return null
   return <StatusBadge tone={v.tone} title={v.detail}>{v.label}</StatusBadge>
 }
 
-export function DueBadge({ lead, now }: { lead: CrmLead; now: Date }) {
+export function DueBadge({ lead, now }: { lead: LeadRow; now: Date }) {
   const bucket = dueBucket(lead, now)
   if (bucket === 'none') {
     return <span className="text-xs text-muted-foreground">No follow-up</span>
@@ -151,7 +151,7 @@ export function LeadTable({
   columns = DEFAULT_INBOX_COLUMNS,
   density = 'comfortable',
 }: {
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   now: Date
   total: number
   onOpen: (id: string) => void
@@ -200,7 +200,7 @@ export function LeadTable({
               {l.phone ?? '—'}
               {l.deal_value !== null ? ` · ${inr(l.deal_value)}` : ''}
             </p>
-            {l.notes && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.notes}</p>}
+            {(l.notes ?? l.notes_preview) && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.notes ?? l.notes_preview}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <DateBadge lead={l} />
               <UncontactedBadge lead={l} />
@@ -237,7 +237,7 @@ export function LeadTable({
     )
   }
 
-  function cell(key: InboxColumn, l: CrmLead) {
+  function cell(key: InboxColumn, l: LeadRow) {
     switch (key) {
       case 'lead':
         return (
@@ -258,8 +258,8 @@ export function LeadTable({
               * has open is "where are we with this one", and the note is the
               * answer far more often than the stage is.
               */}
-            {l.notes && (
-              <span className="mt-0.5 block max-w-xs truncate text-xs text-muted-foreground/80">{l.notes}</span>
+            {(l.notes ?? l.notes_preview) && (
+              <span className="mt-0.5 block max-w-xs truncate text-xs text-muted-foreground/80">{l.notes ?? l.notes_preview}</span>
             )}
             {/* When you last spoke to them. A list of names answers "who";
                 this is half of "where are we", and it was on the record all
@@ -371,7 +371,7 @@ export function LeadTable({
   )
 }
 
-export function LeadCard({ lead, onOpen }: { lead: CrmLead; onOpen: (id: string) => void }) {
+export function LeadCard({ lead, onOpen }: { lead: LeadRow; onOpen: (id: string) => void }) {
   return (
     <button
       type="button"
@@ -421,7 +421,7 @@ export function BoardColumn({
  * Through the shared helper: this quoted correctly but wrote no BOM, so a
  * lead called Sharma with a rupee deal value opened in Excel as mojibake.
  */
-export function exportLeadsCsv(leads: readonly CrmLead[], filename = 'leads.csv') {
+export function exportLeadsCsv(leads: readonly LeadRow[], filename = 'leads.csv') {
   downloadCsv(
     filename,
     toCsv(

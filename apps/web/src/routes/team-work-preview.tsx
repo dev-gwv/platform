@@ -55,9 +55,12 @@ function TeamWorkPreview() {
     queryFn: () => callApi(`/tasks?assignee=${userId}`, { responseSchema: tasksList }),
     enabled: !!session && !!userId,
   })
+  // Their upcoming shoots (the section says so): from today on, not every
+  // shoot they were ever on.
+  const today = todayInIndia()
   const shoots = useQuery({
-    queryKey: ['team-work-preview', 'shoots', userId],
-    queryFn: () => callApi(`/shoots?assignee=${userId}`, { responseSchema: shootsList }),
+    queryKey: ['team-work-preview', 'shoots', userId, today],
+    queryFn: () => callApi(`/shoots?assignee=${userId}&from=${today}`, { responseSchema: shootsList }),
     enabled: !!session && !!userId,
   })
   // Their edits, exactly as their own My work and Home read them.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bookmark, BookmarkPlus, Columns3, Globe, Pencil, Save, Search, Users, X } from 'lucide-react'
-import type { CrmLead, InboxColumn, SavedViewVisibility } from '@ipc/contracts'
+import type { LeadRow, InboxColumn, SavedViewVisibility } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
@@ -35,7 +35,7 @@ export function InboxTab({
   onShowArchived,
   chrome = true,
 }: {
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   now: Date
   query: LeadQuery
   onQuery: (q: LeadQuery) => void

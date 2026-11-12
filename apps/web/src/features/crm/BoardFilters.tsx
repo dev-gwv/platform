@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { CalendarHeart, Flame, Handshake, Layers, Megaphone, Tag, User, X } from 'lucide-react'
-import type { CrmLead } from '@ipc/contracts'
+import type { LeadRow } from '@ipc/contracts'
 import { MultiSelectFilter, type FilterOption } from '@/shared/ui/multi-select-filter'
 import { toneVar, type ToneName } from '@/shared/ui/tones'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -40,7 +40,7 @@ export function BoardFilters({
   value,
   onChange,
 }: {
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   value: LeadFacets
   onChange: (next: LeadFacets) => void
 }) {

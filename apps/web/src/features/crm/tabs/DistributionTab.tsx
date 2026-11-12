@@ -14,7 +14,7 @@ import { isOpen } from '../leads'
 import {
   useAddToRota,
   useBulkPatch,
-  useLeads,
+  useLeadCards,
   useCrmSettings,
   useDistribution,
   useRemoveFromRota,
@@ -36,7 +36,7 @@ function HandOverCard() {
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
   const members = useMembers()
-  const { data: leads } = useLeads(false)
+  const { data: leads } = useLeadCards({ outcome: 'open' })
   const bulk = useBulkPatch()
   const confirm = useConfirm()
   const [from, setFrom] = useState('')

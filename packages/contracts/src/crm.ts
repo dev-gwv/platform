@@ -210,8 +210,86 @@ export const crmLead = z.object({
 })
 export type CrmLead = z.infer<typeof crmLead>
 
+/**
+ * A lead as the Leads page draws it: a card, a row, a filter (`?shape=card`).
+ *
+ * The full lead is ~1.1 KB and a busy studio has 2,000 of them; the board and
+ * the list read about half of it. The drawer asks for the whole record by id
+ * (`GET /crm/leads/:id`), so nothing here has to stand in for it.
+ */
+export const crmLeadCard = crmLead
+  .pick({
+    id: true,
+    name: true,
+    title: true,
+    phone: true,
+    email: true,
+    source: true,
+    source_label: true,
+    status: true,
+    pipeline_id: true,
+    stage_id: true,
+    stage_name: true,
+    quality: true,
+    is_hot: true,
+    score: true,
+    probability: true,
+    deal_value: true,
+    event_type: true,
+    event_date: true,
+    city: true,
+    functions: true,
+    tags: true,
+    partner_id: true,
+    partner_name: true,
+    partner_kind: true,
+    assigned_to: true,
+    assignee_name: true,
+    follow_up_at: true,
+    last_contacted_at: true,
+    converted_at: true,
+    contacted_status: true,
+    created_at: true,
+    close_date: true,
+    crm_company_name: true,
+    date_status: true,
+    date_wanted_by: true,
+    is_archived: true,
+    lost_reason: true,
+  })
+  .extend({
+    /** The first 140 characters of the notes, for search and a row's hint. */
+    notes_preview: z.string().nullable().default(null),
+  })
+export type CrmLeadCard = z.infer<typeof crmLeadCard>
+
+/**
+ * What every list helper reads: a card, or a full lead (which carries `notes`
+ * instead of `notes_preview`). Typing the helpers on this lets both pass.
+ */
+export type LeadRow = Omit<CrmLeadCard, 'notes_preview'> & { notes_preview?: string | null; notes?: string | null }
+
+/** Which leads by how they ended: open (still being worked), won (booked), lost, or all. */
+export const leadOutcome = z.enum(['open', 'won', 'lost', 'all'])
+export type LeadOutcome = z.infer<typeof leadOutcome>
+
+/** GET /crm/leads/summary: the pipeline's columns, counted on the server. */
+export const leadsSummary = z.object({
+  stages: z.array(z.object({ stage_id: uuid.nullable(), count: z.number().int(), value: z.number() })),
+  /** Open, not archived leads in this pipeline (a lead with none sits in the default one). */
+  open_total: z.number().int(),
+  open_value: z.number(),
+  /** Open leads nobody has rung yet, across the studio (status new, never contacted). */
+  not_contacted: z.number().int(),
+})
+export type LeadsSummary = z.infer<typeof leadsSummary>
+
 /** GET /crm/leads query. Server filters are additive — unknown/absent params are ignored. */
 export const leadsQuery = z.object({
+  /** Default (absent) is every non-archived lead, as before; the Leads page sends `open`. */
+  outcome: leadOutcome.optional(),
+  /** `card` returns {@link crmLeadCard} rows; absent returns the full lead. */
+  shape: z.enum(['full', 'card']).optional(),
   include_archived: z
     .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
     .optional()

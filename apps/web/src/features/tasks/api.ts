@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   applyBundleRequest,
@@ -11,6 +11,7 @@ import {
   createTaskRequest,
   taskActivityItem,
   taskBundle,
+  taskDonePage,
   taskListItem,
   taskSubmissionItem,
   updateTaskRequest,
@@ -24,12 +25,14 @@ import {
   type CreateTaskPriorityRequest,
   type UpdateTaskPriorityRequest,
   type SetBoardOrderRequest,
+  type TaskListItem,
   type TaskStatus,
   type UpdateTaskRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 const tasksList = taskListItem.array()
 const bundlesList = taskBundle.array()
@@ -37,18 +40,34 @@ const created = z.object({ id: z.string() })
 const countOnly = z.object({ created: z.number() })
 const anySchema = z.any()
 
-export function useTasks() {
+/** How far back the task pages show finished work before "Show older done tasks". */
+export const TASK_WINDOW_DAYS = 30
+
+/** The India day TASK_WINDOW_DAYS before `today`: open tasks, plus what was finished since. */
+export function taskWindowStart(today: string = todayInIndia(), days = TASK_WINDOW_DAYS): string {
+  const d = new Date(`${today}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The studio's tasks: every open one, and what was finished in the last 30
+ * days (a busy studio's whole history was 1.5 MB). Older finished work comes
+ * a page at a time from useOlderDoneTasks.
+ */
+export function useTasks(enabled = true) {
   const { session } = useAuth()
   const access = useAccess()
+  const since = taskWindowStart()
   return useQuery({
-    queryKey: ['tasks', 'all'],
-    queryFn: () => callApi('/tasks', { responseSchema: tasksList }),
-    enabled: !!session && access.hasModule('tasks'),
+    queryKey: ['tasks', 'all', since],
+    queryFn: () => callApi(`/tasks?done_since=${since}`, { responseSchema: tasksList }),
+    enabled: enabled && !!session && access.hasModule('tasks'),
     staleTime: 15_000,
   })
 }
 
-/** Single task for the detail dialog (server GET /tasks/:id). */
+/** Single task for the detail dialog (server GET /tasks/:id), its description whole. */
 export function useTask(id: string | null) {
   const { session } = useAuth()
   return useQuery({
@@ -59,13 +78,75 @@ export function useTask(id: string | null) {
   })
 }
 
-/** Subtasks of one task — client-side slice of the list (parent_task_id). */
+/** Subtasks of one task (GET /tasks?parent_id=). */
 export function useSubtasks(parentId: string | null) {
-  const { data } = useTasks()
-  return useMemo(
-    () => (data ?? []).filter((t) => t.parent_task_id === parentId),
-    [data, parentId],
-  )
+  const { session } = useAuth()
+  const access = useAccess()
+  const { data } = useQuery({
+    queryKey: ['tasks', 'subtasks', parentId],
+    queryFn: () => callApi(`/tasks?parent_id=${parentId}`, { responseSchema: tasksList }),
+    enabled: !!session && access.hasModule('tasks') && !!parentId,
+    staleTime: 15_000,
+  })
+  return useMemo(() => data ?? [], [data])
+}
+
+/** Tasks whose title holds `q`, twenty at most: the "link to a task" picker. */
+export function useTaskSearch(q: string, enabled = true) {
+  const { session } = useAuth()
+  const access = useAccess()
+  const needle = q.trim()
+  return useQuery({
+    queryKey: ['tasks', 'search', needle],
+    queryFn: () => callApi(`/tasks?q=${encodeURIComponent(needle)}&limit=20`, { responseSchema: tasksList }),
+    enabled: enabled && !!session && access.hasModule('tasks'),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+}
+
+/**
+ * Finished tasks older than the window, fifty at a time, newest first: the
+ * "Show older done tasks" button. `scope` 'my' pages the caller's own.
+ * Nothing loads until the button is pressed; pages already loaded are shared
+ * by every view through the cache.
+ */
+export function useOlderDoneTasks(scope: 'studio' | 'my') {
+  const { session } = useAuth()
+  const since = taskWindowStart()
+  const [asked, setAsked] = useState(false)
+  const base = scope === 'my' ? '/tasks/my' : '/tasks'
+  // Each view has its own `asked`, but the pages live in the cache: once one
+  // view loaded some, the others show them and their button pages on.
+  const q = useInfiniteQuery({
+    queryKey: ['tasks', 'older', scope, since],
+    queryFn: ({ pageParam }) =>
+      callApi(`${base}?done_before=${encodeURIComponent(pageParam)}&limit=50`, { responseSchema: taskDonePage }),
+    initialPageParam: since,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: asked && !!session,
+    staleTime: 60_000,
+  })
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
+  return {
+    rows,
+    /** Load the first page, or the next one. */
+    more: () => {
+      if (q.data) void q.fetchNextPage()
+      else setAsked(true)
+    },
+    /** Unknown until the first page; then whether another waits. */
+    hasMore: !q.data || q.hasNextPage,
+    loading: q.isFetching,
+  }
+}
+
+/** The window's rows with older pages after them, each task once. */
+export function withOlder(rows: readonly TaskListItem[] | undefined, older: readonly TaskListItem[]): TaskListItem[] | undefined {
+  if (!rows) return rows
+  if (older.length === 0) return rows as TaskListItem[]
+  const seen = new Set(rows.map((t) => t.id))
+  return [...rows, ...older.filter((t) => !seen.has(t.id))]
 }
 
 /** One project's own tasks — its detail page's Tasks tab. */
@@ -80,13 +161,14 @@ export function useProjectTasks(projectId: string) {
   })
 }
 
-/** The production board's own view — same rows, lane order applied. */
+/** The production board's own view — same window as the list, lane order applied. */
 export function useBoard() {
   const { session } = useAuth()
   const access = useAccess()
+  const since = taskWindowStart()
   return useQuery({
-    queryKey: ['tasks', 'board'],
-    queryFn: () => callApi('/tasks/board', { responseSchema: tasksList }),
+    queryKey: ['tasks', 'board', 'window', since],
+    queryFn: () => callApi(`/tasks/board?done_since=${since}`, { responseSchema: tasksList }),
     enabled: !!session && access.hasModule('tasks'),
     staleTime: 15_000,
   })
@@ -274,12 +356,28 @@ export function useApplyBundle() {
   )
 }
 
-/** The signed-in person's own tasks — RLS hands employees only what they are on. */
-export function useMyTasks() {
+/**
+ * The signed-in person's own tasks — RLS hands employees only what they are
+ * on. Open ones and what was finished in the last 30 days; older finished
+ * ones through useOlderDoneTasks('my').
+ */
+export function useMyTasks(enabled = true) {
+  const { session } = useAuth()
+  const since = taskWindowStart()
+  return useQuery({
+    queryKey: ['tasks', 'my', 'window', since],
+    queryFn: () => callApi(`/tasks/my?done_since=${since}`, { responseSchema: tasksList }),
+    enabled: enabled && !!session,
+    staleTime: 15_000,
+  })
+}
+
+/** Only my open tasks: Home's day and the Submit work picker. */
+export function useMyOpenTasks() {
   const { session } = useAuth()
   return useQuery({
-    queryKey: ['tasks', 'my'],
-    queryFn: () => callApi('/tasks/my', { responseSchema: tasksList }),
+    queryKey: ['tasks', 'my', 'open'],
+    queryFn: () => callApi('/tasks/my?open=1', { responseSchema: tasksList }),
     enabled: !!session,
     staleTime: 15_000,
   })

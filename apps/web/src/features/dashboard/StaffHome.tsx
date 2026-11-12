@@ -19,7 +19,7 @@ import { useMyProfile } from '@/features/profile/api'
 import { profileLine } from './profile-line'
 import { useMyDeliverables, useNotesHeard } from '@/features/projects/api'
 import { VoiceNotePlayer } from '@/features/projects/VoiceNotePlayer'
-import { useMyTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
+import { useMyOpenTasks, useUpdateMyTaskStatus } from '@/features/tasks/api'
 import { SubmitWorkDialog } from '@/features/work/SubmitWorkDialog'
 import { HandoverDialog } from '@/features/data/HandoverDialog'
 import { localDate } from '@/features/shoots/assign'
@@ -39,7 +39,7 @@ function useMyDay() {
   // a manager's call would otherwise fetch the whole studio's calendar.
   const [from] = useState(() => localDate(new Date(Date.now() - 60 * 86_400_000)))
   const slots = useSlots(me ? { user_id: me, from } : undefined)
-  const tasks = useMyTasks()
+  const tasks = useMyOpenTasks()
   const edits = useMyDeliverables()
   const calls = useMyFollowUps()
   const data = useMyData()

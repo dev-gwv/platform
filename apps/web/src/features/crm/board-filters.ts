@@ -1,4 +1,4 @@
-import type { CrmLead } from '@ipc/contracts'
+import type { LeadRow } from '@ipc/contracts'
 
 /**
  * The toolbar's facet filters: any of these stages, AND any of these owners,
@@ -23,7 +23,7 @@ export const UNSET = '__none'
 
 const one = (v: string | null | undefined) => (v && v.length > 0 ? v : UNSET)
 
-function facetValues(l: CrmLead, f: keyof LeadFacets): string[] {
+function facetValues(l: LeadRow, f: keyof LeadFacets): string[] {
   switch (f) {
     case 'stage':
       return [one(l.stage_id)]
@@ -46,14 +46,14 @@ function facetValues(l: CrmLead, f: keyof LeadFacets): string[] {
   }
 }
 
-export function applyFacets(leads: readonly CrmLead[], facets: LeadFacets): CrmLead[] {
+export function applyFacets<T extends LeadRow>(leads: readonly T[], facets: LeadFacets): T[] {
   const keys = (Object.keys(facets) as (keyof LeadFacets)[]).filter((k) => facets[k].length > 0)
   if (keys.length === 0) return [...leads]
   return leads.filter((l) => keys.every((k) => facetValues(l, k).some((v) => facets[k].includes(v))))
 }
 
 /** How many leads carry each value of a facet, for the counts in the menu. */
-export function facetCounts(leads: readonly CrmLead[], f: keyof LeadFacets): Map<string, number> {
+export function facetCounts(leads: readonly LeadRow[], f: keyof LeadFacets): Map<string, number> {
   const out = new Map<string, number>()
   for (const l of leads) for (const v of facetValues(l, f)) out.set(v, (out.get(v) ?? 0) + 1)
   return out
@@ -93,12 +93,12 @@ export const NO_EXTRAS: LeadExtras = {
 const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 
 /** Every date the lead is asking for: its functions', or the lead's own. */
-const eventDates = (l: CrmLead): string[] => {
+const eventDates = (l: LeadRow): string[] => {
   const ds = l.functions.map((f) => f.event_date).filter((d): d is string => !!d)
   return ds.length ? ds : l.event_date ? [l.event_date] : []
 }
 
-export function applyExtras(leads: readonly CrmLead[], x: LeadExtras, now: Date): CrmLead[] {
+export function applyExtras<T extends LeadRow>(leads: readonly T[], x: LeadExtras, now: Date): T[] {
   const today = dayStart(now).getTime()
   const tomorrow = today + 86_400_000
   const weekEnd = today + 8 * 86_400_000

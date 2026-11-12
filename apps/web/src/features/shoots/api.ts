@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   serviceOption,
+  shootListItem,
   shootPreset,
   z,
   type SaveShootPresetRequest,
@@ -15,6 +16,47 @@ import { useAccess } from '@/shared/auth/useAccess'
 const services = serviceOption.array()
 const presets = shootPreset.array()
 const anySchema = z.any()
+const shootsList = shootListItem.array()
+
+/** `/shoots?from=…&to=…` (inclusive, on the shoot's date), plus an optional search. */
+export function shootsWindowPath(from: string, to: string, q?: string) {
+  const p = new URLSearchParams({ from, to })
+  if (q?.trim()) p.set('q', q.trim())
+  return `/shoots?${p.toString()}`
+}
+
+/**
+ * The studio's shoots between two dates (inclusive), asked of the server
+ * rather than filtered from every shoot ever (speed audit, 12 Nov). Moving
+ * the window keeps the last answer on screen until the new one lands. The key
+ * starts with 'shoots', so every existing invalidation still reaches it.
+ */
+export function useShootsWindow(
+  from: string,
+  to: string,
+  opts: { enabled?: boolean; staleTime?: number } = {},
+) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['shoots', 'window', from, to],
+    queryFn: () => callApi(shootsWindowPath(from, to), { responseSchema: shootsList }),
+    enabled: !!session && (opts.enabled ?? true) && !!from && !!to && from <= to,
+    placeholderData: keepPreviousData,
+    ...(opts.staleTime !== undefined ? { staleTime: opts.staleTime } : {}),
+  })
+}
+
+/** One shoot by id (GET /shoots/:id), under the list's visibility rules. */
+export function useShoot(id: string) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['shoots', 'one', id],
+    queryFn: () => callApi(`/shoots/${id}`, { responseSchema: shootListItem }),
+    enabled: !!session && !!id,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
 
 /**
  * Every service this studio has on its catalog, for the requirement picker

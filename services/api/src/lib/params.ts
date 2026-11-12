@@ -42,6 +42,34 @@ export function uuidQuery(c: Context<AppEnv>, key: string): string | null {
 }
 
 /**
+ * An optional YYYY-MM-DD query filter (a window on a date column). A value
+ * that is not a real calendar date is the caller's mistake (422), never a
+ * cast error from Postgres.
+ */
+export function dateQuery(c: Context<AppEnv>, key: string): string | null {
+  const v = c.req.query(key)
+  if (!v) return null
+  const d = new Date(`${v}T00:00:00Z`)
+  if (!DATE_RE.test(v) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) {
+    fail(422, 'That date filter is not a valid date.')
+  }
+  return v
+}
+
+/**
+ * An optional search box's words: trimmed, bounded, and null when blank.
+ * Used in an ILIKE, so pass it through `likePattern` first.
+ */
+export function searchQuery(c: Context<AppEnv>, key = 'q', max = 100): string | null {
+  const v = c.req.query(key)?.trim()
+  if (!v) return null
+  return v.slice(0, max)
+}
+
+/** `%words%` for ILIKE, with the user's own % _ and \ taken literally. */
+export const likePattern = (v: string) => `%${v.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+
+/**
  * An optional numeric query filter, absent when the caller did not send one.
  *
  * `Number('')` is 0, not NaN. Reading a missing `max_amount` that way turned

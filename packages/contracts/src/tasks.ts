@@ -99,8 +99,22 @@ export const taskListItem = z.object({
   latest_submission: taskLatestSubmission.nullable().default(null),
   /** Last change; for a completed task, when it was done ("Done this week"). */
   updated_at: z.string().nullable().default(null),
+  /**
+   * A windowed list (`done_since` / `done_before`) sends the description cut
+   * to 200 characters; true when there was more. GET /tasks/:id has it whole,
+   * so anything that edits the description reads the task by id.
+   */
+  description_truncated: z.boolean().default(false),
 })
 export type TaskListItem = z.infer<typeof taskListItem>
+
+/** One page of older finished tasks (GET /tasks?done_before=), newest first. */
+export const taskDonePage = z.object({
+  items: taskListItem.array(),
+  /** Pass back as `done_before` for the next page; null on the last one. */
+  next_cursor: z.string().nullable(),
+})
+export type TaskDonePage = z.infer<typeof taskDonePage>
 
 export const createTaskRequest = z.object({
   project_id: uuid.nullable().default(null),

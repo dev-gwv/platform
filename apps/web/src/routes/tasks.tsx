@@ -23,7 +23,7 @@ import { PanelBoundary } from '@/shared/layout/RouteError'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
-import { useProductionBoard } from '@/features/board/api'
+import { useProject } from '@/features/projects/api'
 import { TaskBoard } from '@/features/board/TaskBoard'
 import { useDirectory } from '@/features/team/api'
 import {
@@ -34,13 +34,17 @@ import {
   useDeleteBundle,
   useDeleteTask,
   useMyTasks,
+  useOlderDoneTasks,
   useSetTaskStatus,
   useTaskPriorities,
   useCreateTaskPriority,
   useTasks,
   useUpdateBundle,
   useUpdateTask,
+  useTask,
+  withOlder,
 } from '@/features/tasks/api'
+import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import {
   PRIORITY_LABEL,
   STATUS_LABEL,
@@ -112,9 +116,13 @@ function Tasks({ managed }: { managed: boolean }) {
 
   const { me, canManage, canAssign } = useTaskViewer()
   const mine = !managed || mineParam === '1'
-  const studio = useTasks()
-  const own = useMyTasks()
-  const { data, isLoading, isError, refetch } = managed ? studio : own
+  // Only the list this person reads: the studio's for whoever manages
+  // tasks, else their own. Both are open tasks plus the last 30 days' done.
+  const studio = useTasks(managed)
+  const own = useMyTasks(!managed)
+  const { data: windowRows, isLoading, isError, refetch } = managed ? studio : own
+  const older = useOlderDoneTasks(managed ? 'studio' : 'my')
+  const data = useMemo(() => withOlder(windowRows, older.rows), [windowRows, older.rows])
   const { data: directory } = useDirectory()
   const members = useMemo(() => (directory ?? []).filter((m: DirectoryMember) => m.status === 'active'), [directory])
   const actions = useTaskActions()
@@ -216,12 +224,13 @@ function Tasks({ managed }: { managed: boolean }) {
 
       <div className="mt-4">
         {view === 'board' ? (
-          <TaskBoard items={managed ? undefined : (data ?? [])} filter={keep} />
+          <TaskBoard items={managed ? undefined : (windowRows ?? [])} filter={keep} />
         ) : isLoading ? (
           <SkeletonList rows={6} columns={4} />
         ) : isError ? (
           <ErrorState onRetry={() => void refetch()} />
         ) : scoped.length === 0 ? (
+          <>
           <Card>
             <CardContent className="py-4">
               <EmptyState
@@ -246,6 +255,8 @@ function Tasks({ managed }: { managed: boolean }) {
               />
             </CardContent>
           </Card>
+          {view === 'list' && <ShowOlderDone older={older} />}
+          </>
         ) : view === 'people' ? (
           <TaskPeopleView
             rows={peopleRows}
@@ -263,6 +274,7 @@ function Tasks({ managed }: { managed: boolean }) {
             <div className="mt-3">
               <TaskTable rows={listRows} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
             </div>
+            {(tab === 'all' || tab === 'completed') && <ShowOlderDone older={older} />}
           </>
         )}
       </div>
@@ -591,7 +603,9 @@ function NewTaskDialog({ own = false }: { own?: boolean }) {
   const [voiceNoteUrl, setVoiceNoteUrl] = useState('')
   const [assignees, setAssignees] = useState<string[]>([])
   const [tag, setTag] = useState('General')
-  const deliverables = useProductionBoard().data?.items
+  // The chosen project's own deliverables (its page's query, so it is often
+  // cached already) -- never the whole studio's production board.
+  const deliverables = useProject(own ? '' : projectId).data?.deliverables
   // Only the chosen project's own, still-open deliverables: attaching a task to
   // another project's, or to one already delivered, would be a mistake.
   const projectDeliverables = (deliverables ?? []).filter((d) => d.project_id === projectId && d.status !== 'completed' && d.status !== 'cancelled')
@@ -781,10 +795,31 @@ function NewTaskDialog({ own = false }: { own?: boolean }) {
 }
 
 /** Everything the create form set, editable afterwards — same fields, plus who's assigned. */
-function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactNode }) {
+function EditTaskDialog({ task: row, trigger }: { task: TaskListItem; trigger: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  // A list row may carry only the first 200 characters of the description;
+  // the form starts from the whole task so saving never cuts it short.
+  const full = useTask(open && row.description_truncated ? row.id : null)
+  const task = row.description_truncated ? full.data : row
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent title="Edit task" description="Anything set when it was created can be corrected here.">
+        {task ? (
+          <EditTaskForm task={task} onDone={() => setOpen(false)} />
+        ) : full.isError ? (
+          <p className="text-sm text-muted-foreground">This task could not be opened. It may have been deleted.</p>
+        ) : (
+          <SkeletonList rows={4} columns={1} />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditTaskForm({ task, onDone }: { task: TaskListItem; onDone: () => void }) {
   const update = useUpdateTask()
   const { data: customPriorities } = useTaskPriorities()
-  const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
   const [projectId, setProjectId] = useState(task.project_id ?? '')
@@ -796,7 +831,7 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
   const [tag, setTag] = useState(task.tag)
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
-    open ? `tasks-page:${task.id}` : null,
+    `tasks-page:${task.id}`,
     { title, description, projectId, priority, customPriorityCode, dueDate, voiceNoteUrl, assignees, tag },
     (v) => {
       setTitle(v.title)
@@ -831,87 +866,82 @@ function EditTaskDialog({ task, trigger }: { task: TaskListItem; trigger: ReactN
       {
         onSuccess: () => {
           draft.clear()
-          setOpen(false)
+          onDone()
         },
       },
     )
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent title="Edit task" description="Anything set when it was created can be corrected here.">
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>
-              Title <span className="text-destructive">*</span>
-            </Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Description</Label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-          <AssigneePicker selected={assignees} onChange={setAssignees} />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Project</Label>
-              <ProjectPicker value={projectId} onChange={(id) => setProjectId(id)} label={projectId === task.project_id ? task.project_name : undefined} noneLabel="None" aria-label="Project" />
-            </div>
-            <TagSelect value={tag} onChange={setTag} />
-            <div className="flex flex-col gap-1.5">
-              <Label>Priority</Label>
-              <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
-                {(['low', 'medium', 'high', 'urgent'] as TaskPriority[]).map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_LABEL[p]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Due date</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Voice note URL (optional)</Label>
-            <Input
-              value={voiceNoteUrl}
-              onChange={(e) => setVoiceNoteUrl(e.target.value)}
-              placeholder="https://…"
-              type="url"
-            />
-          </div>
-          {/* Always shown: hidden while the list was empty, nobody ever found
-              out labels existed. A new one is added right here. */}
-          <div className="flex flex-col gap-1.5">
-            <Label>Custom label (optional)</Label>
-            <TaskLabelPicker
-              value={customPriorityCode}
-              onChange={setCustomPriorityCode}
-              options={customPriorities ?? []}
-              noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={update.isPending || title.trim().length === 0}>
-              {update.isPending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Title <span className="text-destructive">*</span>
+        </Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Description</Label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      <AssigneePicker selected={assignees} onChange={setAssignees} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="flex flex-col gap-1.5">
+          <Label>Project</Label>
+          <ProjectPicker value={projectId} onChange={(id) => setProjectId(id)} label={projectId === task.project_id ? task.project_name : undefined} noneLabel="None" aria-label="Project" />
+        </div>
+        <TagSelect value={tag} onChange={setTag} />
+        <div className="flex flex-col gap-1.5">
+          <Label>Priority</Label>
+          <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
+            {(['low', 'medium', 'high', 'urgent'] as TaskPriority[]).map((p) => (
+              <option key={p} value={p}>
+                {PRIORITY_LABEL[p]}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Due date</Label>
+          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Voice note URL (optional)</Label>
+        <Input
+          value={voiceNoteUrl}
+          onChange={(e) => setVoiceNoteUrl(e.target.value)}
+          placeholder="https://…"
+          type="url"
+        />
+      </div>
+      {/* Always shown: hidden while the list was empty, nobody ever found
+          out labels existed. A new one is added right here. */}
+      <div className="flex flex-col gap-1.5">
+        <Label>Custom label (optional)</Label>
+        <TaskLabelPicker
+          value={customPriorityCode}
+          onChange={setCustomPriorityCode}
+          options={customPriorities ?? []}
+          noneLabel={`None — use ${PRIORITY_LABEL[priority]}`}
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <DialogClose asChild>
+          <Button type="button" variant="outline">
+            Cancel
+          </Button>
+        </DialogClose>
+        <Button type="submit" disabled={update.isPending || title.trim().length === 0}>
+          {update.isPending ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </form>
   )
 }
 

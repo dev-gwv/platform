@@ -9,7 +9,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
 import { Input, Label, Select } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { useMyTasks } from '@/features/tasks/api'
+import { useMyOpenTasks } from '@/features/tasks/api'
 import { useMyDeliverables } from '@/features/projects/api'
 import { revisionHint, submittedMessage } from '@/features/projects/revisions'
 import { useDeliveryFlow } from '@/features/projects/stages-api'
@@ -83,7 +83,7 @@ export function SubmitWorkDialog({
   const isEdit = !!submission
   const submit = useSubmitWork()
   const update = useUpdateWorkSubmission()
-  const { data: myTasks } = useMyTasks()
+  const { data: myTasks } = useMyOpenTasks()
   const { data: myDeliverables } = useMyDeliverables()
   const [open, setOpen] = useState(false)
   // A Simple studio delivers a hand-in as it lands (0234): no reviewer to wait on.

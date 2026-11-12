@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
-import { PanelBoundary } from '@/shared/layout/RouteError'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { AlarmClock, BarChart3, CalendarClock, Download, Ellipsis, FileUp, KanbanSquare, List, PhoneCall, QrCode, Search, Settings2, SlidersHorizontal } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -10,12 +9,12 @@ import { Input } from '@/shared/ui/input'
 import { Segmented } from '@/shared/ui/segmented'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { SEARCH_MIN, useLeadSearch, useLeads, useSavedViews } from '@/features/crm/api'
+import { SEARCH_MIN, useLeadCards, useLeadSearch, useSavedViews } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
-import { LeadDrawer } from '@/features/crm/LeadDrawer'
+import { LeadDrawerById } from '@/features/crm/LeadDrawerById'
 import { GettingStarted } from '@/features/crm/GettingStarted'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
-import { inView, openingView, viewName } from '@/features/crm/builtin-views'
+import { closedOutcomeFor, inView, openingView, viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery, toSavedQuery } from '@/features/crm/views'
 import { EMPTY_QUERY, applyQuery, countsFor, isOpen, isUncontacted, type LeadQuery } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
@@ -99,6 +98,7 @@ function Crm() {
   const [query, setQuery] = useState<LeadQuery>(EMPTY_QUERY)
   const [text, setText] = useState('')
   const [openLead, setOpenLead] = useState<string | null>(null)
+  const closeLead = useCallback(() => setOpenLead(null), [])
   const [showArchived, setShowArchived] = useState(false)
   /*
    * Every filter this page ever had is still here -- status, owner, quality,
@@ -146,12 +146,14 @@ function Crm() {
     void navigate({ to: '/follow-ups', search: {} as never, replace: true })
   }, [hasLeadLink]) // fires once, off the initial URL
 
-  const active = useLeads(false)
-  const everything = useLeads(showArchived || hasLeadLink)
+  // The page works from open leads, as slim cards: the board, the views and
+  // their counts are all about leads still being worked. Booked and lost ones
+  // load only for a saved view that asks for them, archived ones only on
+  // "Show archived", and the drawer reads its one lead whole, by id.
+  const active = useLeadCards({ outcome: 'open' })
   const { data: savedViews } = useSavedViews()
   const allOpen = useMemo(() => active.data ?? [], [active.data])
   const notContacted = useMemo(() => allOpen.filter(isUncontacted).length, [allOpen])
-  const allLeads = useMemo(() => everything.data ?? [], [everything.data])
 
   // One clock for the page, so a lead cannot be "due today" in the picker and
   // "overdue" in the list because two components asked at different moments.
@@ -170,6 +172,21 @@ function Crm() {
   const current: ViewChoice = view ?? { kind: 'builtin', key: 'today' }
   const saved = savedViews ?? []
 
+  // A saved view on the list may ask for booked or lost leads; only then are
+  // they fetched. "Show archived" widens the same read to the archive.
+  const closedNeed = mode === 'list' ? closedOutcomeFor(current, saved) : null
+  const wide = useLeadCards({
+    outcome: closedNeed ?? 'open',
+    includeArchived: showArchived,
+    enabled: showArchived || closedNeed !== null,
+  })
+  const wideOn = showArchived || closedNeed !== null
+  const allLeads = useMemo(() => (wideOn ? (wide.data ?? allOpen) : allOpen), [wideOn, wide.data, allOpen])
+  // With no open lead, one more row (of any kind) tells an empty studio from
+  // one that has booked or lost everything it had.
+  const openEmpty = !active.isLoading && allOpen.length === 0
+  const anyLead = useLeadCards({ outcome: 'all', includeArchived: true, limit: 1, enabled: openEmpty })
+
   const label =
     current.kind === 'saved'
       ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
@@ -177,7 +194,7 @@ function Crm() {
 
   /** The rows this view is, before the search box narrows them further. */
   const inViewRows = useMemo(() => {
-    const source = showArchived ? allLeads : allOpen
+    const source = allLeads
     // The board and the stage board both want open leads only -- a won deal has
     // no next call and no stage to sit in.
     if (mode !== 'list') {
@@ -193,7 +210,7 @@ function Crm() {
       return v ? applyQuery(source, toLeadQuery(v.query), now) : source.filter(isOpen)
     }
     return inView(source, current.key, now)
-  }, [current, mode, allOpen, allLeads, showArchived, saved, now])
+  }, [current, mode, allLeads, saved, now])
 
   // A quarter of a second of quiet before we ask the server, so typing a phone
   // number is one request and not eleven.
@@ -211,7 +228,7 @@ function Crm() {
     const needle = text.trim().toLowerCase()
     if (!needle) return inViewRows
     return inViewRows.filter((l) =>
-      [l.name, l.phone, l.email, l.notes, l.assignee_name]
+      [l.name, l.phone, l.email, l.notes_preview, l.assignee_name]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(needle)),
     )
@@ -224,9 +241,24 @@ function Crm() {
   const rows = useMemo(() => applyExtras(applyFacets(unfaceted, facets), extras, now), [unfaceted, facets, extras, now])
 
   const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
-  const selected =
-    [...(found.data ?? []), ...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null
-  const isEmptyStudio = !active.isLoading && allOpen.length === 0 && !searching
+  // The card in hand, if there is one, stands in while the drawer reads the
+  // whole lead; a ?lead= link to a lead not on screen is read by id alone.
+  const selectedCard = openLead
+    ? ([...(found.data ?? []), ...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null)
+    : null
+  const isEmptyStudio = openEmpty && !anyLead.isLoading && (anyLead.data?.length ?? 0) === 0 && !searching
+
+  // The pipeline's heads come from the server while nothing narrows the
+  // board; a filter or a search counts what is left on screen instead.
+  const serverCounts =
+    mode === 'pipeline' &&
+    current.kind === 'builtin' &&
+    current.key === 'all' &&
+    !searching &&
+    text.trim() === '' &&
+    facetsOn === 0 &&
+    extrasOn === 0 &&
+    !showArchived
 
   return (
     <>
@@ -380,7 +412,7 @@ function Crm() {
              the most useful thing present: an empty one. */
           <GettingStarted leads={allOpen} />
         ) : mode === 'pipeline' ? (
-          <PipelineTab leads={rows} onOpen={setOpenLead} />
+          <PipelineTab leads={rows} onOpen={setOpenLead} serverCounts={serverCounts} />
         ) : mode === 'board' ? (
           <FollowUpBoardTab leads={rows} now={now} onOpen={setOpenLead} />
         ) : (
@@ -398,11 +430,7 @@ function Crm() {
         )}
       </div>
 
-      {selected && (
-        <PanelBoundary resetKey={selected.id} label="this lead">
-          <LeadDrawer lead={selected} onClose={() => setOpenLead(null)} />
-        </PanelBoundary>
-      )}
+      {openLead && <LeadDrawerById key={openLead} id={openLead} card={selectedCard} onClose={closeLead} />}
     </>
   )
 }

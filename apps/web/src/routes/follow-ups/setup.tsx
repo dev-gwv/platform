@@ -59,7 +59,7 @@ function CrmSetup() {
   // Duplicates and the pipeline editor both need the archived rows, so the
   // full list is only fetched for the two sections that read it.
   const needsAll = section === 'duplicates' || section === 'pipeline'
-  const everything = useLeads(needsAll)
+  const everything = useLeads({ includeArchived: true, enabled: needsAll })
   const allLeads = everything.data ?? []
   const archived = allLeads.filter((l) => l.is_archived)
 

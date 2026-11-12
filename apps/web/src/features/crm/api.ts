@@ -25,6 +25,10 @@ import {
   sendQuoteResponse,
   timelineResponse,
   crmLead,
+  crmLeadCard,
+  leadsSummary,
+  type CrmLead,
+  type CrmLeadCard,
   crmSettings,
   createWorkflowRequest,
   enrollWorkflowResponse,
@@ -98,8 +102,10 @@ import {
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { leadsPath, placeholderLead, type LeadsOptions } from './lead-reads'
 
 const leadsList = crmLead.array()
+const cardList = crmLeadCard.array()
 const rulesList = distributionRule.array()
 const noContent = z.any()
 
@@ -115,9 +121,54 @@ function useCrmQuery<T>(key: readonly unknown[], fn: () => Promise<T>, staleTime
   })
 }
 
-export function useLeads(includeArchived = false) {
-  return useCrmQuery(['leads', includeArchived ? 'all' : 'active'], () =>
-    callApi(`/crm/leads${includeArchived ? '?include_archived=1' : ''}`, { responseSchema: leadsList }),
+/**
+ * The full lead list. Most screens want {@link useLeadCards} instead: the full
+ * record is ~1.1 KB a lead and only the drawer reads all of it.
+ */
+export function useLeads(o: LeadsOptions = {}) {
+  return useCrmQuery(
+    ['leads', 'full', o.outcome ?? 'live', o.includeArchived ? 'all' : 'active', o.limit ?? 0],
+    () => callApi(leadsPath('full', o), { responseSchema: leadsList }),
+    15_000,
+    o.enabled ?? true,
+  )
+}
+
+/** Slim rows for cards, lists and filters (`?shape=card`). */
+export function useLeadCards(o: LeadsOptions = {}) {
+  return useCrmQuery(
+    ['leads', 'card', o.outcome ?? 'live', o.includeArchived ? 'all' : 'active', o.limit ?? 0],
+    () => callApi(leadsPath('card', o), { responseSchema: cardList }),
+    15_000,
+    o.enabled ?? true,
+  )
+}
+
+/**
+ * One lead, whole, for the drawer. Kept under ['crm', 'leads', …] so every
+ * mutation that refreshes the list refreshes it too. A card row already in
+ * hand stands in while it loads, with the fields a card lacks left empty.
+ */
+export function useLead(id: string | null, card?: CrmLeadCard | CrmLead | null) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['crm', 'leads', 'one', id],
+    queryFn: () => callApi(`/crm/leads/${id}`, { responseSchema: crmLead }),
+    enabled: !!id && !!session && access.hasModule('crm'),
+    staleTime: 15_000,
+    placeholderData: () => (card && card.id === id ? placeholderLead(card) : undefined),
+  })
+}
+
+/** The pipeline's counts per stage, worked out on the server. */
+export function useLeadsSummary(pipelineId: string | null, enabled = true) {
+  return useCrmQuery(
+    ['leads', 'summary', pipelineId ?? 'default'],
+    () =>
+      callApi(`/crm/leads/summary${pipelineId ? `?pipeline_id=${pipelineId}` : ''}`, { responseSchema: leadsSummary }),
+    15_000,
+    enabled,
   )
 }
 
@@ -142,11 +193,21 @@ export function useLeadSearch(term: string) {
   return useCrmQuery(
     ['lead-search', needle.toLowerCase()],
     () =>
-      callApi(`/crm/leads?include_archived=1&limit=200&q=${encodeURIComponent(needle)}`, {
-        responseSchema: leadsList,
+      callApi(`/crm/leads?shape=card&include_archived=1&limit=200&q=${encodeURIComponent(needle)}`, {
+        responseSchema: cardList,
       }),
     30_000,
     needle.length >= SEARCH_MIN,
+  )
+}
+
+/** The newest open leads, a page at a time, for a picker before anything is typed. */
+export function useRecentLeads(enabled: boolean, limit = 20) {
+  return useCrmQuery(
+    ['lead-search', 'recent', limit],
+    () => callApi(`/crm/leads?shape=card&outcome=open&limit=${limit}`, { responseSchema: cardList }),
+    30_000,
+    enabled,
   )
 }
 

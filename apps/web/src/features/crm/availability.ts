@@ -1,4 +1,4 @@
-import type { CrmLead } from '@ipc/contracts'
+import type { LeadRow } from '@ipc/contracts'
 
 /**
  * Whether the studio is free on a lead's event date.
@@ -18,7 +18,7 @@ interface DateVerdict {
 
 const NOTHING: DateVerdict = { label: null, tone: 'neutral', detail: '' }
 
-export function dateVerdict(lead: Pick<CrmLead, 'date_status' | 'date_wanted_by' | 'event_date'>): DateVerdict {
+export function dateVerdict(lead: Pick<LeadRow, 'date_status' | 'date_wanted_by' | 'event_date'>): DateVerdict {
   if (!lead.event_date || lead.date_status === 'unknown') {
     return { ...NOTHING, detail: 'No event date yet — ask for it before anything else.' }
   }
@@ -56,6 +56,6 @@ export function dateVerdict(lead: Pick<CrmLead, 'date_status' | 'date_wanted_by'
 export const worthFlagging = (v: DateVerdict): boolean => v.tone === 'danger' || v.tone === 'neutral'
 
 /** Leads whose date collides with something — the ones worth deciding today. */
-export function contested(leads: readonly CrmLead[]): CrmLead[] {
+export function contested<T extends LeadRow>(leads: readonly T[]): T[] {
   return leads.filter((l) => l.date_status === 'contested')
 }

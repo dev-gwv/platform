@@ -714,8 +714,28 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
   if (method === 'POST' && path === '/tasks/generate') return { created: 2 }
-  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?')))
-    return atStage(boardTasks, 'full')
+  if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?'))) {
+    const qs = new URLSearchParams(path.split('?')[1] ?? '')
+    const rows = atStage(boardTasks, 'full')
+    // Older done tasks a page at a time: one page, then nothing more.
+    if (qs.has('done_before'))
+      return {
+        items: qs.get('done_before')?.includes('|')
+          ? []
+          : [boardTask(uid(0x2a), 'Back up Sharma cards', 'completed', 'low', 'Sharma Wedding', 0, { updated_at: '2026-06-02T10:00:00+05:30' })],
+        next_cursor: null,
+      }
+    const q = qs.get('q')?.trim().toLowerCase()
+    if (q !== undefined) return rows.filter((t) => !q || t.title.toLowerCase().includes(q)).slice(0, 20)
+    const parent = qs.get('parent_id')
+    if (parent) return [] // no fixture task has subtasks
+    if (qs.get('open') === '1') return rows.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
+    return rows
+  }
+  if (method === 'GET' && /^\/tasks\/[0-9a-f-]{36}$/.test(path)) {
+    const t = boardTasks.find((x) => x.id === path.slice('/tasks/'.length))
+    return t ?? NOT_MOCKED
+  }
   if (method === 'GET' && path === '/tasks/bundles') return atStage(bundlesFx, 'partial')
   if (method === 'POST' && path === '/tasks/bundles') return { id: uid(0xd8) }
   if (method === 'DELETE' && path.startsWith('/tasks/bundles/')) return {}
@@ -735,7 +755,29 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'POST' && path === '/shoots/presets')
     return { id: uid(0x5d), ...(body as object) }
   if (method === 'DELETE' && path.startsWith('/shoots/presets/')) return {}
-  if (method === 'GET' && (path === '/shoots' || path.startsWith('/shoots?'))) return shootsFx
+  if (method === 'GET' && (path === '/shoots' || path.startsWith('/shoots?'))) {
+    // The real list takes a window (from / to, inclusive on shoot_date), a
+    // project and a search (project, client or shoot name, at most 20).
+    const qs = new URLSearchParams(path.split('?')[1] ?? '')
+    const from = qs.get('from')
+    const to = qs.get('to')
+    const project = qs.get('project_id')
+    const q = qs.get('q')?.trim().toLowerCase()
+    const hits = shootsFx.filter(
+      (s) =>
+        (!project || s.project_id === project) &&
+        (!from || (!!s.shoot_date && s.shoot_date >= from)) &&
+        (!to || (!!s.shoot_date && s.shoot_date <= to)) &&
+        (!q || `${s.name} ${s.project_name ?? ''} ${s.client_name ?? ''}`.toLowerCase().includes(q)),
+    )
+    return q ? hits.slice(0, 20) : hits
+  }
+  // One shoot (GET /shoots/:id) after the literal paths above, as the API does.
+  if (method === 'GET' && /^\/shoots\/[^/?]+$/.test(path) && path !== '/shoots/my') {
+    const hit = shootsFx.find((s) => s.id === path.slice('/shoots/'.length))
+    if (!hit) throw new Error('That shoot was not found.')
+    return hit
+  }
   if (method === 'POST' && path === '/shoots') return { id: uid(0x5c) }
   if (method === 'PATCH' && path.startsWith('/shoots/')) return {}
   if (method === 'POST' && path === '/projects') return { id: PROJ.p1 }
@@ -1237,8 +1279,36 @@ export function mockResponse(path: string, method: string, body?: unknown): unkn
   if (method === 'PUT' && path === '/crm/prefs') return { ...crmPrefsFx, ...(body as Record<string, unknown>) }
   if (method === 'GET' && path.startsWith('/public/quote/')) return publicQuoteFx
   if (method === 'POST' && path.includes('/public/quote/')) return { ok: true }
-  if (method === 'GET' && (path === '/crm/leads' || path.startsWith('/crm/leads?')))
-    return atStage(dealLeads(), 'partial')
+  if (method === 'GET' && (path === '/crm/leads' || path.startsWith('/crm/leads?'))) {
+    // outcome= splits by how a lead ended, as the API does; shape=card is the
+    // same rows (the contract keeps only the card's fields).
+    const outcome = new URLSearchParams(path.split('?')[1] ?? '').get('outcome')
+    const closed = (l: { status: string }) => l.status === 'converted' || l.status === 'lost'
+    const rows = dealLeads().filter((l) =>
+      outcome === 'open' ? !closed(l) : outcome === 'won' ? l.status === 'converted' : outcome === 'lost' ? l.status === 'lost' : true,
+    )
+    return atStage(rows, 'partial')
+  }
+  if (method === 'GET' && path.startsWith('/crm/leads/summary')) {
+    const open = atStage(dealLeads(), 'partial').filter((l) => l.status !== 'converted' && l.status !== 'lost')
+    const byStage = new Map<string | null, { count: number; value: number }>()
+    for (const l of open) {
+      const k = (l as { stage_id?: string | null }).stage_id ?? null
+      const at = byStage.get(k) ?? { count: 0, value: 0 }
+      byStage.set(k, { count: at.count + 1, value: at.value + ((l as { deal_value?: number | null }).deal_value ?? 0) })
+    }
+    return {
+      stages: [...byStage].map(([stage_id, v]) => ({ stage_id, ...v })),
+      open_total: open.length,
+      open_value: open.reduce((sum, l) => sum + ((l as { deal_value?: number | null }).deal_value ?? 0), 0),
+      not_contacted: open.filter((l) => l.status === 'new' && !(l as { last_contacted_at?: string | null }).last_contacted_at).length,
+    }
+  }
+  if (method === 'GET' && /^\/crm\/leads\/[0-9a-f-]{36}$/.test(path)) {
+    const lead = dealLeads().find((l) => l.id === path.slice('/crm/leads/'.length))
+    if (!lead) throw new Error('That lead was not found.')
+    return lead
+  }
   if (method === 'POST' && /^\/crm\/leads\/[^/]+\/send-template$/.test(path))
     return { url: 'https://wa.me/919876543210?text=Hi', rendered: 'Hi', delivery: 'link' }
   if (method === 'POST' && path === '/crm/leads/bulk') return { updated: 0, previous: [] }
@@ -3214,7 +3284,7 @@ function boardTask(
   priority: string,
   project_name: string,
   sort_order: number,
-  over: { due_date?: string | null; description?: string | null; assignee_names?: string[] } = {},
+  over: { due_date?: string | null; description?: string | null; assignee_names?: string[]; updated_at?: string } = {},
 ) {
   return {
     id,

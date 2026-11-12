@@ -11,6 +11,9 @@ const addDays = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10)
 }
 
+/** The last day of the shoots tile's week: today and six days on. */
+export const shootsWeekEnd = (today: string) => addDays(today, 6)
+
 /** Shoots from today to six days on, leaving out cancelled ones. */
 export function shootsWeekLine(shoots: readonly { shoot_date: string | null; status: string }[], today: string): string {
   const end = addDays(today, 6)

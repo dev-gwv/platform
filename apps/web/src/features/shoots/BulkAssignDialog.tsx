@@ -13,6 +13,7 @@ import { Avatar } from '@/shared/ui/avatar'
 import { cn } from '@/shared/ui/cn'
 import { useBookSlots, useMembers, usePayoutMemory, useSlots } from '@/features/allocation/api'
 import { PayoutButton, PayoutPanel } from './PayoutPicker'
+import { useShootsWindow } from './api'
 import { AssignedNote } from '@/features/team/AssignedNote'
 import {
   clashFor,
@@ -75,24 +76,29 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
   const members = useMembers()
   const slots = useSlots()
   const book = useBookSlots()
-  const shoots = useQuery({
-    queryKey: projectId ? ['shoots', 'project', projectId] : ['shoots', 'all'],
-    queryFn: () => callApi(projectId ? `/shoots?project_id=${projectId}` : '/shoots', { responseSchema: list }),
-    enabled: !!session,
+  // With a project: that project's shoots. Without one: only the dates in
+  // the From / To boxes (this month to start), asked of the server -- never
+  // every shoot the studio ever had (speed audit, 12 Nov).
+  const [from, setFrom] = useState<string | null>(null)
+  const [to, setTo] = useState<string | null>(null)
+  const projectShoots = useQuery({
+    queryKey: ['shoots', 'project', projectId],
+    queryFn: () => callApi(`/shoots?project_id=${projectId}`, { responseSchema: list }),
+    enabled: !!session && !!projectId,
     staleTime: 15_000,
   })
 
   const range = useMemo(() => {
-    const dated = (shoots.data ?? []).map((s) => s.shoot_date).filter((d): d is string => !!d).sort()
+    const dated = (projectShoots.data ?? []).map((s) => s.shoot_date).filter((d): d is string => !!d).sort()
     if (projectId && dated.length) return { from: dated[0]!, to: dated[dated.length - 1]! }
     const now = new Date()
     return { from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)), to: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }
-  }, [shoots.data, projectId])
+  }, [projectShoots.data, projectId])
 
-  const [from, setFrom] = useState<string | null>(null)
-  const [to, setTo] = useState<string | null>(null)
   const dateFrom = from ?? range.from
   const dateTo = to ?? range.to
+  const windowShoots = useShootsWindow(dateFrom, dateTo, { enabled: !projectId, staleTime: 15_000 })
+  const shoots = projectId ? projectShoots : windowShoots
   const [memberId, setMemberId] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
   const [role, setRole] = useState('')

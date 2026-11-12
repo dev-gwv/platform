@@ -1,4 +1,4 @@
-import type { CrmLead } from '@ipc/contracts'
+import type { LeadRow } from '@ipc/contracts'
 
 /**
  * What a studio still has to do before leads run themselves.
@@ -19,7 +19,7 @@ interface StartStep {
 }
 
 interface StartInput {
-  leads: readonly CrmLead[]
+  leads: readonly LeadRow[]
   /** Lead sources with a live webhook — a form or Meta pointed at us. */
   sourceCount: number
   /** Message templates saved for Quick Response. */

@@ -1,13 +1,10 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, ChevronLeft, ChevronRight, Download, Search, UserPlus, X } from 'lucide-react'
-import { shootListItem, type ShootListItem } from '@ipc/contracts'
+import type { ShootListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { CalendarLinkButton } from '@/features/booking/CalendarLinkButton'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
-import { callApi } from '@/shared/api/client'
-import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Button } from '@/shared/ui/button'
@@ -19,6 +16,7 @@ import { cn } from '@/shared/ui/cn'
 import { useMembers, useSlots } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { BulkAssignDialog } from '@/features/shoots/BulkAssignDialog'
+import { useShootsWindow } from '@/features/shoots/api'
 import { conflictItems, figures, monthDays, shiftMonth, staffing, todayLocal } from '@/features/booking/booking-model'
 import { ShootCard } from '@/features/booking/ShootCard'
 import { PeopleGrid } from '@/features/booking/PeopleGrid'
@@ -37,15 +35,12 @@ export function TeamAllocationPage({ initialTab }: { initialTab?: 'calendar' | '
   )
 }
 
-const shootsList = shootListItem.array()
-
 /**
  * Team Booking: a month of shoots and who is on each one, role by role; the
  * whole team's month at a glance; and what needs fixing. Every Assign button
  * opens the same Assign Team dialog the project page uses.
  */
 function TeamBooking({ initialView }: { initialView: View }) {
-  const { session } = useAuth()
   const access = useAccess()
   const canPlan = access.hasAction('projects', 'edit')
 
@@ -61,11 +56,10 @@ function TeamBooking({ initialView }: { initialView: View }) {
 
   const slots = useSlots({ from, to })
   const members = useMembers()
-  const shoots = useQuery({
-    queryKey: ['shoots'],
-    queryFn: () => callApi('/shoots', { responseSchema: shootsList }),
-    enabled: !!session,
-  })
+  // Only the month on screen, from the server; the Shoots, Calendar, People
+  // and Conflicts views all show this month. A new month refetches and keeps
+  // the last one on screen meanwhile.
+  const shoots = useShootsWindow(from, to)
 
   const [assign, setAssign] = useState<{ shoot: ShootListItem; role?: string | undefined } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -120,7 +114,9 @@ function TeamBooking({ initialView }: { initialView: View }) {
     downloadCsv(`team-booking-${month}.csv`, toCsv(head, rows))
   }
 
-  const loading = shoots.isLoading || slots.isLoading
+  // While a new month loads, the last month's answer is filtered out above;
+  // show the skeleton then, never a false "No shoots in …".
+  const loading = shoots.isLoading || slots.isLoading || (shoots.isPlaceholderData && !inMonth.length)
   const failed = shoots.isError || slots.isError
 
   return (

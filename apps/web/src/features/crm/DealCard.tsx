@@ -2,7 +2,7 @@ import { memo, useState, type CSSProperties } from 'react'
 import { PartnerChip } from './PartnerChip'
 import { useDraggable } from '@dnd-kit/core'
 import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
-import type { CrmLead } from '@ipc/contracts'
+import type { LeadRow } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Avatar } from '@/shared/ui/avatar'
 import { useINR } from '@/shared/money/MoneyMask'
@@ -50,7 +50,7 @@ export const DealCard = memo(function DealCard({
   ticking = false,
   onTick,
 }: {
-  lead: CrmLead
+  lead: LeadRow
   now: Date
   onOpen: (id: string) => void
   draggable: boolean
