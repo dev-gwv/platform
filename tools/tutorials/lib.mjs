@@ -67,6 +67,20 @@ export async function studio({ name = 'Mehta Studios', owner = 'Asha Mehta', ski
   return { email, password, token }
 }
 
+/**
+ * Whoever a tutorial signs in as: put away the cards that greet someone new
+ * (the setup and team videos, the welcome alert), so a video shows
+ * the screen it teaches and not the onboarding around it.
+ */
+export async function quietCards(email, password) {
+  const r = await api('/auth/login', { method: 'POST', body: { email, password } })
+  const token = r.json.session?.access_token ?? r.json.access_token
+  if (!token) return
+  await api('/auth/hints/setup_videos', { token, method: 'PUT', body: { value: { shown: 1, closed: true } } })
+  await api('/auth/hints/team_videos', { token, method: 'PUT', body: { value: { watched: [], closed: ['all'] } } })
+  await api('/auth/hints/welcome', { token, method: 'PUT', body: { value: { shown: 1, closed: true } } })
+}
+
 // ── the in-page teaching layer ─────────────────────────────────────────
 function layerInit() {
   if (window.__tut) return
@@ -218,6 +232,7 @@ export class Tutorial {
     // A tutorial never shows a cookie or confirm-email strip it does not teach.
     this.page = await this.ctx.newPage()
     this.page.on('pageerror', (e) => console.log('pageerror', e.message))
+    if (email && password) await quietCards(email, password)
     if (!signIn) {
       // A first visit: nobody signed in (the sign-up tutorial).
       await this.page.goto(WEB + '/')

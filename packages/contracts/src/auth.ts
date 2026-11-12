@@ -210,7 +210,7 @@ export type AssistantLangNote = z.infer<typeof assistantLangNote>
 export const requirementsChoiceNote = z.object({ choice: z.enum(['now', 'later']) })
 export type RequirementsChoiceNote = z.infer<typeof requirementsChoiceNote>
 
-export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang', 'requirements_choice', 'photo_sharing'] as const
+export const HINT_KEYS = ['assign_note', 'getting_started', 'hide_amounts', 'learn', 'guide', 'assistant_lang', 'requirements_choice', 'photo_sharing', 'setup_videos', 'team_videos', 'welcome'] as const
 export const hintKey = z.enum(HINT_KEYS)
 export type HintKey = z.infer<typeof hintKey>
 
@@ -227,6 +227,12 @@ export const userHints = z
     requirements_choice: requirementsChoiceNote.optional(),
     // Photo sharing's "New": shown = visits to the page, closed = this person has started using it.
     photo_sharing: hintNote.optional(),
+    // "Set up Studio AutoPilot, step by step" on a new studio's Home: closed = put away by this person.
+    setup_videos: hintNote.optional(),
+    // A team member's first videos: which they watched, and closed when put away.
+    team_videos: learnNote.optional(),
+    // The welcome alert in the bell: written by the server once it has been sent (or was not due).
+    welcome: hintNote.optional(),
   })
   .passthrough()
 export type UserHints = z.infer<typeof userHints>
@@ -264,3 +270,15 @@ export const quickWordRequest = z.object({
 })
 export type QuickWordRequest = z.infer<typeof quickWordRequest>
 export const quickHintKey = (category: string) => `q_${category}`
+
+/** Hint keys whose note is the watched/closed video lists (LearnNote). */
+export const LEARN_SHAPED_HINTS: readonly HintKey[] = ['learn', 'team_videos']
+
+/**
+ * POST /auth/welcome: the one-time welcome in the bell for someone new --
+ * the setup videos for whoever sets the studio up, their own videos for a
+ * team member. `kind` is null when nothing was due (an older login, or sent
+ * already).
+ */
+export const welcomeResult = z.object({ sent: z.boolean(), kind: z.enum(['setup', 'team']).nullable() })
+export type WelcomeResult = z.infer<typeof welcomeResult>

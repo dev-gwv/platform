@@ -35,6 +35,8 @@ import { LowBalanceBanner } from '@/features/messaging/LowBalanceBanner'
 import { buildJourney, isSetupAudience } from '@/features/onboarding/journey'
 import { useCloseSetup } from '@/features/onboarding/setup-flow'
 import { SetupJourney } from '@/features/onboarding/SetupJourney'
+import { SetupVideosCard, useSetupVideosShowing } from '@/features/onboarding/SetupVideosCard'
+import { TeamVideosCard, useTeamVideosShowing } from '@/features/onboarding/TeamVideosCard'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { greeting, todayLine } from '@/features/dashboard/greeting'
 import { leadsTileLine, moneyTile, shootsTile, shootsWeekEnd } from '@/features/dashboard/tiles'
@@ -66,7 +68,7 @@ function DashboardInner() {
     return (
       <>
         <PageHeader title={first ? `Hi, ${first}` : 'Home'} />
-        <GuideCard />
+        <StaffOnboarding />
         <div className="mt-4">
           <StaffHome />
         </div>
@@ -74,6 +76,12 @@ function DashboardInner() {
     )
   }
   return <StudioCommandCenter />
+}
+
+/** A new team member's videos first; once they are watched or put away, the guide. */
+function StaffOnboarding() {
+  const showing = useTeamVideosShowing()
+  return showing ? <TeamVideosCard /> : <GuideCard />
 }
 
 function StudioCommandCenter() {
@@ -171,15 +179,15 @@ function StudioCommandCenter() {
   const queries = [projects, clients, members]
   const anyFailed = queries.some((q) => q.isError)
   const journeyReady = !queries.some((q) => q.isPending) && !anyFailed
-  const journey = buildJourney(
-    {
-      // The owner is in the directory from registration, so they don't count.
-      teammates: (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length,
-      clients: clientCount,
-      projects: projects.data?.total ?? 0,
-    },
-    (m) => access.hasModule(m),
-  )
+  const signals = {
+    // The owner is in the directory from registration, so they don't count.
+    teammates: (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length,
+    clients: clientCount,
+    projects: projects.data?.total ?? 0,
+  }
+  const journey = buildJourney(signals, (m) => access.hasModule(m))
+  // The six setup videos lead while the studio is new; then Getting started, then the guide.
+  const videosShowing = useSetupVideosShowing(session && isSetupAudience(session) && journeyReady ? signals : null)
   const showJourney = setupAudience && journeyReady && !journey.allDone && !!journey.current
 
   // All three steps satisfied, however they got there: setup is done, for good.
@@ -226,15 +234,18 @@ function StudioCommandCenter() {
       <DiamondTrialBanner />
 
       {settingUp ? (
-        showJourney && journey.current && <SetupJourney steps={journey.steps} current={journey.current} />
+        showJourney &&
+        journey.current &&
+        videosShowing !== null &&
+        (videosShowing ? <SetupVideosCard signals={signals} /> : <SetupJourney steps={journey.steps} current={journey.current} />)
       ) : (
       <>
       <ProfileBanner />
       <OfferStrip withLink />
       <YourDayStrip />
-      {session && isSetupAudience(session) && <GettingStartedCard />}
-      {/* One onboarding card at a time: Getting started, then the guide. */}
-      {!(session && isSetupAudience(session) && startShowing) && <GuideCard />}
+      {/* One onboarding card at a time: the setup videos, Getting started, then the guide. */}
+      {videosShowing ? <SetupVideosCard signals={signals} /> : videosShowing === false && session && isSetupAudience(session) && <GettingStartedCard />}
+      {videosShowing === false && !(session && isSetupAudience(session) && startShowing) && <GuideCard />}
 
       {/* Three tiles, each a sentence and the one place to act (the audit):
           who to call, the week's shoots, and the money due. The figure is
