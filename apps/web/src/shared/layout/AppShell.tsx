@@ -32,6 +32,7 @@ import { HelpButton } from '@/features/help/HelpPanel'
 import { HelpBubble } from '@/features/help/HelpBubble'
 import { useBranding } from '@/features/crm-sequences/api'
 import { HubTabs } from './HubTabs'
+import { useWarmPages } from './warm-pages'
 import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
 
@@ -139,6 +140,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
   const role = session?.role ?? 'none'
   const entries = filterNav(NAV, role, access, session?.is_platform_admin ?? false)
+  // Every menu page's file is fetched while the app sits idle, so a first click is instant.
+  useWarmPages(entries, !!session)
 
   // The menu shows headings, and opens one section at a time: the section
   // holding the page you are on, or the one you just clicked open. Every

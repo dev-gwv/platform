@@ -6,6 +6,7 @@ import { clearThread } from '@/features/assistant/thread'
 import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
 import { MOCK_ENABLED } from '../dev/mock-flag'
 import { setSentryUser } from '@/shared/error/sentry'
+import { forgetCache, setCacheScope } from '../api/persist-cache'
 
 const ok = z.object({ ok: z.boolean() })
 
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
     setNoStudio(false)
     qc.clear()
+    forgetCache()
     // The help assistant's thread is held at module scope so it survives the
     // panel closing, which means qc.clear() does not reach it -- and two people
     // sharing a laptop must not read each other's questions.
@@ -89,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const s = await callApi('/auth/session', { responseSchema: sessionState })
+      // The kept pages belong to this person and studio; another's are dropped.
+      setCacheScope(qc, s.user_id, s.company_id)
       setSession(s)
       setNoStudio(false)
       // Every later event carries who and which studio. Set here rather than
@@ -175,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens(pair)
       markCookieSession(!pair.refresh_token)
       qc.clear()
+      forgetCache()
       window.location.assign('/dashboard')
     },
     [qc],

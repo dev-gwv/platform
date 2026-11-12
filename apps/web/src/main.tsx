@@ -19,6 +19,7 @@ import { z } from '@ipc/contracts'
 import { registerPwa } from '@/shared/pwa/install'
 import { watchForNewRelease } from '@/shared/pwa/update'
 import { setQueryClient } from '@/shared/api/query-client-ref'
+import { persistCache, restoreCache } from '@/shared/api/persist-cache'
 
 /** "Check the email: Invalid email" from a form's ZodError. */
 function checkMessage(error: z.ZodError): string {
@@ -163,32 +164,39 @@ const TOASTER = {
   },
 } satisfies ToasterProps
 
-createRoot(el, {
-  // React 19 hands the framework these instead of letting them reach
-  // window.onerror. Without them a render crash is reported by React to the
-  // console and by nobody to Sentry — the class of bug most worth catching,
-  // because the screen is blank and the user cannot tell you what they did.
-  onUncaughtError: reactErrorHandler(),
-  onCaughtError: reactErrorHandler(),
-  onRecoverableError: reactErrorHandler(),
-}).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <ConfirmProvider>
-            <RouterProvider router={router} />
-            {/* Top centre, under the top bar: on the right a toast sat on the
-                bell and the account menu, and on a drawer's close button
-                (audit, 5 Nov); the bottom right is the help bubble's. */}
-            <Toaster position="top-center" offset={{ top: 68 }} {...TOASTER} />
-            {/* Follow-up reminders stay until acted on, so they sit bottom right,
-                above the help bubble -- at the top they covered every page's
-                header and its buttons (owner audit, 10 Nov). */}
-            <Toaster id="reminders" position="bottom-right" offset={{ bottom: 92, right: 16 }} mobileOffset={{ bottom: 140 }} {...TOASTER} />
-          </ConfirmProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-)
+// What this device read last time is put back before the first page draws,
+// so a page opened before shows at once (owner, 12 Nov); then every new answer
+// is kept for next time. A slow disk is waited on for 0.4 s at most.
+void restoreCache(queryClient).finally(() => {
+  persistCache(queryClient)
+  createRoot(el, {
+    // React 19 hands the framework these instead of letting them reach
+    // window.onerror. Without them a render crash is reported by React to the
+    // console and by nobody to Sentry — the class of bug most worth catching,
+    // because the screen is blank and the user cannot tell you what they did.
+    onUncaughtError: reactErrorHandler(),
+    onCaughtError: reactErrorHandler(),
+    onRecoverableError: reactErrorHandler(),
+  }).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <ConfirmProvider>
+              <RouterProvider router={router} />
+              {/* Top centre, under the top bar: on the right a toast sat on the
+                  bell and the account menu, and on a drawer's close button
+                  (audit, 5 Nov); the bottom right is the help bubble's. */}
+              <Toaster position="top-center" offset={{ top: 68 }} {...TOASTER} />
+              {/* Follow-up reminders stay until acted on, so they sit bottom right,
+                  above the help bubble -- at the top they covered every page's
+                  header and its buttons (owner audit, 10 Nov). */}
+              <Toaster id="reminders" position="bottom-right" offset={{ bottom: 92, right: 16 }} mobileOffset={{ bottom: 140 }} {...TOASTER} />
+            </ConfirmProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+})
+
