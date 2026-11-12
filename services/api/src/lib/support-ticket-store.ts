@@ -14,6 +14,7 @@ import { withService } from './db'
 import { describeError, log } from './log'
 import { whatsappConfigured } from './whatsapp'
 import { readSupportSettings } from './support-call-store'
+import { last10 } from './support-chat'
 import { istWhen } from './support-calls'
 import {
   briefDue,
@@ -46,7 +47,15 @@ import { providersFor, readSettings } from '../modules/assistant/router'
  * cancelled one closes it, and a moved one is briefed and asked about again
  * at its new time. A ticket the owner already worked on keeps its status.
  */
-export async function followBooking(sql: TransactionSql, bookingId: string, companyId: string | null, status: 'booked' | 'rescheduled' | 'cancelled') {
+export async function followBooking(
+  sql: TransactionSql,
+  bookingId: string,
+  companyId: string | null,
+  status: 'booked' | 'rescheduled' | 'cancelled',
+  phone: string | null = null,
+) {
+  // A studio already talking to us on WhatsApp (0304): the call joins that ticket.
+  if (status !== 'cancelled') await joinChatTicket(sql, bookingId, companyId, phone)
   await sql`
     insert into support_tickets (booking_id, company_id, status)
     values (${bookingId}, ${companyId}, ${status === 'cancelled' ? 'cancelled' : 'booked'})
@@ -59,6 +68,25 @@ export async function followBooking(sql: TransactionSql, bookingId: string, comp
       brief_at = case when ${status} = 'rescheduled' and support_tickets.status = 'booked' then null else support_tickets.brief_at end,
       nudged_at = case when ${status} = 'rescheduled' and support_tickets.status = 'booked' then null else support_tickets.nudged_at end,
       updated_at = now()`
+}
+
+/**
+ * A call booked by a studio that is already talking to us joins its open
+ * chat ticket, so the call's brief and notes land on the same conversation.
+ */
+async function joinChatTicket(sql: TransactionSql, bookingId: string, companyId: string | null, phone: string | null): Promise<boolean> {
+  const ten = phone ? last10(phone) : ''
+  if (!companyId && ten.length < 10) return false
+  const rows = await sql`
+    update support_tickets set booking_id = ${bookingId}, updated_at = now()
+     where id = (
+       select id from support_tickets
+        where source = 'chat' and booking_id is null and status in ('open', 'waiting_us', 'waiting_them')
+          and ((${companyId}::uuid is not null and company_id = ${companyId}) or (${ten} <> '' and right(phone, 10) = ${ten}))
+        order by updated_at desc limit 1)
+       and not exists (select 1 from support_tickets where booking_id = ${bookingId})
+    returning id`
+  return rows.length > 0
 }
 
 // ── the AI, for the platform (no studio's allowance) ──────────────────────
@@ -211,7 +239,7 @@ interface DueRow {
   studio_name: string | null
 }
 
-export async function postToGroup(env: Env, bookingId: string, body: string, dedupeKey: string): Promise<boolean> {
+export async function postToGroup(env: Env, bookingId: string | null, body: string, dedupeKey: string): Promise<boolean> {
   return withService(env, async (sql) => {
     const s = await readSupportSettings(sql)
     if (!s.bot_on || !s.group_jid) return false
@@ -253,7 +281,7 @@ export async function runTicketAssistant(env: Env, now = Date.now()): Promise<{ 
       select t.id as ticket_id, b.id as booking_id, coalesce(t.company_id, b.company_id) as company_id, b.starts_at, b.ends_at,
              b.name, b.email, b.notes, b.page, b.studio_name, t.brief_at, t.nudged_at
         from support_tickets t join support_call_bookings b on b.id = t.booking_id
-       where t.status = 'booked' and b.status <> 'cancelled'
+       where (t.status = 'booked' or (t.source = 'chat' and t.status in ('open', 'waiting_us', 'waiting_them'))) and b.status <> 'cancelled'
          and b.starts_at between now() - interval '1 day' and now() + interval '2 hours'
          and (t.brief_at is null or t.nudged_at is null)`
     return {
@@ -285,10 +313,11 @@ export async function runTicketAssistant(env: Env, now = Date.now()): Promise<{ 
 export async function ticketsSummary(sql: TransactionSql, now = Date.now()): Promise<string | null> {
   const today = indiaDatePlus(now, 0)
   const rows = await sql<{ name: string; studio_name: string | null; status: string; next_action: string | null; due_on: string | null }[]>`
-    select b.name, b.studio_name, t.status, t.next_action, t.due_on::text as due_on
-      from support_tickets t join support_call_bookings b on b.id = t.booking_id
+    select coalesce(b.name, t.contact_name, '+' || t.phone) as name, coalesce(b.studio_name, c.display_name, c.name) as studio_name,
+           t.status, t.next_action, t.due_on::text as due_on
+      from support_tickets t left join support_call_bookings b on b.id = t.booking_id left join companies c on c.id = t.company_id
      where t.status in ('open', 'waiting_us', 'waiting_them')
-     order by t.due_on nulls last, b.starts_at`
+     order by t.due_on nulls last, coalesce(b.starts_at, t.created_at)`
   const mine = rows
     .filter((r) => r.status === 'waiting_us' || r.status === 'open')
     .map((r) => ({ name: r.studio_name ? `${r.name} (${r.studio_name})` : r.name, action: r.next_action, late: !!r.due_on && r.due_on < today }))
@@ -298,19 +327,21 @@ export async function ticketsSummary(sql: TransactionSql, now = Date.now()): Pro
 // ── reading and changing tickets (Platform -> Support calls) ──────────────
 
 const TICKET_COLUMNS = `
-  t.id, t.status, t.kind, b.starts_at::text as starts_at, b.ends_at::text as ends_at, b.name, b.email,
+  t.id, t.status, t.kind, coalesce(b.starts_at, t.created_at)::text as starts_at, b.ends_at::text as ends_at,
+  coalesce(b.name, t.contact_name, '+' || t.phone, 'Unknown') as name, b.email,
   coalesce(c.display_name, c.name, b.studio_name) as studio_name, coalesce(t.company_id, b.company_id) as company_id,
   b.meeting_url, b.notes as booking_notes, t.brief, t.transcript, t.summary, t.next_action, t.due_on::text as due_on,
   t.solved_at::text as solved_at, t.updated_at::text as updated_at,
   t.watch, t.closed_by, t.followup, t.followup_sent_at::text as followup_sent_at, t.followup_via,
   t.issue_opened_at::text as issue_opened_at, p.name as plan_name,
-  coalesce(b.phone,
+  t.source, t.escalate_why, t.last_in_at::text as last_in_at, (t.booking_id is not null) as has_call,
+  coalesce(b.phone, t.phone,
            (select u.phone from users u where u.user_id = c.owner_user_id and u.company_id = c.id and u.phone is not null limit 1),
            c.invoice_phone) as raw_phone`
 
 const TICKET_FROM = `
   from support_tickets t
-  join support_call_bookings b on b.id = t.booking_id
+  left join support_call_bookings b on b.id = t.booking_id
   left join companies c on c.id = coalesce(t.company_id, b.company_id)
   left join plans p on p.key = c.plan`
 
@@ -353,7 +384,7 @@ export async function listTickets(env: Env): Promise<SupportTicket[]> {
           or coalesce(t.solved_at, t.updated_at) > now() - interval '30 days'
        order by case t.status when 'waiting_us' then 0 when 'open' then 1 when 'booked' then 2 when 'waiting_them' then 3 else 4 end,
                 case when t.status = 'booked' then b.starts_at end asc,
-                b.starts_at desc
+                coalesce(t.last_in_at, b.starts_at, t.created_at) desc
        limit 200`)
     return rows.map(shape(env, await officialReady(env, sql)))
   })

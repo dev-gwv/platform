@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   saveSupportCalendarRequest,
+  supportChatReplyRequest,
   supportTicketFollowupRequest,
   supportTicketNoteRequest,
   supportWhatsappOverview,
@@ -24,6 +25,7 @@ import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupp
 import { uuidParam } from '../../lib/params'
 import { applyNote, briefTicket, getTicket, listTickets, transcribe, updateTicket } from '../../lib/support-ticket-store'
 import { draftFollowup, markIssueOpened, sendFollowup } from '../../lib/support-ticket-followups'
+import { chatMessages, ownerReply } from '../../lib/support-chat-store'
 
 /** A voice note this long is plenty; Whisper takes 25 MB, most phones send under 2. */
 const MAX_VOICE_BYTES = 20 * 1024 * 1024
@@ -122,7 +124,7 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
           support_wa_hourly_cap = ${d.hourly_cap}, support_wa_daily_cap = ${d.daily_cap}, support_wa_daily_summary = ${d.daily_summary},
           support_wa_tpl_booked = ${d.tpl_booked}, support_wa_tpl_reminder = ${d.tpl_reminder},
           support_wa_tpl_cancelled = ${d.tpl_cancelled}, support_wa_tpl_team = ${d.tpl_team},
-          support_wa_tpl_followup = ${d.tpl_followup}, updated_at = now()`),
+          support_wa_tpl_followup = ${d.tpl_followup}, support_wa_chat_on = ${d.chat_on}, updated_at = now()`),
     )
     if (!ok) fail(400, 'We could not save the settings.')
     // Numbers are said by count, never written into the audit trail.
@@ -130,7 +132,7 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
       action: 'platform.support_calls_settings',
       entityType: 'platform_settings',
       entityId: null,
-      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary },
+      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary, chat_on: d.chat_on },
     })
     return c.json({ ok: true })
   })
@@ -277,6 +279,26 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
     const id = uuidParam(c)
     const t = await attempt(c, 'platform.support_ticket_issue', () => markIssueOpened(c.env, id))
     if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // 0304: the WhatsApp conversation on a ticket, and the owner's reply from the official number.
+  .get('/support-calls/tickets/:id/messages', async (c) => {
+    const id = uuidParam(c)
+    const rows = await attempt(c, 'platform.support_ticket_messages', () => chatMessages(c.env, id))
+    if (rows === null) fail(503, 'The messages could not be read. Try again in a moment.')
+    return c.json(rows)
+  })
+
+  .post('/support-calls/tickets/:id/reply', async (c) => {
+    const id = uuidParam(c)
+    const parsed = supportChatReplyRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Write the reply first.')
+    const r = await attempt(c, 'platform.support_ticket_reply', () => ownerReply(c.env, id, parsed.data.text))
+    if (!r) fail(503, 'The reply could not be sent. Try again in a moment.')
+    if (!r.found) fail(404, 'That ticket was not found.')
+    if (!r.ok) fail(502, r.error ?? 'WhatsApp did not take the message.')
+    const t = await getTicket(c.env, id)
     return c.json(t)
   })
 

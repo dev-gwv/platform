@@ -33,6 +33,7 @@ import {
   useUpdateTicket,
   waLink,
 } from '@/features/support/tickets'
+import { ChatCard } from '@/features/support/ChatCard'
 
 /**
  * One support ticket (0300). The group's brief and "how did it go?" posts link
@@ -59,7 +60,8 @@ const MOVES: SupportTicketStatus[] = ['open', 'waiting_us', 'waiting_them', 'sol
 
 function Loaded({ t }: { t: SupportTicket }) {
   const update = useUpdateTicket(t.id)
-  const past = Date.parse(t.starts_at) <= Date.now()
+  const chat = t.source === 'chat'
+  const past = t.has_call && Date.parse(t.starts_at) <= Date.now()
   const noted = !!t.transcript
 
   return (
@@ -69,7 +71,7 @@ function Loaded({ t }: { t: SupportTicket }) {
       </Link>
       <PageHeader
         title={`${t.name}${t.studio_name ? ` · ${t.studio_name}` : ''}`}
-        description={[callWhen(t.starts_at), t.email].filter(Boolean).join(' · ')}
+        description={[chat ? 'WhatsApp' : null, chat && t.contact_phone ? `+${t.contact_phone}` : null, t.has_call ? callWhen(t.starts_at) : null, t.email].filter(Boolean).join(' · ')}
         actions={
           <div className="flex items-center gap-2">
             <StatusBadge tone={STATUS_TONE[t.status]}>{SUPPORT_TICKET_STATUS_LABEL[t.status]}</StatusBadge>
@@ -85,16 +87,19 @@ function Loaded({ t }: { t: SupportTicket }) {
       />
 
       <div className="flex flex-col gap-4">
+        {/* A WhatsApp ticket: the conversation and your reply come first. */}
+        {chat && <ChatCard t={t} />}
+
         {/* After the call, the one thing to do comes first. */}
         {past && t.status !== 'cancelled' && <NoteCard t={t} />}
 
-        {noted && (
+        {(noted || chat) && (
           <Card>
             <CardContent className="flex flex-col gap-4 p-4">
               <h2 className="font-semibold">What happened</h2>
               <Saving value={t.summary ?? ''} label="Summary" long onSave={(v) => update.mutate({ summary: v || null })} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium">Type of call</span>
+                <span className="text-sm font-medium">{chat ? "Type of problem" : "Type of call"}</span>
                 <div className="flex flex-wrap gap-1.5">
                   {SUPPORT_TICKET_KINDS.map((k) => (
                     <Chip key={k} on={t.kind === k} onClick={() => update.mutate({ kind: k })}>
@@ -143,10 +148,10 @@ function Loaded({ t }: { t: SupportTicket }) {
           </Card>
         )}
 
-        {noted && t.status !== 'cancelled' && <FollowupCard t={t} />}
+        {noted && !chat && t.status !== 'cancelled' && <FollowupCard t={t} />}
         {t.kind === 'bug' && t.issue_url && <IssueCard t={t} />}
 
-        <BriefCard t={t} />
+        {t.has_call && <BriefCard t={t} />}
 
         {t.booking_notes && (
           <Card>

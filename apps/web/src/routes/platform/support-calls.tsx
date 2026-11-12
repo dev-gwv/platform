@@ -449,6 +449,13 @@ function OfficialCard({
           label="Send confirmations, reminders and team alerts"
           description="Only to people who ticked WhatsApp when booking, at most 4 messages a booking. Templates must be approved in Meta first."
         />
+        <Switch
+          checked={s.chat_on}
+          onChange={(v) => patch({ chat_on: v })}
+          disabled={!ready}
+          label="Let the assistant answer studios on WhatsApp"
+          description="Messages to the official number become tickets. The assistant answers how-to questions and hands money, plans, bugs and anyone asking for a person to you in the group. Off: every message waits for you."
+        />
         <div className="flex flex-col gap-2">
           <span className="text-sm">Support team numbers (when the group cannot be used)</span>
           <div className="flex flex-wrap gap-2">

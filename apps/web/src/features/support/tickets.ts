@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { supportTicket, type SupportTicket, type SupportTicketStatus, type UpdateSupportTicketRequest } from '@ipc/contracts'
+import { supportTicket, supportTicketMessage, type SupportTicket, type SupportTicketStatus, type UpdateSupportTicketRequest } from '@ipc/contracts'
 import { callApi, postForm } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
@@ -125,3 +125,32 @@ export const useIssueOpened = (id: string) =>
 
 /** A WhatsApp chat with the message written; with no number, WhatsApp asks who to send it to. */
 export const waLink = (phone: string | null, text: string) => `https://wa.me/${(phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`
+
+// ── WhatsApp chat (0304) ─────────────────────────────────────────────────────
+
+const messagesKey = (id: string) => ['platform', 'support-tickets', id, 'messages']
+
+export function useTicketMessages(id: string, on: boolean) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: messagesKey(id),
+    queryFn: () => callApi(`/platform/support-calls/tickets/${id}/messages`, { responseSchema: supportTicketMessage.array() }),
+    enabled: on && !!session?.is_platform_admin,
+    refetchInterval: 15_000,
+  })
+}
+
+export function useChatReply(id: string) {
+  const qc = useQueryClient()
+  return useTicketWrite(
+    id,
+    (text: string) => callApi(`/platform/support-calls/tickets/${id}/reply`, { method: 'POST', body: { text }, responseSchema: supportTicket }),
+    () => {
+      void qc.invalidateQueries({ queryKey: messagesKey(id) })
+      toast.success('Sent on WhatsApp.')
+    },
+  )
+}
+
+/** Inside 24 hours of their last message a reply is free text; after it, it goes as the follow-up template. */
+export const chatWindowOpen = (lastInAt: string | null) => !!lastInAt && Date.now() - Date.parse(lastInAt) < 23.5 * 3_600_000

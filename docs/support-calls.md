@@ -98,7 +98,7 @@ takes the calls has almost nothing to write:
 
 AI text only ever reaches your own support group, never a studio, and it is
 counted against the platform's token budget, not a studio's allowance. Only
-booked calls make tickets: there is still no support inbox (0273).
+booked calls make tickets, and since 0304 so do WhatsApp messages to the official number (below).
 
 ## Step 2: follow-ups, bugs, tickets that close themselves, Monday (0301)
 
@@ -133,3 +133,32 @@ Set `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN`, switch on
   - `support_call_followup`: "Hi {{1}}, following up on your Studio AutoPilot support call: {{2}}"
 
   ({{2}} is the drafted message on one line, links included).
+
+## WhatsApp support chat (0304)
+
+Once the official WhatsApp number is connected, studios can write to it about a
+problem. The owner lifted 0273's "no written support inbox" rule for this one
+door (12 Nov).
+
+1. A studio writes to the official number. The message becomes a **chat
+   ticket** (one open ticket per number), matched to the studio by the last ten
+   digits of a login's phone or the invoice phone.
+2. If **Let the assistant answer studios on WhatsApp** is on, the assistant
+   answers how-to questions from the help, in the studio's language, in plain
+   text, and asks "Did that fix it?". A short thanks closes the ticket; two
+   days of silence closes it too.
+3. It hands the ticket to you instead (Waiting on you, one line to the studio
+   saying the team will reply, a post in the support group with the link) for:
+   a person asked for, money or a payment, a plan change, lost data, something
+   broken, anger, two answers that did not help, nothing in the help, 15
+   answers in a day, or the switch being off.
+4. You reply on the ticket page (**Send on WhatsApp**). Within 24 hours of
+   their last message it goes as written; after that WhatsApp only allows the
+   `support_call_followup` template, with your words inside it.
+5. If the studio books a call, the booking joins the same ticket, so the brief
+   and your voice note land on the conversation.
+
+The assistant never changes data, plans or money, and never promises a date
+or a fix. To try it: connect the number, point Meta's webhook at
+`/webhooks/whatsapp` (it already carries delivery receipts), switch Official
+messages and the chat switch on, and send the number a question from another phone.
