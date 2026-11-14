@@ -403,6 +403,7 @@ const routeTree = rootRoute.addChildren([
   route('/referrals', ReferralsPage),
   route('/settings/project-templates', ProjectTemplatesPage),
   route('/team-payouts', TeamPayoutsPage),
+  route('/money/crew-payouts', TeamPayoutsPage),
   route('/payroll', PayrollPage),
   route('/team/salaries', TeamSalariesPage),
   route('/payroll/payslip/$lineId', PayslipPage),

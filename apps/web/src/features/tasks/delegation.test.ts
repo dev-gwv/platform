@@ -23,6 +23,7 @@ import {
 const TODAY = '2026-09-02'
 
 const task = (title: string, over: Partial<TaskListItem> = {}): TaskListItem => ({
+  routine_id: null,
   id: `id-${title}`,
   title,
   description: null,

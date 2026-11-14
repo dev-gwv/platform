@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { Link } from '@tanstack/react-router'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SectionTabs } from '@/shared/layout/section-tabs'
@@ -25,7 +26,7 @@ import {
   useCreatePayoutSettlement,
 } from '@/features/team-payouts/api'
 import { useCrewPayouts } from '@/features/team-payouts/pay'
-import { CREW_VIEWS, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
+import { CREW_VIEWS, crewByProject, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf } from '@/features/team-payouts/crew-view'
 import { useDirectory } from '@/features/team/api'
 import { PayToCard } from '@/features/team/PayToCard'
 import { PaymentModePicker } from '@/features/settings/PaymentModePicker'
@@ -453,7 +454,9 @@ function ShootPayoutsTracker() {
         </Card>
       )}
 
-      {shown.length === 0 ? (
+      {view === 'projects' ? (
+        <ProjectCrewTable rows={shown} today={today} />
+      ) : shown.length === 0 ? (
         view === 'owed' && !filtering ? (
           <div className="flex items-center gap-2 rounded-lg border border-success/40 bg-success/5 p-4 text-sm">
             <CheckCircle className="size-5 text-success" aria-hidden /> All crew paid for shoots already done.
@@ -483,6 +486,76 @@ function ShootPayoutsTracker() {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * By project: each project's crew money on one line -- promised, paid, owed
+ * now and still to come -- with the way into that project's Payouts.
+ */
+function ProjectCrewTable({ rows, today }: { rows: readonly CrewPayoutRow[]; today: string }) {
+  const inr = useINR()
+  const list = useMemo(() => crewByProject(rows, today), [rows, today])
+  if (list.length === 0) return <div className="py-12 text-center text-muted-foreground">Nothing matches these filters.</div>
+  const total = list.reduce(
+    (a, p) => ({ booked: a.booked + p.booked, paid: a.paid + p.paid, owed: a.owed + p.owed, upcoming: a.upcoming + p.upcoming }),
+    { booked: 0, paid: 0, owed: 0, upcoming: 0 },
+  )
+  return (
+    <Card>
+      <CardContent className="overflow-x-auto p-0">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Project</th>
+              <th className="px-3 py-2 text-right font-medium">Crew payouts</th>
+              <th className="px-3 py-2 text-right font-medium">Paid</th>
+              <th className="px-3 py-2 text-right font-medium">Owed now</th>
+              <th className="px-3 py-2 text-right font-medium">After the shoot</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((p) => (
+              <tr key={p.project_id ?? 'none'} className="border-t border-border">
+                <td className="px-3 py-2">
+                  <p className="font-medium">{p.project_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.people} {p.people === 1 ? 'person' : 'people'} · last shoot {dayLabel(p.last_shoot)}
+                    {p.unset > 0 && <span className="font-medium text-warning"> · {p.unset} with no payout set</span>}
+                  </p>
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{inr(p.booked)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-success">{p.paid > 0 ? inr(p.paid) : '—'}</td>
+                <td className={cn('px-3 py-2 text-right tabular-nums', p.owed > 0 ? 'font-semibold text-warning' : 'text-muted-foreground')}>
+                  {p.owed > 0 ? inr(p.owed) : 'Nothing'}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{p.upcoming > 0 ? inr(p.upcoming) : '—'}</td>
+                <td className="px-3 py-2 text-right">
+                  {p.project_id && (
+                    <Button asChild size="sm" variant={p.owed > 0 ? 'default' : 'outline'}>
+                      <Link to="/projects/$id" params={{ id: p.project_id }} search={{ tab: 'payouts' } as never}>
+                        {p.owed > 0 ? 'Pay' : 'Open'}
+                      </Link>
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-border bg-muted/30 font-semibold">
+            <tr>
+              <td className="px-3 py-2">All projects</td>
+              <td className="px-3 py-2 text-right tabular-nums">{inr(total.booked)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{inr(total.paid)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{inr(total.owed)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{inr(total.upcoming)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </CardContent>
+    </Card>
   )
 }
 

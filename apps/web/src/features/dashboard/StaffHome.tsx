@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { todayInIndia } from '@/shared/ui/days-left'
+import { useDailyDone } from '@/features/tasks/routines'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -218,6 +219,15 @@ function RowAction({ item }: { item: TodayItem }) {
 
 function TaskAction({ task }: { task: NonNullable<TodayItem['task']> }) {
   const move = useUpdateMyTaskStatus()
+  const daily = useDailyDone()
+  // A daily task needs no review: one tap and it is done for today.
+  if (task.routine_id) {
+    return (
+      <Button size="sm" disabled={daily.isPending} onClick={() => daily.mutate({ id: task.id, done: true })}>
+        <Check /> Done
+      </Button>
+    )
+  }
   if (task.status === 'to_do') {
     return (
       <Button size="sm" disabled={move.isPending} onClick={() => move.mutate({ id: task.id, status: 'in_progress' })}>

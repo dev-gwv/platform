@@ -115,6 +115,8 @@ function ProjectDetail() {
   const navigate = useNavigate()
   const { data, isLoading, isError, refetch } = useProject(id)
   const access = useAccess()
+  // The cost sheet's Pay goes to the Payouts view, for whoever may pay the crew.
+  const canPayCrew = access.hasModule('team_payouts')
   const canEdit = access.hasAction('projects', 'edit')
   // The review endpoint is gated on team_work_preview, not projects — a project
   // editor without that permission would see the buttons but get a 403.
@@ -476,7 +478,7 @@ function ProjectDetail() {
         />
       )}
       {tab === 'expenses' && <ExpensesTab projectId={id} />}
-      {tab === 'costs' && <CostsTab projectId={id} onBookTeam={() => go('team')} />}
+      {tab === 'costs' && <CostsTab projectId={id} onBookTeam={() => go('team')} onPay={canPayCrew ? () => setTab('payouts') : undefined} />}
       {tab === 'payouts' && <PayoutsTab projectId={id} />}
       {tab === 'data' && <DataTab projectId={id} />}
       {tab === 'gallery' && <GalleryTab projectId={id} projectName={data.name} />}

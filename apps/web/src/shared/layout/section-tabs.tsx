@@ -42,8 +42,9 @@ export function SectionTabs<T extends string>({
 }) {
   if (variant === 'chips') {
     // The row inside a tab group (Post-Production, Finance): each one a
-    // bordered chip you can see is a control, the open one tinted in the
-    // studio's colour so it reads as part of the strip above it.
+    // chip with a firm border and a coloured icon, the open one filled in the
+    // studio's colour (owner, 14 Nov: the thin grey chips were "not visible
+    // at all").
     return (
       <div role="tablist" aria-label={label} className={cn('flex flex-wrap gap-2', className)}>
         {tabs.map((t) => {
@@ -57,13 +58,13 @@ export function SectionTabs<T extends string>({
               aria-selected={on}
               onClick={() => onChange(t.value)}
               className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-semibold shadow-sm transition-colors',
                 on
-                  ? 'border-primary/50 bg-primary/10 font-semibold text-primary shadow-sm'
-                  : 'border-border bg-card text-foreground/75 hover:border-primary/30 hover:bg-primary/5 hover:text-foreground',
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-primary/30 bg-card text-foreground hover:border-primary/60 hover:bg-primary/5',
               )}
             >
-              {Icon && <Icon className="size-4" aria-hidden />}
+              {Icon && <Icon className={cn('size-4', !on && 'text-primary')} aria-hidden />}
               {t.label}
               {t.count ? (
                 <span className="ml-0.5 rounded-full bg-warning px-1.5 text-[11px] font-bold leading-5 text-white">{t.count}</span>

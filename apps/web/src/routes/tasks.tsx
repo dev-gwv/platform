@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, Package, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, Package, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import { TASK_TAGS, type DirectoryMember, type TaskListItem, type TaskPriority, type TaskStatus } from '@ipc/contracts'
 import { ModuleRouteGuard } from '@/shared/auth/ModuleRouteGuard'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -19,6 +19,8 @@ import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { RemindersContent } from '@/routes/reminders'
+import { DailyTasks } from '@/features/tasks/DailyTasks'
+import { NewBadge } from '@/shared/ui/new-badge'
 import { PanelBoundary } from '@/shared/layout/RouteError'
 import { AvatarGroup } from '@/shared/ui/avatar'
 import { CountUp } from '@/shared/ui/count-up'
@@ -84,13 +86,15 @@ export function TasksPage() {
   )
 }
 
-type TaskView = 'people' | 'list' | 'board' | 'reminders'
+type TaskView = 'people' | 'list' | 'board' | 'daily' | 'reminders'
 // Reminders were a page of their own: a third to-do list beside Tasks and
 // lead follow-ups. They are a view here now, and /reminders opens it.
 const VIEWS: ReadonlyArray<{ value: TaskView; label: string }> = [
   { value: 'people', label: 'People' },
   { value: 'list', label: 'List' },
   { value: 'board', label: 'Board' },
+  // Daily tasks (0305): work that comes back by itself, set per person.
+  { value: 'daily', label: 'Daily tasks' },
   { value: 'reminders', label: 'Reminders' },
 ]
 
@@ -160,13 +164,26 @@ function Tasks({ managed }: { managed: boolean }) {
         title={managed ? 'Task management' : 'My tasks'}
         actions={
           <>
+            <Button variant={view === 'daily' ? 'default' : 'outline'} onClick={() => setView('daily')}>
+              <Repeat /> Daily tasks
+              <NewBadge feature="dailyTasks" />
+            </Button>
             {managed && <BundlesDialog />}
             <NewTaskDialog own={!canAssign} />
           </>
         }
       />
 
-      {view === 'reminders' ? (
+      {view === 'daily' ? (
+        <>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Segmented label="View" value={view} onChange={(v) => setView(v)} options={VIEWS} />
+          </div>
+          <div className="mt-4">
+            <DailyTasks manage={managed && canAssign} />
+          </div>
+        </>
+      ) : view === 'reminders' ? (
         <>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Segmented label="View" value={view} onChange={(v) => setView(v)} options={VIEWS} />

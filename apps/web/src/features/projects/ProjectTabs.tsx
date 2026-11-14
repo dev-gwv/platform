@@ -195,5 +195,23 @@ export function ProjectSubTabs({
     const t = PROJECT_TABS.find((x) => x.value === v)!
     return { value: v, label: t.label, icon: t.icon, ...(counts?.[v] ? { count: counts[v] } : {}), ...('fresh' in t ? { fresh: t.fresh } : {}) }
   })
-  return <SectionTabs variant="chips" tabs={tabs} value={active} onChange={onSelect} label="Sections" {...(className ? { className } : {})} />
+  const group = PROJECT_GROUPS.find((g) => g.value === groupOf(active))
+  // A panel of its own under the strip, named for its group, so the second
+  // row reads as "the parts of Finance" (owner, 14 Nov: the sub-tabs "are not
+  // visible at all").
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-2.5',
+        className,
+      )}
+    >
+      {group && (
+        <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
+          <group.icon className="size-4" aria-hidden /> {group.label}
+        </span>
+      )}
+      <SectionTabs variant="chips" tabs={tabs} value={active} onChange={onSelect} label={group ? `${group.label} sections` : 'Sections'} />
+    </div>
+  )
 }

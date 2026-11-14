@@ -105,6 +105,8 @@ export const taskListItem = z.object({
    * so anything that edits the description reads the task by id.
    */
   description_truncated: z.boolean().default(false),
+  /** A day's copy of a daily task (0305): the routine it came from. */
+  routine_id: uuid.nullable().default(null),
 })
 export type TaskListItem = z.infer<typeof taskListItem>
 
@@ -253,3 +255,69 @@ export const applyBundleRequest = z.object({
   assignees: z.array(uuid).default([]),
 })
 export type ApplyBundleRequest = z.infer<typeof applyBundleRequest>
+
+// ── Daily tasks (0305) ──────────────────────────────────────────────
+/** "HH:MM", 24-hour, India time. */
+const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Pick a time')
+
+export const routineRepeat = z.enum(['days', 'monthly'])
+export type RoutineRepeat = z.infer<typeof routineRepeat>
+
+/** One person's copy of a routine for one day, as the Daily tasks view shows it. */
+export const routineDay = z.object({
+  user_id: uuid,
+  name: z.string(),
+  /** Today's copy: done, still to do, past its time, or none today. */
+  today: z.enum(['done', 'open', 'late', 'none']),
+  task_id: uuid.nullable(),
+  /** The last 7 days that had a copy: how many were done, how many missed. */
+  done_7: z.number().int(),
+  missed_7: z.number().int(),
+})
+export type RoutineDay = z.infer<typeof routineDay>
+
+export const taskRoutine = z.object({
+  id: uuid,
+  title: z.string(),
+  description: z.string().nullable(),
+  priority: taskPriority,
+  repeat: routineRepeat,
+  weekdays: z.array(z.number().int().min(1).max(7)),
+  month_day: z.number().int().nullable(),
+  /** "HH:MM" or null (by the end of the day). */
+  due_time: z.string().nullable(),
+  starts_on: isoDate,
+  ends_on: isoDate.nullable(),
+  paused: z.boolean(),
+  project_id: uuid.nullable(),
+  project_name: z.string().nullable(),
+  created_by_name: z.string().nullable(),
+  people: z.array(routineDay),
+})
+export type TaskRoutine = z.infer<typeof taskRoutine>
+
+export const saveRoutineRequest = z
+  .object({
+    title: z.string().trim().min(1, 'Say what is to be done.').max(200),
+    description: z.string().trim().max(2000).nullable().optional(),
+    priority: taskPriority.default('medium'),
+    repeat: routineRepeat.default('days'),
+    weekdays: z.array(z.number().int().min(1).max(7)).max(7).default([1, 2, 3, 4, 5, 6, 7]),
+    month_day: z.number().int().min(1).max(31).nullable().optional(),
+    due_time: clock.nullable().optional(),
+    starts_on: isoDate.optional(),
+    ends_on: isoDate.nullable().optional(),
+    paused: z.boolean().optional(),
+    project_id: uuid.nullable().optional(),
+    people: z.array(uuid).min(1, 'Pick who does it.').max(100),
+  })
+  .refine((v) => v.repeat !== 'days' || v.weekdays.length > 0, { message: 'Pick at least one day.', path: ['weekdays'] })
+  .refine((v) => v.repeat !== 'monthly' || !!v.month_day, { message: 'Pick the date of the month.', path: ['month_day'] })
+  .refine((v) => !v.ends_on || !v.starts_on || v.ends_on >= v.starts_on, { message: 'It ends before it starts.', path: ['ends_on'] })
+export type SaveRoutineRequest = z.infer<typeof saveRoutineRequest>
+
+/** Pause or resume without resending the rest. */
+export const pauseRoutineRequest = z.object({ paused: z.boolean() })
+
+/** The person ticks today's copy done, or takes the tick back. */
+export const routineDoneRequest = z.object({ done: z.boolean() })

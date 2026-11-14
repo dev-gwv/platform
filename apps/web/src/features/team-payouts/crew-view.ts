@@ -3,14 +3,62 @@ import type { CrewOwed, CrewPayoutRow } from '@ipc/contracts'
 import { amountsHidden, screenINR } from '@/shared/money/hide'
 
 /** Team payouts' three views: what is owed now, what is promised, everything. */
-type CrewView = 'owed' | 'upcoming' | 'all'
+type CrewView = 'owed' | 'upcoming' | 'all' | 'projects'
 export const CREW_VIEWS: readonly { key: CrewView; label: string }[] = [
   { key: 'owed', label: 'Owed now' },
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'all', label: 'All' },
+  // Every project's crew money on one line each (owner, 14 Nov: "how much
+  // they have paid ... I am not able to find that").
+  { key: 'projects', label: 'By project' },
 ]
 export function crewViewOf(v: string | null | undefined): CrewView {
-  return v === 'upcoming' || v === 'all' ? v : 'owed'
+  return v === 'upcoming' || v === 'all' || v === 'projects' ? v : 'owed'
+}
+
+export interface ProjectCrewMoney {
+  project_id: string | null
+  project_name: string
+  /** Every standing booking's payout. */
+  booked: number
+  paid: number
+  /** Shoots already done, minus what is paid on them. */
+  owed: number
+  /** Promised for shoots still to come, minus anything paid ahead. */
+  upcoming: number
+  people: number
+  /** Bookings with no payout set yet. */
+  unset: number
+  last_shoot: string
+}
+
+/**
+ * One line per project: what its crew was promised, what has gone out, what
+ * is owed now and what is still to come. Each rupee once, by the same rule as
+ * Owed now (a released booking counts only what was paid on it).
+ */
+export function crewByProject(rows: readonly CrewPayoutRow[], today: string): ProjectCrewMoney[] {
+  const by = new Map<string, ProjectCrewMoney & { _people: Set<string> }>()
+  for (const r of rows) {
+    const key = r.project_id ?? 'none'
+    const m =
+      by.get(key) ??
+      ({ project_id: r.project_id, project_name: r.project_name ?? 'No project', booked: 0, paid: 0, owed: 0, upcoming: 0, people: 0, unset: 0, last_shoot: r.shoot_date, _people: new Set<string>() } as ProjectCrewMoney & { _people: Set<string> })
+    m.paid += r.paid
+    if (r.stands) {
+      m.booked += r.amount
+      if (r.amount <= 0) m.unset += 1
+      const left = lineBalance(r)
+      if (crewBucketOf(r.shoot_date, today) === 'past') m.owed += left
+      else m.upcoming += left
+    }
+    m._people.add(r.user_id)
+    if (r.shoot_date > m.last_shoot) m.last_shoot = r.shoot_date
+    by.set(key, m)
+  }
+  return [...by.values()]
+    .map(({ _people, ...m }) => ({ ...m, people: _people.size }))
+    .sort((a, b) => b.owed - a.owed || b.last_shoot.localeCompare(a.last_shoot))
 }
 
 interface CrewFilters {
@@ -27,6 +75,7 @@ export function crewRowsFor(rows: readonly CrewPayoutRow[], view: CrewView, toda
     const bucket = crewBucketOf(r.shoot_date, today)
     if (view === 'owed' && (bucket !== 'past' || lineBalance(r) <= 0.001)) return false
     if (view === 'upcoming' && bucket !== 'upcoming') return false
+    // 'projects' and 'all' keep every row; the filters below still apply.
     if (f.project && r.project_id !== f.project) return false
     if (f.from && r.shoot_date < f.from) return false
     if (f.to && r.shoot_date > f.to) return false

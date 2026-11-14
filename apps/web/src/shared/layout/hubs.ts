@@ -89,6 +89,10 @@ export const MONEY: readonly HubTab[] = [
   { to: '/billing/payments', label: 'Payments', module: 'billing' },
   { to: '/billing/invoices', label: 'Invoices', module: 'billing' },
   { to: '/company-expenses', label: 'Expenses', module: 'company_expenses' },
+  // What the crew are owed and have been paid, every project (owner, 14 Nov:
+  // "where we put it ... I am not able to find that"). The same page as
+  // Team → Pay → Team payouts, at its own address so this row stays on it.
+  { to: '/money/crew-payouts', label: 'Crew payouts', module: 'team_payouts', fresh: 'crewPayouts' },
   { to: '/financials', label: 'Profit & Loss', module: 'financials' },
 ]
 
