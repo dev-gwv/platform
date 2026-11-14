@@ -68,3 +68,38 @@ export function setupStepTarget(step: SetupVideoStep, setupOpen: boolean): { to:
   if (journey) return { to: journey.action.to, search: journey.action.search }
   return step.action.search ? { to: step.action.to, search: step.action.search } : { to: step.action.to }
 }
+
+// ── the setup pop-up ─────────────────────────────────────────────────
+/** After "Later" it comes back on the next visit at least this long after. */
+export const POPUP_GAP_HOURS = 4
+/** A studio with a project but nothing new made for this long is asked again. */
+export const POPUP_QUIET_DAYS = 3
+
+/**
+ * The setup pop-up (owner, 14 Nov: "there should be multiple pop-ups until they
+ * start to use the system ... if they have not created any project, or ... the
+ * actions are not happening"). Due for a studio still setting up:
+ *  - always while it has no project yet (it has not started);
+ *  - once it has one, only while it is new (60 days) and has made nothing for
+ *    3 days;
+ * never once the required steps are done, and never again within 4 hours of
+ * being put away ("Later") or before a snooze ends.
+ */
+export function popupDue(input: {
+  steps: readonly SetupProgressStep[]
+  projects: number
+  lastWorkAt: string | null
+  startedAt: string
+  /** When it was last put away, or a snooze's end; ms. */
+  quietUntil: number | null
+  now?: Date
+}): boolean {
+  const now = (input.now ?? new Date()).getTime()
+  if (!input.steps.some((s) => !s.done && !s.step.optional)) return false
+  if (input.quietUntil && now < input.quietUntil) return false
+  if (input.projects === 0) return true
+  const started = Date.parse(input.startedAt)
+  if (!Number.isNaN(started) && now - started > SETUP_VIDEO_DAYS * 86_400_000) return false
+  const last = input.lastWorkAt ? Date.parse(input.lastWorkAt) : NaN
+  return Number.isNaN(last) || now - last > POPUP_QUIET_DAYS * 86_400_000
+}

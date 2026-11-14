@@ -108,7 +108,16 @@ export const settingsRouter = new Hono<AppEnv>()
                  exists (select 1 from project_templates t where t.company_id = co.id and not t.is_sample) as package,
                  exists (select 1 from crm_leads l where l.company_id = co.id) as enquiry,
                  exists (select 1 from projects p join shoots s on s.project_id = p.id where p.company_id = co.id) as booking,
-                 exists (select 1 from project_quotations q where q.company_id = co.id) as quotation
+                 exists (select 1 from project_quotations q where q.company_id = co.id) as quotation,
+                 -- When the studio last made something: the setup pop-up comes
+                 -- back for a studio that has gone quiet before finishing.
+                 greatest(
+                   (select max(created_at) from projects x where x.company_id = co.id),
+                   (select max(created_at) from clients x where x.company_id = co.id),
+                   (select max(created_at) from crm_leads x where x.company_id = co.id),
+                   (select max(created_at) from shoots x where x.company_id = co.id),
+                   (select max(created_at) from invoices x where x.company_id = co.id)
+                 ) as last_work_at
             from companies co where co.id = ${auth.companyId}`
         return r ?? null
       }),
