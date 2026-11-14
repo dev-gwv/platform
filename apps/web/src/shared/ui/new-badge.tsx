@@ -25,6 +25,9 @@ export const NEW_UNTIL = {
   aiCaptions: '2026-11-17',
   /** Ad scripts for a model to read to camera (10 Nov). */
   aiAdScripts: '2026-11-17',
+  /** Daily tasks that come back by themselves, and Crew payouts under Money (14 Nov). */
+  dailyTasks: '2026-11-21',
+  crewPayouts: '2026-11-21',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

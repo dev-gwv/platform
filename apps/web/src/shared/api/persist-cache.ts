@@ -115,6 +115,11 @@ export async function restoreCache(qc: QueryClient, budgetMs = 400): Promise<voi
   if (usable(stored, Date.now(), buster())) {
     try {
       hydrate(qc, stored.state)
+      // A restored answer is shown, never trusted: mark every one stale so the
+      // page that draws it also asks again. One saved under 30 s ago would
+      // otherwise count as fresh, and a refresh pressed to see someone else's
+      // change showed the old copy.
+      void qc.invalidateQueries({ refetchType: 'none' })
     } catch {
       /* a bad copy is simply not used */
     }

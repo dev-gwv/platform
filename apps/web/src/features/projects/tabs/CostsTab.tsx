@@ -1,4 +1,4 @@
-import { Printer } from 'lucide-react'
+import { Banknote, Printer } from 'lucide-react'
 import type { ProjectCostSheet } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -19,7 +19,7 @@ const day = (iso: string | null) =>
  * project value. The owner asked for "all the cost of the project, including
  * the payouts to the team", in one place.
  */
-export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookTeam?: (() => void) | undefined }) {
+export function CostsTab({ projectId, onBookTeam, onPay }: { projectId: string; onBookTeam?: (() => void) | undefined; onPay?: (() => void) | undefined }) {
   const inr = useINR()
   const costs = useProjectCosts(projectId)
   const canAddExpense = useAccess().hasModule('company_expenses')
@@ -43,14 +43,28 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Figure label="Project value" value={c.project_value} />
-            <Figure label="Team payouts" value={c.team_total} sub={due > 0 ? `${inr(due)} still to pay` : c.team_total > 0 ? 'All paid' : undefined} />
+            <Figure
+              label="Team payouts"
+              value={c.team_total}
+              sub={c.team_total > 0 ? (due > 0 ? `${inr(c.team_paid)} paid · ${inr(due)} still to pay` : 'All paid') : undefined}
+            />
             <Figure label="Expenses" value={c.expenses === null ? null : c.expenses_total} />
             <Figure label={c.profit >= 0 ? 'Left for the studio' : 'Over budget by'} value={Math.abs(c.profit)} tone={c.profit >= 0 ? 'good' : 'bad'} />
           </div>
         </CardContent>
       </Card>
 
-      <Section title="Team payouts" total={c.team_total}>
+      <Section
+        title="Team payouts"
+        total={c.team_total}
+        action={
+          onPay && c.team.length > 0 ? (
+            <Button size="sm" variant={due > 0 ? 'default' : 'outline'} onClick={onPay}>
+              <Banknote /> {due > 0 ? `Pay the team · ${inr(due)}` : 'See payments'}
+            </Button>
+          ) : null
+        }
+      >
         {c.team.length === 0 ? (
           <Empty>
             Nobody is booked yet.{' '}
@@ -67,7 +81,7 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
                 <th className="px-3 py-2 font-medium">Person</th>
                 <th className="px-3 py-2 font-medium">Shoot</th>
                 <th className="px-3 py-2 text-right font-medium">Payout</th>
-                <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Paid</th>
+                <th className="px-3 py-2 text-right font-medium">Paid</th>
               </tr>
             </thead>
             <tbody>
@@ -91,8 +105,8 @@ export function CostsTab({ projectId, onBookTeam }: { projectId: string; onBookT
                       <span className="text-xs font-medium text-warning">No payout set</span>
                     )}
                   </td>
-                  <td className="hidden px-3 py-2 text-right tabular-nums sm:table-cell">
-                    {t.paid > 0 ? inr(t.paid) : <span className="text-muted-foreground">—</span>}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <PaidCell cost={t.cost} paid={t.paid} />
                   </td>
                 </tr>
               ))}
@@ -169,6 +183,15 @@ function Figure({ label, value, sub, tone }: { label: string; value: number | nu
       {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   )
+}
+
+/** Paid in full (green), part paid (amber), or not yet -- never a bare dash. */
+function PaidCell({ cost, paid }: { cost: number; paid: number }) {
+  const inr = useINR()
+  if (paid > 0 && paid >= cost - 0.001) return <span className="font-medium text-success">Paid {inr(paid)}</span>
+  if (paid > 0) return <span className="font-medium text-warning">{inr(paid)} of {inr(cost)}</span>
+  if (cost > 0) return <span className="text-xs font-medium text-muted-foreground">Not paid yet</span>
+  return <span className="text-muted-foreground">—</span>
 }
 
 function Section({ title, total, action, children }: { title: string; total: number; action?: React.ReactNode; children: React.ReactNode }) {

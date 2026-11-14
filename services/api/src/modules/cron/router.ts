@@ -287,6 +287,15 @@ export const cronRouter = new Hono<AppEnv>()
     const followUps = await attempt(c, 'cron.crm_follow_up_soon', () =>
       withService(c.env, async (sql) => (await sql<{ n: number }[]>`select crm_follow_up_soon() as n`)[0]?.n ?? 0),
     )
+    // Daily tasks (0305): today's copies for everyone (once each, so the tick
+    // can run often), then a bell for any copy past its time and not done.
+    const dailyTasks = await attempt(c, 'cron.daily_tasks', () =>
+      withService(c.env, async (sql) => {
+        const made = (await sql<{ n: number }[]>`select generate_routine_tasks() as n`)[0]?.n ?? 0
+        const reminded = (await sql<{ n: number }[]>`select routine_tasks_remind() as n`)[0]?.n ?? 0
+        return { made, reminded }
+      }),
+    )
     // Support call alerts (0280) ride the same tick: retries, reminders an hour
     // before, and the group's morning list. A failure here never fails the rest.
     const supportCalls = await attempt(c, 'cron.support_calls', async () => {
@@ -302,7 +311,7 @@ export const cronRouter = new Hono<AppEnv>()
       const chats = await sweepSupportChats(c.env).catch((err: unknown) => ({ error: String(err instanceof Error ? err.message : err) }))
       return { calendar, summary, tickets, selfClosed, weekly, chats, ...(await drainSupportCalls(c.env)) }
     })
-    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, support_calls: supportCalls }, 'cron messages ran')
+    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, daily_tasks: dailyTasks, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 

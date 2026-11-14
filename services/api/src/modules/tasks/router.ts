@@ -25,6 +25,7 @@ import {
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
+import { routineRoutes } from './routes-routines'
 import { fail } from '../../middleware/errors'
 import { textParam, uuidParam, uuidQuery } from '../../lib/params'
 import { withUser } from '../../lib/db'
@@ -60,6 +61,7 @@ interface RawTask {
   latest_submission: { id: string; link: string | null; status: string; submitted_at: string } | null
   updated_at: string | null
   description_truncated?: boolean
+  routine_id: string | null
 }
 
 /**
@@ -162,7 +164,7 @@ export const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => {
          cp.code as custom_priority_code, cp.label as custom_priority_label, cp.tone as custom_priority_tone,
          t.custom_status_code, cs.label as custom_status_label,
          t.deliverable_id, t.parent_task_id, t.voice_note_url,
-         t.tag, t.blocked_reason, t.created_by, t.updated_at,
+         t.tag, t.blocked_reason, t.created_by, t.updated_at, t.routine_id,
          (select cu.name from users cu where cu.user_id = t.created_by) as created_by_name,
          (select json_build_object('id', s.id, 'link', s.submission_link, 'status', s.status, 'submitted_at', s.created_at)
             from team_work_submissions s
@@ -256,6 +258,8 @@ const submissionList = taskSubmissionItem.array()
 
 export const tasksRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
+  // Daily tasks (0305): before every '/:id'-shaped route.
+  .route('/', routineRoutes)
 
   // ── Custom priority catalogue ────────────────────────────────
   // Declared before '/:id'-shaped routes so "priorities" is never read as one.

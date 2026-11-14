@@ -123,7 +123,8 @@ export function myDay(input: DayInput): { today: TodayItem[]; next: TodayItem[] 
       const n = daysBetween(t.due_date, today)
       todayList.push({ kind: 'task', id: t.id, title, note: lateText(n), late: true, sort: `0${t.due_date}`, task: t })
     } else if (t.due_date === today) {
-      todayList.push({ kind: 'task', id: t.id, title, note: 'Due today', late: false, sort: '2', task: t })
+      // A daily task (0305) reads as one, so a person knows it comes back tomorrow.
+      todayList.push({ kind: 'task', id: t.id, title, note: t.routine_id ? 'Daily task · today' : 'Due today', late: false, sort: '2', task: t })
     } else if (t.due_date <= until) {
       nextList.push({ kind: 'task', id: t.id, title, note: `${daysLeftText(daysUntil(t.due_date, today))} · ${dayText(t.due_date)}`, late: false, sort: `${t.due_date}T23`, task: t })
     }

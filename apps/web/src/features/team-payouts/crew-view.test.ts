@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrewPayoutRow } from '@ipc/contracts'
-import { crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
+import { crewByProject, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
 
 const today = '2026-10-02'
 const row = (o: Partial<CrewPayoutRow>): CrewPayoutRow => ({
@@ -100,5 +100,37 @@ describe('crewPersonLine', () => {
   it('splits what is owed from what comes later', () => {
     expect(crewPersonLine([row({}), row({ shoot_date: '2026-11-21', amount: 12000 })], today, money)).toBe('Rs 10000 owed · Rs 12000 after the shoot · 2 shoots')
     expect(crewPersonLine([row({ paid: 10000 })], today, money)).toBe('All paid · 1 shoot')
+  })
+})
+
+describe('crewByProject', () => {
+  const r = (over: Partial<CrewPayoutRow>): CrewPayoutRow => ({
+    slot_id: Math.random().toString(36),
+    user_id: 'u1',
+    user_name: 'Ravi',
+    role: 'Candid',
+    shoot_id: null,
+    shoot_name: 'Haldi',
+    project_id: 'p1',
+    project_name: 'Sharma Wedding',
+    shoot_date: '2026-11-01',
+    amount: 10000,
+    cost_status: 'final',
+    paid: 0,
+    last_paid_date: null,
+    stands: true,
+    ...over,
+  })
+  it('sums each project once: booked, paid, owed and still to come', () => {
+    const rows = [
+      r({ amount: 10000, paid: 4000 }),
+      r({ user_id: 'u2', shoot_date: '2026-12-01', amount: 5000, paid: 1000 }),
+      r({ user_id: 'u3', amount: 0 }),
+      r({ project_id: 'p2', project_name: 'Mehta', amount: 3000, paid: 3000 }),
+      r({ project_id: 'p2', project_name: 'Mehta', amount: 8000, paid: 2000, stands: false }),
+    ]
+    const [a, b] = crewByProject(rows, '2026-11-14')
+    expect(a).toMatchObject({ project_name: 'Sharma Wedding', booked: 15000, paid: 5000, owed: 6000, upcoming: 4000, people: 3, unset: 1 })
+    expect(b).toMatchObject({ project_name: 'Mehta', booked: 3000, paid: 5000, owed: 0, upcoming: 0, people: 1 })
   })
 })
