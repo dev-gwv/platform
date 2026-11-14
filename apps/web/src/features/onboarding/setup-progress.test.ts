@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSetupStep, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
+import { nextSetupStep, popupDue, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
 
 const none = { teammates: 0, clients: 0, projects: 0, quotation: false, logo: false }
 const now = new Date('2026-11-12T10:00:00Z')
@@ -46,5 +46,30 @@ describe('setupStepTarget', () => {
     expect(setupStepTarget(team, false)).toEqual({ to: '/employees', search: { add: 'bulk' } })
     const quotation = setupProgress(none)[4]!.step
     expect(setupStepTarget(quotation, true)).toEqual({ to: '/projects' })
+  })
+})
+
+describe('popupDue', () => {
+  const now = new Date('2026-11-14T10:00:00Z')
+  const fresh = setupProgress(none)
+  const base = { steps: fresh, projects: 0, lastWorkAt: null, startedAt: '2026-11-13T00:00:00Z', quietUntil: null, now }
+  it('keeps coming while the studio has no project', () => {
+    expect(popupDue(base)).toBe(true)
+    expect(popupDue({ ...base, startedAt: '2026-01-01T00:00:00Z' })).toBe(true)
+  })
+  it('waits while put away', () => {
+    expect(popupDue({ ...base, quietUntil: now.getTime() + 60_000 })).toBe(false)
+    expect(popupDue({ ...base, quietUntil: now.getTime() - 60_000 })).toBe(true)
+  })
+  it('with a project, asks again only after 3 quiet days in a new studio', () => {
+    const one = setupProgress({ ...none, teammates: 1, clients: 1, projects: 1 })
+    const p = { ...base, steps: one, projects: 1 }
+    expect(popupDue({ ...p, lastWorkAt: '2026-11-13T09:00:00Z' })).toBe(false)
+    expect(popupDue({ ...p, lastWorkAt: '2026-11-10T09:00:00Z' })).toBe(true)
+    expect(popupDue({ ...p, lastWorkAt: '2026-08-10T09:00:00Z', startedAt: '2026-08-01T00:00:00Z' })).toBe(false)
+  })
+  it('never once the required steps are done', () => {
+    const done = setupProgress({ teammates: 1, clients: 1, projects: 1, quotation: true, logo: false })
+    expect(popupDue({ ...base, steps: done, projects: 1, lastWorkAt: '2026-10-01T00:00:00Z' })).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AutoAttendance } from '@/features/attendance/auto'
 import { FollowUpReminders } from '@/features/crm/FollowUpReminders'
 import { Link, useLocation } from '@tanstack/react-router'
@@ -27,6 +27,8 @@ import { TaskOverdueBadge } from '@/features/tasks/TaskOverdueBadge'
 import { AccountMenu } from './AccountMenu'
 import { SetupGuideBar, useResumeSetup } from '@/features/onboarding/setup-flow'
 import { useWelcomeOnce } from '@/features/onboarding/welcome'
+import { isSetupAudience } from '@/features/onboarding/journey'
+
 import { SettingsFrame, settingsItemFor } from '@/features/settings/SettingsNav'
 import { PlanCard } from '@/features/billing/PlanCard'
 import { HelpButton } from '@/features/help/HelpPanel'
@@ -36,6 +38,8 @@ import { HubTabs } from './HubTabs'
 import { useWarmPages } from './warm-pages'
 import { startUsageTracking, trackRouteView } from '@/shared/usage/usageTracker'
 import { ConfirmEmailBanner } from '@/features/account/ConfirmEmailBanner'
+
+const SetupPopup = lazy(() => import('@/features/onboarding/SetupPopup').then((m) => ({ default: m.SetupPopup })))
 
 
 const COLLAPSE_KEY = 'ipc.sidebar.collapsed'
@@ -298,6 +302,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
         <MobileTabBar onMenu={() => setMobileOpen(true)} />
         <HelpBubble />
+        {/* The setup pop-up for a studio still starting (owner, 14 Nov); its file loads only for them. */}
+        {session && isSetupAudience(session) && (
+          <Suspense fallback={null}>
+            <SetupPopup />
+          </Suspense>
+        )}
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { showGettingStarted, startCountLine, startSteps } from './getting-starte
 const base = {
   started_at: '2026-10-01T00:00:00Z',
   setup_closed: true,
+  last_work_at: null,
   logo: false,
   package: false,
   enquiry: false,

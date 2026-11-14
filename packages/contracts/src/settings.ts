@@ -347,5 +347,7 @@ export const gettingStarted = z.object({
   enquiry: z.boolean(),
   booking: z.boolean(),
   quotation: z.boolean(),
+  /** The newest project, client, lead, shoot or invoice the studio made; null before the first. */
+  last_work_at: z.coerce.string().nullable().default(null),
 })
 export type GettingStarted = z.infer<typeof gettingStarted>
