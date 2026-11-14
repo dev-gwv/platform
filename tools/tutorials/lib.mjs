@@ -79,6 +79,12 @@ export async function quietCards(email, password) {
   await api('/auth/hints/setup_videos', { token, method: 'PUT', body: { value: { shown: 1, closed: true } } })
   await api('/auth/hints/team_videos', { token, method: 'PUT', body: { value: { watched: [], closed: ['all'] } } })
   await api('/auth/hints/welcome', { token, method: 'PUT', body: { value: { shown: 1, closed: true } } })
+  // The person's id is the token's subject: the setup pop-up's put-away key uses it.
+  try {
+    return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).sub ?? null
+  } catch {
+    return null
+  }
 }
 
 // ── the in-page teaching layer ─────────────────────────────────────────
@@ -226,13 +232,15 @@ export class Tutorial {
   async open({ email, password } = {}, { signIn = true } = {}) {
     // Make every clip before the screen starts, so no line waits on the network.
     if (this.vo) for (const l of [this.vo.title, ...this.vo.steps, this.vo.end]) if (l) await say(l[LANG], LANG)
+    const uid = email && password ? await quietCards(email, password) : null
     this.browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
     this.ctx = await this.browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 })
     await this.ctx.addInitScript(layerInit)
+    // The setup pop-up (SetupPopup) stays put away for this person while recording.
+    if (uid) await this.ctx.addInitScript((k) => { try { localStorage.setItem(k, String(Date.now() + 864e5)) } catch { /* ignore */ } }, `setup-popup:${uid}`)
     // A tutorial never shows a cookie or confirm-email strip it does not teach.
     this.page = await this.ctx.newPage()
     this.page.on('pageerror', (e) => console.log('pageerror', e.message))
-    if (email && password) await quietCards(email, password)
     if (!signIn) {
       // A first visit: nobody signed in (the sign-up tutorial).
       await this.page.goto(WEB + '/')
