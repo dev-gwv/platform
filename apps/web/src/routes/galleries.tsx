@@ -275,7 +275,7 @@ function DriveTab({ driveImport }: { driveImport: boolean }) {
         account.isPending ? (
           <SkeletonList rows={1} />
         ) : account.data?.drive ? (
-          <DriveCard drive={account.data.drive} cover={account.data.cover} onOpen={() => open.mutate('drive')} opening={open.isPending} />
+          <DriveCard drive={account.data.drive} onOpen={() => open.mutate('drive')} opening={open.isPending} />
         ) : (
           <Card>
             <CardContent className="flex flex-col gap-3 p-4">

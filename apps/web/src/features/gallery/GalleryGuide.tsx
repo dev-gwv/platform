@@ -2,7 +2,6 @@ import { CircleHelp } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { GoogleDriveIcon } from './GoogleDriveIcon'
-import { COVER_PHOTOS } from './cover-text'
 
 /**
  * "How it works" beside the gallery's buttons (owner, 31 Oct: "add a help
@@ -49,13 +48,8 @@ export function GalleryGuide() {
             <GoogleDriveIcon className="mt-0.5 size-3.5 shrink-0" />
             <span>
               <b className="text-foreground">Google Drive</b> is connected once by the studio owner, in Settings → Gallery. Frameline sees only the files you pick.
-              Import from Google Drive comes with Pro and Studio Max and the trial.
+              Standard photos count 1 each, Original files 2. Import from Google Drive comes with Pro and Studio Max.
             </span>
-          </p>
-          <p>
-            <b className="text-foreground">Photos included in your plan:</b> Pro {COVER_PHOTOS.pro.toLocaleString('en-IN')}, Studio Max{' '}
-            {COVER_PHOTOS.max.toLocaleString('en-IN')}, the trial {COVER_PHOTOS.trial.toLocaleString('en-IN')}, counted while a Drive gallery is kept (deleting
-            an old one makes room). Need more? Ask for more photos on WhatsApp. Uploads from a computer are on Frameline’s own plan.
           </p>
         </div>
       </PopoverContent>

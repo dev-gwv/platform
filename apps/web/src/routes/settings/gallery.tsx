@@ -15,8 +15,7 @@ import { useFramelineAccount, useOpenFramelineHome } from '@/features/gallery/ap
 import { framelinePlanLine } from '@/features/gallery/gallery-text'
 import { useINR } from '@/shared/money/MoneyMask'
 import { GoogleDriveIcon } from '@/features/gallery/GoogleDriveIcon'
-import type { GalleryCover, GalleryDrive } from '@ipc/contracts'
-import { CoverLine } from '@/features/gallery/CoverLine'
+import type { GalleryDrive } from '@ipc/contracts'
 
 export function GallerySettingsPage() {
   return (
@@ -129,7 +128,7 @@ function OwnerView() {
         </CardContent>
       </Card>
       {a.linked && a.drive?.available && (
-        <DriveCard drive={a.drive} cover={a.cover} onOpen={() => open.mutate('drive')} opening={open.isPending && open.variables === 'drive'} />
+        <DriveCard drive={a.drive} onOpen={() => open.mutate('drive')} opening={open.isPending && open.variables === 'drive'} />
       )}
     </div>
   )
@@ -139,7 +138,7 @@ function OwnerView() {
  * Google Drive in Frameline: the owner connects it there (Google's own page),
  * then projects import shoots from it and can keep full-size photos in it.
  */
-export function DriveCard({ drive, onOpen, opening, cover }: { drive: GalleryDrive; onOpen: () => void; opening: boolean; cover?: GalleryCover | null }) {
+export function DriveCard({ drive, onOpen, opening }: { drive: GalleryDrive; onOpen: () => void; opening: boolean }) {
   const label = opening ? 'Opening…' : drive.connected ? 'Manage in Frameline' : drive.needs_reconnect ? 'Connect again' : 'Connect Google Drive'
   return (
     <Card className={drive.connected ? 'border-success/40' : drive.needs_reconnect ? 'border-warning/50' : undefined}>
@@ -157,7 +156,6 @@ export function DriveCard({ drive, onOpen, opening, cover }: { drive: GalleryDri
         ) : (
           <p className="text-sm text-muted-foreground">Import shoots from your Drive on each project’s Gallery tab, and keep full-size photos there. Frameline sees only the files you pick.</p>
         )}
-        {cover && <CoverLine cover={cover} />}
         <div>
           <Button onClick={onOpen} disabled={opening} variant={drive.connected ? 'outline' : 'default'} className={drive.needs_reconnect ? 'ipc-nudge' : undefined}>
             <ExternalLink /> {label}

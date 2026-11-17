@@ -3,13 +3,13 @@ import type { GalleryCover } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { useTalkToUs } from '@/features/billing/talk-to-us'
-import { NewBadge } from '@/shared/ui/new-badge'
 import { coverSentence, coverShare } from './cover-text'
 
 /**
  * Google Drive galleries included in the studio's plan (0307, owner 17 Nov): "4,200 of 25,000 photos kept ·
  * included in your Pro plan until 17 Dec 2026", a bar, and Ask for more photos (WhatsApp: more are sold by the
- * team). Shown in the Google Drive card on the Photo sharing app and on Settings → Gallery.
+ * team). Not shown anywhere yet (owner, 17 Nov: studios do not see the numbers until we decide what they see);
+ * it was drawn in DriveCard (routes/settings/gallery.tsx) with `cover={account.data.cover}`.
  */
 export function CoverLine({ cover }: { cover: GalleryCover }) {
   const talk = useTalkToUs()
@@ -17,7 +17,7 @@ export function CoverLine({ cover }: { cover: GalleryCover }) {
   return (
     <div className={cn('flex flex-col gap-2 rounded-lg border p-3', share >= 0.9 ? 'border-warning/50 bg-warning/5' : 'bg-muted/30')}>
       <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-        Photos included in your plan <NewBadge feature="galleryCover" />
+        Photos included in your plan
       </p>
       <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(share * 100)} aria-valuemin={0} aria-valuemax={100}>
         <div className={cn('h-full rounded-full', share >= 0.9 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.max(2, share * 100)}%` }} />

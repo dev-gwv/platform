@@ -23,7 +23,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { IconTile } from '@/shared/ui/icon-tile'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
-import { COMPARE_GROUPS, INCLUDED, quoteWords, tierPlans, type Cell } from './plan-features'
+import { COMPARE, INCLUDED, quoteWords, tierPlans, type Cell } from './plan-features'
 import { bestSaving, monthlyOf, percentOff, savingWords, sectionOrder, twinOf, withGst } from './price-lists'
 import { perDay } from './usage'
 import { offerFor, offerPrice } from './offer'
@@ -490,25 +490,18 @@ function ComparePlans({ plans }: { plans: Plan[] }) {
                   ))}
                 </tr>
               </thead>
-              {COMPARE_GROUPS.map((g) => (
-                <tbody key={g.title}>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th colSpan={plans.length + 1} scope="colgroup" className="py-2 pl-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {g.title}
-                    </th>
+              <tbody>
+                {COMPARE.map((r) => (
+                  <tr key={r.label} className="border-b border-border last:border-0">
+                    <td className="py-3 pl-3 pr-1.5 text-xs sm:text-sm">{r.label}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="whitespace-nowrap px-1.5 py-3 text-center sm:px-3">
+                        <CellView c={r.cell(p)} />
+                      </td>
+                    ))}
                   </tr>
-                  {g.rows.map((r) => (
-                    <tr key={r.label} className="border-b border-border">
-                      <td className="py-2.5 pl-3 pr-1.5 text-xs sm:text-sm">{r.label}</td>
-                      {plans.map((p) => (
-                        <td key={p.id} className="whitespace-nowrap px-1.5 py-2.5 text-center sm:px-3">
-                          <CellView c={r.cell(p)} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              ))}
+                ))}
+              </tbody>
             </table>
             <p className="border-t border-border px-3 py-2 text-center text-xs text-muted-foreground">
               The same for the regular and the IPC Diamond plans: only the price differs.

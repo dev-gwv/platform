@@ -38,90 +38,25 @@ const limitCell = (key: PlanLimitKey) => (p: Plan): Cell => {
 
 const tierIs = (t: Plan['tier']) => (p: Plan): Cell => (p.tier === t ? { kind: 'yes' } : { kind: 'no' })
 
-const has = (key: string) => (p: Plan): Cell => (p.includes?.includes(key) ? { kind: 'yes' } : { kind: 'no' })
-const every: CompareRow['cell'] = () => ({ kind: 'yes' })
-const text = (t: string): CompareRow['cell'] => () => ({ kind: 'text', text: t })
-
-/** Storage: Starter's 2 GB, said in GB. */
-const storageCell = (p: Plan): Cell => {
-  const mb = p.limits?.storage_mb
-  return mb == null ? { kind: 'text', text: 'Unlimited' } : { kind: 'text', text: mb >= 1024 ? `${Math.round(mb / 1024)} GB` : `${mb} MB` }
-}
-
-/**
- * What each plan gives, in sections (owner, 17 Nov: "added features rows and columns so users know what they get
- * in each plan and at what are the Frameline limits"). This replaces 3 Oct's "only the rows that differ": the
- * table stays closed until Compare plans is pressed. Numbers come from the plan rows.
- */
-export const COMPARE_GROUPS: { title: string; rows: CompareRow[] }[] = [
+/** Only the rows that differ between plans, at most eleven (the eleventh, Drive import, the owner's 31 Oct). */
+export const COMPARE: CompareRow[] = [
+  { label: 'Projects', cell: limitCell('projects') },
+  { label: 'Leads held at a time', cell: limitCell('leads') },
+  { label: 'GST invoices', cell: limitCell('invoices') },
+  { label: 'Team logins', cell: limitCell('team_logins') },
+  // 0276: more than one studio (a maternity brand beside the wedding one) on one login.
+  { label: 'Brands on one login', cell: (p) => ({ kind: 'text', text: p.limits?.brands == null ? 'Unlimited' : String(p.limits.brands) }) },
+  { label: 'Crew (no login)', cell: limitCell('team_members') },
+  { label: 'Enquiry forms', cell: limitCell('enquiry_forms') },
+  { label: 'Facebook Pages', cell: limitCell('facebook_pages') },
   {
-    title: 'What you can make',
-    rows: [
-      { label: 'Projects', cell: limitCell('projects') },
-      { label: 'GST invoices', cell: limitCell('invoices') },
-      { label: 'Leads held at a time', cell: limitCell('leads') },
-      { label: 'Quotation Designer designs', cell: limitCell('designs') },
-      { label: 'Saved packages', cell: limitCell('packages') },
-      { label: 'File storage', cell: storageCell },
-    ],
+    label: 'Your own name, logo and WhatsApp number (white label)',
+    cell: (p) => (p.includes?.includes('white_label') ? { kind: 'yes' } : { kind: 'no' }),
   },
-  {
-    title: 'Your team',
-    rows: [
-      { label: 'Team logins', cell: limitCell('team_logins') },
-      { label: 'Crew (no login)', cell: limitCell('team_members') },
-      // 0276: more than one studio (a maternity brand beside the wedding one) on one login.
-      { label: 'Brands on one login', cell: (p) => ({ kind: 'text', text: p.limits?.brands == null ? 'Unlimited' : String(p.limits.brands) }) },
-    ],
-  },
-  {
-    title: 'Getting leads',
-    rows: [
-      { label: 'Enquiry forms (your main form is free)', cell: limitCell('enquiry_forms') },
-      { label: 'Facebook lead ad Pages', cell: limitCell('facebook_pages') },
-      { label: 'Follow-ups that send by themselves', cell: has('sequences_auto') },
-      { label: 'Your own WhatsApp Business number', cell: has('whatsapp_api') },
-    ],
-  },
-  {
-    // 0292, 0307: the gallery is Frameline; Drive galleries are included in Pro and up, up to these photos kept.
-    title: 'Photo sharing (Frameline gallery)',
-    rows: [
-      { label: 'Galleries with a link, PIN and QR', cell: every },
-      { label: 'Import from Google Drive', cell: has('drive_import') },
-      {
-        label: 'Google Drive gallery photos included',
-        cell: (p) =>
-          !p.includes?.includes('drive_import')
-            ? { kind: 'no' }
-            : p.limits?.gallery_photos
-              ? { kind: 'text', text: `${p.limits.gallery_photos.toLocaleString('en-IN')} photos` }
-              : { kind: 'yes' },
-      },
-      { label: 'More gallery photos', cell: (p) => (p.includes?.includes('drive_import') ? { kind: 'text', text: 'Ask us' } : { kind: 'no' }) },
-      { label: 'Uploads from a computer or phone', cell: text('Frameline plan') },
-    ],
-  },
-  {
-    title: 'In every plan',
-    rows: [
-      { label: 'AI tools: designer, replies, captions, ad scripts', cell: every },
-      { label: 'Shoots, crew booking and payouts', cell: every },
-      { label: 'Attendance, leave and payroll', cell: every },
-      { label: 'Client tracking page and e-sign', cell: every },
-    ],
-  },
-  {
-    title: 'Extras',
-    rows: [
-      { label: 'Your own name and logo (white label)', cell: has('white_label') },
-      { label: 'Priority help', cell: tierIs('max') },
-    ],
-  },
+  // 0292: the Gallery tab's Import from Google Drive is Pro and above (owner, 31 Oct).
+  { label: 'Photo Sharing App via Google Drive', cell: (p) => (p.includes?.includes('drive_import') ? { kind: 'yes' } : { kind: 'no' }) },
+  { label: 'Priority help', cell: tierIs('max') },
 ]
-
-/** Every row, in order. */
-export const COMPARE: CompareRow[] = COMPARE_GROUPS.flatMap((g) => g.rows)
 
 /** The three plans for one way of paying, cheapest first. */
 export function tierPlans(plans: Plan[], payEvery: 'yearly' | 'monthly'): Plan[] {
