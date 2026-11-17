@@ -9,6 +9,7 @@ import { CheckCircle2, XCircle, AlertTriangle, Info, Loader2 } from 'lucide-reac
 import { AuthProvider } from '@/shared/auth/AuthProvider'
 import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
 import { installClientErrorReporting } from '@/shared/error/report'
+import { repairAndReload } from '@/shared/error/chunk-repair'
 import { initSentry, reactErrorHandler } from '@/shared/error/sentry'
 import * as Sentry from '@sentry/react'
 import { ThemeProvider } from '@/shared/theme/ThemeProvider'
@@ -100,7 +101,7 @@ if (!MOCK_ENABLED && !sentryOn) installClientErrorReporting()
 // dynamically imported module"). The router reloads once for a page's own
 // file; this covers every other late-loaded file. One reload per minute at
 // most, so a host that is really down shows the error instead of looping.
-window.addEventListener('vite:preloadError', () => {
+window.addEventListener('vite:preloadError', (e) => {
   const KEY = 'chunk-reload-at'
   let last = 0
   try {
@@ -118,7 +119,12 @@ window.addEventListener('vite:preloadError', () => {
   // router crashed reading the page off it ("reading 'ProjectQuotationPage'",
   // one Sentry issue per page) while the reload was already on its way. The
   // error goes on to the router as a stale-chunk warning instead.
-  window.location.reload()
+  // A browser that kept a web page in place of a code file is mended first (chunk-repair.ts), or a reload would
+  // read the same bad copy again.
+  const message = (e as Event & { payload?: unknown }).payload
+  void repairAndReload(message instanceof Error ? message.message : String(message ?? '')).then((reloading) => {
+    if (!reloading) window.location.reload()
+  })
 })
 
 // Home-screen install (no caching; see public/sw.js).

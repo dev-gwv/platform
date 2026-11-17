@@ -1,4 +1,6 @@
-import { Component, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { STALE_CHUNK } from '@/shared/error/sentry'
+import { repairAndReload } from '@/shared/error/chunk-repair'
 import { useRouter } from '@tanstack/react-router'
 import * as Sentry from '@sentry/react'
 import { AlertTriangle, ArrowLeft, Copy, RotateCcw } from 'lucide-react'
@@ -18,6 +20,10 @@ export function RouteError({ error, reset }: { error: unknown; reset?: () => voi
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const text = describe(error)
+  // A page file that would not load may be a bad copy the browser kept (17 Nov): mend it and reload once.
+  useEffect(() => {
+    if (STALE_CHUNK.test(text)) void repairAndReload(text)
+  }, [text])
   return (
     <div className="mx-auto mt-10 flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
       <span className="flex size-12 items-center justify-center rounded-full bg-tone-amber-soft text-tone-amber">
@@ -30,6 +36,14 @@ export function RouteError({ error, reset }: { error: unknown; reset?: () => voi
       <div className="flex flex-wrap justify-center gap-2">
         <Button
           onClick={() => {
+            if (STALE_CHUNK.test(text)) {
+              try {
+                sessionStorage.removeItem('chunk-repair-at')
+              } catch {
+                /* storage blocked */
+              }
+              void repairAndReload(text)
+            }
             reset?.()
             void router.invalidate()
           }}

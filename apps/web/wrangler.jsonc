@@ -6,8 +6,12 @@
   "name": "ipc-web",
   "compatibility_date": "2026-08-12",
   "compatibility_flags": ["nodejs_compat"],
+  // A missing /assets file is a 404 nobody keeps, never index.html with a year's cache (worker.js, 17 Nov).
+  "main": "worker.js",
   "assets": {
     "directory": "dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/assets/*"],
     // SPA history fallback — serve index.html for unknown routes (e.g. /verify).
     "not_found_handling": "single-page-application"
   }
