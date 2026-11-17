@@ -265,3 +265,12 @@ describe('a Frameline plan that ended', () => {
     expect(planEndedOn('not a date', now)).toBeNull()
   })
 })
+
+describe('what the plan covers in Frameline (0307)', () => {
+  it('rides on every token: the cover, null for Starter, left out when it was not read', () => {
+    const cover = { plan: 'Diamond Pro', until: '2026-12-17T00:00:00.000Z', photos: 25000 }
+    expect(framelineClaims({ ...owner, cover }, 'api')).toMatchObject({ cover })
+    expect(framelineClaims({ ...owner, cover: null }, 'api')).toMatchObject({ cover: null })
+    expect('cover' in framelineClaims(owner, 'api')).toBe(false)
+  })
+})

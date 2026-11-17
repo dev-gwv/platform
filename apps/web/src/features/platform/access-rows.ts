@@ -53,7 +53,8 @@ export function statusOf(s: PlatformStudio, now = Date.now()): AccessStatus {
   return 'active'
 }
 
-export function toRows(studios: PlatformStudio[], legacy: LegacyStudio[], now = Date.now()): AccessRow[] {
+/** `planNames`: each plan key's label ("Diamond Pro, monthly"), so the list says who bought what (0308). */
+export function toRows(studios: PlatformStudio[], legacy: LegacyStudio[], now = Date.now(), planNames: ReadonlyMap<string, string> = new Map()): AccessRow[] {
   const today = new Date(now).toISOString().slice(0, 10)
   const fresh: AccessRow[] = studios.map((s) => ({
     key: `new:${s.id}`,
@@ -66,7 +67,7 @@ export function toRows(studios: PlatformStudio[], legacy: LegacyStudio[], now = 
     status: statusOf(s, now),
     expires: endsOf(s),
     daysLeft: s.plan_gate === 'expired' ? 0 : daysLeftOf(s, now),
-    plan: s.plan_key ?? null,
+    plan: (s.plan_key ? planNames.get(s.plan_key) : undefined) ?? s.plan_name ?? s.plan_key ?? null,
     diamond: s.member_tier === 'diamond',
     studio: s,
   }))

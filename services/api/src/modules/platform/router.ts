@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, platformPlanQuote, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, diamondMiss, diamondLookup, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, platformPlanQuote, platformGalleryPhotosRequest, platformGalleryPhotosResult, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, diamondMiss, diamondLookup, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -15,6 +15,7 @@ import { platformOffersRouter } from './offers'
 import { platformLoginsRouter } from './logins'
 import { fetchOrderPayments } from '../../lib/razorpay'
 import { publishedCsvUrl, sheetRef, syncDiamondSheet } from '../../lib/diamond-sheet'
+import { pushCover } from '../../lib/gallery-cover'
 
 /**
  * The vendor's cross-tenant console. Gated twice: requirePlatformAdmin() here,
@@ -312,6 +313,7 @@ export const platformRouter = new Hono<AppEnv>()
       )
       if (!done) fail(422, 'Pick today or a later date.')
       await audit(c, { action: 'platform.plan_until', entityType: 'company', entityId: id, after: { until } })
+      void pushCover(c.env, id)
       return c.json({ ok: true })
     }
     const parsed = action === 'custom'
@@ -336,6 +338,8 @@ export const platformRouter = new Hono<AppEnv>()
     )
     if (!ok) fail(400, 'We could not update the plan.')
     await audit(c, { action: `platform.plan_${action}`, entityType: 'company', entityId: id, after: extended.data })
+    // What the plan covers in Frameline (Drive galleries) moves with it (0307).
+    void pushCover(c.env, id)
     return c.json({ ok: true })
   })
 
@@ -423,7 +427,26 @@ export const platformRouter = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_offer_used(${id}, ${parsed.data.plan_key})`),
     )
     await audit(c, { action: 'platform.plan_assign', entityType: 'company', entityId: id, after: { plan_key: parsed.data.plan_key, start_today: parsed.data.start_today, until: row } })
+    void pushCover(c.env, id)
     return c.json({ ok: true, until: row })
+  })
+
+  // More Google Drive gallery photos for a studio, sold by the team on WhatsApp (0307). Negative takes some back.
+  .post('/studios/:id/gallery-photos', async (c) => {
+    const parsed = platformGalleryPhotosRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Say how many photos to add.')
+    const id = uuidParam(c)
+    const extra = await attempt(c, 'platform.gallery_photos', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [r] = await sql<{ extra: number }[]>`select platform_add_gallery_photos(${id}, ${parsed.data.photos}) as extra`
+        const [cover] = await sql<{ plan: string; photos: number }[]>`select plan, photos from gallery_cover(${id})`
+        return { extra: r?.extra ?? 0, cover: cover ?? null }
+      }),
+    )
+    if (!extra) fail(400, 'We could not add the photos.')
+    await audit(c, { action: 'platform.gallery_photos', entityType: 'company', entityId: id, after: { added: parsed.data.photos, extra: extra.extra } })
+    void pushCover(c.env, id)
+    return c.json(platformGalleryPhotosResult.parse({ extra: extra.extra, plan: extra.cover?.plan ?? null, photos: extra.cover?.photos ?? null }))
   })
 
   /** Razorpay took the money, the studio did not get its plan. */

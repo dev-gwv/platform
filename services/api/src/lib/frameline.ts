@@ -42,6 +42,18 @@ export interface FramelinePerson {
    * everyone else a placeholder address instead.
    */
   emailVerified: boolean
+  /**
+   * What the studio's plan covers in Frameline (0307, `gallery_cover`): Google Drive galleries, up to `photos`
+   * kept, until `until`. null: nothing (Starter). Left out: not read, so Frameline keeps what it was told last.
+   */
+  cover?: FramelineCover | null
+}
+
+export interface FramelineCover {
+  plan: string
+  /** ISO time. */
+  until: string
+  photos: number
 }
 
 /**
@@ -70,6 +82,7 @@ export function framelineClaims(p: FramelinePerson, purpose: 'sso' | 'api', to?:
     email_verified: p.emailVerified,
     role: p.auth.isOwner ? 'owner' : 'editor',
     ...(to ? { to } : {}),
+    ...(p.cover !== undefined ? { cover: p.cover } : {}),
   }
 }
 
@@ -146,6 +159,8 @@ export interface FramelineStudio {
   adminUrl: string
   /** Since Frameline's Drive work (30 Oct); missing from an older Frameline. */
   drive?: FramelineDrive
+  /** What our plan covers there, and how much is used (Frameline 17 Nov); missing from an older Frameline. */
+  cover?: { plan: string; until: string; photos: number; used: number; active: boolean } | null
 }
 
 /**
@@ -266,6 +281,11 @@ export function listFramelineGalleries(env: Env, p: FramelinePerson, fetchImpl?:
 /** The Frameline studio behind this company: linked yet, plan, wallet, photos used. */
 export function readFramelineStudio(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<FramelineStudio>> {
   return call(env, p, 'GET', '/studio', undefined, fetchImpl)
+}
+
+/** The studio's plan changed: the token carries the new cover, and Frameline saves it (lib/gallery-cover.ts). */
+export function tellFramelineCover(env: Env, p: FramelinePerson, fetchImpl?: FetchLike): Promise<FramelineResult<{ linked: boolean }>> {
+  return call(env, p, 'POST', '/cover', undefined, fetchImpl)
 }
 
 /** Google Drive import on our Gallery tab (Frameline's /drive and /events/:p/drive-imports doors). */

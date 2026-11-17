@@ -80,11 +80,14 @@ export const galleriesRouter = new Hono<AppEnv>()
   .get('/account', requireOwner(), async (c) => {
     const empty = { linked: false, studio_name: null, plan: null, valid_till: null, wallet_rupees: null, photos_used: null, photos_limit: null, galleries: 0 }
     if (!framelineConnected(c.env)) return c.json(framelineAccount.parse({ connected: false, reachable: false, ...empty }))
-    const r = await readFramelineStudio(c.env, await personOf(c))
+    const person = await personOf(c)
+    // What our plan covers there, from our side, for when Frameline cannot say (not set up yet, or older).
+    const ours = person.cover ? { ...person.cover, used: 0, active: Date.parse(person.cover.until) > Date.now() } : null
+    const r = await readFramelineStudio(c.env, person)
     // A blip ("try again") told apart from a link that is wrong until we fix it (Book a support call).
     if (!r.ok) {
       console.error(`[galleries] Frameline studio read failed: ${r.kind} ${r.status}`)
-      return c.json(framelineAccount.parse({ connected: true, reachable: false, trouble: framelineTrouble(r.kind), ...empty }))
+      return c.json(framelineAccount.parse({ connected: true, reachable: false, trouble: framelineTrouble(r.kind), ...empty, cover: ours }))
     }
     const s = r.data
     return c.json(
@@ -100,6 +103,7 @@ export const galleriesRouter = new Hono<AppEnv>()
         photos_limit: s.photosLimit,
         galleries: s.galleries,
         drive: driveOut(s.drive),
+        cover: s.cover !== undefined ? s.cover : ours,
       }),
     )
   })

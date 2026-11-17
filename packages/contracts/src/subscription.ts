@@ -54,7 +54,12 @@ export const planLimits = z
   )
   // Studios (brands) on one login (0276): Starter 1, Pro 3, Studio Max no key = unlimited.
   // Not a usage bar: it is counted across the login's studios, not in one.
-  .extend({ brands: z.number().int().optional() })
+  .extend({
+    brands: z.number().int().optional(),
+    // Photos kept in Google Drive galleries the plan includes in Frameline (0307): Pro 25,000, Studio Max 75,000.
+    // Not a usage bar here: Frameline counts it, and the Gallery card shows it.
+    gallery_photos: z.number().int().optional(),
+  })
 export type PlanLimits = z.infer<typeof planLimits>
 
 /** The studio's plan, its limits, what it has used and its plan year (my_plan_usage, 0242). */

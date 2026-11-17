@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, platformPlanQuote, loginStudio,makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, platformPlanQuote, platformGalleryPhotosResult, loginStudio,makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -272,5 +272,23 @@ export function usePlanQuote(studioId: string, planKey: string) {
     queryFn: () => callApi(`/platform/studios/${studioId}/plan-quote?plan=${encodeURIComponent(planKey)}`, { responseSchema: platformPlanQuote }),
     enabled: !!planKey,
     staleTime: 0,
+  })
+}
+
+/** More Google Drive gallery photos for one studio, after the team sold them (0307). Negative takes some back. */
+export function useAddGalleryPhotos() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ studioId, photos }: { studioId: string; photos: number }) =>
+      callApi(`/platform/studios/${studioId}/gallery-photos`, { method: 'POST', body: { photos }, responseSchema: platformGalleryPhotosResult }),
+    onSuccess: (r) => {
+      toast.success(
+        r.photos === null
+          ? 'Saved. Their plan covers no Drive galleries (Starter), so it counts once they move to Pro.'
+          : `Saved: ${r.plan} now includes ${r.photos.toLocaleString('en-IN')} Drive gallery photos.`,
+      )
+      void qc.invalidateQueries({ queryKey: ['platform'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not add the photos.'),
   })
 }

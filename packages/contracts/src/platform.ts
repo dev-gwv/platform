@@ -21,6 +21,10 @@ export const platformStudio = z.object({
   owner_name: z.string().nullable().nullish(),
   owner_phone: z.string().nullable().nullish(),
   plan_key: z.string().nullable().nullish(),
+  /** The plan's name, "Diamond Pro" (0308): who bought what. */
+  plan_name: z.string().nullable().nullish(),
+  /** Google Drive gallery photos added on top of the plan by the team (0307). */
+  gallery_photos_extra: z.coerce.number().int().nullish(),
   days_remaining: z.coerce.number().int().nullish(),
   active_today: z.coerce.number().int().nullish(),
   last_seen: isoDateTime.nullable().nullish(),
@@ -294,6 +298,16 @@ export const platformPlanQuote = z.object({
   until_on_top: z.string(),
 })
 export type PlatformPlanQuote = z.infer<typeof platformPlanQuote>
+
+/** More Google Drive gallery photos for one studio, sold by the team (0307). Negative takes some back. */
+export const platformGalleryPhotosRequest = z.object({ photos: z.number().int().min(-1_000_000).max(1_000_000).refine((n) => n !== 0, 'Say how many photos.') })
+export const platformGalleryPhotosResult = z.object({
+  /** Photos added on top of the plan, in all. */
+  extra: z.number().int(),
+  /** What the plan now covers in Frameline; null on a plan that covers nothing (Starter). */
+  plan: z.string().nullable(),
+  photos: z.number().int().nullable(),
+})
 
 /** Orders Razorpay took money for that never gave the studio its plan (0226). */
 export const paymentRecovery = z.object({

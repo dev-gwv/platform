@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Building2, CalendarClock, CalendarPlus, Copy, Download, Eye, Gem, Gift, History, RefreshCw, Search, ShieldOff, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Building2, CalendarClock, CalendarPlus, Copy, Download, Eye, Gem, Gift, History, Images, RefreshCw, Search, ShieldOff, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { PlatformPlanQuote, PlatformStudio, StudioActivity } from '@ipc/contracts'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
@@ -17,7 +17,7 @@ import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
 import { planLabel } from '@/features/platform/plan-rows'
-import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, usePlanQuote, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
+import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, usePlanQuote, useAddGalleryPhotos, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
 import { inviteMessage } from '@/features/platform/legacy'
 import { CreateStudioDialog, GiveAccessDialog, ImportOldAppButton } from '@/features/platform/access-dialogs'
 import { STATUS_LABEL, accessMessage, endsOf, extendFrom, toRows, type AccessRow, type AccessStatus } from '@/features/platform/access-rows'
@@ -94,6 +94,7 @@ type Dialogs =
   | { kind: 'details'; studio: PlatformStudio }
   | { kind: 'plan'; studio: PlatformStudio }
   | { kind: 'custom'; studio: PlatformStudio }
+  | { kind: 'photos'; studio: PlatformStudio }
   | null
 
 function SortHead({ k, sort, dir, onSort, children, className }: { k: SortKey; sort: SortKey; dir: 'asc' | 'desc'; onSort: (k: SortKey) => void; children: React.ReactNode; className?: string }) {
@@ -162,7 +163,9 @@ function StudioList() {
   const [offering, setOffering] = useState(false)
 
   const act = useMemo(() => new Map((activity.data ?? []).map((a) => [a.company_id, a])), [activity.data])
-  const all = useMemo(() => toRows(studios.data ?? [], legacy.data ?? []), [studios.data, legacy.data])
+  const planList = usePlatformPlans()
+  const planNames = useMemo(() => new Map((planList.data ?? []).map((p) => [p.key, planLabel(p)])), [planList.data])
+  const all = useMemo(() => toRows(studios.data ?? [], legacy.data ?? [], Date.now(), planNames), [studios.data, legacy.data, planNames])
   const planOptions = useMemo(() => [...new Set(all.map((r) => r.plan).filter((p): p is string => !!p))].sort(), [all])
 
   if (studios.isLoading) return <SkeletonList rows={5} columns={6} />
@@ -251,6 +254,7 @@ function StudioList() {
       { label: 'Extend 90 days', icon: <CalendarPlus />, onSelect: () => extend(90), disabled: setUntil.isPending },
       { label: 'Extend 180 days', icon: <CalendarPlus />, onSelect: () => extend(180), disabled: setUntil.isPending },
       { label: 'Custom expiry…', icon: <CalendarClock />, onSelect: () => setDialog({ kind: 'custom', studio: s }) },
+      { label: 'Add gallery photos…', icon: <Images />, onSelect: () => setDialog({ kind: 'photos', studio: s }), divider: true },
       ...(r.status === 'expired'
         ? []
         : [{ label: 'Revoke access', icon: <ShieldOff />, onSelect: () => void revoke(s), danger: true, divider: true, disabled: planAction.isPending }]),
@@ -427,7 +431,10 @@ function StudioList() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{r.studio ? lastActiveWords(act.get(r.studio.id)?.last_active) : '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{fmtDate(r.created)}</td>
-                    <td className="px-4 py-3"><StatusBadge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</StatusBadge></td>
+                    <td className="px-4 py-3">
+                      <StatusBadge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</StatusBadge>
+                      {r.plan && <p className="mt-1 whitespace-nowrap text-xs font-medium text-foreground">{r.plan}</p>}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{fmtDate(r.expires)}</td>
                     <td className={cn('px-4 py-3 tabular-nums', r.status === 'soon' && 'font-medium text-warning', r.status === 'expired' && 'text-destructive')}>
                       {r.status === 'expired' ? 'Ended' : r.daysLeft != null ? `${r.daysLeft}d` : '—'}
@@ -459,12 +466,19 @@ function StudioList() {
       )}
       {dialog?.kind === 'plan' && (
         <Dialog open onOpenChange={(o) => { if (!o) setDialog(null) }}>
-          <DialogContent title={`Plan for ${dialog.studio.name}`} description={`Now: ${dialog.studio.plan_key ?? humanize(dialog.studio.plan_gate)}`}>
+          <DialogContent title={`Plan for ${dialog.studio.name}`} description={`Now: ${dialog.studio.plan_name ?? dialog.studio.plan_key ?? humanize(dialog.studio.plan_gate)}`}>
             <AssignPlanForm studio={dialog.studio} />
           </DialogContent>
         </Dialog>
       )}
       {dialog?.kind === 'custom' && <GiveAccessDialog studio={dialog.studio} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'photos' && (
+        <Dialog open onOpenChange={(o) => { if (!o) setDialog(null) }}>
+          <DialogContent title={`Gallery photos for ${dialog.studio.name}`} description="Google Drive gallery photos on top of their plan, after they paid on WhatsApp.">
+            <GalleryPhotosForm studio={dialog.studio} onDone={() => setDialog(null)} />
+          </DialogContent>
+        </Dialog>
+      )}
       {offering && <OfferDialog ids={[...picked]} onClose={() => setOffering(false)} onDone={() => setPicked(new Set())} />}
     </>
   )
@@ -553,6 +567,39 @@ function AssignPlanForm({ studio }: { studio: PlatformStudio }) {
 }
 
 const rupees = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
+
+/** More Google Drive gallery photos for one studio (0307): Pro has 25,000, Studio Max 75,000, the trial 3,000. */
+function GalleryPhotosForm({ studio, onDone }: { studio: PlatformStudio; onDone: () => void }) {
+  const add = useAddGalleryPhotos()
+  const [n, setN] = useState(10_000)
+  const CHOICES = [5_000, 10_000, 25_000, 50_000]
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        {CHOICES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setN(c)}
+            aria-pressed={n === c}
+            className={cn('rounded-full border-2 px-3 py-1 text-sm font-medium', n === c ? 'border-success bg-success/10' : 'border-border hover:border-primary/50')}
+          >
+            +{c.toLocaleString('en-IN')}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">Frameline is told at once. Take back undoes an add made by mistake.</p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" disabled={add.isPending} onClick={() => add.mutate({ studioId: studio.id, photos: -n }, { onSuccess: onDone })}>
+          Take back {n.toLocaleString('en-IN')}
+        </Button>
+        <Button disabled={add.isPending} onClick={() => add.mutate({ studioId: studio.id, photos: n }, { onSuccess: onDone })}>
+          Add {n.toLocaleString('en-IN')} photos
+        </Button>
+      </div>
+    </div>
+  )
+}
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /** What the quote means, in one sentence. */
@@ -606,7 +653,7 @@ function StudioDetailsDialog({ studio, activity, onClose, onExpire }: { studio: 
           <div><dt className="text-muted-foreground">Owner</dt><dd>{studio.owner_name ?? '—'}</dd></div>
           <div><dt className="text-muted-foreground">Email</dt><dd>{studio.owner_email ?? '—'}</dd></div>
           <div><dt className="text-muted-foreground">Phone</dt><dd>{studio.owner_phone ?? '—'}</dd></div>
-          <div><dt className="text-muted-foreground">Plan</dt><dd>{studio.plan_key ?? humanize(studio.plan_gate)}</dd></div>
+          <div><dt className="text-muted-foreground">Plan</dt><dd>{studio.plan_name ?? studio.plan_key ?? humanize(studio.plan_gate)}{(studio.gallery_photos_extra ?? 0) > 0 ? ` · +${studio.gallery_photos_extra!.toLocaleString('en-IN')} gallery photos` : ''}</dd></div>
           <div><dt className="text-muted-foreground">Access until</dt><dd>{fmtDate(endsOf(studio))}</dd></div>
           <div><dt className="text-muted-foreground">Joined</dt><dd>{fmtDate(studio.created_at)}</dd></div>
           <div><dt className="text-muted-foreground">Users</dt><dd>{studio.user_count}</dd></div>

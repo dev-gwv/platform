@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan, PlanQuote } from '@ipc/contracts'
-import { COMPARE, INCLUDED, planEnquiryMessage, quoteWords, tierPlans } from './plan-features'
+import { COMPARE, COMPARE_GROUPS, INCLUDED, planEnquiryMessage, quoteWords, tierPlans } from './plan-features'
 
 const base = { currency: 'INR', duration_days: 365, billing_interval: 'yearly' as const, includes: [] as string[] }
 const starter: Plan = {
@@ -26,16 +26,32 @@ const max: Plan = {
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`
 const text = (c: ReturnType<(typeof COMPARE)[number]['cell']>) => (c.kind === 'text' ? c.text : c.kind)
 
-describe('the pricing page stays short', () => {
-  it('shows every feature once as eight chips, and compares only what differs', () => {
+describe('the pricing page', () => {
+  const row = (label: string) => COMPARE.find((r) => r.label === label)!
+  const across = (label: string) => [starter, pro, max].map((p) => text(row(label).cell(p)))
+
+  it('shows every feature once as eight chips, and Compare plans in sections', () => {
     expect(INCLUDED).toHaveLength(8)
-    expect(COMPARE.length).toBeLessThanOrEqual(11)
+    expect(COMPARE_GROUPS.map((g) => g.title)).toEqual(['What you can make', 'Your team', 'Getting leads', 'Photo sharing (Frameline gallery)', 'In every plan', 'Extras'])
+    expect(COMPARE_GROUPS.every((g) => g.rows.length <= 6)).toBe(true)
   })
 
   it('reads Starter numbers from the plan, and Unlimited on Pro and Studio Max', () => {
-    expect(COMPARE.map((r) => text(r.cell(starter)))).toEqual(['30 a year', '30 at a time', '30 a year', '3', '1', '10', '2', '1', 'no', 'no', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(pro)))).toEqual([...Array(4).fill('Unlimited'), '3', ...Array(3).fill('Unlimited'), 'no', 'yes', 'no'])
-    expect(COMPARE.map((r) => text(r.cell(max)))).toEqual([...Array(8).fill('Unlimited'), 'yes', 'yes', 'yes'])
+    expect(across('Projects')).toEqual(['30 a year', 'Unlimited', 'Unlimited'])
+    expect(across('Leads held at a time')).toEqual(['30 at a time', 'Unlimited', 'Unlimited'])
+    expect(across('Team logins')).toEqual(['3', 'Unlimited', 'Unlimited'])
+    expect(across('Brands on one login')).toEqual(['1', '3', 'Unlimited'])
+    expect(across('Your own name and logo (white label)')).toEqual(['no', 'no', 'yes'])
+  })
+
+  it('says what the gallery includes, with the Drive photos from the plan (0307)', () => {
+    const proPhotos = { ...pro, limits: { ...pro.limits, gallery_photos: 25000 } }
+    const maxPhotos = { ...max, limits: { gallery_photos: 75000 } }
+    const r = row('Google Drive gallery photos included')
+    expect([starter, proPhotos, maxPhotos].map((p) => text(r.cell(p)))).toEqual(['no', '25,000 photos', '75,000 photos'])
+    expect(across('Import from Google Drive')).toEqual(['no', 'yes', 'yes'])
+    expect(across('Galleries with a link, PIN and QR')).toEqual(['yes', 'yes', 'yes'])
+    expect(across('More gallery photos')).toEqual(['no', 'Ask us', 'Ask us'])
   })
 
   it('counts by the year on the monthly plans too, never "a month" (0267)', () => {

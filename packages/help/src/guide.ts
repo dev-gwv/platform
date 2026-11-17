@@ -35,6 +35,7 @@ export const PARTS: readonly GuidePart[] = [
   { track: 'studio', title: { en: 'Shoot and edit', hi: 'शूट और एडिट' } },
   { track: 'studio', title: { en: 'Money', hi: 'पैसा' } },
   { track: 'studio', title: { en: "Your team's time", hi: 'टीम का समय' } },
+  { track: 'studio', title: { en: 'Share the photos', hi: 'फ़ोटो शेयर करें' } },
   { track: 'team', title: { en: 'Your day', hi: 'आपका दिन' } },
   { track: 'team', title: { en: 'Your work, leave and pay', hi: 'आपका काम, छुट्टी और पेमेंट' } },
 ]
@@ -377,6 +378,28 @@ export const CHAPTERS: readonly GuideChapter[] = [
       ],
     },
   },
+  {
+    key: 'gallery',
+    part: 6,
+    to: '/galleries',
+    title: { en: 'Share the photos from Google Drive', hi: 'Google Drive से फ़ोटो शेयर करें' },
+    steps: {
+      en: [
+        'The owner connects Google Drive once: **Photo sharing** → **Connect Google Drive**.',
+        'On a project, open **Post-Production → Gallery** and press **Create gallery**: one link and one PIN for the guests.',
+        'Press **Import from Google Drive**, pick the folders (each becomes an album) and press **Import**. It keeps going if you leave the page.',
+        'Send it to the client on **WhatsApp**, or download the **QR** for the venue.',
+        'Pro includes 25,000 photos kept in Drive galleries, Studio Max 75,000, the trial 3,000. **Photo sharing** shows how many you have used. Need more? **Ask for more photos**.',
+      ],
+      hi: [
+        'मालिक एक बार Google Drive जोड़ते हैं: **Photo sharing** → **Connect Google Drive**।',
+        'प्रोजेक्ट में **Post-Production → Gallery** खोलें और **Create gallery** दबाएँ: मेहमानों के लिए एक लिंक और एक PIN।',
+        '**Import from Google Drive** दबाएँ, फ़ोल्डर चुनें (हर फ़ोल्डर एक एल्बम बनता है) और **Import** दबाएँ। पेज छोड़ने पर भी यह चलता रहता है।',
+        'क्लाइंट को **WhatsApp** पर भेजें, या वेन्यू के लिए **QR** डाउनलोड करें।',
+        'Pro में Drive गैलरी की 25,000 फ़ोटो शामिल हैं, Studio Max में 75,000, ट्रायल में 3,000। **Photo sharing** पर दिखता है कि कितनी इस्तेमाल हुईं। और चाहिए? **Ask for more photos** दबाएँ।',
+      ],
+    },
+  },
 
   // ── Money ──
   {
@@ -552,7 +575,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   // ── The team's track ──
   {
     key: 'team-home',
-    part: 6,
+    part: 7,
     video: 'team-day',
     to: '/dashboard',
     title: { en: 'Your Home', hi: 'आपका Home' },
@@ -571,7 +594,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-attendance',
-    part: 6,
+    part: 7,
     video: 'check-in',
     to: '/attendance/my',
     title: { en: 'Mark your attendance', hi: 'अपनी अटेंडेंस लगाएँ' },
@@ -590,7 +613,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-shoots',
-    part: 6,
+    part: 7,
     video: 'team-day',
     to: '/shoots/my',
     title: { en: 'Your shoots', hi: 'आपके शूट' },
@@ -609,7 +632,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-edits',
-    part: 7,
+    part: 8,
     video: 'hand-in',
     to: '/my-work',
     title: { en: 'Your edits', hi: 'आपके एडिट' },
@@ -630,7 +653,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-leave',
-    part: 7,
+    part: 8,
     video: 'ask-leave',
     to: '/leave',
     title: { en: 'Ask for leave', hi: 'छुट्टी माँगें' },
@@ -649,7 +672,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
   },
   {
     key: 'team-pay',
-    part: 7,
+    part: 8,
     to: '/payouts/my',
     title: { en: 'Your pay', hi: 'आपका पेमेंट' },
     steps: {

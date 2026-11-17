@@ -24,6 +24,7 @@ import {
   type FramelinePerson,
 } from '../../lib/frameline'
 import { saveGallerySnapshot } from '../../lib/gallery-sync'
+import { coverFor } from '../../lib/gallery-cover'
 
 /**
  * A project's photo gallery in Frameline, the gallery add-on (0261).
@@ -90,10 +91,11 @@ export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
         select coalesce(nullif(btrim(display_name), ''), name) as name from companies where id = ${auth.companyId}`
       const [au] = await sql<{ v: boolean }[]>`
         select au.email_verified as v from auth.users au where au.id = auth_identity_of(${auth.userId})`
-      return { companyName: co?.name ?? '', emailVerified: au?.v === true }
+      return { companyName: co?.name ?? '', emailVerified: au?.v === true, cover: await coverFor(sql, auth.companyId) }
     }),
   )
-  return { auth, companyName: facts?.companyName ?? '', emailVerified: facts?.emailVerified ?? false }
+  // A failed read leaves `cover` out, so Frameline keeps the last one it was told rather than losing it.
+  return { auth, companyName: facts?.companyName ?? '', emailVerified: facts?.emailVerified ?? false, ...(facts ? { cover: facts.cover } : {}) }
 }
 
 /** Import from Google Drive is for Pro and above (owner, 31 Oct; 0292). */

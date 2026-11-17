@@ -28,6 +28,8 @@ export const NEW_UNTIL = {
   /** Daily tasks that come back by themselves, and Crew payouts under Money (14 Nov). */
   dailyTasks: '2026-11-21',
   crewPayouts: '2026-11-21',
+  /** Google Drive gallery photos included in Pro and Studio Max (17 Nov, 0307). */
+  galleryCover: '2026-11-24',
 } as const
 export type NewFeature = keyof typeof NEW_UNTIL
 

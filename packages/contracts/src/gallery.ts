@@ -132,6 +132,16 @@ export const framelineNotice = z.object({
 })
 
 /** Settings → Messaging → Gallery: the Frameline studio joined to this company. */
+/** Google Drive galleries included in the studio's plan (0307): Pro 25,000 photos kept, Studio Max 75,000, the trial 3,000. */
+export const galleryCover = z.object({
+  plan: z.string(),
+  until: z.string(),
+  photos: z.number().int(),
+  used: z.number().int(),
+  active: z.boolean(),
+})
+export type GalleryCover = z.infer<typeof galleryCover>
+
 export const framelineAccount = z.object({
   connected: z.boolean(),
   /** Frameline answered. False: it is connected but did not answer just now. */
@@ -149,6 +159,11 @@ export const framelineAccount = z.object({
   galleries: z.number().int(),
   /** Google Drive in Frameline; null when Frameline did not answer (or is too old to say). */
   drive: galleryDrive.nullable().default(null),
+  /**
+   * What the studio's plan covers in Frameline (0307): Google Drive galleries, `photos` kept until `until`, `used`
+   * of them now. Null on a plan that covers nothing (Starter).
+   */
+  cover: galleryCover.nullable().default(null),
 })
 export type FramelineAccount = z.infer<typeof framelineAccount>
 

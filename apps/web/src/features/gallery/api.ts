@@ -13,6 +13,7 @@ import {
 } from '@ipc/contracts'
 import { ApiError, callApi } from '@/shared/api/client'
 import { useMarkPhotoSharingUsed } from '@/shared/ui/new-badge'
+import { useTalkToUs } from '@/features/billing/talk-to-us'
 
 /** A project's gallery in Frameline, the gallery add-on (0261). */
 const key = (projectId: string) => ['projects', projectId, 'gallery'] as const
@@ -137,16 +138,31 @@ export function useDriveImports(projectId: string, enabled: boolean) {
 
 export function useStartDriveImport(projectId: string) {
   const qc = useQueryClient()
+  const talk = useTalkToUs()
   return useMutation({
     mutationFn: (body: DriveImportRequest) =>
       callApi(`/projects/${projectId}/gallery/drive/imports`, { method: 'POST', body, responseSchema: driveImport }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: importsKey(projectId) }),
-    // A plan with no room or no Drive import (402) is said once, with Upgrade, by main.tsx.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: importsKey(projectId) })
+      void qc.invalidateQueries({ queryKey: ['galleries', 'account'] })
+    },
+    // The plan's Drive gallery photos are used up (0307): more are bought from the team, so WhatsApp, not Upgrade.
+    // Any other 402 (no Drive import on Starter) is said once, with Upgrade, by main.tsx, which leaves this one to us.
     onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 402 && isCoverFull(e.message)) {
+        toast.error(e.message, {
+          action: { label: 'WhatsApp us', onClick: () => talk.say('Hi, please add more Google Drive gallery photos to my Studio AutoPilot plan.') },
+          duration: 12_000,
+        })
+        return
+      }
       if (!(e instanceof ApiError && e.status === 402)) toast.error(e.message)
     },
   })
 }
+
+/** Frameline's words when a plan's Drive gallery photos are used up (its `cover_full`). */
+export const isCoverFull = (message: string) => /photos in Google Drive galleries/i.test(message)
 
 export function useStopDriveImport(projectId: string) {
   const qc = useQueryClient()

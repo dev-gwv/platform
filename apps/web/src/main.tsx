@@ -46,6 +46,8 @@ const queryClient = new QueryClient({
       // for everyone looks, from here, like one person seeing one toast.
       // A plan limit (402, 0241) is not a fault: say it, and offer the way up.
       if (error instanceof ApiError && error.status === 402) {
+        // Drive gallery photos used up: the import's own toast offers WhatsApp us (features/gallery/api.ts).
+        if (/photos in Google Drive galleries/i.test(error.message)) return
         toast.error(error.message, {
           action: { label: 'Upgrade', onClick: () => void router.navigate({ to: '/settings/subscription' }) },
           duration: 10_000,

@@ -36,5 +36,10 @@ export function useTalkToUs() {
       })
       window.open(whatsappLink(whatsapp, text), '_blank', 'noopener,noreferrer')
     },
+    /** Anything else bought from the team (more gallery photos): the ask, then who is asking. */
+    say(ask: string) {
+      const text = [ask, `Studio: ${studio}`, session?.email ? `Login: ${session.email}` : null, 'Please call me.'].filter(Boolean).join('\n')
+      window.open(whatsappLink(whatsapp, text), '_blank', 'noopener,noreferrer')
+    },
   }
 }
