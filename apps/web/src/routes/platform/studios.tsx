@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Building2, CalendarClock, CalendarPlus, Copy, Download, Eye, Gem, Gift, History, RefreshCw, Search, ShieldOff, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { PlatformStudio, StudioActivity } from '@ipc/contracts'
+import type { PlatformPlanQuote, PlatformStudio, StudioActivity } from '@ipc/contracts'
 import { PlatformPage } from '@/shared/layout/PlatformPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -17,7 +17,7 @@ import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
 import { planLabel } from '@/features/platform/plan-rows'
-import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
+import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, usePlanQuote, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
 import { inviteMessage } from '@/features/platform/legacy'
 import { CreateStudioDialog, GiveAccessDialog, ImportOldAppButton } from '@/features/platform/access-dialogs'
 import { STATUS_LABEL, accessMessage, endsOf, extendFrom, toRows, type AccessRow, type AccessStatus } from '@/features/platform/access-rows'
@@ -487,26 +487,103 @@ function AssignPlanForm({ studio }: { studio: PlatformStudio }) {
   const assign = useAssignPlan()
   const [planKey, setPlanKey] = useState('')
   const chosen = (plans.data ?? []).find((p) => p.key === planKey)
+  const quote = usePlanQuote(studio.id, planKey)
+  // Picked by hand; until then an upgrade starts today and anything else follows the current plan.
+  const [startPick, setStartPick] = useState<boolean | null>(null)
   const length = (p: NonNullable<typeof chosen>) => (p.duration_days ? `${p.duration_days} days` : p.billing_interval === 'yearly' ? '1 year' : '1 month')
+  const q = quote.data
+  const startToday = startPick ?? (q ? q.kind === 'upgrade' || q.kind === 'buy' : false)
+  const choose = q && (q.kind === 'upgrade' || q.kind === 'later')
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex gap-2">
-        <Select value={planKey} onChange={(e) => setPlanKey(e.target.value)} aria-label="Plan to give" className={planKey ? undefined : 'border-warning/60'}>
-          <option value="">Pick a plan…</option>
-          {(plans.data ?? [])
-            .filter((p) => p.is_active)
-            .map((p) => (
-              <option key={p.id} value={p.key}>
-                {planLabel(p)} · ₹{p.price.toLocaleString('en-IN')} + GST · {length(p)}
-              </option>
-            ))}
-        </Select>
-        <Button size="sm" disabled={assign.isPending || !planKey} onClick={() => assign.mutate({ studioId: studio.id, planKey })}>
+    <div className="flex min-w-0 flex-col gap-3">
+      <Select
+        value={planKey}
+        onChange={(e) => {
+          setPlanKey(e.target.value)
+          setStartPick(null)
+        }}
+        aria-label="Plan to give"
+        className={cn('w-full min-w-0', planKey ? undefined : 'border-warning/60')}
+      >
+        <option value="">Pick a plan…</option>
+        {(plans.data ?? [])
+          .filter((p) => p.is_active)
+          .map((p) => (
+            <option key={p.id} value={p.key}>
+              {planLabel(p)} · ₹{p.price.toLocaleString('en-IN')} + GST · {length(p)}
+            </option>
+          ))}
+      </Select>
+
+      {chosen && quote.isLoading && <p className="text-sm text-muted-foreground">Working out the price…</p>}
+      {chosen && q && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+          <p>{quoteSentence(q, planLabel(chosen))}</p>
+          {choose ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <StartChoice
+                on={startToday}
+                onClick={() => setStartPick(true)}
+                title={q.kind === 'upgrade' ? `Start today · charge ${rupees(q.amount)}` : `Start today · charge ${rupees(q.full_amount)}`}
+                line={`Ends ${day(q.until_today)}${q.kind === 'upgrade' ? `. The ${q.days_left} days left are taken off the price.` : `. The ${q.days_left} days left are dropped.`}`}
+              />
+              <StartChoice
+                on={!startToday}
+                onClick={() => setStartPick(false)}
+                title={`After the current plan · charge ${rupees(q.full_amount)}`}
+                line={`Ends ${day(q.until_on_top)}. They keep the ${q.days_left} days left.`}
+              />
+            </div>
+          ) : (
+            <p className="font-medium">
+              Charge {rupees(q.full_amount)} (with GST). Ends {day(startToday ? q.until_today : q.until_on_top)}.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">No payment is taken here: collect it first.</p>
+        <Button disabled={assign.isPending || !planKey || !q} onClick={() => assign.mutate({ studioId: studio.id, planKey, startToday })}>
           Give plan
         </Button>
       </div>
-      {chosen && <p className="text-xs text-muted-foreground">Adds {length(chosen)} from {studio.plan_expiry && new Date(studio.plan_expiry) > new Date() ? 'their current end date' : 'today'}. No payment is taken.</p>}
     </div>
+  )
+}
+
+const rupees = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
+const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** What the quote means, in one sentence. */
+function quoteSentence(q: PlatformPlanQuote, name: string): string {
+  const net = rupees(q.price - q.credit)
+  switch (q.kind) {
+    case 'upgrade':
+      return `${q.current_name} has ${q.days_left} days left, worth ${rupees(q.credit)}. ${name} is ${rupees(q.price)}, so the upgrade is ${net} + GST = ${rupees(q.amount)}.`
+    case 'renew':
+      return `The same plan again: it runs on after ${q.current_name} ends.`
+    case 'later':
+      return `${name} is lower than ${q.current_name} (${q.days_left} days left), so it normally starts once that ends.`
+    default:
+      return `No plan is running, so ${name} starts today.`
+  }
+}
+
+function StartChoice({ on, onClick, title, line }: { on: boolean; onClick: () => void; title: string; line: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={cn(
+        'flex flex-col gap-0.5 rounded-lg border-2 bg-card p-2.5 text-left transition-colors',
+        on ? 'border-success bg-success/10' : 'border-border hover:border-primary/50',
+      )}
+    >
+      <span className="font-medium">{title}</span>
+      <span className="text-xs text-muted-foreground">{line}</span>
+    </button>
   )
 }
 

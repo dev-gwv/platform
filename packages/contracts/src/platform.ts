@@ -270,7 +270,30 @@ export type PlatformPlanCounts = z.infer<typeof platformPlanCounts>
 
 export const platformPlanOnSaleRequest = z.object({ on_sale: z.boolean() })
 
-export const platformAssignPlanRequest = z.object({ plan_key: z.string().trim().min(1).max(80) })
+export const platformAssignPlanRequest = z.object({
+  plan_key: z.string().trim().min(1).max(80),
+  /** 0306: run from today (an upgrade bought at the difference) instead of after the current end date. */
+  start_today: z.boolean().optional().default(false),
+})
+
+/**
+ * What giving a plan would mean (plan_quote, 0242): buy (nothing running), renew
+ * (same tier), upgrade (the days left come off the price) or later (a lower plan).
+ * Amounts are rupees; `amount` and `full_amount` include 18% GST. The two dates are where the
+ * plan would end if it starts today or after the current end date.
+ */
+export const platformPlanQuote = z.object({
+  kind: z.enum(['buy', 'renew', 'upgrade', 'later']),
+  price: z.number(),
+  credit: z.number(),
+  amount: z.number(),
+  full_amount: z.number(),
+  current_name: z.string().nullable(),
+  days_left: z.number(),
+  until_today: z.string(),
+  until_on_top: z.string(),
+})
+export type PlatformPlanQuote = z.infer<typeof platformPlanQuote>
 
 /** Orders Razorpay took money for that never gave the studio its plan (0226). */
 export const paymentRecovery = z.object({

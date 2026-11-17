@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, diamondMiss, diamondLookup, z } from '@ipc/contracts'
+import { platformDiamondClaim, platformDiamondDecision, diamondClaimStatus, platformStudioList, platformUsage, platformPlanAction, platformCreateStudioRequest, platformUsageQuery, legacyImportRequest, legacyStudioList, featureRequest, featureRequestStatus, updateFeatureRequest, platformPlanList, flowStopList, platformPlanCounts, platformPlanOnSaleRequest, platformAssignPlanRequest, platformPlanQuote, paymentRecovery, paymentCreditResult, diamondSheetStatus, diamondSheetRequest, diamondMiss, diamondLookup, z } from '@ipc/contracts'
 import { serve } from '../files/router'
 import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
@@ -377,6 +377,32 @@ export const platformRouter = new Hono<AppEnv>()
     return c.json({ ok: true })
   })
 
+  // What giving this plan means: the upgrade maths (plan_quote, 0242) and both possible end dates.
+  .get('/studios/:id/plan-quote', async (c) => {
+    const id = uuidParam(c)
+    const key = (c.req.query('plan') ?? '').trim()
+    if (!key) fail(422, 'Pick a plan.')
+    const row = await attempt(c, 'platform.plan_quote', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const [r] = await sql<Record<string, unknown>[]>`
+          with p as (select * from plans where key = ${key}),
+               co as (select plan_expiry from companies where id = ${id}),
+               len as (select case when p.duration_days is not null then make_interval(days => p.duration_days)
+                                   when p.billing_interval = 'yearly' then interval '12 months'
+                                   else interval '1 month' end as l, p.price from p)
+          select q.kind, q.price::float8 as price, q.credit::float8 as credit, q.amount::float8 as amount,
+                 round(len.price * 1.18, 2)::float8 as full_amount, q.current_name,
+                 greatest(0, floor(extract(epoch from (coalesce(co.plan_expiry, now()) - now())) / 86400))::float8 as days_left,
+                 (now() + len.l)::text as until_today,
+                 (greatest(now(), coalesce(co.plan_expiry, now())) + len.l)::text as until_on_top
+            from p, len, co, plan_quote(${id}, p.id) q`
+        return r ?? null
+      }),
+    )
+    if (!row) fail(404, 'That plan or studio was not found.')
+    return c.json(platformPlanQuote.parse(row))
+  })
+
   .post('/studios/:id/assign-plan', async (c) => {
     const parsed = platformAssignPlanRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Pick a plan.')
@@ -386,7 +412,7 @@ export const platformRouter = new Hono<AppEnv>()
       'platform.assign_plan',
       () =>
         withUser(c.env, c.get('auth').userId, async (sql) => {
-          const r = await sql<{ until: string }[]>`select platform_assign_plan(${id}, ${parsed.data.plan_key})::text as until`
+          const r = await sql<{ until: string }[]>`select platform_assign_plan(${id}, ${parsed.data.plan_key}, ${parsed.data.start_today})::text as until`
           return r[0]?.until ?? null
         }),
       { onCode: (code) => (code === '22023' ? fail(422, 'That plan is not in the catalogue.') : undefined) },
@@ -396,7 +422,7 @@ export const platformRouter = new Hono<AppEnv>()
     await attempt(c, 'platform.offer_used', () =>
       withUser(c.env, c.get('auth').userId, (sql) => sql`select platform_offer_used(${id}, ${parsed.data.plan_key})`),
     )
-    await audit(c, { action: 'platform.plan_assign', entityType: 'company', entityId: id, after: { plan_key: parsed.data.plan_key, until: row } })
+    await audit(c, { action: 'platform.plan_assign', entityType: 'company', entityId: id, after: { plan_key: parsed.data.plan_key, start_today: parsed.data.start_today, until: row } })
     return c.json({ ok: true, until: row })
   })
 

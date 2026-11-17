@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z, loginStudio, makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
+import { z, platformPlanQuote, loginStudio,makeOffersResult, platformOffer, studioActivity, type MakeOffersRequest, legacyImportResult, paymentCreditResult, paymentRecovery, platformPlanList, flowStopList, platformPlanCounts, legacyStudioList, platformStudioList, platformUsage, type LegacyStudioInput, type PlatformPlanAction, type PlatformCreateStudioRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -149,10 +149,10 @@ export function useSetPlanOnSale() {
 export function useAssignPlan() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ studioId, planKey }: { studioId: string; planKey: string }) =>
+    mutationFn: ({ studioId, planKey, startToday = false }: { studioId: string; planKey: string; startToday?: boolean }) =>
       callApi(`/platform/studios/${studioId}/assign-plan`, {
         method: 'POST',
-        body: { plan_key: planKey },
+        body: { plan_key: planKey, start_today: startToday },
         responseSchema: z.object({ ok: z.boolean(), until: z.string() }),
       }),
     onSuccess: (r) => {
@@ -262,5 +262,15 @@ export function useOpenFirst() {
       void qc.invalidateQueries({ queryKey: ['platform', 'login'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Could not change it.'),
+  })
+}
+
+/** What giving a plan would mean for a studio: the upgrade maths and both end dates (0306). */
+export function usePlanQuote(studioId: string, planKey: string) {
+  return useQuery({
+    queryKey: ['platform', 'plan-quote', studioId, planKey],
+    queryFn: () => callApi(`/platform/studios/${studioId}/plan-quote?plan=${encodeURIComponent(planKey)}`, { responseSchema: platformPlanQuote }),
+    enabled: !!planKey,
+    staleTime: 0,
   })
 }

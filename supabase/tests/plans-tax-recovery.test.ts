@@ -78,6 +78,17 @@ describe('assigning a plan from the catalogue', () => {
     expect(await q(`select 1 from company_subscriptions where company_id = '${STUDIO}'`)).toHaveLength(1)
   })
 
+  it('can start today instead, for an upgrade bought at the difference (0306)', async () => {
+    await q(`update companies set plan_period_start = now() - interval '200 days' where id = '${STUDIO}'`)
+    await as(ADMIN, `select platform_assign_plan('${STUDIO}', 't-annual', true)`)
+    const [c] = await q<{ days: number; fresh: boolean }>(
+      `select round(extract(epoch from plan_expiry - now()) / 86400)::int as days,
+              plan_period_start > now() - interval '1 minute' as fresh
+         from companies where id = '${STUDIO}'`,
+    )
+    expect(c).toEqual({ days: 365, fresh: true })
+  })
+
   it('refuses a plan that is not in the catalogue', async () => {
     expect(await fails(ADMIN, `select platform_assign_plan('${STUDIO}', 'nope')`)).toMatch(/unknown plan/)
     const plans = await as<{ key: string }>(ADMIN, `select key from platform_plans()`)
