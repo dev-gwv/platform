@@ -4106,7 +4106,16 @@ if (listed) {
   const set = await api('/hr/leave/allowances', { token: aToken, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: 2 }, { kind: 'sick', days_per_year: 6 }] } })
   const staffSet = await api('/hr/leave/allowances', { token: lt, method: 'PUT', body: { allowances: [{ kind: 'casual', days_per_year: 99 }] } })
   const year = new Date().getFullYear() + 1
-  const asked = await api('/hr/leave', { token: lt, method: 'POST', body: { kind: 'casual', start_date: `${year}-01-05`, end_date: `${year}-01-07`, half_day: false, reason: 'Wedding' } })
+  // Tuesday to Thursday in mid-March of next year: always more than 50 days
+  // ahead, so the studio holiday added earlier (today + 50 days) never falls
+  // inside it. Fixed 5-7 January did, on 17 Nov 2026 (6 Jan 2027), and the
+  // three days counted as two.
+  const tue = new Date(Date.UTC(year, 2, 9))
+  tue.setUTCDate(tue.getUTCDate() + ((2 - tue.getUTCDay() + 7) % 7))
+  const iso = (d) => d.toISOString().slice(0, 10)
+  const lvFrom = iso(tue)
+  const lvTo = iso(new Date(tue.getTime() + 2 * 864e5))
+  const asked = await api('/hr/leave', { token: lt, method: 'POST', body: { kind: 'casual', start_date: lvFrom, end_date: lvTo, half_day: false, reason: 'Wedding' } })
   const pending = (await api('/hr/leave?scope=team&status=pending', { token: aToken })).json.find((l) => l.id === asked.json.id)
   const mine = await api(`/hr/leave/balances?year=${year}`, { token: lt })
   const casual = mine.json.find((b) => b.kind === 'casual')
