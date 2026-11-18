@@ -9,6 +9,7 @@ import { quotationTermsRoutes } from './routes-quotation-terms'
 import { deliverableStageRoutes } from './routes-stages'
 import { deliverableRoutes } from './routes-deliverables'
 import { projectRoutes } from './routes-project'
+import { quoteImportRoutes } from './routes-quote-import'
 import { projectMoneyRoutes } from './routes-project-money'
 import { projectGalleryRoutes } from './routes-gallery'
 import { projectGalleryDriveRoutes } from './routes-gallery-drive'
@@ -42,6 +43,9 @@ export const projectsRouter = new Hono<AppEnv>()
   // Deliverables across projects: workload, the caller's own edits, start,
   // stage moves and notes.
   .route('/', deliverableRoutes)
+
+  // Upload a quotation and the project makes itself (0311).
+  .route('/', quoteImportRoutes)
 
   // One project: read, change, delete, and its deliverables.
   .route('/', projectRoutes)
