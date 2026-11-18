@@ -22,6 +22,7 @@ import { cn } from '@/shared/ui/cn'
 import { useIssueQuotation, useProjectsPage, useDeleteProject } from '@/features/projects/api'
 import { Money, useINR } from '@/shared/money/MoneyMask'
 import { useAccess } from '@/shared/auth/useAccess'
+import { QuotationUploadButton } from '@/features/projects/QuotationUpload'
 
 type Filter = ProjectStatus | 'all'
 type ProjectSort = 'recent' | 'oldest' | 'name' | 'pending_desc' | 'upcoming' | 'value_desc'
@@ -136,6 +137,7 @@ function ProjectsList() {
             <Button variant="outline" onClick={() => void exportCsv()} disabled={total === 0 || exporting}>
               <Download /> {exporting ? 'Exporting…' : 'Export'}
             </Button>
+            <QuotationUploadButton />
             <Button asChild>
               <Link to="/projects/new">
                 <Plus /> New project
