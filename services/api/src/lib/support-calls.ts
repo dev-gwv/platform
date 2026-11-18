@@ -15,8 +15,11 @@ import { normalizePhoneForWhatsApp, type SupportCallNotice, type SupportCallNoti
  *     decides anything.
  */
 
-/** Messages to one person about one booking, whatever happens to it. */
-export const BOOKER_CAP = 4
+/**
+ * Messages to one person about one booking, whatever happens to it: booked,
+ * reminder, moved, cancelled, and since 0312 a missed call and its one nudge.
+ */
+export const BOOKER_CAP = 6
 /** The reminder goes this long before the call. */
 export const REMINDER_BEFORE_MS = 60 * 60_000
 
@@ -223,6 +226,54 @@ export function planMessages(
     )
   }
   return out
+}
+
+// ── a missed call (0312) ──────────────────────────────────────────────────
+//
+// Owner, 18 Nov: "send new meeting links to the user whose meetings were
+// missed, so they can rejoin". The owner taps Missed on the ticket -- nothing
+// guesses -- and our official number sends one fixed utility template with the
+// booking page, then once more a day later unless they booked again.
+
+/** The second missed-call message waits this long after the first. */
+export const MISSED_NUDGE_AFTER_MS = 24 * 3600_000
+
+/**
+ * The two messages a missed call sends the person who booked: now, and a day
+ * later (checked again when it goes). Kept with the reason when they cannot go.
+ */
+export function planMissedMessages(
+  b: Pick<Booking, 'ref' | 'name' | 'startsAt' | 'endsAt' | 'phone' | 'whatsappOk'>,
+  s: Pick<SupportWhatsappSettings, 'official_on' | 'missed_on' | 'tpl_missed'>,
+  opts: { now: number; bookerSoFar: number; bookingUrl: string | null },
+): PlannedMessage[] {
+  const why = !s.missed_on
+    ? 'Missed-call messages are off.'
+    : !s.official_on
+      ? 'Official messages are off.'
+      : !b.whatsappOk
+        ? 'They did not ask for WhatsApp.'
+        : !b.phone
+          ? 'No WhatsApp number on the booking.'
+          : !opts.bookingUrl
+            ? 'No booking page is set.'
+            : null
+  const params = [cleanParam(firstName(b.name) || b.name), cleanParam(istWhen(b.startsAt, b.endsAt)), cleanParam(opts.bookingUrl)]
+  const base = { channel: 'official' as const, audience: 'booker' as const, to: b.phone, template: s.tpl_missed, params, body: null }
+  const planned: PlannedMessage[] = [
+    { ...base, dedupeKey: `booker:missed:${b.ref}:${b.startsAt}`, sendAfter: new Date(opts.now).toISOString(), skipped: null },
+    { ...base, dedupeKey: `booker:missed2:${b.ref}:${b.startsAt}`, sendAfter: new Date(opts.now + MISSED_NUDGE_AFTER_MS).toISOString(), skipped: null },
+  ]
+  return planned.map((m, i) => {
+    const skip = why ?? (opts.bookerSoFar + i >= BOOKER_CAP ? `Already ${BOOKER_CAP} messages for this booking.` : null)
+    return skip ? { ...m, skipped: skip } : m
+  })
+}
+
+/** "Hi Priya, sorry we missed you…": the words a studio owner sends from their own WhatsApp when ours cannot. */
+export function missedByHandText(b: Pick<Booking, 'name' | 'startsAt'>, bookingUrl: string | null): string {
+  const again = bookingUrl ? ` Pick a new time here: ${bookingUrl}` : ' Reply here and we will find a new time.'
+  return `${hi(b.name)}, we missed you on your Studio AutoPilot support call (${istWhen(b.startsAt)}).${again}`
 }
 
 // ── the bot writing to whoever booked (0310) ──────────────────────────────

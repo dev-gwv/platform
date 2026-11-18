@@ -123,6 +123,12 @@ export const useFollowupSend = (id: string) =>
 export const useIssueOpened = (id: string) =>
   useTicketWrite(id, () => callApi(`/platform/support-calls/tickets/${id}/issue`, { method: 'POST', responseSchema: supportTicket }))
 
+/** 0312: the call was missed (the booking page goes on WhatsApp), or take it back. */
+export const useTicketMissed = (id: string) =>
+  useTicketWrite(id, (missed: boolean) =>
+    callApi(`/platform/support-calls/tickets/${id}/missed`, { method: 'POST', body: { missed }, responseSchema: supportTicket }),
+  )
+
 /** A WhatsApp chat with the message written; with no number, WhatsApp asks who to send it to. */
 export const waLink = (phone: string | null, text: string) => `https://wa.me/${(phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`
 

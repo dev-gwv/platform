@@ -12,7 +12,7 @@ import type { Env } from '../context'
 import { withService } from './db'
 import { describeError, log } from './log'
 import { sendWhatsAppTemplate, whatsappConfigured } from './whatsapp'
-import { BOT_BOOKER_CAP, bookingFromNotice, groupHasRoom, planBotMessages, planMessages, summaryText, type Booking, type PlannedMessage } from './support-calls'
+import { BOT_BOOKER_CAP, bookingFromNotice, planMissedMessages, groupHasRoom, planBotMessages, planMessages, summaryText, type Booking, type PlannedMessage } from './support-calls'
 import { followBooking, ticketsSummary } from './support-ticket-store'
 
 /**
@@ -33,7 +33,8 @@ export const SETTINGS_COLUMNS = `
   support_wa_tpl_booked as tpl_booked, support_wa_tpl_reminder as tpl_reminder,
   support_wa_tpl_cancelled as tpl_cancelled, support_wa_tpl_team as tpl_team,
   support_wa_tpl_followup as tpl_followup, support_wa_chat_on as chat_on,
-  support_wa_bot_dm_on as bot_dm_on`
+  support_wa_bot_dm_on as bot_dm_on, support_wa_missed_on as missed_on,
+  support_wa_tpl_missed as tpl_missed`
 
 export async function readSupportSettings(sql: TransactionSql): Promise<SupportWhatsappSettings> {
   const [row] = await sql.unsafe<SupportWhatsappSettings[]>(`select ${SETTINGS_COLUMNS} from platform_settings limit 1`)
@@ -282,6 +283,10 @@ async function sendOfficial(env: Env, row: OutboxRow, settings: SupportWhatsappS
     const still = await withService(env, async (sql) => (await sql<{ status: string }[]>`select status from support_call_bookings where id = ${row.booking_id}`)[0])
     if (still?.status === 'cancelled') return finish(env, row.id, { status: 'skipped', error: 'The call was cancelled.' })
   }
+  if (row.dedupe_key.startsWith('booker:missed')) {
+    const why = await missedStillDue(env, row)
+    if (why) return finish(env, row.id, { status: 'skipped', error: why })
+  }
   try {
     const r = await sendWhatsAppTemplate(env, row.to_number, { name: row.template, language: 'en' }, row.params)
     await finish(env, row.id, { status: 'sent', providerId: r.message_id })
@@ -354,6 +359,93 @@ async function sendBot(env: Env, row: OutboxRow, settings: SupportWhatsappSettin
   if (r.retry && row.attempts < MAX_ATTEMPTS) await finish(env, row.id, { status: 'queued', error: r.error, retryInMs: row.attempts * 5 * 60_000 })
   else await finish(env, row.id, { status: 'failed', error: r.error })
   return 'other'
+}
+
+// ── a missed call (0312) ──────────────────────────────────────────────────
+
+/**
+ * Whether a missed-call message should still go: the ticket is still marked
+ * missed and not solved, and -- for the nudge a day later -- they have not
+ * booked again from the same email or number since.
+ */
+async function missedStillDue(env: Env, row: OutboxRow): Promise<string | null> {
+  if (!row.booking_id) return null
+  return withService(env, async (sql) => {
+    const [t] = await sql<{ missed_at: Date | null; status: string; email: string | null; phone: string | null }[]>`
+      select t.missed_at, t.status, b.email, b.phone
+        from support_tickets t join support_call_bookings b on b.id = t.booking_id
+       where t.booking_id = ${row.booking_id} limit 1`
+    if (!t?.missed_at) return 'The call is no longer marked missed.'
+    if (t.status === 'solved') return 'The ticket is solved.'
+    if (row.dedupe_key.startsWith('booker:missed2:')) {
+      const [again] = await sql`
+        select 1 from support_call_bookings
+         where id <> ${row.booking_id} and status <> 'cancelled' and created_at > ${t.missed_at}
+           and ((${t.email}::text is not null and lower(email) = lower(${t.email}::text))
+             or (${t.phone}::text is not null and phone = ${t.phone}::text))
+         limit 1`
+      if (again) return 'They booked a new call.'
+    }
+    return null
+  })
+}
+
+/** The booking page a missed call points back to: its own calendar's, else the first one, else the shared link. */
+async function bookingPageFor(sql: TransactionSql, ref: string): Promise<string | null> {
+  const slot = /^gcal(\d+):/.exec(ref)?.[1]
+  const cals = await sql<{ slot: number; booking_url: string | null }[]>`
+    select slot, booking_url from support_calendars where booking_url is not null and booking_url <> '' order by slot`
+  const own = cals.find((c) => c.slot === (slot ? Number(slot) : 1))?.booking_url
+  if (own) return own
+  if (cals[0]?.booking_url) return cals[0].booking_url
+  const [s] = await sql<{ url: string | null }[]>`select support_call_url as url from platform_settings limit 1`
+  return s?.url || null
+}
+
+/**
+ * The owner tapped Missed (or took it back). Marking it waits on them and
+ * queues the booking page on WhatsApp when it may go; taking it back stops
+ * whatever has not gone. Answers false when there is no such call ticket.
+ */
+export async function markMissed(env: Env, ticketId: string, missed: boolean, now = Date.now()): Promise<boolean> {
+  return withService(env, async (sql) => {
+    const [t] = await sql<(BookingRow & { ticket_id: string; booking_id: string })[]>`
+      select t.id as ticket_id, b.id as booking_id, b.*
+        from support_tickets t join support_call_bookings b on b.id = t.booking_id
+       where t.id = ${ticketId}`
+    if (!t) return false
+    if (!missed) {
+      await sql`update support_tickets set missed_at = null, updated_at = now() where id = ${ticketId}`
+      await sql`
+        update support_call_outbox set status = 'skipped', last_error = 'Taken back: the call was not missed.', updated_at = now()
+         where booking_id = ${t.booking_id} and status = 'queued' and dedupe_key like 'booker:missed%'`
+      return true
+    }
+    await sql`
+      update support_tickets set missed_at = coalesce(missed_at, now()), status = 'waiting_them', solved_at = null,
+             next_action = coalesce(nullif(next_action, ''), 'Missed the call: waiting for them to book a new time'),
+             closed_by = null, updated_at = now()
+       where id = ${ticketId}`
+    const [{ n: bookerSoFar } = { n: 0 }] = await sql<{ n: number }[]>`
+      select count(*)::int as n from support_call_outbox
+       where booking_id = ${t.booking_id} and audience = 'booker' and status in ('queued', 'sending', 'sent')
+         and dedupe_key not like 'booker:missed%'`
+    const settings = await readSupportSettings(sql)
+    const planned = planMissedMessages(toBooking(t), settings, { now, bookerSoFar, bookingUrl: await bookingPageFor(sql, t.booking_ref) })
+    // Marked again after taking it back: the same messages come back to the queue.
+    for (const m of planned) {
+      await sql`
+        update support_call_outbox set status = ${m.skipped ? 'skipped' : 'queued'}, last_error = ${m.skipped}, send_after = ${m.sendAfter}, updated_at = now()
+         where dedupe_key = ${m.dedupeKey} and status = 'skipped'`
+    }
+    await insertPlanned(sql, t.booking_id, planned)
+    return true
+  })
+}
+
+/** The booking page for a ticket's call, for the words the owner sends by hand. */
+export async function missedPageFor(sql: TransactionSql, ref: string): Promise<string | null> {
+  return bookingPageFor(sql, ref)
 }
 
 /** Send what is due. Two runs at once never take the same message. */

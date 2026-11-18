@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Bug, CheckCircle2, Copy, ExternalLink, Eye, Keyboard, MessageCircle, RefreshCw, Send, Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
+import { ArrowLeft, Bug, CheckCircle2, Copy, ExternalLink, Eye, Keyboard, MessageCircle, PhoneMissed, RefreshCw, Send, Sparkles, Undo2 } from 'lucide-react'
 import {
   SUPPORT_TICKET_KIND_LABEL,
   SUPPORT_TICKET_KINDS,
@@ -28,6 +29,7 @@ import {
   useIssueOpened,
   useSupportTicket,
   useTicketBrief,
+  useTicketMissed,
   useTicketNote,
   useTicketVoice,
   useUpdateTicket,
@@ -92,6 +94,9 @@ function Loaded({ t }: { t: SupportTicket }) {
 
         {/* After the call, the one thing to do comes first. */}
         {past && t.status !== 'cancelled' && <NoteCard t={t} />}
+
+        {/* 0312: they did not join -- one tap sends them the booking page. */}
+        {past && t.status !== 'cancelled' && (!noted || t.missed_at) && <MissedCard t={t} />}
 
         {(noted || chat) && (
           <Card>
@@ -174,6 +179,66 @@ function Loaded({ t }: { t: SupportTicket }) {
 }
 
 /** Speak (or type) after the call; the assistant reads it into the ticket. */
+/** "They didn't join?" -> Missed: our number sends the booking page, else the owner's own WhatsApp does. */
+function MissedCard({ t }: { t: SupportTicket }) {
+  const missed = useTicketMissed(t.id)
+  if (!t.missed_at) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <h2 className="font-semibold">They didn’t join?</h2>
+            <p className="text-sm text-muted-foreground">
+              {t.whatsapp_ok ? 'Tap Missed and they get your booking page on WhatsApp to pick a new time.' : 'Tap Missed to send them your booking page from your WhatsApp.'}
+            </p>
+          </div>
+          <Button variant="outline" disabled={missed.isPending} onClick={() => missed.mutate(true)}>
+            <PhoneMissed /> Missed
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  const going = t.missed_reminder === 'queued' || t.missed_reminder === 'sending'
+  const sent = t.missed_reminder === 'sent'
+  const byHand = !going && !sent
+  return (
+    <Card className="border-warning/50 bg-warning/5">
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-1.5 font-semibold">
+              <PhoneMissed className="size-4 text-warning" /> Missed call · {callWhen(t.missed_at)}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {sent
+                ? 'Your booking page went on WhatsApp. One more goes tomorrow unless they book again.'
+                : going
+                  ? 'Sending your booking page on WhatsApp…'
+                  : `${t.missed_reminder_why ?? 'It could not go from our number.'} Send it from your WhatsApp instead.`}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" disabled={missed.isPending} onClick={() => missed.mutate(false)}>
+            <Undo2 /> Not missed
+          </Button>
+        </div>
+        {byHand && t.missed_text && (
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <a href={waLink(t.contact_phone, t.missed_text)} target="_blank" rel="noreferrer">
+                <MessageCircle /> Send on WhatsApp
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => void navigator.clipboard?.writeText(t.missed_text ?? '').then(() => toast.success('Copied'))}>
+              <Copy /> Copy
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function NoteCard({ t }: { t: SupportTicket }) {
   const voice = useTicketVoice(t.id)
   const note = useTicketNote(t.id)

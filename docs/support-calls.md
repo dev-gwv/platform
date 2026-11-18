@@ -93,6 +93,36 @@ messages to people: 6 an hour, 20 a day, 3 to one number a week
 because a chat the person answers is one WhatsApp trusts. It still never reads
 or answers anything: you carry the chat on from the phone.
 
+## A missed call (0312)
+
+The owner, 18 Nov: "send new meeting links to the user whose meetings were
+missed, so they can rejoin". Nothing guesses whether a call happened: the
+after-call group post says "Didn't happen? Open it and tap Missed.", and the
+ticket's **They didn't join?** card has **Missed**.
+
+- **Missed** marks the ticket (`missed_at`, Waiting on them) and, when
+  **Send a new booking link when a call is missed** is on and they ticked
+  WhatsApp, our official number sends `support_call_missed` with their
+  first name, the call's time and the booking page of the calendar the call
+  came from (else the first one, else `support_call_url`).
+- **Once more 24 hours later**, checked as it goes: not if the ticket was
+  solved or taken back, or they booked a new call from the same email or
+  number since.
+- Both count in the per-booking cap, now **6** (booked, reminder, moved,
+  cancelled, missed, its nudge).
+- When our number cannot send (switch off, no WhatsApp tick, no number), the
+  card says why and offers **Send on WhatsApp** from the owner's own phone,
+  the words already written, and **Copy**.
+- **Not missed** takes it back and stops whatever has not gone.
+
+**The template to make in Meta** (Utility, English, name `support_call_missed`):
+
+> Hi {{1}}, we missed you on your Studio AutoPilot support call ({{2}}). No
+> problem, pick a new time that suits you here: {{3}}
+
+Example values: `Asha`, `Fri 23 Oct, 3:00–3:20 pm`,
+`https://calendar.app.google/…`.
+
 ## Later: messages to the person who booked
 
 Built and switched off. It needs Meta's official WhatsApp API (`WHATSAPP_*` in

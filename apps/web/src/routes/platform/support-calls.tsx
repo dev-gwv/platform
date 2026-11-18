@@ -438,7 +438,7 @@ function OfficialCard({
     if (!s.team_numbers.includes(n)) patch({ team_numbers: [...s.team_numbers, n].slice(0, 10) })
     setDraft('')
   }
-  const tpl = (key: 'tpl_booked' | 'tpl_reminder' | 'tpl_cancelled' | 'tpl_team' | 'tpl_followup', label: string) => (
+  const tpl = (key: 'tpl_booked' | 'tpl_reminder' | 'tpl_cancelled' | 'tpl_team' | 'tpl_followup' | 'tpl_missed', label: string) => (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
       <Input className="font-mono text-xs" value={s[key]} onChange={(e) => patch({ [key]: e.target.value.trim() })} />
@@ -453,7 +453,14 @@ function OfficialCard({
           onChange={(v) => patch({ official_on: v })}
           disabled={!ready}
           label="Send confirmations, reminders and team alerts"
-          description="Only to people who ticked WhatsApp when booking, at most 4 messages a booking. Templates must be approved in Meta first."
+          description="Only to people who ticked WhatsApp when booking, at most 6 messages a booking. Templates must be approved in Meta first."
+        />
+        <Switch
+          checked={s.missed_on}
+          onChange={(v) => patch({ missed_on: v })}
+          disabled={!ready || !s.official_on}
+          label="Send a new booking link when a call is missed"
+          description="When you tap Missed on a ticket, they get your booking page on WhatsApp, and once more a day later unless they book again."
         />
         <Switch
           checked={s.chat_on}
@@ -496,6 +503,7 @@ function OfficialCard({
             {tpl('tpl_cancelled', 'Cancelled')}
             {tpl('tpl_team', 'Team alert')}
             {tpl('tpl_followup', 'Follow-up after a call')}
+            {tpl('tpl_missed', 'Missed call: a new booking link')}
           </div>
         </details>
         <div>

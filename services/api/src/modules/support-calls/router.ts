@@ -3,6 +3,7 @@ import {
   saveSupportCalendarRequest,
   supportChatReplyRequest,
   supportTicketFollowupRequest,
+  supportTicketMissedRequest,
   supportTicketNoteRequest,
   supportWhatsappOverview,
   supportWhatsappSettings,
@@ -18,14 +19,25 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { describeError, log } from '../../lib/log'
 import { whatsappConfigured } from '../../lib/whatsapp'
-import { maskNumber, sampleNotice } from '../../lib/support-calls'
+import { maskNumber, missedByHandText, sampleNotice } from '../../lib/support-calls'
 import { looksLikeIcal, maskIcal, refPrefix } from '../../lib/support-calendar'
 import { syncSupportCalendar } from '../../lib/support-calendar-sync'
-import { botGroups, botLogout, botStatus, drainSupportCalls, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
+import { botGroups, botLogout, botStatus, drainSupportCalls, markMissed, missedPageFor, queueTest, readSupportSettings, saveSupportCallNotice } from '../../lib/support-call-store'
 import { uuidParam } from '../../lib/params'
 import { applyNote, briefTicket, getTicket, listTickets, transcribe, updateTicket } from '../../lib/support-ticket-store'
 import { draftFollowup, markIssueOpened, sendFollowup } from '../../lib/support-ticket-followups'
 import { chatMessages, ownerReply } from '../../lib/support-chat-store'
+
+/** A ticket with the words for the owner's own WhatsApp, when its call was missed. */
+async function withMissedText(env: AppEnv['Bindings'], id: string) {
+  const t = await getTicket(env, id)
+  if (!t?.missed_at || !t.has_call) return t
+  const page = await withService(env, async (sql) => {
+    const [b] = await sql<{ ref: string }[]>`select b.booking_ref as ref from support_tickets t join support_call_bookings b on b.id = t.booking_id where t.id = ${id}`
+    return b ? missedPageFor(sql, b.ref) : null
+  })
+  return { ...t, missed_text: missedByHandText({ name: t.name, startsAt: t.starts_at }, page) }
+}
 
 /** A voice note this long is plenty; Whisper takes 25 MB, most phones send under 2. */
 const MAX_VOICE_BYTES = 20 * 1024 * 1024
@@ -126,7 +138,8 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
           support_wa_tpl_booked = ${d.tpl_booked}, support_wa_tpl_reminder = ${d.tpl_reminder},
           support_wa_tpl_cancelled = ${d.tpl_cancelled}, support_wa_tpl_team = ${d.tpl_team},
           support_wa_tpl_followup = ${d.tpl_followup}, support_wa_chat_on = ${d.chat_on},
-          support_wa_bot_dm_on = ${d.bot_dm_on}, updated_at = now()`),
+          support_wa_bot_dm_on = ${d.bot_dm_on}, support_wa_missed_on = ${d.missed_on},
+          support_wa_tpl_missed = ${d.tpl_missed}, updated_at = now()`),
     )
     if (!ok) fail(400, 'We could not save the settings.')
     // Numbers are said by count, never written into the audit trail.
@@ -134,7 +147,7 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
       action: 'platform.support_calls_settings',
       entityType: 'platform_settings',
       entityId: null,
-      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary, chat_on: d.chat_on, bot_dm_on: d.bot_dm_on },
+      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary, chat_on: d.chat_on, bot_dm_on: d.bot_dm_on, missed_on: d.missed_on },
     })
     return c.json({ ok: true })
   })
@@ -218,7 +231,22 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
 
   .get('/support-calls/tickets/:id', async (c) => {
     const id = uuidParam(c)
-    const t = await attempt(c, 'platform.support_ticket', () => getTicket(c.env, id))
+    const t = await attempt(c, 'platform.support_ticket', () => withMissedText(c.env, id))
+    if (!t) fail(404, 'That ticket was not found.')
+    return c.json(t)
+  })
+
+  // 0312: the owner says the call was missed (the booking page goes on WhatsApp), or takes it back.
+  .post('/support-calls/tickets/:id/missed', async (c) => {
+    const id = uuidParam(c)
+    const parsed = supportTicketMissedRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, 'Say whether the call was missed.')
+    const done = await attempt(c, 'platform.support_ticket_missed', () => markMissed(c.env, id, parsed.data.missed))
+    if (done === null) fail(503, 'That could not be saved. Try again in a moment.')
+    if (!done) fail(404, 'That ticket has no booked call.')
+    await audit(c, { action: 'platform.support_ticket_missed', entityType: 'support_ticket', entityId: id, after: { missed: parsed.data.missed } })
+    if (parsed.data.missed) drainSoon(c.env)
+    const t = await attempt(c, 'platform.support_ticket', () => withMissedText(c.env, id))
     if (!t) fail(404, 'That ticket was not found.')
     return c.json(t)
   })

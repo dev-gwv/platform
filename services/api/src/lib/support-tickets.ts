@@ -330,7 +330,11 @@ export function briefPost(b: { name: string; studioName: string | null; startsAt
 
 /** The group's after-call nudge. */
 export function nudgePost(b: { name: string; studioName: string | null }, link: string): string {
-  return [`📝 How did the call with ${who(b.name, b.studioName)} go?`, `Record a voice note and the ticket fills itself: ${link}`].join('\n')
+  return [`📝 How did the call with ${who(b.name, b.studioName)} go?`,
+    `Record a voice note and the ticket fills itself: ${link}`,
+    // 0312: one tap there sends them the booking page on WhatsApp.
+    `Didn't happen? Open it and tap Missed.`,
+  ].join('\n')
 }
 
 /** One line for the 9 am post: what is open and what waits on the owner. */

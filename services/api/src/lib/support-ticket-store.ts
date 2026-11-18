@@ -335,6 +335,11 @@ const TICKET_COLUMNS = `
   t.watch, t.closed_by, t.followup, t.followup_sent_at::text as followup_sent_at, t.followup_via,
   t.issue_opened_at::text as issue_opened_at, p.name as plan_name,
   t.source, t.escalate_why, t.last_in_at::text as last_in_at, (t.booking_id is not null) as has_call,
+  t.missed_at::text as missed_at, coalesce(b.whatsapp_ok, false) as whatsapp_ok,
+  (select o.status from support_call_outbox o where o.booking_id = t.booking_id and o.dedupe_key like 'booker:missed:%'
+    order by o.created_at desc limit 1) as missed_reminder,
+  (select o.last_error from support_call_outbox o where o.booking_id = t.booking_id and o.dedupe_key like 'booker:missed:%'
+    order by o.created_at desc limit 1) as missed_reminder_why,
   coalesce(b.phone, t.phone,
            (select u.phone from users u where u.user_id = c.owner_user_id and u.company_id = c.id and u.phone is not null limit 1),
            c.invoice_phone) as raw_phone`

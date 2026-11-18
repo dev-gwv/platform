@@ -79,6 +79,12 @@ export const supportWhatsappSettings = z.object({
    * the chat is ready on that WhatsApp when a call is missed.
    */
   bot_dm_on: z.boolean().default(false),
+  /**
+   * 0312: the owner taps Missed on a ticket and the person who booked gets the
+   * booking page on WhatsApp (they ticked it), then once more a day later.
+   */
+  missed_on: z.boolean().default(false),
+  tpl_missed: templateName.default('support_call_missed'),
 })
 export type SupportWhatsappSettings = z.infer<typeof supportWhatsappSettings>
 
@@ -248,6 +254,14 @@ export const supportTicket = z.object({
   escalate_why: z.string().nullable().default(null),
   /** The studio's last WhatsApp message: a free reply is allowed for 24 hours after it. */
   last_in_at: z.string().nullable().default(null),
+  /** 0312: when the owner marked the call missed, and what the WhatsApp reminder did. */
+  missed_at: z.string().nullable().default(null),
+  missed_reminder: z.enum(['queued', 'sending', 'sent', 'failed', 'skipped']).nullable().default(null),
+  missed_reminder_why: z.string().nullable().default(null),
+  /** The person ticked WhatsApp on the booking page. */
+  whatsapp_ok: z.boolean().default(false),
+  /** The words for the owner's own WhatsApp when our number cannot send. */
+  missed_text: z.string().nullable().default(null),
 })
 export type SupportTicket = z.infer<typeof supportTicket>
 
@@ -284,3 +298,6 @@ export const supportTicketFollowupRequest = z.object({
   text: z.string().trim().min(5).max(3000),
   via: z.enum(['whatsapp_link', 'official', 'copied']),
 })
+
+/** 0312: mark a call missed (sends the booking page), or take it back. */
+export const supportTicketMissedRequest = z.object({ missed: z.boolean() })

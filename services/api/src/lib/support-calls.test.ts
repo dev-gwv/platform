@@ -10,6 +10,9 @@ import {
   groupText,
   istWhen,
   maskNumber,
+  MISSED_NUDGE_AFTER_MS,
+  missedByHandText,
+  planMissedMessages,
   planBotMessages,
   planMessages,
   summaryText,
@@ -114,7 +117,7 @@ describe('planMessages', () => {
   })
 
   it(`never more than ${BOOKER_CAP} messages to one person for one booking`, () => {
-    const p = planMessages('booking.rescheduled', bookingFromNotice(notice()), settings, { ...opts, bookerSoFar: 3 })
+    const p = planMessages('booking.rescheduled', bookingFromNotice(notice()), settings, { ...opts, bookerSoFar: BOOKER_CAP - 1 })
     expect(p.filter((m) => m.audience === 'booker').map((m) => m.skipped)).toEqual([null, `Already ${BOOKER_CAP} messages for this booking.`])
   })
 
@@ -212,5 +215,47 @@ describe('the bot writing to whoever booked (0310)', () => {
 
   it('the group post carries the number', () => {
     expect(groupText('booking.created', b)).toContain('WhatsApp: +919876543210')
+  })
+})
+
+describe('a missed call (0312)', () => {
+  const b = bookingFromNotice(notice())
+  const on = { official_on: true, missed_on: true, tpl_missed: 'support_call_missed' }
+  const now = Date.parse('2026-10-23T10:30:00Z')
+  const page = 'https://calendar.app.google/abc'
+
+  it('sends the booking page now and once more a day later', () => {
+    const p = planMissedMessages(b, on, { now, bookerSoFar: 2, bookingUrl: page })
+    expect(p.map((m) => m.skipped)).toEqual([null, null])
+    expect(p[0]).toMatchObject({ channel: 'official', audience: 'booker', to: '919876543210', template: 'support_call_missed' })
+    expect(p[0]!.params).toEqual(['Asha', 'Fri 23 Oct, 3:00–3:20 pm', page])
+    expect(Date.parse(p[1]!.sendAfter) - now).toBe(MISSED_NUDGE_AFTER_MS)
+    expect(p[0]!.dedupeKey).not.toBe(p[1]!.dedupeKey)
+  })
+
+  it('the same call marked twice is the same two messages', () => {
+    const a = planMissedMessages(b, on, { now, bookerSoFar: 0, bookingUrl: page })
+    const c = planMissedMessages(b, on, { now: now + 60_000, bookerSoFar: 0, bookingUrl: page })
+    expect(a.map((m) => m.dedupeKey)).toEqual(c.map((m) => m.dedupeKey))
+  })
+
+  it('says why when it cannot go', () => {
+    const why = (s: Partial<typeof on>, over: Partial<typeof b> = {}, url: string | null = page) =>
+      planMissedMessages({ ...b, ...over }, { ...on, ...s }, { now, bookerSoFar: 0, bookingUrl: url })[0]!.skipped
+    expect(why({ missed_on: false })).toBe('Missed-call messages are off.')
+    expect(why({ official_on: false })).toBe('Official messages are off.')
+    expect(why({}, { whatsappOk: false })).toBe('They did not ask for WhatsApp.')
+    expect(why({}, { phone: null })).toBe('No WhatsApp number on the booking.')
+    expect(why({}, {}, null)).toBe('No booking page is set.')
+  })
+
+  it(`keeps to ${BOOKER_CAP} messages a booking`, () => {
+    const p = planMissedMessages(b, on, { now, bookerSoFar: BOOKER_CAP - 1, bookingUrl: page })
+    expect(p.map((m) => m.skipped)).toEqual([null, `Already ${BOOKER_CAP} messages for this booking.`])
+  })
+
+  it("the words for the owner's own WhatsApp carry the page, or ask for a reply", () => {
+    expect(missedByHandText(b, page)).toBe(`Hi Asha, we missed you on your Studio AutoPilot support call (Fri 23 Oct, 3:00 pm). Pick a new time here: ${page}`)
+    expect(missedByHandText(b, null)).toContain('Reply here')
   })
 })
