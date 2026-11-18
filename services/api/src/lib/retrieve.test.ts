@@ -30,7 +30,7 @@ describe('the questions studios actually ask', () => {
 
   it('finds money from the studio\'s words, not ours', () => {
     finds('how do I make a bill', 'kb:money-invoices')
-    finds('record a payment I received', 'kb:money-payments')
+    finds('record a payment I received', 'kb:money-record-payment')
     finds('where do I add an expense', 'kb:money-expenses')
     finds('how much profit did we make', 'kb:money-pnl')
     finds('pay my crew', 'kb:money-payouts')
@@ -56,7 +56,7 @@ describe('the questions studios actually ask', () => {
     // -- handed no article -- answered from memory with buttons that do not
     // exist ("Book team", "Confirm").
     finds('शूट के लिए क्रू कैसे बुक करें?', 'kb:shoots-what')
-    finds('क्लाइंट का पेमेंट कैसे रिकॉर्ड करूँ?', 'kb:money-payments')
+    finds('क्लाइंट का पेमेंट कैसे रिकॉर्ड करूँ?', 'kb:money-record-payment')
     finds('टीम कैसे जोड़ें', 'kb:team-add')
     finds('कोटेशन क्लाइंट को कैसे भेजूँ', 'kb:quotation')
     finds('एडिटर को काम कैसे दें', 'kb:editing-give-work')
@@ -79,7 +79,7 @@ describe('the questions studios actually ask', () => {
   })
 
   it('finds them for Hinglish too', () => {
-    finds('client ka payment kaise record karu?', 'kb:money-payments')
+    finds('client ka payment kaise record karu?', 'kb:money-record-payment')
     finds('editor ko kaam kaise assign karu?', 'kb:editing-give-work')
     finds('team kaise jodu', 'kb:team-add')
     finds('chutti kaise approve karein', 'kb:leave')
@@ -224,5 +224,29 @@ describe('the corpus it searches', () => {
 
   it('gives every article something to match on', () => {
     for (const d of DOCS) expect(d.terms.length, d.key).toBeGreaterThan(0)
+  })
+})
+
+describe('what the 18 Nov help audit fixed', () => {
+  // A studio asked "mujhe photosharing wale feature k bare mei btaio" and got
+  // the gallery's old place: no article named the Photo sharing menu line, and
+  // "photosharing" as one word matched nothing.
+  it('finds Photo sharing however it is typed', () => {
+    finds('mujhe photosharing wale feature k bare mei btaio', 'kb:photo-sharing')
+    finds('photo sharing app kaha hai', 'kb:photo-sharing')
+    finds('फोटो शेयरिंग', 'kb:photo-sharing')
+    finds('gallery kaise banaye', 'kb:photo-sharing')
+  })
+
+  it('finds the newer screens', () => {
+    finds('how do I make a referral card', 'kb:referrals-clients')
+    finds('set a daily task for my team', 'kb:daily-tasks')
+    finds('how to reopen a cancelled invoice', 'kb:money-invoice-changes')
+    finds('wedding qr code', 'kb:wedding-qr')
+    finds('ad script for reels', 'kb:ai-tools')
+    finds('follow up board', 'kb:leads-follow-ups')
+    finds('does the app send emails', 'kb:morning-email')
+    finds('how do I add a second brand', 'kb:brands')
+    finds('invoice numbering', 'kb:studio-profile')
   })
 })

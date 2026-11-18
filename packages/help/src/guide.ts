@@ -102,7 +102,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
       en: [
         'Open **+ New → Project**.',
         "**Who it's for**: name the project (\"Priya & Rahul's Wedding\") and pick the client, or add a new one.",
-        '**Event days**: tap each function (Haldi, Wedding…), then its date, start time and how many hours. Add who that day needs.',
+        '**Event days**: tap each function (Haldi, Wedding…), then its date, start time and how many hours. Press **Add requirements** for who that day needs (or choose **Add them later**).',
         '**Deliverables**: tap what the client gets. Each due date counts from the wedding day.',
         '**Price**: the package price, and any advance already received. Then **Review → Create project**.',
         'The quotation opens, ready to send.',
@@ -110,7 +110,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
       hi: [
         '**+ New → Project** खोलें।',
         "**Who it's for**: प्रोजेक्ट का नाम लिखें (\"Priya & Rahul's Wedding\") और क्लाइंट चुनें, या नया जोड़ें।",
-        '**Event days**: हर फ़ंक्शन पर टैप करें (हल्दी, शादी…), फिर तारीख, शुरू होने का समय और कितने घंटे। उस दिन किसकी ज़रूरत है, वह जोड़ें।',
+        '**Event days**: हर फ़ंक्शन पर टैप करें (हल्दी, शादी…), फिर तारीख, शुरू होने का समय और कितने घंटे। उस दिन किसकी ज़रूरत है, वह **Add requirements** से जोड़ें (या **Add them later** चुनें)।',
         '**Deliverables**: क्लाइंट को जो मिलेगा, उस पर टैप करें। हर ड्यू डेट शादी के दिन से गिनी जाती है।',
         '**Price**: पैकेज की कीमत, और जो एडवांस मिल चुका है। फिर **Review → Create project**।',
         'कोटेशन खुल जाता है, भेजने के लिए तैयार।',
@@ -144,19 +144,21 @@ export const CHAPTERS: readonly GuideChapter[] = [
     key: 'enquiry-form',
     part: 1,
     video: 'enquiry-form',
-    to: '/enquiry-forms',
+    to: '/follow-ups/form',
     title: { en: 'Your enquiry form and QR code', hi: 'आपका इन्क्वायरी फ़ॉर्म और QR कोड' },
     steps: {
       en: [
-        'Open **Enquiry forms** and press **Add form**: **Your website**, or **A vendor** for a QR code.',
-        '**Edit form** shows the form beside you: the heading, what it asks (Off, Ask or Required) and the button colour.',
-        'Website: press **Copy code** and give it to whoever runs your site. Vendor: print the QR.',
+        'Open **Leads** and press **Enquiry form & QR**. Your studio has one main form with its own link and QR.',
+        '**Your QR code**: **Download for print (HD)**, or share the link with **WhatsApp** or **Copy link**. For your website, press **Copy code** and give it to whoever runs your site.',
+        '**Questions** sets what the form asks; **After they send** sets what the client sees next.',
+        'For a shop or vendor, press **Add partner** and print their own QR. For a client\'s wedding, use **Wedding QR codes**.',
         'Every enquiry lands in **Leads** by itself.',
       ],
       hi: [
-        '**Enquiry forms** खोलें और **Add form** दबाएँ: **Your website**, या QR कोड के लिए **A vendor**।',
-        '**Edit form** में फ़ॉर्म साथ में दिखता है: हेडिंग, क्या पूछना है (Off, Ask या Required) और बटन का रंग।',
-        'वेबसाइट: **Copy code** दबाएँ और अपनी साइट चलाने वाले को दें। वेंडर: QR प्रिंट करें।',
+        '**Leads** खोलें और **Enquiry form & QR** दबाएँ। आपके स्टूडियो का एक मुख्य फ़ॉर्म है, उसका अपना लिंक और QR।',
+        '**Your QR code**: **Download for print (HD)** दबाएँ, या लिंक **WhatsApp** या **Copy link** से भेजें। वेबसाइट के लिए **Copy code** दबाएँ और अपनी साइट चलाने वाले को दें।',
+        '**Questions** में तय करें कि फ़ॉर्म क्या पूछे; **After they send** में तय करें कि भेजने के बाद क्लाइंट को क्या दिखे।',
+        'किसी दुकान या वेंडर के लिए **Add partner** दबाएँ और उनका अपना QR प्रिंट करें। किसी क्लाइंट की शादी के लिए **Wedding QR codes** इस्तेमाल करें।',
         'हर इन्क्वायरी अपने आप **Leads** में आती है।',
       ],
     },
@@ -169,12 +171,12 @@ export const CHAPTERS: readonly GuideChapter[] = [
     title: { en: 'Bring in your Facebook leads', hi: 'अपनी Facebook लीड्स लाएँ' },
     steps: {
       en: [
-        'Open **CRM → Lead sources** and press **Connect with Facebook**.',
+        'Open **Settings → Leads → Lead sources** and press **Connect with Facebook**.',
         'Log in to Facebook and pick the Page your lead ads run on.',
         'From then on, every lead from your Facebook and Instagram lead ads lands in **Leads** by itself.',
       ],
       hi: [
-        '**CRM → Lead sources** खोलें और **Connect with Facebook** दबाएँ।',
+        '**Settings → Leads → Lead sources** खोलें और **Connect with Facebook** दबाएँ।',
         'Facebook में लॉगिन करें और वह Page चुनें जिस पर आपके लीड ऐड्स चलते हैं।',
         'इसके बाद Facebook और Instagram लीड ऐड्स की हर लीड अपने आप **Leads** में आती है।',
       ],
@@ -298,14 +300,14 @@ export const CHAPTERS: readonly GuideChapter[] = [
     steps: {
       en: [
         "Open the project's **Shoots** tab. Each day shows who it needs.",
-        'Press **Assign team** on a day, and pick a person for each role.',
-        'Each name says if they are free, busy or on leave that day. Their pay fills in from their usual rate.',
+        'Press **Assign team** on a day, and pick a person for each role. To book one person on many days at once, press **Bulk assign team** at the top.',
+        'Each name says if they are free, busy or on leave that day. Their pay fills in from their usual rate; with no rate yet, tap **₹ Add payout** and pick an amount.',
         'Press **Book**, then **Done**. To see every shoot at once, open **Shoots**.',
       ],
       hi: [
         'प्रोजेक्ट का **Shoots** टैब खोलें। हर दिन पर लिखा है किसकी ज़रूरत है।',
-        'किसी दिन पर **Assign team** दबाएँ, और हर रोल के लिए एक व्यक्ति चुनें।',
-        'हर नाम के साथ लिखा है कि उस दिन वे फ़्री हैं, बिज़ी हैं या छुट्टी पर। पेमेंट उनके रोज़ के रेट से भर जाता है।',
+        'किसी दिन पर **Assign team** दबाएँ, और हर रोल के लिए एक व्यक्ति चुनें। एक व्यक्ति को कई दिनों पर एक साथ बुक करना हो तो ऊपर **Bulk assign team** दबाएँ।',
+        'हर नाम के साथ लिखा है कि उस दिन वे फ़्री हैं, बिज़ी हैं या छुट्टी पर। पेमेंट उनके रोज़ के रेट से भर जाता है; रेट न हो तो **₹ Add payout** पर टैप करके रकम चुनें।',
         '**Book** दबाएँ, फिर **Done**। सारे शूट एक साथ देखने हों तो **Shoots** खोलें।',
       ],
     },
@@ -341,7 +343,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
       en: [
         'Open **Post-Production**.',
         'The top counts late work, work due today and work with no editor.',
-        'When a piece moves on, drag its card to the next stage.',
+        'It opens on **People**. When a piece moves on, open **Stages** and drag its card to the next stage.',
         '**List** puts late work first. Tick several and use **Give to…** to hand them out together.',
         'Let the couple follow along: on the project, **More → Share with client**, then **Send on WhatsApp**. Their page shows each film move from Being edited to Delivered, with no login.',
         'Press **See it as the client** to check what they see. Opening it there is not counted as their visit.',
@@ -349,7 +351,7 @@ export const CHAPTERS: readonly GuideChapter[] = [
       hi: [
         '**Post-Production** खोलें।',
         'ऊपर गिनती है: लेट काम, आज ड्यू काम, और बिना एडिटर वाला काम।',
-        'काम आगे बढ़े तो उसका कार्ड अगले स्टेज पर खींच दें।',
+        'यह **People** पर खुलता है। काम आगे बढ़े तो **Stages** खोलें और उसका कार्ड अगले स्टेज पर खींच दें।',
         '**List** में लेट काम सबसे ऊपर है। कई पर टिक करें और **Give to…** से एक साथ सौंप दें।',
         'कपल को सब दिखता रहे: प्रोजेक्ट पर **More → Share with client**, फिर **Send on WhatsApp**। उनके पेज पर हर फ़िल्म Being edited से Delivered तक आगे बढ़ती दिखती है, बिना लॉगिन के।',
         'वे क्या देखते हैं, यह जाँचने के लिए **See it as the client** दबाएँ। वहाँ खोलना उनकी विज़िट में नहीं गिना जाता।',
@@ -389,13 +391,13 @@ export const CHAPTERS: readonly GuideChapter[] = [
       en: [
         "On the quotation press **Create the invoice**, or open the project's **Finance → Billing** and press **Create invoice**.",
         'The client, the project and the booked package are already filled in. Check the subject line.',
-        'Press **Save and send**.',
+        'Press **Save the invoice** (it reads **Save and record payment** when a new payment is on it). The project\'s Shoots tab opens next, with **Assign team** waiting.',
         'Open the invoice and press **Client link**: a link the client opens without logging in.',
       ],
       hi: [
         'कोटेशन पर **Create the invoice** दबाएँ, या प्रोजेक्ट के **Finance → Billing** में **Create invoice** दबाएँ।',
         'क्लाइंट, प्रोजेक्ट और बुक किया पैकेज पहले से भरे हैं। बस सब्जेक्ट लाइन देख लें।',
-        '**Save and send** दबाएँ।',
+        '**Save the invoice** दबाएँ (नया पेमेंट साथ हो तो बटन पर **Save and record payment** लिखा होता है)। इसके बाद प्रोजेक्ट का Shoots टैब खुलता है, जहाँ **Assign team** इंतज़ार कर रहा होता है।',
         'इनवॉइस खोलें और **Client link** दबाएँ: ऐसा लिंक जो क्लाइंट बिना लॉगिन के खोल सके।',
       ],
     },
