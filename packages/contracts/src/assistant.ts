@@ -24,7 +24,7 @@ export const ASSISTANT_PROVIDERS = [
   // NVIDIA NIM retired gpt-oss-20b on 18 Nov 2026 (410 Gone). Tested that day
   // on studio questions in English and Hindi: Nemotron 3 Ultra answered in
   // ~2 s with real button paths and clean Hindi, so it leads.
-  { key: 'nvidia', label: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', suggest: 'nvidia/nemotron-3-ultra-550b-a55b' },
+  { key: 'nvidia', label: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', suggest: 'nvidia/nemotron-3.5-super-vl-120b-a12b' },
   // Google's OpenAI-compatible surface. A different family, so it is the
   // backstop rather than the first fallback: same request shape, different
   // habits in the answer.
@@ -66,9 +66,10 @@ export function assistantFallbacks(baseUrl: string | null | undefined): readonly
   if (known.key === 'groq' || known.key === 'openrouter' || known.key === 'together') {
     return ASSISTANT_FALLBACK_MODELS
   }
-  // NVIDIA serves no gpt-oss any more, so its chain is its own Nemotrons: the
-  // 120b Super (~2 s, good Hindi) under the Ultra.
-  if (known.key === 'nvidia') return ['nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/nemotron-3.5-super-vl-120b-a12b']
+  // NVIDIA serves no gpt-oss any more, so its chain is its own Nemotrons
+  // (owner, 18 Nov, after timing them): the 120b Super (~3 s, slowest 7.5 s),
+  // then the 30b Nano Omni (~2 s). The Ultra writes best but ran past 11 s.
+  if (known.key === 'nvidia') return ['nvidia/nemotron-3.5-super-vl-120b-a12b', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning']
   // Google retires a Flash generation on a schedule and leaves the older one
   // reachable for a while, so the drop is to the previous Lite.
   if (known.key === 'gemini') return ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']

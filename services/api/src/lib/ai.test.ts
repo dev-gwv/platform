@@ -482,8 +482,8 @@ describe('walking providers, not just models', () => {
 describe('the providers we can actually reach', () => {
   it('knows NVIDIA NIM and Gemini by address', () => {
     expect(assistantFallbacks('https://integrate.api.nvidia.com/v1')).toEqual([
-      'nvidia/nemotron-3-ultra-550b-a55b',
       'nvidia/nemotron-3.5-super-vl-120b-a12b',
+      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
     ])
     expect(assistantFallbacks('https://generativelanguage.googleapis.com/v1beta/openai')).toEqual([
       'gemini-3.5-flash-lite',
