@@ -603,7 +603,7 @@ export const KB: readonly KbArticle[] = [
     to: '/galleries',
     keywords: ['photo sharing', 'photosharing', 'photo share', 'share photos', 'gallery', 'galleries', 'gallery app', 'frameline', 'wedding photos', 'guests', 'pin', 'qr', 'studio app', 'client photos', 'photo delivery'],
     body: [
-      '**Photo sharing** is its own line in the menu, right under Post-Production. It opens every gallery the studio has, with the galleries, photos and visits at the top.',
+      '**Photo sharing** is a line of its own in the left menu (the next line after Post-Production, not inside it). It opens every gallery the studio has, with the galleries, photos and visits at the top.',
       'Press **Create a gallery**, pick the wedding (the project), and it makes one gallery for it with a link and a PIN for guests. **How it works** beside it shows the steps.',
       'Each gallery has a card: the client, photos, visits, PIN and when it closes, with **Open gallery** (to upload photos), **WhatsApp** (sends the link and PIN), a copy-link-and-PIN button and a QR to download and print.',
       'Below the cards is **Google Drive**: the owner connects it here, then photos come straight from Drive on a project\'s Gallery tab (Pro and above). The **Studio app** tab opens the gallery app inside Studio AutoPilot; **Open the studio app** sets up the gallery account the first time.',

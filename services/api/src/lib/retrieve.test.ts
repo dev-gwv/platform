@@ -241,6 +241,8 @@ describe('what the 18 Nov help audit fixed', () => {
   it('finds the newer screens', () => {
     finds('how do I make a referral card', 'kb:referrals-clients')
     finds('set a daily task for my team', 'kb:daily-tasks')
+    finds('रोज़ का काम टीम को कैसे दूँ?', 'kb:daily-tasks')
+    finds('roz ka kaam team ko kaise du', 'kb:daily-tasks')
     finds('how to reopen a cancelled invoice', 'kb:money-invoice-changes')
     finds('wedding qr code', 'kb:wedding-qr')
     finds('ad script for reels', 'kb:ai-tools')

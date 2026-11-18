@@ -58,6 +58,7 @@ const HI: Record<string, readonly string[]> = {
   editing: ['एडिटिंग'],
   work: ['काम'],
   task: ['टास्क'],
+  daily: ['रोज', 'रोजाना', 'रोज़', 'रोज़ाना', 'डेली'],
   review: ['रिव्यू'],
   approve: ['अप्रूव', 'मंजूर', 'मंज़ूर'],
   assign: ['असाइन'],
@@ -159,6 +160,7 @@ const HI_STOP = [
  */
 const HINGLISH: Record<string, readonly string[]> = {
   work: ['kaam', 'kam'],
+  daily: ['roz', 'rozana', 'roj', 'rojana'],
   send: ['bhejna', 'bheju', 'bhejo', 'bhejein', 'bhejen', 'bhej'],
   add: ['jodna', 'jodu', 'jodo', 'jodein', 'joden', 'jod'],
   create: ['banana', 'banau', 'banao', 'banaye', 'banayein'],
