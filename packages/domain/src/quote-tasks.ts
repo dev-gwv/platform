@@ -1,4 +1,5 @@
 import { addDays, findWeddingShoot, type NamedShootDate } from './projects'
+import { dataCopyDay } from './quote-schedule'
 
 /**
  * The team's tasks from an uploaded quotation (owner, 18 Nov; 0311).
@@ -89,6 +90,18 @@ function taskTitle(work: QuoteWork, title: string): string {
 /** Work that needs the footage or photos copied first. */
 const NEEDS_DATA = new Set<QuoteWork>(['video', 'photo', 'album', 'gallery', 'print'])
 
+/**
+ * Work that holds its maker for days, so it waits its turn in their queue
+ * (`planQueue`): a film or reel, an edit of the photos, an album. Handing over
+ * the unedited photos, setting up the gallery or sending frames to print fit
+ * between those, so they are dated on their own.
+ */
+export function isQueuedWork(title: string): boolean {
+  const work = quoteWorkOf(title)
+  if (work === 'video' || work === 'album') return true
+  return work === 'photo' && !/\bun[\s-]?edited|\braw\b/i.test(title)
+}
+
 export interface QuoteForm {
   form: string
   reference?: string
@@ -114,10 +127,14 @@ export interface PlannedTask {
   role: QuoteRole
   /** For a video, which kind, so a studio's editors can split the work. */
   cut?: VideoCut
+  /** For work made from the footage: its promise, working days and first possible day, for the person's queue. */
+  deadline?: string
+  workDays?: number
+  earliest?: string
   title: string
   due: string | null
   description: string
-  /** The deliverable an edit is for (data copies name theirs in the title). */
+  /** The deliverable the task is for (an edit, or the data copy before it). */
   deliverableId: string | null
 }
 
@@ -136,8 +153,19 @@ export function fillFormMessage(f: QuoteForm): string {
   return msg.includes(f.form) ? msg : `${msg}\n\n${f.form}`
 }
 
-const listTitles = (titles: string[]) =>
-  titles.length <= 2 ? titles.join(' and ') : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`
+/** What an edit task says: when to start, and what it is promised by. */
+export function editWords(start: string | null, due: string | null, needsData: boolean): string {
+  return [
+    start ? `Start on ${quoteDay(start)}.` : 'Start once the event dates are set.',
+    due ? `It is promised to the client by ${quoteDay(due)}.` : null,
+    start && needsData ? 'The admin copies the data the day before, so it is ready for you.' : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+export const dataCopyWords = (title: string) =>
+  `Copy the footage and photos onto the editor's drive today. Work on ${title} starts the next day.`
 
 export function planQuotationTasks(input: {
   deliverables: ReadonlyArray<PlanDeliverable>
@@ -154,17 +182,17 @@ export function planQuotationTasks(input: {
   const group = input.clientName?.trim() ? `${input.clientName.trim()}'s WhatsApp group` : "the client's WhatsApp group"
   const tasks: PlannedTask[] = []
 
-  const copies = new Map<string, string[]>()
   for (const d of input.deliverables) {
     const work = quoteWorkOf(d.title)
     const needsData = NEEDS_DATA.has(work)
     // Designs (an e-invite, a save-the-date) are made before the wedding,
     // from the client's details, so they start now; everything else once
-    // the events are shot.
+    // the events are shot. The server may move a start later still, behind
+    // work promised earlier (`planQueue`).
     const start = !needsData
       ? today
       : d.due
-        ? later(floor, addDays(d.due, -Math.max(0, d.workDays)))
+        ? later(floor, addDays(d.due, -(Math.max(1, d.workDays) - 1)))
         : lastShoot
           ? floor
           : null
@@ -172,34 +200,23 @@ export function planQuotationTasks(input: {
       kind: 'edit',
       role: WORK_ROLE[work],
       ...(work === 'video' ? { cut: videoCutOf(d.title) } : {}),
+      ...(d.due && isQueuedWork(d.title) ? { deadline: d.due, workDays: Math.max(1, d.workDays), earliest: floor } : {}),
       title: taskTitle(work, d.title),
       due: start,
       deliverableId: d.id,
-      description: [
-        start ? `Start on ${quoteDay(start)}.` : 'Start once the event dates are set.',
-        d.due ? `It is promised to the client by ${quoteDay(d.due)}.` : null,
-        start && needsData ? 'The admin copies the data the day before, so it is ready for you.' : null,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      description: editWords(start, d.due, needsData),
     })
     if (start && needsData) {
-      // The day before, but never before today or before the footage is shot.
-      const copyOn = later(later(today, lastShoot ?? today), addDays(start, -1))
-      const list = copies.get(copyOn) ?? []
-      list.push(d.title)
-      copies.set(copyOn, list)
+      // One copy per piece of work, tied to it, so it moves when the work does.
+      tasks.push({
+        kind: 'data_copy',
+        role: 'admin',
+        title: `Data copy for ${d.title}`,
+        due: dataCopyDay(start, lastShoot, today),
+        deliverableId: d.id,
+        description: dataCopyWords(d.title),
+      })
     }
-  }
-  for (const [on, titles] of [...copies.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    tasks.push({
-      kind: 'data_copy',
-      role: 'admin',
-      title: `Data copy for ${listTitles(titles)}`,
-      due: on,
-      deliverableId: null,
-      description: `Copy the footage and photos onto the editors' drives today. Work starts the next day: ${listTitles(titles)}.`,
-    })
   }
 
   if (input.deliverables.some((d) => isEInvite(d.title))) {

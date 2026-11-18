@@ -64,6 +64,17 @@ export const quotationTask = z.object({
   title: z.string(),
   due_date: isoDay.nullable(),
   who: z.array(z.string()),
+  /** Days it will be late, when the person's queue cannot fit it in time. */
+  late_days: z.number().int().min(0).default(0),
 })
-export const quotationTasksResult = z.object({ tasks: z.array(quotationTask) })
+/** Work already given on another project that now waits behind an earlier promise. */
+export const quotationMovedTask = z.object({
+  title: z.string(),
+  project: z.string(),
+  who: z.string(),
+  from: isoDay.nullable(),
+  to: isoDay,
+  late_days: z.number().int().min(0),
+})
+export const quotationTasksResult = z.object({ tasks: z.array(quotationTask), moved: z.array(quotationMovedTask).default([]) })
 export type QuotationTasksResult = z.infer<typeof quotationTasksResult>

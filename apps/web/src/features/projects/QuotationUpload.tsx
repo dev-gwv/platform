@@ -41,7 +41,15 @@ type Stage =
   | { at: 'pick'; error?: string }
   | { at: 'reading'; file: string }
   | { at: 'making'; reading: QuotationReading; step: string }
-  | { at: 'done'; projectId: string; name: string; reading: QuotationReading; tasks: QuotationTasksResult['tasks']; missed: string[] }
+  | {
+      at: 'done'
+      projectId: string
+      name: string
+      reading: QuotationReading
+      tasks: QuotationTasksResult['tasks']
+      moved: QuotationTasksResult['moved']
+      missed: string[]
+    }
 
 const ROLE_WORDS: Record<QuotationTasksResult['tasks'][number]['role'], string> = {
   video_editor: 'Video editor',
@@ -141,15 +149,16 @@ function QuotationUploadDialog({ onClose }: { onClose: () => void }) {
 
       setStage({ at: 'making', reading, step: 'Giving the team their tasks' })
       let tasks: QuotationTasksResult['tasks'] = []
+      let moved: QuotationTasksResult['moved'] = []
       try {
-        tasks = (await callApi(`/projects/${id}/quotation-tasks`, { method: 'POST', responseSchema: quotationTasksResult })).tasks
+        ;({ tasks, moved } = await callApi(`/projects/${id}/quotation-tasks`, { method: 'POST', responseSchema: quotationTasksResult }))
       } catch {
         missed.push('the team’s tasks')
       }
       void qc.invalidateQueries({ queryKey: ['projects'] })
       void qc.invalidateQueries({ queryKey: ['tasks'] })
       void qc.invalidateQueries({ queryKey: ['shoots'] })
-      setStage({ at: 'done', projectId: id, name: draft.name, reading, tasks, missed })
+      setStage({ at: 'done', projectId: id, name: draft.name, reading, tasks, moved, missed })
     } catch (e) {
       setStage({ at: 'pick', error: e instanceof Error ? e.message : 'The project could not be made.' })
     }
@@ -245,11 +254,31 @@ function QuotationUploadDialog({ onClose }: { onClose: () => void }) {
                             <CalendarDays className="size-3" aria-hidden /> {quoteDay(t.due_date)}
                           </span>
                         )}
+                        {t.late_days > 0 && (
+                          <span className="font-medium text-destructive">
+                            {t.late_days} {t.late_days === 1 ? 'day' : 'days'} late · {t.who[0] ?? 'the team'} is busy until then
+                          </span>
+                        )}
                       </p>
                     </div>
                   </li>
                 ))}
               </ul>
+            )}
+            {stage.moved.length > 0 && (
+              <div className="rounded-lg border border-tone-amber bg-tone-amber-soft px-3 py-2 text-sm" data-testid="quotation-moved">
+                <p className="font-medium">Other work moved to fit this in, earliest promise first:</p>
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {stage.moved.map((m, i) => (
+                    <li key={i}>
+                      {m.title} · {m.project} ({m.who}): {m.from ? `${quoteDay(m.from)} → ` : ''}
+                      {quoteDay(m.to)}
+                      {m.from && <span className="text-muted-foreground"> ({m.to < m.from ? 'earlier' : 'later'})</span>}
+                      {m.late_days > 0 && <span className="font-medium text-destructive"> · {m.late_days} days late</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {stage.missed.length > 0 && (
               <p className="rounded-md border border-tone-amber bg-tone-amber-soft px-3 py-2 text-sm">

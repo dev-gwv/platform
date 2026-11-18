@@ -1,7 +1,21 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { quotationImportState, quotationReading, quotationTasksResult, type QuotationTasksResult } from '@ipc/contracts'
-import { internalLeadDaysForTitle, jobCoversCut, planQuotationTasks, type PlannedTask, type QuoteForms, type QuoteRole } from '@ipc/domain'
+import {
+  addDays,
+  bestQueueFor,
+  dataCopyDay,
+  editWords,
+  internalLeadDaysForTitle,
+  isQueuedWork,
+  jobCoversCut,
+  planQueue,
+  planQuotationTasks,
+  type PlannedTask,
+  type QueueJob,
+  type QuoteForms,
+  type QuoteRole,
+} from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
@@ -35,6 +49,20 @@ async function switchedOn(c: Context<AppEnv>): Promise<{ on: boolean; forms: Quo
     }),
   )
   return { on: !!row?.enabled, forms: row?.forms ?? null }
+}
+
+interface ExistingJob {
+  id: string
+  user_id: string
+  is_task: boolean
+  title: string
+  project: string
+  deliverable_id: string
+  due_date: string | null
+  deadline: string
+  work: number
+  last_shoot: string | null
+  started: boolean
 }
 
 interface Person {
@@ -110,7 +138,7 @@ export const quoteImportRoutes = new Hono<AppEnv>()
         if (!project) return null
         // Once per project: a second press must not hand everyone the work twice.
         const [done] = await sql`select 1 from tasks where project_id = ${id} and tag = 'From quotation' limit 1`
-        if (done) return { tasks: [] }
+        if (done) return { tasks: [], moved: [] }
 
         const shoots = await sql<{ name: string; shoot_date: string | null }[]>`
           select name, shoot_date::text as shoot_date from shoots
@@ -148,46 +176,150 @@ export const quoteImportRoutes = new Hono<AppEnv>()
           })),
         })
         const who = pickPeople(people)
-        // The least busy person in the role, counting what this quotation
-        // just gave them.
         const load = new Map(people.map((p) => [p.user_id, p.load]))
-        const assignees = (t: PlannedTask): Person[] => {
+        const dated = shoots.map((s) => s.shoot_date).filter((d): d is string => !!d)
+        const lastShoot = dated.length ? dated.reduce((a, b) => (b > a ? b : a)) : null
+
+        // Every maker's queue across the studio's other projects: the tasks an
+        // upload gave them that are not done, and work given to them by hand
+        // (Give work, which means they have started it). Owner, 18 Nov: a
+        // quotation uploaded later whose wedding is earlier goes first.
+        const existing = await sql<ExistingJob[]>`
+          select t.id, ta.user_id, true as is_task, t.title, p.name as project, t.deliverable_id,
+                 t.due_date::text as due_date, d.estimated_date::text as deadline,
+                 coalesce(d.delivery_days_after_start, 7)::int as work,
+                 (select max(s.shoot_date)::text from shoots s
+                   where s.project_id = t.project_id and s.status <> 'cancelled') as last_shoot,
+                 (t.status <> 'to_do') as started
+            from tasks t
+            join task_assignees ta on ta.task_id = t.id
+            join deliverables d on d.id = t.deliverable_id
+            join projects p on p.id = t.project_id
+           where t.company_id = ${auth.companyId} and t.tag = 'From quotation'
+             and t.title not like 'Data copy%' and t.status not in ('completed', 'cancelled')
+             and d.estimated_date is not null and t.project_id <> ${id}
+          union all
+          select d.id, d.assignee_id, false, d.title, p.name, d.id, null, d.estimated_date::text,
+                 coalesce(d.delivery_days_after_start, 7)::int, null, true
+            from deliverables d join projects p on p.id = d.project_id
+           where d.company_id = ${auth.companyId} and d.assignee_id is not null
+             and d.status not in ('completed', 'cancelled') and d.estimated_date is not null
+             and not exists (select 1 from tasks t where t.deliverable_id = d.id and t.tag = 'From quotation')`
+        const queues = new Map<string, QueueJob[]>()
+        const queueOf = (u: string) => queues.get(u) ?? (queues.set(u, []), queues.get(u)!)
+        const known = new Map(existing.map((e) => [e.id, e]))
+        for (const e of existing) {
+          // Only work that holds its maker for days queues (not designs, the
+          // gallery or frames).
+          if (!isQueuedWork(e.title.replace(/^(Edit|Design|Prepare|Set up) /, ''))) continue
+          queueOf(e.user_id).push({
+            id: e.id,
+            due: e.deadline,
+            workDays: e.work,
+            earliest: e.last_shoot ? addDays(e.last_shoot, 1) : today,
+            started: e.started,
+          })
+        }
+
+        // Who does each piece: for work made from the footage, the one in the
+        // role who can finish it on time with least delay to everything else
+        // they have (`bestQueueFor`), earliest promise first; for the rest,
+        // the least busy in the role, counting what this quotation gave them.
+        const poolFor = (t: PlannedTask): Person[] => {
           let pool = who[t.role]
-          // Editors who split the work: only those whose role covers this
-          // kind of video, else anyone who did not say (else all of them).
           if (t.cut) {
             const cut = t.cut
             const covers = pool.filter((p) => jobCoversCut(p.job, cut) === true)
             const open = pool.filter((p) => jobCoversCut(p.job, cut) === null)
             pool = covers.length ? covers : open.length ? open : pool
           }
+          return pool
+        }
+        const leastBusy = (pool: Person[]): Person[] => {
           if (pool.length === 0) return pool
-          // Everything a person is given here counts, so Mohit's photo work
-          // weighs when the designs are shared between him and Sorav.
           const free = [...pool].sort((a, b) => (load.get(a.user_id) ?? 0) - (load.get(b.user_id) ?? 0))[0]!
           load.set(free.user_id, (load.get(free.user_id) ?? 0) + 1)
           return [free]
+        }
+        const given = new Map<PlannedTask, Person[]>()
+        const queued = plan
+          .filter((t) => t.kind === 'edit' && t.deadline && t.deliverableId)
+          .sort((a, b) => a.deadline!.localeCompare(b.deadline!))
+        for (const t of queued) {
+          const pool = poolFor(t)
+          if (pool.length === 0) {
+            given.set(t, [])
+            continue
+          }
+          const job: QueueJob = { id: `new:${t.deliverableId}`, due: t.deadline!, workDays: t.workDays ?? 7, earliest: t.earliest ?? today }
+          const pick = bestQueueFor(job, new Map(pool.map((p) => [p.user_id, queues.get(p.user_id) ?? []])), today) ?? pool[0]!.user_id
+          queueOf(pick).push(job)
+          load.set(pick, (load.get(pick) ?? 0) + 1)
+          given.set(t, pool.filter((p) => p.user_id === pick))
+        }
+
+        // Plan each touched queue: the new work's start, and anything already
+        // given that has to wait behind an earlier promise.
+        const startOf = new Map<string, { start: string; late: number }>()
+        const moved: QuotationTasksResult['moved'] = []
+        for (const [userId, queue] of queues) {
+          if (!queue.some((j) => j.id.startsWith('new:'))) continue
+          for (const placed of planQueue(queue, today)) {
+            if (placed.id.startsWith('new:')) {
+              startOf.set(placed.id.slice(4), { start: placed.start, late: placed.lateDays })
+              continue
+            }
+            const e = known.get(placed.id)
+            if (!e?.is_task || e.started || e.due_date === placed.start) continue
+            await sql`
+              update tasks set due_date = ${placed.start},
+                     priority = ${placed.lateDays > 0 ? 'urgent' : 'medium'},
+                     description = ${editWords(placed.start, e.deadline, true)}
+               where id = ${e.id}`
+            await sql`
+              update tasks set due_date = ${dataCopyDay(placed.start, e.last_shoot, today)}
+               where deliverable_id = ${e.deliverable_id} and tag = 'From quotation'
+                 and title like 'Data copy%' and status = 'to_do'`
+            moved.push({
+              title: e.title,
+              project: e.project,
+              who: people.find((p) => p.user_id === userId)?.name ?? '',
+              from: e.due_date,
+              to: placed.start,
+              late_days: placed.lateDays,
+            })
+          }
         }
 
         const made: QuotationTasksResult['tasks'] = []
         // Designs last, so whoever shares them is weighed with all their other work here.
         for (const t of [...plan.filter((t) => t.role !== 'designer'), ...plan.filter((t) => t.role === 'designer')]) {
-          const team = assignees(t)
+          const placed = t.deliverableId ? startOf.get(t.deliverableId) : undefined
+          let due = t.due
+          let description = t.description
+          if (placed && t.kind === 'edit') {
+            due = placed.start
+            description = editWords(placed.start, t.deadline ?? null, true)
+          } else if (placed && t.kind === 'data_copy') {
+            due = dataCopyDay(placed.start, lastShoot, today)
+          }
+          const late = t.kind === 'edit' ? (placed?.late ?? 0) : 0
+          const team = given.get(t) ?? leastBusy(poolFor(t))
           const [row] = await sql<{ id: string }[]>`
             select create_task_with_assignees(
               p_project_id => ${id},
               p_deliverable_id => ${t.deliverableId},
               p_title => ${t.title.slice(0, 200)},
               p_status => 'to_do',
-              p_priority => ${t.kind === 'data_copy' || t.kind === 'event_timeline' ? 'high' : 'medium'},
-              p_due_date => ${t.due},
+              p_priority => ${late > 0 ? 'urgent' : t.kind === 'data_copy' || t.kind === 'event_timeline' ? 'high' : 'medium'},
+              p_due_date => ${due},
               p_assignees => ${team.map((p) => p.user_id)}::uuid[]
             ) as id`
           if (!row?.id) continue
-          await sql`update tasks set tag = 'From quotation', description = ${t.description} where id = ${row.id}`
-          made.push({ id: row.id, kind: t.kind, role: t.role, title: t.title, due_date: t.due, who: team.map((p) => p.name) })
+          await sql`update tasks set tag = 'From quotation', description = ${description} where id = ${row.id}`
+          made.push({ id: row.id, kind: t.kind, role: t.role, title: t.title, due_date: due, who: team.map((p) => p.name), late_days: late })
         }
-        return { tasks: made }
+        return { tasks: made, moved }
       }),
     )
     if (out === null) fail(404, 'That project was not found.')

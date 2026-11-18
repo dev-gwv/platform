@@ -43,12 +43,13 @@ describe('planQuotationTasks', () => {
 
   it('starts each edit its working days before the promise, and copies data the day before', () => {
     const reels = plan.find((t) => t.deliverableId === 'reels')!
-    expect(reels).toMatchObject({ kind: 'edit', title: 'Edit Instagram reels', due: '2027-02-21' })
+    expect(reels).toMatchObject({ kind: 'edit', title: 'Edit Instagram reels', due: '2027-02-22' })
     const film = plan.find((t) => t.deliverableId === 'hl')!
-    expect(film.due).toBe('2027-03-12')
-    const copies = plan.filter((t) => t.kind === 'data_copy')
-    expect(copies.map((t) => t.due)).toEqual(['2027-02-14', '2027-02-20', '2027-03-11'])
-    expect(copies[1]!.title).toBe('Data copy for Instagram reels')
+    expect(film.due).toBe('2027-03-13')
+    const copies = plan.filter((t) => t.kind === 'data_copy').sort((a, b) => a.due!.localeCompare(b.due!))
+    expect(copies.map((t) => t.due)).toEqual(['2027-02-14', '2027-02-21', '2027-03-12'])
+    expect(copies[1]).toMatchObject({ title: 'Data copy for Instagram reels', deliverableId: 'reels' })
+    expect(reels).toMatchObject({ deadline: '2027-02-28', workDays: 7, earliest: '2027-02-15' })
     expect(copies.every((t) => t.role === 'admin')).toBe(true)
   })
 
