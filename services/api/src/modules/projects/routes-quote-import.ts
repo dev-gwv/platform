@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { quotationImportState, quotationReading, quotationTasksResult, type QuotationTasksResult } from '@ipc/contracts'
-import { internalLeadDaysForTitle, planQuotationTasks, type PlannedTask, type QuoteForms } from '@ipc/domain'
+import { internalLeadDaysForTitle, planQuotationTasks, type PlannedTask, type QuoteForms, type QuoteRole } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
@@ -46,17 +46,29 @@ interface Person {
 }
 
 const isVideoEditor = (p: Person) =>
-  /video\s*edit|film\s*edit|reel\s*edit|cinematic\s*edit/i.test(p.job) || (/\beditor\b/i.test(p.job) && !/photo/i.test(p.job))
+  /video\s*edit|film\s*edit|reel\s*edit|cinematic\s*edit/i.test(p.job) || (/\beditor\b/i.test(p.job) && !/photo|album/i.test(p.job))
+const isPhotoEditor = (p: Person) => /photo\s*edit|retouch|colou?r\s*(grad|correct)|photo\s*editor/i.test(p.job)
+const isAlbumDesigner = (p: Person) => /album|print/i.test(p.job)
+const isDesigner = (p: Person) => /graphic|design(er)?|invite|invitation/i.test(p.job) && !/album/i.test(p.job)
 
-/** Who does each kind of task: the role's people, else the next one up the studio. */
-export function pickPeople(people: Person[]) {
+/**
+ * Who does each kind of task, by job role (Team → Roles), owner's rule "by
+ * role, no choice on screen". The makers (editors, designers) take turns by
+ * load; the admin and the manager are one person each, falling back up the
+ * studio. A role nobody holds leaves the task with nobody on it, said so on
+ * screen, rather than handing it to the wrong person.
+ */
+export function pickPeople(people: Person[]): Record<QuoteRole, Person[]> {
   const by = (f: (p: Person) => boolean) => people.filter(f)
   const owners = by((p) => p.role === 'super_admin')
   const admins = by((p) => p.role === 'admin')
   const managers = by((p) => p.role === 'manager' || /project\s*manager|\bmanager\b/i.test(p.job))
   const adminJob = by((p) => /\badmin\b|data\s*(manager|handler|copy)|\bdit\b/i.test(p.job))
   return {
-    editors: by(isVideoEditor),
+    video_editor: by(isVideoEditor),
+    photo_editor: by(isPhotoEditor),
+    album_designer: by(isAlbumDesigner),
+    designer: by(isDesigner),
     admin: (adminJob.length ? adminJob : admins.length ? admins : owners).slice(0, 1),
     manager: (managers.length ? managers : admins.length ? admins : owners).slice(0, 1),
   }
@@ -135,16 +147,16 @@ export const quoteImportRoutes = new Hono<AppEnv>()
           })),
         })
         const who = pickPeople(people)
-        const load = new Map(who.editors.map((p) => [p.user_id, p.load]))
-        const nextEditor = () => {
-          // The least busy editor, counting what this quotation just gave them.
-          const free = [...load.entries()].sort((a, b) => a[1] - b[1])[0]
-          if (!free) return [] as Person[]
-          load.set(free[0], free[1] + 1)
-          return who.editors.filter((p) => p.user_id === free[0])
+        // The least busy person in the role, counting what this quotation
+        // just gave them.
+        const load = new Map(people.map((p) => [p.user_id, p.load]))
+        const assignees = (t: PlannedTask): Person[] => {
+          const pool = who[t.role]
+          if (pool.length <= 1) return pool
+          const free = [...pool].sort((a, b) => (load.get(a.user_id) ?? 0) - (load.get(b.user_id) ?? 0))[0]!
+          load.set(free.user_id, (load.get(free.user_id) ?? 0) + 1)
+          return [free]
         }
-        const assignees = (t: PlannedTask): Person[] =>
-          t.kind === 'edit' ? nextEditor() : t.kind === 'data_copy' ? who.admin : who.manager
 
         const made: QuotationTasksResult['tasks'] = []
         for (const t of plan) {
@@ -161,7 +173,7 @@ export const quoteImportRoutes = new Hono<AppEnv>()
             ) as id`
           if (!row?.id) continue
           await sql`update tasks set tag = 'From quotation', description = ${t.description} where id = ${row.id}`
-          made.push({ id: row.id, kind: t.kind, title: t.title, due_date: t.due, who: team.map((p) => p.name) })
+          made.push({ id: row.id, kind: t.kind, role: t.role, title: t.title, due_date: t.due, who: team.map((p) => p.name) })
         }
         return { tasks: made }
       }),

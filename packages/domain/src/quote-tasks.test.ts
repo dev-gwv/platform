@@ -8,13 +8,18 @@ const shoots = [
 ]
 
 describe('quoteWorkOf', () => {
-  it('tells films and reels from photos, and e-invites apart', () => {
+  it('says what kind of work each deliverable is', () => {
     expect(quoteWorkOf('Highlight film (4–5 min)')).toBe('video')
     expect(quoteWorkOf('4-5 Instagram reels of key moments')).toBe('video')
-    expect(quoteWorkOf('Full-length film of each event')).toBe('video')
-    expect(quoteWorkOf('E-invite for each side & monologue shoot')).toBe('e_invite')
-    expect(quoteWorkOf('2 Royal album of 40 sheets')).toBe('none')
-    expect(quoteWorkOf('All unedited photographs')).toBe('none')
+    expect(quoteWorkOf('Save the date video')).toBe('video')
+    expect(quoteWorkOf('Save the date')).toBe('design')
+    expect(quoteWorkOf('E-invite for each side & monologue shoot')).toBe('design')
+    expect(quoteWorkOf('2 Royal album of 40 sheets')).toBe('album')
+    expect(quoteWorkOf('2 Large photo frames, 20×30 inches')).toBe('print')
+    expect(quoteWorkOf('All unedited photographs')).toBe('photo')
+    expect(quoteWorkOf('Edited photographs, colour-graded')).toBe('photo')
+    expect(quoteWorkOf('Private online gallery with QR code')).toBe('gallery')
+    expect(quoteWorkOf('Drone coverage')).toBe('other')
   })
 })
 
@@ -41,8 +46,9 @@ describe('planQuotationTasks', () => {
     const film = plan.find((t) => t.deliverableId === 'hl')!
     expect(film.due).toBe('2027-03-12')
     const copies = plan.filter((t) => t.kind === 'data_copy')
-    expect(copies.map((t) => t.due)).toEqual(['2027-02-20', '2027-03-11'])
-    expect(copies[0]!.title).toBe('Data copy for Instagram reels')
+    expect(copies.map((t) => t.due)).toEqual(['2027-02-14', '2027-02-20', '2027-03-11'])
+    expect(copies[1]!.title).toBe('Data copy for Instagram reels')
+    expect(copies.every((t) => t.role === 'admin')).toBe(true)
   })
 
   it('never starts an edit before the footage exists', () => {
@@ -54,8 +60,11 @@ describe('planQuotationTasks', () => {
     expect(t!.due).toBe('2027-02-15')
   })
 
-  it('gives photos no edit task', () => {
-    expect(plan.some((t) => t.deliverableId === 'photos')).toBe(false)
+  it('gives every deliverable its task, to the role that makes it', () => {
+    expect(plan.find((t) => t.deliverableId === 'photos')).toMatchObject({ role: 'photo_editor', title: 'Edit Edited photographs', due: '2027-02-15' })
+    expect(plan.find((t) => t.deliverableId === 'reels')!.role).toBe('video_editor')
+    // A design starts now, from the client's details, with no data copy.
+    expect(plan.find((t) => t.deliverableId === 'inv')).toMatchObject({ role: 'designer', title: 'Design E-invite for each side', due: '2026-11-18' })
   })
 
   it('asks the manager for the e-invite form today, with the studio message', () => {

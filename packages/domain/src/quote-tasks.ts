@@ -14,15 +14,54 @@ import { addDays, findWeddingShoot, type NamedShootDate } from './projects'
  * Pure: the server reads the project and the people, this says what to give.
  */
 
-export type QuoteWork = 'video' | 'e_invite' | 'none'
+/**
+ * The kind of work a deliverable is, which says who makes it (owner, 18 Nov:
+ * "for all of them, photos, videos, save-the-dates, and everything").
+ */
+export type QuoteWork = 'video' | 'photo' | 'album' | 'design' | 'gallery' | 'print' | 'other'
 
-/** What kind of work a deliverable's title is, for the tasks it brings. */
+/** Who makes each kind of work, by job role. */
+export type QuoteRole = 'video_editor' | 'photo_editor' | 'album_designer' | 'designer' | 'admin' | 'manager'
+export const WORK_ROLE: Record<QuoteWork, QuoteRole> = {
+  video: 'video_editor',
+  photo: 'photo_editor',
+  gallery: 'photo_editor',
+  album: 'album_designer',
+  print: 'album_designer',
+  design: 'designer',
+  other: 'manager',
+}
+
+const VIDEO = /\b(film|films|reels?|video|videos|teaser|trailer|highlights?|cinematic|cinematography|monologue|same[\s-]?day edit)\b/
+const DESIGN = /\be[\s-]?invites?\b|\binvitations?\b|save[\s-]?the[\s-]?dates?\b|\bcards?\b|\bwebsite\b|\bcaricature/
+
+/** What kind of work a deliverable's title is, for the task it brings. */
 export function quoteWorkOf(title: string): QuoteWork {
   const t = title.toLowerCase()
-  if (/\be[\s-]?invite|invitation\b/.test(t)) return 'e_invite'
-  if (/\b(film|films|reels?|video|teaser|trailer|highlights?|cinematic|cinematography|monologue|same[\s-]?day edit)\b/.test(t)) return 'video'
-  return 'none'
+  // "Save the date video" is a video; "Save the date" alone is a design.
+  if (VIDEO.test(t) && !/\be[\s-]?invite/.test(t)) return 'video'
+  if (DESIGN.test(t)) return 'design'
+  if (/\balbums?\b|photo\s*book|coffee[\s-]?table/.test(t)) return 'album'
+  if (/\bframes?\b|\bprints?\b|\bcanvas\b|calendar/.test(t)) return 'print'
+  if (/\bgallery\b|\bqr\b/.test(t)) return 'gallery'
+  if (/\bphoto|\bpictures?\b|\bpics?\b|\bportraits?\b|\bimages?\b|\bstills?\b/.test(t)) return 'photo'
+  return 'other'
 }
+
+/** Is this an e-invite, which also brings the manager's form task. */
+export const isEInvite = (title: string) => /\be[\s-]?invites?\b|\binvitations?\b/i.test(title)
+
+/** The verb a task starts with, by the kind of work. */
+function taskTitle(work: QuoteWork, title: string): string {
+  if (work === 'video') return `Edit ${title}`
+  if (work === 'photo') return /\bun[\s-]?edited|\braw\b/i.test(title) ? `Prepare ${title}` : `Edit ${title}`
+  if (work === 'album' || work === 'design') return `Design ${title}`
+  if (work === 'gallery') return `Set up ${title}`
+  return `Prepare ${title}`
+}
+
+/** Work that needs the footage or photos copied first. */
+const NEEDS_DATA = new Set<QuoteWork>(['video', 'photo', 'album', 'gallery', 'print'])
 
 export interface QuoteForm {
   form: string
@@ -45,6 +84,8 @@ export interface PlanDeliverable {
 
 export interface PlannedTask {
   kind: 'edit' | 'data_copy' | 'e_invite' | 'event_timeline'
+  /** Who it goes to, by job role. */
+  role: QuoteRole
   title: string
   due: string | null
   description: string
@@ -87,22 +128,33 @@ export function planQuotationTasks(input: {
 
   const copies = new Map<string, string[]>()
   for (const d of input.deliverables) {
-    if (quoteWorkOf(d.title) !== 'video') continue
-    const start = d.due ? later(floor, addDays(d.due, -Math.max(0, d.workDays))) : lastShoot ? floor : null
+    const work = quoteWorkOf(d.title)
+    const needsData = NEEDS_DATA.has(work)
+    // Designs (an e-invite, a save-the-date) are made before the wedding,
+    // from the client's details, so they start now; everything else once
+    // the events are shot.
+    const start = !needsData
+      ? today
+      : d.due
+        ? later(floor, addDays(d.due, -Math.max(0, d.workDays)))
+        : lastShoot
+          ? floor
+          : null
     tasks.push({
       kind: 'edit',
-      title: `Edit ${d.title}`,
+      role: WORK_ROLE[work],
+      title: taskTitle(work, d.title),
       due: start,
       deliverableId: d.id,
       description: [
-        start ? `Start editing on ${quoteDay(start)}.` : 'Start once the event dates are set.',
+        start ? `Start on ${quoteDay(start)}.` : 'Start once the event dates are set.',
         d.due ? `It is promised to the client by ${quoteDay(d.due)}.` : null,
-        start ? 'The admin copies the data the day before, so it is ready for you.' : null,
+        start && needsData ? 'The admin copies the data the day before, so it is ready for you.' : null,
       ]
         .filter(Boolean)
         .join(' '),
     })
-    if (start) {
+    if (start && needsData) {
       // The day before, but never before today or before the footage is shot.
       const copyOn = later(later(today, lastShoot ?? today), addDays(start, -1))
       const list = copies.get(copyOn) ?? []
@@ -113,17 +165,19 @@ export function planQuotationTasks(input: {
   for (const [on, titles] of [...copies.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     tasks.push({
       kind: 'data_copy',
+      role: 'admin',
       title: `Data copy for ${listTitles(titles)}`,
       due: on,
       deliverableId: null,
-      description: `Copy the footage onto the editor's drive today. Editing starts the next day: ${listTitles(titles)}.`,
+      description: `Copy the footage and photos onto the editors' drives today. Work starts the next day: ${listTitles(titles)}.`,
     })
   }
 
-  if (input.deliverables.some((d) => quoteWorkOf(d.title) === 'e_invite')) {
+  if (input.deliverables.some((d) => isEInvite(d.title))) {
     const f = input.forms?.e_invite
     tasks.push({
       kind: 'e_invite',
+      role: 'manager',
       title: `Send the e-invite form in ${group}`,
       due: today,
       deliverableId: null,
@@ -138,6 +192,7 @@ export function planQuotationTasks(input: {
     const f = input.forms?.event_timeline
     tasks.push({
       kind: 'event_timeline',
+      role: 'manager',
       title: `Send the event timeline form in ${group}`,
       due: later(today, addDays(wedding, -8)),
       deliverableId: null,

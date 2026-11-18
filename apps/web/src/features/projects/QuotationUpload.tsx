@@ -43,11 +43,13 @@ type Stage =
   | { at: 'making'; reading: QuotationReading; step: string }
   | { at: 'done'; projectId: string; name: string; reading: QuotationReading; tasks: QuotationTasksResult['tasks']; missed: string[] }
 
-const TASK_WORDS: Record<QuotationTasksResult['tasks'][number]['kind'], string> = {
-  edit: 'Video editor',
-  data_copy: 'Admin',
-  e_invite: 'Manager',
-  event_timeline: 'Manager',
+const ROLE_WORDS: Record<QuotationTasksResult['tasks'][number]['role'], string> = {
+  video_editor: 'Video editor',
+  photo_editor: 'Photo editor',
+  album_designer: 'Album designer',
+  designer: 'Designer',
+  admin: 'Admin',
+  manager: 'Manager',
 }
 
 /**
@@ -236,7 +238,7 @@ function QuotationUploadDialog({ onClose }: { onClose: () => void }) {
                       <p className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <UserRound className="size-3" aria-hidden />
-                          {t.who.length ? t.who.join(', ') : <span className="text-tone-amber">{TASK_WORDS[t.kind]} · nobody yet</span>}
+                          {t.who.length ? `${t.who.join(', ')} · ${ROLE_WORDS[t.role]}` : <span className="text-tone-amber">{ROLE_WORDS[t.role]} · nobody has this role yet</span>}
                         </span>
                         {t.due_date && (
                           <span className="inline-flex items-center gap-1">

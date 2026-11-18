@@ -60,6 +60,7 @@ export const quotationImportState = z.object({ enabled: z.boolean() })
 export const quotationTask = z.object({
   id: z.string(),
   kind: z.enum(['edit', 'data_copy', 'e_invite', 'event_timeline']),
+  role: z.enum(['video_editor', 'photo_editor', 'album_designer', 'designer', 'admin', 'manager']),
   title: z.string(),
   due_date: isoDay.nullable(),
   who: z.array(z.string()),
