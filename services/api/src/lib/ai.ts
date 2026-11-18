@@ -177,6 +177,10 @@ export function refusalSentence(status: number, raw: string): string {
  */
 function tuningFor(model: string): Record<string, unknown> {
   if (/gpt-oss/i.test(model)) return { reasoning_effort: 'low', include_reasoning: false }
+  // NVIDIA's Nemotrons think by default into `reasoning_content`, and on a
+  // short max_tokens that thinking used the whole allowance: Super returned
+  // an empty answer 4 times in 6 (18 Nov). Off, it answers in ~0.6 s.
+  if (/nemotron/i.test(model)) return { chat_template_kwargs: { enable_thinking: false } }
   return {}
 }
 

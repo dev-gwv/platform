@@ -291,6 +291,14 @@ describe('model-aware tuning', () => {
     expect(bodyOf(f)).toMatchObject({ reasoning_effort: 'low', include_reasoning: false })
   })
 
+  it('switches Nemotron thinking off, so the answer is not left empty', async () => {
+    // Measured 18 Nov: with thinking on, Super spent 300 tokens thinking and
+    // answered nothing in 4 of 6 tries; off, it answered 6 of 6 in ~0.6 s.
+    const f = reply(ok('hi'))
+    await openAiCompatible({ apiKey: 'k', model: 'nvidia/nemotron-3.5-super-vl-120b-a12b', fetchImpl: f as unknown as typeof fetch }).chat({ messages: [] })
+    expect(bodyOf(f)).toMatchObject({ chat_template_kwargs: { enable_thinking: false } })
+  })
+
   it('adds nothing for a plain chat model', async () => {
     // An unknown provider may reject a field it does not know, so nothing
     // speculative goes on the wire.
@@ -298,6 +306,7 @@ describe('model-aware tuning', () => {
     await openAiCompatible({ apiKey: 'k', model: 'gpt-4o-mini', fetchImpl: f as unknown as typeof fetch }).chat({ messages: [] })
     expect(bodyOf(f)).not.toHaveProperty('reasoning_effort')
     expect(bodyOf(f)).not.toHaveProperty('include_reasoning')
+    expect(bodyOf(f)).not.toHaveProperty('chat_template_kwargs')
   })
 })
 
