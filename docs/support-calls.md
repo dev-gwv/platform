@@ -57,10 +57,41 @@ Google appointment schedule ──► "Support calls" calendar ──► Studio 
 
 ## Keeping the number safe from bans
 
-The bot posts only into the one group it is in, never to a person, one post per
+The bot posts only into the one group it is in (and, since 0310 and only when switched on, two messages to whoever booked, below), one post per
 event, at least 5 seconds apart with a random pause and a moment of
 "typing…", at most 20 an hour and 100 a day (the page; the bot itself stops at
 30/150), plain text. It never reads or answers messages and is not shown online.
+
+## The bot messages the person who booked (0310)
+
+Owner, 18 Nov: so their contact and chat are ready on the bot's WhatsApp if a
+call is missed. Switch on **Message the person who booked from this number**
+(Platform -> Support calls, under the group switch). Then the linked number
+sends, from fixed words, never AI, never a link:
+
+1. **When the booking is seen:** "Hi Asha, this is the Studio AutoPilot support
+   team. Your support call is booked for Fri 30 Oct, 3:00 pm. If anything
+   changes, or you'd like help before then, just reply here."
+2. **Ten minutes after the start, only if the ticket has no note yet:** "Hi
+   Asha, it's Studio AutoPilot support about your 3:00 pm support call. If we
+   couldn't connect, just reply here and we'll help you on WhatsApp."
+
+Two messages a booking at most. A cancel stops what has not gone; a move
+moves the check-in. The group post also carries the number (`WhatsApp: +91…`)
+and the ticket shows it.
+
+**The number comes from the booking page.** In each appointment schedule's
+Booking form, turn on **Phone number** and make it required (a custom question
+labelled "WhatsApp number" works too). Google writes the answer into the
+event's description and `phoneOf()` reads it; with no number, nothing is sent
+and the message list says why.
+
+**Keeping the number safe.** The bot checks WhatsApp knows the number, waits
+its 5 s gap and "types" first, refuses any link, and holds its own ceilings for
+messages to people: 6 an hour, 20 a day, 3 to one number a week
+(`WA_BOT_DM_HOURLY_CAP`, `WA_BOT_DM_DAILY_CAP`). Both messages ask for a reply,
+because a chat the person answers is one WhatsApp trusts. It still never reads
+or answers anything: you carry the chat on from the phone.
 
 ## Later: messages to the person who booked
 

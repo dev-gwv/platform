@@ -73,6 +73,12 @@ export const supportWhatsappSettings = z.object({
   tpl_followup: templateName,
   /** 0304: studios write to the official number and the assistant answers what it can. */
   chat_on: z.boolean().default(false),
+  /**
+   * 0310: the group bot's own number also writes to whoever booked -- once on
+   * booking, once ten minutes into the call if no note is on the ticket -- so
+   * the chat is ready on that WhatsApp when a call is missed.
+   */
+  bot_dm_on: z.boolean().default(false),
 })
 export type SupportWhatsappSettings = z.infer<typeof supportWhatsappSettings>
 
@@ -101,7 +107,7 @@ export const supportCallBookingRow = z.object({
 
 export const supportCallMessageRow = z.object({
   id: z.string(),
-  channel: z.enum(['official', 'group']),
+  channel: z.enum(['official', 'group', 'bot']),
   audience: z.enum(['booker', 'team', 'group']),
   /** Masked: the last four digits only. */
   to: z.string().nullable(),

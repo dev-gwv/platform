@@ -103,6 +103,8 @@ export function groupText(kind: SupportCallNoticeKind, b: Booking, plan?: string
   const who = [b.name || 'Someone', [b.studioName, plan ? `(${plan})` : null].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
   const lines = [head, who, istWhen(b.startsAt, b.endsAt)]
   if (kind !== 'booking.cancelled' && b.meetingUrl) lines.push(`Join: ${b.meetingUrl}`)
+  // The number from the booking page (0310), so a missed call is one tap away.
+  if (kind !== 'booking.cancelled' && b.phone) lines.push(`WhatsApp: +${b.phone}`)
   if (kind !== 'booking.cancelled' && b.notes) lines.push(`Notes: ${b.notes.replace(/\s+/g, ' ').slice(0, 200)}`)
   return lines.join('\n')
 }
@@ -115,7 +117,7 @@ export function summaryText(calls: ReadonlyArray<{ startsAt: string; name: strin
 }
 
 export interface PlannedMessage {
-  channel: 'official' | 'group'
+  channel: 'official' | 'group' | 'bot'
   audience: 'booker' | 'team' | 'group'
   to: string | null
   template: string | null
@@ -221,6 +223,78 @@ export function planMessages(
     )
   }
   return out
+}
+
+// ── the bot writing to whoever booked (0310) ──────────────────────────────
+//
+// Owner, 18 Nov: "it's just so I can contact them and their contact is ready
+// in the WhatsApp account for me to continue the chat from". Two messages a
+// booking at most, fixed words, no links (a link from a number someone has
+// never chatted with reads as spam), and each one asks for a reply, because a
+// chat they answer is a chat WhatsApp trusts. The bot adds its own ceilings.
+
+/** The bot's messages to one person about one booking, whatever happens to it. */
+export const BOT_BOOKER_CAP = 2
+/** The check-in goes this long after the call was due to start. */
+export const CHECKIN_AFTER_MS = 10 * 60_000
+
+const firstName = (name: string) => {
+  const first = name.trim().split(/\s+/)[0] ?? ''
+  return /^(someone|sample)$/i.test(first) ? '' : first.slice(0, 40)
+}
+const hi = (name: string) => (firstName(name) ? `Hi ${firstName(name)}` : 'Hi')
+
+/** "3:00 pm" in India time. */
+function istTime(iso: string): string {
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })
+    .format(new Date(iso))
+    .replace(/\s?([ap])\.?m\.?/i, ' $1m')
+    .toLowerCase()
+}
+
+/** The first message, as soon as the booking is seen. */
+export function botBookedText(b: Pick<Booking, 'name' | 'startsAt'>): string {
+  return `${hi(b.name)}, this is the Studio AutoPilot support team. Your support call is booked for ${istWhen(b.startsAt)}. If anything changes, or you'd like help before then, just reply here.`
+}
+
+/** The second, ten minutes into the call, only while the ticket has no note (checked when it is sent). */
+export function botCheckinText(b: Pick<Booking, 'name' | 'startsAt'>): string {
+  return `${hi(b.name)}, it's Studio AutoPilot support about your ${istTime(b.startsAt)} support call. If we couldn't connect, just reply here and we'll help you on WhatsApp.`
+}
+
+/**
+ * What the bot sends the person who booked. Nothing while the switch is off
+ * or for a cancelled call. A move drops the old check-in (the store does that)
+ * and plans one for the new time; the confirmation is never sent twice (its
+ * key has no time in it). BOT_BOOKER_CAP is checked when sending, against
+ * what has actually gone out.
+ */
+export function planBotMessages(
+  kind: SupportCallNoticeKind,
+  b: Booking,
+  s: Pick<SupportWhatsappSettings, 'bot_dm_on'>,
+  opts: { now: number },
+): PlannedMessage[] {
+  if (!s.bot_dm_on || kind === 'booking.cancelled') return []
+  const nowIso = new Date(opts.now).toISOString()
+  const out: PlannedMessage[] = [
+    { channel: 'bot', audience: 'booker', to: b.phone, template: null, params: [], body: botBookedText(b), dedupeKey: `bot:booked:${b.ref}`, sendAfter: nowIso, skipped: null },
+  ]
+  const checkinAt = Date.parse(b.startsAt) + CHECKIN_AFTER_MS
+  if (checkinAt > opts.now) {
+    out.push({
+      channel: 'bot',
+      audience: 'booker',
+      to: b.phone,
+      template: null,
+      params: [],
+      body: botCheckinText(b),
+      dedupeKey: `bot:checkin:${b.ref}:${b.startsAt}`,
+      sendAfter: new Date(checkinAt).toISOString(),
+      skipped: null,
+    })
+  }
+  return b.phone ? out : out.map((m) => ({ ...m, skipped: 'No phone number on the booking.' }))
 }
 
 /** Whether the group may have one more post now. */

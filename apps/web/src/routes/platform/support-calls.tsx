@@ -374,6 +374,12 @@ function BotCard({
           label="Post support calls in the group"
           description="Off, or when the bot cannot post, the team numbers below get the official message instead."
         />
+        <Switch
+          checked={s.bot_dm_on}
+          onChange={(v) => patch({ bot_dm_on: v })}
+          label="Message the person who booked from this number"
+          description="Two messages at most, no links: one when they book, and one 10 minutes into the call if the ticket has no note yet. Their chat is then ready on this WhatsApp. Needs the phone number asked on the booking page."
+        />
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={bot.state !== 'open' || !data.settings.group_jid || testing} onClick={onTest}>
             <Send /> Send a test to the group

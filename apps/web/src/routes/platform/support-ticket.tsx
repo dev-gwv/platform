@@ -71,7 +71,7 @@ function Loaded({ t }: { t: SupportTicket }) {
       </Link>
       <PageHeader
         title={`${t.name}${t.studio_name ? ` · ${t.studio_name}` : ''}`}
-        description={[chat ? 'WhatsApp' : null, chat && t.contact_phone ? `+${t.contact_phone}` : null, t.has_call ? callWhen(t.starts_at) : null, t.email].filter(Boolean).join(' · ')}
+        description={[chat ? 'WhatsApp' : null, t.contact_phone ? `+${t.contact_phone}` : null, t.has_call ? callWhen(t.starts_at) : null, t.email].filter(Boolean).join(' · ')}
         actions={
           <div className="flex items-center gap-2">
             <StatusBadge tone={STATUS_TONE[t.status]}>{SUPPORT_TICKET_STATUS_LABEL[t.status]}</StatusBadge>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { supportCallNotice } from '@ipc/contracts'
-import { diffCalendar, isBooking, looksLikeIcal, maskIcal, noticeFor, parseIcs, personOf, refOf, zonedToUtc } from './support-calendar'
+import { diffCalendar, isBooking, looksLikeIcal, maskIcal, noticeFor, parseIcs, personOf, phoneOf, refOf, zonedToUtc } from './support-calendar'
 
 // The shape Google writes for a booked appointment (folded line included).
 const FEED = [
@@ -136,9 +136,32 @@ describe('noticeFor', () => {
     const [change] = diffCalendar(parseIcs(FEED)!, [], now)
     const n = supportCallNotice.parse(noticeFor(change!, { id: '6f1c2d3e-4b5a-4c6d-8e7f-001122334455', name: 'Mehta Studio' }))
     expect(n.booking.id).toBe('gcal:abc123@google.com')
-    expect(n.booking.invitee).toMatchObject({ name: 'Asha Rao', email: 'asha@mehta.in', whatsapp_ok: false })
+    // The number from the booking page rides along (0310); WhatsApp was never ticked.
+    expect(n.booking.invitee).toMatchObject({ name: 'Asha Rao', email: 'asha@mehta.in', phone: '919876543210', whatsapp_ok: false })
     expect(n.booking.utm?.content).toBe('Mehta Studio')
     expect(n.id).toBe('gcal:abc123@google.com:booking.created:2026-10-30T09:30:00.000Z')
+  })
+})
+
+describe('phoneOf', () => {
+  it('reads a labelled number', () => {
+    expect(phoneOf('Booked by Asha Rao\nPhone: 98765 43210\nCannot add my team')).toBe('919876543210')
+    expect(phoneOf('Booked by\nAsha\nWhatsApp number - +91 98765-43210')).toBe('919876543210')
+  })
+  it('reads a line that is only a number', () => {
+    expect(phoneOf('Booked by\nAsha Rao\nasha@mehta.in\n+91 98765 43210')).toBe('919876543210')
+    expect(phoneOf('Booked by\nAsha Rao\n09876543210')).toBe('919876543210')
+  })
+  it('never takes a number from the next line', () => {
+    expect(phoneOf('Phone: 98765 43210\n2 people will join')).toBe('919876543210')
+  })
+  it("never takes Meet's dial-in numbers", () => {
+    const meet = 'Booked by Asha Rao\n\n-::~:~::~:~:~:~\nJoin with Google Meet: https://meet.google.com/abc\nOr dial: (US) +1 650-555-0101 PIN: 123456789#\n+1 650 555 0101'
+    expect(phoneOf(meet)).toBeNull()
+  })
+  it('is null with no number, or one too short', () => {
+    expect(phoneOf('Booked by Asha Rao\nCannot add my team')).toBeNull()
+    expect(phoneOf('Phone: 12345')).toBeNull()
   })
 })
 

@@ -12,7 +12,7 @@ import type { Env } from '../context'
 import { withService } from './db'
 import { describeError, log } from './log'
 import { sendWhatsAppTemplate, whatsappConfigured } from './whatsapp'
-import { bookingFromNotice, groupHasRoom, planMessages, summaryText, type Booking, type PlannedMessage } from './support-calls'
+import { BOT_BOOKER_CAP, bookingFromNotice, groupHasRoom, planBotMessages, planMessages, summaryText, type Booking, type PlannedMessage } from './support-calls'
 import { followBooking, ticketsSummary } from './support-ticket-store'
 
 /**
@@ -32,7 +32,8 @@ export const SETTINGS_COLUMNS = `
   support_wa_daily_cap as daily_cap, support_wa_daily_summary as daily_summary,
   support_wa_tpl_booked as tpl_booked, support_wa_tpl_reminder as tpl_reminder,
   support_wa_tpl_cancelled as tpl_cancelled, support_wa_tpl_team as tpl_team,
-  support_wa_tpl_followup as tpl_followup, support_wa_chat_on as chat_on`
+  support_wa_tpl_followup as tpl_followup, support_wa_chat_on as chat_on,
+  support_wa_bot_dm_on as bot_dm_on`
 
 export async function readSupportSettings(sql: TransactionSql): Promise<SupportWhatsappSettings> {
   const [row] = await sql.unsafe<SupportWhatsappSettings[]>(`select ${SETTINGS_COLUMNS} from platform_settings limit 1`)
@@ -79,6 +80,22 @@ export async function botLogout(env: Env): Promise<void> {
 async function botSend(env: Env, jid: string, text: string, key: string): Promise<{ ok: true; id: string } | { ok: false; error: string; retry: boolean }> {
   try {
     const res = await botFetch(env, '/send', { method: 'POST', body: JSON.stringify({ jid, text, key }) }, 30_000)
+    const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string; retry?: boolean }
+    if (res.ok) return { ok: true, id: body.id ?? '' }
+    return { ok: false, error: body.error ?? `The bot answered ${res.status}.`, retry: body.retry ?? res.status >= 500 }
+  } catch (err) {
+    return { ok: false, error: `The bot could not be reached: ${describeError(err).message}`, retry: true }
+  }
+}
+
+/**
+ * One message from the bot to the person who booked (0310). The bot checks
+ * the number is on WhatsApp and keeps its own ceilings; `retry` is false
+ * when trying again cannot help.
+ */
+async function botDm(env: Env, phone: string, text: string, key: string): Promise<{ ok: true; id: string } | { ok: false; error: string; retry: boolean }> {
+  try {
+    const res = await botFetch(env, '/dm', { method: 'POST', body: JSON.stringify({ phone, text, key }) }, 45_000)
     const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string; retry?: boolean }
     if (res.ok) return { ok: true, id: body.id ?? '' }
     return { ok: false, error: body.error ?? `The bot answered ${res.status}.`, retry: body.retry ?? res.status >= 500 }
@@ -167,7 +184,9 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
               ${b.meetingUrl}, ${b.notes}, ${company?.id ?? null}, ${b.studioName}, ${b.page}, ${sql.json(notice as never)})
       on conflict (booking_ref) do update set
         status = excluded.status, starts_at = excluded.starts_at, ends_at = excluded.ends_at, timezone = excluded.timezone,
-        name = excluded.name, email = excluded.email, phone = excluded.phone, whatsapp_ok = excluded.whatsapp_ok,
+        name = excluded.name, email = excluded.email,
+        -- A cancel is rebuilt from what we kept, without the number: keep it (0310).
+        phone = coalesce(excluded.phone, support_call_bookings.phone), whatsapp_ok = excluded.whatsapp_ok,
         meeting_url = excluded.meeting_url, notes = excluded.notes,
         company_id = coalesce(excluded.company_id, support_call_bookings.company_id),
         studio_name = coalesce(excluded.studio_name, support_call_bookings.studio_name),
@@ -183,6 +202,12 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
         update support_call_outbox
            set status = 'skipped', last_error = ${notice.event === 'booking.cancelled' ? 'The call was cancelled.' : 'The call moved.'}, updated_at = now()
          where booking_id = ${bookingId} and status = 'queued' and dedupe_key like 'booker:reminder:%'`
+      // The bot's check-in for the old time too; a cancel also stops a confirmation not yet sent (0310).
+      await sql`
+        update support_call_outbox
+           set status = 'skipped', last_error = ${notice.event === 'booking.cancelled' ? 'The call was cancelled.' : 'The call moved.'}, updated_at = now()
+         where booking_id = ${bookingId} and status = 'queued' and channel = 'bot'
+           and (dedupe_key like 'bot:checkin:%' or ${notice.event === 'booking.cancelled'})`
     }
     const [{ n: bookerSoFar } = { n: 0 }] = await sql<{ n: number }[]>`
       select count(*)::int as n from support_call_outbox
@@ -194,6 +219,9 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
       groupWorks,
       plan: await planName(sql, company?.id ?? null),
     })
+    // The bot's two messages to whoever booked (0310), on the number we kept.
+    const [kept] = await sql<{ phone: string | null }[]>`select phone from support_call_bookings where id = ${bookingId}`
+    planned.push(...planBotMessages(notice.event, { ...b, phone: kept?.phone ?? b.phone }, settings, { now }))
     // A quiet save keeps the booking and says why nothing went out.
     await insertPlanned(sql, bookingId, quiet ? planned.map((m) => ({ ...m, skipped: m.skipped ?? quiet })) : planned)
     return 'saved'
@@ -205,7 +233,7 @@ export async function saveSupportCallNotice(env: Env, notice: SupportCallNotice,
 interface OutboxRow {
   id: string
   booking_id: string | null
-  channel: 'official' | 'group'
+  channel: 'official' | 'group' | 'bot'
   audience: 'booker' | 'team' | 'group'
   to_number: string | null
   template: string | null
@@ -292,6 +320,42 @@ async function sendGroup(env: Env, row: OutboxRow, settings: SupportWhatsappSett
   return 'other'
 }
 
+/**
+ * The bot's message to whoever booked (0310). Looked at again as it goes: the
+ * switch, a cancelled call, the two-message cap, and for the check-in a ticket
+ * that already has a note (the call happened) -- then it is not sent.
+ */
+async function sendBot(env: Env, row: OutboxRow, settings: SupportWhatsappSettings): Promise<'posted' | 'other'> {
+  if (!settings.bot_dm_on) return finish(env, row.id, { status: 'skipped', error: 'Messages to the person who booked are off.' }).then(() => 'other' as const)
+  if (!row.to_number || !row.body) return finish(env, row.id, { status: 'skipped', error: 'No phone number on the booking.' }).then(() => 'other' as const)
+  const why = await withService(env, async (sql) => {
+    if (!row.booking_id) return null
+    const [b] = await sql<{ status: string }[]>`select status from support_call_bookings where id = ${row.booking_id}`
+    if (b?.status === 'cancelled') return 'The call was cancelled.'
+    const [{ n } = { n: 0 }] = await sql<{ n: number }[]>`
+      select count(*)::int as n from support_call_outbox where booking_id = ${row.booking_id} and channel = 'bot' and status = 'sent'`
+    if (n >= BOT_BOOKER_CAP) return `Already ${BOT_BOOKER_CAP} messages for this booking.`
+    if (row.dedupe_key.startsWith('bot:checkin:')) {
+      const [noted] = await sql`
+        select 1 from support_tickets
+         where booking_id = ${row.booking_id}
+           and (coalesce(transcript, '') <> '' or coalesce(summary, '') <> '' or status in ('solved', 'waiting_them'))
+         limit 1`
+      if (noted) return 'The ticket has a note, so the call happened.'
+    }
+    return null
+  })
+  if (why) return finish(env, row.id, { status: 'skipped', error: why }).then(() => 'other' as const)
+  const r = await botDm(env, row.to_number, row.body, row.dedupe_key)
+  if (r.ok) {
+    await finish(env, row.id, { status: 'sent', providerId: r.id })
+    return 'posted'
+  }
+  if (r.retry && row.attempts < MAX_ATTEMPTS) await finish(env, row.id, { status: 'queued', error: r.error, retryInMs: row.attempts * 5 * 60_000 })
+  else await finish(env, row.id, { status: 'failed', error: r.error })
+  return 'other'
+}
+
 /** Send what is due. Two runs at once never take the same message. */
 export async function drainSupportCalls(env: Env): Promise<{ sent: number; failed: number; held: number }> {
   const { rows, settings } = await withService(env, async (sql) => {
@@ -309,7 +373,10 @@ export async function drainSupportCalls(env: Env): Promise<{ sent: number; faile
   for (const row of rows) {
     try {
       if (row.channel === 'official') await sendOfficial(env, row, settings)
-      else {
+      else if (row.channel === 'bot') {
+        if (posted > 0) await new Promise((r) => setTimeout(r, GROUP_GAP_MS()))
+        if ((await sendBot(env, row, settings)) === 'posted') posted++
+      } else {
         if (posted > 0) await new Promise((r) => setTimeout(r, GROUP_GAP_MS()))
         const r = await sendGroup(env, row, settings)
         if (r === 'posted') posted++

@@ -1,4 +1,4 @@
-import type { SupportCallNotice, SupportCallNoticeKind } from '@ipc/contracts'
+import { normalizePhoneForWhatsApp, type SupportCallNotice, type SupportCallNoticeKind } from '@ipc/contracts'
 
 /**
  * Support calls read from a Google Calendar (0283): the parts with no network
@@ -172,6 +172,28 @@ export function personOf(e: CalEvent): { name: string; email: string | null } {
 }
 
 /**
+ * The number the booker gave on the booking page (0310), if any: Google
+ * writes the form's answers into the description. A line labelled phone,
+ * mobile or WhatsApp wins; else the first line that is only a number. The
+ * Meet block is cut off first, so its dial-in numbers are never taken. Digits
+ * with the country code first (India assumed for ten), or null.
+ */
+export function phoneOf(description: string): string | null {
+  const text = description.split(/-::~|join with google meet|join by phone|or dial/i)[0] ?? ''
+  const labelled = /(?:phone|mobile|whatsapp|contact)[^:\n]{0,30}[:-][ \t]*(\+?\d[\d \t().-]{8,20})/i.exec(text)?.[1]
+  const bare = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => /^\+?[\d\s().-]{10,20}$/.test(l))
+  for (const raw of [labelled, bare]) {
+    if (!raw) continue
+    const n = normalizePhoneForWhatsApp(raw)
+    if (/^\d{11,15}$/.test(n)) return n
+  }
+  return null
+}
+
+/**
  * Whether an entry was made by the appointment schedule, not typed by the
  * person: Google writes "Booked by <name>" into every booking's description.
  * A booking whose description was cleared still reads "Title (Booker)" with
@@ -246,8 +268,10 @@ export function noticeFor(change: CalendarChange, studio: { id: string; name: st
       event_type: 'support-call',
       meeting_url: e.meetingUrl,
       notes: e.description ? e.description.slice(0, 2000) : null,
-      // A calendar entry carries no "remind me on WhatsApp", so nobody is messaged personally.
-      invitee: { name: who.name.slice(0, 200), email: who.email, phone: null, whatsapp_ok: false },
+      // The number from the booking page (0310). A calendar entry carries no
+      // "remind me on WhatsApp", so the official templates still never go;
+      // only the bot's two messages may (planBotMessages).
+      invitee: { name: who.name.slice(0, 200), email: who.email, phone: phoneOf(e.description), whatsapp_ok: false },
       utm: studio ? { source: 'google-calendar', content: studio.name, term: studio.id } : { source: 'google-calendar' },
       parent: null,
     },

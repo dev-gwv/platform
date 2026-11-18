@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { SupportCallNotice } from '@ipc/contracts'
 import {
   BOOKER_CAP,
+  botBookedText,
+  botCheckinText,
   bookingFromNotice,
   cleanParam,
   groupHasRoom,
   groupText,
   istWhen,
   maskNumber,
+  planBotMessages,
   planMessages,
   summaryText,
 } from './support-calls'
@@ -76,7 +79,7 @@ describe('words', () => {
   })
   it('writes the group line plainly', () => {
     expect(groupText('booking.created', bookingFromNotice(notice()), 'Pro')).toBe(
-      ['🎧 New support call', 'Asha Rao · Mehta Studio (Pro)', 'Fri 23 Oct, 3:00–3:20 pm', 'Join: https://meet.google.com/abc-defg-hij', 'Notes: Cannot add my team help'].join('\n'),
+      ['🎧 New support call', 'Asha Rao · Mehta Studio (Pro)', 'Fri 23 Oct, 3:00–3:20 pm', 'Join: https://meet.google.com/abc-defg-hij', 'WhatsApp: +919876543210', 'Notes: Cannot add my team help'].join('\n'),
     )
     expect(groupText('booking.cancelled', bookingFromNotice(notice()))).toBe(['❌ Support call cancelled', 'Asha Rao · Mehta Studio', 'Fri 23 Oct, 3:00–3:20 pm'].join('\n'))
     expect(summaryText([{ startsAt: '2026-10-23T09:30:00Z', name: 'Asha', studioName: 'Mehta Studio' }])).toBe("📅 Today's support calls (1)\n3:00 pm · Asha (Mehta Studio)")
@@ -160,5 +163,54 @@ describe('sampleNotice', () => {
     expect(n.booking.invitee.whatsapp_ok).toBe(false)
     const p = planMessages(n.event, bookingFromNotice(n), settings, { now: Date.parse('2026-10-24T10:10:00Z'), bookerSoFar: 0, groupWorks: true })
     expect(p.filter((m) => !m.skipped).map((m) => m.audience)).toEqual(['group'])
+  })
+})
+
+describe('the bot writing to whoever booked (0310)', () => {
+  const b = bookingFromNotice(notice())
+  const on = { bot_dm_on: true }
+  const before = Date.parse('2026-10-22T09:30:00Z')
+
+  it('sends nothing while the switch is off, or for a cancelled call', () => {
+    expect(planBotMessages('booking.created', b, { bot_dm_on: false }, { now: before })).toEqual([])
+    expect(planBotMessages('booking.cancelled', b, on, { now: before })).toEqual([])
+  })
+
+  it('confirms at once and checks in ten minutes after the start', () => {
+    const [booked, checkin] = planBotMessages('booking.created', b, on, { now: before })
+    expect(booked).toMatchObject({ channel: 'bot', audience: 'booker', to: '919876543210', dedupeKey: 'bot:booked:bk_1', skipped: null })
+    expect(booked!.sendAfter).toBe(new Date(before).toISOString())
+    expect(checkin).toMatchObject({ dedupeKey: 'bot:checkin:bk_1:2026-10-23T09:30:00.000Z', sendAfter: '2026-10-23T09:40:00.000Z', skipped: null })
+  })
+
+  it('a move keeps the one confirmation and checks in at the new time', () => {
+    const moved = { ...b, startsAt: '2026-10-24T09:30:00.000Z' }
+    const [booked, checkin] = planBotMessages('booking.rescheduled', moved, on, { now: before })
+    expect(booked!.dedupeKey).toBe('bot:booked:bk_1')
+    expect(checkin!.dedupeKey).toBe('bot:checkin:bk_1:2026-10-24T09:30:00.000Z')
+  })
+
+  it('a call already ten minutes in gets no check-in', () => {
+    expect(planBotMessages('booking.created', b, on, { now: Date.parse('2026-10-23T09:45:00Z') })).toHaveLength(1)
+  })
+
+  it('without a number, says so and sends nothing', () => {
+    const rows = planBotMessages('booking.created', { ...b, phone: null }, on, { now: before })
+    expect(rows.every((m) => m.skipped === 'No phone number on the booking.')).toBe(true)
+  })
+
+  it('fixed words, first name only, no links, asking for a reply', () => {
+    expect(botBookedText(b)).toBe(
+      "Hi Asha, this is the Studio AutoPilot support team. Your support call is booked for Fri 23 Oct, 3:00 pm. If anything changes, or you'd like help before then, just reply here.",
+    )
+    expect(botCheckinText(b)).toBe(
+      "Hi Asha, it's Studio AutoPilot support about your 3:00 pm support call. If we couldn't connect, just reply here and we'll help you on WhatsApp.",
+    )
+    for (const t of [botBookedText(b), botCheckinText(b)]) expect(t).not.toMatch(/https?:|www\./)
+    expect(botBookedText({ ...b, name: 'Someone' })).toMatch(/^Hi, this is/)
+  })
+
+  it('the group post carries the number', () => {
+    expect(groupText('booking.created', b)).toContain('WhatsApp: +919876543210')
   })
 })

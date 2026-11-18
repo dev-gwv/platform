@@ -4,8 +4,12 @@
 // Why it is built the way it is (the developer, 24 Oct: "Meta bans APIs very
 // quickly"; this bot is not Meta's official API, so it must look and behave
 // like a careful person, not a broadcaster):
-//   * it only ever posts to groups (@g.us) it is a member of -- never to a
-//     person, never to a list;
+//   * it posts to groups (@g.us) it is a member of, and, since 0310 (owner,
+//     18 Nov), to ONE person in one case: whoever booked a support call, so
+//     their chat is ready on this WhatsApp if the call is missed. /dm is
+//     kept tight: at most DM_PER_NUMBER messages to a number a week,
+//     DM_HOURLY / DM_DAILY in all, never a link, only a number WhatsApp
+//     says exists, and never to a list;
 //   * one post per key (the API's dedupe key), kept across restarts;
 //   * at least MIN_GAP_MS between posts plus a random pause, a "typing…" moment
 //     before each, and hard hourly and daily ceilings that hold even if the
@@ -16,7 +20,7 @@
 //     call but /health needs WA_BOT_SECRET.
 //
 // Endpoints: GET /health, GET /status, GET /groups, POST /send {jid,text,key},
-// POST /logout. Data (the link and the send log) lives in WA_BOT_DATA.
+// POST /dm {phone,text,key}, POST /logout. Data (the link and the send log) lives in WA_BOT_DATA.
 
 import http from 'node:http'
 import fs from 'node:fs/promises'
@@ -34,6 +38,12 @@ const LOG_FILE = path.join(DATA, 'sent.json')
 const HOURLY_CEILING = Number(process.env.WA_BOT_HOURLY_CAP || 30)
 const DAILY_CEILING = Number(process.env.WA_BOT_DAILY_CAP || 150)
 const MIN_GAP_MS = 5_000
+// Messages to people (0310): far below the group's, because a new number
+// writing to many strangers is what WhatsApp bans.
+const DM_HOURLY = Number(process.env.WA_BOT_DM_HOURLY_CAP || 6)
+const DM_DAILY = Number(process.env.WA_BOT_DM_DAILY_CAP || 20)
+const DM_PER_NUMBER = 3
+const WEEK_MS = 7 * 24 * 3600_000
 
 const logger = pino({ level: process.env.WA_BOT_LOG_LEVEL || 'warn' })
 
@@ -43,7 +53,7 @@ let restartTimer = null
 let backoffMs = 2_000
 
 // ── the send log: caps and "already sent" survive a restart ──────────────
-/** @type {{ at: number, key: string, id: string }[]} */
+/** @type {{ at: number, key: string, id: string, to?: string }[]} */
 let sent = []
 async function loadLog() {
   try {
@@ -53,12 +63,17 @@ async function loadLog() {
   }
 }
 async function saveLog() {
+  // Group posts are kept two days for the caps; a person's a little over a
+  // week, for DM_PER_NUMBER.
   const dayAgo = Date.now() - 48 * 3600_000
-  sent = sent.filter((s) => s.at > dayAgo).slice(-2000)
+  const weekAgo = Date.now() - WEEK_MS - 3600_000
+  sent = sent.filter((s) => s.at > (s.to ? weekAgo : dayAgo)).slice(-2000)
   await fs.mkdir(DATA, { recursive: true })
   await fs.writeFile(LOG_FILE, JSON.stringify(sent))
 }
 const sentSince = (ms) => sent.filter((s) => s.at > Date.now() - ms).length
+const dmSince = (ms) => sent.filter((s) => s.to && s.at > Date.now() - ms).length
+const toNumberThisWeek = (to) => sent.filter((s) => s.to === to && s.at > Date.now() - WEEK_MS).length
 
 // ── the WhatsApp link ─────────────────────────────────────────────────────
 async function start() {
@@ -155,6 +170,52 @@ function post(jid, text, key) {
   return p
 }
 
+/**
+ * One message to the person who booked (0310). Same queue and gap as the
+ * group, with its own ceilings, and only to a number WhatsApp knows.
+ */
+function dm(phone, text, key) {
+  const run = async () => {
+    const already = sent.find((s) => s.key === key)
+    if (already) return { status: 200, body: { id: already.id, duplicate: true } }
+    if (status.state !== 'open' || !sock) return { status: 503, body: { error: 'The bot is not linked.', retry: false } }
+    if (sentSince(3600_000) >= HOURLY_CEILING || sentSince(24 * 3600_000) >= DAILY_CEILING || dmSince(3600_000) >= DM_HOURLY || dmSince(24 * 3600_000) >= DM_DAILY) {
+      return { status: 429, body: { error: 'The bot has reached its ceiling for messages to people for now.', retry: true } }
+    }
+    if (toNumberThisWeek(phone) >= DM_PER_NUMBER) {
+      return { status: 429, body: { error: `Already ${DM_PER_NUMBER} messages to this number this week.`, retry: false } }
+    }
+    let jid
+    try {
+      const [found] = await sock.onWhatsApp(phone)
+      if (!found?.exists) return { status: 404, body: { error: 'That number is not on WhatsApp.', retry: false } }
+      jid = found.jid
+    } catch (err) {
+      return { status: 502, body: { error: `WhatsApp could not check the number: ${String(err?.message ?? err).slice(0, 200)}`, retry: true } }
+    }
+    const wait = lastPostAt + MIN_GAP_MS + Math.floor(Math.random() * 4_000) - Date.now()
+    if (wait > 0) await sleep(wait)
+    try {
+      await sock.sendPresenceUpdate('composing', jid).catch(() => {})
+      // Typing takes about as long as the words would.
+      await sleep(Math.min(6_000, 1_500 + text.length * 25) + Math.floor(Math.random() * 1_500))
+      await sock.sendPresenceUpdate('paused', jid).catch(() => {})
+      const res = await sock.sendMessage(jid, { text })
+      lastPostAt = Date.now()
+      const id = res?.key?.id ?? ''
+      sent.push({ at: lastPostAt, key, id, to: phone })
+      await saveLog()
+      return { status: 200, body: { id } }
+    } catch (err) {
+      logger.warn({ err: String(err?.message ?? err) }, 'dm failed')
+      return { status: 502, body: { error: `WhatsApp did not take it: ${String(err?.message ?? err).slice(0, 200)}`, retry: true } }
+    }
+  }
+  const p = queue.then(run, run)
+  queue = p.catch(() => {})
+  return p
+}
+
 // ── HTTP, on the compose network only ─────────────────────────────────────
 function authorised(req) {
   if (!SECRET) return false
@@ -184,7 +245,7 @@ const server = http.createServer(async (req, res) => {
     if (!authorised(req)) return reply(res, 401, { error: 'unauthorised' })
 
     if (req.method === 'GET' && url.pathname === '/status') {
-      return reply(res, 200, { ...status, sent_last_hour: sentSince(3600_000), sent_today: sentSince(24 * 3600_000) })
+      return reply(res, 200, { ...status, sent_last_hour: sentSince(3600_000), sent_today: sentSince(24 * 3600_000), dm_today: dmSince(24 * 3600_000) })
     }
     if (req.method === 'GET' && url.pathname === '/groups') {
       if (status.state !== 'open' || !sock) return reply(res, 503, { error: 'The bot is not linked.' })
@@ -203,6 +264,16 @@ const server = http.createServer(async (req, res) => {
       if (typeof text !== 'string' || !text.trim() || text.length > 1500) return reply(res, 400, { error: 'Empty or too long.', retry: false })
       if (typeof key !== 'string' || !key) return reply(res, 400, { error: 'A key is needed.', retry: false })
       const r = await post(jid, text, key)
+      return reply(res, r.status, r.body)
+    }
+    if (req.method === 'POST' && url.pathname === '/dm') {
+      const { phone, text, key } = await readJson(req)
+      if (typeof phone !== 'string' || !/^\d{10,15}$/.test(phone)) return reply(res, 400, { error: 'A number is 10 to 15 digits, country code first.', retry: false })
+      if (typeof text !== 'string' || !text.trim() || text.length > 600) return reply(res, 400, { error: 'Empty or too long.', retry: false })
+      // A link in a message from a number they have not chatted with reads as spam.
+      if (/https?:\/\/|www\./i.test(text)) return reply(res, 400, { error: 'No links in a message to a person.', retry: false })
+      if (typeof key !== 'string' || !key) return reply(res, 400, { error: 'A key is needed.', retry: false })
+      const r = await dm(phone, text, key)
       return reply(res, r.status, r.body)
     }
     if (req.method === 'POST' && url.pathname === '/logout') {

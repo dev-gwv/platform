@@ -79,6 +79,7 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
       if (key.startsWith('summary:')) return "Today's calls"
       if (key.startsWith('test:')) return 'Test'
       if (m.channel === 'group') return `Group post${who}`
+      if (m.channel === 'bot') return `${key.startsWith('bot:checkin:') ? 'Check-in' : 'Booked'} from the bot${who}`
       return `${String(m.template ?? 'Template')}${who}`
     }
     return c.json(
@@ -124,7 +125,8 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
           support_wa_hourly_cap = ${d.hourly_cap}, support_wa_daily_cap = ${d.daily_cap}, support_wa_daily_summary = ${d.daily_summary},
           support_wa_tpl_booked = ${d.tpl_booked}, support_wa_tpl_reminder = ${d.tpl_reminder},
           support_wa_tpl_cancelled = ${d.tpl_cancelled}, support_wa_tpl_team = ${d.tpl_team},
-          support_wa_tpl_followup = ${d.tpl_followup}, support_wa_chat_on = ${d.chat_on}, updated_at = now()`),
+          support_wa_tpl_followup = ${d.tpl_followup}, support_wa_chat_on = ${d.chat_on},
+          support_wa_bot_dm_on = ${d.bot_dm_on}, updated_at = now()`),
     )
     if (!ok) fail(400, 'We could not save the settings.')
     // Numbers are said by count, never written into the audit trail.
@@ -132,7 +134,7 @@ export const platformSupportCallsRouter = new Hono<AppEnv>()
       action: 'platform.support_calls_settings',
       entityType: 'platform_settings',
       entityId: null,
-      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary, chat_on: d.chat_on },
+      after: { official_on: d.official_on, bot_on: d.bot_on, team_numbers: numbers.length, group: d.group_name, hourly_cap: d.hourly_cap, daily_cap: d.daily_cap, daily_summary: d.daily_summary, chat_on: d.chat_on, bot_dm_on: d.bot_dm_on },
     })
     return c.json({ ok: true })
   })
