@@ -36,3 +36,43 @@ update companies c
    and u.deleted_at is null
    and (u.user_id = c.owner_user_id or u.role in ('super_admin', 'admin'))
    and lower(trim(au.email)) = 'afreenekram98@gmail.com';
+
+-- Who does what in that studio (owner, 18 Nov), as job roles, so the upload's
+-- tasks find them: Sorav admin, Mohit photo editor, Usman and Aman teasers,
+-- films and reels, Rayeen full-length films and reels, Sudhansu project
+-- manager. Each role is made once; each is given to the studio's person whose
+-- first name it is (a person not added yet picks it when added). Never taken
+-- away from anyone, so the studio can change it in Team -> Roles.
+do $$
+declare
+  v_company uuid;
+  r record;
+  v_role uuid;
+begin
+  for v_company in select id from companies where quote_import loop
+    for r in
+      select * from (values
+        ('Admin',                      'admin_data',         'other', array['sorav', 'saurav']),
+        ('Photo Editor',               'photo_editor',       'post',  array['mohit']),
+        ('Teaser, Film & Reel Editor', 'teaser_film_reel_editor', 'post', array['usman', 'aman']),
+        ('Full-length & Reel Editor',  'full_length_reel_editor', 'post', array['rayeen', 'rayyan']),
+        ('Project Manager',            'project_manager',    'other', array['sudhansu', 'sudhanshu'])
+      ) as t(type_name, role_code, stage, first_names)
+    loop
+      select id into v_role from employee_roles
+       where company_id = v_company and (role_code = r.role_code or lower(btrim(type_name)) = lower(r.type_name))
+       limit 1;
+      if v_role is null then
+        insert into employee_roles (company_id, type_name, role_code, stage)
+        values (v_company, r.type_name, r.role_code, r.stage)
+        returning id into v_role;
+      end if;
+      insert into employee_role_assignments (user_id, role_id, company_id)
+      select u.user_id, v_role, v_company
+        from users u
+       where u.company_id = v_company and u.deleted_at is null
+         and lower(split_part(btrim(u.name), ' ', 1)) = any (r.first_names)
+      on conflict do nothing;
+    end loop;
+  end loop;
+end $$;

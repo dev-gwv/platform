@@ -48,6 +48,30 @@ export function quoteWorkOf(title: string): QuoteWork {
   return 'other'
 }
 
+/**
+ * Which kind of video, for studios whose editors split the work (owner,
+ * 18 Nov: Usman and Aman edit teasers, films and reels; Rayeen full-length
+ * films and reels): a full-length film, a reel, or a short film (highlight,
+ * teaser, trailer, save-the-date video).
+ */
+export type VideoCut = 'full' | 'reel' | 'short'
+export function videoCutOf(title: string): VideoCut {
+  const t = title.toLowerCase()
+  if (/full[\s-]*length|full\s*(film|video|ceremony|wedding)|traditional\s*(film|video)|documentary|long\s*(film|video)/.test(t)) return 'full'
+  if (/\breels?\b|instagram|short\s*video|\bstory\b|stories/.test(t)) return 'reel'
+  return 'short'
+}
+
+/** Does a person's job role cover this kind of video? Null: they did not say, so any. */
+export function jobCoversCut(job: string, cut: VideoCut): boolean | null {
+  const j = job.toLowerCase()
+  const full = /full[\s-]*length|full\s*film|long\s*(film|video)|traditional|documentary/.test(j)
+  const reel = /\breels?\b/.test(j)
+  const short = /teaser|highlight|trailer|cinematic/.test(j) || (/\bfilms?\b/.test(j) && !full)
+  if (!full && !reel && !short) return null
+  return cut === 'full' ? full : cut === 'reel' ? reel : short
+}
+
 /** Is this an e-invite, which also brings the manager's form task. */
 export const isEInvite = (title: string) => /\be[\s-]?invites?\b|\binvitations?\b/i.test(title)
 
@@ -86,6 +110,8 @@ export interface PlannedTask {
   kind: 'edit' | 'data_copy' | 'e_invite' | 'event_timeline'
   /** Who it goes to, by job role. */
   role: QuoteRole
+  /** For a video, which kind, so a studio's editors can split the work. */
+  cut?: VideoCut
   title: string
   due: string | null
   description: string
@@ -143,6 +169,7 @@ export function planQuotationTasks(input: {
     tasks.push({
       kind: 'edit',
       role: WORK_ROLE[work],
+      ...(work === 'video' ? { cut: videoCutOf(d.title) } : {}),
       title: taskTitle(work, d.title),
       due: start,
       deliverableId: d.id,

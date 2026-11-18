@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { quotationImportState, quotationReading, quotationTasksResult, type QuotationTasksResult } from '@ipc/contracts'
-import { internalLeadDaysForTitle, planQuotationTasks, type PlannedTask, type QuoteForms, type QuoteRole } from '@ipc/domain'
+import { internalLeadDaysForTitle, jobCoversCut, planQuotationTasks, type PlannedTask, type QuoteForms, type QuoteRole } from '@ipc/domain'
 import type { AppEnv } from '../../context'
 import { requireAction } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
@@ -67,7 +67,8 @@ export function pickPeople(people: Person[]): Record<QuoteRole, Person[]> {
   return {
     video_editor: by(isVideoEditor),
     photo_editor: by(isPhotoEditor),
-    album_designer: by(isAlbumDesigner),
+    // No album designer: the photo editor, who has the photos, does it.
+    album_designer: by(isAlbumDesigner).length ? by(isAlbumDesigner) : by(isPhotoEditor),
     designer: by(isDesigner),
     admin: (adminJob.length ? adminJob : admins.length ? admins : owners).slice(0, 1),
     manager: (managers.length ? managers : admins.length ? admins : owners).slice(0, 1),
@@ -151,7 +152,15 @@ export const quoteImportRoutes = new Hono<AppEnv>()
         // just gave them.
         const load = new Map(people.map((p) => [p.user_id, p.load]))
         const assignees = (t: PlannedTask): Person[] => {
-          const pool = who[t.role]
+          let pool = who[t.role]
+          // Editors who split the work: only those whose role covers this
+          // kind of video, else anyone who did not say (else all of them).
+          if (t.cut) {
+            const cut = t.cut
+            const covers = pool.filter((p) => jobCoversCut(p.job, cut) === true)
+            const open = pool.filter((p) => jobCoversCut(p.job, cut) === null)
+            pool = covers.length ? covers : open.length ? open : pool
+          }
           if (pool.length <= 1) return pool
           const free = [...pool].sort((a, b) => (load.get(a.user_id) ?? 0) - (load.get(b.user_id) ?? 0))[0]!
           load.set(free.user_id, (load.get(free.user_id) ?? 0) + 1)

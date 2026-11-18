@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fillFormMessage, planQuotationTasks, quoteWorkOf } from './quote-tasks'
+import { fillFormMessage, jobCoversCut, planQuotationTasks, quoteWorkOf, videoCutOf } from './quote-tasks'
 
 const shoots = [
   { name: 'Engagement', shoot_date: '2027-02-07' },
@@ -86,5 +86,25 @@ describe('planQuotationTasks', () => {
 
   it('fills a message that names its links', () => {
     expect(fillFormMessage({ form: 'F', reference: 'R', message: 'a {form} b {reference}' })).toBe('a F b R')
+  })
+})
+
+describe('splitting video work between editors', () => {
+  it('tells full-length films, reels and short films apart', () => {
+    expect(videoCutOf('Full-length film of each event')).toBe('full')
+    expect(videoCutOf('Instagram reels (4-5)')).toBe('reel')
+    expect(videoCutOf('Highlight film (4-5 min)')).toBe('short')
+    expect(videoCutOf('Wedding teaser')).toBe('short')
+  })
+  it("reads an editor's job role", () => {
+    const usman = 'Teaser, Film & Reel Editor'
+    const rayeen = 'Full-length & Reel Editor'
+    expect(jobCoversCut(usman, 'short')).toBe(true)
+    expect(jobCoversCut(usman, 'full')).toBe(false)
+    expect(jobCoversCut(usman, 'reel')).toBe(true)
+    expect(jobCoversCut(rayeen, 'full')).toBe(true)
+    expect(jobCoversCut(rayeen, 'short')).toBe(false)
+    expect(jobCoversCut(rayeen, 'reel')).toBe(true)
+    expect(jobCoversCut('Video Editor', 'full')).toBeNull()
   })
 })
