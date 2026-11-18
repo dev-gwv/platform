@@ -161,14 +161,17 @@ export const quoteImportRoutes = new Hono<AppEnv>()
             const open = pool.filter((p) => jobCoversCut(p.job, cut) === null)
             pool = covers.length ? covers : open.length ? open : pool
           }
-          if (pool.length <= 1) return pool
+          if (pool.length === 0) return pool
+          // Everything a person is given here counts, so Mohit's photo work
+          // weighs when the designs are shared between him and Sorav.
           const free = [...pool].sort((a, b) => (load.get(a.user_id) ?? 0) - (load.get(b.user_id) ?? 0))[0]!
           load.set(free.user_id, (load.get(free.user_id) ?? 0) + 1)
           return [free]
         }
 
         const made: QuotationTasksResult['tasks'] = []
-        for (const t of plan) {
+        // Designs last, so whoever shares them is weighed with all their other work here.
+        for (const t of [...plan.filter((t) => t.role !== 'designer'), ...plan.filter((t) => t.role === 'designer')]) {
           const team = assignees(t)
           const [row] = await sql<{ id: string }[]>`
             select create_task_with_assignees(

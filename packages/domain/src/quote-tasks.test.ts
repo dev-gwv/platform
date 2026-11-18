@@ -13,6 +13,7 @@ describe('quoteWorkOf', () => {
     expect(quoteWorkOf('4-5 Instagram reels of key moments')).toBe('video')
     expect(quoteWorkOf('Save the date video')).toBe('video')
     expect(quoteWorkOf('Save the date')).toBe('design')
+    expect(quoteWorkOf('Wedding countdown videos (3)')).toBe('design')
     expect(quoteWorkOf('E-invite for each side & monologue shoot')).toBe('design')
     expect(quoteWorkOf('2 Royal album of 40 sheets')).toBe('album')
     expect(quoteWorkOf('2 Large photo frames, 20×30 inches')).toBe('print')

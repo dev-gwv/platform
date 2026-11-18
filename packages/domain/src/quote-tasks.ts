@@ -38,6 +38,8 @@ const DESIGN = /\be[\s-]?invites?\b|\binvitations?\b|save[\s-]?the[\s-]?dates?\b
 /** What kind of work a deliverable's title is, for the task it brings. */
 export function quoteWorkOf(title: string): QuoteWork {
   const t = title.toLowerCase()
+  // The studio's designers make countdowns, video or not (owner, 18 Nov).
+  if (/count[\s-]?downs?/.test(t)) return 'design'
   // "Save the date video" is a video; "Save the date" alone is a design.
   if (VIDEO.test(t) && !/\be[\s-]?invite/.test(t)) return 'video'
   if (DESIGN.test(t)) return 'design'

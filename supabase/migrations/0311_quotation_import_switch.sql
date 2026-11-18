@@ -40,7 +40,8 @@ update companies c
 -- Who does what in that studio (owner, 18 Nov), as job roles, so the upload's
 -- tasks find them: Sorav admin, Mohit photo editor, Usman and Aman teasers,
 -- films and reels, Rayeen full-length films and reels, Sudhansu project
--- manager. Each role is made once; each is given to the studio's person whose
+-- manager, and Sorav and Mohit design the e-invites, save-the-dates and
+-- countdowns. Each role is made once; each is given to the studio's person whose
 -- first name it is (a person not added yet picks it when added). Never taken
 -- away from anyone, so the studio can change it in Team -> Roles.
 do $$
@@ -56,7 +57,8 @@ begin
         ('Photo Editor',               'photo_editor',       'post',  array['mohit']),
         ('Teaser, Film & Reel Editor', 'teaser_film_reel_editor', 'post', array['usman', 'aman']),
         ('Full-length & Reel Editor',  'full_length_reel_editor', 'post', array['rayeen', 'rayyan']),
-        ('Project Manager',            'project_manager',    'other', array['sudhansu', 'sudhanshu'])
+        ('Project Manager',            'project_manager',    'other', array['sudhansu', 'sudhanshu']),
+        ('Invite & Countdown Designer', 'invite_countdown_designer', 'post', array['sorav', 'saurav', 'mohit'])
       ) as t(type_name, role_code, stage, first_names)
     loop
       select id into v_role from employee_roles
