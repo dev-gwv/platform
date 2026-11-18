@@ -482,8 +482,8 @@ describe('walking providers, not just models', () => {
 describe('the providers we can actually reach', () => {
   it('knows NVIDIA NIM and Gemini by address', () => {
     expect(assistantFallbacks('https://integrate.api.nvidia.com/v1')).toEqual([
-      'openai/gpt-oss-20b',
-      'nvidia/nemotron-3-super-120b-a12b',
+      'nvidia/nemotron-3-ultra-550b-a55b',
+      'nvidia/nemotron-3.5-super-vl-120b-a12b',
     ])
     expect(assistantFallbacks('https://generativelanguage.googleapis.com/v1beta/openai')).toEqual([
       'gemini-3.5-flash-lite',
@@ -491,9 +491,9 @@ describe('the providers we can actually reach', () => {
     ])
   })
 
-  it('never names the 120b at NVIDIA, which does not publish it', () => {
-    // Its catalogue carries the 20b sibling and not the 120b, so naming the
-    // 120b would be one guaranteed 404 on the way down.
-    expect(assistantFallbacks('https://integrate.api.nvidia.com/v1')).not.toContain('openai/gpt-oss-120b')
+  it('never names a gpt-oss at NVIDIA, which retired them', () => {
+    // gpt-oss-20b went 410 Gone on 18 Nov 2026 and the 120b was never there.
+    const chain = assistantFallbacks('https://integrate.api.nvidia.com/v1')
+    expect(chain.some((m) => m.startsWith('openai/gpt-oss'))).toBe(false)
   })
 })

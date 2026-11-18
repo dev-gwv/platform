@@ -21,11 +21,10 @@ import { z } from 'zod'
  */
 export const ASSISTANT_PROVIDERS = [
   { key: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', suggest: 'openai/gpt-oss-120b' },
-  // NVIDIA NIM carries the 20b sibling of our primary model but not the 120b,
-  // so falling through to it keeps the same prompt, the same tool-call shape
-  // and the same reasoning_effort tuning -- nothing above has to be re-tuned
-  // for the second vendor, which is the whole point of picking this one.
-  { key: 'nvidia', label: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', suggest: 'openai/gpt-oss-20b' },
+  // NVIDIA NIM retired gpt-oss-20b on 18 Nov 2026 (410 Gone). Tested that day
+  // on studio questions in English and Hindi: Nemotron 3 Ultra answered in
+  // ~2 s with real button paths and clean Hindi, so it leads.
+  { key: 'nvidia', label: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', suggest: 'nvidia/nemotron-3-ultra-550b-a55b' },
   // Google's OpenAI-compatible surface. A different family, so it is the
   // backstop rather than the first fallback: same request shape, different
   // habits in the answer.
@@ -67,10 +66,9 @@ export function assistantFallbacks(baseUrl: string | null | undefined): readonly
   if (known.key === 'groq' || known.key === 'openrouter' || known.key === 'together') {
     return ASSISTANT_FALLBACK_MODELS
   }
-  // NVIDIA publishes the 20b but not the 120b, so the chain runs the other way
-  // round here: its own sibling first, then a Nemotron of its own. Naming the
-  // 120b would be one guaranteed 404 on the way down.
-  if (known.key === 'nvidia') return ['openai/gpt-oss-20b', 'nvidia/nemotron-3-super-120b-a12b']
+  // NVIDIA serves no gpt-oss any more, so its chain is its own Nemotrons: the
+  // 120b Super (~2 s, good Hindi) under the Ultra.
+  if (known.key === 'nvidia') return ['nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/nemotron-3.5-super-vl-120b-a12b']
   // Google retires a Flash generation on a schedule and leaves the older one
   // reachable for a while, so the drop is to the previous Lite.
   if (known.key === 'gemini') return ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
