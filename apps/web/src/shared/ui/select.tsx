@@ -16,6 +16,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from './cn'
+import { keepScrollInside } from './scroll-inside'
 
 /**
  * The dropdown, in the app's own clothes.
@@ -209,6 +210,13 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
     rows[at >= 0 ? at : 0]?.focus()
   }, [open, placed])
 
+  // Portalled to the body, so inside a dialog its scroll lock would swallow
+  // every swipe on this list (scroll-inside.ts; the plan list, 18 Nov).
+  useEffect(() => {
+    if (!open || !placed || !panel.current) return
+    return keepScrollInside(panel.current)
+  }, [open, placed])
+
   const typed = useRef({ term: '', at: 0 })
 
   function onPanelKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -279,7 +287,7 @@ export function Select({ className, children, disabled, ...props }: ComponentPro
         maxHeight: box.maxHeight,
         ...(box.up ? { bottom: window.innerHeight - box.top } : { top: box.top }),
       }}
-      className="ipc-menu pointer-events-auto fixed z-[60] overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-card p-1.5 shadow-lg"
+      className="ipc-menu pointer-events-auto fixed z-[60] overflow-y-auto overflow-x-hidden overscroll-contain rounded-lg border border-border bg-card p-1.5 shadow-lg"
     >
       {items.length === 0 && <p className="px-2.5 py-2 text-sm text-muted-foreground">Nothing to choose from</p>}
       {items.map((item, i) => {

@@ -3,6 +3,7 @@ import { Check, ChevronDown, Loader2, Search } from 'lucide-react'
 import { cn } from '@/shared/ui/cn'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { SEARCH_MIN, useLead, useLeadSearch, useRecentLeads } from './api'
+import { isTouchScreen } from '@/shared/ui/touch'
 
 const PAGE = 20
 
@@ -86,7 +87,8 @@ export function LeadPicker({
         className="w-80 p-0"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          input.current?.focus()
+          // On a phone the keyboard would cover the list (touch.ts).
+          if (!isTouchScreen()) input.current?.focus()
         }}
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">

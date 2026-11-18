@@ -3,6 +3,7 @@ import { Check, ChevronDown, Loader2, Plus, Search } from 'lucide-react'
 import { cn } from './cn'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { TONES, TONE_BG, TONE_CHIP, type ToneName } from './tones'
+import { isTouchScreen } from './touch'
 
 export interface QuickOption {
   value: string
@@ -133,7 +134,8 @@ export function QuickSelect({
         className="w-72 p-0"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          input.current?.focus()
+          // On a phone the keyboard would cover the list (touch.ts).
+          if (!isTouchScreen()) input.current?.focus()
         }}
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">

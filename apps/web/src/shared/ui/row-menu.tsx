@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Ellipsis } from 'lucide-react'
 import { Button } from './button'
 import { cn } from './cn'
+import { keepScrollInside } from './scroll-inside'
 
 export interface RowMenuItem {
   label: string
@@ -42,7 +43,7 @@ export function RowMenu({
   variant?: 'ghost' | 'default' | 'outline'
   className?: string
 }) {
-  const [box, setBox] = useState<{ top: number; right: number } | null>(null)
+  const [box, setBox] = useState<{ top?: number; bottom?: number; right: number; maxHeight: number } | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const menuId = useId()
@@ -57,12 +58,24 @@ export function RowMenu({
     if (open) return close()
     const r = trigger.current?.getBoundingClientRect()
     if (!r) return
-    setBox({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    // Open upwards when the row sits low on a phone: Studio Access Manager's
+    // eight actions ran off the bottom of the screen, Revoke out of reach.
+    const below = window.innerHeight - r.bottom - 12
+    const above = r.top - 12
+    const up = below < 240 && above > below
+    setBox({
+      ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+      right: Math.max(8, window.innerWidth - r.right),
+      maxHeight: Math.max(160, up ? above : below),
+    })
   }
 
   useEffect(() => {
     if (!open) return
-    panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
+    const el = panel.current
+    el?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+    // Portalled out of any dialog, whose scroll lock would swallow a swipe here.
+    const undoScroll = el ? keepScrollInside(el) : undefined
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
       if (!panel.current?.contains(t) && !trigger.current?.contains(t)) close(false)
@@ -73,12 +86,17 @@ export function RowMenu({
         close()
       }
     }
-    const onMove = () => close(false)
+    // Scrolling the menu's own list keeps it open; anything else moving does not.
+    const onMove = (e: Event) => {
+      if (e.target instanceof Node && panel.current?.contains(e.target)) return
+      close(false)
+    }
     document.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('scroll', onMove, true)
     window.addEventListener('resize', onMove)
     return () => {
+      undoScroll?.()
       document.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('scroll', onMove, true)
@@ -115,8 +133,8 @@ export function RowMenu({
             ref={panel}
             id={menuId}
             role="menu"
-            style={{ position: 'fixed', top: box.top, right: box.right }}
-            className="z-50 min-w-48 rounded-lg border border-border bg-card p-1 text-sm shadow-lg"
+            style={{ position: 'fixed', top: box.top, bottom: box.bottom, right: box.right, maxHeight: box.maxHeight }}
+            className="z-50 min-w-48 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1 text-sm shadow-lg"
           >
             {items.map((item) => [
               item.divider ? <div key={`${item.label}-line`} role="separator" className="my-1 h-px bg-border" /> : null,

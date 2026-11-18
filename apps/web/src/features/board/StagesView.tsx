@@ -258,7 +258,7 @@ function LaneColumn({ lane, count, late, children }: { lane: Lane; count: number
         {late > 0 && <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">{late} late</span>}
         <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums', tone.soft, tone.text)}>{count}</span>
       </header>
-      <div className="flex max-h-[calc(100vh-19rem)] min-h-32 flex-col gap-2 overflow-y-auto px-2 pb-2">{children}</div>
+      <div className="flex max-h-[calc(100dvh-19rem)] min-h-32 flex-col gap-2 overflow-y-auto px-2 pb-2">{children}</div>
     </section>
   )
 }

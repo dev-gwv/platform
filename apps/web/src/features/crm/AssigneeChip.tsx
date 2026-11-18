@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useMembers } from '@/features/allocation/api'
+import { isTouchScreen } from '@/shared/ui/touch'
 
 /**
  * Who has this lead, at the top of the drawer (owner, 25 Oct: "the lead
@@ -68,7 +69,7 @@ export function AssigneeChip({
         {(members.data?.length ?? 0) > 7 && (
           <span className="relative mb-2 block">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input autoFocus value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a person" className="h-9 pl-8" />
+            <Input autoFocus={!isTouchScreen()} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a person" className="h-9 pl-8" />
           </span>
         )}
         <ul className="flex max-h-72 flex-col overflow-y-auto">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Plus, Search, X, type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
 import { Input } from './input'
+import { isTouchScreen } from './touch'
 
 export interface FilterOption {
   value: string
@@ -63,6 +64,22 @@ export function MultiSelectFilter({
   const [adding, setAdding] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
+  // Where the panel starts, from the chip's left edge. Anchored to the chip's
+  // right, a chip at the left of a phone pushed half the list off screen
+  // (audit, 18 Nov: Leads -> All stages ran from x = -143px).
+  const [shift, setShift] = useState(0)
+  const [panelWidth, setPanelWidth] = useState(width)
+
+  function openPanel() {
+    const r = box.current?.getBoundingClientRect()
+    if (r) {
+      const w = Math.max(200, Math.min(width, window.innerWidth - 16))
+      const left = Math.max(8, Math.min(r.right - w, window.innerWidth - 8 - w))
+      setPanelWidth(w)
+      setShift(left - r.left)
+    }
+    setOpen(true)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -119,7 +136,7 @@ export function MultiSelectFilter({
     <div ref={box} className={cn('relative', className)}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openPanel())}
         aria-expanded={open}
         aria-haspopup="listbox"
         title={`Filter by ${label.toLowerCase()}`}
@@ -145,15 +162,15 @@ export function MultiSelectFilter({
       {open && (
         <div
           role="listbox"
-          style={{ width }}
-          className="absolute right-0 top-full z-30 mt-1.5 overflow-hidden rounded-md border border-border bg-card shadow-lg"
+          style={{ width: panelWidth, left: shift }}
+          className="absolute top-full z-30 mt-1.5 overflow-hidden rounded-md border border-border bg-card shadow-lg"
         >
           {searchable && (
             <div className="flex items-center gap-1.5 border-b border-border p-2">
               <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Input
                 ref={search}
-                autoFocus
+                autoFocus={!isTouchScreen()}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {

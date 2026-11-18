@@ -121,7 +121,7 @@ export function ManageAccessDialog({
       <DialogContent
         title={`Manage access${member?.name ? ` for ${member.name}` : ''}`}
         description="Assign a permission profile or customise per-module access."
-        className="max-h-[90vh] max-w-2xl overflow-y-auto"
+        className="max-h-[90dvh] max-w-2xl overflow-y-auto"
       >
         {member && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm">

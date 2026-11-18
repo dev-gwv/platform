@@ -581,6 +581,25 @@ body {
     inset: -0.625rem;
   }
 }
+/* A phone types in 16px boxes. The app's root is 14px, so every field was
+   14px, and below 16 CSS pixels an iPhone zooms the page on focus and leaves it
+   zoomed (audit, 18 Nov). Only a touch screen gets the bigger text and a box a
+   thumb can hit; a desktop keeps its dense forms. Unlayered, so it wins over a
+   field's own text-sm. Never `maximum-scale=1` instead: that also stops a
+   person pinching to zoom on purpose. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: 16px;
+  }
+  input.h-9:not([type='checkbox']):not([type='radio']),
+  button[role='combobox'].h-9 {
+    height: 2.5rem;
+  }
+}
+
 /* A phone has no hover, so a tick box that waits for one never shows: the
    lead cards' could not be ticked at all (audit, 17 Nov). */
 @media (hover: none) {

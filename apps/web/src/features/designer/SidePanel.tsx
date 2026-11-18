@@ -206,7 +206,7 @@ function TemplatesPanel({ doc, studio, onDoc }: PanelProps) {
                 type="button"
                 aria-label={`Delete template ${t.title}`}
                 title="Delete template"
-                className="absolute right-1 top-1 rounded-full bg-black/70 p-1.5 text-white opacity-0 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
+                className="absolute right-1 top-1 rounded-full bg-black/70 p-1.5 text-white opacity-0 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
                 onClick={async () => {
                   if (
                     await confirm({
@@ -431,7 +431,7 @@ function UploadsPanel() {
               aria-label="Remove from uploads"
               title="Remove from uploads (designs keep it)"
               onClick={() => remove.mutate(p.id)}
-              className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-0 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
+              className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-0 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
             >
               <X className="size-3.5" />
             </button>

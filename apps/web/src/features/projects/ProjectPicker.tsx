@@ -4,6 +4,7 @@ import { cn } from '@/shared/ui/cn'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { useClientProjects } from '@/features/clients/api'
 import { useProject, useProjects } from './api'
+import { isTouchScreen } from '@/shared/ui/touch'
 
 /** How many matches the server sends at a time. */
 export const PICKER_PAGE = 20
@@ -121,7 +122,8 @@ export function ProjectPicker({
         className="w-80 p-0"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          input.current?.focus()
+          // On a phone the keyboard would cover the list (touch.ts).
+          if (!isTouchScreen()) input.current?.focus()
         }}
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">

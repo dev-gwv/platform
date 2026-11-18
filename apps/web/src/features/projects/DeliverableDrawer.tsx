@@ -481,14 +481,14 @@ function NoteItem({
                 setText(n.body ?? '')
                 setEditing(true)
               }}
-              className="opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+              className="opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
               aria-label="Edit note"
             >
               <Pencil className="size-3" />
             </button>
           )}
           {onDelete && (
-            <button type="button" onClick={onDelete} className="opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100" aria-label="Delete note">
+            <button type="button" onClick={onDelete} className="opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100" aria-label="Delete note">
               <Trash2 className="size-3" />
             </button>
           )}

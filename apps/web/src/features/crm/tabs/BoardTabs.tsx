@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   DndContext,
   PointerSensor,
+  TouchSensor,
   closestCenter,
   useDraggable,
   useDroppable,
@@ -142,7 +143,12 @@ export function PipelineTab({
   const move = useMoveStage()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    // A press-and-hold drags on a phone, the same as the production board;
+    // a swipe still scrolls (audit, 18 Nov: only a mouse could move a card).
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  )
   const [pick, setPick] = useState<string | null>(null)
   const [losing, setLosing] = useState<{ leadId: string; stageId: string } | null>(null)
   // Which pipeline this person works in is remembered; the board used to

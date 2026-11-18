@@ -939,7 +939,7 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="designer-chrome absolute -right-2 -top-2 flex size-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground opacity-0 shadow transition-opacity hover:text-destructive group-hover/stat:opacity-100 focus:opacity-100"
+      className="designer-chrome absolute -right-2 -top-2 flex size-8 items-center justify-center rounded-full border border-border bg-white text-muted-foreground opacity-0 shadow transition-opacity hover:text-destructive group-hover/stat:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
     >
       <X className="size-4" />
     </button>

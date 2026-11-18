@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { TONE_BG } from '@/shared/ui/tones'
 import { useCreateTag, useTags } from './api'
 import { TagChip } from './TagChip'
+import { isTouchScreen } from '@/shared/ui/touch'
 
 const COLORS: readonly TagColor[] = ['blue', 'green', 'violet', 'amber', 'rose', 'teal']
 
@@ -74,7 +75,8 @@ export function LabelMenu({
         className="w-72 p-0"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          input.current?.focus()
+          // On a phone the keyboard would cover the list (touch.ts).
+          if (!isTouchScreen()) input.current?.focus()
         }}
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">

@@ -247,7 +247,7 @@ function TemplatesContent() {
         </div>
       )}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent title={editingId ? 'Edit design' : 'New design'} className="max-h-[90vh] max-w-5xl overflow-y-auto">
+        <DialogContent title={editingId ? 'Edit design' : 'New design'} className="max-h-[90dvh] max-w-5xl overflow-y-auto">
           {designDraft.restoredAt && (
             <div className="mb-4">
               <DraftRestoredBanner

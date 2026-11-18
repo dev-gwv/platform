@@ -318,7 +318,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                     {copied ? (
                       <Check className="size-3.5 text-tone-green" />
                     ) : (
-                      <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                      <Copy className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100" />
                     )}
                   </button>
                 </InlineField>
