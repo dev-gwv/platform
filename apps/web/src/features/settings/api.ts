@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { MOCK_ENABLED } from '@/shared/dev/mock-flag'
 import { toast } from 'sonner'
 import {
   auditLogPage,
@@ -86,6 +87,12 @@ export function useHealth() {
   return useQuery({
     queryKey: ['health'],
     queryFn: async () => {
+      // The preview has no API; /health is a plain fetch, not callApi, so it
+      // asks the mock itself (audit, 17 Nov: System said "This didn't load").
+      if (MOCK_ENABLED) {
+        const { mockResponse } = await import('@/shared/dev/mock')
+        return healthBody.parse(mockResponse('/health', 'GET'))
+      }
       const res = await fetch(`${config.apiBaseUrl}/health`)
       return healthBody.parse(await res.json())
     },

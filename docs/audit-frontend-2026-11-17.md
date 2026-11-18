@@ -207,9 +207,18 @@ Checked in the preview at 1280 px after the mock data was fixed.
 - **Invoices' Overdue differs from Payments' Overdue, and that is correct.**
   - The ₹40,000 is a *promised* payment on Sharma Wedding that is tied to no invoice. Payments counts promises and plan parts; the Invoices tile counts only invoices past their due date (`services/api/src/modules/billing/routes-due.ts`, `/overview`).
   - The preview showed it the other way, "₹40,000 · 1 invoice past due" with no such invoice in the list, because the mock copied Payments' bucket. The mock now follows the server's rule.
-- **Two server-side points to look at.** Neither can be checked in the preview.
-  1. Profit & Loss and Reports show a "Still to collect" of their own: project value minus money received. Home and Payments count invoice balances, GST included. A project fully paid at its package price but invoiced with GST on top will show ₹0 on Profit & Loss and the GST amount on Home. Either word the two apart ("Project value not yet received", as P&L's hint already says) or make them one number.
-  2. `/billing/overview` uses Postgres `current_date`, which is the server's UTC date. An invoice turns "overdue" at 5:30 am India time, not at midnight. `/billing/due` takes India's today.
+- **Two server-side points, fixed on 18 Nov:**
+  1. **Two "Still to collect" figures.** Profit & Loss and Reports count booked value minus money received; Home and Payments count invoice balances, GST included. They now carry different names: **Unpaid on bookings**, with "Booked price not yet received. Payments also counts GST on invoices." on Profit & Loss (`routes/financials.tsx`, `routes/reports.tsx`, the Reports CSV). Home and Payments keep "To collect".
+  2. **"Today" on the server was UTC.** Invoices' Overdue turned at 5:30 am India time. `/billing/overview` now takes `todayInIndia()`. Nineteen other uses of `current_date` now read `(now() at time zone 'Asia/Kolkata')::date`:
+     - the invoice list's Overdue and Due this week filters
+     - payments and expenses "this month" and "this financial year"
+     - the production board's late and due-today counts and who is on a shoot today
+     - the project list's next shoot and late tasks
+     - a referral offer's last day
+     - the tasks' fallback day
+     - crew payouts this month
+
+     (`services/api/src/modules/billing`, `financials`, `projects`, `referrals`, `tasks`, `team-payouts`)
 
 ## New tests
 
@@ -222,5 +231,14 @@ Checked in the preview at 1280 px after the mock data was fixed.
 ## Still to do
 
 - **Check on a real phone and tablet.** The preview pane was hidden, so the motion (reminder slide, page-in) could not be seen.
-- **Commit and push** after `git pull`. Nothing is committed; the changes touch the top bar, `styles.css` and `mock.ts`, which other sessions also edit.
-- **Re-record two setup videos.** The setup video and the Create project videos show the old top bar on a phone. The desktop top bar looks the same from 1024 px except the search field, which is now an icon below 1800 px; tutorials recorded at 1920 px are unaffected.
+- **Tutorial videos:** no re-recording needed. The recorder films at 1280 × 720 (`tools/tutorials/lib.mjs`), where the top bar is unchanged. My first report was wrong to say the setup videos show the phone bar. At that width only two small things changed: Assign team's booked row now shows the payout on its own line, and the List / Board / Pipeline switch is 4 px taller.
+
+## Second round (18 Nov)
+
+- **Referral cards at 768 px really did scroll 7 px.** Its two-column card turned on at `md` (screen width) beside the sidebar. It now waits for `lg`, here and on the project's Referral card (`routes/ai-referrals.tsx`, `features/referrals/card/ReferralCard.tsx`).
+- **The preview's last gaps are filled:**
+  - Platform → Diamond members, Email, Usage (and Where people stop)
+  - My profile's Morning and Monday email switches
+  - Settings → System's `/health`, which was a plain fetch and now asks the mock in preview mode (`features/settings/api.ts`)
+
+  `mock.test.ts` has 79 cases. Every page checked loads in the preview with nothing past the edge.

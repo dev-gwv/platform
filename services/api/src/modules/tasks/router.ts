@@ -366,7 +366,7 @@ export const tasksRouter = new Hono<AppEnv>()
           from tasks t
          where exists (select 1 from task_assignees a where a.task_id = t.id and a.user_id = ${me})
            and t.status not in ('completed', 'cancelled')
-           and t.due_date < coalesce(${today}::date, current_date)`),
+           and t.due_date < coalesce(${today}::date, (now() at time zone 'Asia/Kolkata')::date)`),
     )
     if (!rows) fail(400, 'We could not count your tasks.')
     return c.json({ count: rows[0]?.count ?? 0 })

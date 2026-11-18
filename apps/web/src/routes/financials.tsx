@@ -82,7 +82,7 @@ function ProfitAndLossPage() {
       ],
     )
     const projects = toCsv(
-      ['Project', 'Client', 'Income', 'Team', 'Expenses', 'Profit', 'Margin %', 'Still to collect'],
+      ['Project', 'Client', 'Income', 'Team', 'Expenses', 'Profit', 'Margin %', 'Unpaid on booking'],
       data.projects.map((p) => [p.name, p.client_name ?? '', p.income, p.team, p.expenses, p.profit, p.margin ?? '', p.to_collect]),
     )
     downloadCsv(
@@ -279,7 +279,7 @@ function Rail({ data }: { data: ProfitAndLoss }) {
     <Card>
       <CardContent className="flex flex-col gap-1 p-3">
         <p className="px-2 pt-1 text-sm font-semibold">Still to come in</p>
-        {item(<Wallet className="size-4 text-tone-amber" aria-hidden />, 'Still to collect', r.still_to_collect, 'Project value not yet received', '/projects')}
+        {item(<Wallet className="size-4 text-tone-amber" aria-hidden />, 'Unpaid on bookings', r.still_to_collect, 'Booked price not yet received. Payments also counts GST on invoices.', '/projects')}
       </CardContent>
     </Card>
   )
@@ -447,7 +447,7 @@ function Projects({ data }: { data: ProfitAndLoss }) {
                   {share !== 'off' && <th className="py-2 pr-3 text-right font-semibold">Studio costs</th>}
                   {share !== 'off' && <th className="py-2 pr-3 text-right font-semibold">After studio costs</th>}
                   <th className="py-2 pr-3 text-right">{head('margin', 'Margin')}</th>
-                  <th className="py-2 text-right">{head('to_collect', 'Still to collect')}</th>
+                  <th className="py-2 text-right">{head('to_collect', 'Unpaid')}</th>
                 </tr>
               </thead>
               <tbody>

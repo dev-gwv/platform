@@ -4508,6 +4508,59 @@ const monthEnd = (m: string) => {
 }
 
 function extraMock(path: string, q: URLSearchParams, method: string, body?: unknown): unknown {
+  // ── platform pages and the email switches (audit, 17 Nov: the last gaps) ──
+  if (method === 'GET' && path === '/health') return { ok: true, service: 'ipc-api', version: 'preview', uptime_s: 86_400, db: 'ok', db_latency_ms: 3 }
+  if ((method === 'GET' || method === 'PUT') && (path === '/settings/morning-email' || path === '/settings/weekly-email')) {
+    const on = method === 'PUT' ? Boolean((body as { on?: unknown } | undefined)?.on) : true
+    return { on, applies: true }
+  }
+  if (method === 'GET' && path === '/platform/diamond') return []
+  if ((method === 'GET' || method === 'PUT') && path === '/platform/diamond/sheet') {
+    return {
+      url: 'https://docs.google.com/spreadsheets/d/e/2PACX-demo/pubhtml',
+      synced_at: '2026-11-17T06:30:00Z',
+      rows: 214,
+      error: null,
+      verified: [{ company_id: '000000aa-0000-4000-8000-000000000000', studio: 'Demo Studio', phone: '9876543210', verified_at: '2026-11-02T10:15:00Z' }],
+    }
+  }
+  if (method === 'GET' && path === '/platform/diamond/misses') {
+    return [{ company_id: '000000ab-0000-4000-8000-000000000000', studio: 'Lensworks Weddings', owner_email: 'owner@lensworks.in', phone: '9812345670', why: 'not_found', tries: 2, last_at: '2026-11-16T12:40:00Z', used_by: null, on_list: false }]
+  }
+  if (method === 'GET' && path === '/platform/email') {
+    return {
+      key_set: true,
+      from: 'Studio AutoPilot <hello@studioautopilot.in>',
+      from_domain: 'studioautopilot.in',
+      app_url: 'https://studioautopilot.in',
+      domain: { name: 'studioautopilot.in', status: 'verified' },
+      domain_note: null,
+      last_7_days: { sent: 42, failed: 1, skipped: 118 },
+      recent: [
+        { id: '0e000001-0000-4000-8000-000000000000', kind: 'client_doc', to_address: 'priya@example.com', subject: 'Your quotation from Demo Studio', status: 'sent', provider_message_id: 're_demo1', error: null, created_at: '2026-11-17T09:12:00Z' },
+        { id: '0e000002-0000-4000-8000-000000000000', kind: 'morning', to_address: 'owner@demostudio.in', subject: null, status: 'skipped', provider_message_id: null, error: null, created_at: '2026-11-17T02:30:00Z' },
+      ],
+    }
+  }
+  if (method === 'GET' && path === '/platform/usage') {
+    return {
+      studio_count: 128, active_studio_count: 74, total_users: 611, revenue_last_30d: 186000,
+      active_today: 31, active_week: 58, active_month: 74, inactive_count: 54,
+      sessions_30d: 2140, events_30d: 48210, avg_sessions_per_studio: 16.7, avg_session_seconds: 412,
+      modules: [{ module: 'projects', events: 12400 }, { module: 'crm', events: 9800 }, { module: 'billing', events: 6100 }],
+      top_studios: [{ company_id: '000000aa-0000-4000-8000-000000000000', company_name: 'Demo Studio', events: 3120 }],
+      recent_events: [{ company_id: '000000aa-0000-4000-8000-000000000000', route: '/projects', module: 'projects', occurred_at: '2026-11-17T09:40:00Z' }],
+      activation_funnel: { signed_up: 128, team: 96, client: 81, project: 70, quotation: 52 },
+      health_by_studio: [{ company_id: '000000aa-0000-4000-8000-000000000000', health_label: 'Busy', last_active: '2026-11-17T09:40:00Z', sessions: 44 }],
+      activity_logs: [{ company_id: '000000aa-0000-4000-8000-000000000000', company_name: 'Demo Studio', module: 'projects', route: '/projects', occurred_at: '2026-11-17T09:40:00Z' }],
+    }
+  }
+  if (method === 'GET' && path === '/platform/usage/stuck') {
+    return [
+      { flow: 'team-bulk', opened: 96, done: 71, left: 18, refused: 7, stuck: 9, videos: 22, studios: 90 },
+      { flow: 'project-step-2', opened: 70, done: 41, left: 21, refused: 8, stuck: 14, videos: 12, studios: 66 },
+    ]
+  }
   // ── account, hints, plan ───────────────────────────────────────────────
   if (method === 'GET' && path === '/auth/hints') return { ...hintsFx }
   if (method === 'PUT' && path.startsWith('/auth/hints/')) {

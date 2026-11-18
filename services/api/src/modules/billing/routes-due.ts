@@ -110,6 +110,9 @@ export const billingDueRoutes = new Hono<AppEnv>()
    */
 
   .get('/overview', async (c) => {
+    // India's today, as /due takes it: Postgres's current_date is the server's
+    // UTC day, so an invoice turned overdue at 5:30 am IST (audit, 17 Nov).
+    const today = todayInIndia()
     const data = await attempt(c, 'billing.overview', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const [head] = await sql`
@@ -121,20 +124,20 @@ export const billingDueRoutes = new Hono<AppEnv>()
                 from projects p where p.status <> 'cancelled'), 0)::float as to_collect,
             (select count(*) from invoices i
               where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
-                and i.due_date < current_date)::int as overdue_count,
+                and i.due_date < ${today}::date)::int as overdue_count,
             coalesce((select sum(i.balance_due) from invoices i
               where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
-                and i.due_date < current_date), 0)::float as overdue_amount,
+                and i.due_date < ${today}::date), 0)::float as overdue_amount,
             (select count(*) from invoices i
               where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
-                and i.due_date between current_date and current_date + 7)::int as due_soon_count,
+                and i.due_date between ${today}::date and ${today}::date + 7)::int as due_soon_count,
             coalesce((select sum(i.balance_due) from invoices i
               where i.balance_due > 0 and i.status not in ('cancelled', 'draft')
-                and i.due_date between current_date and current_date + 7), 0)::float as due_soon_amount,
+                and i.due_date between ${today}::date and ${today}::date + 7), 0)::float as due_soon_amount,
             coalesce((select sum(rp.amount) from received_payments rp
-              where rp.status = 'paid' and rp.paid_on >= date_trunc('month', current_date)), 0)::float as received_this_month,
+              where rp.status = 'paid' and rp.paid_on >= date_trunc('month', ${today}::date)), 0)::float as received_this_month,
             coalesce((select sum(i.total) from invoices i
-              where i.status not in ('cancelled', 'draft') and i.invoice_date >= date_trunc('month', current_date)), 0)::float as invoiced_this_month`
+              where i.status not in ('cancelled', 'draft') and i.invoice_date >= date_trunc('month', ${today}::date)), 0)::float as invoiced_this_month`
         const due = await sql`
           select i.id, i.invoice_number, i.invoice_date, i.due_date, i.total, i.balance_due, i.status,
                  cl.name as client_name, cl.phone as client_phone, i.project_id, pj.name as project_name

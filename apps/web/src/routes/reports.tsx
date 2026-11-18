@@ -257,7 +257,9 @@ function MoneyTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
             <Tile label="Billed" value={<Money value={r.billed} />} hint={`${r.invoices} invoice${r.invoices === 1 ? '' : 's'} issued`} />
             <Tile label="Received" value={<Money value={r.received} />} tone="text-tone-green" hint="Payments that came in" />
             <Tile
-              label="Still to collect"
+              // Booked value not yet received, like Profit & Loss: not Home's
+              // "To collect", which counts invoice balances with GST (audit, 17 Nov).
+              label="Unpaid on bookings"
               value={<Money value={r.to_collect} />}
               tone="text-tone-amber"
               hint={r.overdue > 0 ? <span className="text-destructive">{inr(r.overdue)} overdue</span> : 'Nothing overdue'}

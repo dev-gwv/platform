@@ -50,7 +50,7 @@ export function moneyCsv(r: MoneyReport, label: string): string {
       ['Billed', r.billed],
       ['Invoices issued', r.invoices],
       ['Received', r.received],
-      ['Still to collect (today)', r.to_collect],
+      ['Unpaid on bookings (today)', r.to_collect],
       ['Overdue (today)', r.overdue],
       ['Expenses', r.expenses],
     ]),

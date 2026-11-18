@@ -137,7 +137,7 @@ function Sample() {
 
   return (
     <Card>
-      <CardContent className="grid items-center gap-6 p-4 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <CardContent className="grid items-center gap-6 p-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <CardPreview data={data} look={s?.card_look} className="mx-auto max-w-[420px]" />
         <div className="flex flex-col gap-3">
           <span className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-rose-500 text-white shadow">

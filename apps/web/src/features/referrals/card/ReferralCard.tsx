@@ -194,7 +194,7 @@ export function ReferralCard({
           </span>
         </div>
       </div>
-      <CardContent className="grid gap-5 p-4 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <CardContent className="grid gap-5 p-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <div className="mx-auto w-full max-w-[420px] md:sticky md:top-4 md:self-start">
           <canvas
             ref={canvas}

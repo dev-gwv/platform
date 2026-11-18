@@ -55,6 +55,13 @@ import {
   whatsappStatus,
   workReminderSettings,
   z,
+  platformDiamondClaim,
+  diamondSheetStatus,
+  diamondMiss,
+  emailHealth,
+  platformUsage,
+  flowStopList,
+  healthBody,
 } from '@ipc/contracts'
 import { NOT_MOCKED } from './mock-flag'
 import { mockResponse } from './mock'
@@ -66,6 +73,7 @@ const perfTeamResponse = z.object({ from: z.string(), to: z.string(), items: sco
 const expensePage = z.object({ items: expense.array(), total: z.number().int(), page: z.number().int(), page_size: z.number().int() })
 const shootTypeItem = z.object({ id: z.string().uuid(), name: z.string(), category: z.string().nullable().default(null), usage_count: z.number().int().default(0), is_archived: z.boolean().default(false) })
 const ok = z.object({ ok: z.boolean() })
+const emailSwitch = z.object({ on: z.boolean(), applies: z.boolean().default(true) })
 
 const P1 = '00000091-0000-4000-8000-000000000000'
 const U1 = '000000e1-0000-4000-8000-000000000000'
@@ -140,6 +148,15 @@ const table: [string, string, z.ZodTypeAny, unknown?][] = [
   ['GET', `/projects/${P1}/billing`, projectBilling],
   ['GET', `/projects/${P1}/costs`, projectCostSheet],
   ['GET', '/projects/catalog/shoot-types', shootTypeItem.array()],
+  ['GET', '/health', healthBody],
+  ['GET', '/settings/morning-email', emailSwitch],
+  ['GET', '/settings/weekly-email', emailSwitch],
+  ['GET', '/platform/diamond', platformDiamondClaim.array()],
+  ['GET', '/platform/diamond/sheet', diamondSheetStatus],
+  ['GET', '/platform/diamond/misses', diamondMiss.array()],
+  ['GET', '/platform/email', emailHealth],
+  ['GET', '/platform/usage?days=30', platformUsage],
+  ['GET', '/platform/usage/stuck?days=30', flowStopList],
 ]
 
 describe('preview mock answers fit their contracts', () => {

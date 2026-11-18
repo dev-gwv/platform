@@ -132,9 +132,9 @@ export const invoiceRoutes = new Hono<AppEnv>()
             : status === 'pending'
               ? sql`i.balance_due > 0 and i.status != 'cancelled'`
               : status === 'overdue'
-                ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date is not null and i.due_date < current_date`
+                ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date is not null and i.due_date < (now() at time zone 'Asia/Kolkata')::date`
                 : status === 'due_soon'
-                  ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date between current_date and current_date + 7`
+                  ? sql`i.balance_due > 0 and i.status not in ('cancelled', 'draft') and i.due_date between (now() at time zone 'Asia/Kolkata')::date and (now() at time zone 'Asia/Kolkata')::date + 7`
                   : sql`i.status = ${status}`
         const items = await sql`
           select i.id, i.invoice_number, i.invoice_date, i.total, i.balance_due, i.status,

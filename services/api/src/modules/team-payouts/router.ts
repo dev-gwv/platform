@@ -54,7 +54,7 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
                  coalesce(sum(amount), 0)::numeric as total_amount,
                  coalesce(sum(amount) filter (where status = 'pending'), 0)::numeric as pending_amount,
                  coalesce(sum(amount) filter (where status = 'completed'), 0)::numeric as completed_amount,
-                 coalesce(sum(amount) filter (where period_start >= date_trunc('month', current_date)), 0)::numeric as this_month_amount
+                 coalesce(sum(amount) filter (where period_start >= date_trunc('month', (now() at time zone 'Asia/Kolkata')::date)), 0)::numeric as this_month_amount
             from team_payouts
            where company_id = ${c.get('auth').companyId}`
         return { items, summary: summary[0] }

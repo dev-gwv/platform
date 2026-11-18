@@ -64,8 +64,8 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
            where rp.company_id = ${c.get('auth').companyId}`
         // The tiles: over every payment, not the filtered set.
         const [tiles] = await sql<{ this_month: number; this_fy: number; promised: number; promised_count: number }[]>`
-          select coalesce(sum(amount) filter (where status = 'paid' and coalesce(date_received, paid_on) >= date_trunc('month', current_date)), 0)::float as this_month,
-                 coalesce(sum(amount) filter (where status = 'paid' and fy_label(coalesce(date_received, paid_on)) = fy_label(current_date)), 0)::float as this_fy,
+          select coalesce(sum(amount) filter (where status = 'paid' and coalesce(date_received, paid_on) >= date_trunc('month', (now() at time zone 'Asia/Kolkata')::date)), 0)::float as this_month,
+                 coalesce(sum(amount) filter (where status = 'paid' and fy_label(coalesce(date_received, paid_on)) = fy_label((now() at time zone 'Asia/Kolkata')::date)), 0)::float as this_fy,
                  coalesce(sum(amount) filter (where status = 'pending'), 0)::float as promised,
                  (count(*) filter (where status = 'pending'))::int as promised_count
             from received_payments where company_id = ${c.get('auth').companyId}`

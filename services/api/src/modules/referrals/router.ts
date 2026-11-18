@@ -115,7 +115,7 @@ export const referralsRouter = new Hono<AppEnv>()
           values (${auth.companyId}, ${name}, ${d?.reward_type ?? 'custom'}, ${d?.reward_value ?? 0}, ${d?.reward_title ?? null},
                   ${pid}, ${project.client_id}, ${auth.userId}, generate_referral_slug(${name}),
                   ${d?.friend_reward_type ?? 'none'}, ${d?.friend_reward_value ?? 0}, ${d?.friend_reward_title ?? null},
-                  ${d ? sql`current_date + ${d.valid_days}::int` : null})
+                  ${d ? sql`(now() at time zone 'Asia/Kolkata')::date + ${d.valid_days}::int` : null})
           on conflict (company_id, project_id) where project_id is not null do nothing`
         const [made] = await sql`
           select rc.id, rc.company_id, rc.name, rc.slug, rc.description, rc.reward_type, rc.reward_value,

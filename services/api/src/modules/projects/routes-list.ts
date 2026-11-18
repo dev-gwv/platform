@@ -45,8 +45,8 @@ export const projectListRoutes = new Hono<AppEnv>()
                    (select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),
                    0
                  ) as received,
-                 (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> 'cancelled') as next_shoot_date,
-                 coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < current_date), 0) as tasks_overdue
+                 (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= (now() at time zone 'Asia/Kolkata')::date and status <> 'cancelled') as next_shoot_date,
+                 coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < (now() at time zone 'Asia/Kolkata')::date), 0) as tasks_overdue
           from projects p
           left join clients cl on cl.id = p.client_id
           where ${mine ? worksOn(sql, me) : sql`true`}
@@ -72,7 +72,7 @@ export const projectListRoutes = new Hono<AppEnv>()
         case 'received_desc': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) desc'
         case 'name': return 'p.name asc'
         case 'completion': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) / nullif(p.total_cost,0) asc'
-        case 'upcoming': return '(select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> \'cancelled\') asc nulls last'
+        case 'upcoming': return '(select min(shoot_date) from shoots where project_id = p.id and shoot_date >= (now() at time zone \'Asia/Kolkata\')::date and status <> \'cancelled\') asc nulls last'
         default: return 'p.created_at desc'
       }
     })()
@@ -101,8 +101,8 @@ export const projectListRoutes = new Hono<AppEnv>()
           select p.id, p.name, p.status, p.client_id, p.package_cost, p.total_cost, p.created_at,
                  cl.name as client_name, cl.phone as client_phone,
                  coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),0) as received,
-                 (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= current_date and status <> 'cancelled') as next_shoot_date,
-                 coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < current_date),0) as tasks_overdue
+                 (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= (now() at time zone 'Asia/Kolkata')::date and status <> 'cancelled') as next_shoot_date,
+                 coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < (now() at time zone 'Asia/Kolkata')::date),0) as tasks_overdue
           from projects p
           left join clients cl on cl.id = p.client_id
           where ${status && status !== 'all' ? sql`p.status = ${status}` : sql`true`}

@@ -181,8 +181,8 @@ export const financialsRouter = new Hono<AppEnv>()
         // The tiles, over everything: this month, this year, and what is owed
         // to people who paid from their own pocket.
         const [tiles] = await sql<{ this_month: number; this_fy: number; to_reimburse: number }[]>`
-          select coalesce(sum(expense_cash_out(e)) filter (where e.expense_date >= date_trunc('month', current_date)), 0)::float as this_month,
-                 coalesce(sum(expense_cash_out(e)) filter (where fy_label(e.expense_date) = fy_label(current_date)), 0)::float as this_fy,
+          select coalesce(sum(expense_cash_out(e)) filter (where e.expense_date >= date_trunc('month', (now() at time zone 'Asia/Kolkata')::date)), 0)::float as this_month,
+                 coalesce(sum(expense_cash_out(e)) filter (where fy_label(e.expense_date) = fy_label((now() at time zone 'Asia/Kolkata')::date)), 0)::float as this_fy,
                  coalesce(sum(expense_cash_out(e)) filter (where e.reimbursement_status = 'pending'), 0)::float as to_reimburse
             from expenses e where e.company_id = ${c.get('auth').companyId}`
         return { ...rows[0], ...tiles }

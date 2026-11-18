@@ -56,8 +56,8 @@ export const productionBoardRoutes = new Hono<AppEnv>()
            limit 1000`
         const counts = await sql<{ open: number; late: number; due_today: number; in_review: number; unassigned: number; dropped: number }[]>`
           select count(*) filter (where d.status not in ('completed', 'cancelled'))::int as open,
-                 count(*) filter (where d.status not in ('completed', 'cancelled') and d.estimated_date < current_date)::int as late,
-                 count(*) filter (where d.status not in ('completed', 'cancelled') and d.estimated_date = current_date)::int as due_today,
+                 count(*) filter (where d.status not in ('completed', 'cancelled') and d.estimated_date < (now() at time zone 'Asia/Kolkata')::date)::int as late,
+                 count(*) filter (where d.status not in ('completed', 'cancelled') and d.estimated_date = (now() at time zone 'Asia/Kolkata')::date)::int as due_today,
                  count(*) filter (where d.status = 'review')::int as in_review,
                  count(*) filter (where d.status not in ('completed', 'cancelled') and d.assignee_id is null)::int as unassigned,
                  count(*) filter (where d.status = 'cancelled' and d.updated_at > now() - interval '14 days')::int as dropped
@@ -69,7 +69,7 @@ export const productionBoardRoutes = new Hono<AppEnv>()
                  exists (
                    select 1 from team_assignment_slots t
                     where t.user_id = u.user_id and t.status = 'booked'
-                      and t.start_at < (current_date + 1)::timestamptz and t.end_at > current_date::timestamptz
+                      and t.start_at < ((now() at time zone 'Asia/Kolkata')::date + 1)::timestamptz and t.end_at > (now() at time zone 'Asia/Kolkata')::date::timestamptz
                  ) as on_shoot_today,
                  (select count(*)::int from task_assignees ta join tasks tk on tk.id = ta.task_id
                    where ta.user_id = u.user_id and tk.status in ('to_do', 'in_progress')) as open_tasks
