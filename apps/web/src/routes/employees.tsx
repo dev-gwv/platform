@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Download, Plus, ShieldCheck, Users } from 'lucide-react'
@@ -219,7 +220,7 @@ function Directory({ onAdd }: { onAdd: () => void }) {
       return
     }
     downloadCsv(
-      `team-directory-${new Date().toISOString().slice(0, 10)}.csv`,
+      `team-directory-${todayInIndia()}.csv`,
       toCsv(list),
     )
   }

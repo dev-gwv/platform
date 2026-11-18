@@ -227,42 +227,51 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden print:overflow-visible">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
+        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card px-2 sm:gap-2 sm:px-4">
+          <Button variant="ghost" size="icon" className="size-10 shrink-0 md:hidden" aria-label="Open menu" onClick={() => setMobileOpen(true)}>
             <Menu />
           </Button>
-          <span className="md:hidden">
+          {/* The full wordmark from 480px; below that the two-letter mark the
+              collapsed sidebar uses, so the bell and the account fit beside it
+              (audit, 17 Nov: at 375px they were pushed off the screen). The
+              drawer behind the menu button always shows the full name. */}
+          <span className="shrink-0 min-[480px]:hidden">
+            <Brand compact />
+          </span>
+          <span className="hidden min-w-0 min-[480px]:inline md:hidden">
             <Brand />
           </span>
           {/* Back and Refresh on every page: a way out of any screen without
-              the browser's buttons, and fresh numbers without a reload. */}
-          <div className="flex items-center">
+              the browser's buttons, and fresh numbers without a reload. On a
+              phone Refresh rides in the account menu. */}
+          <div className="flex shrink-0 items-center">
             <BackButton />
-            <RefreshButton />
+            <RefreshButton className="hidden sm:inline-flex" />
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
             <QuickLinks className="hidden lg:flex" />
 
             {/* A shortcut nobody can see is a shortcut nobody uses, so the
                 trigger sits in the bar and names its own key.
 
-                From lg the shortcut pills are up and the bar is shared with
-                the due, trial and suggest chips and the account, so below 1800px
-                every one of them rides in its compact form (icons, "3 due",
-                "23 days left") and the field gives back its 16rem. Nothing is
-                removed; at about 1250px the full forms ran the bar past the
-                right edge and pushed the account menu off screen. Never put
-                overflow-hidden on this bar: the account panel is not portalled. */}
+                Below 1800px every item rides in its compact form (icons, "3 due",
+                "23 days left") and the field gives back its 16rem. At 1250px the
+                full forms ran the bar past the right edge; at 375-1000px (audit,
+                17 Nov) even the compact ones did, so below lg the eye, and below
+                md Suggest, ride in the account menu instead (AccountMenu's
+                "narrow" lines). Nothing is removed. Never put overflow-hidden on
+                this bar: the account panel is not portalled. A new item ships
+                its compact form and is checked at 375, 768, 1024, 1280 and 1920px. */}
             <button
               type="button"
               onClick={openCommandPalette}
               aria-label="Search"
-              className="flex shrink-0 items-center justify-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted sm:w-64 lg:w-9 lg:px-2 min-[1800px]:w-64 min-[1800px]:px-2.5"
+              className="flex size-9 shrink-0 items-center justify-center gap-2 rounded-md border border-border text-sm text-muted-foreground transition-colors hover:bg-muted min-[1800px]:h-auto min-[1800px]:w-64 min-[1800px]:px-2.5 min-[1800px]:py-1.5"
             >
               <Search className="size-4 shrink-0" aria-hidden />
-              <span className="hidden flex-1 text-left sm:inline lg:hidden min-[1800px]:inline">Search…</span>
-              <kbd className="hidden rounded border border-border px-1.5 text-[0.65rem] sm:inline min-[1800px]:inline lg:hidden">
+              <span className="hidden flex-1 text-left min-[1800px]:inline">Search…</span>
+              <kbd className="hidden rounded border border-border px-1.5 text-[0.65rem] min-[1800px]:inline">
                 {paletteShortcutHint()}
               </kbd>
             </button>
@@ -270,13 +279,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NewMenu />
             <DueChip />
             <TrialChip />
-            <SuggestFeatureButton />
+            <SuggestFeatureButton className="hidden md:inline-flex" />
             <HeaderBookCall />
 
-            <div className="flex items-center gap-1">
-              <AssistantButton />
+            <div className="flex shrink-0 items-center gap-1">
+              {/* On a phone the round help button carries the assistant. */}
+              <div className="hidden md:flex">
+                <AssistantButton />
+              </div>
               <NotificationBell />
-              <HideAmountsButton />
+              <HideAmountsButton className="hidden lg:inline-flex" />
               <AccountMenu onSignOut={() => void signOut()} />
             </div>
           </div>

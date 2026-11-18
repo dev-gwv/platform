@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus, Tag as TagIcon } from 'lucide-react'
 import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, createLeadRequest, type CreateLeadRequest } from '@ipc/contracts'
@@ -145,7 +146,9 @@ export function AddLeadDialog({
       ...(name.trim() ? { name: name.trim() } : {}),
       ...(email.trim() ? { email: email.trim() } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
-      ...(value.trim() && Number(value) >= 0 ? { deal_value: Number(value) } : {}),
+      // "1,50,000" is a number (parseAmount); Number() made it NaN and the
+      // budget was dropped without a word.
+      ...(value.trim() && parseAmount(value) > 0 ? { deal_value: parseAmount(value) } : {}),
       ...(closeDate ? { close_date: closeDate } : {}),
       ...(toFunctions(events).length ? { functions: toFunctions(events) } : {}),
       ...(tagIds.length ? { tag_ids: tagIds } : {}),
@@ -301,7 +304,7 @@ export function AddLeadDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label>Deal value (₹)</Label>
-                <Input type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Optional" />
+                <Input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Optional" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Expected close</Label>

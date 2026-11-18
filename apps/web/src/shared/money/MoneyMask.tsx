@@ -51,8 +51,8 @@ function useSyncHideAmounts() {
 }
 
 /** The eye in the top bar: hide or show every amount, remembered on every device. */
-export function HideAmountsButton() {
-  useSyncHideAmounts()
+/** Hide or show every amount, remembered on every device: the eye and the account menu's line. */
+export function useToggleAmounts() {
   const hidden = useAmountsHidden()
   const setHint = useSetHint()
   const flip = () => {
@@ -60,6 +60,12 @@ export function HideAmountsButton() {
     setAmountsHidden(next)
     setHint.mutate({ key: 'hide_amounts', value: { shown: 0, closed: next } })
   }
+  return { hidden, flip }
+}
+
+export function HideAmountsButton({ className }: { className?: string }) {
+  useSyncHideAmounts()
+  const { hidden, flip } = useToggleAmounts()
   return (
     <Button
       variant="ghost"
@@ -68,7 +74,7 @@ export function HideAmountsButton() {
       aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
       aria-pressed={hidden}
       title={hidden ? 'Show amounts' : 'Hide amounts'}
-      className={cn(hidden && 'text-primary')}
+      className={cn(hidden && 'text-primary', className)}
     >
       {hidden ? <EyeOff /> : <Eye />}
     </Button>

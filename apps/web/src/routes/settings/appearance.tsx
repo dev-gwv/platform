@@ -275,7 +275,7 @@ function Appearance() {
         </p>
       )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-4">
           {Object.values(THEME_PRESETS).map((p) => (
             <ThemeCard
               key={p.key}

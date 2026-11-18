@@ -1,3 +1,4 @@
+import { readAmount } from '@/shared/money/parse-amount'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Check, Clock, Loader2, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -651,9 +652,11 @@ function RoleRow({
               <li key={s.id} className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <Avatar name={s.user_name ?? '?'} size="sm" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {s.user_name ?? 'Someone'}
-                    <span className="text-muted-foreground"> · {payout != null ? inr(payout) : 'no payout yet'}</span>
+                  {/* The payout on its own line: beside the name it was cut off
+                      on a phone ("Rahul Verma ·…", audit 17 Nov). */}
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block truncate">{s.user_name ?? 'Someone'}</span>
+                    <span className="block text-xs text-muted-foreground">{payout != null ? inr(payout) : 'No payout yet'}</span>
                   </span>
                   <HoursChip window={w} own={false} name={s.user_name ?? 'this person'} />
                   <button
@@ -661,7 +664,7 @@ function RoleRow({
                     aria-label={`Options for ${s.user_name ?? 'this person'}`}
                     aria-expanded={menu}
                     onClick={() => setMenuFor(menu ? null : s.id)}
-                    className={cn('rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground', menu && 'bg-muted text-foreground')}
+                    className={cn('flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground', menu && 'bg-muted text-foreground')}
                   >
                     <MoreHorizontal className="size-4" />
                   </button>
@@ -967,7 +970,7 @@ function EditPayoutDialog({ slot, onClose }: { slot: TeamSlot; onClose: () => vo
   const payee = members.data?.find((m) => m.user_id === slot.user_id)
 
   function save() {
-    const n = amount.trim() === '' ? null : Number(amount)
+    const n = amount.trim() === '' ? null : readAmount(amount)
     if (n != null && (!Number.isFinite(n) || n < 0)) {
       toast.error('Payout must be a positive number.')
       return

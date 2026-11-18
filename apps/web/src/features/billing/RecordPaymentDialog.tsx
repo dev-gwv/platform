@@ -484,7 +484,7 @@ function PaymentDialogFrame({
                   aria-pressed={form.mode === m}
                   onClick={() => set('mode', m)}
                   className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    'min-h-8 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                     form.mode === m ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted',
                   )}
                 >

@@ -376,8 +376,11 @@ function ProjectDetail() {
       </div>
 
       {seesMoney && (
-        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3')}>
-          <Figure icon={IndianRupee} label="Project value" value={<Money value={data.total_cost} />} />
+        <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3')}>
+          {/* Two to a row on a phone (the value across the top when there is no
+              margin box): three stacked boxes pushed the tabs below the fold
+              (audit, 17 Nov). */}
+          <Figure className={margin ? undefined : 'col-span-2 sm:col-span-1'} icon={IndianRupee} label="Project value" value={<Money value={data.total_cost} />} />
           <Figure icon={CircleCheck} label="Received" value={<Money value={received} />} tone="success" sub={collectedLine(money)} />
           <Figure
             icon={Clock}
@@ -510,7 +513,9 @@ function Figure({
   sub,
   tone,
   action,
+  className,
 }: {
+  className?: string | undefined
   icon: typeof Clock
   label: string
   value: ReactNode
@@ -520,7 +525,7 @@ function Figure({
   action?: ReactNode
 }) {
   return (
-    <Card>
+    <Card className={className}>
       {/* Figures and their lines wrap rather than truncate: at 1280px with
           the sidebar open "₹2,8…" and "Still to co…" said nothing. */}
       <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3 sm:p-4">

@@ -3,7 +3,9 @@ import { cn } from './cn'
 
 export const Tabs = TabsPrimitive.Root
 export const TabsList = ({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) => (
-  <TabsPrimitive.List className={cn('inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1', className)} {...props} />
+  // Scrolls sideways rather than widening the page when the tabs outgrow a
+  // phone (Settings → Invoicing, audit 17 Nov).
+  <TabsPrimitive.List className={cn('inline-flex h-9 max-w-full items-center justify-start overflow-x-auto rounded-lg bg-muted p-1', className)} {...props} />
 )
 export const TabsTrigger = ({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) => (
   <TabsPrimitive.Trigger

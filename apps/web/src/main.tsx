@@ -198,8 +198,11 @@ void restoreCache(queryClient).finally(() => {
               <Toaster position="top-center" offset={{ top: 68 }} {...TOASTER} />
               {/* Follow-up reminders stay until acted on, so they sit bottom right,
                   above the help bubble -- at the top they covered every page's
-                  header and its buttons (owner audit, 10 Nov). */}
-              <Toaster id="reminders" position="bottom-right" offset={{ bottom: 92, right: 16 }} mobileOffset={{ bottom: 140 }} {...TOASTER} />
+                  header and its buttons (owner audit, 10 Nov). `ipc-reminders`
+                  (styles.css) steps them aside while a dialog is open and lifts
+                  them over a sticky Save / Next bar on a phone (audit, 17 Nov:
+                  they covered the wizard's Next and Add lead's buttons). */}
+              <Toaster id="reminders" className="ipc-reminders" position="bottom-right" offset={{ bottom: 92, right: 16 }} mobileOffset={{ bottom: 140 }} {...TOASTER} />
             </ConfirmProvider>
           </AuthProvider>
         </ThemeProvider>

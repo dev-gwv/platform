@@ -103,6 +103,7 @@ export function LeadBulkBar({
       <div
         role="toolbar"
         aria-label="Change the ticked leads"
+        data-sticky-actions
         className="no-print sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
       >
         <span className="rounded-full bg-primary px-2.5 py-1 text-sm font-semibold text-primary-foreground tabular-nums">

@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -291,7 +292,7 @@ function ReferralsContent() {
                 value={rewardValueText}
                 onChange={(e) => {
                   setRewardValueText(e.target.value)
-                  setForm({ ...form, reward_value: Number(e.target.value) || 0 })
+                  setForm({ ...form, reward_value: parseAmount(e.target.value) })
                 }}
               />
             </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Download, ExternalLink, MessageCircle, Pencil, Phone, Search, X } from 'lucide-react'
 import type { BulkDataAction, DataBoardRow } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -86,7 +87,7 @@ export function DataBoardView({
 
   function exportCsv() {
     downloadCsv(
-      `data-${new Date().toISOString().slice(0, 10)}.csv`,
+      `data-${todayInIndia()}.csv`,
       toCsv(
         [
           'Shoot date',
@@ -481,6 +482,7 @@ function DataBulkBar({ rows, onDone }: { rows: DataBoardRow[]; onDone: () => voi
     <div
       role="region"
       aria-label="Change the selected data"
+      data-sticky-actions
       className="sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
     >
       <span className="text-sm font-semibold">{rows.length} selected</span>

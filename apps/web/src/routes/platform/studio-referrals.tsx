@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useEffect, useState } from 'react'
 import type { PlatformStudioReferral, StudioRefTerms } from '@ipc/contracts'
 import { usePlatformStudioReferrals, useSaveStudioRefTerms, useSettleStudioReferral } from '@/features/studio-referrals/api'
@@ -114,7 +115,7 @@ function Row({ r, defaultReward }: { r: PlatformStudioReferral; defaultReward: n
       {r.paid_at && !r.rewarded_at && !r.void_reason && (
         <div className="flex items-center gap-2">
           <Input className={cn('h-8 w-24', filled(amount))} inputMode="numeric" placeholder="₹" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <Button size="sm" disabled={settle.isPending || !amount.trim()} onClick={() => settle.mutate({ id: r.id, action: 'reward', amount: Number(amount) })}>
+          <Button size="sm" disabled={settle.isPending || !amount.trim()} onClick={() => settle.mutate({ id: r.id, action: 'reward', amount: parseAmount(amount) })}>
             Mark rewarded
           </Button>
         </div>

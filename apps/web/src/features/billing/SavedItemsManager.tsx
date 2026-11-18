@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { GstSlab } from '@ipc/domain'
@@ -42,7 +43,7 @@ export function SavedItemsManager() {
 
   async function onSave() {
     if (!editing) return
-    await save.mutateAsync({ id: editing.id, body: { ...editing.body, rate: Number(rateText) || 0 } })
+    await save.mutateAsync({ id: editing.id, body: { ...editing.body, rate: parseAmount(rateText) } })
     setEditing(null)
   }
 
@@ -62,7 +63,7 @@ export function SavedItemsManager() {
           )}
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
             <tr>

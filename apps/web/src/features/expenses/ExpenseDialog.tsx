@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { Plus, X } from 'lucide-react'
@@ -107,7 +108,7 @@ export function AddExpenseDialog({
   // With lines, the amount is what they add up to -- one number, never two
   // that disagree.
   const itemized = cleanItems(items).length > 0
-  const value = itemized ? itemsTotal(items) : Number(amount) || 0
+  const value = itemized ? itemsTotal(items) : parseAmount(amount)
   const setItem = (i: number, k: keyof ItemDraft, v: string) => setItems((rows) => rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
   const taxGuess = gstTreatment === 'gst_applicable' && value > 0 ? (amountIs === 'excluding_tax' ? (value * gstRate) / 100 : value - value / (1 + gstRate / 100)) : 0
 
@@ -148,7 +149,7 @@ export function AddExpenseDialog({
         amount_is: amountIs,
         invoice_number: invoiceNumber.trim() || null,
         tax_name: gstTreatment === 'gst_applicable' && taxName ? taxName : null,
-        tax_amount: taxAmount.trim() ? Number(taxAmount) : gstTreatment === 'gst_applicable' ? Math.round(taxGuess * 100) / 100 : 0,
+        tax_amount: taxAmount.trim() ? parseAmount(taxAmount) : gstTreatment === 'gst_applicable' ? Math.round(taxGuess * 100) / 100 : 0,
         reverse_charge: reverse,
         paid_by_user_id: paidBy || null,
         // An edit keeps the expense's own overhead flag.

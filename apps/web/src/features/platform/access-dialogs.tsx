@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Plus, Upload } from 'lucide-react'
 import type { PlatformStudio } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -122,7 +123,7 @@ export function ImportOldAppButton() {
   const [parsed, setParsed] = useState<LegacyParse | null>(null)
   const [bad, setBad] = useState(false)
   const imp = useImportLegacyStudios()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayInIndia()
   const live = parsed?.rows.filter((r) => legacyState(r.expires_at, today) !== 'expired').length ?? 0
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setParsed(null); setBad(false) } }}>

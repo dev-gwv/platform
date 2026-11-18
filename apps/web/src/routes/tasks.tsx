@@ -337,7 +337,7 @@ function Segmented<T extends string>({
   options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>
 }) {
   return (
-    <div role="tablist" aria-label={label} className="inline-flex gap-1 rounded-lg bg-muted p-1">
+    <div role="tablist" aria-label={label} className="inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
       {options.map((o) => (
         <button
           key={o.value}

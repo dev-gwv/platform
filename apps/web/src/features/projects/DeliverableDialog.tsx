@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import type { Deliverable, DeliverableStatus } from '@ipc/contracts'
@@ -117,7 +118,7 @@ export function DeliverableDialog({
       status,
       delivery_link: link.trim() || null,
       is_additional_charge: extra,
-      additional_charge_amount: extra ? Number(amount) || 0 : 0,
+      additional_charge_amount: extra ? parseAmount(amount) : 0,
       description: brief.trim() || null,
       internal_notes: teamNote.trim() || null,
     }

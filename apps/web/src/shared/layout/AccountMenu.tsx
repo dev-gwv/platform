@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Building2, Check, ChevronDown, Download, Loader2, LogOut, Moon, Palette, Sun, UserRound, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, Building2, Check, ChevronDown, Download, Eye, EyeOff, Lightbulb, Loader2, LogOut, Moon, Palette, RotateCw, Sun, UserRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { companyProfile, type StudioMembership } from '@ipc/contracts'
 import { callApi } from '../api/client'
@@ -13,6 +13,9 @@ import { humanize } from '../ui/format'
 import { useInstall } from '../pwa/install'
 import { useTheme } from '../theme/ThemeProvider'
 import { AddBrandDialog, BrandsMenuItem } from '@/features/billing/brands'
+import { SuggestFeatureDialogLazy } from '@/features/feedback/SuggestFeature'
+import { useToggleAmounts } from '../money/MoneyMask'
+import { useRefreshPage } from './RefreshButton'
 
 /**
  * Who you are signed in as, and the two or three things you do about it.
@@ -31,6 +34,9 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const [addingBrand, setAddingBrand] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const amounts = useToggleAmounts()
+  const page = useRefreshPage()
   const install = useInstall()
   const { scheme, toggleScheme } = useTheme()
   const root = useRef<HTMLDivElement>(null)
@@ -72,13 +78,15 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
   return (
     <div ref={root} className="relative">
       {addingBrand && <AddBrandDialog onClose={() => setAddingBrand(false)} />}
+      <SuggestFeatureDialogLazy open={suggesting} onOpenChange={setSuggesting} />
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Account"
         className={cn(
-          'flex items-center gap-2 rounded-lg py-1 pl-2 pr-1.5 text-sm transition-colors hover:bg-muted',
+          'flex items-center gap-2 rounded-lg p-1 text-sm transition-colors hover:bg-muted sm:py-1 sm:pl-2 sm:pr-1.5',
           open && 'bg-muted',
         )}
       >
@@ -87,7 +95,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
         </span>
         <Avatar name={session.display_name} size="md" />
         <ChevronDown
-          className={cn('size-3.5 text-muted-foreground transition-transform', open && 'rotate-180')}
+          className={cn('hidden size-3.5 text-muted-foreground transition-transform sm:block', open && 'rotate-180')}
           aria-hidden
         />
       </button>
@@ -98,7 +106,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
           role="menu"
           aria-label="Account"
           onKeyDown={onPanelKeyDown}
-          className="ipc-menu absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+          className="ipc-menu absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5rem)] w-64 overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
         >
           <Identity name={session.display_name} email={session.email} role={session.role} />
 
@@ -114,6 +122,24 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
               setAddingBrand(true)
             }}
           />
+
+          {/* What the top bar has no room for on a narrower screen (audit, 17
+              Nov): the same actions, one line each, only below the width where
+              the bar shows them. */}
+          <div className="border-t border-border p-1.5 lg:hidden">
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); void page.refresh() }} className={cn(MENU_LINE, 'sm:hidden')}>
+              <RotateCw className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              Refresh this page
+            </button>
+            <button type="button" role="menuitem" aria-pressed={amounts.hidden} onClick={amounts.flip} className={MENU_LINE}>
+              {amounts.hidden ? <Eye className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <EyeOff className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+              {amounts.hidden ? 'Show amounts' : 'Hide amounts'}
+            </button>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setSuggesting(true) }} className={cn(MENU_LINE, 'md:hidden')}>
+              <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
+              <span>Suggest a feature <span className="text-muted-foreground">· सुझाव दें</span></span>
+            </button>
+          </div>
 
           <div className="border-t border-border p-1.5">
             <Item to="/profile" icon={UserRound} label="My profile" />
@@ -178,6 +204,8 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
     </div>
   )
 }
+
+const MENU_LINE = 'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted'
 
 /**
  * The studio name above the person's own, because one login can belong to more

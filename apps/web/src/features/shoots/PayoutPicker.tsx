@@ -1,3 +1,4 @@
+import { parseAmount, readAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { Check, ChevronDown, Minus, Plus } from 'lucide-react'
 import type { PayoutMemory } from '@ipc/contracts'
@@ -26,7 +27,7 @@ export function PayoutButton({
   name: string
 }) {
   const inr = useINR()
-  const amount = Number(value)
+  const amount = readAmount(value)
   const set = value.trim() !== '' && Number.isFinite(amount)
   return (
     <button
@@ -66,7 +67,7 @@ export function PayoutPanel({
   const [other, setOther] = useState(false)
   const [typed, setTyped] = useState(value)
   const sections = payoutChoices(member, role, memory, userId)
-  const current = Number(value) || 0
+  const current = parseAmount(value)
   return (
     <div className="mt-1 flex flex-col gap-2.5 rounded-lg border border-border bg-card p-3 shadow-sm" role="group" aria-label={`Payout for ${member.name ?? 'this person'}`}>
       {sections.map((s) => (

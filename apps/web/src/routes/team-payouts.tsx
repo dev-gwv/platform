@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -223,7 +224,7 @@ function TeamPayoutsContent() {
                 value={amountText}
                 onChange={(e) => {
                   setAmountText(e.target.value)
-                  setForm({ ...form, amount: Number(e.target.value) || 0 })
+                  setForm({ ...form, amount: parseAmount(e.target.value) })
                 }}
                 placeholder="0.00"
               />

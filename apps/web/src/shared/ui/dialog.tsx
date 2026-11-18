@@ -53,7 +53,9 @@ export function DialogContent({
           </div>
         )}
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {/* A 36px target around the 16px cross: the bare icon was a 13px tap on a
+            phone (audit, 17 Nov). Same corner as before. */}
+        <DialogPrimitive.Close className="absolute right-1.5 top-1.5 flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <X className="size-4" aria-hidden />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

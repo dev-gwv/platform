@@ -122,7 +122,10 @@ export function PlanPicker({
         </div>
         <PaySwitch value={payEvery} onChange={setPayEvery} label="How to pay, regular prices" />
       </div>
-      <div className="grid gap-5 pt-2 md:grid-cols-3">
+      {/* Columns from the room the cards have, not the screen: beside the
+          sidebar and the settings rail at 768px three columns pushed "a day"
+          past the card's edge (audit, 17 Nov). */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-5 pt-2">
         {reg.map((p) => (
           <PlanCard
             key={p.id}
@@ -198,7 +201,7 @@ export function PlanPicker({
           )}
         </div>
       </div>
-      <div className="relative grid gap-5 pt-2 md:grid-cols-3">
+      <div className="relative grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-5 pt-2">
         {mem.map((p) => (
           <PlanCard
             key={p.id}

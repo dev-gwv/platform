@@ -19,14 +19,16 @@ export function FilterTabs<T extends string>({
   className?: string
 }) {
   return (
-    <div className={cn('inline-flex gap-1 rounded-lg bg-muted p-1', className)}>
+    // Scrolls sideways inside itself when the tabs outgrow a phone, never the
+    // page (Platform → Diamond members, audit 17 Nov).
+    <div className={cn('inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1', className)}>
       {tabs.map((t) => (
         <button
           key={t.value}
           type="button"
           onClick={() => onChange(t.value)}
           className={cn(
-            'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+            'shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
             value === t.value
               ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',

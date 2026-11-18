@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Minus, Pause, Play, Plus, RotateCcw, X } from 'lucide-react'
-import { DEFAULT_SPEED_INDEX, SPEEDS, pxPerSecond, stepSpeed } from './teleprompter'
+import { DEFAULT_SPEED_INDEX, SPEEDS, pxPerSecond, stepSpeed } from './teleprompter-pace'
 
 const SIZES = [28, 34, 40, 48, 56] as const
 

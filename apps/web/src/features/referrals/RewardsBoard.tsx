@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { Gift, Undo2 } from 'lucide-react'
 import type { ReferralCampaign, ReferralSubmission } from '@ipc/contracts'
@@ -94,7 +95,7 @@ function DueCard({ s, suggested }: { s: ReferralSubmission; suggested: number })
       <Button
         size="sm"
         disabled={update.isPending}
-        onClick={() => update.mutate({ id: s.id, reward_status: 'given', ...(Number(amount) > 0 ? { reward_amount: Number(amount) } : {}) })}
+        onClick={() => update.mutate({ id: s.id, reward_status: 'given', ...(parseAmount(amount) > 0 ? { reward_amount: parseAmount(amount) } : {}) })}
       >
         <Gift /> Given
       </Button>

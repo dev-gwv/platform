@@ -94,6 +94,9 @@ export function RowMenu({
         variant={variant}
         className={className}
         title={label}
+        // With children the visible words may be hidden on a phone (+ New is
+        // only a plus there), so the name never depends on them.
+        aria-label={children ? label : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

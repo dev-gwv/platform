@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Plus, Pencil, Trash2, Settings2, X } from 'lucide-react'
 import type { DataBoardRow } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -129,8 +130,8 @@ function DataPage({ initialTab }: { initialTab?: DmTab | undefined }) {
               user_id: opened.user_id ?? '',
               user_name: opened.user_name,
               service_name: opened.role,
-              start_at: opened.start_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-              end_at: opened.end_at ?? `${opened.shoot_date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+              start_at: opened.start_at ?? `${opened.shoot_date ?? todayInIndia()}T00:00:00.000Z`,
+              end_at: opened.end_at ?? `${opened.shoot_date ?? todayInIndia()}T00:00:00.000Z`,
             }}
             record={opened.record ?? undefined}
             onClose={() => setOpened(null)}
@@ -180,7 +181,7 @@ function LocationsTab() {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm">
         <thead className="bg-muted/50 text-left text-muted-foreground">
           <tr>

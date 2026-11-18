@@ -19,4 +19,25 @@ describe('top bar', () => {
       expect(src(f), f).toMatch(/whitespace-nowrap/)
     }
   })
+  it('fits a phone: what has no room rides in the account menu', () => {
+    // Audit, 17 Nov: from 375px to about 1000px the bell and the account menu
+    // were pushed off the right edge. These keep the narrow forms in place.
+    const shell = src('shared/layout/AppShell.tsx')
+    expect(shell).toMatch(/<SuggestFeatureButton className="hidden md:inline-flex" \/>/)
+    expect(shell).toMatch(/<HideAmountsButton className="hidden lg:inline-flex" \/>/)
+    expect(shell).toMatch(/<RefreshButton className="hidden sm:inline-flex" \/>/)
+    expect(shell).not.toMatch(/sm:w-64/)
+    const menu = src('shared/layout/AccountMenu.tsx')
+    for (const line of ['Refresh this page', 'Hide amounts', 'Suggest a feature']) expect(menu).toContain(line)
+  })
+  it('keeps the help bubble off a sticky Save / Next bar at every width', () => {
+    const css = src('styles.css')
+    // The lane outside any media query, so a phone has it too.
+    expect(css).toMatch(/\n\[data-sticky-actions\] \{\r?\n {2}padding-right: 4\.75rem !important;/)
+    expect(css).toMatch(/\.ipc-reminders/)
+  })
+  it('gives staff their Attendance tab before Calls on a phone', () => {
+    const bar = src('shared/layout/MobileTabBar.tsx')
+    expect(bar.indexOf("'/attendance/my'")).toBeLessThan(bar.indexOf("'/follow-ups/queue'"))
+  })
 })

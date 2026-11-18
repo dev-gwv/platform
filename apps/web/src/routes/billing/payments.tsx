@@ -126,7 +126,7 @@ function PaymentsSection() {
       ['Receipt', 'Date', 'Client', 'Project', 'Invoice', 'Amount', 'Mode', 'Reference', 'Status', 'GST', 'Description'],
       items.map((r) => [r.receipt_number ?? '', r.date_received ?? '', r.client_name ?? '', r.project_name ?? '', r.invoice_number ?? '', r.amount, r.mode ?? '', r.reference ?? '', r.status, r.is_gst ? (r.gst_number ?? 'GST') : '', r.description ?? '']),
     )
-    downloadCsv(`payments-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+    downloadCsv(`payments-${todayInIndia()}.csv`, csv)
   }
 
   function toggleSort(field: string) {

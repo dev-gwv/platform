@@ -10,3 +10,11 @@ export function parseAmount(v: string | number | null | undefined): number {
   const n = Number(String(v ?? '').replace(/[,₹\s]/g, ''))
   return Number.isFinite(n) ? n : 0
 }
+
+/**
+ * The same reading, but NaN for something that is not an amount ("12a"), for
+ * a form that tells the person what to fix instead of saving ₹0.
+ */
+export function readAmount(v: string): number {
+  return Number(v.replace(/[,₹\s]/g, ''))
+}

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { Lightbulb } from 'lucide-react'
+import { cn } from '@/shared/ui/cn'
 
 const SuggestFeatureDialog = lazy(() => import('./SuggestFeatureDialog').then((m) => ({ default: m.SuggestFeatureDialog })))
 
@@ -9,7 +10,17 @@ const SuggestFeatureDialog = lazy(() => import('./SuggestFeatureDialog').then((m
  * what would help, by typing, by a voice note, or by showing the screen; it
  * goes straight to the people who build the app.
  */
-export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header' | 'menu' }) {
+/** The dialog alone, for a menu that closes before the dialog opens (the account menu on a phone). */
+export function SuggestFeatureDialogLazy({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!open) return null
+  return (
+    <Suspense fallback={null}>
+      <SuggestFeatureDialog open={open} onOpenChange={onOpenChange} />
+    </Suspense>
+  )
+}
+
+export function SuggestFeatureButton({ variant = 'header', className }: { variant?: 'header' | 'menu'; className?: string }) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -33,7 +44,7 @@ export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header
           title="Suggest a feature · सुझाव दें"
           // One line with room around it: the two-line pill was cramped
           // against its own border.
-          className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-tone-amber/40 bg-tone-amber-soft px-3 text-xs font-semibold text-foreground transition-colors hover:border-tone-amber sm:px-4"
+          className={cn('inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-tone-amber/40 bg-tone-amber-soft px-3 text-xs font-semibold text-foreground transition-colors hover:border-tone-amber', className)}
         >
           <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
           {/* Named from 1360px, like the shortcut pills, so it reads as an invitation. */}
@@ -42,7 +53,7 @@ export function SuggestFeatureButton({ variant = 'header' }: { variant?: 'header
           <span className="hidden text-muted-foreground min-[1800px]:inline" aria-hidden>
             ·
           </span>
-          <span className="hidden font-medium leading-normal sm:inline lg:hidden min-[1800px]:inline">सुझाव दें</span>
+          <span className="hidden font-medium leading-normal min-[1800px]:inline">सुझाव दें</span>
         </button>
       )}
       {/* The dialog (voice notes, screenshots) loads on the first press, not

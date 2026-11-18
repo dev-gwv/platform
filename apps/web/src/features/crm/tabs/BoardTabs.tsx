@@ -515,7 +515,7 @@ function DroppableStage({
               type="button"
               {...drag.attributes}
               {...drag.listeners}
-              className="-ml-1 cursor-grab text-muted-foreground/70 hover:text-foreground active:cursor-grabbing"
+              className="-my-1 -ml-2 flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground/70 hover:text-foreground active:cursor-grabbing"
               aria-label={`Drag to reorder ${stage.name}`}
             >
               <GripVertical className="size-3.5" />

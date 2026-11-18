@@ -49,7 +49,7 @@ import { usePersonalWords } from '@/features/settings/quick-words'
 import { LANG_NAMES, TONE_NAMES } from '@/features/crm-ai/intents'
 import { AiChoice, AiStep, AiTile, AiTwoPane, AiWaiting, aiChip } from '@/features/ai/parts'
 import { Teleprompter } from '@/features/ai/Teleprompter'
-import { spokenText } from '@/features/ai/teleprompter'
+import { spokenText } from '@/features/ai/teleprompter-pace'
 
 export function AiAdScriptsPage() {
   return (

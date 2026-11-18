@@ -19,6 +19,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select, Textarea } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
+import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { uploadFile } from '@/shared/api/client'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
@@ -103,6 +104,16 @@ function MyProfileForm() {
   const safe = form ? (Object.fromEntries(Object.entries(form).filter(([k]) => !SENSITIVE.includes(k as keyof Form))) as Partial<Form>) : null
   const draft = useFormDraft(form ? 'my-profile' : null, safe, (v) => v && setForm((f) => (f ? { ...f, ...v } : f)))
 
+  // A failed read says so with Try again; it used to stay a skeleton for ever,
+  // with no heading and no way out (audit, 17 Nov).
+  if (profile.isError && !profile.data) {
+    return (
+      <section className="flex flex-col gap-4">
+        <PageHeader title="My profile" />
+        <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />
+      </section>
+    )
+  }
   if (profile.isLoading || !form || !profile.data) return <SkeletonList rows={6} columns={2} />
   const p = profile.data
   const missing = new Set<ProfileField>(p.completeness.missing)
@@ -260,7 +271,7 @@ function MyProfileForm() {
       <AlertEmailCard />
       <SecurityCard />
 
-      <div className="sticky bottom-3 flex justify-end">
+      <div data-sticky-actions className="sticky bottom-3 flex justify-end">
         <Button onClick={submit} disabled={save.isPending} className="shadow-lg">
           {save.isPending ? <Loader2 className="animate-spin" /> : <Check />} Save profile
         </Button>

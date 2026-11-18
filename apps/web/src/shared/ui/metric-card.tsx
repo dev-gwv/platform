@@ -40,7 +40,9 @@ export function MetricCard({
 
   return (
     <Card className={className}>
-      <CardContent className="p-4">
+      {/* Tighter on a phone, where four of these filled the first screen
+          before any work showed (audit, 17 Nov). */}
+      <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
           {help && (
@@ -49,9 +51,9 @@ export function MetricCard({
             </span>
           )}
         </div>
-        <p className={cn('mt-2 text-3xl font-semibold tabular-nums leading-none', toneClass)}>{value}</p>
+        <p className={cn('mt-1.5 text-2xl font-semibold tabular-nums leading-none sm:mt-2 sm:text-3xl', toneClass)}>{value}</p>
         {/* A number with nothing under it is a number nobody can act on. */}
-        <p className="mt-2 min-h-4 text-xs text-muted-foreground">{hint ?? ''}</p>
+        <p className="mt-1.5 min-h-4 text-xs text-muted-foreground sm:mt-2">{hint ?? ''}</p>
       </CardContent>
     </Card>
   )

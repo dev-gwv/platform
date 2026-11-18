@@ -211,6 +211,7 @@ const profileFx = {
   role: 'super_admin',
   status: 'active',
   avatar_url: null,
+  completeness: { percent: 75, missing: ['date_of_birth', 'pan'] as ('date_of_birth' | 'pan')[] },
 }
 
 /** Help (0236): what the panel and /help show. */
@@ -322,7 +323,22 @@ const payrollMonthFx = {
   can_edit: true,
 }
 
+/**
+ * Canned response for a path, or NOT_MOCKED to fall through to the network.
+ * The paths the app asks for carry query strings (`/allocation?from=…`), so
+ * the newer fixtures below match on the path before `?`, and an older exact
+ * match is tried again without the query before giving up.
+ */
 export function mockResponse(path: string, method: string, body?: unknown): unknown {
+  const [base = path, query = ''] = path.split('?')
+  const extra = extraMock(base, new URLSearchParams(query), method, body)
+  if (extra !== NOT_MOCKED) return extra
+  const hit = baseMock(path, method, body)
+  if (hit !== NOT_MOCKED || base === path) return hit
+  return baseMock(base, method, body)
+}
+
+function baseMock(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && path === '/auth/session') return mockSession
   // Quotation Designer (0295).
   if (path.startsWith('/designs') || path.startsWith('/public/designs/')) return designMock(path, method, body)
@@ -4367,4 +4383,498 @@ function designMock(path: string, method: string, body?: unknown): unknown {
   if (method === 'PATCH') return { ok: true, updated_at: now }
   if (method === 'DELETE') return { ok: true }
   return { id: DESIGN_ID }
+}
+
+// ─── Money, team, reports and settings pages (preview audit, 17 Nov) ─────────
+// One studio's month, told the same way everywhere: Home's "To collect",
+// Payments' tiles and the Billing overview all add up to the same rupees.
+
+/** Today in India, so "today" rows never read as yesterday before 5:30 am. */
+const indiaToday = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10)
+const monthStart = () => `${indiaToday().slice(0, 7)}-01`
+
+const hintsFx: Record<string, unknown> = { welcome: { shown: 1, closed: true } }
+
+const NOV = { from: '2026-11-01', to: '2026-11-30' }
+
+const dueFx = () => ({
+  today: indiaToday(),
+  overdue: { amount: 40000, count: 1 },
+  soon: { amount: 72000, count: 1 },
+  later: { amount: 37000, count: 1 },
+  received: { amount: 45000, count: 1 },
+  lines: [
+    { project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', kind: 'promise', label: 'Before the wedding', amount: 40000, due_on: '2026-11-10', bucket: 'overdue', payment_id: uid(0xf3) },
+    { project_id: PROJ.p3, project_name: 'Nova Product Shoot', client_name: 'Nova Events', kind: 'invoice', label: 'INV-0003', amount: 72000, due_on: '2026-11-25', bucket: 'soon', invoice_id: uid(0x93) },
+    { project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', kind: 'rest', label: 'Rest of the project value', amount: 37000, due_on: null, bucket: 'later' },
+  ],
+})
+
+const paymentRow = (n: number, over: Record<string, unknown>) => ({
+  id: uid(0xf0 + n),
+  project_id: PROJ.p1 as string,
+  project_name: 'Sharma Wedding',
+  invoice_id: null as string | null,
+  invoice_number: null as string | null,
+  client_id: CLIENT.sharma as string,
+  client_name: 'Sharma Family',
+  client_phone: '9876543210' as string | null,
+  client_email: 'client@example.test' as string | null,
+  amount: 0,
+  description: null as string | null,
+  status: 'paid' as 'paid' | 'pending',
+  is_gst: false,
+  gst_number: null,
+  date_received: null as string | null,
+  file_url: null,
+  receipt_number: null as string | null,
+  mode: 'UPI',
+  reference: null as string | null,
+  created_at: '2026-06-02T10:00:00Z',
+  ...over,
+})
+const paymentsFx = [
+  paymentRow(8, { project_id: PROJ.p4, project_name: 'Kapoor Pre-Wedding', amount: 45000, date_received: '2026-11-05', receipt_number: 'RCPT-0014', reference: 'UPI 6612 0981', created_at: '2026-11-05T07:30:00Z' }),
+  paymentRow(3, { amount: 40000, status: 'pending', description: 'Before the wedding', date_received: '2026-11-10', created_at: '2026-10-01T10:00:00Z' }),
+  paymentRow(2, { amount: 50000, date_received: '2026-07-15', mode: 'Bank transfer', reference: 'NEFT5521', receipt_number: 'RCPT-0006', created_at: '2026-07-15T10:00:00Z' }),
+  paymentRow(1, { amount: 100000, date_received: '2026-06-02', reference: 'TXN9931', receipt_number: 'RCPT-0002', created_at: '2026-06-02T10:00:00Z' }),
+  paymentRow(9, { project_id: PROJ.p2, project_name: 'Verma Reception', invoice_id: uid(0x92), invoice_number: 'INV-0002', client_id: CLIENT.verma, client_name: 'Verma Weddings', client_phone: '9812345678', client_email: null, amount: 90000, date_received: '2026-06-18', receipt_number: 'RCPT-0003', created_at: '2026-06-18T10:00:00Z' }),
+]
+
+const invoiceRows = () =>
+  invoices2.map((i) => ({
+    ...i,
+    project_id: i.id === uid(0x91) ? PROJ.p1 : i.id === uid(0x92) ? PROJ.p2 : PROJ.p3,
+    project_name: i.id === uid(0x91) ? 'Sharma Wedding' : i.id === uid(0x92) ? 'Verma Reception' : 'Nova Product Shoot',
+    due_date: i.id === uid(0x93) ? '2026-11-25' : null,
+    client_phone: null,
+    taxable: Math.round(i.total / 1.18),
+  }))
+
+const expenseRows = () =>
+  [
+    ...expensesFx.map((e) => ({ ...e, reimbursement_status: 'none' })),
+    { id: uid(0xa4), project_id: PROJ.p1, party_id: null, party_name: 'Mumbai Cabs', category: 'Travel', description: 'Cab for the haldi crew', amount: 3200, expense_date: '2026-11-08', gst_treatment: 'non_gst', gst_rate: null, is_fixed_overhead: false, paid_by_user_id: uid(0xe1), paid_by_name: 'Rahul Sharma', reimbursement_status: 'pending' },
+    { id: uid(0xa5), project_id: null, party_id: null, party_name: 'Airtel', category: 'Internet', description: 'Studio broadband', amount: 1499, expense_date: '2026-11-03', gst_treatment: 'gst_applicable', gst_rate: 18, is_fixed_overhead: true, reimbursement_status: 'none' },
+  ].map((e) => ({ ...e, project_name: e.project_id === PROJ.p1 ? 'Sharma Wedding' : e.project_id === PROJ.p3 ? 'Nova Product Shoot' : null }))
+
+type HealthBand = 'critical' | 'high' | 'low_progress' | 'healthy' | 'completed'
+const healthFx = (band: HealthBand, completion: number, next_action: string, reasons: { code: string; count: number; action: string }[] = []) => ({
+  completion,
+  band,
+  score: band === 'critical' ? 90 : band === 'high' ? 60 : band === 'low_progress' ? 35 : 0,
+  flags: {
+    critical: band === 'critical',
+    high_risk: band === 'high',
+    low_progress: band === 'low_progress',
+    data_missing: reasons.some((r) => r.code === 'data'),
+    overdue: reasons.some((r) => r.code === 'late'),
+    pending_review: reasons.some((r) => r.code === 'review'),
+    completed: band === 'completed',
+  },
+  next_action,
+  reasons,
+})
+const HEALTH: Record<string, ReturnType<typeof healthFx>> = {
+  [PROJ.p1]: healthFx('critical', 38, 'Check the 3 data cards', [
+    { code: 'late', count: 2, action: 'Chase the 2 late edits' },
+    { code: 'data', count: 3, action: 'Check the 3 data cards' },
+    { code: 'review', count: 1, action: 'Review 1 hand-in' },
+  ]),
+  [PROJ.p2]: healthFx('high', 29, 'Review 2 hand-ins', [{ code: 'review', count: 2, action: 'Review 2 hand-ins' }]),
+  [PROJ.p3]: healthFx('completed', 100, 'All done'),
+  [PROJ.p4]: healthFx('healthy', 25, 'Book the team for the next shoot'),
+}
+
+const scoreCard = (score: number | null, over: Record<string, unknown> = {}) => ({
+  from: NOV.from,
+  to: NOV.to,
+  score,
+  work: { deliverables: 4, tasks: 9, with_due: 11, on_time: 9, avg_days_late: 1.5, pct: 82 },
+  quality: { approved: 5, sent_back: 1, pct: 83 },
+  shoots: { shoots: 3, measured: 3, on_time: 3, declined: 0, pct: 100 },
+  attendance: { present: 12, late: 1, absent: 0, pct: 92 } as Record<string, number> | null,
+  late_now: [] as { title: string; project: string | null; days_late: number }[],
+  ...over,
+})
+
+const routinePerson = (n: number, name: string, today: 'done' | 'open' | 'late' | 'none', done_7: number) => ({
+  user_id: uid(0xe0 + n), name, today, task_id: today === 'none' ? null : uid(0x7700 + n), done_7, missed_7: done_7 < 5 ? 2 : 0,
+})
+
+const monthEnd = (m: string) => {
+  const [y, mo] = m.split('-').map(Number) as [number, number]
+  return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`
+}
+
+function extraMock(path: string, q: URLSearchParams, method: string, body?: unknown): unknown {
+  // ── account, hints, plan ───────────────────────────────────────────────
+  if (method === 'GET' && path === '/auth/hints') return { ...hintsFx }
+  if (method === 'PUT' && path.startsWith('/auth/hints/')) {
+    const key = path.slice('/auth/hints/'.length)
+    const value = (body as { value?: unknown } | undefined)?.value
+    if (value === null || value === undefined) delete hintsFx[key]
+    else hintsFx[key] = value
+    return { ...hintsFx }
+  }
+  if (method === 'GET' && path === '/auth/learn') return { teammates: 5, clients: 3, projects: 4, since: '2026-05-01T10:00:00Z' }
+  if (method === 'POST' && path === '/auth/welcome') return { sent: false, kind: null }
+  if (method === 'POST' && path === '/activity/track') return { ok: true }
+  if (method === 'GET' && path === '/subscription/status')
+    return {
+      plan_key: 'studio_max',
+      plan_name: 'Studio Max',
+      plan_gate: 'active',
+      plan_expiry: mockSession.plan_expiry,
+      access_until: mockSession.plan_expiry,
+      days_left: Math.max(0, Math.round((Date.parse('2027-01-01T00:00:00Z') - Date.now()) / 86_400_000)),
+      can_purchase: true,
+      plan_source: 'paid',
+      latest_order_id: null,
+      latest_order_status: null,
+      webhook_configured: true,
+      member_tier: 'outsider',
+      diamond_claim: null,
+      diamond_group_link: null,
+      history: [{ id: uid(0x9e1), plan_name: 'Studio Max', amount: 95988, status: 'paid', created_at: '2026-01-01T09:00:00Z', expires_at: '2027-01-01T00:00:00Z' }],
+    }
+  // Off, so the preview draws no assistant button.
+  if (method === 'GET' && path === '/assistant/state') return { enabled: false, ready: false, call_url: null, asked_today: 0, daily_limit: 20 }
+  if (method === 'GET' && path === '/features') return { keys: ['sequences_auto'] }
+  if (method === 'GET' && path === '/features/branding')
+    return { enabled: false, studio_name: 'Demo Studio', logo_url: null, from_name: 'Demo Studio', reply_to: 'owner@demostudio.in', footer_line: null }
+
+  // ── attendance ─────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/hr/attendance/me') {
+    const day = indiaToday()
+    return {
+      today: {
+        id: uid(0x7a90), a_date: day, check_in_at: `${day}T04:35:00Z`, check_out_at: null, status: 'present', late_minutes: 0,
+        place_name: 'Demo Studio, Bandra', check_in_distance_m: 18, source: 'auto_login', closed_by_system: false, accuracy_m: 12, selfie_file_id: null,
+      },
+      mode: 'required', place_name: 'Demo Studio, Bandra', rule_from: 'studio', configured: true, enabled: true, selfie_required: false,
+      day_start: '10:00', grace_min: 15, day_end: '19:00', fenced: true, day_off: null, on_leave: false, shoot_today: null,
+    }
+  }
+  if (method === 'GET' && path === '/hr/places')
+    return [{ id: uid(0x7a80), name: 'Demo Studio, Bandra', lat: 19.0596, lng: 72.8295, radius_m: 150, is_active: true, is_primary: true }]
+  if (method === 'GET' && path === '/hr/rules')
+    return [
+      { id: uid(0x7a81), scope: 'role', role_id: ROLE.photographer, user_id: null, label: 'Photographers', mode: 'anywhere', place_id: null, radius_m: null, expected_checkin_time: null, late_grace_minutes: null },
+      { id: uid(0x7a82), scope: 'user', role_id: null, user_id: uid(0xe3), label: 'Sana Khan', mode: 'required', place_id: uid(0x7a80), radius_m: 200, expected_checkin_time: '10:30', late_grace_minutes: 15 },
+    ]
+
+  // ── leads: calls, sequences, tags ──────────────────────────────────────
+  if (method === 'GET' && path === '/crm/queue') {
+    const items = [
+      { id: uid(0xb1), name: 'Priya & Arjun', phone: '9876500001', event_type: 'Wedding', event_date: '2026-12-12', city: 'Mumbai', status: 'new', quality: 'hot', follow_up_at: daysFromNow(-2), last_contacted_at: null, last_call_outcome: null, call_attempts: 0, assigned_to: uid(0xe1), priority: 100, reason: 'Follow-up 2 days late' },
+      { id: uid(0xb4), name: 'Walk-in enquiry', phone: '9876500004', event_type: 'Pre-wedding', event_date: null, city: 'Pune', status: 'new', quality: null, follow_up_at: null, last_contacted_at: null, last_call_outcome: null, call_attempts: 0, assigned_to: null, priority: 80, reason: 'Not contacted yet' },
+      { id: uid(0xb2), name: 'Meera', phone: '9876500002', event_type: 'Wedding', event_date: '2027-02-14', city: 'Jaipur', status: 'contacted', quality: 'warm', follow_up_at: daysFromNow(0, 16), last_contacted_at: daysFromNow(-3, 12), last_call_outcome: 'no_answer', call_attempts: 1, assigned_to: uid(0xe3), priority: 60, reason: 'Follow-up due today' },
+    ]
+    const scope = q.get('scope') === 'all' ? 'all' : 'mine'
+    return { scope, items: scope === 'all' ? items : items.filter((i) => i.assigned_to !== uid(0xe3)) }
+  }
+  if (method === 'GET' && path === '/crm/queue/day')
+    return {
+      user_id: q.get('user') ?? mockSession.user_id, day: indiaToday(), calls_made: 6, calls_answered: 4, messages: 5, follow_ups_done: 3, leads_moved: 2, quotes_sent: 1, booked: 0, leads_touched: 7, overdue_left: 1, due_today_left: 2,
+      lead_lines: [
+        { id: uid(0xb3), name: 'Corporate Event', phone: '9876500003', last_type: 'call', last_outcome: 'answered', last_note: 'Wants a quote for 2 days', last_at: daysFromNow(0, 11), next_at: daysFromNow(2, 11) },
+        { id: uid(0xb2), name: 'Meera', phone: '9876500002', last_type: 'whatsapp', last_outcome: null, last_note: 'Sent the wedding packages', last_at: daysFromNow(0, 12), next_at: null },
+      ],
+    }
+  if (method === 'GET' && path === '/crm/queue/team')
+    return {
+      day: indiaToday(),
+      items: [
+        { user_id: uid(0xe1), user_name: 'Rahul Sharma', calls_made: 6, calls_answered: 4, messages: 5, quotes_sent: 1, booked: 0, leads_touched: 7, overdue_left: 1 },
+        { user_id: uid(0xe3), user_name: 'Sana Khan', calls_made: 3, calls_answered: 2, messages: 2, quotes_sent: 0, booked: 1, leads_touched: 4, overdue_left: 0 },
+      ],
+    }
+  if (method === 'GET' && path === '/crm/sequences/sends')
+    return {
+      items: [
+        { id: uid(0x5e1), lead_id: uid(0xb1), lead_name: 'Priya & Arjun', phone: '9876500001', email: 'priya@x.in', sequence_name: 'New enquiry, no reply', step_no: 2, channel: 'whatsapp', subject: null, text: 'Hi Priya! Just checking if you saw our wedding packages. Happy to set up a quick call 😊', status: 'manual', delivery: null, error: null, due_at: daysFromNow(0, 11), sent_at: null },
+        { id: uid(0x5e2), lead_id: uid(0xb3), lead_name: 'Corporate Event', phone: '9876500003', email: 'events@co.in', sequence_name: 'Quotation sent, gone quiet', step_no: 1, channel: 'email', subject: 'Your quotation from Demo Studio', text: 'Hello! Did you get a chance to look at the quotation?', status: 'sent', delivery: 'read', error: null, due_at: daysFromNow(-1, 11), sent_at: daysFromNow(-1, 11) },
+      ],
+    }
+  if (method === 'GET' && path === '/crm/tags')
+    return [
+      { id: uid(0x7a1), name: 'Destination', color: 'violet', is_active: true, lead_count: 3 },
+      { id: uid(0x7a2), name: 'Budget 3L+', color: 'green', is_active: true, lead_count: 2 },
+      { id: uid(0x7a3), name: 'Referral', color: 'teal', is_active: true, lead_count: 1 },
+      { id: uid(0x7a4), name: 'Call after 6 pm', color: 'amber', is_active: true, lead_count: 1 },
+    ]
+
+  // ── tasks ──────────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/tasks/priorities')
+    return [
+      { id: uid(0x7b1), code: 'low', label: 'Low', tone: 'neutral', sort_order: 1 },
+      { id: uid(0x7b2), code: 'medium', label: 'Medium', tone: 'info', sort_order: 2 },
+      { id: uid(0x7b3), code: 'high', label: 'High', tone: 'warning', sort_order: 3 },
+      { id: uid(0x7b4), code: 'urgent', label: 'Urgent', tone: 'danger', sort_order: 4 },
+    ]
+  if (method === 'GET' && path === '/tasks/routines') {
+    const all = [
+      { id: uid(0x7c1), title: 'Back up yesterday’s cards', description: 'Main disk and backup disk, then tick the data record.', priority: 'high', repeat: 'days', weekdays: [1, 2, 3, 4, 5, 6], month_day: null, due_time: '12:00', starts_on: '2026-11-01', ends_on: null, paused: false, project_id: null, project_name: null, created_by_name: 'Demo Owner', people: [routinePerson(1, 'Rahul Sharma', 'done', 6), routinePerson(4, 'Imran Qureshi', 'late', 4)] },
+      { id: uid(0x7c2), title: 'Post one reel', description: null, priority: 'medium', repeat: 'days', weekdays: [1, 3, 5], month_day: null, due_time: null, starts_on: '2026-11-01', ends_on: null, paused: false, project_id: null, project_name: null, created_by_name: 'Demo Owner', people: [routinePerson(3, 'Sana Khan', 'open', 3)] },
+    ]
+    // The owner is on none of them: "mine" is empty for them.
+    return q.get('mine') ? [] : all
+  }
+
+  // ── money ──────────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/billing/due') return dueFx()
+  if (method === 'GET' && path === '/billing/payments') {
+    const rows = atStage(paymentsFx, 'full')
+    const paid = rows.filter((p) => p.status === 'paid')
+    const pending = rows.filter((p) => p.status === 'pending')
+    const sum = (r: typeof rows) => r.reduce((n, p) => n + p.amount, 0)
+    return {
+      items: rows,
+      summary: {
+        total_received_amount: sum(paid),
+        pending_amount: sum(pending),
+        paid_count: paid.length,
+        pending_count: pending.length,
+        gst_count: 0,
+        received_this_month: 45000,
+        received_this_fy: sum(paid),
+        promised_amount: sum(pending),
+        promised_count: pending.length,
+      },
+      total: rows.length,
+      page: Number(q.get('page') ?? 1),
+      page_size: Number(q.get('page_size') ?? 25),
+    }
+  }
+  if (method === 'GET' && path === '/billing/overview') {
+    const open = invoiceRows().filter((i) => i.balance_due > 0)
+    const due = dueFx()
+    // As the server counts them (billing/routes-due.ts): invoices alone, by
+    // their due date -- never Payments' promises and plan parts.
+    const today = new Date().toISOString().slice(0, 10)
+    const week = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+    const sum = (xs: typeof open) => ({ count: xs.length, amount: xs.reduce((n, i) => n + i.balance_due, 0) })
+    return {
+      to_collect: due.overdue.amount + due.soon.amount + due.later.amount,
+      overdue: sum(open.filter((i) => i.due_date && i.due_date < today)),
+      due_soon: sum(open.filter((i) => i.due_date && i.due_date >= today && i.due_date <= week)),
+      received_this_month: due.received.amount,
+      invoiced_this_month: 0,
+      due_invoices: open.map((i) => ({ id: i.id, invoice_number: i.invoice_number, invoice_date: i.invoice_date, due_date: i.due_date, total: i.total, balance_due: i.balance_due, status: i.status, client_name: i.client_name, client_phone: i.client_phone, project_id: i.project_id, project_name: i.project_name })),
+    }
+  }
+  if (method === 'GET' && path === '/billing/invoices') {
+    const rows = atStage(invoiceRows(), 'full')
+    // No filters: the legacy bare array. With filters: the envelope.
+    if (![...q.keys()].length) return rows
+    const billed = rows.reduce((n, i) => n + i.total, 0)
+    const pending = rows.reduce((n, i) => n + i.balance_due, 0)
+    return {
+      items: rows,
+      summary: { total_invoices: rows.length, billed, paid: billed - pending, pending },
+      total: rows.length,
+      page: Number(q.get('page') ?? 1),
+      page_size: Number(q.get('page_size') ?? 25),
+    }
+  }
+  if (method === 'GET' && path === '/billing/templates')
+    return { items: [{ id: uid(0x7d01), company_id: mockSession.company_id, name: 'Classic', is_default: true, created_at: '2026-05-01T10:00:00Z' }] }
+  if (method === 'GET' && path === '/billing/bank-accounts')
+    return {
+      items: [{ id: uid(0x7d11), company_id: mockSession.company_id, label: 'HDFC current', holder: 'Demo Studio', bank: 'HDFC Bank', number: '50200012345678', ifsc: 'HDFC0000123', upi: 'demostudio@hdfcbank', branch: 'Bandra West', notes: null, is_default: true, is_active: true, created_at: '2026-05-01T10:00:00Z' }],
+    }
+  if (method === 'GET' && path === '/billing/note-templates')
+    return {
+      items: [
+        { id: uid(0x7d21), company_id: mockSession.company_id, title: 'Payment terms', content: '50% advance to book the date. Balance before delivery.', template_type: 'terms', is_default: true, created_at: '2026-05-01T10:00:00Z' },
+        { id: uid(0x7d22), company_id: mockSession.company_id, title: 'Thank you', content: 'Thank you for choosing Demo Studio!', template_type: 'note', is_default: false, created_at: '2026-05-01T10:00:00Z' },
+      ],
+    }
+  if (method === 'GET' && path === '/billing/items')
+    return [
+      { id: uid(0x7d31), name: 'Wedding package (2 days)', description: 'Candid, traditional, cinematic film', rate: 185000, hsn_sac: '998386', gst_rate: 18, kind: 'service' },
+      { id: uid(0x7d32), name: 'Pre-wedding shoot', description: null, rate: 45000, hsn_sac: '998386', gst_rate: 18, kind: 'service' },
+      { id: uid(0x7d33), name: 'Album (40 sheets)', description: 'Lay-flat, premium cover', rate: 30000, hsn_sac: '4911', gst_rate: 12, kind: 'goods' },
+    ]
+  if (method === 'GET' && path === '/financials/expenses') {
+    const rows = expenseRows()
+    const keys = [...q.keys()]
+    // A project's own expenses come back as a plain list; the Expenses page gets a page.
+    if (keys.length === 1 && keys[0] === 'project_id') return rows.filter((e) => e.project_id === q.get('project_id'))
+    return { items: rows, total: rows.length, page: Number(q.get('page') ?? 1), page_size: Number(q.get('page_size') ?? 25) }
+  }
+  if (method === 'GET' && path === '/financials/expenses/summary') {
+    const rows = expenseRows().filter((e) => !q.get('reimbursement') || e.reimbursement_status === q.get('reimbursement'))
+    const total = rows.reduce((n, e) => n + e.amount, 0)
+    return {
+      count: rows.length, total, tax_total: 6329, rcm_total: 0,
+      linked_count: rows.filter((e) => e.project_id).length, category_count: new Set(rows.map((e) => e.category)).size,
+      this_month: rows.filter((e) => e.expense_date >= '2026-11-01').reduce((n, e) => n + e.amount, 0), this_fy: total,
+      to_reimburse: rows.filter((e) => e.reimbursement_status === 'pending').reduce((n, e) => n + e.amount, 0),
+    }
+  }
+  if (method === 'GET' && path === '/financials/gst-summary')
+    return {
+      from: q.get('from') ?? NOV.from,
+      to: q.get('to') ?? NOV.to,
+      months: [{ month: '2026-11', taxable_sales: 61017, cgst: 5492, sgst: 5491, igst: 0, gst_collected: 10983, purchases: 1270, gst_paid: 229, rcm: 0 }],
+    }
+  if (method === 'GET' && path === '/financials/fixed-overheads') {
+    const month = q.get('month') ? `${q.get('month')!.slice(0, 7)}-01` : monthStart()
+    return [
+      { id: uid(0x7e01), category: 'Rent', label: 'Studio rent', amount: 40000, alloc_basis: 'revenue', month, is_active: true, created_at: '2026-05-01T10:00:00Z' },
+      { id: uid(0x7e02), category: 'Software', label: 'Adobe + Studio AutoPilot', amount: 8500, alloc_basis: 'revenue', month, is_active: true, created_at: '2026-05-01T10:00:00Z' },
+      { id: uid(0x7e03), category: 'Internet', label: 'Broadband', amount: 1499, alloc_basis: 'equal', month, is_active: true, created_at: '2026-05-01T10:00:00Z' },
+    ]
+  }
+
+  // ── team pay and people ────────────────────────────────────────────────
+  if (method === 'GET' && path === '/team-payouts')
+    return {
+      items: [
+        { id: uid(0x7f01), company_id: mockSession.company_id, user_id: uid(0xe1), user_name: 'Rahul Sharma', amount: 12000, period_start: '2026-11-01', period_end: '2026-11-15', status: 'completed', payment_mode: 'UPI', reference: 'UPI 7781', notes: 'Sharma haldi + mehendi', created_at: '2026-11-16T10:00:00Z' },
+        { id: uid(0x7f02), company_id: mockSession.company_id, user_id: uid(0xe2), user_name: 'Anita Desai', amount: 10000, period_start: '2026-11-01', period_end: '2026-11-15', status: 'pending', payment_mode: null, reference: null, notes: null, created_at: '2026-11-16T10:00:00Z' },
+      ],
+      summary: { total_payouts: 2, total_amount: 22000, pending_amount: 10000, completed_amount: 12000, this_month_amount: 22000 },
+    }
+  if (method === 'GET' && path === '/team-payouts/settlements')
+    return {
+      entries: [
+        { id: uid(0x7f11), slot_id: uid(0x51), member_uid: uid(0xe1), project_id: PROJ.p1, shoot_id: uid(0x61), amount_due: 8000, amount_paid: 3000, paid_date: '2026-11-12', payment_mode: 'UPI', payment_reference: 'UPI 6610', notes: 'Advance', entry_type: 'payment', reverses_settlement_id: null, created_by: mockSession.user_id, created_at: '2026-11-12T09:00:00Z' },
+      ],
+      aggregates: [{ slot_id: uid(0x51), paid_total: 3000, last_paid_date: '2026-11-12', last_reference: 'UPI 6610', entries_count: 1 }],
+    }
+  if (method === 'GET' && path === '/team/profile-gaps')
+    return [
+      { user_id: uid(0xe1), percent: 88, missing: ['pan'] },
+      { user_id: uid(0xe2), percent: 63, missing: ['date_of_birth', 'emergency_contact', 'pan'] },
+      { user_id: uid(0xe4), percent: 38, missing: ['photo', 'address', 'emergency_contact', 'payout', 'id_document'] },
+    ]
+  if (method === 'GET' && path === '/team/monthly-salaries') {
+    const month = Number(q.get('month') ?? 11)
+    const year = Number(q.get('year') ?? 2026)
+    const items = [
+      { id: uid(0x7f21), user_id: uid(0xe1), name: 'Rahul Sharma', email: 'rahul@demostudio.in', phone: null, engagement_type: 'salaried', month, year, base_amount: 30000, paid_amount: 30000, status: 'paid', created_at: '2026-11-01T10:00:00Z' },
+      { id: uid(0x7f22), user_id: uid(0xe3), name: 'Sana Khan', email: 'sana@demostudio.in', phone: null, engagement_type: 'salaried', month, year, base_amount: 35000, paid_amount: 15000, status: 'partial', created_at: '2026-11-01T10:00:00Z' },
+      { id: uid(0x7f23), user_id: uid(0xe2), name: 'Anita Desai', email: 'anita@demostudio.in', phone: null, engagement_type: 'salaried', month, year, base_amount: 22000, paid_amount: 0, status: 'unpaid', created_at: '2026-11-01T10:00:00Z' },
+    ]
+    return { items, totals: { base: 87000, paid: 45000, pending: 42000, count: 3, paid_count: 1, partial_count: 1, unpaid_count: 1 } }
+  }
+  if (method === 'GET' && path === '/performance')
+    return {
+      from: NOV.from,
+      to: NOV.to,
+      items: [
+        { user_id: uid(0xe3), name: 'Sana Khan', engagement_type: 'salaried', card: scoreCard(91) },
+        { user_id: uid(0xe1), name: 'Rahul Sharma', engagement_type: 'salaried', card: scoreCard(78, { work: { deliverables: 2, tasks: 6, with_due: 8, on_time: 6, avg_days_late: 2, pct: 75 }, late_now: [{ title: 'Highlight film', project: 'Sharma Wedding', days_late: 2 }] }) },
+        { user_id: uid(0xe2), name: 'Anita Desai', engagement_type: 'freelancer', card: scoreCard(null, { attendance: null, work: { deliverables: 0, tasks: 0, with_due: 0, on_time: 0, avg_days_late: null, pct: null } }) },
+      ],
+    }
+  if (method === 'GET' && (path === '/performance/me' || path.startsWith('/performance/members/'))) {
+    const id = path === '/performance/me' ? mockSession.user_id : path.split('/').pop()!
+    const months = ['2026-11', '2026-10', '2026-09'].map((m, i) => ({ ...scoreCard(88 - i * 6), from: `${m}-01`, to: monthEnd(m) }))
+    return { user_id: id, name: id === mockSession.user_id ? 'Demo Owner' : 'Sana Khan', months }
+  }
+
+  // ── reports ────────────────────────────────────────────────────────────
+  if (method === 'GET' && path.startsWith('/reports/')) {
+    const from = q.get('from') ?? NOV.from
+    const to = q.get('to') ?? NOV.to
+    const tab = path.slice('/reports/'.length)
+    if (tab === 'sales')
+      return {
+        from, to, enquiries: 18, booked: 4, conversion_pct: 22, bookings: 4, booking_value: 512000,
+        sources: [{ source: 'Instagram', enquiries: 8, booked: 2 }, { source: 'Facebook', enquiries: 5, booked: 1 }, { source: 'Referral', enquiries: 3, booked: 1 }, { source: 'Enquiry form', enquiries: 2, booked: 0 }],
+        lost: 5, lost_reasons: [{ reason: 'Budget', count: 3 }, { reason: 'Date not free', count: 2 }],
+      }
+    if (tab === 'money')
+      return {
+        from, to, billed: 0, invoices: 0, received: 45000, to_collect: 149000, overdue: 40000, overdue_invoices: 0, expenses: 4699,
+        owes: [
+          { client_id: CLIENT.sharma, client_name: 'Sharma Family', outstanding: 77000, overdue: 40000, overdue_days: 7, invoice_id: null, project_id: PROJ.p1 },
+          { client_id: CLIENT.nova, client_name: 'Nova Events', outstanding: 72000, overdue: 0, overdue_days: null, invoice_id: uid(0x93), project_id: PROJ.p3 },
+        ],
+      }
+    if (tab === 'delivery')
+      return {
+        from, to, delivered: 6, with_due_date: 6, on_time: 5, on_time_pct: 83, avg_days_to_deliver: 18.5, late_now: 2,
+        late: [
+          { id: uid(0xd2), title: 'Highlight film', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', due_date: daysFromNow(-2).slice(0, 10), days_late: 2, assignee_name: 'Sana Khan' },
+          { id: uid(0xd4), title: 'Edited Photos', project_id: PROJ.p1, project_name: 'Sharma Wedding', client_name: 'Sharma Family', due_date: daysFromNow(-3).slice(0, 10), days_late: 3, assignee_name: 'Demo Owner' },
+        ],
+      }
+    if (tab === 'team')
+      return {
+        from, to,
+        members: [
+          { user_id: uid(0xe1), name: 'Rahul Sharma', shoots: 4, delivered: 2, late_now: 0, days_present: 12, leave_days: 1 },
+          { user_id: uid(0xe3), name: 'Sana Khan', shoots: 2, delivered: 4, late_now: 1, days_present: 13, leave_days: 0 },
+          { user_id: uid(0xe2), name: 'Anita Desai', shoots: 3, delivered: 0, late_now: 0, days_present: 0, leave_days: 0 },
+        ],
+      }
+  }
+
+  // ── integrations and settings ──────────────────────────────────────────
+  if (method === 'GET' && path === '/meta/status')
+    return { connected: false, page_count: 0, connected_page_count: 0, webhook_subscribed_count: 0, missing_config: [], last_synced_at: null, last_error: null, ready: true, webhook_url: null, last_lead_at: null }
+  if (method === 'GET' && path === '/meta/connect-url')
+    return { connect_url: 'https://www.facebook.com/dialog/oauth?client_id=demo', app_id: 'demo', redirect_uri: 'https://studioautopilot.in/meta/callback', missing_config: [] }
+  if (method === 'GET' && path === '/meta/pages') return []
+  if (method === 'GET' && path === '/whatsapp') return { entitled: false, ready: true, embedded: null, connection: null }
+  if (method === 'GET' && path === '/work/reminder-settings') return { enabled: true, reminder_days: [3, 1, 0] }
+
+  // ── projects ───────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/projects/tracking')
+    return atStage(trackingRows, 'partial').map((r) => ({ ...r, health: HEALTH[r.id] ?? healthFx('healthy', 0, 'Add the first task') }))
+  if (method === 'GET' && path === '/projects/templates')
+    return {
+      items: [
+        {
+          id: uid(0x7e21), company_id: mockSession.company_id, name: 'Sample — Wedding', description: 'Two-day wedding: haldi, mehendi, wedding.',
+          deliverables_json: [{ name: 'Wedding album (40 sheets)', description: null, quantity: 1 }, { name: 'Highlight film', description: null, quantity: 1 }, { name: 'Edited Photos', description: null, quantity: 1 }],
+          shoots_json: [{ name: 'Haldi', kind: 'haldi', duration_hours: 4 }, { name: 'Wedding', kind: 'wedding', duration_hours: 8 }],
+          tasks_json: [{ title: 'Back up the cards', priority: 'high', sort_order: 0 }],
+          is_sample: true, created_at: '2026-05-01T10:00:00Z',
+        },
+      ],
+    }
+  if (method === 'GET' && path === '/projects/catalog/shoot-types')
+    return [
+      { id: uid(0x7e31), name: 'Haldi', category: 'wedding', usage_count: 6, is_archived: false },
+      { id: uid(0x7e32), name: 'Mehendi', category: 'wedding', usage_count: 5, is_archived: false },
+      { id: uid(0x7e33), name: 'Wedding', category: 'wedding', usage_count: 9, is_archived: false },
+      { id: uid(0x7e34), name: 'Reception', category: 'wedding', usage_count: 4, is_archived: false },
+      { id: uid(0x7e35), name: 'Pre-wedding', category: 'couple', usage_count: 3, is_archived: false },
+    ]
+  if (method === 'GET' && /^\/projects\/[^/]+\/billing$/.test(path)) {
+    const id = path.split('/')[2]!
+    const inv = invoiceRows().filter((i) => i.project_id === id)
+    return {
+      plan: id === PROJ.p1
+        ? {
+            document_id: uid(0x7e41), title: 'Wedding terms', agreed_at: '2026-06-01T12:00:00Z', total_cost: 227000,
+            instalments: [
+              { label: 'On booking', mode: 'percent', value: 40, due_trigger: 'on_booking' },
+              { label: 'Before the wedding', mode: 'percent', value: 40, due_trigger: 'before_wedding' },
+              { label: 'On delivery', mode: 'percent', value: 20, due_trigger: 'on_delivery' },
+            ],
+          }
+        : null,
+      invoices: inv.map((i) => ({ id: i.id, invoice_number: i.invoice_number, invoice_date: i.invoice_date, due_date: i.due_date, status: i.status, total: i.total, taxable: i.taxable, balance_due: i.balance_due })),
+    }
+  }
+  if (method === 'GET' && /^\/projects\/[^/]+\/costs$/.test(path)) {
+    const id = path.split('/')[2]!
+    const team = id === PROJ.p1
+      ? slots.map((s) => ({ slot_id: s.id, user_name: s.user_name, role: s.service_name, shoot_name: 'Engagement shoot', shoot_date: s.start_at.slice(0, 10), cost: s.estimated_cost, cost_status: s.cost_status, paid: s.id === uid(0x51) ? 3000 : 0 }))
+      : []
+    const exp = expenseRows().filter((e) => e.project_id === id).map((e) => ({ id: e.id, category: e.category, description: e.description, party_name: e.party_name, expense_date: e.expense_date, amount: e.amount }))
+    const project_value = projects.find((p) => p.id === id)?.total_cost ?? 0
+    const team_total = team.reduce((n, t) => n + t.cost, 0)
+    const expenses_total = exp.reduce((n, e) => n + e.amount, 0)
+    const total_cost = team_total + expenses_total
+    return { project_value, team, expenses: exp, team_total, team_paid: team.reduce((n, t) => n + t.paid, 0), expenses_total, total_cost, profit: Math.max(0, project_value - total_cost) }
+  }
+  return NOT_MOCKED
 }

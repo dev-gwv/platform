@@ -552,6 +552,44 @@ body {
   color: var(--muted-foreground);
 }
 
+/* A screen-reader-only label sits where it would have been drawn unless told
+   otherwise, so one inside a sideways-scrolling table or strip pushed the page
+   wider than the phone (Payroll's "Actions", audit 17 Nov). Pinned to its
+   box's corner it is still read out and never widens anything. */
+.sr-only:not(:focus):not(:focus-within) {
+  left: 0;
+  top: 0;
+}
+
+/* A tick box is the way to change many cards at once, so on a phone it has to
+   take a thumb: the 13-14px boxes on the boards and lists were missed more
+   often than hit (audit, 17 Nov). */
+@media (pointer: coarse), (max-width: 767px) {
+  input[type='checkbox'] {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+  }
+  /* The drawn tick boxes (cards, lists, column heads) keep their look and
+     gain an invisible ring a thumb can find. */
+  [role='checkbox']:not(.absolute):not(.fixed) {
+    position: relative;
+  }
+  [role='checkbox']::after {
+    content: '';
+    position: absolute;
+    inset: -0.625rem;
+  }
+}
+/* A phone has no hover, so a tick box that waits for one never shows: the
+   lead cards' could not be ticked at all (audit, 17 Nov). */
+@media (hover: none) {
+  [role='checkbox'].opacity-0,
+  [role='checkbox'].opacity-60 {
+    opacity: 1;
+  }
+}
+
 /* ── Tables ────────────────────────────────────────────────────
    A long directory or billing table loses its headings the moment you
    scroll, and then every column is a guess. `position: sticky` on the header
@@ -564,6 +602,10 @@ body {
      glue itself to a box that scrolls off the page, and stick to nothing. The
      bound is what makes the header real. */
   max-height: 70vh;
+  /* The containing block for anything absolute inside, such as a header's
+     `sr-only` "Actions": without it that span escaped the scroller and made
+     the whole page scroll sideways on a phone (Payroll, audit 17 Nov). */
+  position: relative;
 }
 
 .table-sticky thead th {
@@ -921,10 +963,32 @@ body {
 
 /* A sticky Save / Next bar keeps a lane free on its right for the help
    bubble, wherever the bar sits on screen (owner, 5 Nov: the bubble sat on the
-   wizard's Next and merged into it). */
+   wizard's Next and merged into it). On a phone the bubble rides above the
+   bottom tab bar, right where the bar's last button is, so the lane is kept
+   there too (audit, 17 Nov: a tap on Next opened Help at 375px). */
+[data-sticky-actions] {
+  padding-right: 4.75rem !important;
+}
 @media (min-width: 768px) {
   [data-sticky-actions] {
     padding-right: 5.5rem !important;
+  }
+}
+
+/* Follow-up reminders (main.tsx, `ipc-reminders`) wait until acted on, so
+   they must never sit on what the person is doing: while a dialog or drawer is
+   open they step aside and come back when it closes, and on a phone they ride
+   above a sticky Save / Next bar and the help bubble (audit, 17 Nov). */
+body:has([role='dialog'], [role='alertdialog']) .ipc-reminders {
+  display: none !important;
+}
+@media (max-width: 767px) {
+  .ipc-reminders {
+    --offset-bottom: 140px !important;
+  }
+  body:has([data-sticky-actions]) .ipc-reminders {
+    --offset-bottom: 200px !important;
+    --mobile-offset-bottom: 200px !important;
   }
 }
 

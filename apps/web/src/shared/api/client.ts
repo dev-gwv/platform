@@ -201,7 +201,23 @@ export async function callApi<TOut extends z.ZodTypeAny>(
   if (MOCK_ENABLED) {
     const { mockResponse } = await import('../dev/mock')
     const canned = mockResponse(path, method, opts.body)
-    if (canned !== NOT_MOCKED) return opts.responseSchema.parse(canned)
+    if (canned !== NOT_MOCKED) {
+      // A canned answer that no longer fits its contract is the mock's fault,
+      // not the page's: say which one, so a preview's "This didn't load" is
+      // never mistaken for a real bug (audit, 17 Nov).
+      const out = opts.responseSchema.safeParse(canned)
+      if (!out.success) {
+        const where = `${method} ${path}`
+        console.error(`[mock] ${where} no longer matches its contract`, out.error.issues)
+        ;((globalThis as { __mockDrift?: Record<string, unknown> }).__mockDrift ??= {})[where] = out.error.issues
+        throw out.error
+      }
+      return out.data
+    }
+    // No canned answer: it goes on to the real API, which a preview usually
+    // has not got. Name it, so a gap in the mock reads as one.
+    console.warn(`[mock] no canned answer for ${method} ${path}`)
+    ;((globalThis as { __mockMissing?: Record<string, true> }).__mockMissing ??= {})[`${method} ${path.split('?')[0]}`] = true
   }
 
   const send = () => {

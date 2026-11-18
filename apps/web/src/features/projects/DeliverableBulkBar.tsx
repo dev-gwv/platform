@@ -25,6 +25,7 @@ export function DeliverableBulkBar({ picked, onDone }: { picked: readonly Delive
     <div
       role="region"
       aria-label="Change the ticked deliverables"
+      data-sticky-actions
       className="sticky bottom-3 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-card p-3 shadow-lg"
     >
       <span className="text-sm font-semibold">{picked.length} ticked</span>

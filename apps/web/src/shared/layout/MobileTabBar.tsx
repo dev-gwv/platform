@@ -23,8 +23,10 @@ export function MobileTabBar({ onMenu }: { onMenu: () => void }) {
     // An editor's day is their edits: My work sits under the thumb too.
     { to: '/my-work', label: 'My work', icon: ClipboardList, show: !studio },
     { to: '/shoots/my', label: 'My shoots', icon: Camera, show: !studio },
-    { to: '/follow-ups/queue', label: 'Calls', icon: PhoneCall, show: access.hasModule('crm') },
+    // Attendance before Calls: a team member who also has leads kept Calls
+    // and lost Attendance to the four-tab cut (audit, 17 Nov).
     { to: '/attendance/my', label: 'Attendance', icon: MapPin, show: !studio && attendanceOn },
+    { to: '/follow-ups/queue', label: 'Calls', icon: PhoneCall, show: access.hasModule('crm') },
     { to: '/follow-ups', label: 'Leads', icon: Inbox, show: access.hasModule('crm') },
     { to: '/team-allocation', label: 'Shoots', icon: Camera, show: studio && access.hasModule('projects') },
   ]

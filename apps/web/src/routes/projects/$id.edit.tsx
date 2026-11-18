@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { AlertTriangle, ArrowLeft, Camera, ListChecks, Pencil, User } from 'lucide-react'
@@ -302,7 +303,7 @@ function ProjectEdit() {
                     value={packageCostText}
                     onChange={(e) => {
                       setPackageCostText(e.target.value)
-                      setForm({ ...form, package_cost: e.target.value.trim() ? Number(e.target.value) : 0 })
+                      setForm({ ...form, package_cost: parseAmount(e.target.value) })
                     }}
                   />
                 </div>

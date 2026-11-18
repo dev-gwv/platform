@@ -11,10 +11,10 @@ import { cn } from '../ui/cn'
  * and card fetches again, and whatever you had typed stays where it is.
  * Press R anywhere outside a text box for the same.
  */
-export function RefreshButton() {
+/** Fetch everything on screen again; the top bar's button and the account menu's line share it. */
+export function useRefreshPage() {
   const qc = useQueryClient()
   const router = useRouter()
-  const fetching = useIsFetching() > 0
   const [busy, setBusy] = useState(false)
 
   async function refresh() {
@@ -29,6 +29,12 @@ export function RefreshButton() {
       setBusy(false)
     }
   }
+  return { refresh, busy }
+}
+
+export function RefreshButton({ className }: { className?: string }) {
+  const { refresh, busy } = useRefreshPage()
+  const fetching = useIsFetching() > 0
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,7 +50,7 @@ export function RefreshButton() {
   })
 
   return (
-    <Button variant="ghost" size="icon" aria-label="Refresh" title="Refresh (R)" onClick={() => void refresh()}>
+    <Button variant="ghost" size="icon" aria-label="Refresh" title="Refresh (R)" className={className} onClick={() => void refresh()}>
       <RotateCw className={cn((busy || fetching) && 'animate-spin')} />
     </Button>
   )

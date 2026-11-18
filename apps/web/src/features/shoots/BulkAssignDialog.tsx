@@ -267,7 +267,7 @@ export function BulkAssignDialog({ projectId, onClose }: { projectId?: string | 
         description="Pick a person and a role — every shoot that needs that role is listed by date. Tick the ones they should do and book them together."
       >
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bulk-member" className="text-xs">
                 1. Team member

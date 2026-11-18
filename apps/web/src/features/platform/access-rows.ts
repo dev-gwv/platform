@@ -1,4 +1,5 @@
 import type { LegacyStudio, PlatformStudio } from '@ipc/contracts'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { legacyDaysLeft, legacyState } from './legacy'
 
 /**
@@ -55,7 +56,7 @@ export function statusOf(s: PlatformStudio, now = Date.now()): AccessStatus {
 
 /** `planNames`: each plan key's label ("Diamond Pro, monthly"), so the list says who bought what (0308). */
 export function toRows(studios: PlatformStudio[], legacy: LegacyStudio[], now = Date.now(), planNames: ReadonlyMap<string, string> = new Map()): AccessRow[] {
-  const today = new Date(now).toISOString().slice(0, 10)
+  const today = todayInIndia(new Date(now))
   const fresh: AccessRow[] = studios.map((s) => ({
     key: `new:${s.id}`,
     kind: 'new',

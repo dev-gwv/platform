@@ -1,3 +1,4 @@
+import { readAmount } from '@/shared/money/parse-amount'
 import { useMemo, useState } from 'react'
 import { Building2, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { FixedOverhead } from '@ipc/contracts'
@@ -149,7 +150,7 @@ function OverheadDialog({ month, editing, onDone }: { month: string; editing: Fi
     setAmount(v.amount)
   })
   const busy = create.isPending || update.isPending
-  const n = Number(amount)
+  const n = readAmount(amount)
 
   function save() {
     if (!(n > 0)) return

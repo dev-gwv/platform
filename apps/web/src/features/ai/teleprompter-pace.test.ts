@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SPEED_INDEX, SPEEDS, pxPerSecond, spokenText, stepSpeed } from './teleprompter'
+import { DEFAULT_SPEED_INDEX, SPEEDS, pxPerSecond, spokenText, stepSpeed } from './teleprompter-pace'
 
 describe('teleprompter', () => {
   it('scrolls the script past in its spoken time', () => {

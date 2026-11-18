@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Send, Trash2 } from 'lucide-react'
 import type { InvoiceListItem } from '@ipc/contracts'
@@ -129,7 +130,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
       ['Number', 'Client', 'Project', 'Date', 'Due', 'Total', 'Balance', 'Status'],
       items.map((inv) => [inv.invoice_number, inv.client_name ?? '', inv.project_name ?? '', inv.invoice_date, inv.due_date ?? '', inv.total, inv.balance_due, invoiceBadge(inv).label]),
     )
-    downloadCsv(`invoices-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+    downloadCsv(`invoices-${todayInIndia()}.csv`, csv)
   }
 
   /**

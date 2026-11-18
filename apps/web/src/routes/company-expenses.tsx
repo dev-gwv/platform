@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { Link } from '@tanstack/react-router'
 import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown, Undo2 } from 'lucide-react'
 import type { Expense } from '@ipc/contracts'
@@ -53,7 +54,7 @@ function cashOut(e: Expense): number {
 
 function exportCsv(rows: Expense[]) {
   downloadCsv(
-    `expenses-${new Date().toISOString().slice(0, 10)}.csv`,
+    `expenses-${todayInIndia()}.csv`,
     toCsv(
       ['Date', 'Category', 'Description', 'Project', 'Vendor', 'Paid by', 'Reimbursed', 'Amount', 'GST', 'GST rate', 'Tax', 'Vendor invoice', 'Reverse charge', 'Bills'],
       rows.map((e) => [

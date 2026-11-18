@@ -1,4 +1,5 @@
 import { ReplyWithAiButton } from '@/features/crm-ai/ReplySheet'
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useEffect, useRef, useState } from 'react'
 import { PartnerChip, partnerLabel } from './PartnerChip'
 import { AssigneeChip } from './AssigneeChip'
@@ -619,15 +620,15 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                   <Label htmlFor="lead-budget">Budget (₹)</Label>
                   <Input
                     id="lead-budget"
-                    type="number"
-                    min={0}
+                    inputMode="decimal"
                     key={`v-${lead.deal_value ?? ''}`}
                     defaultValue={lead.deal_value ?? ''}
                     placeholder="What they want to spend"
                     disabled={!canEdit}
                     className={cn(lead.deal_value === null && 'border-tone-amber/60 bg-tone-amber-soft/30')}
                     onBlur={(e) => {
-                      const v = e.target.value ? Number(e.target.value) : null
+                      // "1,50,000" is a number (parseAmount), never NaN.
+                      const v = e.target.value.trim() ? parseAmount(e.target.value) : null
                       if (v !== lead.deal_value) patch({ deal_value: v })
                     }}
                   />
@@ -724,8 +725,8 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="lead-value">Deal value (₹)</Label>
-                <Input id="lead-value" type="number" min={0} defaultValue={lead.deal_value ?? ''} placeholder="0" disabled={!canEdit}
-                  onBlur={(e)=>{ const v = e.target.value ? Number(e.target.value) : null; if (v !== lead.deal_value) patch({ deal_value: v })}} />
+                <Input id="lead-value" inputMode="decimal" defaultValue={lead.deal_value ?? ''} placeholder="0" disabled={!canEdit}
+                  onBlur={(e)=>{ const v = e.target.value.trim() ? parseAmount(e.target.value) : null; if (v !== lead.deal_value) patch({ deal_value: v })}} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="lead-prob">Probability %</Label>
@@ -779,7 +780,9 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               setAskArchive(false)
             }}
           />
-          <div className="sticky bottom-0 -mx-4 mt-auto flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-3">
+          {/* -bottom-6 / -mb-6 cancel the scroller's pb-6: at bottom-0 the bar stopped
+              24px short of the edge and the timeline showed under it (audit, 17 Nov). */}
+          <div className="sticky -bottom-6 -mx-4 -mb-6 mt-auto flex items-center justify-between gap-2 border-t border-border bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
             {canEdit ? (
               <Button
                 size="sm"

@@ -116,7 +116,9 @@ function WeddingQrRow({ qr, studio }: { qr: EnquiryPartner; studio: string }) {
           <Heart className="size-4 shrink-0 text-tone-rose" aria-hidden />
           <span className="truncate">{qr.name}</span>
         </span>
-        <span className="block truncate text-sm text-muted-foreground">
+        {/* Wraps rather than truncates: on a phone the project link at the end
+            was cut off (audit, 17 Nov). */}
+        <span className="block text-sm text-muted-foreground">
           {partnerCounts(qr.scans, qr.enquiries, qr.booked)}
           {qr.project_id && qr.project_name && (
             <>

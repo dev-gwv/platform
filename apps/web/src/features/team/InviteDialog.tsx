@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState, type FormEvent } from 'react'
 import { Check, Copy, UserPlus } from 'lucide-react'
 import { createInvitationRequest } from '@ipc/contracts'
@@ -89,7 +90,7 @@ export function InviteDialog() {
       role_ids: roleIds,
       ...(phone.trim() ? { phone: phone.trim() } : {}),
       ...(alternatePhone.trim() ? { alternate_phone: alternatePhone.trim() } : {}),
-      ...(salary.trim() && powers.canPay ? { salary: Number(salary) } : {}),
+      ...(salary.trim() && powers.canPay ? { salary: parseAmount(salary) } : {}),
       ...(address.trim() ? { address: address.trim() } : {}),
     }
     const found = fieldErrors<Field>(createInvitationRequest, body, { labels: LABELS })

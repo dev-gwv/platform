@@ -1,3 +1,4 @@
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { Loader2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -79,7 +80,7 @@ export function QuickAddMemberDialog({
           if (made) roleIds = [made.id]
         }
       }
-      const amount = rate.trim() ? Number(rate) : undefined
+      const amount = rate.trim() ? parseAmount(rate) : undefined
       const out = await add.mutateAsync(
         addMemberRequest.parse({
           name: name.trim(),
