@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Heart, Pencil, Plus, QrCode, Trash2 } from 'lucide-react'
+import { Heart, Pencil, Plus, QrCode, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { EnquiryPartner } from '@ipc/contracts'
+import type { EnquiryHub, EnquiryPartner } from '@ipc/contracts'
 import { partnerCounts, slugify } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -14,16 +14,20 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { downloadQrPng } from '@/shared/ui/qr-download'
-import { ProjectPicker } from '@/features/projects/ProjectPicker'
+import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useCreateWeddingQr, useEnquiryHub, usePartners, useUpdatePartner } from './api'
 import { DownloadButtons, PrintCardPreview, QrImage } from './parts'
+import { WeddingAfterSendCard } from './AfterSendCard'
 
 /**
  * Wedding QR codes (owner, 10 Nov; 0299). A partner is a shop or vendor that
  * keeps the studio's QR at its counter; a wedding QR is one the studio prints
  * and places at a client's wedding, so guests who liked the work can enquire.
- * Same form and counts underneath (enquiry_partners, kind 'wedding'), kept in
- * a place of its own and tied to the project it was made for.
+ * Same counts underneath (enquiry_partners, kind 'wedding'), kept in a place
+ * of its own. Made like the studio's own QR, with just the couple's names
+ * (owner, 19 Nov; 0313): no project to pick. Its guests' form asks only name,
+ * mobile, email and whether they have a wedding coming up, and wedding QRs
+ * have their own "After they send".
  */
 
 /** The words under the code on the printed card. */
@@ -47,21 +51,51 @@ async function downloadWeddingQr(qr: EnquiryPartner, studio: string) {
   }
 }
 
-/** The hub's "Wedding QR codes" tab: each wedding in a line, and Add wedding QR. */
-export function WeddingQrSection({ studio }: { studio: string }) {
+type WeddingTab = 'codes' | 'after'
+
+/** The hub's "Wedding QR codes" tab: the codes with Add wedding QR, and their own "After they send". */
+export function WeddingQrSection({ hub }: { hub: EnquiryHub }) {
+  const [tab, setTab] = useState<WeddingTab>('codes')
+  return (
+    <section className="flex flex-col gap-3">
+      <SectionTabs<WeddingTab>
+        variant="chips"
+        label="Wedding QR codes"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'codes', label: 'Wedding QRs', icon: Heart },
+          { value: 'after', label: 'After they send', icon: Send },
+        ]}
+      />
+      {tab === 'codes' ? (
+        <WeddingQrList studio={hub.studio} />
+      ) : (
+        <WeddingAfterSendCard
+          key={`w-${hub.form.wedding_after_submit}-${hub.form.wedding_whatsapp_phone}-${hub.form.wedding_redirect_url}`}
+          form={hub.form}
+          studio={hub.studio}
+          defaultPhone={hub.default_whatsapp_phone}
+        />
+      )}
+    </section>
+  )
+}
+
+function WeddingQrList({ studio }: { studio: string }) {
   const weddings = usePartners(false, true, 'wedding')
   const [adding, setAdding] = useState(false)
   const rows = weddings.data ?? []
   if (weddings.isPending) return <Skeleton className="h-32" />
   if (weddings.isError) return <ErrorState message="We could not load your wedding QR codes." onRetry={() => void weddings.refetch()} />
   return (
-    <section className="flex flex-col gap-3">
+    <>
       {rows.length === 0 ? (
         <Card>
           <CardContent className="p-6">
             <EmptyState
               title="No wedding QR codes yet"
-              description="Print one for a client's wedding and place it at the venue. Guests who scan it are marked as from that wedding."
+              description="Make one with the couple's names, print it and place it at their wedding. Guests who liked your work scan it to enquire."
               action={
                 <Button onClick={() => setAdding(true)}>
                   <Plus /> Add wedding QR
@@ -87,7 +121,7 @@ export function WeddingQrSection({ studio }: { studio: string }) {
         </>
       )}
       {adding && <AddWeddingQrDialog studio={studio} onClose={() => setAdding(false)} />}
-    </section>
+    </>
   )
 }
 
@@ -155,10 +189,14 @@ function WeddingQrRow({ qr, studio }: { qr: EnquiryPartner; studio: string }) {
   )
 }
 
-/** "Whose wedding?": pick the project, and its QR is made (or the one it has is given back). */
+/**
+ * Add wedding QR: the couple's names, then Make wedding QR -- one box, one
+ * button (owner, 19 Nov: "a first-timer ... should be able to create their
+ * wedding QR code"). From a project's page the project's name is filled in.
+ */
 export function AddWeddingQrDialog({
   studio,
-  projectId: fixedProject,
+  projectId,
   projectName,
   onClose,
 }: {
@@ -168,32 +206,41 @@ export function AddWeddingQrDialog({
   onClose: () => void
 }) {
   const make = useCreateWeddingQr()
-  const [projectId, setProjectId] = useState(fixedProject ?? '')
-  const [label, setLabel] = useState<string | null>(projectName ?? null)
+  const [name, setName] = useState(projectName ?? '')
   const [made, setMade] = useState<EnquiryPartner | null>(null)
+  const ready = name.trim().length >= 2
+  const submit = () => {
+    if (!ready || make.isPending) return
+    make.mutate({ name: name.trim(), ...(projectId ? { project_id: projectId } : {}) }, { onSuccess: (qr) => setMade(qr) })
+  }
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={made ? 'Wedding QR ready' : 'Whose wedding?'} className="max-w-md">
+      <DialogContent title={made ? 'Wedding QR ready' : 'Add wedding QR'} className="max-w-md">
         {made ? (
           <div className="flex flex-col items-center gap-3">
             <PrintCardPreview url={made.form_url} studio={studio} line={WEDDING_QR_LINE} />
             <p className="text-center text-sm text-muted-foreground">Guests who scan it are marked as from {made.name}.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="wedding-project">The wedding's project</Label>
-            <ProjectPicker
-              id="wedding-project"
-              value={projectId}
-              label={label}
-              disabled={!!fixedProject}
-              onChange={(id, name) => {
-                setProjectId(id)
-                setLabel(name)
-              }}
-              className={projectId ? undefined : 'border-warning/60 bg-warning/5'}
+          <form
+            className="flex flex-col gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              submit()
+            }}
+          >
+            <Label htmlFor="wedding-name">Couple&apos;s names</Label>
+            <Input
+              id="wedding-name"
+              autoFocus
+              maxLength={70}
+              placeholder="Priya & Rahul's wedding"
+              className={ready ? 'border-success/60 bg-success/5' : 'border-warning/60 bg-warning/5'}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
-          </div>
+            <p className="text-xs text-muted-foreground">Shown on the form guests open.</p>
+          </form>
         )}
         <DialogFooter>
           {made ? (
@@ -210,10 +257,7 @@ export function AddWeddingQrDialog({
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button
-                disabled={!projectId || make.isPending}
-                onClick={() => make.mutate({ project_id: projectId }, { onSuccess: (qr) => setMade(qr) })}
-              >
+              <Button disabled={!ready || make.isPending} onClick={submit}>
                 {make.isPending ? 'Making…' : 'Make wedding QR'}
               </Button>
             </>
@@ -224,15 +268,13 @@ export function AddWeddingQrDialog({
   )
 }
 
-/** Rename it, or move it to another project. */
+/** Rename it: the couple's names on the form. */
 function EditWeddingQrDialog({ qr, onClose }: { qr: EnquiryPartner; onClose: () => void }) {
   const update = useUpdatePartner(qr.id)
   const [name, setName] = useState(qr.name)
-  const [projectId, setProjectId] = useState(qr.project_id ?? '')
-  const [label, setLabel] = useState<string | null>(qr.project_name)
   const save = () =>
     update.mutate(
-      { name: name.trim(), occasion: name.trim(), ...(projectId && projectId !== qr.project_id ? { project_id: projectId } : {}) },
+      { name: name.trim(), occasion: name.trim() },
       {
         onSuccess: () => {
           toast.success('Wedding QR saved')
@@ -244,23 +286,9 @@ function EditWeddingQrDialog({ qr, onClose }: { qr: EnquiryPartner; onClose: () 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title="Edit wedding QR" className="max-w-md">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="wedding-name">Name on the form</Label>
-            <Input id="wedding-name" value={name} maxLength={70} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="wedding-edit-project">The wedding's project</Label>
-            <ProjectPicker
-              id="wedding-edit-project"
-              value={projectId}
-              label={label}
-              onChange={(id, n) => {
-                setProjectId(id)
-                setLabel(n)
-              }}
-            />
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="wedding-edit-name">Couple&apos;s names</Label>
+          <Input id="wedding-edit-name" value={name} maxLength={70} onChange={(e) => setName(e.target.value)} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
