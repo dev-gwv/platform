@@ -12,6 +12,7 @@ import {
   type CreateEnquiryPartnerRequest,
   type CreateWeddingQrRequest,
   type UpdateEnquiryFormRequest,
+  type WeddingAfterSendRequest,
   type UpdateEnquiryPartnerRequest,
 } from '@ipc/contracts'
 import { ApiError, callApi } from '@/shared/api/client'
@@ -73,6 +74,19 @@ export function useUpdateEnquiryForm(id: string) {
       callApi(`/enquiry-forms/${id}`, { method: 'PATCH', body, responseSchema: enquiryForm }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
     // A refusal about one box ("Add your WhatsApp number") is shown under it by the screen.
+    onError: (e) => {
+      if (!fieldOf(e)) toast.error(errorText(e, 'We could not save that.'))
+    },
+  })
+}
+
+/** Wedding QRs' own "After they send" (0313); after_submit null follows the main form. */
+export function useWeddingAfterSend(formId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: WeddingAfterSendRequest) =>
+      callApi(`/enquiry-forms/${formId}/wedding-after`, { method: 'PUT', body, responseSchema: enquiryForm }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
     onError: (e) => {
       if (!fieldOf(e)) toast.error(errorText(e, 'We could not save that.'))
     },

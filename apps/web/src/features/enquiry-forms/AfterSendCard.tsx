@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { fieldOf, useUpdateEnquiryForm, useUpdatePartner } from './api'
+import { fieldOf, useUpdateEnquiryForm, useUpdatePartner, useWeddingAfterSend } from './api'
 
 const CHOICES: { key: EnquiryAfterSubmit; title: string; line: string; icon: ReactNode; best?: boolean }[] = [
   {
@@ -115,6 +115,46 @@ export function PartnerAfterSendCard({
             : {
                 after_submit: v.after,
                 whatsapp_phone: v.phone.trim() ? v.phone : null,
+                whatsapp_text: v.text.trim() || null,
+                redirect_url: v.link.trim() || null,
+                thank_you: v.thanks.trim() || null,
+              },
+          { onSuccess: done, onError: failed },
+        )
+      }
+    />
+  )
+}
+
+/**
+ * Every wedding QR, after the guest sends (owner, 19 Nov: "a tab after they
+ * send, specifically for the wedding QR code"; 0313). "Same as your main
+ * form" until the studio picks something else; one wedding QR's own choice
+ * still wins.
+ */
+export function WeddingAfterSendCard({ form, studio, defaultPhone }: { form: EnquiryForm; studio: string; defaultPhone: string | null }) {
+  const update = useWeddingAfterSend(form.id)
+  return (
+    <AfterSendEditor
+      studio={studio}
+      fallbackPhone={form.whatsapp_phone ?? defaultPhone}
+      fallbackText={form.whatsapp_text}
+      sameLine={`Like your main form: ${afterSendWords(form.after_submit)}.`}
+      pending={update.isPending}
+      start={{
+        after: form.wedding_after_submit ?? 'same',
+        phone: tenOf(form.wedding_whatsapp_phone),
+        text: form.wedding_whatsapp_text ?? '',
+        link: form.wedding_redirect_url ?? '',
+        thanks: form.wedding_thank_you ?? '',
+      }}
+      save={(v, done, failed) =>
+        update.mutate(
+          v.after === 'same'
+            ? { after_submit: null }
+            : {
+                after_submit: v.after,
+                whatsapp_phone: v.phone.trim() || null,
                 whatsapp_text: v.text.trim() || null,
                 redirect_url: v.link.trim() || null,
                 thank_you: v.thanks.trim() || null,

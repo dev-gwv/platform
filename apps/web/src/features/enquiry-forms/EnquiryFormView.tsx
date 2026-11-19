@@ -11,7 +11,7 @@ type FormLook = Pick<
   PublicEnquiryFormV2,
   'studio' | 'form_name' | 'purpose' | 'title' | 'intro' | 'thank_you' | 'accent' | 'logo_url' | 'fields'
 > &
-  Partial<Pick<PublicEnquiryFormV2, 'city' | 'services' | 'event_types' | 'partner' | 'goes_to' | 'occasion' | 'questions'>>
+  Partial<Pick<PublicEnquiryFormV2, 'city' | 'services' | 'event_types' | 'partner' | 'goes_to' | 'occasion' | 'questions' | 'wedding'>>
 
 export interface EnquirySend {
   name: string
@@ -27,6 +27,8 @@ export interface EnquirySend {
   website: string
   /** A partner QR's own questions, answered (0281). */
   answers?: Record<string, string> | null
+  /** A wedding QR's "Do you have a wedding in the coming months?" (0313). */
+  wedding_soon?: 'yes' | 'no' | null
 }
 
 /** Field errors, plus "q:<id>" for a partner QR's own questions. */
@@ -65,7 +67,11 @@ export function EnquiryFormView({
   embed?: boolean
   onSend?: (body: EnquirySend) => Promise<{ redirect_url: string | null }>
 }) {
-  const f = look.fields
+  const wedding = look.wedding ?? false
+  // A wedding QR (0313): name, mobile, email, then "a wedding coming up?";
+  // when and where only after Yes.
+  const [soon, setSoon] = useState<'' | 'yes' | 'no'>('')
+  const f = wedding && soon !== 'yes' ? { ...look.fields, event_date: 'off' as const, city: 'off' as const } : look.fields
   const services = look.services ?? []
   const events = look.event_types?.length ? look.event_types : [...enquiryEventTypes]
   const [name, setName] = useState('')
@@ -81,13 +87,16 @@ export function EnquiryFormView({
   const [done, setDone] = useState<{ redirect: string | null } | null>(null)
   const accent = look.accent && look.accent !== 'slate' ? toneVar(look.accent) : undefined
   const set = (k: Exclude<keyof EnquiryValues, 'services'>) => (v: string) => setValues((x) => ({ ...x, [k]: v }))
-  const label = (k: keyof typeof f, text = FIELD_LABEL[k]) => (f[k] === 'required' ? text : `${text} (optional)`)
+  const WEDDING_LABEL: Partial<Record<keyof typeof f, string>> = { event_date: 'When is the wedding?', city: 'Where is it?' }
+  const label = (k: keyof typeof f, text = (wedding && WEDDING_LABEL[k]) || FIELD_LABEL[k]) =>
+    f[k] === 'required' ? text : `${text} (optional)`
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (preview) return
     setNotice(null)
     const found: SendErrors = checkEnquiry(f, name, phone, values)
+    if (wedding && !soon) found.wedding_soon = 'Pick one'
     for (const q of questions) {
       if (q.required && !(answers[q.id] ?? '').trim()) found[`q:${q.id}`] = q.kind === 'choice' ? 'Pick one' : 'Please fill this in'
     }
@@ -103,8 +112,8 @@ export function EnquiryFormView({
         phone: phone.trim(),
         email: values.email?.trim() || null,
         event_type: values.event_type || null,
-        event_date: values.event_date || null,
-        city: values.city?.trim() || null,
+        event_date: f.event_date !== 'off' ? values.event_date || null : null,
+        city: f.city !== 'off' ? values.city?.trim() || null : null,
         services: values.services?.length ? values.services : null,
         guests: num(values.guests),
         budget: num(values.budget),
@@ -113,6 +122,7 @@ export function EnquiryFormView({
         answers: questions.length
           ? Object.fromEntries(questions.map((q) => [q.id, (answers[q.id] ?? '').trim()]).filter(([, a]) => a))
           : null,
+        ...(wedding ? { wedding_soon: soon || null } : {}),
       })
       setDone({ redirect: res?.redirect_url ?? null })
     } catch (err) {
@@ -205,6 +215,40 @@ export function EnquiryFormView({
                   onChange={(e) => set('email')(e.target.value)}
                 />
               </Field>
+            )}
+
+            {wedding && (
+              <fieldset
+                id="enq-wedding_soon"
+                tabIndex={-1}
+                aria-describedby="enq-wedding_soon-note"
+                aria-invalid={!!errors.wedding_soon}
+                className="flex flex-col gap-1.5 outline-none"
+              >
+                <legend className="mb-1.5 text-sm font-semibold">Do you have a wedding in the coming months?</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['yes', 'no'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={soon === v}
+                      onClick={() => setSoon(v)}
+                      className={cn(
+                        'inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border text-base font-semibold transition-colors',
+                        soon === v ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card hover:border-brand',
+                      )}
+                    >
+                      {soon === v && <Check className="size-4" aria-hidden />}
+                      {v === 'yes' ? 'Yes' : 'No'}
+                    </button>
+                  ))}
+                </div>
+                {errors.wedding_soon && (
+                  <p id="enq-wedding_soon-note" className="text-xs text-destructive">
+                    {errors.wedding_soon}
+                  </p>
+                )}
+              </fieldset>
             )}
 
             {(f.event_type !== 'off' || f.event_date !== 'off') && (
@@ -440,7 +484,10 @@ const FIELD_IDS: [keyof FieldErrors, string][] = [
 
 /** Send refused: the cursor goes to the first answer to fix, so a phone scrolls to it. */
 function focusFirstError(errors: SendErrors) {
-  const first = FIELD_IDS.find(([k]) => errors[k])?.[1] ?? Object.keys(errors).find((k) => k.startsWith('q:') && errors[k])?.replace('q:', 'enq-q-')
+  const first =
+    FIELD_IDS.find(([k]) => errors[k])?.[1] ??
+    (errors.wedding_soon ? 'enq-wedding_soon' : undefined) ??
+    Object.keys(errors).find((k) => k.startsWith('q:') && errors[k])?.replace('q:', 'enq-q-')
   if (!first) return
   // After the error text has been drawn, so the box is where it will stay.
   window.requestAnimationFrame(() => document.getElementById(first)?.focus())

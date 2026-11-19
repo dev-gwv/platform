@@ -105,7 +105,7 @@ function Hub({ hub }: { hub: EnquiryHub }) {
         />
       )}
       {tab === 'qr' && <YourQrCard hub={hub} />}
-      {tab === 'wedding' && <WeddingQrSection studio={hub.studio} />}
+      {tab === 'wedding' && <WeddingQrSection hub={hub} />}
       {tab === 'partners' && (
         <div className="flex flex-col gap-6">
           <PartnersSection hub={hub} onAdd={() => setAdding(true)} />

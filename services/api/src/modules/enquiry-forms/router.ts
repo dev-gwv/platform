@@ -12,6 +12,7 @@ import {
   submitEnquiryRequestV2,
   submitEnquiryRequest,
   updateEnquiryFormRequest,
+  weddingAfterSendRequest,
 } from '@ipc/contracts'
 import type { TransactionSql } from 'postgres'
 import type { AppEnv } from '../../context'
@@ -43,6 +44,7 @@ const selectForms = (sql: TransactionSql) => sql`
          f.archived_at, f.created_at, f.scans, f.page_views, f.page_viewed_at, f.view_token,
          f.purpose, f.title, f.intro, f.thank_you, f.accent, f.show_logo, f.fields,
          f.is_main, f.slug, f.after_submit, f.whatsapp_phone, f.whatsapp_text, f.redirect_url,
+         f.wedding_after_submit, f.wedding_whatsapp_phone, f.wedding_whatsapp_text, f.wedding_redirect_url, f.wedding_thank_you,
          coalesce(st.enquiries, 0)::int as enquiries, coalesce(st.booked, 0)::int as booked,
          st.last_enquiry_at
     from enquiry_forms f
@@ -215,6 +217,50 @@ export const enquiryFormsRouter = new Hono<AppEnv>()
     if (!rows) fail(400, 'We could not save the form.')
     if (!rows[0]) fail(404, 'That form was not found.')
     await audit(c, { action: 'enquiry_form.update', entityType: 'enquiry_form', entityId: id, after: parsed.data })
+    return c.json(toForm(c.env.APP_URL, rows[0]))
+  })
+
+  /**
+   * Wedding QRs' own "After they send" (0313), kept on the main form. Null
+   * after_submit follows the main form; a link needs an https:// address.
+   */
+  .put('/:id/wedding-after', edit, manage, async (c) => {
+    const id = uuidParam(c)
+    const parsed = weddingAfterSendRequest.safeParse(await c.req.json().catch(() => ({})))
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check this.')
+    const d = parsed.data
+    let phone: string | null = null
+    if (d.whatsapp_phone?.trim()) {
+      phone = toIndianMobile(d.whatsapp_phone)
+      if (!phone) return c.json({ error: 'Enter a valid 10-digit mobile number', field: 'whatsapp_phone' }, 422)
+    }
+    const link = d.redirect_url?.trim() || null
+    if (link && !/^https:\/\/[^\s<>"]+$/.test(link)) return c.json({ error: 'Paste a link that starts with https://', field: 'redirect_url' }, 422)
+    if (d.after_submit === 'link' && !link) return c.json({ error: 'Paste the link to open', field: 'redirect_url' }, 422)
+    const same = d.after_submit === null
+    const rows = await attempt(c, 'enquiry_forms.wedding_after', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        if (d.after_submit === 'whatsapp' && !phone) {
+          const [r] = await sql<{ wa: string | null; own: string | null }[]>`
+            select enquiry_default_whatsapp(company_id) as wa, whatsapp_phone as own from enquiry_forms where id = ${id}`
+          if (r && !r.wa && !r.own) return 'no-number' as const
+        }
+        const done = await sql`
+          update enquiry_forms set
+            wedding_after_submit = ${d.after_submit},
+            wedding_whatsapp_phone = ${same ? null : phone},
+            wedding_whatsapp_text = ${same ? null : d.whatsapp_text?.trim() || null},
+            wedding_redirect_url = ${same ? null : link},
+            wedding_thank_you = ${same ? null : d.thank_you?.trim() || null}
+           where id = ${id} returning id`
+        if (!done[0]) return []
+        return sql<FormRow[]>`${selectForms(sql)} where f.id = ${id}`
+      }),
+    )
+    if (rows === 'no-number') return c.json({ error: 'Add your WhatsApp number', field: 'whatsapp_phone' }, 422)
+    if (!rows) fail(400, 'We could not save it.')
+    if (!rows[0]) fail(404, 'That form was not found.')
+    await audit(c, { action: 'enquiry_form.wedding_after', entityType: 'enquiry_form', entityId: id, after: { after_submit: d.after_submit } })
     return c.json(toForm(c.env.APP_URL, rows[0]))
   })
 

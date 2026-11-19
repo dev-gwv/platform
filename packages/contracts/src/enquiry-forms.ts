@@ -70,8 +70,24 @@ export const enquiryForm = z.object({
   whatsapp_phone: z.string().nullable().default(null),
   whatsapp_text: z.string().nullable().default(null),
   redirect_url: z.string().nullable().default(null),
+  /** 0313: what wedding QRs do after a send; null follows the main form. */
+  wedding_after_submit: enquiryAfterSubmit.nullable().default(null),
+  wedding_whatsapp_phone: z.string().nullable().default(null),
+  wedding_whatsapp_text: z.string().nullable().default(null),
+  wedding_redirect_url: z.string().nullable().default(null),
+  wedding_thank_you: z.string().nullable().default(null),
 })
 export type EnquiryForm = z.infer<typeof enquiryForm>
+
+/** 0313: wedding QRs' own "After they send"; after_submit null = same as the main form. */
+export const weddingAfterSendRequest = z.object({
+  after_submit: enquiryAfterSubmit.nullable(),
+  whatsapp_phone: z.string().trim().max(20).nullable().default(null),
+  whatsapp_text: z.string().trim().max(300).nullable().default(null),
+  redirect_url: z.string().trim().max(500).nullable().default(null),
+  thank_you: z.string().trim().max(300).nullable().default(null),
+})
+export type WeddingAfterSendRequest = z.input<typeof weddingAfterSendRequest>
 
 const text = (max: number) => z.string().trim().max(max)
 
@@ -274,10 +290,13 @@ export const createEnquiryPartnerRequest = z.object({
 export type CreateEnquiryPartnerRequest = z.input<typeof createEnquiryPartnerRequest>
 
 /** POST /enquiry-partners with kind 'wedding', in the app's words: whose wedding. */
-export const createWeddingQrRequest = z.object({
-  project_id: uuid,
-  name: z.string().trim().min(2).max(70).nullish(),
-})
+/** 0313: the couple's names are enough; a project is optional (the project page's Make wedding QR). */
+export const createWeddingQrRequest = z
+  .object({
+    project_id: uuid.nullish(),
+    name: z.string().trim().min(2, "Type the couple's names.").max(70).nullish(),
+  })
+  .refine((v) => !!v.project_id || !!v.name, { message: "Type the couple's names.", path: ['name'] })
 export type CreateWeddingQrRequest = z.infer<typeof createWeddingQrRequest>
 
 export const updateEnquiryPartnerRequest = z
@@ -328,6 +347,8 @@ export const publicEnquiryFormV2 = publicEnquiryForm.extend({
   /** 0281: what a partner's QR is for, and its own questions. */
   occasion: z.string().nullable().default(null),
   questions: z.array(enquiryQuestion).catch([]).default([]),
+  /** 0313: a wedding QR's form -- name, mobile, email, and a wedding coming up? */
+  wedding: z.boolean().default(false),
 })
 export type PublicEnquiryFormV2 = z.infer<typeof publicEnquiryFormV2>
 
@@ -348,6 +369,8 @@ export const submitEnquiryRequestV2 = z.object({
   p: z.string().max(20).nullish(),
   /** Answers to a partner QR's own questions, by question id (0281). */
   answers: z.record(z.string().max(40), z.string().max(500)).nullish(),
+  /** 0313: a wedding QR's "Do you have a wedding in the coming months?". */
+  wedding_soon: z.enum(['yes', 'no']).nullish(),
 })
 export type SubmitEnquiryRequestV2 = z.input<typeof submitEnquiryRequestV2>
 

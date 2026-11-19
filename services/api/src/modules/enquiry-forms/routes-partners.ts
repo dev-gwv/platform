@@ -65,8 +65,12 @@ const kindOf = (raw: string | undefined): 'partner' | 'wedding' | 'all' =>
  * named after it, with no partner page. create_wedding_qr refuses another
  * studio's project (22023 -> 422).
  */
-async function makeWeddingQr(sql: TransactionSql, appUrl: string | undefined, projectId: string, name: string | null) {
-  const [made] = await sql<{ id: string }[]>`select (create_wedding_qr(${projectId}, ${name})).id`
+async function makeWeddingQr(sql: TransactionSql, appUrl: string | undefined, projectId: string | null, name: string | null) {
+  // 0313: just the couple's names, like the studio's own QR; a project only
+  // when made from the project page.
+  const [made] = projectId
+    ? await sql<{ id: string }[]>`select (create_wedding_qr(${projectId}, ${name})).id`
+    : await sql<{ id: string }[]>`select (create_wedding_qr_named(${name})).id`
   const formUrl = await formUrlOf(sql, appUrl)
   const rows = await sql<Row[]>`${selectPartners(sql)} where p.id = ${made!.id}`
   return { formUrl, row: rows[0]! }
@@ -125,11 +129,11 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
     if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? 'Please check the partner.')
     const d = parsed.data
     if (d.kind === 'wedding') {
-      if (!d.project_id) fail(422, 'Pick whose wedding this QR is for.')
+      if (!d.project_id && !d.name?.trim()) fail(422, "Type the couple's names.")
       const wedding = await attempt(
         c,
         'enquiry_partners.create_wedding',
-        () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, d.project_id!, d.name)),
+        () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, d.project_id ?? null, d.name ?? null)),
         { onCode: clash },
       )
       if (!wedding) fail(400, 'We could not make the wedding QR.')
@@ -171,11 +175,11 @@ export const enquiryPartnersRouter = new Hono<AppEnv>()
    */
   .post('/wedding', async (c) => {
     const parsed = createWeddingQrRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Pick whose wedding this QR is for.')
+    if (!parsed.success) fail(422, parsed.error.issues[0]?.message ?? "Type the couple's names.")
     const out = await attempt(
       c,
       'enquiry_partners.create_wedding',
-      () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, parsed.data.project_id, parsed.data.name ?? null)),
+      () => withUser(c.env, c.get('auth').userId, (sql) => makeWeddingQr(sql, c.env.APP_URL, parsed.data.project_id ?? null, parsed.data.name ?? null)),
       { onCode: clash },
     )
     if (!out) fail(400, 'We could not make the wedding QR.')

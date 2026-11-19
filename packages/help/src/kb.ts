@@ -281,7 +281,9 @@ export const KB: readonly KbArticle[] = [
     to: '/follow-ups/form',
     keywords: ['wedding qr', 'guests', 'scan to book', 'qr at wedding', 'venue standee'],
     body: [
-      'A wedding QR is one you print and place at a client\'s wedding, so guests who liked your work can enquire. **Add wedding QR** asks "Whose wedding?".',
+      'A wedding QR is one you print and place at a client\'s wedding, so guests who liked your work can enquire. **Add wedding QR**, type the couple\'s names (like "Priya & Rahul\'s wedding"), then **Make wedding QR**. No project to pick.',
+      'Guests who scan it see a short form: name, mobile, email, and "Do you have a wedding in the coming months?" -- on Yes, when and where. Their answer shows on the lead.',
+      'Wedding QR codes has its own **After they send** (a WhatsApp chat, a thank-you, or a link). Until you change it, it is the same as your main form.',
       'Each one has **Download for print (HD)** ("Loved our work? Scan to book us for your wedding") and says its scans, enquiries and bookings. A lead from it reads "via Priya & Rahul\'s Wedding QR".',
     ],
   },
