@@ -1,0 +1,3 @@
+-- 0313: claim -- wedding QR codes made like your own QR: a name, no project;
+-- the guest form asks name, phone, email and whether a wedding is coming up;
+-- wedding QRs get their own "After they send".
