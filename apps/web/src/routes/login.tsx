@@ -365,7 +365,8 @@ export function LoginPage() {
         * to trust this with their client list, furniture that moves when you
         * approach it reads as a demo rather than as a product.
         */}
-      <div className="relative w-full max-w-[27rem]">
+      {/* Sign-up asks six things, so it is wide (owner, 20 Nov: "it has to be wide"); sign-in stays narrow. */}
+      <div className={`relative w-full ${isRegister && !resetSentTo && !pendingEmail ? 'max-w-[46rem]' : 'max-w-[27rem]'}`}>
         <h1 className="mb-7 text-center text-2xl font-bold tracking-tight">
           {/*
             * The raw brand amber (#f2a618) on a near-white ground fails
@@ -497,6 +498,7 @@ export function LoginPage() {
                     </div>
                   )}
 
+                  <div className={isRegister ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : 'flex flex-col gap-4'}>
                   <Field label="Email" name="email" error={errors.email}>
                     {(p) => (
                       <Input
@@ -533,6 +535,7 @@ export function LoginPage() {
                       )}
                     </Field>
                   )}
+                  </div>
 
                   {isRegister ? (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

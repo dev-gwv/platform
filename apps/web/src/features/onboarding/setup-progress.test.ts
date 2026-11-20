@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSetupStep, popupDue, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
+import { nextSetupStep, popupDue, setupCountLine, setupProgress, setupStepTarget, showSetupProgress, showSetupPill } from './setup-progress'
 
 const none = { teammates: 0, clients: 0, projects: 0, quotation: false, logo: false }
 const now = new Date('2026-11-12T10:00:00Z')
@@ -71,5 +71,16 @@ describe('popupDue', () => {
   it('never once the required steps are done', () => {
     const done = setupProgress({ teammates: 1, clients: 1, projects: 1, quotation: true, logo: false })
     expect(popupDue({ ...base, steps: done, projects: 1, lastWorkAt: '2026-10-01T00:00:00Z' })).toBe(false)
+  })
+})
+
+describe('showSetupPill', () => {
+  const now = new Date('2026-11-20T10:00:00Z')
+  it('shows for a studio in its first 60 days', () => {
+    expect(showSetupPill('2026-11-19T10:00:00Z', now)).toBe(true)
+    expect(showSetupPill('2026-09-22T10:00:00Z', now)).toBe(true)
+  })
+  it('goes after 60 days', () => {
+    expect(showSetupPill('2026-09-01T10:00:00Z', now)).toBe(false)
   })
 })

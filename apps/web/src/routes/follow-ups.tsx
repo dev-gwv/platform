@@ -12,7 +12,6 @@ import { ErrorState } from '@/shared/ui/states'
 import { SEARCH_MIN, useLeadCards, useLeadSearch, useSavedViews } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawerById } from '@/features/crm/LeadDrawerById'
-import { GettingStarted } from '@/features/crm/GettingStarted'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
 import { closedOutcomeFor, inView, openingView, viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery, toSavedQuery } from '@/features/crm/views'
@@ -407,10 +406,6 @@ function Crm() {
           <SkeletonList rows={5} columns={4} />
         ) : active.isError ? (
           <ErrorState error={active.error} onRetry={() => void active.refetch()} />
-        ) : isEmptyStudio ? (
-          /* The checklist a studio needs once, on the only screen where it is
-             the most useful thing present: an empty one. */
-          <GettingStarted leads={allOpen} />
         ) : mode === 'pipeline' ? (
           <PipelineTab leads={rows} onOpen={setOpenLead} serverCounts={serverCounts} />
         ) : mode === 'board' ? (

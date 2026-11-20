@@ -53,6 +53,16 @@ export function showSetupProgress(
   return steps.some((s) => !s.done && !s.step.optional)
 }
 
+/**
+ * The "Setup videos" pill in the top bar (owner, 20 Nov: "somewhere on the top
+ * how to set up"): for a studio's first 60 days, whatever the Home card does,
+ * so the way back to /start is always one tap.
+ */
+export function showSetupPill(startedAt: string, now = new Date()): boolean {
+  const t = Date.parse(startedAt)
+  return Number.isNaN(t) || now.getTime() - t <= SETUP_VIDEO_DAYS * 86_400_000
+}
+
 /** "2 of 6 done" -- moves the moment a step's data lands. */
 export function setupCountLine(steps: readonly SetupProgressStep[]): string {
   return `${steps.filter((s) => s.done).length} of ${steps.length} done`

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { KeyRound, MessageCircle, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { KeyRound, MessageCircle, Search, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserX } from 'lucide-react'
 import { PROFILE_FIELD_LABEL, buildWhatsAppUrl } from '@ipc/contracts'
 import { useTeamProfileGaps } from '@/features/profile/api'
 import { Link } from '@tanstack/react-router'
@@ -51,17 +51,27 @@ export function DirectoryFiltersBar({
   filters,
   onChange,
   roles,
+  open,
+  onToggle,
+  actions,
 }: {
   filters: DirectoryFilters
   onChange: (next: DirectoryFilters) => void
   roles: readonly EmployeeRole[]
+  /** The type, status, role and sort pickers show only once Filter is pressed (minimal first). */
+  open: boolean
+  onToggle: () => void
+  /** The page's buttons, on the same line as the search. */
+  actions?: ReactNode
 }) {
   const set = <K extends keyof DirectoryFilters>(key: K, value: DirectoryFilters[K]) =>
     onChange({ ...filters, [key]: value })
+  const on = [filters.type, filters.status, filters.role].filter(Boolean).length + (filters.sort !== 'newest' ? 1 : 0)
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
-      <div className="relative sm:col-span-2">
+    <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative min-w-0 flex-1 sm:max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.q}
@@ -71,7 +81,13 @@ export function DirectoryFiltersBar({
           className="pl-9"
         />
       </div>
-
+      <Button variant="outline" onClick={onToggle} aria-expanded={open}>
+        <SlidersHorizontal /> Filter{on > 0 && ` · ${on}`}
+      </Button>
+      {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+    {open && (
+    <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-4">
       <Select value={filters.type} onChange={(e) => set('type', e.target.value)} aria-label="Engagement">
         <option value="">All types</option>
         <option value="in_house">In-house staff</option>
@@ -114,6 +130,8 @@ export function DirectoryFiltersBar({
         <option value="salary_high">Salary (high to low)</option>
         <option value="salary_low">Salary (low to high)</option>
       </Select>
+    </div>
+    )}
     </div>
   )
 }

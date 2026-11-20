@@ -16,6 +16,7 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { AssistantButton } from '@/features/assistant/AssistantButton'
 import { HeaderBookCall } from '@/features/help/BookCall'
+import { HeaderSetupVideos } from '@/features/onboarding/SetupVideosLink'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
@@ -279,6 +280,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NewMenu />
             <DueChip />
             <TrialChip />
+            <HeaderSetupVideos />
             <SuggestFeatureButton className="hidden md:inline-flex" />
             <HeaderBookCall />
 

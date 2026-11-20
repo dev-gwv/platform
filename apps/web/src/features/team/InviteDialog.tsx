@@ -27,11 +27,15 @@ const LABELS: Record<Field, string> = {
  * a 7-day link. The link is shown after sending because the email is not always
  * the channel that reaches crew: most of this gets pasted into WhatsApp.
  */
-export function InviteDialog() {
+/** Without `open`, it brings its own Invite User button; with it, a menu line opens it (Team's More). */
+export function InviteDialog({ open: openProp, onOpenChange }: { open?: boolean; onOpenChange?: (open: boolean) => void } = {}) {
   const powers = useTeamPowers()
   const invite = useCreateInvitation()
   const { data: roles } = useEmployeeRoles()
-  const [open, setOpen] = useState(false)
+  const [openOwn, setOpenOwn] = useState(false)
+  const controlled = openProp !== undefined
+  const open = controlled ? openProp : openOwn
+  const setOpen = (o: boolean) => (controlled ? onOpenChange?.(o) : setOpenOwn(o))
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -113,11 +117,13 @@ export function InviteDialog() {
         if (!o) reset()
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <UserPlus /> Invite User
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <UserPlus /> Invite User
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent
         title="Invite a team member"
         description="They set their own password from the link. It expires in 7 days."

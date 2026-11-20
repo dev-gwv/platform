@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { todayInIndia } from '@/shared/ui/days-left'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Download, Plus, ShieldCheck, Users } from 'lucide-react'
+import { Download, Ellipsis, Plus, ShieldCheck, UserPlus, Users } from 'lucide-react'
 import type { DirectoryMember } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { Button } from '@/shared/ui/button'
@@ -15,14 +14,13 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { downloadCsv } from '@/shared/ui/csv'
 import { Select } from '@/shared/ui/input'
+import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useDeleteMember, useDirectoryPaged, useEmployeeRoles, useUpdateMember } from '@/features/team/api'
 import { AddMemberForm } from '@/features/team/AddMemberForm'
 import { AddTeamChooser, type AddMode } from '@/features/team/AddTeamChooser'
 import { BulkAddMembers } from '@/features/team/BulkAddMembers'
 import { AddMorePrompt, useFromSetup } from '@/features/onboarding/setup-flow'
 import { nextStep } from '@/features/onboarding/journey'
-import { SetupWelcome } from '@/features/onboarding/SetupWelcome'
-import { useMembers } from '@/features/allocation/api'
 import { DeleteEmployeeDialog } from '@/features/team/DeleteEmployeeDialog'
 import { DirectoryFiltersBar, DirectoryTable } from '@/features/team/DirectoryTable'
 import { RemovedPeople } from '@/features/team/RemovedPeople'
@@ -36,7 +34,6 @@ import {
   hasActiveFilters,
   toCsv,
   type DirectoryFilters,
-  type DirectoryTab,
 } from '@/features/team/filters'
 
 export function EmployeesPage() {
@@ -69,13 +66,6 @@ function TeamPage() {
   // Set once people have just been added: the "add more?" question.
   const [justAdded, setJustAdded] = useState(false)
   const fromSetup = useFromSetup()
-  const { session } = useAuth()
-  // The welcome is for a studio with nobody on its team yet (the owner is in
-  // the directory from registration, so they do not count).
-  const members = useMembers()
-  const nobodyYet =
-    members.isSuccess && (members.data ?? []).filter((m) => m.user_id !== session?.user_id).length === 0
-
   const setAdding = (mode: AddMode | null) => {
     setAddingState(mode)
     // Leaving the add flow drops `?add=` too, so a refresh shows the list
@@ -124,7 +114,6 @@ function TeamPage() {
   if (adding) {
     return (
       <div className="pt-2">
-        {adding === 'choose' && fromSetup && nobodyYet && <SetupWelcome name={session?.display_name} />}
         {adding === 'choose' ? (
           <AddTeamChooser onPick={setAdding} onCancel={() => setAdding(null)} setup={fromSetup} />
         ) : adding === 'bulk' ? (
@@ -150,7 +139,9 @@ function Directory({ onAdd }: { onAdd: () => void }) {
   const { session } = useAuth()
   const access = useAccess()
   const { data: roles } = useEmployeeRoles()
-  const [tab, setTab] = useState<DirectoryTab>('all')
+  const [showFilters, setShowFilters] = useState(false)
+  const [inviting, setInviting] = useState(false)
+  const navigate = useNavigate()
   const [filters, setFilters] = useState<DirectoryFilters>(EMPTY_FILTERS)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -164,14 +155,12 @@ function Directory({ onAdd }: { onAdd: () => void }) {
   // already-loaded page meant "freelancers only" could show an empty page 1
   // of 4 with the freelancers sitting on page 3.
   //
-  // The Freelance tab is the same question as the engagement filter, so it
-  // goes down the same wire rather than trimming the result afterwards.
   const paged = useDirectoryPaged({
     page,
     page_size: pageSize,
     search: filters.q || undefined,
     status: filters.status || undefined,
-    engagement_type: tab === 'freelance' ? 'freelancer' : filters.type || undefined,
+    engagement_type: filters.type || undefined,
     role: filters.role || undefined,
   })
   const updateMember = useUpdateMember()
@@ -225,6 +214,14 @@ function Directory({ onAdd }: { onAdd: () => void }) {
     )
   }
 
+  const moreItems: RowMenuItem[] = [
+    ...(powers.canCreate ? [{ label: 'Invite by link', icon: <UserPlus className="size-4" />, onSelect: () => setInviting(true) }] : []),
+    ...(access.hasModule('team_roles')
+      ? [{ label: 'Roles & access', icon: <ShieldCheck className="size-4" />, onSelect: () => void navigate({ to: '/settings/roles' }) }]
+      : []),
+    { label: 'Export CSV', icon: <Download className="size-4" />, onSelect: () => exportCsv(false), divider: true },
+  ]
+
   async function bulkStatus(status: 'active' | 'inactive') {
     if (editableSelected.length === 0) return
     try {
@@ -265,44 +262,31 @@ function Directory({ onAdd }: { onAdd: () => void }) {
 
   return (
     <>
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">Team Directory</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {access.hasModule('team_roles') && (
-            <Button variant="outline" asChild>
-              <Link to="/settings/roles">
-                <ShieldCheck /> Roles &amp; Access
-              </Link>
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => exportCsv(false)} disabled={rows.length === 0}>
-            <Download /> Export CSV
-          </Button>
-          {powers.canCreate && <InviteDialog />}
-          {powers.canCreate && (
-            <Button onClick={onAdd}>
-              <Plus /> Add Team Member
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <FilterTabs<DirectoryTab>
-        className="mt-4"
-        tabs={[
-          { value: 'all', label: 'All', count: total },
-          { value: 'freelance', label: 'Freelance / Non-salaried', count: total },
-        ]}
-        value={tab}
-        onChange={(v) => {
-          setTab(v)
-          setPage(1)
-        }}
-      />
-
+      {/* One heading (the page's), the search with Filter, Add Team Member, and
+          the rest under More (owner, 20 Nov: the Team page was "very cluttered").
+          The Freelance tab was the Type filter twice; it is under Filter now. */}
       <div className="mt-4">
-        <DirectoryFiltersBar filters={filters} onChange={resetPage} roles={roles ?? []} />
+        <DirectoryFiltersBar
+          filters={filters}
+          onChange={resetPage}
+          roles={roles ?? []}
+          open={showFilters || hasActiveFilters(filters)}
+          onToggle={() => setShowFilters((v) => !v)}
+          actions={
+            <>
+              <RowMenu label="More team tools" variant="outline" items={moreItems}>
+                <Ellipsis /> More
+              </RowMenu>
+              {powers.canCreate && (
+                <Button onClick={onAdd}>
+                  <Plus /> Add Team Member
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
+      {powers.canCreate && <InviteDialog open={inviting} onOpenChange={setInviting} />}
 
       {(canEdit || canDelete) && selected.size > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
@@ -348,7 +332,7 @@ function Directory({ onAdd }: { onAdd: () => void }) {
                   This used to read `total === 0`, which worked only while the
                   total ignored the filters -- now that it follows them, the
                   question has to be asked directly. */}
-              {total === 0 && !hasActiveFilters(filters) && tab === 'all' ? (
+              {total === 0 && !hasActiveFilters(filters) ? (
                 <EmptyState
                   title="No employees found yet."
                   description="Add your first employee to start building your team."

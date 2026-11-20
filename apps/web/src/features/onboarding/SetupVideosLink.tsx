@@ -1,7 +1,44 @@
 import { Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { PlayCircle } from 'lucide-react'
+import { gettingStarted } from '@ipc/contracts'
+import { callApi } from '@/shared/api/client'
+import { useAuth } from '@/shared/auth/AuthProvider'
 import { cn } from '@/shared/ui/cn'
+import { isSetupAudience } from './journey'
+import { showSetupPill } from './setup-progress'
 import { SETUP_VIDEOS } from './setup-videos'
+
+/**
+ * "Setup videos" in the top bar, on every page, for the owner and admins in a
+ * studio's first 60 days (owner, 20 Nov: "somewhere on the top how to set up,
+ * something that they can see and follow"). Opens /start. The label shows
+ * from 1360px like the shortcut pills; below that the play icon alone; not on
+ * a phone, where Home's setup card carries it.
+ */
+export function HeaderSetupVideos() {
+  const { session } = useAuth()
+  const audience = !!session && isSetupAudience(session)
+  const q = useQuery({
+    queryKey: ['settings', 'getting-started'],
+    queryFn: () => callApi('/settings/getting-started', { responseSchema: gettingStarted }),
+    enabled: audience,
+    staleTime: 30_000,
+  })
+  if (!audience || !q.data || !showSetupPill(q.data.started_at)) return null
+  return (
+    <Link
+      to="/start"
+      aria-label="Setup videos: set up Studio AutoPilot step by step"
+      title="Set up Studio AutoPilot, step by step"
+      data-testid="header-setup-videos"
+      className="hidden h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-tone-violet/40 bg-tone-violet-soft px-2.5 text-sm font-semibold text-tone-violet transition-colors hover:bg-tone-violet/15 md:flex"
+    >
+      <PlayCircle className="size-4" aria-hidden />
+      <span className="hidden min-[1360px]:inline">Setup videos</span>
+    </Link>
+  )
+}
 
 /**
  * "New here? Watch how to set up — 6 short videos" under the sign-in and
