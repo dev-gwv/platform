@@ -146,7 +146,7 @@ function ProjectDocuments() {
                         </Button>
                       )}
                       {r.projectId && (
-                        <Button size="sm" variant={r.state === 'agreed' || r.state === 'waiting' ? 'outline' : 'default'} asChild>
+                        <Button size="sm" variant="outline" asChild>
                           <Link to="/projects/$id" params={{ id: r.projectId }} search={{ tab: 'terms' }}>
                             {r.state === 'not_sent' ? 'Send terms' : r.state === 'closed' ? 'Send again' : 'Open'} <ArrowRight />
                           </Link>
