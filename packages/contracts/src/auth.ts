@@ -164,6 +164,14 @@ export const sessionState = z.object({
 })
 export type SessionState = z.infer<typeof sessionState>
 
+/**
+ * POST /auth/refresh?with=session: the new pair, and the session when the
+ * server could build it, so a new tab draws after one round trip. Optional (and
+ * a bad one dropped), so an API a release behind or ahead still parses.
+ */
+export const refreshResponse = authToken.extend({ session: sessionState.optional().catch(undefined) })
+export type RefreshResponse = z.infer<typeof refreshResponse>
+
 /** Open a different studio this login belongs to. */
 export const switchStudioRequest = z.object({
   profile_id: uuid,

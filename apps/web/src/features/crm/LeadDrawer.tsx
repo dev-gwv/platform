@@ -134,7 +134,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
       toast.error(`Fill in ${missing.map((m) => REQUIRED_FIELD_LABEL[m] ?? m).join(', ')} before moving to ${stage.name}.`)
       return
     }
-    move.mutate({ leadId: lead.id, stage_id: stage.id })
+    move.mutate({ leadId: lead.id, stage_id: stage.id, stageName: stage.name })
   }
 
   const patch = (p: Parameters<typeof update.mutate>[0]['patch']) => update.mutate({ id: lead.id, patch: p })

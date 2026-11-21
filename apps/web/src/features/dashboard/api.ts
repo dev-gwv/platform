@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { myFollowUp, z } from '@ipc/contracts'
+import { dashboardSummary, myFollowUp, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 
@@ -12,6 +12,23 @@ export function useMyFollowUps() {
     queryFn: () => callApi('/me/follow-ups', { responseSchema: myFollowUp.array() }),
     enabled: !!session,
     staleTime: 30_000,
+  })
+}
+
+/**
+ * The numbers behind Home's leads and shoots tiles, in one light answer
+ * (`GET /dashboard/summary`) instead of the whole call queue, the week's
+ * shoots and every booking. Asked again each time Home opens; the last answer
+ * shows meanwhile.
+ */
+export function useDashboardSummary(enabled = true) {
+  const { session } = useAuth()
+  return useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: () => callApi('/dashboard/summary', { responseSchema: dashboardSummary }),
+    enabled: enabled && !!session,
+    staleTime: 30_000,
+    refetchOnMount: 'always',
   })
 }
 

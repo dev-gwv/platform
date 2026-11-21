@@ -1,12 +1,21 @@
-import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { createContext, use, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { z, authToken, sessionState, type SessionState } from '@ipc/contracts'
-import { callApi, ApiError, markCookieSession, hasStoredSession, rotateTokens, setAuthLostHandler } from '../api/client'
+import {
+  callApi,
+  ApiError,
+  markCookieSession,
+  hasStoredSession,
+  rotateTokens,
+  setAuthLostHandler,
+  takeRefreshedSession,
+} from '../api/client'
 import { clearThread } from '@/features/assistant/thread'
 import { clearToken, getRefreshToken, getToken, onSessionChange, setTokens } from './token'
 import { MOCK_ENABLED } from '../dev/mock-flag'
 import { setSentryUser } from '@/shared/error/sentry'
 import { forgetCache, setCacheScope } from '../api/persist-cache'
+import { otherPerson, readSessionView, sameSession, writeSessionView } from './session-snapshot'
 
 const ok = z.object({ ok: z.boolean() })
 
@@ -41,9 +50,23 @@ interface AuthValue {
 
 const AuthCtx = createContext<AuthValue | null>(null)
 
+/**
+ * The session kept on the device from last time, drawn at once while the
+ * server confirms it -- only while a refresh token (or cookie) is still held,
+ * so a signed-out browser never shows anyone's shell.
+ */
+function keptSession(): SessionState | null {
+  if (MOCK_ENABLED || !hasStoredSession()) return null
+  return readSessionView()
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SessionState | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [kept] = useState(keptSession)
+  const [session, setSession] = useState<SessionState | null>(kept)
+  // Drawn from the device: no loading shell, the page and its kept data show
+  // now and the confirmed session replaces this one if it differs.
+  const [loading, setLoading] = useState(!kept)
+  const shown = useRef<SessionState | null>(kept)
   const [bootError, setBootError] = useState<string | null>(null)
   const [noStudio, setNoStudio] = useState(false)
   const qc = useQueryClient()
@@ -56,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const endSession = useCallback(() => {
     clearToken()
     markCookieSession(false)
+    writeSessionView(null)
+    shown.current = null
     setSession(null)
     setNoStudio(false)
     qc.clear()
@@ -73,6 +98,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setAuthLostHandler(null)
   }, [endSession])
 
+  /** Show a confirmed session: keep it on the device, and keep the drawn one when nothing changed. */
+  const confirm = useCallback(
+    (s: SessionState) => {
+      const was = shown.current
+      // Someone else, or another studio: nothing drawn from the device may stay.
+      if (otherPerson(was, s)) qc.clear()
+      // The kept pages belong to this person and studio; another's are dropped.
+      setCacheScope(qc, s.user_id, s.company_id)
+      writeSessionView(s)
+      if (!sameSession(was, s)) {
+        shown.current = s
+        setSession(s)
+      }
+      setNoStudio(false)
+      // Every later event carries who and which studio. Set here rather than
+      // at sign-in so a returning session (page reload, token refresh) is
+      // identified too, not just a fresh login.
+      setSentryUser(s)
+      return shown.current ?? s
+    },
+    [qc],
+  )
+
+  /** Nobody is signed in here (or no studio): drop whatever was drawn. */
+  const signedOut = useCallback((studioless = false) => {
+    writeSessionView(null)
+    shown.current = null
+    setSession(null)
+    setNoStudio(studioless)
+  }, [])
+
   const refresh = useCallback(async () => {
     if (MOCK_ENABLED) {
       const { mockSession } = await import('../dev/mock')
@@ -80,38 +136,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return mockSession
     }
     // A new tab has no access token (it is per tab); a refresh from the stored
-    // token or the HttpOnly cookie mints one before anything is asked.
-    if (!getToken() && !(await rotateTokens())) {
-      // Still holding a session means the refresh was not refused -- the
-      // server did not answer. Say so, with Retry, rather than sign them out.
-      if (hasStoredSession()) throw new Error('We could not reach the server. Check your connection and try again.')
-      setSession(null)
-      setNoStudio(false)
-      return null
+    // token or the HttpOnly cookie mints one before anything is asked -- and
+    // brings the session with it, so the app is one round trip from drawing.
+    if (!getToken()) {
+      if (!(await rotateTokens(true, true))) {
+        // Still holding a session means the refresh was not refused -- the
+        // server did not answer. Say so, with Retry, rather than sign them out.
+        if (hasStoredSession()) throw new Error('We could not reach the server. Check your connection and try again.')
+        signedOut()
+        return null
+      }
+      const carried = takeRefreshedSession()
+      if (carried) return confirm(carried)
     }
     try {
-      const s = await callApi('/auth/session', { responseSchema: sessionState })
-      // The kept pages belong to this person and studio; another's are dropped.
-      setCacheScope(qc, s.user_id, s.company_id)
-      setSession(s)
-      setNoStudio(false)
-      // Every later event carries who and which studio. Set here rather than
-      // at sign-in so a returning session (page reload, token refresh) is
-      // identified too, not just a fresh login.
-      setSentryUser(s)
-      return s
+      return confirm(await callApi('/auth/session', { responseSchema: sessionState }))
     } catch (e) {
       // Network/5xx should NOT log out - keep session for retry; only 401/403 mean gone.
       const status = e instanceof ApiError ? e.status : undefined
       if (status === 401 || status === 403) {
-        setSession(null)
         // The one 403 that is not "signed out": a real login with no studio.
-        setNoStudio(status === 403 && e instanceof ApiError && /no studio/i.test(e.message))
+        signedOut(status === 403 && e instanceof ApiError && /no studio/i.test(e.message))
         return null
       }
       throw e
     }
-  }, [])
+  }, [confirm, signedOut])
 
   /**
    * Establish the session once. A thrown refresh used to leave `loading` true
@@ -119,7 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * "Loading…" with no way out. Now the failure is surfaced with a retry.
    */
   const boot = useCallback(async () => {
-    setLoading(true)
+    // A session drawn from the device stays on screen while it is confirmed.
+    if (!shown.current) setLoading(true)
     setBootError(null)
     try {
       await refresh()
@@ -180,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       markCookieSession(!pair.refresh_token)
       qc.clear()
       forgetCache()
+      // The kept session is the studio being left; the next load confirms the new one.
+      writeSessionView(null)
       window.location.assign('/dashboard')
     },
     [qc],

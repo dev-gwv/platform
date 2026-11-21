@@ -1,7 +1,7 @@
 import type { Context, Next } from 'hono'
 import { resolveAccess, type AppRole } from '@ipc/permissions'
 import type { PlanGate } from '@ipc/contracts'
-import type { AppEnv } from '../context'
+import type { AppEnv, AuthContext } from '../context'
 import { fail } from './errors'
 import { verifyToken } from '../lib/auth-token'
 import { withUser } from '../lib/db'
@@ -41,8 +41,30 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
   const token = bearer(c)
   const claims = await verifyToken(c.env, token)
   if (!claims) fail(401, 'Your session has expired. Please sign in again.')
-  const { uid, pwv } = claims
+  const auth = await authContextFor(c, claims.uid, claims.pwv)
 
+  // Who and which studio, on every event and span raised for the rest of this
+  // request. Without it a Sentry issue says a thing broke but not for whom,
+  // and in a multi-tenant product "one studio" and "everyone" are the same
+  // stack trace with very different urgency.
+  //
+  // Deliberately id-only: no name, no email. sendDefaultPii is off for the
+  // same reason, and a support question is answerable from the user id.
+  Sentry.setUser({ id: claims.uid })
+  Sentry.setTag('company_id', auth.companyId)
+  Sentry.setTag('role', auth.role)
+
+  c.set('auth', auth)
+
+  await next()
+}
+
+/**
+ * Steps 2-4 for a user id and password version already proven (a verified
+ * access token, or a refresh just rotated). Fails 403 with no studio and 401
+ * on a stale password version, as requireAuth always has.
+ */
+export async function authContextFor(c: Context<AppEnv>, uid: string, pwv: number): Promise<AuthContext> {
   const row = await withUser(c.env, uid, async (sql) => {
     const rows = await sql<AuthContextRow[]>`select * from get_auth_context()`
     return rows[0]
@@ -62,18 +84,7 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
     overrides: row.overrides ?? [],
   })
 
-  // Who and which studio, on every event and span raised for the rest of this
-  // request. Without it a Sentry issue says a thing broke but not for whom,
-  // and in a multi-tenant product "one studio" and "everyone" are the same
-  // stack trace with very different urgency.
-  //
-  // Deliberately id-only: no name, no email. sendDefaultPii is off for the
-  // same reason, and a support question is answerable from the user id.
-  Sentry.setUser({ id: uid })
-  Sentry.setTag('company_id', row.company_id)
-  Sentry.setTag('role', row.role)
-
-  c.set('auth', {
+  return {
     userId: uid,
     companyId: row.company_id,
     role: row.role,
@@ -84,7 +95,5 @@ export async function requireAuth(c: Context<AppEnv>, next: Next) {
     planGate: row.plan_gate,
     planExpiry: row.plan_expiry,
     access,
-  })
-
-  await next()
+  }
 }

@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  type CrmTag,
   bulkPatchResponse,
   bulkUndoResponse,
   eraseLeadsResponse,
@@ -103,6 +104,18 @@ import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { leadsPath, placeholderLead, type LeadsOptions } from './lead-reads'
+import {
+  applyLeadPatch,
+  refreshLeadReads,
+  bulkRowPatch,
+  changesMembership,
+  listsNeedRefresh,
+  rollbackLeadPatch,
+  rowPatchFrom,
+  settleLeads,
+  tagsFor,
+
+} from './lead-cache'
 
 const leadsList = crmLead.array()
 const cardList = crmLeadCard.array()
@@ -248,13 +261,20 @@ export function useTeamStats(range: CrmStatsQuery) {
 function useCrmMutation<TInput, TOutput>(
   fn: (input: TInput) => Promise<TOutput>,
   success?: string | ((out: TOutput) => string),
+  /**
+   * 'all' (set-up changes, rare): every CRM read on screen is asked for again.
+   * 'leads' (notes, calls, a new lead -- many a day): only the lead reads; the
+   * pipelines, labels and settings are marked out of date, not refetched.
+   */
+  refresh: 'all' | 'leads' = 'all',
 ) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
     onSuccess: (out) => {
       if (success) toast.success(typeof success === 'function' ? success(out) : success)
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      if (refresh === 'leads') refreshLeadReads(qc)
+      else void qc.invalidateQueries({ queryKey: ['crm'] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -269,6 +289,7 @@ export function useAddLead() {
         responseSchema: createLeadResponse,
       }),
     (r) => (r.created ? 'Lead added' : 'We already had this number — opening that lead'),
+    'leads',
   )
 }
 
@@ -278,15 +299,27 @@ export function useAddLead() {
  * place that decides what a stage change timestamps.
  */
 export function useUpdateLead(success?: string) {
-  return useCrmMutation(
-    ({ id, patch }: { id: string; patch: UpdateLeadRequest }) =>
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateLeadRequest }) =>
       callApi(`/crm/leads/${id}`, {
         method: 'PATCH',
         body: updateLeadRequest.parse(patch),
         responseSchema: noContent,
       }),
-    success,
-  )
+    // The card and the drawer show the change at once; what the browser cannot
+    // work out itself (a new owner's name) comes with the lists' refresh.
+    onMutate: ({ id, patch }) => applyLeadPatch(qc, [id], rowPatchFrom(patch)),
+    onError: (e: Error, _v, snap) => {
+      rollbackLeadPatch(qc, snap)
+      toast.error(e.message)
+    },
+    onSuccess: () => {
+      if (success) toast.success(success)
+    },
+    onSettled: (_d, e, { id, patch }, snap) =>
+      settleLeads(qc, [id], { lists: !!e || listsNeedRefresh(patch, snap?.before) }),
+  })
 }
 
 /**
@@ -307,6 +340,8 @@ export function useBulkPatch() {
   return useMutation({
     mutationFn: (input: BulkLeadPatch) =>
       callApi('/crm/leads/bulk', { method: 'POST', body: input, responseSchema: bulkPatchResponse }),
+    // Ticked cards dragged together land together, before the server answers.
+    onMutate: ({ ids, patch }) => applyLeadPatch(qc, ids, bulkRowPatch(patch)),
     onSuccess: (r) => {
       toast.success(`Updated ${r.updated} lead${r.updated === 1 ? '' : 's'}`, {
         action: r.previous.length
@@ -314,9 +349,13 @@ export function useBulkPatch() {
           : undefined,
         duration: 8000,
       })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error, _v, snap) => {
+      rollbackLeadPatch(qc, snap)
+      toast.error(e.message)
+    },
+    // Many leads at once is rare: everything is asked for again.
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['crm'] }),
   })
 }
 
@@ -529,9 +568,24 @@ export function useDeleteTag() {
 
 /** The drawer sends the whole set it wants, so add and remove are one call. */
 export function useSetLeadTags() {
-  return useCrmMutation(({ id, tag_ids }: { id: string; tag_ids: string[] }) =>
-    callApi(`/crm/leads/${id}/tags`, { method: 'PUT', body: { tag_ids }, responseSchema: noContent }),
-  )
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, tag_ids }: { id: string; tag_ids: string[] }) =>
+      callApi(`/crm/leads/${id}/tags`, { method: 'PUT', body: { tag_ids }, responseSchema: noContent }),
+    onMutate: ({ id, tag_ids }) => {
+      const tags = tagsFor(tag_ids, qc.getQueryData<CrmTag[]>(['crm', 'tags']))
+      return applyLeadPatch(qc, [id], tags ? { tags } : {})
+    },
+    onError: (e: Error, _v, snap) => {
+      rollbackLeadPatch(qc, snap)
+      toast.error(e.message)
+    },
+    onSettled: (_d, _e, { id }) => {
+      settleLeads(qc, [id], { lists: false })
+      // A label's count of leads moves with it.
+      void qc.invalidateQueries({ queryKey: ['crm', 'tags'] })
+    },
+  })
 }
 
 /**
@@ -660,9 +714,28 @@ export function useDeleteStage() {
  * message is written for the person and is shown as-is.
  */
 export function useMoveStage() {
-  return useCrmMutation(({ leadId, ...body }: MoveStageRequest & { leadId: string }) =>
-    callApi(`/crm/leads/${leadId}/stage`, { method: 'POST', body, responseSchema: moveStageResponse }),
-  )
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ leadId, stage_id, lost_reason, lost_competitor }: MoveStageRequest & { leadId: string; stageName?: string }) =>
+      callApi(`/crm/leads/${leadId}/stage`, {
+        method: 'POST',
+        body: { stage_id, lost_reason, lost_competitor },
+        responseSchema: moveStageResponse,
+      }),
+    // The card lands in its new column the moment it is dropped.
+    onMutate: ({ leadId, stage_id, stageName }) =>
+      applyLeadPatch(qc, [leadId], { stage_id, ...(stageName !== undefined ? { stage_name: stageName } : {}) }),
+    onError: (e: Error, v, snap) => {
+      rollbackLeadPatch(qc, snap)
+      toast.error(e.message)
+      settleLeads(qc, [v.leadId], { lists: true })
+    },
+    onSuccess: async (r, v, snap) => {
+      // The stage's kind decides the status (open / won / lost); the server says which.
+      await applyLeadPatch(qc, [v.leadId], { status: r.status, stage_id: r.stage_id })
+      settleLeads(qc, [v.leadId], { lists: changesMembership({ status: r.status }, snap?.before) })
+    },
+  })
 }
 
 // ── lost reasons ──────────────────────────────────────────────
@@ -763,23 +836,28 @@ export function useLogActivity() {
   return useCrmMutation(
     (input: CreateActivityRequest) => callApi('/crm/activities', { method: 'POST', body: input, responseSchema: crmActivity }),
     (a) => (a.type === 'task' ? 'Task added' : 'Logged'),
+    'leads',
   )
 }
 
 export function useUpdateActivity() {
   return useCrmMutation(({ id, patch }: { id: string; patch: UpdateActivityRequest }) =>
     callApi(`/crm/activities/${id}`, { method: 'PATCH', body: patch, responseSchema: noContent }),
+    undefined,
+    'leads',
   )
 }
 
 export function useDeleteActivity() {
-  return useCrmMutation((id: string) => callApi(`/crm/activities/${id}`, { method: 'DELETE', responseSchema: noContent }), 'Removed')
+  return useCrmMutation((id: string) => callApi(`/crm/activities/${id}`, { method: 'DELETE', responseSchema: noContent }), 'Removed', 'leads')
 }
 
 /** Rings the agent then the lead when Twilio is connected; otherwise logs a manual call and hands back tel:. */
 export function usePlaceCall() {
   return useCrmMutation((input: PlaceCallRequest) =>
     callApi('/crm/activities/call', { method: 'POST', body: input, responseSchema: placeCallResponse }),
+    undefined,
+    'leads',
   )
 }
 
@@ -788,6 +866,7 @@ export function useScheduleMeeting() {
     (input: ScheduleMeetingRequest) =>
       callApi('/crm/activities/meeting', { method: 'POST', body: input, responseSchema: scheduleMeetingResponse }),
     'Meeting scheduled',
+    'leads',
   )
 }
 
