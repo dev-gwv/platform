@@ -34,6 +34,14 @@ header-only file is recorded as applied and the body that follows never runs
 been pushed for a while, or you are not sure nobody has deployed since, put the
 body in the next free number, written so it is safe to run twice.
 
+**Since 0314 (audit, 21 Nov) the runner and CI guard this too.** `deploy/db/migrate.sh`
+skips a header-only file without recording it (so a deployed claim is harmless), records
+each file in the same transaction that applies it, and refuses a number below the highest
+already applied (`MIGRATE_ALLOW_OUT_OF_ORDER=1` overrides). `tools/check-migrations.mjs` in
+CI fails a shared number, a SQL change to a migration already on `main`, or a new number
+not above `main`'s highest. Still claim first -- the checks catch a collision, they do not
+prevent the wasted work.
+
 Renumbering after the fact is cheap but easy to get half-right: the number
 appears in the filename, in the test that reads the file by name, and in the
 comments of every file that cites it. Grep for it.
@@ -82,6 +90,13 @@ host where IPC owns the ports, not for this one.
   picklists in 0139 and broke `check_in()` once.
 - A lost lead needs a `lost_reason` (0037) and it is checked on the way in.
 - Only `status = 'paid'` counts as money (0146). Pending is a promise.
+
+## Deploys wait for CI
+
+Production deploys only after the CI workflow passes on `main` (`deploy.yml` runs on
+`workflow_run`), and only the commit CI tested. `deploy/deploy.sh` builds, runs `migrate`
+alone while the old API keeps serving, and only then replaces the API -- a failed migration
+leaves the site up. A red `main` therefore means nothing ships until it is green.
 
 ## Before you push
 
