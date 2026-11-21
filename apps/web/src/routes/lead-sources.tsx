@@ -89,7 +89,7 @@ function LeadSources() {
         <MetaConnectionCard />
         <div className="mt-3">
           <Button variant="outline" size="sm" onClick={() => setShowMeta((v) => !v)} aria-expanded={showMeta}>
-            {showMeta ? 'Hide Meta setup steps' : 'Set up Meta'}
+            {showMeta ? 'Hide the Facebook steps' : 'Facebook setup, step by step'}
           </Button>
         </div>
         {showMeta && <MetaSetupChecklist />}
@@ -120,8 +120,8 @@ function LeadSources() {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        A source URL is a credential: anyone holding it can post leads into this studio. Pause or
-        delete a source to stop it working.
+        Anyone with a source&apos;s link can send leads into your studio. Pause or delete the source to
+        stop that.
       </p>
     </>
   )
@@ -193,7 +193,7 @@ function SourceCard({ source }: { source: LeadSourceRow }) {
               </Button>
             </div>
           ) : (
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-40">
               <p className="truncate font-medium">{source.label ?? source.source_key}</p>
               <p className="text-xs text-muted-foreground">
                 {source.kind === 'meta' ? 'Meta lead ads' : 'Web form'} · added{' '}

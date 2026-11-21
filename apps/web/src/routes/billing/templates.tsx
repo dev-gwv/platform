@@ -88,7 +88,8 @@ function InvoiceSettings() {
     <>
       <PageHeader title="Invoicing" />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
+        {/* Two rows of two on a phone, never a row that scrolls sideways. */}
+        <TabsList className="mb-4 grid h-auto w-full grid-cols-2 gap-1 sm:inline-flex sm:h-9 sm:w-auto">
           <TabsTrigger value="details">Your details & bank</TabsTrigger>
           <TabsTrigger value="layouts">Designs</TabsTrigger>
           <TabsTrigger value="items">Saved items</TabsTrigger>
@@ -484,7 +485,7 @@ function CompanyInvoiceDefaults() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Company invoice defaults</CardTitle>
+        <CardTitle className="text-base">On every invoice</CardTitle>
         {defaultLayout && <StatusBadge tone="info">Layout default: {defaultLayout.name}</StatusBadge>}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -511,18 +512,18 @@ function CompanyInvoiceDefaults() {
             <p className="mt-1 text-xs text-muted-foreground">The services code GST invoices carry. 998387 is photography and videography.</p>
           </div>
           <div className="md:col-span-2">
-            <Label>Bank fallback</Label>
+            <Label>Bank details used when an invoice has none</Label>
             <textarea
               value={form.invoice_bank_details}
               onChange={(e) => set('invoice_bank_details', e.target.value)}
               rows={3}
-              placeholder="Used only when no saved bank account is picked on the invoice."
+              placeholder="Bank name, account number, IFSC"
               disabled={!isOwner}
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
             />
           </div>
           <div className="md:col-span-2">
-            <Label>Default notes (fallback)</Label>
+            <Label>Notes printed on every invoice</Label>
             <textarea
               value={form.invoice_default_notes}
               onChange={(e) => set('invoice_default_notes', e.target.value)}
@@ -532,12 +533,12 @@ function CompanyInvoiceDefaults() {
             />
           </div>
           <div className="md:col-span-2">
-            <Label>Default terms (fallback)</Label>
+            <Label>Terms used when an invoice has none</Label>
             <textarea
               value={form.invoice_default_terms}
               onChange={(e) => set('invoice_default_terms', e.target.value)}
               rows={3}
-              placeholder="Used only when no default Terms template is set."
+              placeholder="e.g. 50% on booking, the rest before delivery."
               disabled={!isOwner}
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
             />
@@ -546,7 +547,7 @@ function CompanyInvoiceDefaults() {
         {isOwner ? (
           <div className="flex justify-end">
             <Button onClick={() => void onSave()} disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save defaults'}
+              {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </div>
         ) : (
@@ -620,13 +621,13 @@ function BankAccountsSection() {
         <CardTitle className="flex items-center gap-2 text-base">
           <Wallet className="h-4 w-4" /> Bank / UPI accounts
         </CardTitle>
-        <Button size="sm" onClick={() => setDialog({ open: true, editing: null })}>
+        <Button size="sm" variant="outline" onClick={() => setDialog({ open: true, editing: null })}>
           <Plus className="mr-1 h-4 w-4" /> Add account
         </Button>
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-sm text-muted-foreground">
-          Pick one on the invoice form to fill bank details — the invoice keeps a snapshot, so later edits here don&apos;t rewrite history.
+          Pick one on the invoice form to fill in where to pay.
         </p>
         {isLoading ? (
           <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
@@ -773,7 +774,7 @@ function TextLibrarySection({ type }: { type: 'terms' | 'note' }) {
         <div className="flex gap-2">
           {items.length === 0 && (
             <Button size="sm" variant="outline" onClick={() => seed.mutate()} disabled={seed.isPending}>
-              <Sparkles className="mr-1 h-4 w-4" /> {seed.isPending ? 'Seeding…' : 'Seed defaults'}
+              <Sparkles className="mr-1 h-4 w-4" /> {seed.isPending ? 'Adding…' : isTerms ? 'Add the usual terms' : 'Add the usual notes'}
             </Button>
           )}
           <Button size="sm" onClick={() => setDialog({ open: true, editing: null })}>
@@ -784,13 +785,13 @@ function TextLibrarySection({ type }: { type: 'terms' | 'note' }) {
       <CardContent>
         <p className="mb-3 text-sm text-muted-foreground">
           {isTerms
-            ? 'Reusable payment terms. The default fills new invoices; blank falls back to company defaults, then the print layout.'
-            : 'Reusable notes snippets. The default fills new invoices; pick any of them from the invoice form.'}
+            ? 'The default fills every new invoice.'
+            : 'The default fills every new invoice; pick any other on the invoice form.'}
         </p>
         {isLoading ? (
           <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">No templates yet — add one or seed defaults.</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">Nothing saved yet.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((t) => (
