@@ -314,7 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             own per-page key, as before, so a video it plays ends with the page. */}
         <main className="relative min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:static print:overflow-visible">
           <ConfirmEmailBanner />
-          <SetupGuideBar key={pathname} />
+          <SetupGuideBar key={`setup:${pathname}`} />
           <HubTabs />
           <div key={pathname} className="page-enter">
             {settingsItemFor(pathname) ? <SettingsFrame>{children}</SettingsFrame> : children}
