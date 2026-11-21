@@ -343,18 +343,20 @@ function Payroll() {
                   <Link to="/team-payouts">Pay in Team payouts</Link>
                 </Button>
               </div>
-              {/* These count the month's shoots still to come as well, so they can be
-                  more than Team payouts' "Owed now" (done shoots only): say so. */}
+              {/* The same rule as Team payouts' Owed now (one query, payout-rows.ts):
+                  the month's done shoots less what is paid. Shoots still to come
+                  are said apart, never added in. */}
               <p className="mt-1 text-xs text-muted-foreground">
-                Every shoot this month, done or still to come, less what is paid. Team payouts' Owed now counts only shoots already done.
+                This month's shoots already done, less what is paid -- the same as Team payouts' Owed now. Shoots still to come are shown apart.
               </p>
               <ul className="mt-2 divide-y divide-border">
                 {q.data.freelancers.map((f) => (
                   <li key={f.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
                     <span className="min-w-0 flex-1 font-medium">{f.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {f.shoots} {f.shoots === 1 ? 'shoot' : 'shoots'}
+                      {f.shoots > 0 && `${f.shoots} ${f.shoots === 1 ? 'shoot' : 'shoots'} done`}
                       {f.paid > 0 && ` · ${inr(f.paid)} paid`}
+                      {f.upcoming > 0 && `${f.shoots > 0 ? ' · ' : ''}${inr(f.upcoming)} after shoots still to come`}
                     </span>
                     <span className="font-semibold tabular-nums">{inr(f.due)}</span>
                   </li>

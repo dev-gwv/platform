@@ -351,6 +351,11 @@ export const cronRouter = new Hono<AppEnv>()
         return { made, reminded }
       }),
     )
+    // A plan given "after the current plan" (0315) starts once the current
+    // one ends: the studio keeps its plan's limits until then.
+    const plansStarted = await attempt(c, 'cron.pending_plans', () =>
+      withService(c.env, async (sql) => (await sql<{ n: number }[]>`select apply_pending_plans() as n`)[0]?.n ?? 0),
+    )
     // Support call alerts (0280) ride the same tick: retries, reminders an hour
     // before, and the group's morning list. A failure here never fails the rest.
     const supportCalls = await attempt(c, 'cron.support_calls', async () => {
@@ -366,7 +371,7 @@ export const cronRouter = new Hono<AppEnv>()
       const chats = await sweepSupportChats(c.env).catch((err: unknown) => ({ error: String(err instanceof Error ? err.message : err) }))
       return { calendar, summary, tickets, selfClosed, weekly, chats, ...(await drainSupportCalls(c.env)) }
     })
-    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, daily_tasks: dailyTasks, support_calls: supportCalls }, 'cron messages ran')
+    log.info({ path: c.req.path, ...result, attendance_reminders: nudged, follow_ups_soon: followUps, daily_tasks: dailyTasks, plans_started: plansStarted, support_calls: supportCalls }, 'cron messages ran')
     return c.json(messagesCronResult.parse({ ok: true, ...result }))
   })
 

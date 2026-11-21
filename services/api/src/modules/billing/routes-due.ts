@@ -22,9 +22,10 @@ export const billingDueRoutes = new Hono<AppEnv>()
     const today = todayInIndia()
     const data = await attempt(c, 'billing.due', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
-        const projects = await sql<{ id: string; name: string; client_name: string | null; total: number; received: number }[]>`
+        const projects = await sql<{ id: string; name: string; client_name: string | null; total: number; received: number; outstanding: number }[]>`
           select p.id, p.name, cl.name as client_name, p.total_cost::float8 as total,
-                 coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and rp.status = 'paid'), 0)::float8 as received
+                 coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and rp.status = 'paid'), 0)::float8 as received,
+                 project_outstanding(p.id)::float8 as outstanding
             from projects p
             left join clients cl on cl.id = p.client_id
            where p.status <> 'cancelled'`
@@ -63,12 +64,13 @@ export const billingDueRoutes = new Hono<AppEnv>()
     const lines: DueLineRow[] = []
     const byProject = <T extends { project_id: string | null }>(xs: readonly T[], id: string) => xs.filter((x) => x.project_id === id)
     for (const p of data.projects) {
-      // An invoice can be more than the project's value (GST on top, extra
-      // lines), so what its open invoices still ask for is owed even when the
-      // value is fully paid (bug sweep, 6 Nov: an ₹18,000 GST balance never
-      // showed as due, and Home and Invoices disagreed on Overdue).
-      const openInvoices = byProject(data.invoices, p.id).reduce((n, i) => n + i.balance, 0)
-      const outstanding = Math.max(0, p.total - p.received, openInvoices)
+      // The one rule (project_outstanding, 0315 = projectOutstanding in
+      // @ipc/domain): open invoice balances with their GST, plus the value no
+      // invoice covers yet less money on no invoice. An invoice can be more
+      // than the value (GST on top, extra lines), so its balance is owed even
+      // when the value is paid (bug sweep, 6 Nov), and GST paid on an invoice
+      // never counts against the value (audit, 21 Nov).
+      const outstanding = p.outstanding
       if (outstanding <= 0.5) continue
       const plan = data.plans.find((x) => x.project_id === p.id)
       const parts = plan ? planInstalmentsFrom(plan.payment_terms) : []
@@ -118,9 +120,7 @@ export const billingDueRoutes = new Hono<AppEnv>()
         const [head] = await sql`
           select
             coalesce((
-              select sum(greatest(p.total_cost - coalesce((
-                select sum(rp.amount) from received_payments rp
-                 where rp.project_id = p.id and rp.status = 'paid'), 0), 0))
+              select sum(project_outstanding(p.id))
                 from projects p where p.status <> 'cancelled'), 0)::float as to_collect,
             (select count(*) from invoices i
               where i.balance_due > 0 and i.status not in ('cancelled', 'draft')

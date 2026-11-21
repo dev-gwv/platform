@@ -26,9 +26,9 @@ export const projectListRoutes = new Hono<AppEnv>()
     const noMoney = !seesMoney(c)
     const hide = <T extends Record<string, unknown>>(r: T): T =>
       mine
-        ? { ...r, package_cost: 0, total_cost: 0, received: 0, client_phone: null }
+        ? { ...r, package_cost: 0, total_cost: 0, received: 0, outstanding: 0, client_phone: null }
         : noMoney
-          ? { ...r, package_cost: 0, total_cost: 0, received: 0 }
+          ? { ...r, package_cost: 0, total_cost: 0, received: 0, outstanding: 0 }
           : r
     if (!hasPaging) {
       const rows = await attempt(c, 'projects.list', () =>
@@ -45,6 +45,7 @@ export const projectListRoutes = new Hono<AppEnv>()
                    (select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),
                    0
                  ) as received,
+                 project_outstanding(p.id)::float8 as outstanding,
                  (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= (now() at time zone 'Asia/Kolkata')::date and status <> 'cancelled') as next_shoot_date,
                  coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < (now() at time zone 'Asia/Kolkata')::date), 0) as tasks_overdue
           from projects p
@@ -68,7 +69,7 @@ export const projectListRoutes = new Hono<AppEnv>()
         case 'value_desc': return 'p.total_cost desc'
         case 'pending_desc':
         case 'risk':
-        case 'overdue': return '(p.total_cost - coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0)) desc'
+        case 'overdue': return 'project_outstanding(p.id) desc'
         case 'received_desc': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) desc'
         case 'name': return 'p.name asc'
         case 'completion': return 'coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, \'paid\') = \'paid\'),0) / nullif(p.total_cost,0) asc'
@@ -81,10 +82,12 @@ export const projectListRoutes = new Hono<AppEnv>()
       withUser(c.env, c.get('auth').userId, async (sql) => {
         // One pass over everything the search matches: the count and money
         // for the chosen status, and a count per status for the tabs.
-        const countRows = await sql<{ status: string; n: number; value: number; received: number }[]>`
+        const countRows = await sql<{ status: string; n: number; value: number; received: number; due: number }[]>`
           select p.status, count(*)::int as n, coalesce(sum(p.total_cost), 0)::float8 as value,
                  coalesce(sum((select sum(rp.amount) from received_payments rp
-                                where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid')), 0)::float8 as received
+                                where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid')), 0)::float8 as received,
+                 -- What each still owes, by the one rule (0315), GST on paid invoices included.
+                 coalesce(sum(project_outstanding(p.id)), 0)::float8 as due
             from projects p
             left join clients cl on cl.id = p.client_id
            where ${search ? sql`(p.name ilike ${'%' + search + '%'} or coalesce(cl.name,'') ilike ${'%' + search + '%'} or coalesce(cl.phone,'') ilike ${'%' + search + '%'})` : sql`true`}
@@ -94,13 +97,15 @@ export const projectListRoutes = new Hono<AppEnv>()
         const total = inFilter.reduce((n, r) => n + r.n, 0)
         const value = inFilter.reduce((n, r) => n + Number(r.value), 0)
         const received = inFilter.reduce((n, r) => n + Number(r.received), 0)
-        const summary = mine || noMoney ? { value: 0, received: 0, due: 0 } : { value, received, due: Math.max(0, value - received) }
+        const due = inFilter.reduce((n, r) => n + Number(r.due), 0)
+        const summary = mine || noMoney ? { value: 0, received: 0, due: 0 } : { value, received, due }
         const statusCounts = Object.fromEntries(countRows.map((r) => [r.status, r.n]))
         // orderBy is an allow-listed fragment (see switch above), never user input.
         const rows = await sql`
           select p.id, p.name, p.status, p.client_id, p.package_cost, p.total_cost, p.created_at,
                  cl.name as client_name, cl.phone as client_phone,
                  coalesce((select sum(rp.amount) from received_payments rp where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'),0) as received,
+                 project_outstanding(p.id)::float8 as outstanding,
                  (select min(shoot_date) from shoots where project_id = p.id and shoot_date >= (now() at time zone 'Asia/Kolkata')::date and status <> 'cancelled') as next_shoot_date,
                  coalesce((select count(*)::int from tasks where project_id = p.id and status not in ('completed','cancelled') and due_date is not null and due_date < (now() at time zone 'Asia/Kolkata')::date),0) as tasks_overdue
           from projects p
@@ -148,6 +153,7 @@ export const projectListRoutes = new Hono<AppEnv>()
             d.next_due                       as next_due_date,
             coalesce((select sum(rp.amount) from received_payments rp
                        where rp.project_id = p.id and coalesce(rp.status, 'paid') = 'paid'), 0) as received,
+            project_outstanding(p.id)::float8 as outstanding,
             coalesce(inv.n, 0)::int          as invoices_overdue,
             coalesce(inv.amount, 0)          as overdue_amount,
             coalesce(dr.total, 0)::int       as data_records_total,
@@ -249,6 +255,7 @@ export const projectListRoutes = new Hono<AppEnv>()
         ...counters,
         total_cost: seesMoney ? counters.total_cost : null,
         received: seesMoney ? counters.received : null,
+        outstanding: seesMoney ? Number(r.outstanding ?? 0) : null,
         overdue_amount: seesMoney ? Number(r.overdue_amount ?? 0) : null,
         health,
       }
@@ -312,8 +319,8 @@ export const projectListRoutes = new Hono<AppEnv>()
            order by s.shoot_date nulls last, s.name`
         let money = null
         if (seesMoney) {
-          const [m] = await sql<{ received: number }[]>`
-            select coalesce(sum(amount), 0) as received from received_payments
+          const [m] = await sql<{ received: number; balance: number }[]>`
+            select coalesce(sum(amount), 0) as received, project_outstanding(${id}::uuid)::float8 as balance from received_payments
              where project_id = ${id} and coalesce(status, 'paid') = 'paid'`
           const overdue = await sql`
             select id, invoice_number, due_date, balance_due from invoices
@@ -322,7 +329,7 @@ export const projectListRoutes = new Hono<AppEnv>()
              order by due_date`
           const total = Number(project.total_cost ?? 0)
           const received = Number(m?.received ?? 0)
-          money = { total_cost: total, received, balance: Math.max(0, total - received), invoices_overdue: overdue }
+          money = { total_cost: total, received, balance: Number(m?.balance ?? Math.max(0, total - received)), invoices_overdue: overdue }
         }
         return { deliverables, tasks, submissions, shoots, money }
       }),
