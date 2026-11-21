@@ -155,7 +155,10 @@ describe('a new tab is one round trip from drawing', () => {
     expect(refreshes[0]!.url).toContain('?with=session')
     expect(calls.filter((c) => !c.url.includes('/auth/refresh')).every((c) => c.auth === 'Bearer a1')).toBe(true)
     expect(takeRefreshedSession()?.display_name).toBe('Asha')
-    // Handed over once.
+    // Good for every read while its token is held, and for none after.
+    expect(takeRefreshedSession()?.display_name).toBe('Asha')
+    const { clearToken } = await import('../auth/token')
+    clearToken()
     expect(takeRefreshedSession()).toBeNull()
   })
 

@@ -125,7 +125,7 @@ export async function rotateTokens(retry = true, withSession = false): Promise<b
       // writing then would resurrect the session we were told to end.
       if (getRefreshToken() !== before) return false
       const { session, ...pair } = parsed.data
-      refreshedSession = session ?? null
+      refreshedSession = session ? { token: pair.access_token, session } : null
       setTokens(pair)
       markCookieSession(!pair.refresh_token)
       return true
@@ -156,14 +156,15 @@ export async function rotateTokens(retry = true, withSession = false): Promise<b
 
 /**
  * The session that rode on the last refresh asked `withSession` (a new tab's
- * first call), handed over once. Null when the refresh did not carry one, so
- * the caller asks /auth/session as before.
+ * first call), good only while the access token it came with is the one held
+ * -- so every boot of that token can read it (React runs a dev boot twice),
+ * and none after the next rotation. Null when the refresh did not carry one,
+ * so the caller asks /auth/session as before.
  */
-let refreshedSession: SessionState | null = null
+let refreshedSession: { token: string; session: SessionState } | null = null
 export function takeRefreshedSession(): SessionState | null {
-  const s = refreshedSession
-  refreshedSession = null
-  return s
+  const held = getToken()
+  return refreshedSession && held && refreshedSession.token === held ? refreshedSession.session : null
 }
 
 /**
