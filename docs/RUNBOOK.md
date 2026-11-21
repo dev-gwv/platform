@@ -292,6 +292,85 @@ needs the one before it.
    and the commit; an owner can sign in; `docker compose -f docker-compose.yml -f docker-compose.coolify.yml ps` shows backup healthy
    (it takes a fresh dump at start).
 
+## Zero-downtime deploys (optional, off by default)
+
+An ordinary deploy recreates the `api` container: Traefik has no healthy API
+from the moment the old one stops until the new one passes its first
+healthcheck, and every request in that gap gets a 404 or 502 (in a local test
+of the same compose files and labels, about 585 of 3,200 requests over a
+fast-request load). `ZERO_DOWNTIME_DEPLOY=1` swaps the API without that gap.
+
+**What it does** (`deploy/deploy.sh`, step 2b, after the migrations succeed):
+
+1. Starts a second `api` container from the image just built, beside the old
+   one (`up -d --no-deps --no-recreate --scale api=2 api`).
+2. Waits up to 180 s (`ZERO_DOWNTIME_HEALTH_TIMEOUT`) for it to report
+   healthy. Traefik ignores a container until it is healthy, then
+   load-balances across both (same labels, same router and service names).
+3. Marks the old one as leaving (`/tmp/ipc-api-draining` in it), which turns
+   its healthcheck red: after up to ~90 s (three failed checks, 30 s apart;
+   `ZERO_DOWNTIME_DRAIN_TIMEOUT`, default 150 s) Traefik drops it, while it
+   still answers anything already sent to it.
+4. Stops it (`docker stop -t 15`, SIGTERM, which `server.ts` finishes in-flight
+   requests on), removes it, and scales back to one.
+5. Brings everything else up as always; step 3 finds the api current and
+   leaves it alone.
+
+A deploy takes about 1.5 to 2 minutes longer (the healthcheck waits).
+
+It falls back to the ordinary replacement, with a line saying why, when the
+running API is not exactly one healthy container, or when this deploy changes
+the **Traefik labels** (`docker-compose.coolify.yml`, `API_DOMAIN`,
+`API_ALT_DOMAIN`): two containers with different routers make Traefik drop the
+router, so the API would 404 for the whole overlap. The first deploy after the
+old container was created by a version of `docker-compose.yml` without the
+draining mark stops the old one directly (a request may miss in that second).
+
+If the new API does not become healthy, it is removed, the old one keeps
+serving, and the deploy exits non-zero with the new container's last log lines.
+**The migrations have already run by then**, as in the ordinary path, so the old
+API is serving on the new schema; migrations must stay backward compatible
+(they already must, because the old API serves while `migrate` runs).
+
+**Turn it on.** On the VPS, back up `.env`, then add one line and deploy:
+
+```bash
+cd /root/ipc/platform
+cp .env .env.bak.$(date +%Y%m%d%H%M)
+echo 'ZERO_DOWNTIME_DEPLOY=1' >> .env
+sh deploy/deploy.sh
+```
+
+Every service reads `.env`, so the first deploy after the edit also restarts
+the cron tickers, migrate and backup once (as any `.env` change does). An
+exported `ZERO_DOWNTIME_DEPLOY` in the deploy's environment wins over `.env`
+(`ZERO_DOWNTIME_DEPLOY=0 sh deploy/deploy.sh` forces one ordinary deploy).
+
+**Check it worked.** From any other machine, during a deploy:
+
+```bash
+while true; do
+  printf '%s %s\n' "$(date +%T)" \
+    "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://api.studioautopilot.in/health)"
+  sleep 0.2
+done | grep -v ' 200$'      # prints nothing while every request succeeds
+```
+
+The deploy log shows the `deploy.sh: zero-downtime:` lines ending in "done; the
+new api is the only one serving", and afterwards
+`docker compose -f docker-compose.yml -f docker-compose.coolify.yml ps api`
+shows exactly **one** api, healthy. Its name may be `platform-api-2`, `-3` …:
+each swap takes the next number. Nothing refers to the container by name.
+
+**Turn it off.** Delete the `ZERO_DOWNTIME_DEPLOY=1` line from `.env` (or set
+it to `0`). The next deploy is the ordinary one. If a swap was interrupted and
+left two api containers, the next deploy (either way) brings it back to one.
+
+**Know before relying on it:** for the minute or two of overlap there are two
+API processes, so the in-process rate limits ("Rate limiting" above) are per
+container and briefly allow up to twice the rate, the database sees up to 40
+pool connections instead of 20, and the box holds two 2 GB API memory limits.
+
 ## Incident response
 
 - Start from the reference id the user quotes. It is the request id: grep the
