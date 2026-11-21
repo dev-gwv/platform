@@ -175,7 +175,8 @@ function Headline({ lines: l, label }: { lines: PnlLines; label: string }) {
   const costs = l.income - l.net_profit
   const profit = l.net_profit >= 0
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    // Three across on a phone too: stacked, they took a whole screen to say three numbers.
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
       <Tile label={`Income · ${label}`} value={inr(l.income)} tone="text-tone-green" icon={<ArrowDownRight className="size-4" aria-hidden />} />
       <Tile label="Costs" value={inr(costs)} tone="text-tone-rose" icon={<ArrowUpRight className="size-4" aria-hidden />} hint={l.income > 0 ? `${pct(costs, l.income)} of income` : undefined} />
       <Tile
@@ -193,11 +194,11 @@ function Headline({ lines: l, label }: { lines: PnlLines; label: string }) {
 function Tile({ label, value, tone, icon, hint, strong }: { label: string; value: string; tone: string; icon: ReactNode; hint?: string | undefined; strong?: boolean }) {
   return (
     <Card className={cn(strong && 'ring-1 ring-inset ring-current/10')}>
-      <CardContent className="p-4">
-        <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-          <span className={tone}>{icon}</span> {label}
+      <CardContent className="p-3 sm:p-4">
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:text-sm">
+          <span className={tone}>{icon}</span> <span className="truncate">{label}</span>
         </p>
-        <p className={cn('mt-1 text-2xl font-semibold tabular-nums tracking-tight', strong && tone)}>{value}</p>
+        <p className={cn('mt-1 text-base font-semibold tabular-nums tracking-tight sm:text-2xl', strong && tone)}>{value}</p>
         {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
@@ -435,7 +436,31 @@ function Projects({ data }: { data: ProfitAndLoss }) {
         {rows.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No project had money in or out in this period.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto">
+          <>
+          {/* A phone gets one card a project, in a sentence: the table scrolled sideways. */}
+          <ul className="mt-2 flex flex-col divide-y divide-border sm:hidden">
+            {rows.map((p) => {
+              const net = share === 'off' ? p.profit : after(p)
+              const spent = p.team + p.expenses + (share === 'off' ? 0 : (shares[p.project_id] ?? 0))
+              return (
+                <li key={p.project_id} className="py-2.5 text-sm">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <Link to="/projects/$id" params={{ id: p.project_id }} search={{ tab: 'billing' }} className="min-w-0 truncate font-medium hover:text-primary hover:underline">
+                      {p.name}
+                    </Link>
+                    <span className={cn('shrink-0 font-semibold tabular-nums', net < 0 ? 'text-destructive' : 'text-tone-green')}>{signed(net)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {inr(p.income)} in{spent ? ` · ${inr(spent)} spent` : ''}
+                    {share !== 'off' ? ' (with studio costs)' : ''}
+                    {p.margin == null || share !== 'off' ? '' : ` · ${Math.round(p.margin)}% margin`}
+                  </p>
+                  {p.to_collect > 0 && <p className="text-xs text-tone-amber">{inr(p.to_collect)} still to collect</p>}
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-2 hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -476,6 +501,7 @@ function Projects({ data }: { data: ProfitAndLoss }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>

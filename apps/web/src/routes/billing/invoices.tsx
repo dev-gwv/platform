@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Send, Trash2 } from 'lucide-react'
+import { AlarmClock, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Download, Eye, FileText, IndianRupee, Mail, MessageCircle, Pencil, Plus, Printer, Send, SlidersHorizontal, Trash2 } from 'lucide-react'
 import type { InvoiceListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -29,6 +29,7 @@ import { useClients } from '@/features/clients/api'
 import { useProject } from '@/features/projects/api'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
+import { RowMenu } from '@/shared/ui/row-menu'
 
 const PAGE_SIZE = 25
 
@@ -108,6 +109,10 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   // The one project filtered on, for the heading and a new invoice's client.
   const pickedProject = useProject(projectId).data
   const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || !!from || !!to
+  // Client, project and dates wait behind Filter (minimal first); a link that
+  // already carries one opens with them showing.
+  const narrowed = !!clientId || !!projectId || !!from || !!to
+  const [filtering, setFiltering] = useState(narrowed)
   const change = (fn: () => void) => {
     fn()
     setPage(1)
@@ -134,9 +139,9 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   }
 
   /**
-   * The things done with an invoice, each its own icon as in the old app:
-   * view, record a payment (green, while money is owed), WhatsApp, email,
-   * copy the client link, print, edit and delete. Edit whatever is paid
+   * The things done with an invoice: view, record a payment (green, while
+   * money is owed), WhatsApp, email, copy the client link, print, edit and
+   * delete -- the next one named on the row, the rest under its "⋯". Edit whatever is paid
    * (owner, 26 Oct); delete only while nothing has been paid against it.
    */
   const actionsFor = (inv: InvoiceListItem, labelled = false) => {
@@ -179,24 +184,47 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
         className: 'text-destructive hover:text-destructive',
       },
     ].filter((x) => x.show)
+    // One named button for the next thing to do with this invoice (send a
+    // draft, record money still owed, else open it), the rest under "⋯":
+    // a row of seven icons was "a lot of buttons" (owner, 20 Nov).
+    const main = actions.find((x) => x.key === 'send') ?? actions.find((x) => x.key === 'record') ?? actions.find((x) => x.key === 'view')!
+    const rest = actions.filter((x) => x !== main)
+    const menu = (
+      <RowMenu
+        label={`More for ${inv.invoice_number}`}
+        variant="outline"
+        className={labelled ? 'min-h-10' : 'size-8 px-0'}
+        items={rest.map((x) => ({
+          label: x.key === 'copy' ? 'Copy client link' : x.key === 'print' ? 'Print or PDF' : x.label,
+          icon: <x.icon />,
+          onSelect: () => void x.onClick(),
+          danger: x.key === 'delete',
+          divider: x.key === 'delete',
+        }))}
+      />
+    )
     if (labelled) {
+      const view = main.key === 'view' ? null : actions.find((x) => x.key === 'view')
       return (
-        <div className="grid w-full grid-cols-2 gap-2">
-          {actions.map((x) => (
-            <Button key={x.key} variant="outline" size="sm" onClick={() => void x.onClick()} className={cn('min-h-10', x.className)} aria-label={x.title}>
-              <x.icon /> {x.label}
+        <div className="flex w-full gap-2">
+          <Button variant="outline" size="sm" onClick={() => void main.onClick()} className={cn('min-h-10 flex-1', main.className)} aria-label={main.title}>
+            <main.icon /> {main.label}
+          </Button>
+          {view && (
+            <Button variant="outline" size="sm" onClick={() => void view.onClick()} className="min-h-10 flex-1" aria-label={view.title}>
+              <view.icon /> {view.label}
             </Button>
-          ))}
+          )}
+          {rest.length > 0 && menu}
         </div>
       )
     }
     return (
-      <div className="flex items-center justify-end gap-0.5">
-        {actions.map((x) => (
-          <Button key={x.key} variant="ghost" size="icon" onClick={() => void x.onClick()} title={x.title} aria-label={`${x.title}: ${inv.invoice_number}`} className={cn('size-8', x.className)}>
-            <x.icon className="size-4" />
-          </Button>
-        ))}
+      <div className="flex items-center justify-end gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => void main.onClick()} title={main.title} aria-label={`${main.title}: ${inv.invoice_number}`} className={cn('h-8', main.className)}>
+          <main.icon className="size-4" /> {main.label}
+        </Button>
+        {rest.length > 0 && menu}
       </div>
     )
   }
@@ -255,42 +283,57 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search number or client…" className="w-full sm:w-56" aria-label="Search invoices" />
-        <Select
-          value={clientId}
-          onChange={(e) => change(() => {
-            setClientId(e.target.value)
-            setProjectId('')
-          })}
-          className="w-full sm:w-44"
-          aria-label="Filter by client"
-        >
-          <option value="">All clients</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-        <ProjectPicker
-          value={projectId}
-          onChange={(id) => change(() => setProjectId(id))}
-          clientId={clientId || undefined}
-          noneLabel="All projects"
-          className="sm:w-52"
-          aria-label="Filter by project"
-        />
-        <Input type="date" value={from} onChange={(e) => change(() => setFrom(e.target.value))} className="w-full sm:w-40" aria-label="From date" />
-        <Input type="date" value={to} onChange={(e) => change(() => setTo(e.target.value))} className="w-full sm:w-40" aria-label="To date" />
-        {anyFilter && (
-          <Button variant="ghost" size="sm" onClick={resetFilters}>
-            Clear
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search number or client…" className="min-w-0 flex-1 sm:w-56 sm:flex-none" aria-label="Search invoices" />
+          <Button variant="outline" onClick={() => setFiltering((v) => !v)} aria-expanded={filtering} className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}>
+            <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
           </Button>
+          {anyFilter && (
+            <Button variant="ghost" size="sm" onClick={resetFilters}>
+              Clear
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={items.length === 0} className="ml-auto">
+            <Download /> CSV
+          </Button>
+        </div>
+        {filtering && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={clientId}
+              onChange={(e) => change(() => {
+                setClientId(e.target.value)
+                setProjectId('')
+              })}
+              className="w-full sm:w-44"
+              aria-label="Filter by client"
+            >
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+            <ProjectPicker
+              value={projectId}
+              onChange={(id) => change(() => setProjectId(id))}
+              clientId={clientId || undefined}
+              noneLabel="All projects"
+              className="sm:w-52"
+              aria-label="Filter by project"
+            />
+            <label className="flex w-full items-center gap-2 text-sm text-muted-foreground sm:w-auto">
+              From
+              <Input type="date" value={from} onChange={(e) => change(() => setFrom(e.target.value))} className="flex-1 sm:w-40" aria-label="From date" />
+            </label>
+            <label className="flex w-full items-center gap-2 text-sm text-muted-foreground sm:w-auto">
+              To
+              <Input type="date" value={to} onChange={(e) => change(() => setTo(e.target.value))} className="flex-1 sm:w-40" aria-label="To date" />
+            </label>
+          </div>
         )}
-        <Button variant="outline" size="sm" onClick={exportCsv} disabled={items.length === 0} className="ml-auto">
-          <Download /> CSV
-        </Button>
       </div>
 
       {isFetching && !isLoading && <p className="mb-2 text-xs text-muted-foreground">Refreshing…</p>}
@@ -333,7 +376,7 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                     fields={[
                       { label: 'Total', value: inr(inv.total) },
                       { label: 'Paid', value: inr(Math.max(0, inv.total - inv.balance_due)) },
-                      { label: 'Balance', value: inr(inv.balance_due), strong: true },
+                      { label: 'Left to pay', value: inr(inv.balance_due), strong: true },
                       { label: 'Date', value: shortDate(inv.invoice_date) },
                       { label: 'Due', value: dueText(inv) ?? shortDate(inv.due_date) },
                     ]}
@@ -352,8 +395,8 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                     <th className="px-3 py-2 font-medium">Date</th>
                     <th className="px-3 py-2 font-medium">Due</th>
                     <th className="px-3 py-2 text-right font-medium">Total</th>
-                    <th className="px-3 py-2 font-medium">Payment</th>
-                    <th className="px-3 py-2 text-right font-medium">Balance</th>
+                    <th className="px-3 py-2 font-medium">Paid</th>
+                    <th className="px-3 py-2 text-right font-medium">Left to pay</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="sr-only">Actions</span>
@@ -387,10 +430,11 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
                           {inv.status === 'cancelled' ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
-                            <>
-                              <div className="text-tone-green">Rec: {inr(Math.max(0, inv.total - inv.balance_due))}</div>
-                              <div className={cn(inv.balance_due > 0 ? 'text-tone-amber' : 'text-muted-foreground')}>Rem: {inr(inv.balance_due)}</div>
-                            </>
+                            inv.total - inv.balance_due > 0 ? (
+                              <span className="text-tone-green">{inr(inv.total - inv.balance_due)} paid</span>
+                            ) : (
+                              <span className="text-muted-foreground">Nothing paid yet</span>
+                            )
                           )}
                         </td>
                         <td className={cn('px-3 py-2 text-right font-semibold tabular-nums', inv.balance_due > 0 ? (late ? 'text-destructive' : 'text-tone-amber') : 'text-tone-green')}>
