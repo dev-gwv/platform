@@ -257,7 +257,7 @@ export function PipelineTab({
       toast.error(`Fill in ${missing.map((m) => REQUIRED_FIELD_LABEL[m] ?? m).join(', ')} before moving to ${stage.name}.`)
       return
     }
-    move.mutate({ leadId: lead.id, stage_id: stage.id })
+    move.mutate({ leadId: lead.id, stage_id: stage.id, stageName: stage.name })
   }
 
   const reorder = useReorderStages()

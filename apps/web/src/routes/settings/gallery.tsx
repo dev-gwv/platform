@@ -20,7 +20,16 @@ import type { GalleryDrive } from '@ipc/contracts'
 export function GallerySettingsPage() {
   return (
     <AuthedPage module="settings">
-      <PageHeader title="Gallery" />
+      {/* One heading: it was "Gallery" over "Photo gallery (Frameline)". */}
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Images className="size-5 text-tone-violet" aria-hidden /> Photo gallery (Frameline)
+          </span>
+        }
+        className="max-w-3xl"
+        actions={<GalleryGuide />}
+      />
       <GallerySettings />
     </AuthedPage>
   )
@@ -55,19 +64,9 @@ function OwnerView() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />
   const a = q.data
 
-  const heading = (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-        <Images className="size-5 text-tone-violet" aria-hidden /> Photo gallery (Frameline)
-      </h2>
-      <GalleryGuide />
-    </div>
-  )
-
   if (!a.connected) {
     return (
       <div className="flex max-w-3xl flex-col gap-3">
-        {heading}
         <Card>
           <CardContent className="flex flex-col gap-3 p-4">
             <p className="text-sm text-muted-foreground">The gallery add-on is not switched on for your studio yet.</p>
@@ -89,7 +88,6 @@ function OwnerView() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-3">
-      {heading}
       <Card className={a.linked && !plan?.ended ? 'border-success/40' : 'border-warning/50'}>
         <CardContent className="flex flex-col gap-3 p-4">
           {!a.reachable && a.trouble === 'misconfigured' ? (

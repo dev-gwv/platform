@@ -37,7 +37,7 @@ import { foregroundForHex, presetFor } from '@/shared/theme/presets'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { termsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
-import { DELIVERABLE_STATUS_LABEL, expectedLine, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
+import { DELIVERABLE_STATUS_LABEL, expectedLine, moneyCard, nextDueWhen, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
 import { DeliverableTile } from '@/shared/ui/icon-tile'
 import { guestsLabel } from '@/features/shoots/guests'
 
@@ -525,14 +525,15 @@ function DeliverableCard({
 
 // ── money ────────────────────────────────────────────────────────
 function MoneySection({ money }: { money: NonNullable<PublicClientPortal['money']> }) {
-  const pct = money.total > 0 ? Math.min(100, Math.round((money.received / money.total) * 100)) : 0
+  const card = moneyCard(money)
+  const pct = card.total > 0 ? Math.min(100, Math.round((card.received / card.total) * 100)) : 0
   return (
     <Section icon={Wallet} title="Payments">
       <Card>
         <CardContent className="flex flex-col gap-3 p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Total package</p>
-            <p className="font-semibold tabular-nums">{formatINR(money.total)}</p>
+            <p className="text-sm text-muted-foreground">{card.withGst ? 'Total, with GST' : 'Total package'}</p>
+            <p className="font-semibold tabular-nums">{formatINR(card.total)}</p>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Paid so far">
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${pct}%` }} />
@@ -540,19 +541,19 @@ function MoneySection({ money }: { money: NonNullable<PublicClientPortal['money'
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0 rounded-xl bg-success/10 p-3">
               <p className="text-xs text-muted-foreground">Paid so far</p>
-              <p className="truncate font-semibold tabular-nums text-success">{formatINR(money.received)}</p>
+              <p className="truncate font-semibold tabular-nums text-success">{formatINR(card.received)}</p>
             </div>
-            <div className={cn('min-w-0 rounded-xl p-3', money.balance > 0 ? 'bg-warning/10' : 'bg-success/10')}>
+            <div className={cn('min-w-0 rounded-xl p-3', card.balance > 0 ? 'bg-warning/10' : 'bg-success/10')}>
               <p className="text-xs text-muted-foreground">Balance due</p>
-              <p className={cn('truncate font-semibold tabular-nums', money.balance > 0 ? 'text-warning' : 'text-success')}>
-                {money.balance > 0 ? formatINR(money.balance) : 'All paid 🎉'}
+              <p className={cn('truncate font-semibold tabular-nums', card.balance > 0 ? 'text-warning' : 'text-success')}>
+                {card.balance > 0 ? formatINR(card.balance) : 'All paid 🎉'}
               </p>
             </div>
           </div>
-          {money.next_due && money.balance > 0 && (
+          {money.next_due && card.balance > 0 && (
             <p className="text-sm">
               <span className="font-semibold">Next:</span> {formatINR(money.next_due.amount)}
-              {money.next_due.due_date ? ` by ${shortFmt.format(asDate(money.next_due.due_date))}` : ''}
+              {nextDueWhen(money.next_due.due_date, todayInIndia(), (d) => shortFmt.format(asDate(d)))}
             </p>
           )}
         </CardContent>
@@ -628,7 +629,7 @@ function LinkDoesNotOpen({ message }: { message: string | null }) {
           </span>
           <p className="font-semibold">This link does not open</p>
           <p className="text-sm text-muted-foreground">
-            {message ?? 'This link is not working any more.'} Your studio can send you a fresh one.
+            {message && !/ask the studio/i.test(message) ? `${message} Your studio can send you a fresh one.` : (message ?? 'This link is not working any more. Your studio can send you a fresh one.')}
           </p>
         </CardContent>
       </Card>

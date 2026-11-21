@@ -180,7 +180,9 @@ function TodayRow({ item }: { item: TodayItem }) {
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       <KindIcon item={item} />
-      <div className="min-w-0 flex-1">
+      {/* The words keep at least 7rem: with two buttons (Confirm · Can't make it) the
+          buttons drop under the words instead of squeezing them one word a line. */}
+      <div className="min-w-[7rem] flex-1">
         {/* Two lines, then cut: a long edit name was cut to nothing on a phone. */}
         <p className="line-clamp-2 break-words text-sm font-medium">{item.title}</p>
         <p className={cn('text-xs', item.late ? 'font-medium text-warning' : 'text-muted-foreground')}>
@@ -188,7 +190,7 @@ function TodayRow({ item }: { item: TodayItem }) {
           {item.kind === 'shoot' && item.slot?.location ? ` · ${item.slot.location}` : ''}
         </p>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
         <RowAction item={item} />
       </div>
     </li>

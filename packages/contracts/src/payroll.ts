@@ -64,7 +64,10 @@ export const payrollFreelancerDue = z.object({
   shoots: z.number().int(),
   owed: money,
   paid: z.number(),
+  /** The month's done shoots less what is paid: its share of Team payouts' Owed now. */
   due: money,
+  /** What the month's shoots still to come will pay; never part of `due`. */
+  upcoming: money.default(0),
 })
 export type PayrollFreelancerDue = z.infer<typeof payrollFreelancerDue>
 

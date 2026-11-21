@@ -1,4 +1,4 @@
-import { authToken, storedFile, type StoredFile, type z } from '@ipc/contracts'
+import { refreshResponse, storedFile, type SessionState, type StoredFile, type z } from '@ipc/contracts'
 import { config } from '../config'
 import { getToken, getRefreshToken, setTokens, clearToken } from '../auth/token'
 import { MOCK_ENABLED, NOT_MOCKED } from '../dev/mock-flag'
@@ -88,13 +88,13 @@ export function setAuthLostHandler(fn: (() => void) | null): void {
  * mode there is nothing stored and the browser sends the HttpOnly cookie. With
  * neither (never signed in here) there is nothing to try.
  */
-export async function rotateTokens(retry = true): Promise<boolean> {
+export async function rotateTokens(retry = true, withSession = false): Promise<boolean> {
   const before = getRefreshToken()
   if (!before && !hasCookieSession()) return false
 
   rotating ??= (async () => {
     try {
-      const res = await fetch(`${config.apiBaseUrl}/auth/refresh`, {
+      const res = await fetch(`${config.apiBaseUrl}/auth/refresh${withSession ? '?with=session' : ''}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -119,13 +119,15 @@ export async function rotateTokens(retry = true): Promise<boolean> {
         }
         return false
       }
-      const parsed = authToken.safeParse(await res.json().catch(() => null))
+      const parsed = refreshResponse.safeParse(await res.json().catch(() => null))
       if (!parsed.success) return false
       // The store may have been cleared by a sign-out while this was in flight;
       // writing then would resurrect the session we were told to end.
       if (getRefreshToken() !== before) return false
-      setTokens(parsed.data)
-      markCookieSession(!parsed.data.refresh_token)
+      const { session, ...pair } = parsed.data
+      refreshedSession = session ? { token: pair.access_token, session } : null
+      setTokens(pair)
+      markCookieSession(!pair.refresh_token)
       return true
     } catch {
       return false // network blip: keep the tokens, let the caller fail
@@ -144,12 +146,25 @@ export async function rotateTokens(retry = true): Promise<boolean> {
       if (before ? now && now !== before : i >= 2) break
       await new Promise((r) => setTimeout(r, 150))
     }
-    return rotateTokens(false)
+    return rotateTokens(false, withSession)
   }
   // Another tab may have rotated while we waited; only a token that is actually
   // present counts — a cleared store is a failure, not someone else's success.
   const after = getRefreshToken()
   return !!after && after !== before
+}
+
+/**
+ * The session that rode on the last refresh asked `withSession` (a new tab's
+ * first call), good only while the access token it came with is the one held
+ * -- so every boot of that token can read it (React runs a dev boot twice),
+ * and none after the next rotation. Null when the refresh did not carry one,
+ * so the caller asks /auth/session as before.
+ */
+let refreshedSession: { token: string; session: SessionState } | null = null
+export function takeRefreshedSession(): SessionState | null {
+  const held = getToken()
+  return refreshedSession && held && refreshedSession.token === held ? refreshedSession.session : null
 }
 
 /**
@@ -260,8 +275,6 @@ export async function callApi<TOut extends z.ZodTypeAny>(
     })
   }
 
-  let res = await send()
-
   // Access tokens are short-lived by design, so a 401 is the normal way we
   // learn one has aged out: rotate and replay, once. Only the endpoints that
   // establish a session are exempt (a 401 there means bad credentials, and
@@ -270,6 +283,16 @@ export async function callApi<TOut extends z.ZodTypeAny>(
   // into a silent no-op for any tab idle past the access-token TTL.
   // Match on the path alone: /auth/invite carries the token as a query string.
   const canRotate = !UNAUTHENTICATED_PATHS.has(path.split('?')[0]!)
+
+  // A page drawn from the device's kept session asks before this tab has an
+  // access token (child effects run before the AuthProvider's). Get one first
+  // -- joining the refresh already on its way, or starting the tab's first one,
+  // which brings the session for the AuthProvider -- instead of being refused
+  // and spending the new refresh token a second time.
+  if (canRotate && !getToken()) await rotateTokens(true, true)
+
+  let res = await send()
+
   if (res.status === 401 && canRotate && (await rotateTokens())) {
     res = await send()
   }

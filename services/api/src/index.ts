@@ -54,6 +54,7 @@ import { enquiryFormsRouter, publicEnquiryFormsRouter } from './modules/enquiry-
 import { enquiryPartnersRouter } from './modules/enquiry-forms/routes-partners'
 import { leadsExportRouter } from './modules/enquiry-forms/routes-export'
 import { crmCallsRouter } from './modules/crm-calls/router'
+import { dashboardRouter } from './modules/dashboard/router'
 import { crmSequencesRouter } from './modules/crm-sequences/router'
 import { featuresRouter, platformFeaturesRouter } from './modules/features/router'
 import { studioWhatsappRouter } from './modules/studio-whatsapp/router'
@@ -248,6 +249,7 @@ app.route('/work/reminder-settings', workReminderSettingsRouter)
 app.route('/billing', billingRouter)
 app.route('/financials', financialsRouter)
 app.route('/crm', crmCallsRouter)
+app.route('/dashboard', dashboardRouter)
 app.route('/crm', crmSequencesRouter)
 app.route('/crm', crmRouter)
 app.route('/webhooks', webhooksRouter)

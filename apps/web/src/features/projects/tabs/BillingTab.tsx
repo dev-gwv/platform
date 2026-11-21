@@ -25,7 +25,7 @@ import { projectInvoiceLines, unappliedPayments } from '@/features/billing/proje
 import { dueText, isOverdue, shortDate } from '@/features/billing/status'
 import { projectMoneyChecks, type MoneyCheck } from '@/features/billing/project-money'
 import { IconTile } from '@/shared/ui/icon-tile'
-import { waLink } from '@ipc/domain'
+import { projectOutstanding, waLink } from '@ipc/domain'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
 import { useINR } from '@/shared/money/MoneyMask'
 
@@ -38,11 +38,13 @@ type BillingInvoice = NonNullable<ProjectBilling['invoices']>[number]
  * "promised" payment (recorded as pending) is shown for what it is -- money
  * someone said is coming -- and never counted as received.
  */
-export function projectMoney(p: Pick<ProjectDetail, 'total_cost' | 'payments' | 'package_cost' | 'additional_deliverables_cost'>) {
+export function projectMoney(p: Pick<ProjectDetail, 'total_cost' | 'payments' | 'package_cost' | 'additional_deliverables_cost'> & { outstanding?: number | null | undefined }) {
   const isPaid = (x: Payment) => (x.status ?? 'paid') !== 'pending'
   const received = p.payments.filter(isPaid).reduce((n, x) => n + x.amount, 0)
   const promised = p.payments.filter((x) => !isPaid(x)).reduce((n, x) => n + x.amount, 0)
-  const due = Math.max(0, p.total_cost - received)
+  // The server's one rule (project_outstanding, 0315): GST paid on invoices
+  // never counts against the value. Without it, value less money in.
+  const due = p.outstanding ?? projectOutstanding({ value: p.total_cost, received })
   const pct = p.total_cost > 0 ? Math.min(100, Math.round((received / p.total_cost) * 100)) : 0
   return { total: p.total_cost, received, promised, due, pct, isPaid }
 }

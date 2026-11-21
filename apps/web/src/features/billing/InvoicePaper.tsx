@@ -211,8 +211,32 @@ export function InvoicePaper({
           </div>
         )}
 
-        {/* Items */}
-        <div className="mt-6 overflow-x-auto">
+        {/* Items: on a phone each line is a short card, so nothing hides off the
+            right edge (a client opening the link from WhatsApp could not see
+            the rate or the amount); a wider screen and the printed paper keep the table. */}
+        <ul className="mt-6 divide-y divide-slate-200 border-y border-slate-200 text-sm sm:hidden print:hidden">
+          {invoice.items.map((it) => (
+            <li key={it.id} className="py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900">{it.description}</p>
+                  {it.subtext && <p className="mt-0.5 text-xs text-slate-500">{it.subtext}</p>}
+                </div>
+                <p className="shrink-0 font-semibold tabular-nums">{formatINR(it.amount)}</p>
+              </div>
+              <p className="mt-1 text-xs tabular-nums text-slate-500">
+                {lineMeasure(it)} × {formatINR(it.rate)}
+                {rateUnit(it) ? ` ${rateUnit(it)}` : ''}
+                {showHsn && it.hsn_sac ? ` · HSN/SAC ${it.hsn_sac}` : ''}
+                {layout.show_gst &&
+                  (intraState
+                    ? ` · CGST ${Number((it.gst_rate / 2).toFixed(2))}% ${formatINR(it.cgst)} · SGST ${Number((it.gst_rate / 2).toFixed(2))}% ${formatINR(it.sgst)}`
+                    : ` · IGST ${Number(it.gst_rate.toFixed(2))}% ${formatINR(it.igst)}`)}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 hidden overflow-x-auto sm:block print:block">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr style={headStyle}>

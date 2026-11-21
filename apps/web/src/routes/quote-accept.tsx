@@ -29,7 +29,7 @@ export function QuoteAcceptPage() {
 
   useEffect(() => {
     if (!token) {
-      setLoadError('This link is missing its token.')
+      setLoadError('Part of this link is missing. Open the whole link from your message, or ask the studio to send it again.')
       return
     }
     callApi(`/public/quote/${token}`, { responseSchema: publicQuote })
@@ -77,7 +77,7 @@ export function QuoteAcceptPage() {
             </span>
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">{quote?.studio ?? 'Quote'}</p>
-              <h1 className="truncate text-lg font-semibold">{quote ? `${quote.quote_number}${quote.title ? ` · ${quote.title}` : ''}` : 'Your quote'}</h1>
+              <h1 className="text-base font-semibold leading-snug sm:text-lg">{quote ? `${quote.quote_number}${quote.title ? ` · ${quote.title}` : ''}` : 'Your quote'}</h1>
             </div>
             {/*
               * A client agreeing to a price should be able to keep a copy of
@@ -93,7 +93,10 @@ export function QuoteAcceptPage() {
           </div>
 
           {loadError ? (
-            <p className="text-sm text-destructive">{loadError}</p>
+            <div className="flex flex-col items-center gap-1 py-6 text-center">
+              <p className="font-medium">This quote link does not open</p>
+              <p className="text-sm text-muted-foreground">{loadError} Please ask the studio to send it again.</p>
+            </div>
           ) : !quote ? (
             <Skeleton className="h-40" />
           ) : done === 'accepted' || quote.status === 'accepted' ? (
@@ -139,7 +142,7 @@ export function QuoteAcceptPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="flex flex-col gap-1">
                       <Label htmlFor="q-name">Your name</Label>
-                      <Input id="q-name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+                      <Input id="q-name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor="q-email">Email (optional)</Label>
@@ -147,11 +150,12 @@ export function QuoteAcceptPage() {
                     </div>
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
-                  <div className="flex flex-wrap justify-end gap-2">
+                  {/* On a phone Accept is the one big button and Decline sits quietly under it. */}
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <Button type="button" variant="ghost" onClick={() => setDeclining(true)} disabled={busy}>
                       Decline
                     </Button>
-                    <Button type="submit" disabled={busy || !name.trim()}>
+                    <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={busy || !name.trim()}>
                       {busy ? 'Accepting…' : `Accept ${formatINR(quote.total)}`}
                     </Button>
                   </div>

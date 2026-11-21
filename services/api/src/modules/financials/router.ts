@@ -409,20 +409,22 @@ export const financialsRouter = new Hono<AppEnv>()
       withUser(
         c.env,
         c.get('auth').userId,
-        (sql) => sql<FinancialRow[]>`
-          select project_id, name, revenue, received, direct_team_cost, project_expenses
+        (sql) => sql<(FinancialRow & { outstanding: number })[]>`
+          select project_id, name, revenue, received, direct_team_cost, project_expenses,
+                 -- What it still owes, by the one rule (0315), GST on paid invoices included.
+                 project_outstanding(project_id)::float8 as outstanding
           from project_financials`,
       ),
     )
     if (!data) fail(400, 'We could not load financials.')
-    const rows = data.map((row) => ({
+    const rows = data.map(({ outstanding, ...row }) => ({
       ...row,
       gross_profit: grossProfit({
         revenue: row.revenue,
         directTeamCost: row.direct_team_cost,
         projectExpenses: row.project_expenses,
       }),
-      balance_pending: balancePending(row.revenue, row.received),
+      balance_pending: Number.isFinite(Number(outstanding)) ? Number(outstanding) : balancePending(row.revenue, row.received),
     }))
     return c.json(financials.parse(rows))
   })

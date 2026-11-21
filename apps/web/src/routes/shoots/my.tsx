@@ -84,7 +84,10 @@ function MyShoots() {
       {owed > 0 && (
         <p className="mt-4 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
           <HardDrive className="size-4 shrink-0 text-warning" aria-hidden />
-          You have cards from {owed === 1 ? '1 booking' : `${owed} bookings`} to hand over. Tap <b>Hand over data</b> once they are with the studio.
+          {/* One span, so the bold words flow with the sentence instead of standing as their own squeezed column. */}
+          <span className="min-w-0">
+            You have cards from {owed === 1 ? '1 booking' : `${owed} bookings`} to hand over. Tap <b>Hand over data</b> once they are with the studio.
+          </span>
         </p>
       )}
       <div className="mt-6">

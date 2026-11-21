@@ -354,8 +354,9 @@ export function ClientDetailsPage() {
                     ))}
                   </div>
                 )}
-                <div className="grid grid-cols-[1fr_6.5rem_5rem] gap-2">
-                  <Input aria-label="Date" type="date" value={ev.date} onChange={(e) => setEvent(i, { date: e.target.value })} />
+                {/* On a phone the date takes its own line, so "Wed, 11 Nov 2026" and the time are never cut short. */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_6.5rem_5rem]">
+                  <Input aria-label="Date" type="date" className="col-span-2 sm:col-span-1" value={ev.date} onChange={(e) => setEvent(i, { date: e.target.value })} />
                   <Input aria-label="Start time" type="time" value={ev.start_time} onChange={(e) => setEvent(i, { start_time: e.target.value })} />
                   <Select aria-label="Hours" value={ev.hours} onChange={(e) => setEvent(i, { hours: e.target.value })}>
                     <option value="">Hours</option>

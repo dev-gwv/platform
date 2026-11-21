@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { projectOutstanding } from '@ipc/domain'
 import { brandingGaps } from '@/features/projects/branding'
 import { timeRangeLine } from '@/shared/ui/time-format'
 import { useQuery } from '@tanstack/react-query'
@@ -195,7 +196,7 @@ function ProjectQuotation() {
   const received = project.payments
     .filter((p) => (p.status ?? 'paid') === 'paid')
     .reduce((s, p) => s + p.amount, 0)
-  const balance = Math.max(0, project.total_cost - received)
+  const balance = project.outstanding ?? projectOutstanding({ value: project.total_cost, received })
   const schedule = toSchedule(shoots.data ?? [])
 
   const doc: QuotationDocumentData = {

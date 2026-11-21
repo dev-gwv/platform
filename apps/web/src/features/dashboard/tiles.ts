@@ -42,9 +42,13 @@ export function collectLine(invoices: readonly { balance_due: number; due_date: 
 
 /** Leads: who is owed a call today, and how many were never rung. */
 export function leadsTileLine(queue: readonly { last_contacted_at: string | null }[]): string {
-  if (!queue.length) return 'Nobody to call today'
-  const fresh = queue.filter((l) => !l.last_contacted_at).length
-  return `${queue.length} to call today${fresh ? ` · ${fresh} not contacted yet` : ''}`
+  return leadsLine(queue.length, queue.filter((l) => !l.last_contacted_at).length)
+}
+
+/** The same line from the two counts `GET /dashboard/summary` sends. */
+export function leadsLine(toCall: number, notContacted: number): string {
+  if (!toCall) return 'Nobody to call today'
+  return `${toCall} to call today${notContacted ? ` · ${notContacted} not contacted yet` : ''}`
 }
 
 /** Shoots this week: how many, and how many still need people. */
@@ -56,8 +60,13 @@ export function shootsTile(
   const end = addDays(today, 6)
   const week = shoots.filter((s) => s.status !== 'cancelled' && !!s.shoot_date && s.shoot_date >= today && s.shoot_date <= end)
   const need = week.filter((s) => short(s.id)).length
-  const line = !week.length ? 'No shoots this week' : need ? `${need} still ${need === 1 ? 'needs' : 'need'} people` : 'Every day has its team'
-  return { count: week.length, short: need, line }
+  return { count: week.length, short: need, line: shootsLine(week.length, need) }
+}
+
+/** Under "Shoots this week", from the week's count and how many still need people. */
+export function shootsLine(count: number, short: number): string {
+  if (!count) return 'No shoots this week'
+  return short ? `${short} still ${short === 1 ? 'needs' : 'need'} people` : 'Every day has its team'
 }
 
 /**

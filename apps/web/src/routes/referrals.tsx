@@ -2,7 +2,6 @@ import { parseAmount } from '@/shared/money/parse-amount'
 import { useState } from 'react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
-import { StatCard } from '@/shared/ui/stat-card'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
@@ -23,7 +22,7 @@ import { toast } from 'sonner'
 import { RewardsBoard } from '@/features/referrals/RewardsBoard'
 import { ReferralDefaults } from '@/features/referrals/ReferralDefaults'
 import { useAccess } from '@/shared/auth/useAccess'
-import { Plus, Trash2, Pencil, Copy, Trophy, Users, TrendingUp, Target, Gift } from 'lucide-react'
+import { Plus, Trash2, Pencil, Copy, Gift } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 
 function ReferralsContent() {
@@ -106,13 +105,10 @@ function ReferralsContent() {
         }
       />
 
-      {summary && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Campaigns" value={summary.total_campaigns} icon={Trophy} />
-          <StatCard label="Active Campaigns" value={summary.active_campaigns} icon={Target} />
-          <StatCard label="Total Submissions" value={summary.total_submissions} icon={Users} />
-          <StatCard label="Converted" value={summary.converted_submissions} icon={TrendingUp} />
-        </div>
+      {/* One sentence instead of four tiles that took a phone's whole first
+          screen (audit, 21 Nov). */}
+      {summary && summary.total_campaigns > 0 && (
+        <p className="text-sm text-muted-foreground">{referralLine(summary)}</p>
       )}
 
       <Tabs defaultValue="cards">
@@ -335,4 +331,14 @@ export function ReferralsPage() {
       <ReferralsContent />
     </AuthedPage>
   )
+}
+
+/** "1 of 2 campaigns running · 3 friends enquired · 1 booked" */
+function referralLine(s: { total_campaigns: number; active_campaigns: number; total_submissions: number; converted_submissions: number }): string {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  return [
+    `${s.active_campaigns} of ${plural(s.total_campaigns, 'campaign', 'campaigns')} running`,
+    `${plural(s.total_submissions, 'friend', 'friends')} enquired`,
+    `${s.converted_submissions} booked`,
+  ].join(' · ')
 }

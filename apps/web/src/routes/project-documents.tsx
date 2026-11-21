@@ -11,7 +11,6 @@ import { Input } from '@/shared/ui/input'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { SkeletonList } from '@/shared/ui/skeleton'
-import { cn } from '@/shared/ui/cn'
 import { useTermsDocuments, type TermsDocument } from '@/features/terms/api'
 import { useProjects } from '@/features/projects/api'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
@@ -92,29 +91,8 @@ function ProjectDocuments() {
     <>
       <PageHeader title="Documents" />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {(['agreed', 'waiting', 'closed', 'not_sent'] as const).map((s) => {
-          const Icon = LOOK[s].icon
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setFilter(filter === s ? 'all' : s)}
-              aria-pressed={filter === s}
-              className={cn(
-                'rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/40',
-                filter === s ? 'border-primary ring-1 ring-primary' : 'border-border',
-              )}
-            >
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Icon className="size-4" aria-hidden /> {LOOK[s].label}
-              </span>
-              <span className="mt-1 block text-2xl font-semibold tabular-nums">{count(s)}</span>
-            </button>
-          )
-        })}
-      </div>
-
+      {/* The filter chips carry each count; four tiles above them said the
+          same numbers again (audit, 21 Nov). */}
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <FilterTabs
           tabs={[
@@ -168,7 +146,7 @@ function ProjectDocuments() {
                         </Button>
                       )}
                       {r.projectId && (
-                        <Button size="sm" variant={r.state === 'agreed' || r.state === 'waiting' ? 'outline' : 'default'} asChild>
+                        <Button size="sm" variant="outline" asChild>
                           <Link to="/projects/$id" params={{ id: r.projectId }} search={{ tab: 'terms' }}>
                             {r.state === 'not_sent' ? 'Send terms' : r.state === 'closed' ? 'Send again' : 'Open'} <ArrowRight />
                           </Link>

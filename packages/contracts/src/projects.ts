@@ -165,6 +165,8 @@ export const projectListItem = z.object({
   total_cost: money,
   /** Summed from received_payments, so the list needs no second request. */
   received: money,
+  /** Still to collect, by the one rule (project_outstanding, 0315); absent from older servers. */
+  outstanding: money.nullish(),
   created_at: isoDateTime,
   // Lovable parity (additive, nullable so old rows parse): sorting helpers.
   next_shoot_date: isoDate.nullable().default(null),
@@ -462,6 +464,8 @@ export const projectDetail = z.object({
   quotation_accepted_by: z.string().nullable().default(null),
   /** When a quotation link was last made for the client -- the journey's first step. */
   quotation_issued_at: isoDateTime.nullable().default(null),
+  /** Still to collect, by the one rule (project_outstanding, 0315); absent from older servers. */
+  outstanding: money.nullish(),
   deliverables: z.array(deliverable),
   payments: z.array(
     z.object({
@@ -567,6 +571,8 @@ export const projectTrackingRow = z.object({
   deliverables_with_client: z.number().int().default(0),
   /** Paid money only; a promised payment is not here. Null without Billing access. */
   received: money.nullable().default(null),
+  /** Still to collect, by the one rule (project_outstanding, 0315). Null without Billing access. */
+  outstanding: money.nullish(),
   /** Owed on invoices past their due date. Null without Billing access. */
   overdue_amount: money.nullable().default(null),
   invoices_overdue: z.number().int().default(0),

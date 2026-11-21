@@ -35,33 +35,33 @@ import {
   useCreateTask,
   useDeleteBundle,
   useDeleteTask,
+  useDoneWindow,
   useMyTasks,
   useOlderDoneTasks,
+  useOpenTasks,
   useSetTaskStatus,
   useTaskPriorities,
   useCreateTaskPriority,
-  useTasks,
   useUpdateBundle,
   useUpdateTask,
   useTask,
   withOlder,
 } from '@/features/tasks/api'
 import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
+import { ShowMoreOpen } from '@/features/tasks/ShowMoreOpen'
+import { pageCounts, peopleCounts } from '@/features/tasks/open-pages'
 import {
   PRIORITY_LABEL,
   STATUS_LABEL,
   TASK_TABS,
   filterTasks,
-  tabCounts,
   todayISO,
   type TaskTab,
 } from '@/features/tasks/board'
 import {
   DUE_FILTERS,
-  isOpen,
   matchesDue,
   matchesScope,
-  taskStats,
   weekStart,
   type DueFilter,
 } from '@/features/tasks/delegation'
@@ -122,43 +122,73 @@ function Tasks({ managed }: { managed: boolean }) {
 
   const { me, canManage, canAssign } = useTaskViewer()
   const mine = !managed || mineParam === '1'
-  // Only the list this person reads: the studio's for whoever manages
-  // tasks, else their own. Both are open tasks plus the last 30 days' done.
-  const studio = useTasks(managed)
-  const own = useMyTasks(!managed)
-  const { data: windowRows, isLoading, isError, refetch } = managed ? studio : own
+  const today = todayISO()
+  const monday = weekStart(today)
+  // The search box asks the server, so it waits for a pause in typing.
+  const typed = useDebounced(search.trim(), 300)
+  const needle = typed.toLowerCase()
+  const scopeMember = managed && !mine ? member : ''
+
+  // Open work comes a page at a time with the toolbar applied on the server
+  // (speed audit, 21 Nov: 1,158 open tasks were 0.99 MB on every open);
+  // finished work is the last 30 days', older ones behind "Show older done
+  // tasks". Each list is only the one this person reads.
+  const listing = view === 'people' || view === 'list'
+  // Completed reads only finished rows, but keeps the open query (the All
+  // tab's, cached) for the counts.
+  const openTab: TaskTab = view === 'list' && tab !== 'completed' ? tab : 'all'
+  const open = useOpenTasks({ mine, member: scopeMember, due, tab: openTab, q: typed, today }, listing)
+  const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing)
+  // The board of someone who sees only their own: their window, as before.
+  const ownBoard = useMyTasks(!managed && view === 'board')
   const older = useOlderDoneTasks(managed ? 'studio' : 'my')
-  const data = useMemo(() => withOlder(windowRows, older.rows), [windowRows, older.rows])
+  const isLoading = open.isLoading || doneQ.isLoading
+  const isError = open.isError || doneQ.isError
+  const refetch = () => {
+    void open.refetch()
+    void doneQ.refetch()
+  }
   const { data: directory } = useDirectory()
   const members = useMemo(() => (directory ?? []).filter((m: DirectoryMember) => m.status === 'active'), [directory])
   const actions = useTaskActions()
 
-  const today = todayISO()
-  const monday = weekStart(today)
-  const needle = search.trim().toLowerCase()
-
-  // Everything the toolbar says, in one predicate the three views share.
+  // Everything the toolbar says, in one predicate: the server applies it to
+  // open work, this applies it to the finished rows and to the board.
   const keep = useMemo(
     () => (t: TaskListItem) =>
-      matchesScope(t, { mine, me, member: managed && !mine ? member : '' }) &&
+      matchesScope(t, { mine, me, member: scopeMember }) &&
       matchesDue(t, due, today) &&
       (!needle ||
         [t.title, t.description, t.project_name, t.tag, ...t.assignee_names]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(needle))),
-    [mine, me, member, managed, due, today, needle],
+    [mine, me, scopeMember, due, today, needle],
   )
-  const scoped = useMemo(() => (data ?? []).filter(keep), [data, keep])
-  const stats = useMemo(() => taskStats(scoped, today), [scoped, today])
+  const doneRows = useMemo(() => (withOlder(doneQ.data, older.rows) ?? []).filter(keep), [doneQ.data, older.rows, keep])
+  const counts = useMemo(() => pageCounts(open.summary, doneRows, today), [open.summary, doneRows, today])
+  const stats = counts.stats
+  const people = useMemo(() => peopleCounts(open.summary), [open.summary])
   // The People view is about work in hand: open tasks, and what was finished
   // this week so a tick does not make a card vanish on the spot.
   const peopleRows = useMemo(
-    () => scoped.filter((t) => isOpen(t) || (t.status === 'completed' && (t.updated_at ?? '').slice(0, 10) >= monday)),
-    [scoped, monday],
+    () => [...open.rows, ...doneRows.filter((t) => t.status === 'completed' && (t.updated_at ?? '').slice(0, 10) >= monday)],
+    [open.rows, doneRows, monday],
   )
-  const counts = useMemo(() => tabCounts(scoped, today), [scoped, today])
-  const listRows = useMemo(() => filterTasks(scoped, tab, { search: '', priority: 'all' }, today), [scoped, tab, today])
-  const total = (data ?? []).length
+  // The List: open work in the server's order (late first, then due date),
+  // finished work under it.
+  const listOpen = view === 'list' && tab === 'completed' ? [] : open.rows
+  const moreOpenRows = open.hasMore && listOpen.length > 0
+  const listDone = useMemo(
+    () => (tab === 'all' || tab === 'completed' ? filterTasks(doneRows, tab, { search: '', priority: 'all' }, today) : []),
+    [doneRows, tab, today],
+  )
+  const openTotal = open.summary?.matching ?? open.rows.length
+  const shown = open.rows.length + doneRows.length
+  const filtersOn = (managed && mine) || !!scopeMember || due !== 'all' || !!needle
+  const total = shown === 0 && !filtersOn ? 0 : Math.max(shown, 1)
+  const moreOpen = (
+    <ShowMoreOpen shown={open.rows.length} total={openTotal} hasMore={open.hasMore} loading={open.loadingMore} onMore={open.more} />
+  )
 
   return (
     <>
@@ -257,12 +287,12 @@ function Tasks({ managed }: { managed: boolean }) {
 
       <div className="mt-4">
         {view === 'board' ? (
-          <TaskBoard items={managed ? undefined : (windowRows ?? [])} filter={keep} />
+          <TaskBoard items={managed ? undefined : (ownBoard.data ?? [])} filter={keep} />
         ) : isLoading ? (
           <SkeletonList rows={6} columns={4} />
         ) : isError ? (
           <ErrorState onRetry={() => void refetch()} />
-        ) : scoped.length === 0 ? (
+        ) : open.rows.length === 0 && doneRows.length === 0 ? (
           <>
           <Card>
             <CardContent className="py-4">
@@ -291,6 +321,7 @@ function Tasks({ managed }: { managed: boolean }) {
           {view === 'list' && <ShowOlderDone older={older} />}
           </>
         ) : view === 'people' ? (
+          <>
           <TaskPeopleView
             rows={peopleRows}
             today={today}
@@ -298,14 +329,29 @@ function Tasks({ managed }: { managed: boolean }) {
             canManage={canManage}
             canAssign={canAssign && managed}
             members={managed && !mine && !member ? members : []}
+            counts={people}
             onOpen={(t) => setOpenId(t.id)}
             onAction={actions.run}
           />
+          {moreOpen}
+          </>
         ) : (
           <>
-            <FilterTabs<TaskTab> tabs={TASK_TABS.map((t) => ({ ...t, count: counts[t.value] }))} value={tab} onChange={setTab} />
+            <FilterTabs<TaskTab> tabs={TASK_TABS.map((t) => ({ ...t, count: counts.tabs[t.value] }))} value={tab} onChange={setTab} />
             <div className="mt-3">
-              <TaskTable rows={listRows} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
+              {moreOpenRows ? (
+                <>
+                  <TaskTable rows={listOpen} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
+                  {moreOpen}
+                  {listDone.length > 0 && (
+                    <div className="mt-4">
+                      <TaskTable rows={listDone} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <TaskTable rows={[...listOpen, ...listDone]} today={today} canManage={canManage} onOpen={(id) => setOpenId(id)} />
+              )}
             </div>
             {(tab === 'all' || tab === 'completed') && <ShowOlderDone older={older} />}
           </>
@@ -339,6 +385,16 @@ function Tasks({ managed }: { managed: boolean }) {
       )}
     </>
   )
+}
+
+/** `value`, once it has held still for `ms`. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms)
+    return () => clearTimeout(id)
+  }, [value, ms])
+  return settled
 }
 
 function Segmented<T extends string>({

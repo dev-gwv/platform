@@ -114,6 +114,66 @@ describe('two tabs refreshing at once (0221)', () => {
   })
 })
 
+describe('a new tab is one round trip from drawing', () => {
+  const session = {
+    user_id: '00000000-0000-4000-8000-000000000001',
+    company_id: '00000000-0000-4000-8000-000000000002',
+    role: 'admin',
+    is_owner: true,
+    display_name: 'Asha',
+    email: 'asha@example.com',
+    plan_gate: 'active',
+    plan_expiry: null,
+    permissions: ['crm.view'],
+  }
+
+  it('the first call gets a token first, and the session rides on that refresh', async () => {
+    localStorage.setItem('ipc_refresh_token', 'r1')
+    const calls: { url: string; auth: string | null }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const headers = (init?.headers ?? {}) as Record<string, string>
+        calls.push({ url, auth: headers.Authorization ?? null })
+        if (url.includes('/auth/refresh')) {
+          return new Response(
+            JSON.stringify({ access_token: 'a1', refresh_token: 'r2', token_type: 'bearer', expires_in: 1800, session }),
+            { status: 200 },
+          )
+        }
+        return new Response('{"ok":true}', { status: 200 })
+      }),
+    )
+    const { callApi, takeRefreshedSession } = await import('./client')
+    // Two pages asking at once share one refresh: a refresh token is single-use.
+    await Promise.all([
+      callApi('/crm/leads/summary', { responseSchema: z.object({ ok: z.boolean() }) }),
+      callApi('/dashboard/summary', { responseSchema: z.object({ ok: z.boolean() }) }),
+    ])
+    const refreshes = calls.filter((c) => c.url.includes('/auth/refresh'))
+    expect(refreshes).toHaveLength(1)
+    expect(refreshes[0]!.url).toContain('?with=session')
+    expect(calls.filter((c) => !c.url.includes('/auth/refresh')).every((c) => c.auth === 'Bearer a1')).toBe(true)
+    expect(takeRefreshedSession()?.display_name).toBe('Asha')
+    // Good for every read while its token is held, and for none after.
+    expect(takeRefreshedSession()?.display_name).toBe('Asha')
+    const { clearToken } = await import('../auth/token')
+    clearToken()
+    expect(takeRefreshedSession()).toBeNull()
+  })
+
+  it('an API without the session still refreshes', async () => {
+    localStorage.setItem('ipc_refresh_token', 'r1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ access_token: 'a1', refresh_token: 'r2', token_type: 'bearer', expires_in: 1800 }), { status: 200 })),
+    )
+    const { rotateTokens, takeRefreshedSession } = await import('./client')
+    expect(await rotateTokens(true, true)).toBe(true)
+    expect(takeRefreshedSession()).toBeNull()
+  })
+})
+
 describe('which writes re-read the profit figures', () => {
   it('money, crew pay, payroll and a project or its shoots; not a task or a lead', async () => {
     const { MONEY_WRITE } = await import('./client')
