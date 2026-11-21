@@ -1,0 +1,2 @@
+-- 0316: indexes for the Leads pages (/crm/leads/page, /columns, /counts) and
+-- an expired referral link that still reaches the studio. Claimed 21 Nov.
