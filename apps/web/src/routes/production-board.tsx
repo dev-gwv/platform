@@ -24,6 +24,9 @@ import { StagesView } from '@/features/board/StagesView'
 import { useDeliveryFlow } from '@/features/projects/stages-api'
 import { PeopleView } from '@/features/board/PeopleView'
 import { TaskBoard } from '@/features/board/TaskBoard'
+import { useDebounced } from '@/shared/hooks/use-debounced'
+import { taskWindowStart } from '@/features/tasks/api'
+import { todayISO } from '@/features/tasks/board'
 import { BulkBar } from '@/features/board/BulkBar'
 
 type View = 'stages' | 'list' | 'people' | 'tasks'
@@ -64,6 +67,12 @@ function Board() {
   const [person, setPerson] = useUrlParam('person')
   const [focusParam, setFocus] = useUrlParam('focus')
   const [q, setQ] = useUrlParam('q')
+  // The Tasks view's lanes read a page at a time with these filters on the server.
+  const typed = useDebounced(q.trim(), 300)
+  const taskBoardQuery = useMemo(() => {
+    const today = todayISO()
+    return { mine: false, member: person, due: 'all', q: typed, today, project, since: taskWindowStart(today) }
+  }, [person, typed, project])
   const view: View = viewParam === 'stages' || viewParam === 'list' || (viewParam === 'tasks' && canSeeTasks) ? viewParam : 'people'
   const focus = FOCI.some((f) => f.key === focusParam) ? (focusParam as Focus) : null
 
@@ -220,7 +229,7 @@ function Board() {
 
           <div className="mt-4">
             {view === 'tasks' ? (
-              <TaskBoard project={project || undefined} person={person || undefined} q={q || undefined} />
+              <TaskBoard query={taskBoardQuery} />
             ) : items.length === 0 ? (
               <EmptyState
                 title="Nothing in production yet"

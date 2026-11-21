@@ -112,6 +112,7 @@ import { leadsPath, placeholderLead, type LeadsOptions } from './lead-reads'
 import { appendToColumn, leadColumnsPath, leadPagePath } from './lead-pages'
 import {
   applyLeadPatch,
+  refreshCrm,
   refreshLeadReads,
   bulkRowPatch,
   changesMembership,
@@ -346,7 +347,7 @@ function useCrmMutation<TInput, TOutput>(
     onSuccess: (out) => {
       if (success) toast.success(typeof success === 'function' ? success(out) : success)
       if (refresh === 'leads') refreshLeadReads(qc)
-      else void qc.invalidateQueries({ queryKey: ['crm'] })
+      else void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -405,7 +406,7 @@ export function useBulkPatch() {
       callApi('/crm/leads/bulk/undo', { method: 'POST', body: input, responseSchema: bulkUndoResponse }),
     onSuccess: (r) => {
       toast.success(`Restored ${r.restored} lead${r.restored === 1 ? '' : 's'}`)
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -427,7 +428,7 @@ export function useBulkPatch() {
       toast.error(e.message)
     },
     // Many leads at once is rare: everything is asked for again.
-    onSettled: () => void qc.invalidateQueries({ queryKey: ['crm'] }),
+    onSettled: () => void refreshCrm(qc),
   })
 }
 
@@ -442,7 +443,7 @@ export function useEraseLeads() {
       callApi('/crm/leads/erase', { method: 'POST', body: { ids }, responseSchema: eraseLeadsResponse }),
     onSuccess: (r) => {
       toast.success(`Deleted ${r.erased} lead${r.erased === 1 ? '' : 's'} permanently`)
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -687,13 +688,13 @@ export function useBulkLabel() {
           label: 'Undo',
           onClick: () =>
             void call(v.ids, v.tagId, !v.attach).then(
-              () => void qc.invalidateQueries({ queryKey: ['crm'] }),
+              () => void refreshCrm(qc),
               (e: Error) => toast.error(e.message),
             ),
         },
         duration: 8000,
       })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -716,7 +717,7 @@ export function useConvertLead() {
       }),
     onSuccess: () => {
       toast.success('Project created')
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
       void qc.invalidateQueries({ queryKey: ['projects'] })
       void qc.invalidateQueries({ queryKey: ['clients'] })
     },

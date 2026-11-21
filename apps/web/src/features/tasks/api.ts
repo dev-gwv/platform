@@ -25,7 +25,6 @@ import {
   type UpdateBundleRequest,
   type CreateTaskPriorityRequest,
   type UpdateTaskPriorityRequest,
-  type SetBoardOrderRequest,
   type TaskListItem,
   type TaskStatus,
   type UpdateTaskRequest,
@@ -35,6 +34,7 @@ import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { openTasksPath, type OpenTaskQuery } from './open-pages'
+import { refreshTasks } from './refresh'
 
 const tasksList = taskListItem.array()
 const bundlesList = taskBundle.array()
@@ -109,6 +109,23 @@ export function useOpenTasks(query: OpenTaskQuery, enabled = true) {
     loadingMore: q.isFetchingNextPage,
     more: () => void q.fetchNextPage(),
   }
+}
+
+/**
+ * Only the open-work summary (tile and tab counts), for the Board view, which
+ * reads its cards from GET /tasks/columns: one row of /tasks/open carries the
+ * same summary the List reads. Shares the tasks key, so a save refreshes it.
+ */
+export function useOpenSummary(query: OpenTaskQuery, enabled = true) {
+  const { session } = useAuth()
+  const q = useQuery({
+    queryKey: ['tasks', 'open-summary', query],
+    queryFn: () => callApi(openTasksPath(query, null, 1), { responseSchema: taskOpenPage }),
+    enabled: enabled && !!session,
+    staleTime: 15_000,
+    placeholderData: (prev) => prev,
+  })
+  return q.data?.summary ?? null
 }
 
 /**
@@ -221,19 +238,6 @@ export function useProjectTasks(projectId: string) {
   })
 }
 
-/** The production board's own view — same window as the list, lane order applied. */
-export function useBoard() {
-  const { session } = useAuth()
-  const access = useAccess()
-  const since = taskWindowStart()
-  return useQuery({
-    queryKey: ['tasks', 'board', 'window', since],
-    queryFn: () => callApi(`/tasks/board?done_since=${since}`, { responseSchema: tasksList }),
-    enabled: !!session && access.hasModule('tasks'),
-    staleTime: 15_000,
-  })
-}
-
 const laneColorRow = z.object({ lane_key: z.string(), color: z.string() })
 
 /** Per-lane colour for the board, keyed by lane. */
@@ -271,15 +275,6 @@ export function useSetLaneColor() {
   })
 }
 
-export function useSetBoardOrder() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: SetBoardOrderRequest) =>
-      callApi('/tasks/board/order', { method: 'POST', body: input, responseSchema: anySchema }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', 'board'] }),
-  })
-}
-
 /**
  * The board's status setter: same endpoint as useSetTaskStatus, but silent.
  * Dragging a card between lanes IS the feedback; a toast per drop is noise.
@@ -289,7 +284,7 @@ export function useUpdateTaskStatus() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: TaskStatus }) =>
       callApi(`/tasks/${id}/status`, { method: 'PATCH', body: { status }, responseSchema: anySchema }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSuccess: () => refreshTasks(qc),
   })
 }
 
@@ -314,7 +309,7 @@ function useTaskMutation<TInput, TOutput>(
     onSuccess: (out) => {
       const msg = typeof success === 'function' ? success(out) : success
       if (msg) toast.success(msg)
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -455,7 +450,7 @@ export function useUpdateMyTaskStatus() {
       }),
     onSuccess: () => {
       toast.success('Task updated')
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })

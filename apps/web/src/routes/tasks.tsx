@@ -18,6 +18,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { useDebounced } from '@/shared/hooks/use-debounced'
 import { RemindersContent } from '@/routes/reminders'
 import { DailyTasks } from '@/features/tasks/DailyTasks'
 import { NewBadge } from '@/shared/ui/new-badge'
@@ -36,8 +37,8 @@ import {
   useDeleteBundle,
   useDeleteTask,
   useDoneWindow,
-  useMyTasks,
   useOlderDoneTasks,
+  useOpenSummary,
   useOpenTasks,
   useSetTaskStatus,
   useTaskPriorities,
@@ -45,8 +46,10 @@ import {
   useUpdateBundle,
   useUpdateTask,
   useTask,
+  taskWindowStart,
   withOlder,
 } from '@/features/tasks/api'
+import type { BoardQuery } from '@/features/tasks/board-columns'
 import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { ShowMoreOpen } from '@/features/tasks/ShowMoreOpen'
 import { pageCounts, peopleCounts } from '@/features/tasks/open-pages'
@@ -138,9 +141,16 @@ function Tasks({ managed }: { managed: boolean }) {
   // tab's, cached) for the counts.
   const openTab: TaskTab = view === 'list' && tab !== 'completed' ? tab : 'all'
   const open = useOpenTasks({ mine, member: scopeMember, due, tab: openTab, q: typed, today }, listing)
-  const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing)
-  // The board of someone who sees only their own: their window, as before.
-  const ownBoard = useMyTasks(!managed && view === 'board')
+  // The Board's tiles need the counts too: the summary alone (one row), and
+  // the finished window for "Done this week" (audit, 21 Nov: they read 0).
+  const boardSummary = useOpenSummary({ mine, member: scopeMember, due, tab: 'all', q: typed, today }, view === 'board')
+  const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing || view === 'board')
+  // The board reads its lanes a page at a time with the same toolbar on the
+  // server (GET /tasks/columns); someone who sees only their own gets theirs.
+  const boardQuery = useMemo<BoardQuery>(
+    () => ({ mine, member: scopeMember, due, q: typed, today, project: '', since: taskWindowStart(today) }),
+    [mine, scopeMember, due, typed, today],
+  )
   const older = useOlderDoneTasks(managed ? 'studio' : 'my')
   const isLoading = open.isLoading || doneQ.isLoading
   const isError = open.isError || doneQ.isError
@@ -165,7 +175,7 @@ function Tasks({ managed }: { managed: boolean }) {
     [mine, me, scopeMember, due, today, needle],
   )
   const doneRows = useMemo(() => (withOlder(doneQ.data, older.rows) ?? []).filter(keep), [doneQ.data, older.rows, keep])
-  const counts = useMemo(() => pageCounts(open.summary, doneRows, today), [open.summary, doneRows, today])
+  const counts = useMemo(() => pageCounts(view === 'board' ? boardSummary : open.summary, doneRows, today), [view, boardSummary, open.summary, doneRows, today])
   const stats = counts.stats
   const people = useMemo(() => peopleCounts(open.summary), [open.summary])
   // The People view is about work in hand: open tasks, and what was finished
@@ -287,7 +297,7 @@ function Tasks({ managed }: { managed: boolean }) {
 
       <div className="mt-4">
         {view === 'board' ? (
-          <TaskBoard items={managed ? undefined : (ownBoard.data ?? [])} filter={keep} />
+          <TaskBoard query={boardQuery} scope={managed ? 'studio' : 'my'} olderFilter={keep} />
         ) : isLoading ? (
           <SkeletonList rows={6} columns={4} />
         ) : isError ? (
@@ -385,16 +395,6 @@ function Tasks({ managed }: { managed: boolean }) {
       )}
     </>
   )
-}
-
-/** `value`, once it has held still for `ms`. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setSettled(value), ms)
-    return () => clearTimeout(id)
-  }, [value, ms])
-  return settled
 }
 
 function Segmented<T extends string>({

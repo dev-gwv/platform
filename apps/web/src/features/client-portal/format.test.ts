@@ -78,6 +78,17 @@ describe('moneyCard', () => {
     const inv = { id: 'i', invoice_number: 'INV-1', invoice_date: '2026-10-31', due_date: '2026-11-14', status: 'partial', total: 336300, balance_due: 236300 }
     expect(moneyCard({ ...base, invoices: [inv] })).toEqual({ total: 336300, received: 100000, balance: 236300, withGst: true })
   })
+  it('adds up when the server balance already carries GST (0315)', () => {
+    // ₹2,85,000 package, ₹1,00,000 paid, an invoice's GST in the server's balance.
+    const card = moneyCard({ ...base, balance: 236300, invoices: [] })
+    expect(card).toEqual({ total: 336300, received: 100000, balance: 236300, withGst: true })
+    expect(card.total - card.received).toBe(card.balance)
+  })
+  it('keeps the package when the balance is less than package minus paid (an overpaid or discounted project)', () => {
+    expect(moneyCard({ ...base, balance: 0, invoices: [] })).toEqual({ total: 285000, received: 100000, balance: 0, withGst: false })
+    // Paid more than the package: nothing due, and no GST claim.
+    expect(moneyCard({ ...base, received: 300000, balance: 0, invoices: [] })).toEqual({ total: 285000, received: 300000, balance: 0, withGst: false })
+  })
 })
 
 describe('nextDueWhen', () => {

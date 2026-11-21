@@ -15,6 +15,7 @@ import {
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 /** Everything here is keyed under ['crm'] so a lead change refreshes it too. */
 const K = {
@@ -34,7 +35,7 @@ function useDone(message?: string) {
   return {
     onSuccess: () => {
       if (message) toast.success(message)
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message || 'That did not work. Please try again.'),
   }
@@ -120,7 +121,7 @@ async function undoSend(id: string) {
 /** Sent and Skip each say what happened, with Undo beside it. */
 function useMarkedWithUndo(path: 'done' | 'skip', message: string) {
   const qc = useQueryClient()
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['crm'] })
+  const refresh = () => void refreshCrm(qc)
   return useMutation({
     mutationFn: (id: string) => callApi(`/crm/sequences/sends/${id}/${path}`, { method: 'POST', responseSchema: z.unknown() }),
     onSuccess: (_out, id) => {

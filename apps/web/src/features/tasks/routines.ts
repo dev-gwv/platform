@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { taskRoutine, z, type SaveRoutineRequest, type TaskRoutine } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { refreshTasks } from './refresh'
 
 /**
  * Daily tasks (0305): a task that comes back by itself for the people it is
@@ -26,7 +27,7 @@ export function useSaveRoutine() {
   return useMutation({
     mutationFn: ({ id, body }: { id?: string; body: SaveRoutineRequest }) =>
       callApi(id ? `/tasks/routines/${id}` : '/tasks/routines', { method: id ? 'PATCH' : 'POST', body, responseSchema: taskRoutine }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSuccess: () => void refreshTasks(qc),
     onError: (e: Error) => toast.error(e.message),
   })
 }
@@ -38,7 +39,7 @@ export function usePauseRoutine() {
       callApi(`/tasks/routines/${id}/pause`, { method: 'POST', body: { paused }, responseSchema: taskRoutine }),
     onSuccess: (r) => {
       toast.success(r.paused ? `Paused. "${r.title}" will not come back until you resume it.` : `"${r.title}" is back on.`)
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -50,7 +51,7 @@ export function useDeleteRoutine() {
     mutationFn: (id: string) => callApi(`/tasks/routines/${id}`, { method: 'DELETE', responseSchema: z.unknown() }),
     onSuccess: () => {
       toast.success('Daily task removed. Days already done stay in the history.')
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -64,7 +65,7 @@ export function useDailyDone() {
       callApi(`/tasks/daily/${id}/done`, { method: 'POST', body: { done }, responseSchema: z.object({ status: z.string() }) }),
     onSuccess: (_r, v) => {
       toast.success(v.done ? 'Done for today. Well done!' : 'Marked not done.')
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })

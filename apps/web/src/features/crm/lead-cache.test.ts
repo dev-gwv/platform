@@ -9,7 +9,9 @@ import {
   patchLead,
   patchLeadRows,
   rollbackLeadPatch,
+  refreshCrm,
   rowPatchFrom,
+  settleLeads,
   tagsFor,
 } from './lead-cache'
 
@@ -102,5 +104,40 @@ describe('applyLeadPatch / rollbackLeadPatch', () => {
     rollbackLeadPatch(qc, snap)
     expect(qc.getQueryData(['crm', 'leads', 'card', 'open', 'active', 0])).toEqual(open)
     expect(qc.getQueryData<CrmLead>(['crm', 'leads', 'one', A])!.stage_id).toBe(S1)
+  })
+})
+
+describe('a refresh asks for the list from its first page', () => {
+  const pagesKey = ['crm', 'leads', 'card', 'pages', 'view=today']
+  const threePages = () => ({
+    pages: [{ items: [lead(A)], next_cursor: 'c1' }, { items: [lead(B)], next_cursor: 'c2' }, { items: [], next_cursor: null }],
+    pageParams: [null, 'c1', 'c2'],
+  })
+  type Pages = ReturnType<typeof threePages>
+
+  it('a patch still lands on every loaded page; settling a list change cuts it to the first', async () => {
+    const qc = new QueryClient()
+    qc.setQueryData(pagesKey, threePages())
+    await applyLeadPatch(qc, [B], { stage_id: S2 })
+    expect(qc.getQueryData<Pages>(pagesKey)!.pages[1]!.items[0]!.stage_id).toBe(S2)
+
+    // A change that cannot move a lead between lists leaves the pages alone.
+    settleLeads(qc, [B], { lists: false })
+    expect(qc.getQueryData<Pages>(pagesKey)!.pages).toHaveLength(3)
+
+    settleLeads(qc, [B], { lists: true })
+    const trimmed = qc.getQueryData<Pages>(pagesKey)!
+    expect(trimmed.pages).toHaveLength(1)
+    expect(trimmed.pageParams).toEqual([null])
+  })
+
+  it('refreshCrm cuts the list to its first page and leaves the board whole', () => {
+    const qc = new QueryClient()
+    qc.setQueryData(pagesKey, threePages())
+    const cols = { columns: [{ stage_id: S1, total: 40, items: [lead(A), lead(B)], next_cursor: null }] }
+    qc.setQueryData(['crm', 'leads', 'card', 'columns', 'p', ''], cols)
+    void refreshCrm(qc)
+    expect(qc.getQueryData<Pages>(pagesKey)!.pages).toHaveLength(1)
+    expect(qc.getQueryData(['crm', 'leads', 'card', 'columns', 'p', ''])).toEqual(cols)
   })
 })

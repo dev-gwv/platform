@@ -183,6 +183,26 @@ export const publicReferralCampaign = z.object({
 })
 export type PublicReferralCampaign = z.infer<typeof publicReferralCampaign>
 
+/**
+ * GET /public/referrals/studio/:slug (0316): whose link this is, even once the
+ * offer has ended, so the friend can still write to the studio. Nothing else.
+ */
+export const publicReferralStudio = z.object({
+  studio_name: z.string(),
+  logo_url: z.string().nullable(),
+  /** False once the campaign is paused, ended or archived, or past its valid_until. */
+  active: z.boolean(),
+})
+export type PublicReferralStudio = z.infer<typeof publicReferralStudio>
+
+/** POST /public/referrals/studio/:slug/enquiry: the friend's plain enquiry after the offer ended. */
+export const endedReferralEnquiryRequest = z.object({
+  name: z.string().trim().min(2).max(160),
+  phone: z.string().trim().min(1).max(40),
+  message: z.string().trim().max(2000).nullish(),
+})
+export type EndedReferralEnquiryRequest = z.infer<typeof endedReferralEnquiryRequest>
+
 export const submitReferralRequest = z.object({
   referrer_name: z.string().trim().max(160).nullish(),
   referrer_phone: z.string().trim().max(40).nullish(),
