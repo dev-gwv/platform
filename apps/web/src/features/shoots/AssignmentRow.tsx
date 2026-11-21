@@ -135,12 +135,7 @@ export function AssignmentRow({
             />
           )}
           {!optedOut(slot) && (
-            <Button
-              size="sm"
-              variant={record || dayPassed ? 'outline' : 'ghost'}
-              className={cn(!record && dayPassed && stage === 'missing' && 'border-tone-amber/60 bg-tone-amber-soft text-tone-amber hover:border-tone-amber')}
-              onClick={() => setEditing(true)}
-            >
+            <Button size="sm" variant={record || dayPassed ? 'outline' : 'ghost'} onClick={() => setEditing(true)}>
               {record ? <Pencil /> : <Database />} {record ? 'Data' : 'Add data'}
             </Button>
           )}

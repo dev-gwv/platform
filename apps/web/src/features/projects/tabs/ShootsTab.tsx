@@ -746,14 +746,18 @@ function ShootPlanner({
                               setRequirements(asInput().map((x) => (x.name === r.name ? { ...x, quantity: q } : x)))
                             }
                           />
-                          <Button
-                            size="sm"
-                            variant={full ? 'outline' : 'default'}
-                            className={cn(!full && 'bg-warning text-card hover:bg-warning/90')}
-                            onClick={() => setAssign({ requirement: r.name })}
-                          >
-                            <UserPlus /> {full ? 'Manage team' : 'Assign team'}
-                          </Button>
+                          {/* A filled role on a staffed day needs no button of
+                              its own: the card's Manage team opens the same. */}
+                          {!(full && staffed) && (
+                            <Button
+                              size="sm"
+                              variant={full ? 'outline' : 'default'}
+                              className={cn(!full && 'bg-warning text-card hover:bg-warning/90')}
+                              onClick={() => setAssign({ requirement: r.name })}
+                            >
+                              <UserPlus /> {full ? 'Manage team' : 'Assign team'}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
