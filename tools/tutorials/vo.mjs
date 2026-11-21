@@ -19,8 +19,7 @@ export const VO = {
     steps: [
       L('Tap Add your team.', 'Add your team पर टैप कीजिए।'),
       L('One row per person: just a name and a mobile number.', 'हर व्यक्ति की एक लाइन: बस नाम और मोबाइल नंबर।'),
-      L('Want them to sign in? Any email works. It is only their username.', 'उन्हें साइन इन करवाना है? कोई भी ईमेल चलेगा, यह बस उनका यूज़रनेम है।'),
-      L('A freelancer? Switch them to Per shoot.', 'फ़्रीलांसर हैं? उन्हें Per shoot पर कर दीजिए।'),
+      L('Want them to sign in? Tick Give a login. Any email works, it is only their username.', 'उन्हें साइन इन करवाना है? Give a login पर टिक कीजिए। कोई भी ईमेल चलेगा, यह बस उनका यूज़रनेम है।'),
       L('Press Add, and you are done.', 'Add दबाइए, बस हो गया।'),
     ],
     end: L('Your team is in. Next, your first client.', 'आपकी टीम जुड़ गई। अब, आपका पहला क्लाइंट।'),

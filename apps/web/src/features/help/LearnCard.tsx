@@ -33,6 +33,9 @@ function useLearnSignals() {
  */
 const visit = new Map<string, StuckState>()
 
+/** How long "Stuck? Watch how" stays before it goes by itself. */
+const STUCK_TOAST_MS = 10_000
+
 export interface Learn {
   /** The card to put at the top of the screen, or null once they know the job. */
   card: React.ReactNode
@@ -85,12 +88,16 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
     if (!tutorial) return
     const s = visit.get(key)
     if (!s || !stuckReason(s, Date.now())) return
+    // Never over a dialog: wait for it to close (the next tick asks again).
+    // A screen that is itself a dialog (countClose) has its own one open.
+    if (!countClose && document.querySelector('[role="dialog"], [role="alertdialog"]')) return
     feed({ type: 'offered' })
     trackFlow(key, 'stuck')
     toast(`Stuck? Watch how${tutorial.seconds ? ` · ${lengthLabel(tutorial.seconds)}` : ''}`, {
       id: `stuck-${key}`,
       description: tutorial.title,
-      duration: 20_000,
+      // Short: it is an offer, not a wall. It also goes when the screen does.
+      duration: STUCK_TOAST_MS,
       action: {
         label: 'Watch',
         onClick: () => {
@@ -107,7 +114,7 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
         },
       }),
     })
-  }, [callLinks, feed, key, tutorial])
+  }, [callLinks, countClose, feed, key, tutorial])
 
   // The listeners live as long as the screen does; they read the latest
   // feed/offer through refs, so a re-render never counts as closing it.
@@ -142,6 +149,8 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
     done.current = false
     return () => {
       if (!done.current) trackFlow(key, 'closed')
+      // The step changed or the page did: the offer was about that screen.
+      toast.dismiss(`stuck-${key}`)
     }
   }, [key])
 
@@ -156,6 +165,7 @@ export function useLearn(key: string, { countClose = false }: { countClose?: boo
     done.current = true
     moved.current = true
     feed({ type: 'progress', at: Date.now() })
+    toast.dismiss(`stuck-${key}`)
   }, [feed, key])
 
   const player = (

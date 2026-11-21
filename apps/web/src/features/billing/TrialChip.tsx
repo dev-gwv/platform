@@ -12,7 +12,7 @@ import { cn } from '@/shared/ui/cn'
  * the 30 days (0210) is never a surprise. Amber in the last week, red once it
  * has passed; a paid plan shows nothing until its last fortnight.
  */
-export function TrialChip() {
+export function TrialChip({ besidePlanCard = false }: { besidePlanCard?: boolean } = {}) {
   const { session } = useAuth()
   const owner = !!session?.is_owner
   const q = useQuery({
@@ -36,6 +36,8 @@ export function TrialChip() {
       to="/settings/subscription"
       className={cn(
         'hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold sm:inline-flex',
+        // From md the open sidebar's plan card already says it: one place, not two.
+        besidePlanCard && 'md:hidden',
         left < 0
           ? 'border-destructive/40 bg-destructive/10 text-destructive'
           : left <= 7

@@ -18,6 +18,7 @@ export const HI = {
   'Tap “Add your team”': '“Add your team” पर टैप करें',
   'One row per person: name and mobile': 'हर व्यक्ति की एक लाइन: नाम और मोबाइल',
   'Give a login: any email works, it is just a username': 'लॉगिन दें: कोई भी ईमेल चलेगा, यह बस यूज़रनेम है',
+  'Give a login: tick it, then any email works, it is just a username': 'लॉगिन दें: टिक कीजिए, फिर कोई भी ईमेल चलेगा, यह बस यूज़रनेम है',
   'Freelancer? Switch them to Per shoot': 'फ़्रीलांसर हैं? “Per shoot” चुनें',
   'Add them, and you are done': 'जोड़ दें, बस हो गया',
   'Your team is in. Next: your first client.': 'आपकी टीम जुड़ गई। अगला: आपका पहला क्लाइंट।',

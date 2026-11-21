@@ -51,7 +51,21 @@ import { Band, Field, SubCard } from './wizard-ui'
  * blank row: a chip per common shoot day, a preset that lays down the four a
  * standard wedding books, and the whole searchable list behind Add shoot.
  */
-export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft; patch: Patch; refused?: number }) {
+export function ShootsStep({
+  draft,
+  patch,
+  refused = 0,
+  askRequirements,
+}: {
+  draft: ProjectDraft
+  patch: Patch
+  refused?: number
+  /**
+   * "Add shoot requirements now" in Next's question: open that day's card and
+   * its requirements picker at once (`n` changes on each ask).
+   */
+  askRequirements?: { index: number; n: number } | null
+}) {
   const services = useServices()
   const shootPresets = useShootPresets('shoot')
   const shootTypes = useShootTypes()
@@ -90,6 +104,16 @@ export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft;
     scrollIntoView(cardAt(first))
     // Only a new refusal moves the page, not every keystroke after it.
   }, [refused])
+
+  // Next asked "no shoot requirements yet" and they chose Add now: open that
+  // day and its picker, never a red line about it.
+  const [pickFor, setPickFor] = useState<number | null>(null)
+  useEffect(() => {
+    if (!askRequirements) return
+    setOpenShoot(askRequirements.index)
+    setPickFor(askRequirements.index)
+    scrollIntoView(cardAt(askRequirements.index))
+  }, [askRequirements])
 
   // The moment the open card turns green it folds and the next unfinished
   // one opens — the platform walks them down the list. It waits while a
@@ -176,32 +200,6 @@ export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft;
         ))}
       </datalist>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-bold tracking-tight">Add your functions</p>
-          <p className="text-sm text-muted-foreground">
-            Every function is one shoot day: Haldi, Mehendi, Wedding, Reception. Tap the ones below, or add your own.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <AddShootMenu
-            shoots={draft.shoots}
-            onAdd={addNamed}
-            extraNames={(shootPresets.data ?? []).map((p) => p.name)}
-          />
-          <PresetMenu
-            label="Apply preset"
-            presets={shootPresets.data ?? []}
-            onApply={applyShootPreset}
-            builtIn={{
-              label: `Standard wedding — ${SHOOT_PRESET.join(', ')}`,
-              disabled: wedding.length === draft.shoots.length,
-              onApply: () => patch({ shoots: wedding }),
-            }}
-          />
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground">
           {(shootTypes.data ?? []).length ? 'Your functions' : 'Tap to add'}
@@ -222,15 +220,36 @@ export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft;
             />
           )
         })}
+        {/* One heading for the step (the section's "Event days"); the chips
+            are the first thing to press, so the add button stays quiet until
+            a function exists. */}
+        <div className="ml-auto flex items-center gap-2">
+          <AddShootMenu
+            shoots={draft.shoots}
+            variant={draft.shoots.length ? 'default' : 'outline'}
+            label={draft.shoots.length ? 'Add another function' : 'Add your own'}
+            onAdd={addNamed}
+            extraNames={(shootPresets.data ?? []).map((p) => p.name)}
+          />
+          <PresetMenu
+            label="Apply preset"
+            variant="ghost"
+            presets={shootPresets.data ?? []}
+            onApply={applyShootPreset}
+            builtIn={{
+              label: `Standard wedding — ${SHOOT_PRESET.join(', ')}`,
+              disabled: wedding.length === draft.shoots.length,
+              onApply: () => patch({ shoots: wedding }),
+            }}
+          />
+        </div>
       </div>
 
       {draft.shoots.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-border px-6 py-10 text-center">
           <CalendarDays className="size-5 text-muted-foreground" aria-hidden />
           <p className="mt-1 font-semibold">No functions yet</p>
-          <p className="text-sm text-muted-foreground">
-            Tap Haldi, Wedding Day, Reception above — one card each. Delivery dates count forward from these.
-          </p>
+          <p className="text-sm text-muted-foreground">Tap one above — one card each.</p>
         </div>
       ) : (
         <div ref={listRef} className="flex flex-col gap-2">
@@ -244,6 +263,8 @@ export function ShootsStep({ draft, patch, refused = 0 }: { draft: ProjectDraft;
               onToggle={() => setOpenShoot((o) => (o === i ? null : i))}
               onChange={(p) => set(i, p)}
               onRemove={() => remove(i)}
+              pickRequirements={pickFor === i}
+              onPickedRequirements={() => setPickFor(null)}
             />
           ))}
         </div>
@@ -277,6 +298,8 @@ function ShootCard({
   onToggle,
   onChange,
   onRemove,
+  pickRequirements = false,
+  onPickedRequirements,
 }: {
   index: number
   shoot: ShootDraft
@@ -285,6 +308,8 @@ function ShootCard({
   onToggle: () => void
   onChange: (p: Partial<ShootDraft>) => void
   onRemove: () => void
+  pickRequirements?: boolean
+  onPickedRequirements?: (() => void) | undefined
 }) {
   const issues = shootIssues(shoot)
   const ready = issues.length === 0
@@ -296,6 +321,9 @@ function ShootCard({
     [services.data, library.data],
   )
   const name = shoot.name.trim() || `Shoot ${index + 1}`
+  // Map link, guests, status and Save as preset wait under "More" per card.
+  const [more, setMore] = useState(false)
+  const moreFilled = [shoot.map_link.trim(), (shoot.guests ?? '').trim(), shoot.status === 'confirmed' ? 'yes' : ''].filter(Boolean).length
   return (
     <div
       className={cn(
@@ -354,22 +382,6 @@ function ShootCard({
             aria-hidden
           />
         </button>
-        {/* Always on the card, folded or open: a studio saves the day it
-            just set up as a preset, and that is usually once it is done. */}
-        <SavePresetButton
-          kind="shoot"
-          defaultName={name}
-          label="Save as preset"
-          disabled={!shoot.name.trim()}
-          disabledHint="Name the shoot first"
-          payload={{
-            requirements: shoot.requirements
-              .filter((r) => r.name.trim())
-              .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
-            internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
-            duration_hours: shootHoursOf(shoot) || null,
-          }}
-        />
         {open && (
           <>
             <Button variant="ghost" size="icon" onClick={onRemove}>
@@ -382,9 +394,9 @@ function ShootCard({
 
       {open && (
         <div className="px-4 pb-4">
-          {/* The optional fields (venue, map link) sit ahead of the required
-              ones: the card folds the moment the last required field --
-              the duration -- is set, so nothing optional may come after it. */}
+          {/* What a day needs, in one row: title, date, start time, venue --
+              then the duration last, because the card folds the moment the
+              last required field is set. The rest waits under "More". */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Shoot title" required>
               <Input
@@ -403,33 +415,6 @@ function ShootCard({
                 aria-invalid={!shoot.shoot_date}
               />
             </Field>
-            <Field label="City / Venue" icon={MapPin}>
-              <Input
-                value={shoot.location}
-                onChange={(e) => onChange({ location: e.target.value })}
-                placeholder="e.g. Jaipur"
-              />
-            </Field>
-            {/* Whatever the client sent — a Maps link, a short link, or the
-                venue's name from WhatsApp. It is stored as given. */}
-            <Field label="Map link" icon={MapPin}>
-              <Input
-                value={shoot.map_link}
-                onChange={(e) => onChange({ map_link: e.target.value })}
-                placeholder="Paste the map link"
-              />
-            </Field>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Guests" icon={UsersRound}>
-              <Input
-                inputMode="numeric"
-                value={shoot.guests ?? ''}
-                onChange={(e) => onChange({ guests: e.target.value.replace(/[^\d]/g, '').slice(0, 6) })}
-                placeholder="e.g. 400"
-              />
-            </Field>
             <Field label="Start time" icon={Clock}>
               <Input
                 type="time"
@@ -438,25 +423,84 @@ function ShootCard({
                 aria-invalid={!shoot.start_time}
               />
             </Field>
-            <div className="sm:col-span-2">
-              {/* The owner: "Duration (अवधि) — 1 hour to 12 hours, and a custom
-                  one", so the day's crew hours can be planned from it. */}
-              <Field label="Duration (अवधि)" icon={Clock}>
-                <DurationField
-                  value={shootHoursOf(shoot) || null}
-                  onChange={(h) => onChange({ hours: h == null ? '' : String(h) })}
-                  aria-invalid={!shootHoursOf(shoot)}
-                />
-              </Field>
-            </div>
-            <Field label="Status">
-              <Select
-                value={shoot.status}
-                onChange={(e) => onChange({ status: e.target.value as ShootDraft['status'] })}
-              >
-                <option value="planned">Planned</option>
-                <option value="confirmed">Confirmed</option>
-              </Select>
+            <Field label="City / Venue" icon={MapPin}>
+              <Input
+                value={shoot.location}
+                onChange={(e) => onChange({ location: e.target.value })}
+                placeholder="e.g. Jaipur"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              aria-expanded={more}
+              onClick={() => setMore((v) => !v)}
+            >
+              More
+              {!more && moreFilled > 0 && <span className="text-xs font-normal text-muted-foreground">· {moreFilled} filled</span>}
+              <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} aria-hidden />
+            </button>
+            {more && (
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Whatever the client sent — a Maps link, a short link, or the
+                    venue's name from WhatsApp. It is stored as given. */}
+                <Field label="Map link" icon={MapPin}>
+                  <Input
+                    value={shoot.map_link}
+                    onChange={(e) => onChange({ map_link: e.target.value })}
+                    placeholder="Paste the map link"
+                  />
+                </Field>
+                <Field label="Guests" icon={UsersRound}>
+                  <Input
+                    inputMode="numeric"
+                    value={shoot.guests ?? ''}
+                    onChange={(e) => onChange({ guests: e.target.value.replace(/[^\d]/g, '').slice(0, 6) })}
+                    placeholder="e.g. 400"
+                  />
+                </Field>
+                <Field label="Status">
+                  <Select
+                    value={shoot.status}
+                    onChange={(e) => onChange({ status: e.target.value as ShootDraft['status'] })}
+                  >
+                    <option value="planned">Planned</option>
+                    <option value="confirmed">Confirmed</option>
+                  </Select>
+                </Field>
+                <div className="flex items-end">
+                  {/* A studio saves the day it just set up as a preset. */}
+                  <SavePresetButton
+                    kind="shoot"
+                    defaultName={name}
+                    label="Save as preset"
+                    disabled={!shoot.name.trim()}
+                    disabledHint="Name the shoot first"
+                    payload={{
+                      requirements: shoot.requirements
+                        .filter((r) => r.name.trim())
+                        .map((r) => ({ name: r.name.trim(), quantity: Math.max(1, Number(r.quantity) || 1) })),
+                      internal_work: work.map((w) => w.item.title.trim()).filter(Boolean),
+                      duration_hours: shootHoursOf(shoot) || null,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4">
+            {/* The owner: "Duration (अवधि) — 1 hour to 12 hours, and a custom
+                one", so the day's crew hours can be planned from it. */}
+            <Field label="Duration (अवधि)" icon={Clock}>
+              <DurationField
+                value={shootHoursOf(shoot) || null}
+                onChange={(h) => onChange({ hours: h == null ? '' : String(h) })}
+                aria-invalid={!shootHoursOf(shoot)}
+              />
             </Field>
           </div>
 
@@ -470,6 +514,8 @@ function ShootCard({
                 shootName={shoot.name}
                 requirements={shoot.requirements}
                 onSave={(requirements) => onChange({ requirements })}
+                autoOpen={pickRequirements}
+                onAutoOpened={onPickedRequirements}
               />
             }
           >

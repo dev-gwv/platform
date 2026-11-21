@@ -41,7 +41,7 @@ const ok = z.object({ ok: z.boolean() })
 type FieldName = 'company_name' | 'admin_name' | 'email' | 'phone' | 'password' | 'confirm_password'
 
 const LABELS: Record<FieldName, string> = {
-  company_name: 'Company name',
+  company_name: 'Studio name',
   admin_name: 'Your name',
   email: 'Email',
   phone: 'Phone',
@@ -461,7 +461,7 @@ export function LoginPage() {
                     {isForgot
                       ? "Enter your email and we'll send a reset link"
                       : isRegister
-                        ? 'Start your studio workspace'
+                        ? 'Start your free trial'
                         : 'Sign in to your studio workspace'}
                   </p>
                 </div>
@@ -471,7 +471,7 @@ export function LoginPage() {
                 <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
                   {isRegister && (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <Field label="Company name" name="company_name" error={errors.company_name}>
+                      <Field label="Studio name" name="company_name" error={errors.company_name}>
                         {(p) => (
                           <Input
                             {...p}
@@ -550,7 +550,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="new-password"
-                            placeholder="••••••••"
+                            placeholder="8+ characters"
                             value={password}
                             onChange={edit('password', setPassword)}
                             onBlur={(e) => validateField('password', e.target.value)}
@@ -568,7 +568,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="new-password"
-                            placeholder="••••••••"
+                            placeholder="Type it again"
                             value={confirmPassword}
                             onChange={edit('confirm_password', setConfirmPassword)}
                             onBlur={() => {
@@ -607,7 +607,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="current-password"
-                            placeholder="••••••••"
+                            placeholder="Your password"
                             value={password}
                             onChange={edit('password', setPassword)}
                             required

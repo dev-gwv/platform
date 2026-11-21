@@ -13,10 +13,7 @@ import { useHelpLang } from '@/features/help/lang'
 import { LangSwitch } from '@/features/help/TutorialPlayer'
 import { lengthLabel, playsIn, posterSrc, videoSrc } from '@/features/help/tutorials'
 import { isSetupAudience } from './journey'
-import { POPUP_GAP_HOURS, nextSetupStep, popupDue, setupCountLine, setupProgress, setupStepTarget } from './setup-progress'
-
-/** Pages it never opens over: the videos themselves, a step being done, full-screen tools. */
-const NOT_ON = ['/start', '/help', '/learn', '/login', '/projects/new', '/platform', '/ai/designer/']
+import { POPUP_GAP_HOURS, nextSetupStep, popupBlockedOn, popupDue, setupCountLine, setupProgress, setupStepTarget } from './setup-progress'
 
 const keyFor = (uid: string) => `setup-popup:${uid}`
 function readQuiet(uid: string): number | null {
@@ -73,7 +70,7 @@ export function SetupPopup() {
   )
   const uid = session?.user_id ?? ''
   const fromSetup = (search as Record<string, unknown>).from === 'setup'
-  const blocked = NOT_ON.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`)) || fromSetup
+  const blocked = popupBlockedOn(pathname, fromSetup)
   const due =
     !!steps &&
     !!start.data &&
@@ -84,17 +81,38 @@ export function SetupPopup() {
       lastWorkAt: start.data.last_work_at,
       startedAt: start.data.started_at,
       quietUntil: readQuiet(uid),
+      pathname,
     })
 
   useEffect(() => {
     if (!due || blocked || openedThisLoad || !uid) return
     // A moment after the page settles, and never over a dialog already open.
+    // The counts are asked for again first: a team, client or project made a
+    // minute ago must tick before the pop-up decides (it once opened on
+    // "Step 2: Add your team" right after the first project was made).
+    let live = true
     const t = setTimeout(() => {
-      if (document.querySelector('[role="dialog"]')) return
-      openedThisLoad = true
-      setOpen(true)
+      void Promise.all([signals.refetch(), start.refetch()]).then(([sig, st]) => {
+        if (!live || openedThisLoad || !sig.data || !st.data) return
+        if (document.querySelector('[role="dialog"]')) return
+        const here = window.location.pathname
+        const fresh = popupDue({
+          steps: setupProgress({ ...sig.data, ...st.data }),
+          projects: sig.data.projects,
+          lastWorkAt: st.data.last_work_at,
+          startedAt: st.data.started_at,
+          quietUntil: readQuiet(uid),
+          pathname: here,
+        })
+        if (!fresh) return
+        openedThisLoad = true
+        setOpen(true)
+      })
     }, 2500)
-    return () => clearTimeout(t)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
   }, [due, blocked, uid])
 
   if (!steps || !open) return null

@@ -28,7 +28,13 @@ export interface BulkRow {
   key: string
   name: string
   phone: string
-  /** Blank means "no login": the person is bookable but cannot sign in. */
+  /**
+   * "Give a login?" ticked: only then are an email and a password asked for
+   * and sent. Unticked, the person is bookable but cannot sign in -- typing an
+   * email never quietly makes a password required.
+   */
+  login: boolean
+  /** Their username, asked only when `login` is ticked. */
   email: string
   password: string
   role: BulkAccess
@@ -65,6 +71,7 @@ export const newRow = (): BulkRow => ({
   key: `row-${++seq}`,
   name: '',
   phone: '',
+  login: false,
   email: '',
   password: '',
   role: 'employee',
@@ -125,7 +132,7 @@ export function pickableRoles(
  */
 export function toRequest(row: BulkRow, resolveRoleId: (key: string) => string | null): AddMemberRequest {
   const email = row.email.trim()
-  const login = email.length > 0
+  const login = row.login && email.length > 0
   return {
     engagement_type: row.engagement,
     create_login: login,
@@ -161,7 +168,8 @@ export function validateRows(rows: readonly BulkRow[]): Map<string, RowErrors> {
     const e: RowErrors = {}
     const name = r.name.trim()
     const phone = r.phone.trim()
-    const email = r.email.trim().toLowerCase()
+    // An email counts only on a row that gives a login; untick and it is ignored.
+    const email = r.login ? r.email.trim().toLowerCase() : ''
 
     if (name.length < 2) e.name = name ? 'At least 2 letters' : 'Name is required'
     else if (name.length > 120) e.name = 'Too long'
@@ -170,6 +178,7 @@ export function validateRows(rows: readonly BulkRow[]): Map<string, RowErrors> {
     else if (phone.length < 6) e.phone = 'Too short'
     else if (phone.length > 20) e.phone = 'Too long'
 
+    if (r.login && !email) e.email = 'Needed to sign in'
     if (email && !EMAIL.test(email)) e.email = "Doesn't look like an email"
     if (email && r.password.length < 6) {
       e.password = r.password ? 'At least 6 characters' : 'Needed to sign in'
@@ -299,7 +308,11 @@ export function parsePastedTeam(
       if (!col || !v) return
       if (col === 'name') row.name = v
       else if (col === 'phone') row.phone = v
-      else if (col === 'email') row.email = v
+      else if (col === 'email') {
+        row.email = v
+        // A pasted email column is a list of logins: tick them.
+        row.login = true
+      }
       else if (col === 'password') row.password = v
       else if (col === 'access') row.role = toAccess(v)
       else if (col === 'type') row.engagement = toEngagement(v)

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Plus, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/shared/ui/dialog'
@@ -35,14 +35,27 @@ export function RequirementsDialog({
   shootName,
   requirements,
   onSave,
+  autoOpen = false,
+  onAutoOpened,
 }: {
   shootName: string
   requirements: ShootRequirementDraft[]
   onSave: (next: ShootRequirementDraft[]) => void
+  /** Open straight away (Next's "Add shoot requirements now"), then say so. */
+  autoOpen?: boolean
+  onAutoOpened?: (() => void) | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<ShootRequirementDraft[]>(requirements)
   const [custom, setCustom] = useState('')
+  useEffect(() => {
+    if (!autoOpen) return
+    setDraft(requirements)
+    setCustom('')
+    setOpen(true)
+    onAutoOpened?.()
+    // Only the ask opens it; later edits to the list never do.
+  }, [autoOpen])
   const services = useServices()
   const library = useRoleLibrary()
   const remember = useRememberService()
