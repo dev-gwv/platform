@@ -187,6 +187,10 @@ function Crm() {
   }, [view, counts.isLoading, landing])
 
   const current: ViewChoice = view ?? { kind: 'builtin', key: 'today' }
+  // No leads are asked for until the view is chosen: before, the page asked
+  // for Today while the counts were on their way, then for the view it landed
+  // on -- one wasted download on every open.
+  const settled = view !== null
   const saved = savedViews ?? []
 
   // With no open lead, one more row (of any kind) tells an empty studio from
@@ -232,7 +236,7 @@ function Crm() {
 
   const searching = debounced.trim().length >= SEARCH_MIN
   const found = useLeadSearch(debounced)
-  const pages = useLeadPages(filters, mode !== 'pipeline' && !searching)
+  const pages = useLeadPages(filters, settled && mode !== 'pipeline' && !searching)
   const paged = useMemo(() => pageRows(pages.data?.pages), [pages.data])
   const pagedTotal = pages.data?.pages[0]?.total ?? paged.length
 
@@ -261,7 +265,7 @@ function Crm() {
   // whole lead; a ?lead= link to a lead not on screen is read by id alone.
   const selectedCard = openLead ? ([...(found.data ?? []), ...paged].find((l) => l.id === openLead) ?? null) : null
   const isEmptyStudio = openEmpty && !anyLead.isLoading && (anyLead.data?.length ?? 0) === 0 && !searching
-  const loadingFirst = counts.isLoading || (mode !== 'pipeline' && !searching && pages.isLoading)
+  const loadingFirst = counts.isLoading || (!settled && !counts.isError) || (mode !== 'pipeline' && !searching && pages.isLoading)
   const failed = counts.isError ? counts : mode !== 'pipeline' && !searching && pages.isError ? pages : null
 
   return (
