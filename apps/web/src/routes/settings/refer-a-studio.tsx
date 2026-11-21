@@ -59,7 +59,7 @@ function ReferAStudio() {
             <div className="flex items-start gap-3">
               <IconTile icon={Gift} tone="amber" size="lg" />
               <div>
-                <p className="text-lg font-semibold">Know a studio that should run on AutoPilot?</p>
+                <p className="text-lg font-semibold">Know a studio that should run on Studio AutoPilot?</p>
                 <p className="text-sm text-muted-foreground">{termsLine(terms)}</p>
               </div>
             </div>
