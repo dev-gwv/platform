@@ -113,3 +113,15 @@ describe('two tabs refreshing at once (0221)', () => {
     expect(localStorage.getItem('ipc_refresh_token')).toBeNull()
   })
 })
+
+describe('which writes re-read the profit figures', () => {
+  it('money, crew pay, payroll and a project or its shoots; not a task or a lead', async () => {
+    const { MONEY_WRITE } = await import('./client')
+    for (const p of ['/billing/payments', '/financials/expenses/1', '/allocation/abc/cost', '/team-payouts/slot/1/pay', '/payroll/run', '/projects/1', '/shoots?x=1']) {
+      expect(MONEY_WRITE.test(p), p).toBe(true)
+    }
+    for (const p of ['/tasks/1', '/crm/leads/1', '/notifications/read', '/projectsx', '/me/payouts']) {
+      expect(MONEY_WRITE.test(p), p).toBe(false)
+    }
+  })
+})

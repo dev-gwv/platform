@@ -49,7 +49,7 @@ export function ProjectJourney({
     queryFn: () => callApi(`/shoots?project_id=${project.id}`, { responseSchema: shootsList }),
     staleTime: 15_000,
   })
-  const slots = useSlots()
+  const slots = useSlots({ project_id: project.id })
 
   if (shoots.isLoading || billing.isLoading || slots.isLoading) return null
 

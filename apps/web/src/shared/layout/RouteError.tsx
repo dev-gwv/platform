@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowLeft, Copy, RotateCcw } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { reportClientError } from '@/shared/error/report'
 import { BookCallButton } from '@/features/help/BookCall'
+import { forgetCacheAfterCrash } from '@/shared/api/persist-cache'
 
 /**
  * What a screen shows when it breaks, instead of the router's bare "Something
@@ -21,8 +22,11 @@ export function RouteError({ error, reset }: { error: unknown; reset?: () => voi
   const [open, setOpen] = useState(false)
   const text = describe(error)
   // A page file that would not load may be a bad copy the browser kept (17 Nov): mend it and reload once.
+  // A screen that breaks just after the device's saved copy was put back may
+  // be choking on an older shape in it: forget the copy and reload once.
   useEffect(() => {
     if (STALE_CHUNK.test(text)) void repairAndReload(text)
+    else forgetCacheAfterCrash()
   }, [text])
   return (
     <div className="mx-auto mt-10 flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
@@ -100,6 +104,7 @@ export class PanelBoundary extends Component<
   override componentDidCatch(error: unknown, info: ErrorInfo) {
     Sentry.captureException(error, { extra: { componentStack: info.componentStack } })
     reportClientError('error', describe(error), info.componentStack ?? undefined)
+    forgetCacheAfterCrash()
   }
 
   override componentDidUpdate(prev: { resetKey?: string }) {

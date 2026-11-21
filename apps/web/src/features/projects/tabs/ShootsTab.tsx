@@ -30,7 +30,7 @@ import {
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useTeamTermsSends } from '@/features/team-terms/api'
+import { useProjectTeamTermsSends } from '@/features/team-terms/api'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -45,7 +45,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useShootTypes } from '@/features/projects/api'
 import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/features/shoots/api'
-import { useReleaseSlot, useSlots } from '@/features/allocation/api'
+import { useReleaseSlot, useSlots, useSlotsOnDays } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { AssignmentRow } from '@/features/shoots/AssignmentRow'
 import { dataCounts, dataHandIn, dataHandInLine, optedOut, recordForSlot } from '@/features/data/stage'
@@ -119,7 +119,7 @@ export function ShootsTab({
   const qc = useQueryClient()
   const shootTypes = useShootTypes()
   const presets = useShootPresets('shoot')
-  const slots = useSlots()
+  const slots = useSlots({ project_id: projectId })
   const dataRecords = useProjectDataRecords(projectId)
   const [customOpen, setCustomOpen] = useState(false)
   // The event chips are the empty state; once a day exists they fold behind
@@ -135,6 +135,7 @@ export function ShootsTab({
     enabled: !!session && !!projectId,
     staleTime: 15_000,
   })
+  const daySlots = useSlotsOnDays(data, slots.data)
 
   const create = useMutation({
     mutationFn: (input: {
@@ -318,7 +319,7 @@ export function ShootsTab({
               onFocused={onFocused}
               canEdit={canEdit}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
-              allSlots={slots.data ?? []}
+              allSlots={daySlots}
               records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
             />
           ))}
@@ -375,7 +376,7 @@ function ShootPlanner({
   const planAccess = useAccess()
   const usesTerms = canEdit && planAccess.hasModule('team_terms')
   const seesMoney = planAccess.hasModule('billing') || planAccess.hasModule('money')
-  const termSends = useTeamTermsSends(usesTerms && live.length > 0 ? shoot.id : null)
+  const termSends = useProjectTeamTermsSends(usesTerms && live.length > 0 ? shoot.project_id : null, shoot.id)
   const termsFor = (userId: string | null): TeamTermsSend | null | undefined => {
     if (!usesTerms || !termSends.data) return undefined
     return termSends.data.find((t) => t.user_id === userId) ?? null

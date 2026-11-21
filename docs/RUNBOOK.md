@@ -27,7 +27,7 @@ them. `deploy/.env.example` lists every variable.
 | `VITE_SENTRY_DSN` | Web (build) | Browser DSN. Empty = Sentry off and the beacon fallback is used instead. |
 | `VITE_APP_VERSION` | Web (build) | Must equal the API's `APP_VERSION`, or the two halves report different releases. |
 | `VITE_ENVIRONMENT` | Web (build) | `production` etc. Drives the browser sample rates. |
-| `VITE_SENTRY_REPLAY` | Web (build) | `0` drops Session Replay from the bundle (~40 kB gzip). Anything else keeps it. |
+| `VITE_SENTRY_REPLAY` | Web (build) | `1` puts Session Replay in the bundle (~40 kB gzip; it slowed every click). Off otherwise. |
 | `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | CI only | Source-map upload at build time. **Never** in the runtime `.env`. |
 | `ENVIRONMENT` | API | `production` fails closed everywhere (token echo, demo activation, CORS). |
 

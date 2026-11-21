@@ -226,6 +226,25 @@ export function useExpenseSummary(filters: ExpenseFilters = {}) {
   })
 }
 
+const projectProfit = profitAndLoss.shape.projects.element.nullable()
+
+/**
+ * One project's booked profit over its whole life (value, crew, expenses,
+ * margin): the same figure as `useProfitAndLoss({ project_id })`'s
+ * `projects[0]`, read without working out the whole studio's statement.
+ * Its key sits under ['financials', 'pnl'], so a money change re-reads it too.
+ */
+export function useProjectProfit(projectId: string, enabled = true) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useQuery({
+    queryKey: ['financials', 'pnl', 'project', projectId],
+    queryFn: () => callApi(`/financials/project/${projectId}/margin`, { responseSchema: projectProfit }),
+    enabled: enabled && !!session && !!projectId && access.hasModule('financials'),
+    staleTime: 30_000,
+  })
+}
+
 /** The Profit & Loss for a period (cash or booked), or one project's whole life. */
 export function useProfitAndLoss(q: PnlQuery, enabled = true) {
   const { session } = useAuth()

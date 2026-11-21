@@ -122,8 +122,14 @@ export const projectListRoutes = new Hono<AppEnv>()
   // anything else read one answer. "Today" is the studio's day (India).
   //
   // `/tracking` must be declared before `/:id`, or Hono matches it as an id.
+  //
+  // `?open=1` (Home's Needs attention): projects still running only. A
+  // completed project always scores 0 there, so counting every project the
+  // studio ever finished was work for nothing (speed audit, 21 Nov). The
+  // tracking page asks for all: its Done tab lists them.
   .get('/tracking', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const seesMoney = c.get('auth').access.hasModule('billing')
+    const openOnly = c.req.query('open') === '1'
     const rows = await attempt(c, 'projects.tracking', () =>
       withUser(
         c.env,
@@ -228,6 +234,7 @@ export const projectListRoutes = new Hono<AppEnv>()
                and i.balance_due > 0 and i.due_date is not null and i.due_date < today.d
           ) inv on true
           where p.status <> 'cancelled'
+            ${openOnly ? sql`and p.status <> 'completed'` : sql``}
           order by p.created_at desc`,
       ),
     )
