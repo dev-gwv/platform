@@ -3,6 +3,8 @@ import {
   createReferralCampaignRequest,
   getOrCreateCampaignRequest,
   publicReferralCampaign,
+  publicReferralStudio,
+  endedReferralEnquiryRequest,
   referralCampaign,
   updateReferralSubmissionRequest,
   referralCampaignList,
@@ -360,10 +362,13 @@ publicReferralsRouter.get('/referrals/campaign/:slug', async (c) => {
       if (!base?.campaign_id) return null
       // The card is the client's (0298): their name leads it, never whoever
       // filled the form last; the friend's offer and the studio's look ride along.
+      // The studio's logo is its invoice logo, else its picture (as
+      // studio-brand.ts). This read named companies.logo_url, which never
+      // existed, so every extra here -- the friend's offer included -- was
+      // dropped and the card's opens went uncounted (0316).
       const rows = await sql<Record<string, unknown>[]>`select rc.name as campaign_name,
-          (select co.logo_url from companies co
-            join referral_campaigns rc2 on rc2.company_id = co.id
-           where rc2.id = ${base.campaign_id}::uuid limit 1) as logo_url,
+          (select coalesce(nullif(co.invoice_logo_url, ''), nullif(co.avatar_url, '')) from companies co
+            where co.id = rc.company_id) as logo_url,
           coalesce((select cl.name from clients cl where cl.id = rc.client_id),
                    (select rs.referrer_name from referral_submissions rs
                      where rs.campaign_id = ${base.campaign_id}::uuid and rs.referrer_name is not null
@@ -395,6 +400,50 @@ publicReferralsRouter.get('/referrals/campaign/:slug', async (c) => {
       ? ((base['reward_description'] as string).split('\n')[0] ?? '').slice(0, 120)
       : null
   return c.json(publicReferralCampaign.parse({ ...base, ...extra, reward_title: rewardTitle }))
+})
+
+// Whose link this is, ended or not (0316). A friend who opens a card after its
+// offer ended still sees the studio and can write to it; only a slug that was
+// never a campaign is a dead end.
+publicReferralsRouter.get('/referrals/studio/:slug', async (c) => {
+  const slug = c.req.param('slug')
+  const row = await attempt(c, 'referrals.public_studio', () =>
+    withService(c.env, async (sql) => {
+      const rows = await sql<{ studio: unknown }[]>`select get_public_referral_studio(${slug}) as studio`
+      return rows[0]?.studio ?? 'missing'
+    }),
+  )
+  if (!row) fail(400, 'We could not open this link.')
+  if (row === 'missing') fail(404, 'This referral link does not exist.')
+  return c.json(publicReferralStudio.parse(row))
+})
+
+// The friend's enquiry once the offer has ended: a plain lead for the studio,
+// marked so, credited to the client who shared the link, and the owner's bell
+// -- what a referral does, without the offer (0316, submit_ended_referral_enquiry).
+publicReferralsRouter.post('/referrals/studio/:slug/enquiry', async (c) => {
+  const slug = c.req.param('slug')
+  const parsed = endedReferralEnquiryRequest.safeParse(await c.req.json().catch(() => ({})))
+  if (!parsed.success) fail(422, 'Please enter your name and phone number.')
+  // As the referral form: a studio cannot call back a 3-digit number.
+  if (parsed.data.phone.replace(/[^\d]/g, '').length < 7) fail(422, 'Please enter a valid phone number (at least 7 digits).')
+  const d = parsed.data
+  let id: string | null = null
+  try {
+    id = await withService(c.env, async (sql) => {
+      const [r] = await sql<{ id: string }[]>`
+        select submit_ended_referral_enquiry(${slug}, ${d.name}, ${d.phone}, ${d.message ?? null}) as id`
+      return r?.id ?? null
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('referral link not found')) fail(404, 'This referral link does not exist.')
+    if (msg.includes('referral offer still active')) fail(409, 'This offer is still open. Please reload the page.')
+    if (msg.includes('name and phone are required')) fail(422, 'Please enter your name and phone number.')
+    throw e
+  }
+  if (!id) fail(400, 'We could not send this. Please try again.')
+  return c.json({ id }, 201)
 })
 
 // The client's own list (owner, 26 Oct): who they referred and where each

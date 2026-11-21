@@ -3410,6 +3410,52 @@ if (listed) {
     const bad = await api(`/referrals/submissions/${got.id}/status`, { token: aToken, method: 'PATCH', body: {} })
     check('referrals: an empty status change is refused (422)', bad.status === 422, { status: bad.status })
   }
+
+  // The card's page shows the friend's offer (the extras read named a column
+  // that never existed, so the offer was dropped until 0316).
+  await api(`/referrals/${first.json.id}`, {
+    token: aToken,
+    method: 'PATCH',
+    body: { name: first.json.name, reward_type: 'custom', reward_value: 0, friend_reward_type: 'fixed', friend_reward_value: 5000, friend_reward_title: '5,000 off' },
+  })
+  const open = await api(`/public/referrals/campaign/${first.json.slug}`)
+  check(
+    'referrals: the open link shows the friend offer and the client who shared it',
+    open.status === 200 && open.json.friend_reward_type === 'fixed' && open.json.referring_client_name === client.json.name,
+    open.json,
+  )
+
+  // An ended offer still reaches the studio (0316).
+  const live = await api(`/public/referrals/studio/${first.json.slug}`)
+  check('referrals: a live link names its studio and says the offer is open', live.status === 200 && live.json.active === true && !!live.json.studio_name, live.json)
+  const early = await api(`/public/referrals/studio/${first.json.slug}/enquiry`, { method: 'POST', body: { name: 'Too Early', phone: randPhone() } })
+  check('referrals: a live offer takes no ended-link enquiry (409)', early.status === 409, { status: early.status })
+  await api(`/referrals/${first.json.id}/status`, { token: aToken, method: 'PATCH', body: { status: 'ended' } })
+  const gone = await api(`/public/referrals/campaign/${first.json.slug}`)
+  const ended = await api(`/public/referrals/studio/${first.json.slug}`)
+  check(
+    'referrals: an ended link hides the offer but still names the studio, and nothing else',
+    gone.status === 404 && ended.status === 200 && ended.json.active === false &&
+      Object.keys(ended.json).sort().join() === 'active,logo_url,studio_name',
+    { gone: gone.status, ended: ended.json },
+  )
+  const shortPhone = await api(`/public/referrals/studio/${first.json.slug}/enquiry`, { method: 'POST', body: { name: 'Riya', phone: '12345' } })
+  check('referrals: an ended-link enquiry needs a real phone (422)', shortPhone.status === 422, { status: shortPhone.status })
+  const friendPhone = randPhone()
+  const late = await api(`/public/referrals/studio/${first.json.slug}/enquiry`, {
+    method: 'POST',
+    body: { name: 'Late Friend', phone: friendPhone, message: 'Wedding in March' },
+  })
+  const leads = await api(`/crm/leads/page?q=${friendPhone}`, { token: aToken })
+  const lead = (leads.json.items ?? [])[0]
+  check(
+    'referrals: an ended-link enquiry is a referral lead for the studio, credited to the client',
+    late.status === 201 && lead?.name === 'Late Friend' && lead?.source === 'referral' && /offer ended/.test(lead?.notes_preview ?? ''),
+    { late: late.status, lead },
+  )
+  const nowhere = await api(`/public/referrals/studio/no-such-link-${rand()}`)
+  const nowherePost = await api(`/public/referrals/studio/no-such-link-${rand()}/enquiry`, { method: 'POST', body: { name: 'Riya', phone: randPhone() } })
+  check('referrals: a link that never was does not open (404)', nowhere.status === 404 && nowherePost.status === 404, { get: nowhere.status, post: nowherePost.status })
 }
 
 // ── One-time notes and "last seen" (0216) ──

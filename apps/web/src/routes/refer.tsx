@@ -3,7 +3,16 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { Gift, CheckCircle2, Share2, MessageCircle, Mail, Copy } from 'lucide-react'
 import { toast } from 'sonner'
-import { publicReferralCampaign, publicReferralRow, z, buildWhatsAppUrl, type PublicReferralCampaign, type PublicReferralRow } from '@ipc/contracts'
+import {
+  publicReferralCampaign,
+  publicReferralRow,
+  publicReferralStudio,
+  z,
+  buildWhatsAppUrl,
+  type PublicReferralCampaign,
+  type PublicReferralRow,
+  type PublicReferralStudio,
+} from '@ipc/contracts'
 
 const created = z.object({ id: z.string().uuid() })
 const duplicateResponse = z.object({ duplicate: z.boolean(), message: z.string().nullish() })
@@ -42,6 +51,8 @@ export function ReferPage() {
   const viewToken = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('view') : null
   const [campaign, setCampaign] = useState<PublicReferralCampaign | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // The offer has ended, but the link still names its studio (0316).
+  const [ended, setEnded] = useState<PublicReferralStudio | null>(null)
   const [referrerName, setReferrerName] = useState('')
   const [referrerPhone, setReferrerPhone] = useState('')
   const [clientName, setClientName] = useState('')
@@ -58,7 +69,18 @@ export function ReferPage() {
   useEffect(() => {
     callApi(`/public/referrals/campaign/${slug}`, { responseSchema: publicReferralCampaign })
       .then(setCampaign)
-      .catch((e) => setLoadError(e instanceof ApiError ? e.message : 'This referral link is invalid or no longer active.'))
+      .catch(async (e) => {
+        const message = e instanceof ApiError ? e.message : 'This referral link is invalid or no longer active.'
+        // A link whose offer ended still reaches the studio; only an unknown one is a dead end.
+        if (e instanceof ApiError && e.status === 404) {
+          const studio = await callApi(`/public/referrals/studio/${slug}`, { responseSchema: publicReferralStudio }).catch(() => null)
+          if (studio && !studio.active) {
+            setEnded(studio)
+            return
+          }
+        }
+        setLoadError(message)
+      })
   }, [slug])
 
   async function onSubmit(e: FormEvent) {
@@ -117,6 +139,16 @@ export function ReferPage() {
 
   // The link to pass on never carries the private ?view=.
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''
+
+  if (ended) {
+    return (
+      <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4 font-sans">
+        <PageBackdrop />
+        <EndedReferral slug={slug} studio={ended} />
+        {viewToken && <YourReferrals slug={slug} view={viewToken} refresh={false} />}
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4 font-sans">
@@ -267,6 +299,107 @@ export function ReferPage() {
       </Card>
       {campaign && viewToken && <YourReferrals slug={slug} view={viewToken} refresh={done} />}
     </div>
+  )
+}
+
+/**
+ * A referral link whose offer has ended (0316): the studio's name and logo and
+ * a short form -- no offer, no reward. What is sent becomes a lead for the
+ * studio, marked that the offer had ended.
+ */
+export function EndedReferral({ slug, studio }: { slug: string; studio: PublicReferralStudio }) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (name.trim().length < 2) {
+      setError('Please enter your name.')
+      return
+    }
+    if (phone.replace(/[^\d]/g, '').length < 7) {
+      setError('Please enter a valid phone number (at least 7 digits).')
+      return
+    }
+    setBusy(true)
+    try {
+      await callApi(`/public/referrals/studio/${slug}/enquiry`, {
+        method: 'POST',
+        body: { name: name.trim(), phone: phone.trim(), message: message.trim() || undefined },
+        responseSchema: created,
+      })
+      setDone(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'We could not send this. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="relative z-10 w-full max-w-2xl">
+      <CardContent className="flex flex-col gap-4 p-4">
+        <div className="flex items-center gap-3">
+          {studio.logo_url ? (
+            <img src={studio.logo_url} alt={studio.studio_name} className="size-10 rounded-lg object-contain" />
+          ) : (
+            <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <MessageCircle className="size-5" />
+            </span>
+          )}
+          <h1 className="min-w-0 truncate text-lg font-semibold leading-snug">{studio.studio_name}</h1>
+        </div>
+        {done ? (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <CheckCircle2 className="size-10 text-success" />
+            <p className="font-medium">Thanks — we've got it.</p>
+            <p className="text-sm text-muted-foreground">{studio.studio_name} will reach out shortly.</p>
+          </div>
+        ) : (
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            <p className="text-sm">This offer has ended, but {studio.studio_name} would still love to hear from you.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ended-name">
+                  Your name <span className="text-destructive">*</span>
+                </Label>
+                <Input id="ended-name" value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ended-phone">
+                  Your phone <span className="text-destructive">*</span>
+                </Label>
+                <Input id="ended-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" required />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ended-message">Message</Label>
+              <textarea
+                id="ended-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                placeholder="Optional — what you are planning, roughly when"
+                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+              />
+            </div>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Sending…' : `Send to ${studio.studio_name}`}
+            </Button>
+          </form>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
