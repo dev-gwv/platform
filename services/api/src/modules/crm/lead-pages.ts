@@ -222,18 +222,28 @@ export function countLeads(sql: TransactionSql, v: LeadPageQuery, d: string): Fr
 /**
  * The board's first `per + 1` cards in every stage, newest first, with each
  * stage's own count and value: one statement for the whole board.
+ *
+ * The stages are ranked over the bare rows and only the kept ones are built
+ * into cards (0316): building every open lead's card first -- its events, tags
+ * and joins -- cost ~10 ms per 2,000 leads, and the plan's estimate crossed
+ * Postgres's JIT threshold, which compiled it for another ~50 ms on every
+ * open of the board.
  */
 export function selectColumns(sql: TransactionSql, v: LeadPageQuery, d: string, per: number): Frag {
   return sql`
-    select * from (
-      select c.*, c.created_at::text as k_at,
-             row_number() over (partition by c.stage_id order by c.created_at desc, c.id desc)::int as k_n,
-             count(*) over (partition by c.stage_id)::int as k_total,
-             coalesce(sum(c.deal_value) over (partition by c.stage_id), 0)::float8 as k_value
-        from ${cardsWhere(sql, v, d)}
-    ) x
-    where x.k_n <= ${per + 1}
-    order by x.stage_id nulls last, x.k_n`
+    with ranked as (
+      select l.id,
+             row_number() over (partition by l.stage_id order by l.created_at desc, l.id desc)::int as k_n,
+             count(*) over (partition by l.stage_id)::int as k_total,
+             coalesce(sum(l.deal_value) over (partition by l.stage_id), 0)::float8 as k_value
+        from crm_leads l
+        left join users u on u.user_id = l.assigned_to
+       where ${leadWhere(sql, v, d)}
+    )
+    select c.*, c.created_at::text as k_at, r.k_n, r.k_total, r.k_value
+      from ranked r
+      join (${sql.unsafe(CARD_SELECT)} where l.id in (select id from ranked where k_n <= ${per + 1})) c on c.id = r.id
+     order by c.stage_id nulls last, r.k_n`
 }
 
 /** The size of every built-in view and chip, over every open, live lead (RLS decides whose). */
