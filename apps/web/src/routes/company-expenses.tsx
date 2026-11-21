@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { Link } from '@tanstack/react-router'
-import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown, Undo2 } from 'lucide-react'
+import { Wallet, Pencil, Trash2, Search, Download, Printer, Tags, X, Eye, Paperclip, CheckCircle2, HandCoins, Receipt, TrendingDown, Undo2, Ellipsis, SlidersHorizontal } from 'lucide-react'
 import type { Expense } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -16,6 +16,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { RowMenu } from '@/shared/ui/row-menu'
+import { cn } from '@/shared/ui/cn'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { humanize } from '@/shared/ui/format'
 import { Money, useINR } from '@/shared/money/MoneyMask'
@@ -133,6 +134,9 @@ function Expenses() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const activeCount = [search.trim(), category, projectId, paidBy, gst, missing].filter(Boolean).length + (period.choice !== 'this_month' ? 1 : 0)
+  // Category, project, who paid and GST wait behind Filter (minimal first).
+  const narrowed = [category, projectId, paidBy, gst, missing].some(Boolean)
+  const [filtering, setFiltering] = useState(narrowed)
   const change = (fn: () => void) => {
     fn()
     setPage(1)
@@ -169,9 +173,10 @@ function Expenses() {
     }
   }
 
-  const menuFor = (e: Expense) => (
+  const menuFor = (e: Expense, onCard = false) => (
     <RowMenu
       label={`More for ${e.category ?? 'this expense'} ${inr(e.amount)}`}
+      variant={onCard ? 'outline' : 'ghost'}
       items={[
         { label: 'View', icon: <Eye className="size-4" />, onSelect: () => setDetail(e) },
         ...(canEdit ? [{ label: 'Edit', icon: <Pencil className="size-4" />, onSelect: () => setEditing(e) }] : []),
@@ -199,15 +204,18 @@ function Expenses() {
         title="Expenses"
         actions={
           <div className="no-print flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCatsOpen(true)}>
-              <Tags /> Categories
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => exportCsv(rows)} disabled={rows.length === 0}>
-              <Download /> CSV
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()} disabled={rows.length === 0}>
-              <Printer /> Print
-            </Button>
+            {/* The rarer three under More, so Add expense is the one thing in view. */}
+            <RowMenu
+              label="More expense tools"
+              variant="outline"
+              items={[
+                { label: 'Categories', icon: <Tags />, onSelect: () => setCatsOpen(true) },
+                { label: 'Download CSV', icon: <Download />, onSelect: () => exportCsv(rows), disabled: rows.length === 0 },
+                { label: 'Print', icon: <Printer />, onSelect: () => window.print(), disabled: rows.length === 0 },
+              ]}
+            >
+              <Ellipsis /> More
+            </RowMenu>
             {canAdd && <AddExpenseDialog />}
           </div>
         }
@@ -234,58 +242,65 @@ function Expenses() {
           <PeriodSwitch p={period} onChange={() => change(() => undefined)} />
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-60">
+          <div className="relative min-w-0 flex-1 sm:w-60 sm:flex-none">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => change(() => setSearch(e.target.value))} placeholder="Search description, invoice…" className="pl-9" aria-label="Search expenses" />
           </div>
-          <Select
-            value={missing === 'category' ? '__none__' : category}
-            onChange={(e) =>
-              change(() => {
-                const v = e.target.value
-                setMissing(v === '__none__' ? 'category' : '')
-                setCategory(v === '__none__' ? '' : v)
-              })
-            }
-            className="w-full sm:w-40"
-            aria-label="Filter by category"
-          >
-            <option value="">All categories</option>
-            <option value="__none__">No category yet</option>
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.value}>
-                {c.value}
-              </option>
-            ))}
-          </Select>
-          <ProjectPicker
-            value={projectId}
-            onChange={(id) => change(() => setProjectId(id))}
-            noneLabel="All projects"
-            className="sm:w-48"
-            aria-label="Filter by project"
-          />
-          <Select value={paidBy} onChange={(e) => change(() => setPaidBy(e.target.value))} className="w-full sm:w-40" aria-label="Filter by who paid">
-            <option value="">Paid by anyone</option>
-            {(people ?? []).map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-          <Select value={gst} onChange={(e) => change(() => setGst(e.target.value))} className="w-full sm:w-40" aria-label="Filter by GST">
-            <option value="">Any GST</option>
-            <option value="gst_applicable">GST charged</option>
-            <option value="exempt">Exempt</option>
-            <option value="non_gst">No GST</option>
-            <option value="reverse_charge">Reverse charge</option>
-          </Select>
+          <Button variant="outline" onClick={() => setFiltering((v) => !v)} aria-expanded={filtering} className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}>
+            <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+          </Button>
           {activeCount > 0 && (
             <Button variant="ghost" size="sm" onClick={resetFilters}>
               <X /> Clear
             </Button>
           )}
         </div>
+        {filtering && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={missing === 'category' ? '__none__' : category}
+              onChange={(e) =>
+                change(() => {
+                  const v = e.target.value
+                  setMissing(v === '__none__' ? 'category' : '')
+                  setCategory(v === '__none__' ? '' : v)
+                })
+              }
+              className="w-full sm:w-40"
+              aria-label="Filter by category"
+            >
+              <option value="">All categories</option>
+              <option value="__none__">No category yet</option>
+              {(categories ?? []).map((c) => (
+                <option key={c.id} value={c.value}>
+                  {c.value}
+                </option>
+              ))}
+            </Select>
+            <ProjectPicker
+              value={projectId}
+              onChange={(id) => change(() => setProjectId(id))}
+              noneLabel="All projects"
+              className="sm:w-48"
+              aria-label="Filter by project"
+            />
+            <Select value={paidBy} onChange={(e) => change(() => setPaidBy(e.target.value))} className="w-full sm:w-40" aria-label="Filter by who paid">
+              <option value="">Paid by anyone</option>
+              {(people ?? []).map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+            <Select value={gst} onChange={(e) => change(() => setGst(e.target.value))} className="w-full sm:w-40" aria-label="Filter by GST">
+              <option value="">Any GST</option>
+              <option value="gst_applicable">GST charged</option>
+              <option value="exempt">Exempt</option>
+              <option value="non_gst">No GST</option>
+              <option value="reverse_charge">Reverse charge</option>
+            </Select>
+          </div>
+        )}
       </div>
 
       {summary && (
@@ -321,13 +336,24 @@ function Expenses() {
                     </span>
                   }
                   subtitle={[e.description, e.party_name].filter(Boolean).join(' · ') || '—'}
-                  badge={paidChip(e) ?? undefined}
+                  badge={
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="font-semibold tabular-nums">{inr(cashOut(e))}</span>
+                      {paidChip(e)}
+                    </div>
+                  }
                   fields={[
                     { label: 'Project', value: e.project_name ?? 'Studio' },
                     { label: 'Date', value: shortDate(e.expense_date) },
-                    { label: 'Amount', value: inr(cashOut(e)), strong: true },
                   ]}
-                  actions={menuFor(e)}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setDetail(e)}>
+                        <Eye /> View
+                      </Button>
+                      {menuFor(e, true)}
+                    </>
+                  }
                 />
               ))}
             </RecordCards>

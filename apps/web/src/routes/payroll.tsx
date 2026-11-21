@@ -94,6 +94,43 @@ function Payroll() {
     }
   }
 
+  // A line's buttons, shared by the table and the phone's cards. Mark paid is
+  // bordered: beside "Mark all paid" a solid one on every row was a page of main buttons.
+  const actionsFor = (l: (typeof lines)[number]) =>
+    run ? (
+          <div className="flex items-center justify-end gap-1.5">
+            {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
+            {canEdit && l.paid_at && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={unpay.isPending}
+                title="Marked paid by mistake? Make it unpaid again"
+                onClick={() => unpay.mutate({ runId: run.id, lineId: l.id })}
+              >
+                <Undo2 /> Undo paid
+              </Button>
+            )}
+            {canEdit && run.status === 'draft' && (
+              <Button size="sm" variant="outline" onClick={() => setAdjusting(adjusting === l.id ? null : l.id)}>
+                {adjusting === l.id ? 'Close' : 'Adjust'}
+              </Button>
+            )}
+            {canEdit && run.status !== 'draft' && !l.paid_at && (
+              <Button size="sm" onClick={() => setPaying(l)}>
+                Mark paid
+              </Button>
+            )}
+            {run.status !== 'draft' && (
+              <Button size="sm" variant="ghost" asChild>
+                <Link to="/payroll/payslip/$lineId" params={{ lineId: l.id }} aria-label={`Payslip for ${l.name}`}>
+                  <FileText /> Payslip
+                </Link>
+              </Button>
+            )}
+          </div>
+    ) : null
+
   return (
     <>
       <PageHeader title="Payroll" />
@@ -196,7 +233,41 @@ function Payroll() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="table-wrap rounded-lg border border-border">
+              <>
+              {/* A phone gets one card a person: the six-column table scrolled sideways. */}
+              <ul className="flex flex-col gap-3 sm:hidden">
+                {lines.map((l) => {
+                  const partial = proRataNote({ ...l, pay_year: run.pay_year, pay_month: run.pay_month })
+                  return (
+                    <li key={l.id} className="rounded-lg border border-border bg-card p-3 text-sm">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="min-w-0 truncate font-medium">{l.name}</p>
+                        <p className="shrink-0 font-semibold tabular-nums">{inr(l.net_pay)}</p>
+                      </div>
+                      {partial && <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{partial}</p>}
+                      <p className="text-xs text-muted-foreground">
+                        {l.days_present} of {l.payable_days} days in
+                        {l.unpaid_leave_days > 0 && ` · ${days(l.unpaid_leave_days)} unpaid leave`}
+                        {l.absent_days > 0 && ` · ${l.absent_days} absent`}
+                        {l.late_marks > 0 && ` · ${l.late_marks} late`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Salary {inr(l.prorated_base)}
+                        {l.deduction > 0 && ` · ${inr(l.deduction)} cut for days`}
+                        {l.additions > 0 && ` · ${inr(l.additions)} added`}
+                        {l.other_deductions > 0 && ` · ${inr(l.other_deductions)} other cuts`}
+                      </p>
+                      <div className="mt-2">{actionsFor(l)}</div>
+                      {adjusting === l.id && (
+                        <div className="mt-3 border-t border-border pt-3">
+                          <AdjustRow line={l} onDone={() => setAdjusting(null)} />
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="table-wrap hidden rounded-lg border border-border sm:block">
                 <table className="w-full min-w-[46rem] text-sm">
                   <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                     <tr>
@@ -242,37 +313,7 @@ function Payroll() {
                             </td>
                             <td className="px-3 py-2 text-right font-semibold tabular-nums">{inr(l.net_pay)}</td>
                             <td className="px-3 py-2">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {l.paid_at && <StatusBadge tone="success">Paid</StatusBadge>}
-                                {canEdit && l.paid_at && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={unpay.isPending}
-                                    title="Marked paid by mistake? Make it unpaid again"
-                                    onClick={() => unpay.mutate({ runId: run.id, lineId: l.id })}
-                                  >
-                                    <Undo2 /> Undo paid
-                                  </Button>
-                                )}
-                                {canEdit && run.status === 'draft' && (
-                                  <Button size="sm" variant="outline" onClick={() => setAdjusting(adjusting === l.id ? null : l.id)}>
-                                    {adjusting === l.id ? 'Close' : 'Adjust'}
-                                  </Button>
-                                )}
-                                {canEdit && run.status !== 'draft' && !l.paid_at && (
-                                  <Button size="sm" onClick={() => setPaying(l)}>
-                                    Mark paid
-                                  </Button>
-                                )}
-                                {run.status !== 'draft' && (
-                                  <Button size="sm" variant="ghost" asChild>
-                                    <Link to="/payroll/payslip/$lineId" params={{ lineId: l.id }} aria-label={`Payslip for ${l.name}`}>
-                                      <FileText /> Payslip
-                                    </Link>
-                                  </Button>
-                                )}
-                              </div>
+                              {actionsFor(l)}
                             </td>
                           </tr>
                           {adjusting === l.id && (
@@ -288,6 +329,7 @@ function Payroll() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </>
         )}
@@ -296,11 +338,16 @@ function Payroll() {
           <Card>
             <CardContent className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-semibold">Shoot payouts still owed</h2>
+                <h2 className="font-semibold">Shoot payouts for {label}</h2>
                 <Button size="sm" variant="outline" asChild>
-                  <Link to="/team-payouts">Pay in Team Payouts</Link>
+                  <Link to="/team-payouts">Pay in Team payouts</Link>
                 </Button>
               </div>
+              {/* These count the month's shoots still to come as well, so they can be
+                  more than Team payouts' "Owed now" (done shoots only): say so. */}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Every shoot this month, done or still to come, less what is paid. Team payouts' Owed now counts only shoots already done.
+              </p>
               <ul className="mt-2 divide-y divide-border">
                 {q.data.freelancers.map((f) => (
                   <li key={f.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
