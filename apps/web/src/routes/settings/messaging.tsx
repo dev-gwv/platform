@@ -99,14 +99,8 @@ function Messaging() {
 
   return (
     <>
-      <PageHeader
-        title="Messaging"
-        description={
-          q.data && !q.data.whatsapp_enabled
-            ? 'Emails to your team and clients, paid from your messaging wallet.'
-            : 'WhatsApp and email to your team, paid from your messaging wallet.'
-        }
-      />
+      {/* No line under the heading: the wallet sentence below says it. */}
+      <PageHeader title="Messaging" />
       {q.isLoading ? (
         <SkeletonCards />
       ) : q.isError || !q.data ? (

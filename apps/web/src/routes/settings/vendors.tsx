@@ -57,6 +57,8 @@ function Vendors() {
         }
       />
 
+      {/* Search and the kind chips only once there is something to search. */}
+      {(rows.length > 0 || search || kind || archived) && (
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -90,6 +92,7 @@ function Vendors() {
           {archived ? 'Showing archived' : 'Archived'}
         </button>
       </div>
+      )}
 
       <div className="mt-3">
         {parties.isLoading ? (
@@ -99,7 +102,7 @@ function Vendors() {
         ) : rows.length === 0 ? (
           <EmptyState
             title={archived ? 'Nobody archived' : search || kind ? 'No vendor matches' : 'No vendors yet'}
-            {...(archived || search || kind ? {} : { description: 'Add one here, or pick “+ Add new party” while recording an expense.' })}
+            {...(archived || search || kind ? {} : { description: 'The album printer, the drone pilot, the hall: add them here, or while recording an expense.' })}
           />
         ) : (
           <ul className="flex flex-col gap-1.5">

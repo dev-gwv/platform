@@ -52,12 +52,7 @@ export function ReportsPage() {
     <>
       <PageHeader title="Reports" />
 
-      <Card>
-        <CardContent className="flex flex-col gap-2 p-4">
-          <PeriodSwitch p={period} />
-          <p className="text-xs text-muted-foreground">Showing {period.label}</p>
-        </CardContent>
-      </Card>
+      <PeriodSwitch p={period} />
 
       <Tabs value={active} onValueChange={(v) => setTab(v as ReportTab)} className="mt-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
@@ -157,7 +152,7 @@ function MoreLink({ to, children }: { to: string; children: ReactNode }) {
   )
 }
 
-/** Loading, error, or the tab, with its Download button on top. */
+/** Loading, error, or the tab, with its Download button under it. */
 function TabBody<T>({
   query,
   csv,
@@ -179,6 +174,7 @@ function TabBody<T>({
   if (query.isError || !data) return <ErrorState onRetry={() => void query.refetch()} />
   return (
     <div className={cn('flex flex-col gap-4 transition-opacity', query.isFetching && 'opacity-70')}>
+      {children(data)}
       <div className="flex justify-end">
         <Button
           variant="outline"
@@ -191,7 +187,6 @@ function TabBody<T>({
           <Download /> Download CSV
         </Button>
       </div>
-      {children(data)}
     </div>
   )
 }
@@ -345,8 +340,19 @@ function TeamTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean 
           {r.members.length === 0 ? (
             <Empty>No team members yet.</Empty>
           ) : (
-            <div className="-mx-4 overflow-x-auto px-4">
-              <table className="w-full min-w-[28rem] text-sm">
+            <>
+            <ul className="sm:hidden">
+              {r.members.map((m) => (
+                <Row
+                  key={m.user_id}
+                  left={m.name}
+                  sub={`${m.shoots} shoot${m.shoots === 1 ? '' : 's'} · ${m.delivered} delivered · ${m.days_present} present, ${m.leave_days} on leave`}
+                  right={m.late_now > 0 ? <span className="font-semibold text-destructive">{m.late_now} late</span> : <span className="text-muted-foreground">None late</span>}
+                />
+              ))}
+            </ul>
+            <div className="hidden sm:block">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3 font-semibold">Name</th>
@@ -371,8 +377,8 @@ function TeamTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean 
                 </tbody>
               </table>
             </div>
+            </>
           )}
-          <p className="mt-2 text-xs text-muted-foreground">Days present come from Attendance; leave is approved leave on working days.</p>
         </Section>
       )}
     </TabBody>

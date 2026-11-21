@@ -51,7 +51,7 @@ function Bundles() {
   return (
     <>
       <PageHeader
-        title="Task Bundles"
+        title="Task bundles"
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus /> New bundle

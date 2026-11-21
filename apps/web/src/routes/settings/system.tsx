@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, Database, ScrollText, Timer, Settings, Plus, Trash2, Pencil, Plug } from 'lucide-react'
+import { Activity, ChevronDown, Database, ScrollText, Timer, Settings, Plus, Trash2, Pencil, Plug } from 'lucide-react'
 import type { AuditLogEntry, CronRun } from '@ipc/contracts'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -16,7 +16,7 @@ import { Switch } from '@/shared/ui/switch'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { humanize } from '@/shared/ui/format'
-import { useAuditLog, useCronRuns, useHealth, useIntegrations, useCustomLookups, useDeleteCustomLookup, useCreateCustomLookup, useUpdateCustomLookup } from '@/features/settings/api'
+import { useAuditLog, useCronRuns, useHealth, useIntegrations } from '@/features/settings/api'
 import { useServices, useCreateService, useUpdateService, useDeleteService } from '@/features/shoots/api'
 import { useTaskPriorities, useCreateTaskPriority, useUpdateTaskPriority, useDeleteTaskPriority } from '@/features/tasks/api'
 import { useWorkReminderSettings, useUpdateWorkReminderSettings, useRunWorkReminders } from '@/features/work/api'
@@ -63,12 +63,13 @@ function System({ focus }: { focus?: 'services' | 'work-submissions' | undefined
   return (
     <>
       <PageHeader title="System" />
-      <HealthCard />
+      {/* What a studio uses comes first. The server's own health, its keys and
+          the job runs are for whoever runs the server, so they sit folded at
+          the foot. The dropdown lists that were repeated here as "Custom
+          Lookups" are the Lists tab's (invoice lines and currencies moved there). */}
       {session?.is_owner ? (
         <>
-          <Integrations />
-          <CustomLookups />
-          <div id="services">
+          <div id="services" className="-mt-2">
             <Services />
           </div>
           <TaskPriorities />
@@ -76,15 +77,31 @@ function System({ focus }: { focus?: 'services' | 'work-submissions' | undefined
             <WorkReminders />
           </div>
           <AuditLog />
-          <CronRuns />
         </>
       ) : (
         <Card className="mt-4">
           <CardContent className="py-4">
-            <EmptyState title="Owner only" description="The audit log and job history are visible to the studio owner." />
+            <EmptyState title="Owner only" description="Who changed what, and the studio's services, are kept for the studio owner." />
           </CardContent>
         </Card>
       )}
+      <details className="group mt-6 rounded-xl border border-border bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium">
+          <span className="flex items-center gap-2">
+            <Plug className="size-4 text-muted-foreground" aria-hidden /> Technical details
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="border-t border-border px-4 pb-4">
+          <HealthCard />
+          {session?.is_owner && (
+            <>
+              <Integrations />
+              <CronRuns />
+            </>
+          )}
+        </div>
+      </details>
     </>
   )
 }
@@ -207,19 +224,21 @@ function AuditLog() {
   const [entity, setEntity] = useState('')
   const q = useAuditLog(entity || undefined)
   const isMobile = useIsMobile()
-  const items = q.data?.pages.flatMap((p) => p.items) ?? []
+  // The latest ten first: the whole first page was a phone's worth of scrolling.
+  const [shown, setShown] = useState(10)
+  const all = q.data?.pages.flatMap((p) => p.items) ?? []
+  const items = all.slice(0, shown)
+  const more = all.length > shown || q.hasNextPage
 
   return (
     <Card className="mt-6">
       <CardContent className="p-4 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold tracking-tight">Audit log</h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Every change, newest first. The reference is the id the API logged the request under.
-            </p>
+            <h3 className="font-semibold tracking-tight">Who changed what</h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">Every change, newest first.</p>
           </div>
-          <Select value={entity} onChange={(e) => setEntity(e.target.value)} className="w-44" aria-label="Filter by area">
+          <Select value={entity} onChange={(e) => { setEntity(e.target.value); setShown(10) }} className="w-44" aria-label="Filter by area">
             {ENTITY_FILTERS.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -243,10 +262,7 @@ function AuditLog() {
                   title={humanize(e.action.replace('.', ' '))}
                   subtitle={`${e.actor_name ?? 'System'} · ${when.format(new Date(e.created_at))}`}
                   badge={<StatusBadge tone="neutral">{humanize(e.entity_type)}</StatusBadge>}
-                  fields={[
-                    { label: 'Reference', value: e.correlation_id ?? '—' },
-                    { label: 'Change', value: summarise(e) },
-                  ]}
+                  fields={[{ label: 'Change', value: summarise(e) }]}
                 />
               ))}
             </RecordCards>
@@ -259,13 +275,13 @@ function AuditLog() {
                     <th className="px-4 py-2 font-medium">Who</th>
                     <th className="px-4 py-2 font-medium">Action</th>
                     <th className="px-4 py-2 font-medium">Change</th>
-                    <th className="px-4 py-2 font-medium">Reference</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((e) => (
                     <tr key={e.id} className="border-t border-border align-top hover:bg-muted/30">
-                      <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">
+                      {/* The request's reference stays on hover, for a support call. */}
+                      <td className="whitespace-nowrap px-4 py-2 text-muted-foreground" title={e.correlation_id ? `Reference ${e.correlation_id}` : undefined}>
                         {when.format(new Date(e.created_at))}
                       </td>
                       <td className="px-4 py-2">{e.actor_name ?? 'System'}</td>
@@ -274,7 +290,6 @@ function AuditLog() {
                         <span className="ml-2 text-xs text-muted-foreground">{humanize(e.entity_type)}</span>
                       </td>
                       <td className="max-w-md px-4 py-2 text-muted-foreground">{summarise(e)}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{e.correlation_id ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -283,9 +298,17 @@ function AuditLog() {
           )}
         </div>
 
-        {q.hasNextPage && (
+        {more && (
           <div className="mt-3 flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShown((n) => n + 20)
+                if (all.length <= shown + 20 && q.hasNextPage) void q.fetchNextPage()
+              }}
+              disabled={q.isFetchingNextPage}
+            >
               {q.isFetchingNextPage ? 'Loading…' : 'Show older'}
             </Button>
           </div>
@@ -298,13 +321,16 @@ function AuditLog() {
 /** A one-line reading of the after (or before) payload. */
 function summarise(e: AuditLogEntry): string {
   const payload = (e.after ?? e.before) as Record<string, unknown> | null
-  if (!payload || typeof payload !== 'object') return e.entity_id ? `#${e.entity_id.slice(0, 8)}` : '—'
+  if (!payload || typeof payload !== 'object') return '—'
+  // Words a person reads, not the database's ids ("Lead id: d738e735-…").
   const parts = Object.entries(payload)
-    .filter(([, v]) => v !== undefined && v !== null && typeof v !== 'object')
+    .filter(([k, v]) => v !== undefined && v !== null && typeof v !== 'object' && !/(^|_)id$/.test(k) && !(typeof v === 'string' && UUID.test(v)))
     .slice(0, 4)
-    .map(([k, v]) => `${humanize(k)}: ${String(v)}`)
-  return parts.length ? parts.join(' · ') : e.entity_id ? `#${e.entity_id.slice(0, 8)}` : '—'
+    .map(([k, v]) => `${humanize(k)}: ${typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v)}`)
+  return parts.length ? parts.join(' · ') : '—'
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function CronRuns() {
   const { data, isLoading, isError, error, refetch } = useCronRuns()
@@ -352,139 +378,6 @@ function CronRow({ run }: { run: CronRun }) {
   )
 }
 
-const LOOKUP_CATEGORIES = [
-  { value: 'lead_source', label: 'Lead Sources' },
-  { value: 'expense_category', label: 'Expense Categories' },
-  { value: 'enquiry_source', label: 'Enquiry Sources' },
-  { value: 'enquiry_status', label: 'Enquiry Statuses' },
-  { value: 'payment_type', label: 'Payment Types' },
-  { value: 'invoice_line_preset', label: 'Invoice Line Presets' },
-  { value: 'project_type', label: 'Project Types' },
-  { value: 'currency', label: 'Currencies' },
-]
-
-function CustomLookups() {
-  const [activeCategory, setActiveCategory] = useState('lead_source')
-  const [newValue, setNewValue] = useState('')
-  const { data: items, isLoading } = useCustomLookups(activeCategory)
-  const create = useCreateCustomLookup()
-  const update = useUpdateCustomLookup()
-  const del = useDeleteCustomLookup()
-  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
-
-  function handleAdd() {
-    if (!newValue.trim()) return
-    create.mutate({ category: activeCategory, value: newValue.trim() }, {
-      onSuccess: () => setNewValue(''),
-    })
-  }
-
-  return (
-    <Card className="mt-6">
-      <CardContent className="p-4 sm:p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold tracking-tight flex items-center gap-2">
-              <Settings className="h-4 w-4" /> Custom Lookups
-            </h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Manage dropdown values used throughout the app: lead sources, expense categories, and more.
-            </p>
-          </div>
-          <Select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value)} className="w-48">
-            {LOOKUP_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="mt-4 flex gap-2">
-          <Input
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            placeholder={`Add a new ${humanize(activeCategory).toLowerCase()}...`}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          />
-          <Button size="sm" onClick={handleAdd} disabled={!newValue.trim() || create.isPending}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="mt-4">
-          {isLoading ? (
-            <SkeletonList rows={4} columns={3} />
-          ) : !items || items.length === 0 ? (
-            <EmptyState title="No values yet" description="Add your first lookup value above." />
-          ) : (
-            <ul className="divide-y divide-border">
-              {items.map((item) =>
-                editing?.id === item.id ? (
-                  <li key={item.id} className="flex items-center gap-2 py-2">
-                    <Input
-                      value={editing.value}
-                      onChange={(e) => setEditing({ id: item.id, value: e.target.value })}
-                      className="h-8"
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        update.mutate({ id: item.id, patch: { value: editing.value.trim() } }, { onSuccess: () => setEditing(null) })
-                      }
-                      disabled={!editing.value.trim() || update.isPending}
-                    >
-                      Save
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
-                  </li>
-                ) : (
-                  <li key={item.id} className="flex items-center justify-between py-2 text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium">{item.value}</span>
-                      <StatusBadge tone={item.is_active ? 'success' : 'neutral'}>
-                        {item.is_active ? 'Active' : 'Inactive'}
-                      </StatusBadge>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setEditing({ id: item.id, value: item.value })}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7"
-                        onClick={() => update.mutate({ id: item.id, patch: { is_active: !item.is_active } })}
-                      >
-                        {item.is_active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => del.mutate(item.id)}
-                        disabled={del.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </li>
-                ),
-              )}
-            </ul>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 /** The service catalog shoots and the project wizard suggest from — a studio's own vocabulary for what it books. */
 function Services() {
   const { data: items, isLoading } = useServices()
@@ -506,7 +399,7 @@ function Services() {
           <Settings className="h-4 w-4" /> Services
         </h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Reusable service catalog suggested when scheduling a shoot — Wedding Photography, Pre-wedding, and so on.
+          What you book, offered when you plan a shoot: Wedding Photography, Pre-wedding and so on.
         </p>
 
         <div className="mt-4 flex gap-2">
@@ -607,7 +500,7 @@ function TaskPriorities() {
     <Card className="mt-6">
       <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight flex items-center gap-2">
-          <Settings className="h-4 w-4" /> Task Priorities
+          <Settings className="h-4 w-4" /> Task priorities
         </h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Your own labels for how urgent a task is — shown on tasks instead of the plain Low/Medium/High/Urgent.
@@ -725,7 +618,7 @@ function WorkReminders() {
     <Card className="mt-6">
       <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight flex items-center gap-2">
-          <Settings className="h-4 w-4" /> Work Submission Reminders
+          <Settings className="h-4 w-4" /> Work reminders
         </h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Nudge whoever a task is assigned to before its due date, if nothing has been submitted yet.
