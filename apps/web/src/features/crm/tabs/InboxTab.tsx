@@ -537,11 +537,6 @@ export function InboxTab({
         />
       )}
 
-      {leads.length >= 2000 && (
-        <p className="text-xs text-muted-foreground">
-          Showing the {leads.length.toLocaleString('en-IN')} most recent leads. Older ones are still in reports and on a contact.
-        </p>
-      )}
       <LeadTable leads={rows} now={now} total={leads.length} onOpen={onOpen} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleAll} hotScore={settings.data?.hot_score ?? 60} columns={columns} density={density} />
 
     </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -28,6 +29,10 @@ import {
   crmLead,
   crmLeadCard,
   leadsSummary,
+  leadColumns,
+  leadCounts,
+  leadPage,
+  type LeadColumns,
   type CrmLead,
   type CrmLeadCard,
   crmSettings,
@@ -104,6 +109,7 @@ import { callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { leadsPath, placeholderLead, type LeadsOptions } from './lead-reads'
+import { appendToColumn, leadColumnsPath, leadPagePath } from './lead-pages'
 import {
   applyLeadPatch,
   refreshLeadReads,
@@ -172,6 +178,72 @@ export function useLead(id: string | null, card?: CrmLeadCard | CrmLead | null) 
     staleTime: 15_000,
     placeholderData: () => (card && card.id === id ? placeholderLead(card) : undefined),
   })
+}
+
+/**
+ * The board, paged (speed audit, 21 Nov): each stage's first 30 cards with its
+ * own total, every filter applied on the server. Kept under
+ * ['crm', 'leads', 'card', …] so a stage move patches it at once (lead-cache).
+ */
+export function useLeadColumns(filters: string, pipelineId: string | null, enabled = true) {
+  return useCrmQuery(
+    ['leads', 'card', 'columns', pipelineId ?? '', filters],
+    () => callApi(leadColumnsPath(filters, pipelineId ?? ''), { responseSchema: leadColumns }),
+    15_000,
+    enabled && !!pipelineId,
+  )
+}
+
+/** Show more on one column: the next 30, added under the cards already there. */
+export function useColumnMore(filters: string, pipelineId: string | null) {
+  const qc = useQueryClient()
+  const [loading, setLoading] = useState<string | null>(null)
+  const key = ['crm', 'leads', 'card', 'columns', pipelineId ?? '', filters]
+  const more = async (stageId: string | null, cursor: string) => {
+    setLoading(stageId ?? 'none')
+    try {
+      const page = await callApi(
+        leadPagePath(filters, { order: 'newest', pipelineId, stageId, cursor, limit: COLUMN_PAGE }),
+        { responseSchema: leadPage },
+      )
+      qc.setQueryData<LeadColumns>(key, (old) => (old ? appendToColumn(old, stageId, page) : old))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'We could not load more leads.')
+    } finally {
+      setLoading(null)
+    }
+  }
+  return { more, loading }
+}
+
+/** A board column's page, as the server sends it (`COLUMN_PAGE` in routes-leads.ts). */
+export const COLUMN_PAGE = 30
+/** The list's page. */
+export const LIST_PAGE = 100
+
+/** The list, a hundred at a time in its own order (late first), every filter on the server. */
+export function useLeadPages(filters: string, enabled = true) {
+  const { session } = useAuth()
+  const access = useAccess()
+  return useInfiniteQuery({
+    queryKey: ['crm', 'leads', 'card', 'pages', filters],
+    queryFn: ({ pageParam }) =>
+      callApi(leadPagePath(filters, { order: 'urgency', cursor: pageParam, limit: LIST_PAGE }), { responseSchema: leadPage }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor,
+    enabled: enabled && !!session && access.hasModule('crm'),
+    staleTime: 15_000,
+  })
+}
+
+/** The size of every built-in view and chip, over every open lead. */
+export function useLeadCounts(dayStart: string, enabled = true) {
+  return useCrmQuery(
+    ['leads', 'counts', dayStart],
+    () => callApi(`/crm/leads/counts?day_start=${encodeURIComponent(dayStart)}`, { responseSchema: leadCounts }),
+    15_000,
+    enabled,
+  )
 }
 
 /** The pipeline's counts per stage, worked out on the server. */
