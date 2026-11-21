@@ -56,10 +56,13 @@ export function AiDesignerPage() {
     <AuthedPage module="projects" studioWork="/dashboard">
       <PageHeader
         title="Quotation Designer"
+        // With no designs yet, the empty list's own New design is the one button.
         actions={
-          <Button onClick={() => setMaking({})}>
-            <Plus /> New design
-          </Button>
+          tab !== 'templates' && designs.data?.length === 0 ? undefined : (
+            <Button onClick={() => setMaking({})}>
+              <Plus /> New design
+            </Button>
+          )
         }
       />
       <div className="mb-4 inline-flex rounded-lg border border-border bg-muted/50 p-1" role="tablist">
