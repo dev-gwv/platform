@@ -5,6 +5,8 @@ import { PGlite } from '@electric-sql/pglite'
 import type { TransactionSql } from 'postgres'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { readDoneBefore, readDoneSince, readLimit, selectTasks, type TaskFilter } from './router'
+import { decodeUrgencyCursor, encodeUrgencyCursor, openSummary, type OpenSummary } from './task-query'
+import { readOpenFilter } from './routes-open'
 
 /**
  * The task lists' window (speed audit, 12 Nov): open tasks plus the last 30
@@ -61,6 +63,9 @@ let db: PGlite
 
 interface Row {
   id: string
+  title: string
+  priority: string
+  due_date: string | Date | null
   status: string
   description: string | null
   description_truncated: boolean
@@ -239,5 +244,132 @@ describe('reading the query string', () => {
     expect(readLimit('500', 50, 100)).toBe(100)
     expect(readLimit('0', 20, 20)).toBe(1)
     expect(readLimit('abc', 20, 20)).toBe(20)
+  })
+})
+
+// ── GET /tasks/open: open tasks a page at a time (speed audit, 21 Nov) ──
+// Seeded in the second studio so the first one's counts above stay as they are.
+const B = (n: number) => `bbbbbbbb-0000-4000-8000-${String(n).padStart(12, '0')}`
+const BX = '77777777-7777-4777-8777-777777777777' // Kiran Editor
+const BY = '88888888-8888-4888-8888-888888888888' // Zoya Designer
+const LATE_HIGH = B(1)
+const LATE_URGENT = B(2)
+const DUE_TODAY = B(3)
+const THIS_WEEK = B(4) // in progress
+const LATER = B(5) // nobody on it
+const UNDATED_URGENT = B(6) // in review
+const B_DONE = B(7)
+const TODAY = '2026-11-21'
+
+async function summaryFor(uid: string, f: TaskFilter): Promise<OpenSummary> {
+  const q = render(openSummary(fakeSql, f) as unknown as Fragment)
+  await db.exec(`set role authenticated;`)
+  await db.exec(`set request.jwt.claim.sub = '${uid}';`)
+  try {
+    return (await db.query<OpenSummary>(q.text, q.params)).rows[0]!
+  } finally {
+    await db.exec(`reset role;`)
+  }
+}
+
+const open = (f: TaskFilter = {}) => tasksFor(OWNER_B, { today: TODAY, urgency: true, ...f })
+
+describe('open tasks a page at a time', () => {
+  beforeAll(async () => {
+    await db.exec(`insert into auth.users (id, email) values ('${BX}', 'kiran@w.test'), ('${BY}', 'zoya@w.test');`)
+    await db.exec(`
+      insert into users (user_id, company_id, role, name, email) values
+        ('${BX}', '${COMPANY_B}', 'employee', 'Kiran Editor', 'kiran@w.test'),
+        ('${BY}', '${COMPANY_B}', 'employee', 'Zoya Designer', 'zoya@w.test');
+      insert into tasks (id, company_id, title, status, priority, due_date, description) values
+        ('${LATE_HIGH}',      '${COMPANY_B}', 'Late A',    'to_do',       'high',   '2026-11-10', null),
+        ('${LATE_URGENT}',    '${COMPANY_B}', 'Late B',    'to_do',       'urgent', '2026-11-10', null),
+        ('${DUE_TODAY}',      '${COMPANY_B}', 'Today',     'to_do',       'low',    '2026-11-21', 'call the florist'),
+        ('${THIS_WEEK}',      '${COMPANY_B}', 'Week',      'in_progress', 'medium', '2026-11-25', null),
+        ('${LATER}',          '${COMPANY_B}', 'Later',     'to_do',       'medium', '2026-12-30', null),
+        ('${UNDATED_URGENT}', '${COMPANY_B}', 'Undated',   'review',      'urgent', null,         null),
+        ('${B_DONE}',         '${COMPANY_B}', 'Done one',  'completed',   'high',   '2026-11-01', null);
+      insert into task_assignees (task_id, user_id, company_id) values
+        ('${LATE_HIGH}', '${BX}', '${COMPANY_B}'),
+        ('${DUE_TODAY}', '${BX}', '${COMPANY_B}'),
+        ('${THIS_WEEK}', '${BX}', '${COMPANY_B}'),
+        ('${LATE_URGENT}', '${BY}', '${COMPANY_B}'),
+        ('${UNDATED_URGENT}', '${BY}', '${COMPANY_B}'),
+        ('${B_DONE}', '${BX}', '${COMPANY_B}');
+    `)
+  })
+
+  const ORDER = [LATE_URGENT, LATE_HIGH, DUE_TODAY, THIS_WEEK, LATER, UNDATED_URGENT, OTHER_STUDIO]
+
+  it('late first, then by due date, priority and title; undated last; never a finished task', async () => {
+    expect(ids(await open())).toEqual(ORDER)
+  })
+
+  it('a cursor carries on exactly where the page ended, with no row twice or missed', async () => {
+    const seen: string[] = []
+    let after: ReturnType<typeof decodeUrgencyCursor> = null
+    for (let i = 0; i < 5; i++) {
+      const rows = await open({ limit: 3, after: after && after !== 'bad' ? after : undefined })
+      seen.push(...ids(rows))
+      if (rows.length < 3) break
+      after = decodeUrgencyCursor(encodeUrgencyCursor(rows[rows.length - 1]!))
+      expect(after).not.toBe('bad')
+    }
+    expect(seen).toEqual(ORDER)
+  })
+
+  it('applies the toolbar on the server: due date, person, nobody, search, tab', async () => {
+    expect(ids(await open({ due: 'overdue' }))).toEqual([LATE_URGENT, LATE_HIGH])
+    expect(ids(await open({ due: 'today' }))).toEqual([DUE_TODAY])
+    expect(ids(await open({ due: 'week' }))).toEqual([DUE_TODAY, THIS_WEEK])
+    expect(ids(await open({ due: 'none' }))).toEqual([UNDATED_URGENT, OTHER_STUDIO])
+    expect(ids(await open({ member: BX }))).toEqual([LATE_HIGH, DUE_TODAY, THIS_WEEK])
+    expect(ids(await open({ assignee: BY }))).toEqual([LATE_URGENT, UNDATED_URGENT])
+    expect(ids(await open({ member: 'none' }))).toEqual([LATER, OTHER_STUDIO])
+    expect(ids(await open({ search: 'later' }))).toEqual([LATER])
+    expect(ids(await open({ search: 'florist' }))).toEqual([DUE_TODAY])
+    expect(ids(await open({ search: 'zoya' }))).toEqual([LATE_URGENT, UNDATED_URGENT])
+    expect(ids(await open({ tab: 'in_progress' }))).toEqual([THIS_WEEK])
+    expect(ids(await open({ tab: 'overdue' }))).toEqual([LATE_URGENT, LATE_HIGH])
+  })
+
+  it('counts the tabs, tiles and each person without the rows', async () => {
+    const s = await summaryFor(OWNER_B, { today: TODAY })
+    expect(s).toMatchObject({ open: 7, matching: 7, to_do: 5, in_progress: 1, review: 1, blocked: 0, overdue: 2, high_priority: 3, due_today: 1 })
+    const people = Object.fromEntries(s.people.map((p) => [p.user_id ?? 'none', [p.open, p.late]]))
+    expect(people).toEqual({ [BX]: [3, 1], [BY]: [2, 1], none: [2, 0] })
+    expect((await summaryFor(OWNER_B, { today: TODAY, tab: 'in_progress' })).matching).toBe(1)
+    expect((await summaryFor(OWNER_B, { today: TODAY, member: BX })).open).toBe(3)
+  })
+
+  it('staff page only their own', async () => {
+    expect(ids(await tasksFor(BX, { today: TODAY, urgency: true, assignee: BX }))).toEqual([LATE_HIGH, DUE_TODAY, THIS_WEEK])
+    expect((await summaryFor(BX, { today: TODAY, assignee: BX })).open).toBe(3)
+  })
+
+  it('done_only with a window is the finished ones alone', async () => {
+    expect(ids(await tasksFor(OWNER_B, { since: since(), doneOnly: true }))).toEqual([B_DONE])
+  })
+})
+
+describe('reading the open-page query', () => {
+  const q = (o: Record<string, string>) => (k: string) => o[k]
+  it('someone who cannot view the studio gets their own whatever they ask', () => {
+    expect(readOpenFilter(q({ member: BX }), BY, false)).toMatchObject({ assignee: BY, member: undefined })
+    expect(readOpenFilter(q({ mine: '1' }), BY, true)).toMatchObject({ assignee: BY })
+    expect(readOpenFilter(q({ member: 'none', due: 'all', tab: 'overdue', q: ' x ' }), BY, true)).toMatchObject({
+      assignee: undefined,
+      member: 'none',
+      due: undefined,
+      tab: 'overdue',
+      search: 'x',
+    })
+  })
+
+  it('refuses a cursor it did not make', () => {
+    expect(decodeUrgencyCursor('nonsense')).toBe('bad')
+    expect(decodeUrgencyCursor(Buffer.from('[1,2,3,4]').toString('base64url'))).toBe('bad')
+    const c = encodeUrgencyCursor({ due_date: null, priority: 'low', title: 'A, "b"', id: B(1) })
+    expect(decodeUrgencyCursor(c)).toEqual({ due: '9999-12-31', rank: 3, title: 'A, "b"', id: B(1) })
   })
 })

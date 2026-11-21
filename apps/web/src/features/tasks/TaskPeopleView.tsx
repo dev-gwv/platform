@@ -28,6 +28,7 @@ export function TaskPeopleView({
   canManage,
   canAssign,
   members,
+  counts,
   onOpen,
   onAction,
 }: {
@@ -38,17 +39,32 @@ export function TaskPeopleView({
   canAssign: boolean
   /** Active team members, so people with nothing on still show as drop targets. */
   members: readonly DirectoryMember[]
+  /**
+   * Each person's open and late tasks from the server ('none' = nobody on it),
+   * when the rows are only the first page: the column headers and "Free right
+   * now" read these, never just the cards that happen to be loaded.
+   */
+  counts?: ReadonlyMap<string, { open: number; late: number }> | undefined
   onOpen: (task: TaskListItem) => void
   onAction: (task: TaskListItem, action: QuickAction) => void
 }) {
   const update = useUpdateTask()
   const sensors = useBoardSensors()
   const [active, setActive] = useState<DragData | null>(null)
-  const columns = useMemo(() => groupByPerson(rows, today), [rows, today])
+  const columns = useMemo(() => {
+    const cols = groupByPerson(rows, today)
+    if (!counts) return cols
+    return cols.map((c) => {
+      const n = counts.get(c.id ?? 'none')
+      const finished = c.tasks.filter((t) => t.status === 'completed' || t.status === 'cancelled').length
+      return { ...c, count: (n?.open ?? c.tasks.length - finished) + finished, late: n?.late ?? c.late }
+    })
+  }, [rows, today, counts])
   const free = useMemo(() => {
-    const busy = new Set(columns.map((c) => c.id))
+    const busy = new Set<string | null>(columns.map((c) => c.id))
+    for (const [id, n] of counts ?? []) if (n.open > 0) busy.add(id)
     return canAssign ? members.filter((m) => !busy.has(m.user_id)) : []
-  }, [columns, members, canAssign])
+  }, [columns, members, canAssign, counts])
 
   function onDragStart(e: DragStartEvent) {
     setActive((e.active.data.current as DragData | undefined) ?? null)
@@ -104,7 +120,7 @@ export function TaskPeopleView({
   )
 }
 
-function Column({ col, droppable, children }: { col: PersonColumn; droppable: boolean; children: ReactNode }) {
+function Column({ col, droppable, children }: { col: PersonColumn & { count?: number }; droppable: boolean; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: `person:${col.id ?? 'none'}`, disabled: !droppable })
   return (
     <section
@@ -124,7 +140,7 @@ function Column({ col, droppable, children }: { col: PersonColumn; droppable: bo
           </span>
         )}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{col.name}</span>
-        <span className="rounded-full bg-card px-2 text-xs font-medium tabular-nums">{col.tasks.length}</span>
+        <span className="rounded-full bg-card px-2 text-xs font-medium tabular-nums">{col.count ?? col.tasks.length}</span>
         {col.late > 0 && (
           <span className="rounded-full bg-destructive/10 px-2 text-xs font-semibold tabular-nums text-destructive">{col.late} late</span>
         )}
