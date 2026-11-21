@@ -5,6 +5,10 @@ import {
   createLeadResponse,
   crmLead,
   crmLeadCard,
+  leadColumns,
+  leadCounts,
+  leadPage,
+  leadPageQuery,
   leadsQuery,
   leadsSummary,
   normalizePhone,
@@ -20,6 +24,31 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { edit } from './shared'
 import { CARD_SELECT, SUMMARY_SQL, outcomeWhere } from './lead-reads'
+import { countLeads, cursorAfter, decodeCursor, indiaDayStart, selectColumns, selectCounts, selectLeadPage } from './lead-pages'
+
+/** A board column's first page, and each Show more after it. */
+export const COLUMN_PAGE = 30
+
+const PAGE_KEYS = [
+  'outcome', 'include_archived', 'pipeline_id', 'stage_id', 'view', 'quick', 'status', 'assignee', 'quality', 'tag_id',
+  'f_stage', 'f_owner', 'f_event', 'f_quality', 'f_tag', 'f_source', 'f_partner', 'due', 'event_from', 'event_to',
+  'created_from', 'budget_min', 'budget_max', 'hot', 'contacted', 'q', 'day_start', 'order', 'cursor', 'limit',
+] as const
+
+/** The page query off the address; absent keys stay absent. */
+function readPageQuery(query: (k: string) => string | undefined) {
+  const raw: Record<string, string | undefined> = {}
+  for (const k of PAGE_KEYS) raw[k] = query(k) || undefined
+  const q = leadPageQuery.safeParse(raw)
+  if (!q.success) fail(422, 'Invalid query.')
+  return q.data
+}
+
+/** The sort keys ride on each row for the cursor; they never reach the wire. */
+const stripKeys = (r: Record<string, unknown>) => {
+  const { k_at: _a, k_rank: _r, k_hot: _h, k_sort: _s, k_n: _n, k_total: _t, k_value: _v, ...rest } = r
+  return rest
+}
 
 const list = crmLead.array()
 const cards = crmLeadCard.array()
@@ -168,7 +197,7 @@ export const crmLeadRoutes = new Hono<AppEnv>()
             and ${v.unassigned ? sql`l.assigned_to is null` : sql`true`}
             and ${needle ? sql`(l.name ilike ${needle} or l.phone ilike ${needle} or l.email ilike ${needle} or l.title ilike ${needle})` : sql`true`}
           order by l.created_at desc
-          limit ${limit}`,
+          ${limit ? sql`limit ${limit}` : sql``}`,
       ),
     )
     if (!rows) fail(400, 'We could not load leads.')
@@ -186,6 +215,79 @@ export const crmLeadRoutes = new Hono<AppEnv>()
     )
     if (!row) fail(400, 'We could not count leads.')
     return c.json(leadsSummary.parse(row))
+  })
+
+  // The list a page at a time (speed audit, 21 Nov), every filter on the
+  // server, keyset on the list's order. The first page carries the total.
+  .get('/leads/page', async (c) => {
+    const v = readPageQuery((k) => c.req.query(k))
+    const after = decodeCursor(v.cursor, v.order)
+    if (after === 'bad') fail(422, 'Invalid cursor.')
+    const day = v.day_start ?? indiaDayStart()
+    const result = await attempt(c, 'crm.leads_page', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = (await selectLeadPage(sql, v, day, after)) as unknown as (Record<string, unknown> & { id: string; k_at: string })[]
+        const count = after ? null : ((await countLeads(sql, v, day))[0] as { total: number } | undefined)
+        return { rows, total: count ? count.total : null }
+      }),
+    )
+    if (!result) fail(400, 'We could not load leads.')
+    const items = result.rows.slice(0, v.limit)
+    const last = items[items.length - 1]
+    return c.json(
+      leadPage.parse({
+        items: items.map(stripKeys),
+        next_cursor: result.rows.length > v.limit && last ? cursorAfter(last, v.order) : null,
+        total: result.total,
+      }),
+    )
+  })
+
+  // The board: the first 30 cards of every stage with each stage's own count,
+  // in one read. Show more on a column asks /leads/page?stage_id=…&order=newest.
+  .get('/leads/columns', async (c) => {
+    const v = readPageQuery((k) => c.req.query(k))
+    const day = v.day_start ?? indiaDayStart()
+    const rows = await attempt(c, 'crm.leads_columns', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => (await selectColumns(sql, { ...v, order: 'newest' }, day, COLUMN_PAGE)) as unknown as (Record<string, unknown> & { id: string; stage_id: string | null; k_at: string; k_n: number; k_total: number; k_value: number })[]),
+    )
+    if (!rows) fail(400, 'We could not load leads.')
+    const byStage = new Map<string | null, typeof rows>()
+    for (const r of rows) {
+      const list = byStage.get(r.stage_id) ?? []
+      list.push(r)
+      byStage.set(r.stage_id, list)
+    }
+    let total = 0
+    let value = 0
+    const columns = [...byStage.entries()].map(([stageId, list]) => {
+      const head = list[0]!
+      total += head.k_total
+      value += head.k_value
+      const items = list.slice(0, COLUMN_PAGE)
+      const last = items[items.length - 1]
+      return {
+        stage_id: stageId,
+        total: head.k_total,
+        value: head.k_value,
+        items: items.map(stripKeys),
+        next_cursor: list.length > COLUMN_PAGE && last ? cursorAfter(last, 'newest') : null,
+      }
+    })
+    return c.json(leadColumns.parse({ columns, total, value }))
+  })
+
+  // The size of every built-in view and quick chip, over every open lead.
+  .get('/leads/counts', async (c) => {
+    const raw = c.req.query('day_start')
+    const parsed = leadPageQuery.shape.day_start.safeParse(raw || undefined)
+    if (!parsed.success) fail(422, 'day_start must be a moment.')
+    const day = parsed.data ?? indiaDayStart()
+    const row = await attempt(c, 'crm.leads_counts', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => (await selectCounts(sql, day))[0] ?? null),
+    )
+    if (!row) fail(400, 'We could not count leads.')
+    return c.json(leadCounts.parse(row))
   })
 
   // One lead, whole: the drawer reads it, so the list can stay slim. RLS keeps
