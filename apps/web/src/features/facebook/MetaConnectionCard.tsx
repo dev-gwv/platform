@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Facebook, Link2, Plug, PowerOff, Unplug } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import type { FbPage } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
@@ -11,6 +12,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { useAccess } from '@/shared/auth/useAccess'
+import { oauthStateMatches, rememberOauthState, takeOauthState, withOauthState } from './oauth-state'
 import {
   META_EXPIRED,
   isMetaExpired,
@@ -63,6 +65,8 @@ export function MetaConnectionCard() {
     const denied = url.searchParams.get('error')
     if (!code && !denied) return
     spent.current = true
+    const returnedState = url.searchParams.get('state')
+    const keptState = takeOauthState()
     url.searchParams.delete('code')
     url.searchParams.delete('state')
     url.searchParams.delete('error')
@@ -70,6 +74,11 @@ export function MetaConnectionCard() {
     url.searchParams.delete('error_description')
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
     if (!code) return
+    // A code this tab did not ask for (someone else's link) is never traded.
+    if (!oauthStateMatches(returnedState, keptState)) {
+      toast.error('That Facebook connection was not started here. Press Connect with Facebook to try again.')
+      return
+    }
     setExchanging(true)
     // The promise, not mutate's callbacks: those are dropped when React
     // remounts the card (dev strict mode), and the spinner would never stop.
@@ -199,7 +208,14 @@ export function MetaConnectionCard() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {oauthReady && (
                   <Button asChild size="sm" variant={live.length > 0 ? 'outline' : 'default'}>
-                    <a href={connectUrl.data!.connect_url!} rel="noreferrer">
+                    <a
+                      href={connectUrl.data!.connect_url!}
+                      rel="noreferrer"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        window.location.assign(withOauthState(connectUrl.data!.connect_url!, rememberOauthState()))
+                      }}
+                    >
                       <Facebook /> {live.length > 0 ? 'Add another page' : 'Connect with Facebook'}
                     </a>
                   </Button>

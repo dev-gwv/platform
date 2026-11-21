@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { routeLabel } from './route-label'
 import type { AppEnv } from '../context'
 import { fail } from '../middleware/errors'
 import { currentRequestId } from '../middleware/request-id'
@@ -59,12 +60,14 @@ export async function attempt<T, C = never>(
     const refused =
       d.code !== undefined && (REFUSAL_CODES.has(d.code) || (d.code === '42501' && !/row-level security/i.test(d.message)))
     const answered = claimed !== undefined || refused
-    const line = { requestId, method: c.req.method, path: c.req.path, label, code: d.code, message: d.message }
+    // The route pattern, never the raw path: public links carry their token in it.
+    const route = routeLabel(c)
+    const line = { requestId, method: c.req.method, path: route, label, code: d.code, message: d.message }
     if (answered) {
       log.warn(line, 'operation refused')
     } else {
       log.error({ ...line, stack: d.stack }, 'operation failed')
-      reportError(c.env, err, { requestId, method: c.req.method, path: c.req.path, label })
+      reportError(c.env, err, { requestId, method: c.req.method, path: route, label })
     }
     if (claimed !== undefined) return claimed as C
     switch (d.code) {

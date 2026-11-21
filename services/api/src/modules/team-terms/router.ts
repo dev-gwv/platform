@@ -22,6 +22,7 @@ import { requireStudioWork } from '../../lib/scope'
 import { todayInIndia } from '../../lib/dates'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendTeamTermsEmail } from '../../lib/email'
+import { claimStudioEmail } from '../../lib/email-cap'
 
 const templates = teamTermsTemplate.array()
 const sends = teamTermsSend.array()
@@ -299,6 +300,9 @@ export const teamTermsRouter = new Hono<AppEnv>()
     })
 
     const ttl = context.validity_days ? context.validity_days * 24 : DEFAULT_TTL_HOURS
+    // The studio's daily email ceiling is checked before anything is issued,
+    // so a refusal leaves nothing half-sent.
+    if (d.send_email && d.recipient_email) await claimStudioEmail(c)
     const issued = await attempt(c, 'team_terms.send', () =>
       withUser(c.env, auth.userId, async (sql) => {
         const rows = await sql<{ send_id: string; token: string; expires_at: string | null }[]>`
@@ -329,7 +333,7 @@ export const teamTermsRouter = new Hono<AppEnv>()
         shootName: context.shoot_name,
         title: context.title,
         mustSign: context.mode === 'acknowledgement_required',
-      })
+      }, auth.companyId)
       email = ok ? 'sent' : 'failed'
     }
 

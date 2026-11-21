@@ -33,6 +33,7 @@ import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { DesignerCredit } from '@/shared/ui/designer-credit'
 import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 import { Wordmark } from '@/shared/ui/wordmark'
+import { safeRedirect } from '@/shared/auth/safe-redirect'
 
 type Mode = 'signin' | 'register' | 'forgot'
 const ok = z.object({ ok: z.boolean() })
@@ -178,8 +179,9 @@ export function LoginPage() {
    * ?redirect=/leads), and a new studio starts at step 1 of setup.
    */
   function goNext(s: SessionState | null = null, fresh = false) {
-    if (!fresh && redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
-      window.location.assign(redirect)
+    const target = fresh ? null : safeRedirect(redirect, window.location.origin)
+    if (target) {
+      window.location.assign(target)
       return
     }
     const landing = setupLanding(s)

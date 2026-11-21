@@ -212,3 +212,7 @@ end;
 $$;
 revoke all on function prune_usage_events() from public, anon, authenticated;
 grant execute on function prune_usage_events() to service_role;
+
+-- The old Diamond screenshot claim is gone from the API (audit, 21 Nov): its
+-- definer function has no caller left.
+drop function if exists diamond_submit_claim(uuid);

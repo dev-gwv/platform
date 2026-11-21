@@ -45,6 +45,7 @@ import { clearRefreshCookie, cookieMode, readRefreshCookie, setRefreshCookie } f
 import { originAllowed } from '../../lib/allowed-origins'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../../lib/email'
 import { sendWelcomeFor } from '../../lib/onboarding'
+import { inviteAcceptPath, NO_PASSWORD_MESSAGE } from '../../lib/invite-safety'
 
 /**
  * A throwaway hash to verify against when no account matches, so a miss costs
@@ -728,25 +729,33 @@ export const authRouter = new Hono<AppEnv>()
     const existing = await attempt(c, 'auth.accept_invite.lookup', () =>
       withService(
         c.env,
-        (sql) => sql<{ id: string; encrypted_password: string | null; email_verified: boolean }[]>`
-          select au.id, au.encrypted_password, au.email_verified
+        (sql) => sql<{ id: string; encrypted_password: string | null }[]>`
+          select au.id, au.encrypted_password
             from peek_user_invitation(${parsed.data.token}) i
             join auth.users au on lower(au.email) = lower(i.email) and au.identity_id is null`,
       ),
     )
     if (!existing) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
+    // The link alone only ever makes a NEW login: the studio that sent it can
+    // hold it too. A login with no password (Google-only, imported, someone's
+    // directory entry) is refused rather than handed to whoever has the link
+    // (audit, 21 Nov) -- its owner sets a password through Forgot password,
+    // which proves the inbox, and opens the link again.
     const login = existing[0]
-    const isLogin = !!login && (!!login.encrypted_password || login.email_verified)
-    if (isLogin && login.encrypted_password) {
-      const ok = await verifyPassword(parsed.data.password, login.encrypted_password)
+    const path = inviteAcceptPath(login)
+    if (path === 'no_password') fail(409, NO_PASSWORD_MESSAGE)
+    if (path === 'check_password') {
+      const ok = await verifyPassword(parsed.data.password, login!.encrypted_password!)
       if (!ok) fail(401, 'That is not the password for your existing IPC login.')
-    } else if (!isLogin && parsed.data.password.length < 8) {
+    } else if (parsed.data.password.length < 8) {
       fail(422, 'Please choose a password of at least 8 characters.')
     }
 
     // Hash first, then consume: the SQL side creates the identity and the tenant
     // row in one transaction, so a failure leaves no half-built member behind.
-    const pwHash = await hashPassword(parsed.data.password)
+    // An existing login keeps its own password: the hash goes to the SQL side
+    // only when a new login is being made.
+    const pwHash = path === 'new' ? await hashPassword(parsed.data.password) : null
     const uid = await attempt(
       c,
       'auth.accept_invite',

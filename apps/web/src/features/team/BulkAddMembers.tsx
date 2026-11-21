@@ -128,8 +128,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   }
 
   function applySharedPassword() {
-    if (sharedPassword.length < 6) {
-      toast.error('Use at least 6 characters.')
+    if (sharedPassword.length < 8) {
+      toast.error('Use at least 8 characters.')
       return
     }
     setRows((prev) => prev.map((r) => (r.status === 'added' ? r : { ...r, password: sharedPassword })))
@@ -307,7 +307,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
               autoComplete="new-password"
               value={sharedPassword}
               onChange={(e) => setSharedPassword(e.target.value)}
-              placeholder="6+ characters"
+              placeholder="8+ characters"
               className="h-8 w-40"
               disabled={running}
             />
@@ -490,7 +490,7 @@ function LoginFields({ index, row, errors, locked, showPasswords, onEdit }: RowP
               autoComplete="new-password"
               value={row.password}
               onChange={(e) => onEdit({ password: e.target.value })}
-              placeholder="Password, 6+ characters"
+              placeholder="Password, 8+ characters"
               aria-label={`Row ${index + 1} password`}
               aria-invalid={!!errors?.password}
               disabled={locked}

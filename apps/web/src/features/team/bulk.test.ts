@@ -43,10 +43,10 @@ describe('rows', () => {
 
 describe('toRequest', () => {
   it('makes a login when Give a login is ticked and there is an email', () => {
-    const req = toRequest(row({ name: 'Asha', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret1' }), () => null)
+    const req = toRequest(row({ name: 'Asha', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret12' }), () => null)
     expect(req.create_login).toBe(true)
     expect(req.email).toBe('a@x.in')
-    expect(req.password).toBe('secret1')
+    expect(req.password).toBe('secret12')
     expect(addMemberRequest.safeParse(req).success).toBe(true)
   })
 
@@ -80,7 +80,7 @@ describe('toRequest', () => {
 
 describe('validateRows', () => {
   it('passes a complete row', () => {
-    const r = row({ name: 'Asha', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret1' })
+    const r = row({ name: 'Asha', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret12' })
     expect(validateRows([r]).size).toBe(0)
   })
 
@@ -101,8 +101,8 @@ describe('validateRows', () => {
   })
 
   it('catches the same email or phone typed on two rows', () => {
-    const a = row({ name: 'Asha', phone: '98765 43210', login: true, email: 'A@x.in', password: 'secret1' })
-    const b = row({ name: 'Ravi', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret1' })
+    const a = row({ name: 'Asha', phone: '98765 43210', login: true, email: 'A@x.in', password: 'secret12' })
+    const b = row({ name: 'Ravi', phone: '9876543210', login: true, email: 'a@x.in', password: 'secret12' })
     const e = validateRows([a, b])
     expect(e.has(a.key)).toBe(false)
     expect(e.get(b.key)?.email).toBe('Same as row 1')
@@ -116,10 +116,10 @@ describe('validateRows', () => {
 
 describe('parsePastedTeam', () => {
   it('reads a tab-separated block from a spreadsheet without a header, in the default order', () => {
-    const text = 'Asha Rao\t9876543210\tasha@x.in\tsecret1\tCandid Photographer\nRavi\t9876543211\t\t\t'
+    const text = 'Asha Rao\t9876543210\tasha@x.in\tsecret12\tCandid Photographer\nRavi\t9876543211\t\t\t'
     const { rows, unknownRoles } = parsePastedTeam(text, PICKABLE)
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({ name: 'Asha Rao', phone: '9876543210', email: 'asha@x.in', password: 'secret1', roleKeys: [ROLE_ID] })
+    expect(rows[0]).toMatchObject({ name: 'Asha Rao', phone: '9876543210', email: 'asha@x.in', password: 'secret12', roleKeys: [ROLE_ID] })
     expect(rows[1]).toMatchObject({ name: 'Ravi', email: '', roleKeys: [] })
     expect(unknownRoles).toEqual([])
   })

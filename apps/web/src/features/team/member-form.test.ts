@@ -78,7 +78,7 @@ describe('formErrors', () => {
   })
 
   it('says a short password is short, in plain words', () => {
-    expect(formErrors(form({ ...filled, password: 'abc' })).password).toBe('Password must be at least 6 characters.')
+    expect(formErrors(form({ ...filled, password: 'abc' })).password).toBe('Password must be at least 8 characters.')
   })
 
   it('catches a mistyped email', () => {

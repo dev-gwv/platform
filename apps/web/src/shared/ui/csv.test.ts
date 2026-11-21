@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toCsv } from './csv'
+import { csvCell, toCsv } from './csv'
 
 /**
  * The quoting rule, pinned.
@@ -49,5 +49,25 @@ describe('toCsv', () => {
 
   it('quotes a header that needs it too', () => {
     expect(toCsv(['Name, legal'], [['x']])).toBe('"Name, legal"\nx')
+  })
+
+  it('never lets a typed cell run as a formula in Excel or Sheets', () => {
+    expect(toCsv(['A'], [['=HYPERLINK("http://evil","x")']])).toBe('A\n"\'=HYPERLINK(""http://evil"",""x"")"')
+    expect(toCsv(['A'], [['+91 98765 43210']])).toBe("A\n'+91 98765 43210")
+    expect(toCsv(['A'], [['-2+3']])).toBe("A\n'-2+3")
+    expect(toCsv(['A'], [['@SUM(A1)']])).toBe("A\n'@SUM(A1)")
+    expect(toCsv(['A'], [['\tcmd']])).toBe("A\n'\tcmd")
+  })
+
+  it('keeps a real negative number a number', () => {
+    expect(toCsv(['Amount'], [[-500]])).toBe('Amount\n-500')
+  })
+})
+
+describe('csvCell', () => {
+  it('defuses and quotes the same way for other export screens', () => {
+    expect(csvCell('=1+1')).toBe("'=1+1")
+    expect(csvCell('Roy, Jr.')).toBe('"Roy, Jr."')
+    expect(csvCell(null)).toBe('')
   })
 })

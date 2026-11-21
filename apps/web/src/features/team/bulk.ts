@@ -180,8 +180,8 @@ export function validateRows(rows: readonly BulkRow[]): Map<string, RowErrors> {
 
     if (r.login && !email) e.email = 'Needed to sign in'
     if (email && !EMAIL.test(email)) e.email = "Doesn't look like an email"
-    if (email && r.password.length < 6) {
-      e.password = r.password ? 'At least 6 characters' : 'Needed to sign in'
+    if (email && r.password.length < 8) {
+      e.password = r.password ? 'At least 8 characters' : 'Needed to sign in'
     } else if (email && r.password.length > 72) {
       e.password = 'Too long'
     }

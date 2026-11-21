@@ -180,7 +180,7 @@ export function AddMemberForm({ onDone, onCancel }: { onDone: () => void; onCanc
                       value={form.password}
                       onChange={(e) => set('password', e.target.value)}
                       onFocus={() => setShowPassword(true)}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       aria-invalid={!!errors.password}
                       autoComplete="new-password"
                       className="min-w-0 flex-1"

@@ -4,8 +4,6 @@ import { planQuote, planUsage, diamondPhoneRequest, diamondPhoneResult, brandsSt
   activateResponse,
   createOrderRequest,
   createOrderResponse,
-  diamondClaimRequest,
-  diamondClaimResult,
   plan,
   subscriptionStatus,
 } from '@ipc/contracts'
@@ -19,8 +17,6 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { isDevLike, razorpayConfigured } from '../../lib/env'
 import { createRazorpayOrder, verifyRazorpaySignature } from '../../lib/razorpay'
-import { checkDiamondScreenshot } from '../../lib/diamond-check'
-import { sendDiamondClaimNotice, sendDiamondResultEmail } from '../../lib/email'
 import { subscriptionOfferRouter } from './offer'
 
 /** One plans row as the contract reads it; numerics arrive as strings from the driver. */
@@ -339,72 +335,8 @@ export const subscriptionRouter = new Hono<AppEnv>()
     return c.json(diamondPhoneResult.parse({ outcome, access_until: after?.[0]?.u ?? rows[0].u }))
   })
 
-  .post('/diamond/claim', requireOwner(), async (c) => {
-    const parsed = diamondClaimRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Upload a screenshot first.')
-    const auth = c.get('auth')
-
-    const claimId = await attempt(
-      c,
-      'subscription.diamond_claim',
-      () =>
-        withUser(c.env, auth.userId, async (sql) => {
-          const [r] = await sql<{ id: string }[]>`select diamond_submit_claim(${parsed.data.file_id}) as id`
-          return r?.id ?? null
-        }),
-      { onCode: (code) => (code === '22023' ? 'bad' : undefined) },
-    )
-    if (claimId === 'bad') fail(422, 'Upload a screenshot image (PNG, JPEG or WEBP) of the group.')
-    if (!claimId) fail(400, 'We could not send that. Please try again.')
-
-    const file = await attempt(c, 'subscription.diamond_file', () =>
-      withService(c.env, (sql) => sql<{ mime: string; bytes: Buffer; name: string }[]>`
-        select f.mime, f.bytes, co.name
-          from files f join companies co on co.id = f.company_id
-         where f.id = ${parsed.data.file_id} and f.company_id = ${auth.companyId}`),
-    )
-    const img = file?.[0]
-    const verdict = img
-      ? await checkDiamondScreenshot(c.env.ANTHROPIC_API_KEY, { mime: img.mime, bytes: img.bytes })
-      : ({ decision: 'manual', reason: 'The screenshot could not be read; the team will look at it.' } as const)
-
-    let status: 'pending' | 'approved' | 'rejected' = 'pending'
-    let reason: string | null = verdict.decision === 'approve' ? null : verdict.reason
-    if (verdict.decision !== 'manual') {
-      const decided = await attempt(c, 'subscription.diamond_decide', () =>
-        withService(c.env, (sql) => sql<{ s: string }[]>`
-          select diamond_decide(${claimId}, ${verdict.decision === 'approve'}, 'auto', ${reason},
-                                ${verdict.reading ? sql.json(verdict.reading as never) : null}) as s`),
-      )
-      if (decided?.[0]?.s === 'approved' || decided?.[0]?.s === 'rejected') status = decided[0].s
-    } else {
-      // Nothing read: the reason says so, and a person decides from the inbox.
-      await attempt(c, 'subscription.diamond_note', () =>
-        withService(c.env, (sql) => sql`update diamond_claims set reason = ${reason} where id = ${claimId}`),
-      )
-    }
-
-    const until = await attempt(c, 'subscription.diamond_until', () =>
-      withService(c.env, (sql) => sql<{ u: string | null }[]>`
-        select company_access_until(plan_expiry, grandfathered_until, grace_until)::text as u
-          from companies where id = ${auth.companyId}`),
-    )
-    const accessUntil = until?.[0]?.u ?? null
-    const studio = img?.name ?? 'Your studio'
-
-    await audit(c, { action: `subscription.diamond_${status}`, entityType: 'company', entityId: auth.companyId })
-    if (status !== 'pending') {
-      await sendDiamondResultEmail(c.env, auth.email, { studio, approved: status === 'approved', reason, accessUntil })
-    }
-    const title = verdict.decision === 'manual' ? null : (verdict.reading?.group_title ?? null)
-    await sendDiamondClaimNotice(c.env, {
-      studio,
-      outcome: status === 'approved' ? 'approved automatically' : status === 'rejected' ? 'not approved' : 'waiting for you',
-      title,
-    })
-    if (status === 'approved') reason = null
-    return c.json(diamondClaimResult.parse({ status, reason, access_until: accessUntil }), 201)
-  })
+  // The old screenshot claim (POST /diamond/claim) is gone (audit, 21 Nov):
+  // membership is checked by the registered phone number alone (/diamond/verify).
 
   .post('/activate', requireOwner(), async (c) => {
     const parsed = activateRequest.safeParse(await c.req.json().catch(() => ({})))

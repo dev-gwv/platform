@@ -12,7 +12,7 @@ export interface Env {
   /** Email (Resend) for verification mail. */
   RESEND_API_KEY: string
   EMAIL_FROM: string
-  /** Reads IPC Diamond screenshots (lib/diamond-check.ts). Optional: without it a person approves each claim. */
+  /** Claude, for reading a studio's uploaded quotation (lib/quotation-reader.ts). Optional. */
   ANTHROPIC_API_KEY?: string
   /**
    * The help assistant's provider key (0247, lib/ai.ts). Optional: without it

@@ -82,7 +82,13 @@ const fromFrameline = (row: Pick<GalleryRow, 'created_at'>, g: FramelineGallery)
 const refresh = (c: Context<AppEnv>, projectId: string, g: FramelineGallery) =>
   attempt(c, 'gallery.sync', () => withService(c.env, (sql) => saveGallerySnapshot(sql, c.get('auth').companyId, projectId, g)))
 
-/** Who the person is, for Frameline. A failed read means "not confirmed": never the other way round. */
+/**
+ * Who the person is, for Frameline. Frameline matches people by email only
+ * when it is confirmed, so "confirmed" means the inbox was proven (the
+ * confirmation link, a password reset or Google -- 0294), never
+ * `email_verified`, which a studio sets on any team login it makes. A failed
+ * read means "not confirmed": never the other way round.
+ */
 export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
   const auth = c.get('auth')
   const facts = await attempt(c, 'gallery.person', () =>
@@ -90,7 +96,7 @@ export async function personOf(c: Context<AppEnv>): Promise<FramelinePerson> {
       const [co] = await sql<{ name: string | null }[]>`
         select coalesce(nullif(btrim(display_name), ''), name) as name from companies where id = ${auth.companyId}`
       const [au] = await sql<{ v: boolean }[]>`
-        select au.email_verified as v from auth.users au where au.id = auth_identity_of(${auth.userId})`
+        select (au.email_proven_at is not null) as v from auth.users au where au.id = auth_identity_of(${auth.userId})`
       return { companyName: co?.name ?? '', emailVerified: au?.v === true, cover: await coverFor(sql, auth.companyId) }
     }),
   )
