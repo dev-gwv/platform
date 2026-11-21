@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
+import { trimToFirstPage } from '@/shared/api/reset-pages'
 import type { BulkLeadPatch, CrmLead, CrmTag, LeadTag, UpdateLeadRequest } from '@ipc/contracts'
 
 /**
@@ -309,6 +310,7 @@ export function rollbackLeadPatch(qc: QueryClient, snap: LeadSnapshot | undefine
  * marked out of date.
  */
 export function refreshLeadReads(qc: QueryClient) {
+  trimToFirstPage(qc, PAGED)
   void qc.invalidateQueries({ queryKey: ['crm'], refetchType: 'none' })
   for (const queryKey of LEAD_READS) void qc.invalidateQueries({ queryKey })
 }
@@ -343,5 +345,24 @@ export function settleLeads(qc: QueryClient, ids: readonly string[], opts: { lis
   now(['crm', 'my-day'])
   now(['crm', 'team-day'])
   now(['crm', 'reminders'])
-  if (opts.lists) for (const queryKey of LIST_KEYS) now(queryKey)
+  if (opts.lists) {
+    trimToFirstPage(qc, PAGED)
+    for (const queryKey of LIST_KEYS) now(queryKey)
+  }
+}
+
+/**
+ * The lead list's pages (useLeadPages, a hundred at a time). An invalidated
+ * infinite query refetches every page it holds, one after another, so each
+ * refresh above first cuts it back to its first page: one request, not six
+ * for someone who pressed Show more five times. The board's columns
+ * (useLeadColumns) are one request already; a column's Show more cards are
+ * dropped when it refetches.
+ */
+const PAGED: QueryKey = ['crm', 'leads', 'card', 'pages']
+
+/** Every CRM read asked for again (a set-up change, many leads at once), the list's pages from the first. */
+export function refreshCrm(qc: QueryClient) {
+  trimToFirstPage(qc, PAGED)
+  return qc.invalidateQueries({ queryKey: ['crm'] })
 }

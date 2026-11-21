@@ -3,14 +3,15 @@ import { PanelBoundary } from '@/shared/layout/RouteError'
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCorners, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { toast } from 'sonner'
 import { Palette } from 'lucide-react'
 import type { TaskListItem, TaskStatus } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { SkeletonCards } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
-import { useBoard, useLaneColors, useOlderDoneTasks, useSetBoardOrder, useSetLaneColor, useUpdateTaskStatus, withOlder } from '@/features/tasks/api'
+import { useLaneColors, useOlderDoneTasks, useSetLaneColor } from '@/features/tasks/api'
+import { useBoardMoves, useTaskColumnMore, useTaskColumns } from '@/features/tasks/board-api'
+import { TASK_COLUMN_PAGE, laneOf, type BoardQuery } from '@/features/tasks/board-columns'
 import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { todayISO } from '@/features/tasks/board'
 import { BOARD_LANES } from '@/features/tasks/delegation'
@@ -22,6 +23,11 @@ import { TaskDrawer } from '@/features/tasks/TaskDrawer'
  * The studio's tasks as a kanban: To do · In progress · Review · Blocked ·
  * Done. The order inside a lane is dragged by hand and shared. Cancelled work
  * is off the board (the list still has it).
+ *
+ * A page at a time (speed audit, 21 Nov): each lane reads its first 30 cards
+ * and its own count from GET /tasks/columns, with the toolbar applied on the
+ * server; "Show N more" brings the next 30 of that lane. Done holds the last
+ * 30 days; older done tasks come in under it once it is all here.
  */
 const LANES = BOARD_LANES
 
@@ -40,64 +46,51 @@ const LANE_COLORS = {
 } as const
 type LaneColor = keyof typeof LANE_COLORS
 
-type Lanes = Record<TaskStatus, TaskListItem[]>
-
-/** Older done tasks sort after every card placed by hand. */
-const OLDER_ORDER = 1_000_000_000
+type LaneView = ReturnType<typeof laneOf>
 
 export function TaskBoard({
-  project,
-  person,
-  q,
-  items,
-  filter,
+  query,
+  scope = 'studio',
+  olderFilter,
 }: {
-  project?: string | undefined
-  person?: string | undefined
-  q?: string | undefined
-  /** Rows to show instead of the studio board (someone who sees only their own). */
-  items?: readonly TaskListItem[] | undefined
-  /** The page's own filters (mine, member, due date). */
-  filter?: ((t: TaskListItem) => boolean) | undefined
+  /** The toolbar, applied on the server (GET /tasks/columns). */
+  query: BoardQuery
+  /** Whose older done tasks page in under Done. */
+  scope?: 'studio' | 'my' | undefined
+  /** The page's own filters, for the older done tasks (which come unfiltered). */
+  olderFilter?: ((t: TaskListItem) => boolean) | undefined
 }) {
-  const board = useBoard()
-  // The board shows open work and the last 30 days' done; older done tasks
-  // join the Done lane a page at a time, after the hand-ordered ones.
-  const older = useOlderDoneTasks(items ? 'my' : 'studio')
-  const olderRows = useMemo(() => older.rows.map((t, i) => ({ ...t, sort_order: OLDER_ORDER + i })), [older.rows])
-  const data = useMemo(() => withOlder(items ?? board.data, olderRows), [items, board.data, olderRows])
-  const { isLoading, isError, refetch } = items ? { isLoading: false, isError: false, refetch: board.refetch } : board
+  const board = useTaskColumns(query)
+  const columnMore = useTaskColumnMore(query)
+  const moves = useBoardMoves(query)
+  const older = useOlderDoneTasks(scope)
+  const olderRows = useMemo(() => (olderFilter ? older.rows.filter(olderFilter) : older.rows), [older.rows, olderFilter])
   const today = todayISO()
   const { me, canManage } = useTaskViewer()
   const actions = useTaskActions()
   const [openId, setOpenId] = useState<string | null>(null)
-  const setOrder = useSetBoardOrder()
-  const updateStatus = useUpdateTaskStatus()
   const laneColors = useLaneColors()
   const setLaneColor = useSetLaneColor()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const [lanes, setLanes] = useState<Lanes>(() => groupByLane([]))
 
-  const filtered = useMemo(() => {
-    const needle = (q ?? '').trim().toLowerCase()
-    return (data ?? []).filter((t) => {
-      if (filter && !filter(t)) return false
-      if (project && t.project_id !== project) return false
-      if (person === 'none' ? t.assignee_ids.length > 0 : person && !t.assignee_ids.includes(person)) return false
-      if (needle && !`${t.title} ${t.project_name ?? ''}`.toLowerCase().includes(needle)) return false
-      return true
-    })
-  }, [data, project, person, q, filter])
+  const lanes = useMemo(
+    () => Object.fromEntries(LANES.map((l) => [l.key, laneOf(board.data, l.key, olderRows)])) as Record<TaskStatus, LaneView>,
+    [board.data, olderRows],
+  )
+  const byId = useMemo(() => {
+    const m = new Map<string, { task: TaskListItem; lane: TaskStatus }>()
+    for (const l of LANES) for (const t of lanes[l.key].items) m.set(t.id, { task: t, lane: l.key })
+    return m
+  }, [lanes])
 
-  // Selection never points at rows the filters have hidden.
-  const visibleIds = useMemo(() => new Set(filtered.map((t) => t.id)), [filtered])
+  // Selection never points at cards no longer on the board.
   useEffect(() => {
     setSelected((prev) => {
       if (prev.size === 0) return prev
-      const next = new Set([...prev].filter((id) => visibleIds.has(id)))
+      const next = new Set([...prev].filter((id) => byId.has(id)))
       return next.size === prev.size ? prev : next
     })
-  }, [visibleIds])
+  }, [byId])
 
   const toggleSelect = (id: string) =>
     setSelected((s) => {
@@ -108,80 +101,43 @@ export function TaskBoard({
     })
 
   async function bulkStatus(status: TaskStatus) {
-    const ids = [...selected]
-    if (ids.length === 0) return
-    try {
-      await Promise.all(ids.map((taskId) => updateStatus.mutateAsync({ id: taskId, status })))
-      toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} moved`)
-      setSelected(new Set())
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not move every task.')
-    }
+    const tasks = [...selected].map((id) => byId.get(id)?.task).filter((t): t is TaskListItem => !!t)
+    if (tasks.length === 0) return
+    if (await moves.bulk(tasks, status)) setSelected(new Set())
   }
-
-  useEffect(() => {
-    if (data) setLanes(groupByLane(filtered))
-  }, [data, filtered])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     // A press-and-hold drags on a phone; a swipe still scrolls (audit, 18 Nov).
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   )
-  const laneOf = useMemo(() => {
-    const m = new Map<string, TaskStatus>()
-    for (const key of Object.keys(lanes) as TaskStatus[]) for (const t of lanes[key]) m.set(t.id, key)
-    return m
-  }, [lanes])
 
   function onDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id)
     if (!e.over) return
     const overId = String(e.over.id)
-    const from = laneOf.get(activeId)
+    const from = byId.get(activeId)
     if (!from) return
     // over is either a card id or a lane droppable id ("lane:<status>")
-    const to = overId.startsWith('lane:') ? (overId.slice(5) as TaskStatus) : laneOf.get(overId)
+    const to = overId.startsWith('lane:') ? (overId.slice(5) as TaskStatus) : byId.get(overId)?.lane
     if (!to) return
     // Only someone who manages tasks drags between lanes; the person on a
     // task uses its buttons (Done is a review, not a drag).
     if (!canManage) return
-
-    setLanes((prev) => {
-      const next: Lanes = {
-        to_do: [...prev.to_do],
-        in_progress: [...prev.in_progress],
-        review: [...prev.review],
-        blocked: [...prev.blocked],
-        completed: [...prev.completed],
-        cancelled: [...prev.cancelled],
-      }
-      const idx = next[from].findIndex((t) => t.id === activeId)
-      if (idx === -1) return prev
-
-      if (from === to) {
-        const overIdx = next[to].findIndex((t) => t.id === overId)
-        if (overIdx !== -1 && overIdx !== idx) next[to] = arrayMove(next[to], idx, overIdx)
-      } else {
-        const [moved] = next[from].splice(idx, 1)
-        if (!moved) return prev
-        const overIdx = next[to].findIndex((t) => t.id === overId)
-        const insertAt = overIdx === -1 ? next[to].length : overIdx
-        next[to].splice(insertAt, 0, { ...moved, status: to })
-      }
-
-      // Persist: target lane order (+ source lane if changed) and the status move.
-      void setOrder.mutateAsync({ board_view: 'default', lane_key: to, task_ids: next[to].map((t) => t.id) })
-      if (from !== to) {
-        void setOrder.mutateAsync({ board_view: 'default', lane_key: from, task_ids: next[from].map((t) => t.id) })
-        void updateStatus.mutateAsync({ id: activeId, status: to })
-      }
-      return next
-    })
+    const target = lanes[to].items
+    if (from.lane === to) {
+      const idx = target.findIndex((t) => t.id === activeId)
+      const overIdx = target.findIndex((t) => t.id === overId)
+      if (idx === -1 || overIdx === -1 || idx === overIdx) return
+      void moves.reorder(to, arrayMove(target, idx, overIdx).map((t) => t.id))
+      return
+    }
+    const overIdx = target.findIndex((t) => t.id === overId)
+    void moves.drag(from.task, from.lane, to, overIdx === -1 ? target.length : overIdx)
   }
 
-  if (isLoading) return <SkeletonCards count={3} />
-  if (isError) return <ErrorState onRetry={() => void refetch()} />
+  if (board.isLoading) return <SkeletonCards count={3} />
+  if (board.isError) return <ErrorState onRetry={() => void board.refetch()} />
 
   return (
     <>
@@ -190,7 +146,7 @@ export function TaskBoard({
           <span className="font-medium">{selected.size} selected</span>
           <span className="text-xs text-muted-foreground">Move to:</span>
           {LANES.map((l) => (
-            <Button key={l.key} size="sm" variant="outline" disabled={updateStatus.isPending} onClick={() => void bulkStatus(l.key)}>
+            <Button key={l.key} size="sm" variant="outline" disabled={moves.pending} onClick={() => void bulkStatus(l.key)}>
               {l.label}
             </Button>
           ))}
@@ -199,32 +155,47 @@ export function TaskBoard({
       )}
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {LANES.map((lane) => (
-            <Lane
-              key={lane.key}
-              laneKey={lane.key}
-              label={lane.label}
-              hint={lane.hint}
-              tasks={lanes[lane.key]}
-              color={(laneColors.data?.[lane.key] as LaneColor | undefined) ?? 'default'}
-              onColor={canManage ? (c) => setLaneColor.mutate({ lane: lane.key, color: c }) : undefined}
-              footer={lane.key === 'completed' ? <ShowOlderDone older={older} className="mt-1 flex justify-center" /> : undefined}
-            >
-              {(t) => (
-                <SortableCard key={t.id} id={t.id} disabled={!canManage}>
-                  <TaskCard
-                    task={t}
-                    today={today}
-                    me={me}
-                    canManage={canManage}
-                    onOpen={(x) => setOpenId(x.id)}
-                    onAction={actions.run}
-                    {...(canManage ? { select: { ticked: selected.has(t.id), onToggle: () => toggleSelect(t.id) } } : {})}
-                  />
-                </SortableCard>
-              )}
-            </Lane>
-          ))}
+          {LANES.map((lane) => {
+            const l = lanes[lane.key]
+            return (
+              <Lane
+                key={lane.key}
+                laneKey={lane.key}
+                label={lane.label}
+                hint={lane.hint}
+                tasks={l.items}
+                count={l.count}
+                color={(laneColors.data?.[lane.key] as LaneColor | undefined) ?? 'default'}
+                onColor={canManage ? (c) => setLaneColor.mutate({ lane: lane.key, color: c }) : undefined}
+                footer={
+                  <>
+                    <ShowMore
+                      more={l.more}
+                      loading={columnMore.loading === lane.key}
+                      onShow={() => {
+                        if (l.cursor) void columnMore.more(lane.key, l.cursor)
+                      }}
+                    />
+                    {lane.key === 'completed' && !l.cursor && <ShowOlderDone older={older} className="mt-1 flex justify-center" />}
+                  </>
+                }
+              >
+                {(t) => (
+                  <SortableCard key={t.id} id={t.id} disabled={!canManage || moves.pending}>
+                    <TaskCard
+                      task={t}
+                      today={today}
+                      me={me}
+                      canManage={canManage}
+                      onOpen={(x) => setOpenId(x.id)}
+                      onAction={actions.run}
+                      {...(canManage ? { select: { ticked: selected.has(t.id), onToggle: () => toggleSelect(t.id) } } : {})}
+                    />
+                  </SortableCard>
+                )}
+              </Lane>
+            )
+          })}
         </div>
       </DndContext>
       {actions.dialogs}
@@ -237,13 +208,19 @@ export function TaskBoard({
   )
 }
 
-function groupByLane(items: TaskListItem[]): Lanes {
-  const lanes: Lanes = { to_do: [], in_progress: [], review: [], blocked: [], completed: [], cancelled: [] }
-  for (const t of items) lanes[t.status].push(t)
-  for (const key of Object.keys(lanes) as TaskStatus[]) {
-    lanes[key].sort((a, b) => a.sort_order - b.sort_order)
-  }
-  return lanes
+/** Under a lane that holds more than it shows: a bordered "Show N more" (the next 30 at most). */
+function ShowMore({ more, onShow, loading }: { more: number; onShow: () => void; loading: boolean }) {
+  if (more <= 0) return null
+  return (
+    <button
+      type="button"
+      onClick={onShow}
+      disabled={loading}
+      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
+    >
+      {loading ? 'Loading…' : `Show ${Math.min(more, TASK_COLUMN_PAGE)} more`}
+    </button>
+  )
 }
 
 function Lane({
@@ -251,6 +228,7 @@ function Lane({
   label,
   hint,
   tasks,
+  count,
   color,
   onColor,
   footer,
@@ -260,6 +238,8 @@ function Lane({
   label: string
   hint: string
   tasks: TaskListItem[]
+  /** The lane's own total from the server, not the cards loaded. */
+  count: number
   color: LaneColor
   onColor?: ((c: LaneColor) => void) | undefined
   footer?: ReactNode
@@ -282,7 +262,7 @@ function Lane({
           {label}
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground">{tasks.length}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">{count.toLocaleString('en-IN')}</span>
           {onColor && <button
             type="button"
             aria-label={`Change ${label} lane colour`}

@@ -16,6 +16,7 @@ import {
 import { ApiError, callApi, SLOW_TIMEOUT_MS } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 const pages = fbPage.array()
 
@@ -87,7 +88,7 @@ export const useResetMeta = () => {
       toast.success('Facebook disconnected. Leads already received are kept.')
       qc.removeQueries({ queryKey: ['meta', 'check'] })
       forgetPagesHere(qc)
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -100,7 +101,7 @@ function useMetaMutation<TInput, TOutput>(fn: (input: TInput) => Promise<TOutput
     onSuccess: (out) => {
       if (success) toast.success(success(out))
       void qc.invalidateQueries({ queryKey: ['meta'] })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -132,7 +133,7 @@ export const useDisconnectPage = () => {
           duration: 12000,
         })
       void qc.invalidateQueries({ queryKey: ['meta'] })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })

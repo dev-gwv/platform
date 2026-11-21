@@ -21,6 +21,7 @@ import { quoteDay } from '@ipc/domain'
 import { useDeliverableTypeList } from './api'
 import { shootDeliverables, toNewClientRequest, toProjectRequest, toShootRequests } from './wizard'
 import { readingToDraft } from './quotation-import'
+import { refreshTasks } from '@/features/tasks/refresh'
 
 const idOnly = z.object({ id: z.string() })
 
@@ -156,7 +157,7 @@ function QuotationUploadDialog({ onClose }: { onClose: () => void }) {
         missed.push('the team’s tasks')
       }
       void qc.invalidateQueries({ queryKey: ['projects'] })
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void refreshTasks(qc)
       void qc.invalidateQueries({ queryKey: ['shoots'] })
       setStage({ at: 'done', projectId: id, name: draft.name, reading, tasks, moved, missed })
     } catch (e) {

@@ -4,6 +4,7 @@ import { callQueueItem, callQueueScope, crmActivity, dayReport, dayReportRow, z,
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 const queueResponse = z.object({ scope: callQueueScope, items: callQueueItem.array() })
 
@@ -57,7 +58,7 @@ export function useLogCall() {
     },
     onSuccess: () => {
       toast.success('Call logged')
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message || 'We could not log the call.'),
   })

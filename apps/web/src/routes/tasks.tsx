@@ -18,6 +18,7 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { useDebounced } from '@/shared/hooks/use-debounced'
 import { RemindersContent } from '@/routes/reminders'
 import { DailyTasks } from '@/features/tasks/DailyTasks'
 import { NewBadge } from '@/shared/ui/new-badge'
@@ -36,7 +37,6 @@ import {
   useDeleteBundle,
   useDeleteTask,
   useDoneWindow,
-  useMyTasks,
   useOlderDoneTasks,
   useOpenTasks,
   useSetTaskStatus,
@@ -45,8 +45,10 @@ import {
   useUpdateBundle,
   useUpdateTask,
   useTask,
+  taskWindowStart,
   withOlder,
 } from '@/features/tasks/api'
+import type { BoardQuery } from '@/features/tasks/board-columns'
 import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { ShowMoreOpen } from '@/features/tasks/ShowMoreOpen'
 import { pageCounts, peopleCounts } from '@/features/tasks/open-pages'
@@ -139,8 +141,12 @@ function Tasks({ managed }: { managed: boolean }) {
   const openTab: TaskTab = view === 'list' && tab !== 'completed' ? tab : 'all'
   const open = useOpenTasks({ mine, member: scopeMember, due, tab: openTab, q: typed, today }, listing)
   const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing)
-  // The board of someone who sees only their own: their window, as before.
-  const ownBoard = useMyTasks(!managed && view === 'board')
+  // The board reads its lanes a page at a time with the same toolbar on the
+  // server (GET /tasks/columns); someone who sees only their own gets theirs.
+  const boardQuery = useMemo<BoardQuery>(
+    () => ({ mine, member: scopeMember, due, q: typed, today, project: '', since: taskWindowStart(today) }),
+    [mine, scopeMember, due, typed, today],
+  )
   const older = useOlderDoneTasks(managed ? 'studio' : 'my')
   const isLoading = open.isLoading || doneQ.isLoading
   const isError = open.isError || doneQ.isError
@@ -287,7 +293,7 @@ function Tasks({ managed }: { managed: boolean }) {
 
       <div className="mt-4">
         {view === 'board' ? (
-          <TaskBoard items={managed ? undefined : (ownBoard.data ?? [])} filter={keep} />
+          <TaskBoard query={boardQuery} scope={managed ? 'studio' : 'my'} olderFilter={keep} />
         ) : isLoading ? (
           <SkeletonList rows={6} columns={4} />
         ) : isError ? (
@@ -385,16 +391,6 @@ function Tasks({ managed }: { managed: boolean }) {
       )}
     </>
   )
-}
-
-/** `value`, once it has held still for `ms`. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setSettled(value), ms)
-    return () => clearTimeout(id)
-  }, [value, ms])
-  return settled
 }
 
 function Segmented<T extends string>({
