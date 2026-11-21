@@ -28,6 +28,7 @@ export async function placeCall(env: TwilioEnv, agent: string, lead: string): Pr
   const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)
   const res = await fetch(`${API}/Accounts/${encodeURIComponent(env.TWILIO_ACCOUNT_SID)}/Calls.json`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form.toString(),
   })

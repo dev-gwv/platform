@@ -11,10 +11,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so the migration guard below can see main as it was.
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      # Two sessions picking the same migration number broke the other one's
+      # deploy three times (CLAUDE.md). Fails on a shared number, an edited or
+      # renamed migration that is already on main, or a new number that is not
+      # above main's highest; warns about claims (files with no SQL yet).
+      # On a PR the checkout is the merge with main, so origin/main is the
+      # base; on a push to main the base is the commit main was at before.
+      - name: Migration numbers
+        env:
+          MIGRATIONS_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: node tools/check-migrations.mjs
 
       - name: Install
         run: bun install --frozen-lockfile

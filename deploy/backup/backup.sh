@@ -8,7 +8,8 @@
 #   backup.sh restore … hand off to restore.sh (see there; destructive)
 #
 # Each run: pg_dump -Fc -> /backups, verify the dump is readable, prune local
-# copies older than BACKUP_KEEP_DAYS, then (if BACKUP_S3_BUCKET is set) copy it
+# copies older than BACKUP_KEEP_DAYS (but never the newest BACKUP_KEEP_COUNT,
+# so a stretch of failed nights cannot age every copy away), then (if BACKUP_S3_BUCKET is set) copy it
 # off the box with rclone and prune the remote past BACKUP_OFFSITE_KEEP_DAYS.
 #
 # Success is recorded in marker files so `health` can fail loudly when backups
@@ -18,6 +19,7 @@ set -eu
 DIR="${BACKUP_DIR:-/backups}"
 DB="${POSTGRES_DB:-ipc}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-7}"
+KEEP_COUNT="${BACKUP_KEEP_COUNT:-14}"
 OFFSITE_KEEP_DAYS="${BACKUP_OFFSITE_KEEP_DAYS:-30}"
 AT="${BACKUP_AT_UTC:-02:30}"
 LOCAL_MARKER="$DIR/.last-success"
@@ -33,6 +35,9 @@ DRILL_TABLES="companies users clients projects shoots invoices received_payments
 LOCAL_STALE_MIN=1560      # 26h
 OFFSITE_STALE_MIN=4320    # 72h
 DRILL_STALE_MIN=11520     # 8 days: the drill runs weekly
+# The start-up dump is skipped when the last good one is younger than this, so
+# a run of restarts does not fill the disk with near-identical dumps.
+STARTUP_SKIP_MIN=360      # 6h
 
 log() { echo "[backup] $*"; }
 
@@ -83,9 +88,7 @@ run_backup() {
   log "ok $(basename "$file") ($size)"
   date -u +%s > "$LOCAL_MARKER"
 
-  # Local retention. -mtime is whole days, which is what we want here.
-  find "$DIR" -maxdepth 1 -name "${DB}-*.dump" -mtime "+${KEEP_DAYS}" -print -delete |
-    while read -r old; do log "pruned local $(basename "$old")"; rm -f "$old.counts"; done
+  prune_local
 
   if offsite_enabled; then
     copy_offsite "$file"
@@ -93,6 +96,18 @@ run_backup() {
     log "BACKUP_S3_BUCKET unset — local-only. A backup on the same box as the"
     log "database does not survive losing the box. Configure off-box storage."
   fi
+}
+
+# Local retention: a dump goes once it is older than KEEP_DAYS (-mtime is
+# whole days, which is what we want here) AND is not one of the newest
+# KEEP_COUNT. If backups fail for a week and a half, the last good ones stay.
+prune_local() {
+  ls -1t "$DIR"/"${DB}"-*.dump 2>/dev/null | tail -n "+$((KEEP_COUNT + 1))" |
+    while read -r old; do
+      [ -n "$(find "$old" -maxdepth 0 -mtime "+${KEEP_DAYS}")" ] || continue
+      rm -f "$old" "$old.counts"
+      log "pruned local $(basename "$old")"
+    done
 }
 
 copy_offsite() {
@@ -166,6 +181,12 @@ fresh() {
 }
 
 health() {
+  # In production a backup that lives only on the database's own disk does not
+  # survive losing the box, which is the failure backups exist for.
+  if [ "${ENVIRONMENT:-}" = "production" ] && ! offsite_enabled; then
+    echo "production has no off-box backup: BACKUP_S3_BUCKET is unset, so every copy dies with this server"
+    exit 1
+  fi
   fresh "$LOCAL_MARKER" "$LOCAL_STALE_MIN" || {
     echo "no successful local backup in the last $((LOCAL_STALE_MIN / 60))h"
     exit 1
@@ -210,7 +231,13 @@ case "${1:-daemon}" in
   daemon)
     # One at start: a deploy leaves a fresh snapshot behind, and a broken backup
     # path shows up immediately instead of at 02:30 three weeks from now.
-    run_backup || log "startup backup failed — will retry on schedule"
+    # Skipped when the last good dump is under STARTUP_SKIP_MIN old: a restart
+    # or a redeploy an hour after the nightly run adds nothing but disk use.
+    if fresh "$LOCAL_MARKER" "$STARTUP_SKIP_MIN"; then
+      log "startup backup skipped: the last good dump is under $((STARTUP_SKIP_MIN / 60))h old"
+    else
+      run_backup || log "startup backup failed — will retry on schedule"
+    fi
     while true; do
       sleep_until_next
       run_backup || log "scheduled backup failed — will retry tomorrow"

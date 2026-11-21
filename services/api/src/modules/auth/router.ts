@@ -370,7 +370,9 @@ export const authRouter = new Hono<AppEnv>()
     // Verify via Google tokeninfo (no secret needed for GIS id_token)
     let info: Record<string, string>
     try {
-      const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`)
+      const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`, {
+        signal: AbortSignal.timeout(15_000),
+      })
       if (!res.ok) fail(401, 'Invalid Google token. Please try again.')
       info = (await res.json()) as Record<string, string>
     } catch {

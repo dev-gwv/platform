@@ -213,9 +213,11 @@ tighten it to `'self' https://api.<your-domain>` once known.
 ## Backups & restore
 
 The `backup` service (`deploy/backup/`) runs `pg_dump -Fc` once at container
-start and then daily at `BACKUP_AT_UTC` (default 02:30 UTC). Each dump is
-verified with `pg_restore --list` before it counts as a success; local copies are
-pruned after `BACKUP_KEEP_DAYS` (7).
+start (skipped when the last good dump is under 6 hours old) and then daily at
+`BACKUP_AT_UTC` (default 02:30 UTC). Each dump is verified with
+`pg_restore --list` before it counts as a success; local copies are pruned after
+`BACKUP_KEEP_DAYS` (7), but the newest `BACKUP_KEEP_COUNT` (14) are always kept,
+so a run of failed nights cannot age every copy away.
 
 **Off-box copies are opt-in and you want them on.** Set `BACKUP_S3_BUCKET` and
 the rest of the `BACKUP_S3_*` block in `.env` (any S3-compatible bucket — R2, B2,
@@ -224,8 +226,11 @@ S3, MinIO) and each dump is uploaded with rclone and pruned after
 the database it is protecting.
 
 The container goes **unhealthy** if there has been no successful local backup in
-26h (or no off-box copy in 72h, when configured), so a backup path that quietly
-breaks shows up in `docker compose ps` and fails the next deploy's `--wait`.
+26h (or no off-box copy in 72h, when configured), or, with
+`ENVIRONMENT=production`, while `BACKUP_S3_BUCKET` is unset at all. A backup path
+that quietly breaks shows up in `docker compose ps`, and `deploy.sh` prints a
+warning with the reason at the end of every deploy (it no longer fails the deploy
+on it: by then the API has already been replaced).
 
 ```bash
 docker compose logs backup                       # what it has been doing
@@ -236,11 +241,13 @@ docker compose run --rm backup restore list      # what exists, here + off-box
 ### Restore
 
 Destructive — it drops and recreates the database, so stop the API first.
+Always with both compose files, and back up through `deploy.sh`: a bare
+`docker compose up` drops the Traefik labels and the API vanishes behind a 503.
 
 ```bash
-docker compose stop api cron
-docker compose run --rm -e RESTORE_CONFIRM=yes backup restore latest
-docker compose up -d migrate api cron
+docker compose -f docker-compose.yml -f docker-compose.coolify.yml stop api cron cron-messages cron-attendance
+docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm -e RESTORE_CONFIRM=yes backup restore latest
+sh deploy/deploy.sh      # runs the migrations, then brings everything back
 ```
 
 Without `RESTORE_CONFIRM=yes` it prints what it would do and stops. Pass a dump
@@ -250,6 +257,40 @@ from off-box storage automatically.
 **Do a restore drill on a scratch VPS before you need one.** An untested backup
 is a hope. What to check afterwards: `/health` is green, a studio owner can log
 in, and a project's invoices and payments still add up.
+
+### The server is gone
+
+The VPS is lost, wiped or unreachable for good. Work down the list; each step
+needs the one before it.
+
+1. **New VPS.** Hostinger (or anywhere), Ubuntu, Docker installed. Note its
+   address.
+2. **Coolify.** Install it (its own installer), so its Traefik owns :80/:443 and
+   the `coolify` Docker network exists — `docker-compose.coolify.yml` attaches
+   the API to that network.
+3. **Clone.** `git clone` the repo to `/root/ipc/platform` with a read-only
+   deploy key. Never `git add -A` in that checkout.
+4. **`.env`.** Restore it from the password manager into the checkout root. It
+   holds every secret (`JWT_SECRET`, `CRON_SECRET`, database passwords,
+   `BACKUP_S3_*`, `FRAMELINE_*` …); nothing else has them.
+5. **Database.** Start only the database, then restore the newest **off-box**
+   dump (the local ones died with the old disk):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.coolify.yml up -d --wait db
+   docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm backup restore list
+   docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm -e RESTORE_CONFIRM=yes backup restore latest
+   ```
+   If the restore trips on a missing role, run
+   `docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm migrate` once (it creates the roles) and restore again.
+6. **Deploy.** `sh deploy/deploy.sh` from the checkout root. Never a bare
+   `docker compose up`.
+7. **DNS and Cloudflare.** Point `api.studioautopilot.in` (and `API_DOMAIN`) at
+   the new address, Cloudflare proxy on (orange cloud), SSL Full (strict). Update
+   the `VPS_HOST` repo secret, or re-register the self-hosted runner if
+   `DEPLOY_RUNNER` is set.
+8. **Check.** `curl https://api.studioautopilot.in/health` reports `ok: true`
+   and the commit; an owner can sign in; `docker compose -f docker-compose.yml -f docker-compose.coolify.yml ps` shows backup healthy
+   (it takes a fresh dump at start).
 
 ## Incident response
 

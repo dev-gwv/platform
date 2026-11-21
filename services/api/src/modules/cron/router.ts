@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { TransactionSql } from 'postgres'
 import * as Sentry from '@sentry/bun'
 import { attendanceSweepResult, cronRun, cronRunResult, messagesCronResult } from '@ipc/contracts'
 import type { AppEnv } from '../../context'
@@ -7,7 +8,9 @@ import { requireAuth } from '../../middleware/auth'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { timingSafeEqual } from '../../lib/crypto'
-import { log } from '../../lib/log'
+import { describeError, log } from '../../lib/log'
+import { reportError } from '../../lib/error-reporter'
+import { currentRequestId } from '../../middleware/request-id'
 import { drainOutbox } from '../../lib/outbox'
 import { drainMessages } from '../../lib/messaging'
 import { runOnboardingNudges } from '../../lib/onboarding'
@@ -73,85 +76,129 @@ export const cronRouter = new Hono<AppEnv>()
             timezone: 'Etc/UTC',
           })
 
-    const result = await run(() => attempt(c, 'cron.reminders', () =>
-      withService(c.env, async (sql) => {
-        const rows = await sql<{ summary: unknown }[]>`
-          select run_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        const followUps = await sql<{ summary: unknown }[]>`
-          select run_crm_followup_cron(p_dry_run => ${dryRun}) as summary`
-        const workReminders = await sql<{ summary: unknown }[]>`
-          select run_work_submission_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        // Editors hear about their deliverables the day before, on the day,
-        // and once when late.
-        const deliverablesDue = await sql<{ summary: unknown }[]>`
-          select run_deliverable_due_cron(p_dry_run => ${dryRun}) as summary`
-        // Crew hear about tomorrow's shoot the evening before.
-        const shootsTomorrow = await sql<{ summary: unknown }[]>`
-          select run_shoot_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        // Crew still holding cards, and the managers' daily data digest.
-        const dataReminders = await sql<{ summary: unknown }[]>`
-          select run_data_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        // Whoever is on a deliverable or task hears when to start it.
-        const startReminders = await sql<{ summary: unknown }[]>`
-          select run_start_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        // Clients with money due hear by email (3 days before, on the day, 3
-        // and 10 days after), where the studio has switched it on.
-        const clientPayments = await sql<{ summary: unknown }[]>`
-          select run_client_payment_due_cron(p_dry_run => ${dryRun}) as summary`
-        // Owners and admins hear about each overdue invoice once, from 10 am.
-        const invoicesOverdue = await sql<{ summary: unknown }[]>`
-          select run_invoice_overdue_cron(p_dry_run => ${dryRun}) as summary`
-        // Anyone with gaps in their profile hears what is missing, every day.
-        const profileReminders = await sql<{ summary: unknown }[]>`
-          select run_profile_reminder_cron(p_dry_run => ${dryRun}) as summary`
-        // Rotation writes a refresh_tokens row every 30 minutes per active
-        // user, so the table needs a sweep or it grows forever.
-        const purged = dryRun
-          ? 0
-          : ((await sql<{ n: number }[]>`select purge_expired_refresh_tokens() as n`)[0]?.n ?? 0)
-        // The assistant's log is kept six months: long enough to see whether a
-        // prompt change helped, short enough that we are not holding studios'
-        // questions for years. 0247 granted the delete and nothing used it.
-        const assistantLog = dryRun
-          ? 0
-          : ((
-              await sql<{ n: number }[]>`
-                with gone as (delete from assistant_log where created_at < now() - interval '180 days' returning 1)
-                select count(*)::int as n from gone`
-            )[0]?.n ?? 0)
-        // Facebook page tokens for pages nobody connected are dropped after half an hour.
-        const idleTokens = dryRun ? 0 : await pruneIdlePageTokens(sql)
-        // Workflows queue template sends; only the API can deliver them.
-        const outbox = dryRun ? { claimed: 0, sent: 0, manual: 0, failed: 0 } : await drainOutbox(c.env, sql)
-        // The quote sweep runs inside run_crm_followup_cron now, so its count
-        // comes out of that summary. Calling it again here would expire a
-        // second batch outside the dry run and double-report the first.
-        // No email goes out by itself (owner, 26 Oct): the setup nudges, the
-        // morning and Monday emails, "your plan is ending" and the hourly
-        // alert copies are not even worked out. See MANUAL_MAIL_KINDS.
-        const mailOff = automaticEmailOff(c.env)
-        const onboarding = mailOff ? { due: 0, sent: 0 } : await runOnboardingNudges(c.env, dryRun)
-        const morning = mailOff ? { due: 0, sent: 0 } : await runMorningEmails(c.env, dryRun)
-        const weekly = mailOff ? { due: 0, sent: 0 } : await runWeeklyEmails(c.env, dryRun)
-        const accessEmails = mailOff ? { due: 0, sent: 0 } : await runAccessEmails(c.env, dryRun)
-        const alertEmails = mailOff ? { due: 0, people: 0, sent: 0 } : await runAlertEmails(c.env, dryRun)
-        // The IPC Diamond member list, copied from the owner's sheet (0262),
-        // every 12 hours rather than every run (owner, 21 Oct).
-        const diamondSheet = dryRun ? null : await syncDiamondSheet(c.env, { onlyIfDue: true }).catch(() => null)
-        const followUpSummary = (followUps[0]?.summary ?? {}) as { quotes?: { expired?: number } }
-        const expiredQuotes = followUpSummary.quotes?.expired ?? 0
-        return {
-          summary: rows[0]?.summary ?? {},
+    // Each job runs in its own transaction and its own try. It used to be one
+    // transaction for the lot, so a single failing reminder function rolled
+    // back every other one (and the outbox's "sent" marks with them) and the
+    // whole hour did nothing. Now a failure is logged and reported, the rest
+    // carry on, and the monitor still records the run as an error.
+    const failedSteps: string[] = []
+    const step = async <T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> => {
+      try {
+        return await fn()
+      } catch (err) {
+        failedSteps.push(label)
+        const d = describeError(err)
+        const requestId = currentRequestId(c)
+        log.error({ requestId, path: c.req.path, label: `cron.reminders.${label}`, code: d.code, message: d.message, stack: d.stack }, 'cron step failed')
+        reportError(c.env, err, { requestId, method: c.req.method, path: c.req.path, label: `cron.reminders.${label}` })
+        return fallback
+      }
+    }
+    const summaryOf = (label: string, fnName: string) =>
+      step<unknown>(label, {}, () =>
+        withService(c.env, async (sql) => {
+          const rows = await sql<{ summary: unknown }[]>`
+            select ${sql(fnName)}(p_dry_run => ${dryRun}) as summary`
+          return rows[0]?.summary ?? {}
+        }),
+      )
+    const countOf = (label: string, fn: (sql: TransactionSql) => Promise<number>) =>
+      dryRun ? Promise.resolve(0) : step(label, 0, () => withService(c.env, fn))
+
+    const work = async () => {
+      const summary = await summaryOf('reminders', 'run_reminder_cron')
+      const followUpSummary = (await summaryOf('crm_follow_ups', 'run_crm_followup_cron')) as { quotes?: { expired?: number } }
+      const workReminders = await summaryOf('work_submission_reminders', 'run_work_submission_reminder_cron')
+      // Editors hear about their deliverables the day before, on the day,
+      // and once when late.
+      const deliverablesDue = await summaryOf('deliverable_reminders', 'run_deliverable_due_cron')
+      // Crew hear about tomorrow's shoot the evening before.
+      const shootsTomorrow = await summaryOf('shoot_reminders', 'run_shoot_reminder_cron')
+      // Crew still holding cards, and the managers' daily data digest.
+      const dataReminders = await summaryOf('data_reminders', 'run_data_reminder_cron')
+      // Whoever is on a deliverable or task hears when to start it.
+      const startReminders = await summaryOf('start_reminders', 'run_start_reminder_cron')
+      // Clients with money due hear by email (3 days before, on the day, 3
+      // and 10 days after), where the studio has switched it on.
+      const clientPayments = await summaryOf('client_payment_reminders', 'run_client_payment_due_cron')
+      // Owners and admins hear about each overdue invoice once, from 10 am.
+      const invoicesOverdue = await summaryOf('invoice_overdue', 'run_invoice_overdue_cron')
+      // Anyone with gaps in their profile hears what is missing, every day.
+      const profileReminders = await summaryOf('profile_reminders', 'run_profile_reminder_cron')
+      // Rotation writes a refresh_tokens row every 30 minutes per active
+      // user, so the table needs a sweep or it grows forever.
+      const purged = await countOf(
+        'purge_refresh_tokens',
+        async (sql) => (await sql<{ n: number }[]>`select purge_expired_refresh_tokens() as n`)[0]?.n ?? 0,
+      )
+      // The assistant's log is kept six months: long enough to see whether a
+      // prompt change helped, short enough that we are not holding studios'
+      // questions for years. 0247 granted the delete and nothing used it.
+      const assistantLog = await countOf(
+        'prune_assistant_log',
+        async (sql) =>
+          (
+            await sql<{ n: number }[]>`
+              with gone as (delete from assistant_log where created_at < now() - interval '180 days' returning 1)
+              select count(*)::int as n from gone`
+          )[0]?.n ?? 0,
+      )
+      // Old usage events (0314 adds prune_usage_events()). Until that
+      // migration has run the function does not exist, and this does nothing.
+      const usageEvents = dryRun
+        ? null
+        : await step<unknown>('prune_usage_events', null, () =>
+            withService(c.env, async (sql) => {
+              const [has] = await sql<{ ok: boolean }[]>`
+                select exists (select 1 from pg_proc where proname = 'prune_usage_events') as ok`
+              if (!has?.ok) return 'not installed'
+              const rows = await sql`select prune_usage_events() as n`
+              return (rows[0] as { n?: unknown } | undefined)?.n ?? null
+            }).catch((err: unknown) => {
+              // Undefined function (42883): there, but not callable without
+              // arguments, or dropped between the check and the call.
+              if (describeError(err).code === '42883') return 'not installed'
+              throw err
+            }),
+          )
+      // Facebook page tokens for pages nobody connected are dropped after half an hour.
+      const idleTokens = await countOf('prune_idle_page_tokens', (sql) => pruneIdlePageTokens(sql))
+      // Workflows queue template sends; only the API can deliver them. Each
+      // message is claimed and recorded in transactions of its own.
+      const outbox = dryRun
+        ? { claimed: 0, sent: 0, manual: 0, failed: 0 }
+        : await step('crm_outbox', { claimed: 0, sent: 0, manual: 0, failed: 0 }, () => drainOutbox(c.env))
+      // The quote sweep runs inside run_crm_followup_cron now, so its count
+      // comes out of that summary. Calling it again here would expire a
+      // second batch outside the dry run and double-report the first.
+      // No email goes out by itself (owner, 26 Oct): the setup nudges, the
+      // morning and Monday emails, "your plan is ending" and the hourly
+      // alert copies are not even worked out. See MANUAL_MAIL_KINDS.
+      const mailOff = automaticEmailOff(c.env)
+      const none = { due: 0, sent: 0 }
+      const onboarding = mailOff ? none : await step('onboarding_emails', none, () => runOnboardingNudges(c.env, dryRun))
+      const morning = mailOff ? none : await step('morning_emails', none, () => runMorningEmails(c.env, dryRun))
+      const weekly = mailOff ? none : await step('weekly_emails', none, () => runWeeklyEmails(c.env, dryRun))
+      const accessEmails = mailOff ? none : await step('access_emails', none, () => runAccessEmails(c.env, dryRun))
+      const noAlerts = { due: 0, people: 0, sent: 0 }
+      const alertEmails = mailOff ? noAlerts : await step('alert_emails', noAlerts, () => runAlertEmails(c.env, dryRun))
+      // The IPC Diamond member list, copied from the owner's sheet (0262),
+      // every 12 hours rather than every run (owner, 21 Oct).
+      const diamondSheet = dryRun ? null : await syncDiamondSheet(c.env, { onlyIfDue: true }).catch(() => null)
+      const expiredQuotes = followUpSummary.quotes?.expired ?? 0
+      return {
+        result: {
+          summary,
           crm_follow_ups: followUpSummary,
-          work_submission_reminders: workReminders[0]?.summary ?? {},
-          deliverable_reminders: deliverablesDue[0]?.summary ?? {},
-          shoot_reminders: shootsTomorrow[0]?.summary ?? {},
-          data_reminders: dataReminders[0]?.summary ?? {},
-          start_reminders: startReminders[0]?.summary ?? {},
-          client_payment_reminders: clientPayments[0]?.summary ?? {},
-          profile_reminders: profileReminders[0]?.summary ?? {},
+          work_submission_reminders: workReminders,
+          deliverable_reminders: deliverablesDue,
+          shoot_reminders: shootsTomorrow,
+          data_reminders: dataReminders,
+          start_reminders: startReminders,
+          client_payment_reminders: clientPayments,
+          profile_reminders: profileReminders,
           onboarding_emails: onboarding,
-          invoice_overdue: invoicesOverdue[0]?.summary ?? {},
+          invoice_overdue: invoicesOverdue,
           morning_emails: morning,
           weekly_emails: weekly,
           access_emails: accessEmails,
@@ -162,23 +209,31 @@ export const cronRouter = new Hono<AppEnv>()
           purged_refresh_tokens: purged,
           removed_idle_page_tokens: idleTokens,
           pruned_assistant_log: assistantLog,
-        }
-      }),
-    ))
-    // attempt() returns null on failure instead of throwing, so without this
-    // the monitor would record a cheerful "ok" for a run that did nothing.
-    // Throwing inside withMonitor is what makes the check-in an error.
-    if (!result) {
-      if (!dryRun) throw new Error('cron.reminders failed')
-      fail(400, 'The job could not run.')
+        },
+        usageEvents,
+      }
     }
-    // After the sweep has committed, so a sequence email written this tick
-    // goes this tick. Each send commits on its own (never twice).
-    const sequenceSends = await runSequenceSends(c.env, dryRun).catch((err: unknown) => {
-      log.error({ err: String(err) }, 'sequence sends failed')
-      return { claimed: 0, sent: 0, failed: 0 }
+
+    const { result, sequenceSends } = await run(async () => {
+      const out = await work()
+      // After the sweep has committed, so a sequence email written this tick
+      // goes this tick. Each send commits on its own (never twice). It runs
+      // even when another job failed: they do not depend on each other.
+      const sends = await runSequenceSends(c.env, dryRun).catch((err: unknown) => {
+        log.error({ err: String(err) }, 'sequence sends failed')
+        return { claimed: 0, sent: 0, failed: 0 }
+      })
+      log.info(
+        { path: c.req.path, dryRun, ...out.result, pruned_usage_events: out.usageEvents, sequenceSends: sends, failedSteps },
+        failedSteps.length > 0 ? 'cron reminders ran with failures' : 'cron reminders ran',
+      )
+      // Every job ran; if any failed, the check-in must say error (throwing
+      // inside withMonitor is what does that), after the ones that worked
+      // have committed and been logged.
+      if (failedSteps.length > 0 && !dryRun) throw new Error(`cron.reminders: ${failedSteps.join(', ')} failed`)
+      return { ...out, sequenceSends: sends }
     })
-    log.info({ path: c.req.path, dryRun, ...result, sequenceSends }, 'cron reminders ran')
+    if (failedSteps.length > 0) fail(400, `These jobs could not run: ${failedSteps.join(', ')}.`)
     return c.json(cronRunResult.parse({ ok: true, ...result, sequence_sends: sequenceSends }))
   })
 

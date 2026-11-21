@@ -42,6 +42,7 @@ export async function createRazorpayOrder(
   const auth = btoa(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`)
   const res = await fetch('https://api.razorpay.com/v1/orders', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       amount: Math.round(input.amountRupees * 100),
@@ -78,6 +79,7 @@ export async function fetchOrderPayments(
   const auth = btoa(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`)
   const res = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}/payments`, {
     headers: { Authorization: `Basic ${auth}` },
+    signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')

@@ -31,6 +31,7 @@ export async function sendWhatsAppText(
 ): Promise<{ message_id: string }> {
   const res = await fetch(`${GRAPH}/${encodeURIComponent(env.WHATSAPP_PHONE_NUMBER_ID)}/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
@@ -65,6 +66,7 @@ export async function sendWhatsAppTemplate(
 ): Promise<{ message_id: string }> {
   const res = await fetch(`${GRAPH}/${encodeURIComponent(env.WHATSAPP_PHONE_NUMBER_ID)}/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp',

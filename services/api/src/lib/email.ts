@@ -56,6 +56,7 @@ export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; co
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...mail, from: mail.from ?? env.EMAIL_FROM }),
       })
