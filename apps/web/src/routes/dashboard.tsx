@@ -21,9 +21,7 @@ import { useProjectsPage } from '@/features/projects/api'
 import { useClients } from '@/features/clients/api'
 import { useMembers } from '@/features/allocation/api'
 import { useBillingDue } from '@/features/billing/api'
-import { useCallQueue } from '@/features/crm-calls/api'
-import { useSlots } from '@/features/allocation/api'
-import { crewState } from '@ipc/domain'
+import { useDashboardSummary } from '@/features/dashboard/api'
 import { StaffHome, YourDayStrip } from '@/features/dashboard/StaffHome'
 import { WhoYouOwe } from '@/features/dashboard/WhoYouOwe'
 import { GettingStartedCard, useGettingStartedShowing } from '@/features/dashboard/GettingStartedCard'
@@ -39,8 +37,7 @@ import { SetupVideosCard, useSetupVideosShowing } from '@/features/onboarding/Se
 import { TeamVideosCard, useTeamVideosShowing } from '@/features/onboarding/TeamVideosCard'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { greeting, todayLine } from '@/features/dashboard/greeting'
-import { leadsTileLine, moneyTile, shootsTile, shootsWeekEnd } from '@/features/dashboard/tiles'
-import { useShootsWindow } from '@/features/shoots/api'
+import { leadsLine, moneyTile, shootsLine } from '@/features/dashboard/tiles'
 import { seesStudioWork } from '@ipc/permissions'
 import { useINR } from '@/shared/money/MoneyMask'
 
@@ -104,41 +101,28 @@ function StudioCommandCenter() {
     staleTime: 30_000,
   })
   const today = todayInIndia()
-  // The week tile reads this week only (India dates), never every shoot ever.
-  const shoots = useShootsWindow(today, shootsWeekEnd(today), {
-    enabled: access.hasModule('projects'),
-    staleTime: 30_000,
-  })
   const tracked = track(trackingRows.data ?? [], today)
   const clientCount = Array.isArray(clients.data) ? clients.data.length : (clients.data?.total ?? 0)
   const startShowing = useGettingStartedShowing()
 
-  // The three tiles' data: today's calls, the bookings against the week's
-  // shoots, and what is due by the Payments received rule.
+  // The three tiles' data: today's calls and the week's shoots as two counts
+  // each (GET /dashboard/summary, worked out by the same rules as Today's
+  // calls and Team Booking), and what is due by the Payments received rule.
   const canCrm = access.hasModule('crm')
-  const queue = useCallQueue(access.hasAction('crm', 'edit') ? 'all' : 'mine')
-  const slots = useSlots({ from: today, to: shootsWeekEnd(today) })
+  const summary = useDashboardSummary(canCrm || access.hasModule('projects'))
+  const calls = summary.data?.leads ?? null
+  const week = summary.data?.shoots ?? null
   const due = useBillingDue({ from: `${today.slice(0, 8)}01`, to: today })
-  const booked = (slots.data ?? []).filter((x) => x.status === 'booked')
-  const week = shootsTile(
-    shoots.data ?? [],
-    (id) => {
-      const s = (shoots.data ?? []).find((x) => x.id === id)
-      const state = s ? crewState(id, s.requirements, booked) : 'unplanned'
-      return state === 'unassigned' || state === 'partial'
-    },
-    today,
-  )
   const money = due.data ? moneyTile(due.data, inr) : null
   const tiles = [
     canCrm && (
       <Tile
         key="leads"
         icon={PhoneCall}
-        value={queue.data?.items.length ?? '–'}
+        value={calls?.to_call ?? '–'}
         label="Leads to call"
-        hint={queue.data ? leadsTileLine(queue.data.items) : undefined}
-        tone={queue.data?.items.length ? 'warning' : 'success'}
+        hint={calls ? leadsLine(calls.to_call, calls.not_contacted) : undefined}
+        tone={calls?.to_call ? 'warning' : 'success'}
         to="/follow-ups/queue"
         {...(access.hasAction('crm', 'edit') ? { search: { scope: 'all' } } : {})}
       />
@@ -147,10 +131,10 @@ function StudioCommandCenter() {
       <Tile
         key="shoots"
         icon={CalendarClock}
-        value={shoots.data ? week.count : '–'}
+        value={week ? week.count : '–'}
         label="Shoots this week"
-        hint={shoots.data ? week.line : undefined}
-        tone={week.short ? 'warning' : 'primary'}
+        hint={week ? shootsLine(week.count, week.short) : undefined}
+        tone={week?.short ? 'warning' : 'primary'}
         to="/team-allocation"
       />
     ),
