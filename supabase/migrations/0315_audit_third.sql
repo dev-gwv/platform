@@ -23,13 +23,16 @@
 --    Each is copied from the highest-numbered migration that defines it with
 --    current_date -> india_today() and nothing else changed; the signature is
 --    the same, so create or replace keeps its grants. A test fails on any
---    live function that still reads current_date.
+--    live function that still reads current_date. (crm_apply_automations and
+--    the old list_personal_expenses were dropped in 0143 and 0170 and are not
+--    brought back.)
 --
 -- 3. A plan given "after the current plan" waits for it. 0306's
 --    platform_assign_plan set companies.plan at once and only moved the
 --    expiry, so a Studio Max studio given Starter "after the current plan"
 --    fell to Starter's limits that minute. Now a different plan given for
---    later is kept in companies.plan_next / plan_next_from and
+--    later while a paid plan runs (a trial is still replaced at once) is
+--    kept in companies.plan_next / plan_next_from and
 --    apply_pending_plans() (the five-minute messages tick) switches it when
 --    the current plan ends; the plan year starts again then. Start today, or
 --    the same plan, clears anything pending.
@@ -604,89 +607,6 @@ begin
 end;
 $$;
 
--- crm_apply_automations: copied from 0036_crm_v4.sql; current_date -> india_today() (1), nothing else changed.
-create or replace function crm_apply_automations(p_lead_id uuid, p_trigger text, p_from_status text default null)
-returns int
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_lead crm_leads;
-  v_rule crm_automation_rules;
-  v_applied int := 0;
-  v_title text;
-  v_cadence uuid;
-  v_step crm_cadence_steps;
-  v_next timestamptz;
-begin
-  select * into v_lead from crm_leads where id = p_lead_id;
-  if not found then return 0; end if;
-
-  for v_rule in
-    select * from crm_automation_rules
-    where company_id = v_lead.company_id and is_active and trigger = p_trigger
-    order by created_at
-  loop
-    if not crm_rule_matches(v_rule.condition, v_lead, p_from_status) then continue; end if;
-
-    if p_trigger = 'follow_up_overdue' then
-      insert into crm_automation_runs (rule_id, lead_id) values (v_rule.id, v_lead.id)
-      on conflict do nothing;
-      if not found then continue; end if;
-    end if;
-
-    if v_rule.action = 'assign_to' then
-      update crm_leads set assigned_to = nullif(v_rule.action_value->>'user_id', '')::uuid where id = v_lead.id;
-    elsif v_rule.action = 'set_follow_up_days' then
-      update crm_leads
-         set follow_up_at = date_trunc('day', now()) + make_interval(days => coalesce((v_rule.action_value->>'days')::int, 1)) + interval '10 hours'
-       where id = v_lead.id;
-    elsif v_rule.action = 'mark_hot' then
-      update crm_leads set is_hot = true where id = v_lead.id;
-    elsif v_rule.action = 'add_note' then
-      update crm_leads
-         set notes = nullif(trim(coalesce(notes, '') || chr(10) || coalesce(v_rule.action_value->>'note', '')), '')
-       where id = v_lead.id;
-    elsif v_rule.action = 'notify_assignee' then
-      if v_lead.assigned_to is not null then
-        v_title := case p_trigger
-          when 'lead_created' then 'New lead: ' || coalesce(v_lead.name, v_lead.phone, 'unnamed')
-          when 'stage_changed' then coalesce(v_lead.name, v_lead.phone, 'A lead') || ' moved to ' || v_lead.status
-          else 'Follow-up overdue: ' || coalesce(v_lead.name, v_lead.phone, 'unnamed') end;
-        perform create_notification(
-          v_lead.company_id, v_lead.assigned_to, 'crm', v_title,
-          coalesce(v_rule.action_value->>'note', null),
-          'crm_auto:' || v_rule.id::text || ':' || v_lead.id::text || ':' || p_trigger || ':' || india_today()::text,
-          'crm_lead', v_lead.id);
-      end if;
-    elsif v_rule.action = 'start_cadence' then
-      -- Same as start_lead_cadence, without the caller checks: this runs from
-      -- a trigger or the cron, as the definer.
-      v_cadence := nullif(v_rule.action_value->>'cadence_id', '')::uuid;
-      select * into v_step from crm_cadence_steps s
-        join crm_cadences c on c.id = s.cadence_id
-       where s.cadence_id = v_cadence and c.company_id = v_lead.company_id and c.is_active
-       order by s.step_no limit 1;
-      if found then
-        v_next := greatest(crm_cadence_step_time(now(), v_step.day_offset), now() + interval '5 minutes');
-        insert into crm_lead_cadences (lead_id, company_id, cadence_id, step_no, next_at)
-        values (v_lead.id, v_lead.company_id, v_cadence, v_step.step_no, v_next)
-        on conflict (lead_id) do nothing;
-        if found then
-          update crm_leads set follow_up_at = v_next where id = v_lead.id;
-        end if;
-      end if;
-    end if;
-
-    insert into crm_lead_events (company_id, lead_id, from_status, to_status, actor_id, note)
-    values (v_lead.company_id, v_lead.id, null, null, null, 'automation: ' || v_rule.name);
-    v_applied := v_applied + 1;
-  end loop;
-  return v_applied;
-end;
-$$;
-
 -- crm_enroll_workflows: copied from 0047_crm_workflows.sql; current_date -> india_today() (1), nothing else changed.
 create or replace function crm_enroll_workflows(p_lead uuid, p_trigger text, p_from_status text default null)
 returns int
@@ -932,73 +852,6 @@ begin
     'expired', v_q.valid_until is not null and v_q.valid_until < india_today() and v_q.status = 'sent'
   ) into r;
   return r;
-end;
-$$;
-
--- list_personal_expenses: copied from 0072_personal_expense_gst_rate.sql; current_date -> india_today() (2), nothing else changed.
-create or replace function list_personal_expenses(
-  p_search   text default null,
-  p_category text default null,
-  p_cursor   timestamptz default null,
-  p_limit    int default 100
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_company uuid := get_current_company_id();
-  v_user    uuid := auth.uid();
-  v_limit   int  := greatest(1, least(p_limit, 200));
-  v_items   jsonb;
-  v_summary jsonb;
-  v_next    timestamptz;
-begin
-  if v_company is null or not is_current_user_active() then
-    raise exception 'not allowed' using errcode = '42501';
-  end if;
-
-  select jsonb_agg(row_to_json(pe)) into v_items
-  from (
-    select pe.id, pe.company_id, pe.user_id, pe.party_id,
-           pa.name as party_name,
-           pe.amount, pe.expense_date, pe.category, pe.gst_treatment, pe.gst_rate,
-           pe.description, pe.created_at
-      from personal_expense pe
-      left join parties pa on pa.id = pe.party_id
-     where pe.company_id = v_company
-       and pe.user_id = v_user
-       and (p_search is null or pe.description ilike '%' || p_search || '%')
-       and (p_category is null or pe.category = p_category)
-       and (p_cursor is null or pe.created_at < p_cursor)
-     order by pe.created_at desc
-     limit v_limit + 1
-  ) pe;
-
-  -- Get the cursor for next page
-  if coalesce(jsonb_array_length(v_items), 0) > v_limit then
-    v_items := v_items - (-1);
-    v_next := (v_items->-1->>'created_at')::timestamptz;
-  else
-    v_next := null;
-  end if;
-
-  -- Summary: total count/amount and this month
-  select jsonb_build_object(
-    'total_count', count(*)::int,
-    'total_amount', coalesce(sum(amount), 0)::numeric,
-    'this_month_count', count(*) filter (where expense_date >= date_trunc('month', india_today()))::int,
-    'this_month_amount', coalesce(sum(amount) filter (where expense_date >= date_trunc('month', india_today())), 0)::numeric
-  ) into v_summary
-  from personal_expense
-  where company_id = v_company and user_id = v_user;
-
-  return jsonb_build_object(
-    'items', coalesce(v_items, '[]'::jsonb),
-    'summary', v_summary,
-    'next_cursor', to_jsonb(v_next)
-  );
 end;
 $$;
 
@@ -1572,9 +1425,12 @@ begin
   end if;
   -- When the plan running now ends: a plan already waiting starts there.
   v_end := coalesce(v_old.plan_next_from, v_old.plan_expiry);
+  -- Only a paid plan from the catalogue waits; a trial (no plan) or a key no
+  -- longer in the catalogue is replaced at once, as before (plan_quote's 'buy').
   v_later := not p_start_today
              and v_end is not null and v_end > now()
-             and v_old.plan is distinct from v_plan.key;
+             and v_old.plan is distinct from v_plan.key
+             and exists (select 1 from plans x where x.key = v_old.plan);
   v_base := case when p_start_today then now() else greatest(now(), coalesce(v_end, now())) end;
   v_expires := case
                  when v_plan.duration_days is not null then v_base + make_interval(days => v_plan.duration_days)

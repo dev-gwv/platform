@@ -127,6 +127,13 @@ describe('0315: a plan given after the current plan waits for it', () => {
     expect(after).toEqual({ plan: 't-starter', next: null, limits: { projects: 30 } })
   })
 
+  it('a studio on its trial (no plan) gets the plan at once, as before', async () => {
+    await q(`update companies set plan = null, plan_next = null, plan_next_from = null, plan_expiry = now() + interval '5 days' where id = $1`, [COMPANY])
+    await asAdmin(`select platform_assign_plan('${COMPANY}', 't-starter', false)`)
+    const c = await one<{ plan: string; next: string | null }>(`select plan, plan_next as next from companies where id = $1`, [COMPANY])
+    expect(c).toEqual({ plan: 't-starter', next: null })
+  })
+
   it('start today replaces the plan at once and clears anything waiting', async () => {
     await asAdmin(`select platform_assign_plan('${COMPANY}', 't-max', true)`)
     await asAdmin(`select platform_assign_plan('${COMPANY}', 't-starter', false)`)
