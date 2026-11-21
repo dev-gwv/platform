@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { dashboardSummary, myFollowUp, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 /** CRM follow-ups given to me -- calls to make, for staff without the CRM too. */
 export function useMyFollowUps() {
@@ -39,7 +40,7 @@ export function useFollowUpDone() {
     onSuccess: () => {
       toast.success('Done')
       void qc.invalidateQueries({ queryKey: ['me'] })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message),
   })

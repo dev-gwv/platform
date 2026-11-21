@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { myLead, myLeadDetail, z } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 /**
  * The leads given to me (0282) and what I do with them -- write what was
@@ -37,7 +38,7 @@ function useMeMutation<T>(fn: (v: T) => Promise<unknown>, done: string) {
     onSuccess: () => {
       toast.success(done)
       void qc.invalidateQueries({ queryKey: ['me'] })
-      void qc.invalidateQueries({ queryKey: ['crm'] })
+      void refreshCrm(qc)
     },
     onError: (e: Error) => toast.error(e.message || 'That did not save. Please try again.'),
   })

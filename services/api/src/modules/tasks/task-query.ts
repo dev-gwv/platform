@@ -51,6 +51,8 @@ export interface TaskFilter {
   project?: string | undefined
   deliverable?: string | undefined
   id?: string | undefined
+  /** These tasks only (the board's columns pick the ids, then read the rows). */
+  ids?: readonly string[] | undefined
   parent?: string | undefined
   /** Title search for pickers. */
   q?: string | undefined
@@ -178,7 +180,7 @@ function tabWhere(sql: TransactionSql, f: TaskFilter) {
  * rows and by their counts, so a count never disagrees with the list.
  * Needs `p` (projects) joined.
  */
-function toolbarWhere(sql: TransactionSql, f: TaskFilter) {
+export function toolbarWhere(sql: TransactionSql, f: TaskFilter) {
   const like = f.search ? likeOf(f.search) : null
   return sql`
     ${f.assignee ? sql`exists (select 1 from task_assignees a2 where a2.task_id = t.id and a2.user_id = ${f.assignee})` : sql`true`}
@@ -235,6 +237,7 @@ export const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => {
     and ${f.project ? sql`t.project_id = ${f.project}` : sql`true`}
     and ${f.deliverable ? sql`t.deliverable_id = ${f.deliverable}` : sql`true`}
     and ${f.id ? sql`t.id = ${f.id}` : sql`true`}
+    and ${f.ids ? sql`t.id = any(${f.ids as string[]}::uuid[])` : sql`true`}
     and ${f.parent ? sql`t.parent_task_id = ${f.parent}` : sql`true`}
     and ${f.q ? sql`t.title ilike ${likeOf(f.q)}` : sql`true`}
     and ${f.openOnly ? sql`t.status::text not in ('completed', 'cancelled')` : sql`true`}

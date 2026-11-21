@@ -27,6 +27,8 @@ import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
 import { routineRoutes } from './routes-routines'
 import { openRoutes } from './routes-open'
+import { columnRoutes } from './routes-columns'
+import { placeRestAfter } from './task-columns'
 import { readDoneBefore, readDoneSince, readLimit, selectTasks, type RawTask } from './task-query'
 import { fail } from '../../middleware/errors'
 import { textParam, uuidParam, uuidQuery } from '../../lib/params'
@@ -112,6 +114,8 @@ export const tasksRouter = new Hono<AppEnv>()
   .route('/', routineRoutes)
   // Open tasks a page at a time (GET /tasks/open), before '/:id' too.
   .route('/', openRoutes)
+  // The board's columns a page at a time (GET /tasks/columns), before '/:id'.
+  .route('/', columnRoutes)
 
   // ── Custom priority catalogue ────────────────────────────────
   // Declared before '/:id'-shaped routes so "priorities" is never read as one.
@@ -321,10 +325,13 @@ export const tasksRouter = new Hono<AppEnv>()
     const parsed = setBoardOrderRequest.safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) fail(422, 'Invalid board order payload.')
     const d = parsed.data
+    const auth = c.get('auth')
     const ok = await attempt(c, 'tasks.board_order', () =>
-      withUser(c.env, c.get('auth').userId, async (sql) => {
+      withUser(c.env, auth.userId, async (sql) => {
         await sql`select set_board_lane_order(
           p_board_view => ${d.board_view}, p_lane_key => ${d.lane_key}, p_task_ids => ${d.task_ids}::uuid[])`
+        // The paged board sends only a lane's first cards: the rest go after them.
+        if (d.rest_after) await placeRestAfter(sql, auth.companyId, d.board_view, d.lane_key, d.task_ids)
         return true
       }),
     )

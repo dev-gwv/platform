@@ -8,6 +8,7 @@ import {
   type SequenceDraftRequest,
 } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
+import { refreshCrm } from '@/features/crm/lead-cache'
 
 /**
  * AI for leads (owner, 9 Nov). `mine` is a team member's own lead on My
@@ -38,7 +39,7 @@ export function useReplySendDirect(leadId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (text: string) => callApi(`/crm/leads/${leadId}/reply/send`, { method: 'POST', body: { text }, responseSchema: ok }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['crm'] }),
+    onSuccess: () => void refreshCrm(qc),
   })
 }
 

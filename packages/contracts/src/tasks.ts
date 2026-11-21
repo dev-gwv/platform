@@ -152,6 +152,34 @@ export const taskOpenPage = z.object({
 })
 export type TaskOpenPage = z.infer<typeof taskOpenPage>
 
+/**
+ * The Tasks board a page at a time (GET /tasks/columns): each status's first
+ * cards in the board's own order (hand order, then newest), with the column's
+ * own total -- the header count -- and where its next page starts. Done holds
+ * the window's finished work (`done_since`); cancelled work is off the board.
+ */
+export const taskColumns = z.object({
+  columns: z
+    .object({
+      status: taskStatus,
+      /** Every task in this column the filters match, not just the ones sent. */
+      total: z.number().int(),
+      items: taskListItem.array(),
+      /** Pass back to GET /tasks/columns/page as `cursor`; null when all are here. */
+      next_cursor: z.string().nullable().default(null),
+    })
+    .array()
+    .default([]),
+})
+export type TaskColumns = z.infer<typeof taskColumns>
+
+/** Show more on one board column (GET /tasks/columns/page?status=…&cursor=…). */
+export const taskColumnPage = z.object({
+  items: taskListItem.array(),
+  next_cursor: z.string().nullable().default(null),
+})
+export type TaskColumnPage = z.infer<typeof taskColumnPage>
+
 export const createTaskRequest = z.object({
   project_id: uuid.nullable().default(null),
   deliverable_id: uuid.nullable().default(null),
@@ -247,6 +275,11 @@ export const setBoardOrderRequest = z.object({
   board_view: z.string().default('default'),
   lane_key: taskStatus,
   task_ids: z.array(uuid),
+  /**
+   * The ids are only the lane's first cards (the board reads a page at a
+   * time): every other card in the lane keeps its order, after them.
+   */
+  rest_after: z.boolean().optional(),
 })
 export type SetBoardOrderRequest = z.infer<typeof setBoardOrderRequest>
 
