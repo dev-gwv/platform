@@ -37,6 +37,11 @@ video is re-recorded in the same pull request**, in both languages.
    `ffmpeg -i final/<key>.mp4 -vf "fps=1/3,scale=640:-1,tile=4x4" -frames:v 1 sheet.png`
 4. Copy `final/<key>.mp4/.jpg` (and `final/hi/…`) into `apps/web/public/help/`
    (`…/help/hi/`) and set `seconds` in `TUTORIALS` to the new length.
+5. Mark it current: `node tools/tutorials/check-stale.mjs --update <key>`.
+
+## Which videos are out of date
+`node tools/tutorials/check-stale.mjs` lists every tutorial whose filmed files (`screens.json`) changed since its recorded hash (`recorded.json`); CI prints the same list as a warning on every push and PR, never a failure.
+After re-recording one, run `--update <key>`; when a video films a new screen or component, add that file to its line in `screens.json` and run `--update` too.
 
 ## Adding one
 Write `t-<key>.mjs` (copy a close one), add its lines to `vo.mjs` and its

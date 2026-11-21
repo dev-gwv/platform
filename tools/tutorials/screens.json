@@ -1,0 +1,104 @@
+{
+  "_about": "Each tutorial key -> the source files whose change means its video should be re-recorded: the page it opens and the 1-5 components it films (read from t-<key>.mjs). Checked by check-stale.mjs against recorded.json.",
+  "ask-leave": ["apps/web/src/routes/leave.tsx", "apps/web/src/features/hr/leave-balance.ts"],
+  "assign": [
+    "apps/web/src/features/projects/tabs/ShootsTab.tsx",
+    "apps/web/src/features/shoots/AssignTeamDialog.tsx",
+    "apps/web/src/features/shoots/assign.ts",
+    "apps/web/src/features/shoots/PayoutPicker.tsx"
+  ],
+  "attendance": ["apps/web/src/routes/settings/attendance-location.tsx", "apps/web/src/features/attendance/AttendanceSettings.tsx"],
+  "board": ["apps/web/src/routes/production-board.tsx", "apps/web/src/features/board/BulkBar.tsx", "apps/web/src/features/board/ListView.tsx"],
+  "check-in": [
+    "apps/web/src/features/dashboard/StaffHome.tsx",
+    "apps/web/src/features/attendance/TodayAttendanceCard.tsx",
+    "apps/web/src/routes/attendance.tsx"
+  ],
+  "client": ["apps/web/src/routes/clients/list.tsx", "apps/web/src/features/clients/ClientFormDialog.tsx"],
+  "data": [
+    "apps/web/src/features/projects/tabs/ShootsTab.tsx",
+    "apps/web/src/features/data/DataRecordDialog.tsx",
+    "apps/web/src/features/data/stage.ts"
+  ],
+  "designer": [
+    "apps/web/src/routes/ai-designer.tsx",
+    "apps/web/src/routes/ai-designer-edit.tsx",
+    "apps/web/src/features/designer/SidePanel.tsx",
+    "apps/web/src/features/designer/ColourPicker.tsx"
+  ],
+  "details-form": ["apps/web/src/routes/projects/detail.tsx", "apps/web/src/features/wishes/DetailsLinkDialog.tsx", "apps/web/src/routes/client-details.tsx"],
+  "enquiry-form": [
+    "apps/web/src/routes/enquiry-hub.tsx",
+    "apps/web/src/features/enquiry-forms/PartnerDialog.tsx",
+    "apps/web/src/features/enquiry-forms/WeddingQr.tsx",
+    "apps/web/src/features/enquiry-forms/AfterSendCard.tsx"
+  ],
+  "expenses": ["apps/web/src/routes/company-expenses.tsx", "apps/web/src/features/expenses/ExpenseDialog.tsx"],
+  "facebook": ["apps/web/src/routes/lead-sources.tsx", "apps/web/src/features/facebook/MetaConnectionCard.tsx"],
+  "give-work": [
+    "apps/web/src/features/projects/ProjectTabs.tsx",
+    "apps/web/src/features/projects/DeliverableCard.tsx",
+    "apps/web/src/features/projects/GiveWorkDialog.tsx"
+  ],
+  "hand-in": ["apps/web/src/routes/my-work.tsx", "apps/web/src/features/projects/MyDeliverables.tsx", "apps/web/src/features/work/SubmitWorkDialog.tsx"],
+  "invoices": [
+    "apps/web/src/features/projects/tabs/BillingTab.tsx",
+    "apps/web/src/features/billing/InvoiceEditor.tsx",
+    "apps/web/src/routes/invoice-detail.tsx"
+  ],
+  "leads": [
+    "apps/web/src/routes/follow-ups.tsx",
+    "apps/web/src/features/crm/AddLeadDialog.tsx",
+    "apps/web/src/features/crm/LeadDrawer.tsx",
+    "apps/web/src/features/projects/ProjectJourney.tsx"
+  ],
+  "leave": ["apps/web/src/routes/leave.tsx", "apps/web/src/features/hr/leave-balance.ts"],
+  "payments": [
+    "apps/web/src/routes/billing/payments.tsx",
+    "apps/web/src/features/billing/DuePanel.tsx",
+    "apps/web/src/features/billing/RecordPaymentDialog.tsx"
+  ],
+  "payouts": ["apps/web/src/routes/team-payouts.tsx", "apps/web/src/features/team-payouts/PayDialog.tsx", "apps/web/src/features/team/PayToCard.tsx"],
+  "project-billing": [
+    "apps/web/src/routes/projects/new.tsx",
+    "apps/web/src/features/projects/wizard/StepBilling.tsx",
+    "apps/web/src/features/projects/wizard/StepReview.tsx"
+  ],
+  "project-client": ["apps/web/src/routes/projects/new.tsx", "apps/web/src/features/projects/wizard/StepClient.tsx"],
+  "project-deliverables": ["apps/web/src/routes/projects/new.tsx", "apps/web/src/features/projects/wizard/StepDeliverables.tsx"],
+  "project-shoots": [
+    "apps/web/src/routes/projects/new.tsx",
+    "apps/web/src/features/projects/wizard/StepShoots.tsx",
+    "apps/web/src/features/projects/wizard/RequirementsDialog.tsx",
+    "apps/web/src/features/shoots/ShootWhenFields.tsx"
+  ],
+  "project": [
+    "apps/web/src/routes/projects/new.tsx",
+    "apps/web/src/features/projects/wizard/StepClient.tsx",
+    "apps/web/src/features/projects/wizard/StepShoots.tsx",
+    "apps/web/src/features/projects/wizard/StepDeliverables.tsx",
+    "apps/web/src/features/projects/wizard/StepBilling.tsx",
+    "apps/web/src/features/projects/wizard/StepReview.tsx"
+  ],
+  "quotation": ["apps/web/src/routes/projects/$id.quotation.tsx", "apps/web/src/features/projects/QuotationDocument.tsx"],
+  "salaries": ["apps/web/src/routes/payroll.tsx", "apps/web/src/features/team/CompensationFields.tsx"],
+  "signup": ["apps/web/src/routes/login.tsx"],
+  "studio": ["apps/web/src/routes/settings.tsx", "apps/web/src/routes/project-templates.tsx", "apps/web/src/shared/ui/photo-upload.tsx"],
+  "team-bulk": ["apps/web/src/features/team/AddTeamChooser.tsx", "apps/web/src/features/team/BulkAddMembers.tsx"],
+  "team-day": [
+    "apps/web/src/features/dashboard/StaffHome.tsx",
+    "apps/web/src/features/attendance/TodayAttendanceCard.tsx",
+    "apps/web/src/features/projects/MyDeliverables.tsx"
+  ],
+  "team": [
+    "apps/web/src/routes/employees.tsx",
+    "apps/web/src/features/team/AddTeamChooser.tsx",
+    "apps/web/src/features/team/AddMemberForm.tsx",
+    "apps/web/src/features/team/JobRolePicker.tsx"
+  ],
+  "terms": [
+    "apps/web/src/features/projects/tabs/TermsTab.tsx",
+    "apps/web/src/features/terms/TermsComposer.tsx",
+    "apps/web/src/features/terms/SignHereDialog.tsx"
+  ]
+}

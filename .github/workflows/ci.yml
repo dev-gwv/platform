@@ -30,6 +30,12 @@ jobs:
           MIGRATIONS_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: node tools/check-migrations.mjs
 
+      # Tutorials whose screens changed since the video was recorded: a
+      # warning in the log, never a failure (the owner records them by hand).
+      - name: Tutorials to re-record
+        continue-on-error: true
+        run: node tools/tutorials/check-stale.mjs
+
       - name: Install
         run: bun install --frozen-lockfile
 

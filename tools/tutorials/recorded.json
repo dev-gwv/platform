@@ -1,0 +1,254 @@
+{
+  "ask-leave": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/leave.tsx": "5d186f51e514eda2",
+      "apps/web/src/features/hr/leave-balance.ts": "a4cd3309081551c2"
+    }
+  },
+  "assign": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/features/projects/tabs/ShootsTab.tsx": "06e905fa67f52445",
+      "apps/web/src/features/shoots/AssignTeamDialog.tsx": "106ea396ad15bd0b",
+      "apps/web/src/features/shoots/assign.ts": "9a8b92e6b368400b",
+      "apps/web/src/features/shoots/PayoutPicker.tsx": "c32d3ebb94d66cae"
+    }
+  },
+  "attendance": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/settings/attendance-location.tsx": "7f102e385e575434",
+      "apps/web/src/features/attendance/AttendanceSettings.tsx": "a3766585efc2f629"
+    }
+  },
+  "board": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/production-board.tsx": "6062b519e395fe27",
+      "apps/web/src/features/board/BulkBar.tsx": "8460d1072acfecf7",
+      "apps/web/src/features/board/ListView.tsx": "cb4f9c3aece10dab"
+    }
+  },
+  "check-in": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/dashboard/StaffHome.tsx": "38b0b26f65e167ce",
+      "apps/web/src/features/attendance/TodayAttendanceCard.tsx": "1ca9bc930209b835",
+      "apps/web/src/routes/attendance.tsx": "bf210dd21e5f8370"
+    }
+  },
+  "client": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/clients/list.tsx": "31e8f8cf0b64e846",
+      "apps/web/src/features/clients/ClientFormDialog.tsx": "73f98da5ba6f9975"
+    }
+  },
+  "data": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/projects/tabs/ShootsTab.tsx": "ab9ba2516f997718",
+      "apps/web/src/features/data/DataRecordDialog.tsx": "76fe061f5e5c1dc0",
+      "apps/web/src/features/data/stage.ts": "451960bc425fdfca"
+    }
+  },
+  "designer": {
+    "video": "2026-11-10",
+    "files": {
+      "apps/web/src/routes/ai-designer.tsx": "4c89d2339ac396f4",
+      "apps/web/src/routes/ai-designer-edit.tsx": "e5c7c05edf6cdec6",
+      "apps/web/src/features/designer/SidePanel.tsx": "b2088adb49b827d0",
+      "apps/web/src/features/designer/ColourPicker.tsx": "34d13fe066faa82a"
+    }
+  },
+  "details-form": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/projects/detail.tsx": "b5ac92069747c2a0",
+      "apps/web/src/features/wishes/DetailsLinkDialog.tsx": "82cea0db1d427a91",
+      "apps/web/src/routes/client-details.tsx": "4abbfe9ba60cf58b"
+    }
+  },
+  "enquiry-form": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/enquiry-hub.tsx": "ab371a6af4ab877b",
+      "apps/web/src/features/enquiry-forms/PartnerDialog.tsx": "6cee444a02b18d33",
+      "apps/web/src/features/enquiry-forms/WeddingQr.tsx": "2c8caec657b553ae",
+      "apps/web/src/features/enquiry-forms/AfterSendCard.tsx": "f0ed7fec86b586e0"
+    }
+  },
+  "expenses": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/company-expenses.tsx": "6e3344598acb73a9",
+      "apps/web/src/features/expenses/ExpenseDialog.tsx": "4235be057fde0497"
+    }
+  },
+  "facebook": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/lead-sources.tsx": "baf74786a67dbb86",
+      "apps/web/src/features/facebook/MetaConnectionCard.tsx": "2911e863c3acca13"
+    }
+  },
+  "give-work": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/projects/ProjectTabs.tsx": "295e316d78a3b519",
+      "apps/web/src/features/projects/DeliverableCard.tsx": "8c21570b1a09a173",
+      "apps/web/src/features/projects/GiveWorkDialog.tsx": "b80dfdbdba262d94"
+    }
+  },
+  "hand-in": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/my-work.tsx": "1f7b17c62387d0fd",
+      "apps/web/src/features/projects/MyDeliverables.tsx": "24966f724a9f1c5c",
+      "apps/web/src/features/work/SubmitWorkDialog.tsx": "f1f293b1aa2f425f"
+    }
+  },
+  "invoices": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/projects/tabs/BillingTab.tsx": "9ae6214a3027c355",
+      "apps/web/src/features/billing/InvoiceEditor.tsx": "3d4899c90a4d8f67",
+      "apps/web/src/routes/invoice-detail.tsx": "22de4eefca75a372"
+    }
+  },
+  "leads": {
+    "video": "2026-11-10",
+    "files": {
+      "apps/web/src/routes/follow-ups.tsx": "615d0b2201636d05",
+      "apps/web/src/features/crm/AddLeadDialog.tsx": "4dc782c2150c6053",
+      "apps/web/src/features/crm/LeadDrawer.tsx": "694c171619177f0c",
+      "apps/web/src/features/projects/ProjectJourney.tsx": "a343971f689a9e6e"
+    }
+  },
+  "leave": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/leave.tsx": "5d186f51e514eda2",
+      "apps/web/src/features/hr/leave-balance.ts": "a4cd3309081551c2"
+    }
+  },
+  "payments": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/billing/payments.tsx": "e016c32ceab97b83",
+      "apps/web/src/features/billing/DuePanel.tsx": "c346639c3821a996",
+      "apps/web/src/features/billing/RecordPaymentDialog.tsx": "2a1b2706f7d5e424"
+    }
+  },
+  "payouts": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/team-payouts.tsx": "c9e6683f63b251ed",
+      "apps/web/src/features/team-payouts/PayDialog.tsx": "aac04bed89ea21d8",
+      "apps/web/src/features/team/PayToCard.tsx": "9c06fa14dacb18ba"
+    }
+  },
+  "project": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/new.tsx": "6e2c88e113bda974",
+      "apps/web/src/features/projects/wizard/StepClient.tsx": "bf750e9b1ae3a5d2",
+      "apps/web/src/features/projects/wizard/StepShoots.tsx": "8ddbe8c15fd404db",
+      "apps/web/src/features/projects/wizard/StepDeliverables.tsx": "1c75b5f09c565bdb",
+      "apps/web/src/features/projects/wizard/StepBilling.tsx": "8489bc9a4dd81f1c",
+      "apps/web/src/features/projects/wizard/StepReview.tsx": "280762f96a99aef5"
+    }
+  },
+  "project-billing": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/new.tsx": "6e2c88e113bda974",
+      "apps/web/src/features/projects/wizard/StepBilling.tsx": "8489bc9a4dd81f1c",
+      "apps/web/src/features/projects/wizard/StepReview.tsx": "280762f96a99aef5"
+    }
+  },
+  "project-client": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/new.tsx": "6e2c88e113bda974",
+      "apps/web/src/features/projects/wizard/StepClient.tsx": "bf750e9b1ae3a5d2"
+    }
+  },
+  "project-deliverables": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/new.tsx": "6e2c88e113bda974",
+      "apps/web/src/features/projects/wizard/StepDeliverables.tsx": "1c75b5f09c565bdb"
+    }
+  },
+  "project-shoots": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/new.tsx": "6e2c88e113bda974",
+      "apps/web/src/features/projects/wizard/StepShoots.tsx": "8ddbe8c15fd404db",
+      "apps/web/src/features/projects/wizard/RequirementsDialog.tsx": "d79c035c191b4aca",
+      "apps/web/src/features/shoots/ShootWhenFields.tsx": "85955007afe6e841"
+    }
+  },
+  "quotation": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/projects/$id.quotation.tsx": "69618965febfa415",
+      "apps/web/src/features/projects/QuotationDocument.tsx": "c37ad100aea10aa0"
+    }
+  },
+  "salaries": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/payroll.tsx": "0706d5e33c0ef20b",
+      "apps/web/src/features/team/CompensationFields.tsx": "4e7f1c0b0b62661a"
+    }
+  },
+  "signup": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/login.tsx": "900be302a633953c"
+    }
+  },
+  "studio": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/routes/settings.tsx": "5f86c06cda9e1127",
+      "apps/web/src/routes/project-templates.tsx": "702e04d0ad645f5b",
+      "apps/web/src/shared/ui/photo-upload.tsx": "97a0a61e723b053a"
+    }
+  },
+  "team": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/routes/employees.tsx": "daca8e1c0eb4d95a",
+      "apps/web/src/features/team/AddTeamChooser.tsx": "03e39639fdf4d91e",
+      "apps/web/src/features/team/AddMemberForm.tsx": "c56cb00c36ae2128",
+      "apps/web/src/features/team/JobRolePicker.tsx": "64442e784e42252d"
+    }
+  },
+  "team-bulk": {
+    "video": "2026-11-11",
+    "files": {
+      "apps/web/src/features/team/AddTeamChooser.tsx": "03e39639fdf4d91e",
+      "apps/web/src/features/team/BulkAddMembers.tsx": "08ffbca8a2835b71"
+    }
+  },
+  "team-day": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/dashboard/StaffHome.tsx": "38b0b26f65e167ce",
+      "apps/web/src/features/attendance/TodayAttendanceCard.tsx": "1ca9bc930209b835",
+      "apps/web/src/features/projects/MyDeliverables.tsx": "24966f724a9f1c5c"
+    }
+  },
+  "terms": {
+    "video": "2026-10-10",
+    "files": {
+      "apps/web/src/features/projects/tabs/TermsTab.tsx": "5f28ab0c7d2d3871",
+      "apps/web/src/features/terms/TermsComposer.tsx": "25cac9ab27fce46e",
+      "apps/web/src/features/terms/SignHereDialog.tsx": "ec7fdbc56b7764d2"
+    }
+  }
+}
