@@ -12,6 +12,7 @@ import { useCreateReceivedPayment, useInvoices, useRecordPayment, useUpdateRecei
 import { useClientProjectOptions } from './client-projects'
 import { leftToPayLine } from './left-to-pay'
 import { todayInIndia } from '@/shared/ui/days-left'
+import { parseAmount } from '@/shared/money/parse-amount'
 import {
   blankPaymentForm,
   checkPaymentForm,
@@ -154,7 +155,7 @@ function PlacedPaymentDialog({
       setError(wrong)
       return
     }
-    const value = Number(form.amount)
+    const value = parseAmount(form.amount)
     const done = {
       onSuccess: () => {
         state.draft.clear()
@@ -430,7 +431,7 @@ function PaymentDialogFrame({
   const { form, set, more, setMore } = state
   const q = paymentQuestions(kind)
   const received = !q.status || form.received
-  const value = Number(form.amount) || 0
+  const value = parseAmount(form.amount)
   const needsReference = q.reference && (form.mode === 'UPI' || form.mode === 'Bank transfer')
   const leftLine = leftToPayLine({ due, amount: value, received, editing, dueOn, today: todayInIndia() })
 

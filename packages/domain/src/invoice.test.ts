@@ -79,6 +79,47 @@ describe('a line counted in a unit, for some days', () => {
     expect(inv.total).toBe(20390.4)
   })
 
+  // Σ line taxable must equal subtotal − discount to the paisa (audit, 21 Nov:
+  // each line rounded on its own gave ₹20,000.01 for ₹30,000 less ₹10,000).
+  const paise = (n: number) => Math.round(n * 100)
+  const sumTaxable = (inv: ReturnType<typeof computeInvoice>) => inv.lines.reduce((a, l) => a + paise(l.taxable), 0)
+
+  it('spreads an uneven flat discount so the lines add up exactly (3 × 10,000 less 10,000)', () => {
+    const three = [1, 2, 3].map((n) => ({ description: `Day ${n}`, quantity: 1, rate: 10000, gst_rate: 18 as const }))
+    const inv = computeInvoice(three, { intraState: true, discount: 10000 })
+    expect(sumTaxable(inv)).toBe(paise(inv.subtotal - inv.discount))
+    expect(inv.lines.map((l) => l.taxable)).toEqual([6666.66, 6666.67, 6666.67])
+    expect(inv.taxable).toBe(20000)
+    expect(inv.tax).toBe(3600)
+    expect(inv.total).toBe(23600)
+  })
+
+  it('gives the leftover paise to the largest line (7 × 33,333 less 5,000)', () => {
+    const seven = Array.from({ length: 7 }, (_, n) => ({ description: `Item ${n}`, quantity: 1, rate: 33333, gst_rate: 18 as const }))
+    const inv = computeInvoice(seven, { intraState: true, discount: 5000 })
+    expect(inv.subtotal).toBe(233331)
+    expect(sumTaxable(inv)).toBe(paise(233331 - 5000))
+    expect(inv.taxable).toBe(228331)
+    expect(inv.lines[0]!.taxable).toBe(32618.74)
+    expect(inv.lines[6]!.taxable).toBe(32618.71)
+    expect(inv.tax).toBe(41099.54)
+    expect(inv.total).toBe(269430.54)
+  })
+
+  it('keeps the identity with uneven lines and a percent discount', () => {
+    const mixed = [
+      { description: 'A', quantity: 1, rate: 12345.67, gst_rate: 18 as const },
+      { description: 'B', quantity: 3, rate: 999.99, gst_rate: 12 as const },
+      { description: 'C', quantity: 1, rate: 50000, gst_rate: 5 as const },
+    ]
+    for (const d of [1, 7, 333.33, 12.5]) {
+      const flat = computeInvoice(mixed, { intraState: false, discount: d })
+      expect(sumTaxable(flat)).toBe(paise(flat.subtotal - flat.discount))
+      const pct = computeInvoice(mixed, { intraState: true, discount: d % 100, discountType: 'percent' })
+      expect(sumTaxable(pct)).toBe(paise(pct.subtotal - pct.discount))
+    }
+  })
+
   it('treats empty or zero days as one', () => {
     const one = computeInvoice([{ description: 'x', quantity: 2, rate: 100, gst_rate: 0 }], { intraState: true })
     const zero = computeInvoice([{ description: 'x', quantity: 2, rate: 100, days: 0, gst_rate: 0 }], { intraState: true })

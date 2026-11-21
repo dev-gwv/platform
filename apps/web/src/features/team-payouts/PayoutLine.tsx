@@ -3,6 +3,7 @@ import type { PaySlotRequest, SlotPayStatus } from '@ipc/contracts'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { useINR } from '@/shared/money/MoneyMask'
+import { readAmount } from '@/shared/money/parse-amount'
 
 export type PayoutChoice = 'later' | 'full' | 'part'
 export interface PayoutDraft {
@@ -23,11 +24,11 @@ export function startPayout(status: SlotPayStatus | undefined): PayoutDraft {
  * outstanding, "Part paid" pays what was typed.
  */
 export function payoutRequest(draft: PayoutDraft, status: SlotPayStatus, today: string): PaySlotRequest | null {
-  const typed = draft.amount.trim() === '' ? status.amount : Number(draft.amount)
+  const typed = draft.amount.trim() === '' ? status.amount : readAmount(draft.amount)
   const amount = Number.isFinite(typed) && typed >= 0 ? Math.round(typed * 100) / 100 : status.amount
   const changed = Math.abs(amount - status.amount) > 0.001
   const outstanding = Math.max(0, amount - status.paid)
-  const part = Number(draft.part)
+  const part = readAmount(draft.part)
   const paidNow =
     draft.choice === 'full' ? outstanding : draft.choice === 'part' && Number.isFinite(part) && part > 0 ? Math.min(part, outstanding) : 0
   if (!changed && paidNow <= 0) return null
@@ -56,7 +57,7 @@ export function PayoutLine({
   onChange: (next: PayoutDraft) => void
 }) {
   const inr = useINR()
-  const typed = value.amount.trim() === '' ? status.amount : Number(value.amount) || 0
+  const typed = value.amount.trim() === '' ? status.amount : readAmount(value.amount) || 0
   const outstanding = Math.max(0, typed - status.paid)
   const settled = status.paid > 0 && outstanding <= 0.001
   const done = settled || value.choice === 'full'

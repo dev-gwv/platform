@@ -82,8 +82,13 @@ describe('0218 studio access carry-over', () => {
     expect(r.map((x) => x.studio_name)).toEqual(['ARK Pictures'])
   })
 
-  it('gives a studio signing up with the old email the paid time it had', async () => {
-    const company = await signUp('e0000000-0000-4000-8000-0000000000a1', 'ark@example.com', 'ARK Pictures')
+  it('gives a studio signing up with the old email the paid time it had, once its inbox is proven (0314)', async () => {
+    const uid = 'e0000000-0000-4000-8000-0000000000a1'
+    const company = await signUp(uid, 'ark@example.com', 'ARK Pictures')
+    // Not before the owner proves the inbox: anyone can type an email.
+    const before = await one<{ until: string | null }>(`select plan_expiry::date::text as until from companies where id = '${company}'`)
+    expect(before.until).toBeNull()
+    await db.exec(`update auth.users set email_proven_at = now() where id = '${uid}'`)
     const c = await one<{ until: string }>(`select plan_expiry::date::text as until from companies where id = '${company}'`)
     expect(c.until).toBe(future(41))
     const l = await one<{ joined: string | null }>(`select joined_company_id as joined from legacy_studios where old_company_id = 'old-1'`)
@@ -92,10 +97,12 @@ describe('0218 studio access carry-over', () => {
 
   it('never shortens a studio that already has longer', async () => {
     await db.exec(`insert into legacy_studios (old_company_id, studio_name, email, expires_at) values ('old-2', 'Modern', 'mm@example.com', '${future(10)}')`)
-    const company = await signUp('e0000000-0000-4000-8000-0000000000a2', 'someone@example.com', 'Modern Memories')
+    const uid = 'e0000000-0000-4000-8000-0000000000a2'
+    const company = await signUp(uid, 'someone@example.com', 'Modern Memories')
     await db.exec(`update companies set plan_expiry = now() + interval '200 days' where id = '${company}'`)
-    await db.exec(`update users set email = 'mm@example.com' where company_id = '${company}'`)
+    await db.exec(`update auth.users set email = 'mm@example.com', email_proven_at = now() where id = '${uid}'`)
     await db.exec(`select legacy_carry_over('${company}')`)
+    expect((await one<{ joined: string | null }>(`select joined_company_id as joined from legacy_studios where old_company_id = 'old-2'`)).joined).toBe(company)
     const c = await one<{ days: number }>(`select (plan_expiry::date - current_date) as days from companies where id = '${company}'`)
     expect(c.days).toBeGreaterThanOrEqual(199)
   })
@@ -103,10 +110,24 @@ describe('0218 studio access carry-over', () => {
   it('marks an expired old studio joined but carries no time', async () => {
     await db.exec(`insert into legacy_studios (old_company_id, studio_name, email, expires_at) values ('old-3', 'Gone', 'gone@example.com', '2025-01-01')`)
     const company = await signUp('e0000000-0000-4000-8000-0000000000a3', 'gone@example.com', 'Gone Films')
+    await db.exec(`update auth.users set email_proven_at = now() where id = 'e0000000-0000-4000-8000-0000000000a3'`)
     const c = await one<{ plan_expiry: string | null }>(`select plan_expiry from companies where id = '${company}'`)
     expect(c.plan_expiry).toBeNull()
     const l = await one<{ joined: string | null }>(`select joined_company_id as joined from legacy_studios where old_company_id = 'old-3'`)
     expect(l.joined).toBe(company)
+  })
+
+  it("never carries time to an admin's typed email, only the owner's own proven login (0314)", async () => {
+    await db.exec(`insert into legacy_studios (old_company_id, studio_name, email, expires_at) values ('old-4', 'Paid Studio', 'paid@example.com', '${future(90)}')`)
+    const owner = 'e0000000-0000-4000-8000-0000000000a4'
+    const company = await signUp(owner, 'new-owner@example.com', 'Copycat Films')
+    await db.exec(`update auth.users set email_proven_at = now() where id = '${owner}'`)
+    // A team row with the paid studio's email, as a studio can type for any login.
+    await db.exec(`insert into auth.users (id, email) values ('e0000000-0000-4000-8000-0000000000a5', 'paid@example.com')`)
+    await db.exec(`insert into users (user_id, company_id, role, name, email) values ('e0000000-0000-4000-8000-0000000000a5', '${company}', 'admin', 'Typed', 'paid@example.com')`)
+    expect((await one<{ n: number }>(`select legacy_carry_over('${company}') as n`)).n).toBe(0)
+    const l = await one<{ joined: string | null }>(`select joined_company_id as joined from legacy_studios where old_company_id = 'old-4'`)
+    expect(l.joined).toBeNull()
   })
 
   it('shows the list to a platform admin only', async () => {

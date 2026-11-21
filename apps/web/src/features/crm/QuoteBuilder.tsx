@@ -104,7 +104,7 @@ export function QuoteBuilder({
         })),
     [lines],
   )
-  const totals = useMemo(() => computeInvoice(parsedLines, { intraState: intra, discount: Number(discount) || 0 }), [parsedLines, intra, discount])
+  const totals = useMemo(() => computeInvoice(parsedLines, { intraState: intra, discount: parseAmount(discount) }), [parsedLines, intra, discount])
 
   const setLine = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)))
   // The order is kept on the quote and shown to the client, so it is worth
@@ -125,7 +125,7 @@ export function QuoteBuilder({
       ...(validUntil ? { valid_until: validUntil } : {}),
       place_of_supply: place.trim(),
       intra_state: intra,
-      discount: Number(discount) || 0,
+      discount: parseAmount(discount),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(terms.trim() ? { terms: terms.trim() } : {}),
       lines: parsedLines,
