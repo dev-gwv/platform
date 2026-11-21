@@ -21,12 +21,3 @@ export const NO_PASSWORD_MESSAGE =
   'This email already has a Studio AutoPilot login without a password. ' +
   'Use Forgot password on the sign-in page to set one, then open this invitation link again and enter it. ' +
   'If you sign in with Google and have no studio yet, you can join this studio right after signing in.'
-
-/**
- * The link goes back to the studio only for an email with no login yet. For
- * an existing login only its mailbox gets it, so the studio can never open the
- * link as that person.
- */
-export function shareableInviteLink(link: string, emailHasLogin: boolean): string | null {
-  return emailHasLogin ? null : link
-}
