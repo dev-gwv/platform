@@ -134,7 +134,8 @@ export function NoteComposer({ leadId, onSaved, autoFocus }: { leadId: string; o
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[0.7rem] text-muted-foreground">
-          {needsOutcome ? 'Pick how the call went first.' : '⌘/Ctrl + Enter to save'}
+          {/* The keyboard hint only where there is a keyboard (not on a phone). */}
+          {needsOutcome ? 'Pick how the call went first.' : <span className="hidden [@media(hover:hover)]:inline">⌘/Ctrl + Enter to save</span>}
         </span>
         <Button size="sm" onClick={save} disabled={needsOutcome || empty || log.isPending}>
           {channel === 'call' ? 'Log call' : 'Add note'}

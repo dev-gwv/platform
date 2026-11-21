@@ -481,9 +481,10 @@ export function DeliverableCard({
                 onClick={() => onOpen('voice')}
                 aria-label={`Send ${d.assignee_name ?? 'a'} voice note`}
                 title="Record a voice note"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/5 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                // Neutral: red is for a real problem, and a red dot made this
+                // the loudest thing on the Work tab (audit, 21 Nov).
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-foreground hover:border-primary hover:text-primary"
               >
-                <span className="size-2 rounded-full bg-destructive" aria-hidden />
                 <Mic className="size-3.5" aria-hidden />
                 <span className="hidden sm:inline">Voice note</span>
               </button>

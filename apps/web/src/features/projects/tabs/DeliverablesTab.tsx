@@ -134,7 +134,9 @@ export function DeliverablesTab({
         )}
       </div>
 
-      {groups.map((g) => {
+      {/* Groups with work first; once anything is promised, the empty ones
+          fold into one "+ Add" line at the foot instead of a box each. */}
+      {(deliverables.length > 0 ? groups.filter((g) => g.items.length > 0) : groups).map((g) => {
         const items = g.items.filter((d) => matches(d, filter))
         // With a filter on, a group with nothing matching simply steps aside.
         if (filter && items.length === 0) return null
@@ -209,6 +211,27 @@ export function DeliverablesTab({
           </section>
         )
       })}
+
+      {canEdit && !filter && deliverables.length > 0 && (() => {
+        const empty = groups.filter((g) => g.shoot && g.items.length === 0)
+        if (empty.length === 0) return null
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-dashed border-border bg-card px-3 py-2.5 text-xs text-muted-foreground">
+            <span className="mr-1">Nothing yet from</span>
+            {empty.map((g) => (
+              <button
+                key={g.shoot!.id}
+                type="button"
+                onClick={() => setDialog({ shootId: g.shoot!.id })}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 font-medium text-foreground hover:border-primary hover:text-primary"
+                aria-label={`Add deliverable to ${g.shoot!.name}`}
+              >
+                <Plus className="size-3" aria-hidden /> {g.shoot!.name}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {picked.length > 0 && <DeliverableBulkBar picked={picked} onDone={() => setTicked(new Set())} />}
 

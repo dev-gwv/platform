@@ -138,6 +138,11 @@ export function myDay(input: DayInput): { today: TodayItem[]; next: TodayItem[] 
       todayList.push({ ...base, note: noteLine(d.last_note, input.now), late: false, sort: '04', heard: false })
     } else if (d.changes_requested) {
       todayList.push({ ...base, note: 'Sent back for changes', late: false, sort: '05' })
+    } else if (!d.started_at && d.start_by && d.start_by <= today && d.estimated_date) {
+      // Lateness is counted from the due date, as My work says it ("2 days
+      // late"), never from the start-by day (which read "10 days late").
+      const left = daysUntil(d.estimated_date, today)
+      todayList.push({ ...base, note: `Start · ${daysLeftText(left)}`, late: left < 0, sort: left < 0 ? `0${d.estimated_date}` : '2' })
     } else if (!d.started_at && d.start_by && d.start_by <= today) {
       const n = daysBetween(d.start_by, today)
       todayList.push({ ...base, note: n > 0 ? `Start · ${lateText(n)}` : 'Start today', late: n > 0, sort: n > 0 ? `0${d.start_by}` : '2' })

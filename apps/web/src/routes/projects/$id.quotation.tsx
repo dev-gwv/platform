@@ -40,7 +40,7 @@ import { Breadcrumbs } from '@/shared/layout/breadcrumbs'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label, Textarea } from '@/shared/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Switch } from '@/shared/ui/switch'
 import { ErrorState } from '@/shared/ui/states'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -406,6 +406,9 @@ function ProjectQuotation() {
     }, 1000)
   }
 
+  // The journey shows its own Send to client while the quotation is unsent.
+  const journeySends = !project.quotation_issued_at && !project.quotation_accepted_at
+
   /**
    * The journey's next step, taken from here: the project page opens on the
    * right tab with the next thing already open (?invoice=next opens the
@@ -459,11 +462,20 @@ function ProjectQuotation() {
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
             <Popover open={sendOpen} onOpenChange={setSendOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Send /> Send to client <ChevronDown className="size-3.5" />
-                </Button>
-              </PopoverTrigger>
+              {/* Until the quotation is sent, the journey bar right under this
+                  carries Send to client and opens this same menu; the toolbar
+                  shows it again only once that step is done (to send again). */}
+              {journeySends ? (
+                <PopoverAnchor asChild>
+                  <span className="block h-8 w-0" aria-hidden />
+                </PopoverAnchor>
+              ) : (
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Send /> Send to client <ChevronDown className="size-3.5" />
+                  </Button>
+                </PopoverTrigger>
+              )}
               <PopoverContent align="end" className="w-56 p-1.5">
                 <MenuItem icon={<Eye />} label="See it as the client" onSelect={() => { setSendOpen(false); setAs('client') }} />
                 <MenuItem icon={<Mail />} label="Email" onSelect={() => { setSendOpen(false); openEmail() }} />
@@ -595,7 +607,8 @@ function ProjectQuotation() {
         </div>
       )}
 
-      <div className="mt-3">
+      {/* Room under the paper, so its total scrolls clear of the help bubble. */}
+      <div className="mt-3 pb-20">
         {asClient ? (
           <QuotationDocument data={doc} prefs={prefs} />
         ) : (

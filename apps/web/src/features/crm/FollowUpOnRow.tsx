@@ -14,6 +14,22 @@ export function useOpenFollowUps(scope: 'mine' | 'all') {
   return useActivities({ openTasks: true, mine: scope === 'mine' })
 }
 
+/** Who sees everyone's follow-ups and calls, and opens on them. */
+export const SEES_ALL_FOLLOW_UPS: ReadonlySet<string> = new Set(['super_admin', 'admin', 'manager', 'platform_admin'])
+
+/** The scope the follow-up board opens on: the studio's for whoever runs it. */
+export const boardScopeFor = (role: string | null | undefined): 'mine' | 'all' =>
+  SEES_ALL_FOLLOW_UPS.has(role ?? '') ? 'all' : 'mine'
+
+/**
+ * The follow-up board's list. The Leads header's "N late" reads the same
+ * query in the same scope, so the chip and the board's Overdue column never
+ * disagree.
+ */
+export function useBoardFollowUps(scope: 'mine' | 'all') {
+  return useActivities({ openTasks: true, mine: scope === 'mine', live: true, limit: 1000 })
+}
+
 /**
  * What was promised, on the call row: the follow-up's type and priority as
  * chips and when it is owed. Red only once it is late.
@@ -75,10 +91,23 @@ export function FollowUpActions({ task }: { task: CrmActivity }) {
  * lead; a lead already in the list carries its follow-up on its own row.
  */
 export function ComingUpFollowUps({ tasks, scope }: { tasks: CrmActivity[]; scope: 'mine' | 'all' }) {
+  const now = useMemo(() => new Date(), [tasks])
+  // A follow-up already late is not "coming up": it gets its own heading first.
+  const late = tasks.filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue')
+  const ahead = tasks.filter((t) => !late.includes(t))
+  return (
+    <>
+      <FollowUpSection title="Late follow-ups" tasks={late} scope={scope} />
+      <FollowUpSection title="Coming up" tasks={ahead} scope={scope} />
+    </>
+  )
+}
+
+function FollowUpSection({ title, tasks, scope }: { title: string; tasks: CrmActivity[]; scope: 'mine' | 'all' }) {
   if (tasks.length === 0) return null
   return (
-    <section aria-label="Follow-ups coming up" className="mt-4">
-      <h2 className="mb-2 text-sm font-semibold">Coming up</h2>
+    <section aria-label={title} className="mt-4">
+      <h2 className="mb-2 text-sm font-semibold">{title}</h2>
       <ul className="divide-y divide-border rounded-xl border border-border bg-card">
         {tasks.map((t) => (
           <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:px-4">

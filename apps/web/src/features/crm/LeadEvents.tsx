@@ -112,7 +112,7 @@ export function LeadEvents({
             disabled={disabled}
             onChange={(e) => change(i, { guests: guestsValue(e.target.value) }, false)}
             onBlur={() => onCommit(rows)}
-            className="h-8 w-20"
+            className="h-8 w-24 shrink-0"
           />
           {!disabled && (rows.length > 1 || r.event_type || r.event_date || r.location) && (
             <button

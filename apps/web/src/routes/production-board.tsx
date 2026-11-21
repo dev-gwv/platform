@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Images, Search, X } from 'lucide-react'
+import { Images, Search, SlidersHorizontal, X } from 'lucide-react'
 import { NewBadge } from '@/shared/ui/new-badge'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -102,6 +102,8 @@ function Board() {
 
   const open = openId ? items.find((d) => d.id === openId) : undefined
   const filtered = !!(project || person || q || focus)
+  const narrowed = !!(project || person)
+  const [filtering, setFiltering] = useState(false)
 
   return (
     <>
@@ -170,6 +172,17 @@ function Board() {
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search work, project, client…" aria-label="Search the board" className="pl-9" />
             </label>
+            {/* Project and person wait behind Filter (minimal first). */}
+            <Button
+              variant="outline"
+              onClick={() => setFiltering((v) => !v)}
+              aria-expanded={filtering || narrowed}
+              className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}
+            >
+              <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+            </Button>
+            {(filtering || narrowed) && (
+            <>
             <Select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Filter by project" className="min-w-0 flex-1 sm:w-44 sm:flex-none">
               <option value="">All projects</option>
               {projects.map(([id, name]) => (
@@ -187,6 +200,8 @@ function Board() {
                 </option>
               ))}
             </Select>
+            </>
+            )}
             {filtered && (
               <Button
                 variant="ghost"

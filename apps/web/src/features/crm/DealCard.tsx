@@ -6,7 +6,7 @@ import type { LeadRow } from '@ipc/contracts'
 import { cn } from '@/shared/ui/cn'
 import { Avatar } from '@/shared/ui/avatar'
 import { useINR } from '@/shared/money/MoneyMask'
-import { DateBadge, DueBadge, ScoreBadge, lastTouch } from './tabs/shared'
+import { DateBadge, DueBadge, lastTouch } from './tabs/shared'
 import { TagChips } from './TagChip'
 import { EventTile } from '@/shared/ui/icon-tile'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -45,7 +45,6 @@ export const DealCard = memo(function DealCard({
   now,
   onOpen,
   draggable,
-  stageProbability,
   ticked = false,
   ticking = false,
   onTick,
@@ -54,7 +53,7 @@ export const DealCard = memo(function DealCard({
   now: Date
   onOpen: (id: string) => void
   draggable: boolean
-  /** Used for the bar when the deal carries no probability of its own. */
+  /** Kept for callers; the card no longer draws a probability. */
   stageProbability?: number | undefined
   /** Picked for the bulk bar. */
   ticked?: boolean | undefined
@@ -74,7 +73,6 @@ export const DealCard = memo(function DealCard({
 
   const qualityColor = useLookupColor('lead_quality')
   const [noting, setNoting] = useState(false)
-  const pct = lead.probability ?? stageProbability ?? null
   const title = lead.title ?? lead.name ?? 'Unnamed deal'
   // Where it came from, as the caption above the name.
   const origin = lead.source_label ?? lead.crm_company_name ?? null
@@ -146,7 +144,6 @@ export const DealCard = memo(function DealCard({
             <span className="flex items-center gap-1.5">
               {lead.is_hot && <Flame className="size-3.5 shrink-0 text-destructive" aria-label="Hot" />}
               <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{title}</span>
-              {lead.score > 0 && <ScoreBadge score={lead.score} />}
             </span>
           </span>
         </span>
@@ -171,18 +168,9 @@ export const DealCard = memo(function DealCard({
 
         {lead.deal_value !== null && (
           <span className="mt-1.5 block">
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold tabular-nums">{inr(lead.deal_value)}</span>
-              {pct !== null && <span className="text-[0.65rem] tabular-nums text-muted-foreground">{pct}%</span>}
-            </span>
-            {pct !== null && (
-              <span className="mt-1 block h-0.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-                <span
-                  className="block h-full rounded-full bg-primary/70"
-                  style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                />
-              </span>
-            )}
+            {/* The amount only: the score and the stage's "10%" meant nothing
+                to a studio on a card (audit, 21 Nov). */}
+            <span className="text-sm font-semibold tabular-nums">{inr(lead.deal_value)}</span>
           </span>
         )}
 

@@ -106,13 +106,15 @@ export function AssignmentRow({
       </div>
 
       <div className="flex min-w-[10rem] flex-col items-start gap-0.5">
-        {(dayPassed || record) && (
+        {/* "Data not added" beside an Add data button says the same thing
+            twice: whoever can add it sees only the (amber) button. */}
+        {(dayPassed || record) && !(canEdit && stage === 'missing' && !optedOut(slot)) && (
           <StatusBadge tone={tone} title={stage === 'opted_out' ? (slot.data_not_required_reason ?? undefined) : undefined}>
             {STAGE_LABEL[stage]}
           </StatusBadge>
         )}
         {where.length > 0 && <p className="text-[11px] text-muted-foreground">{where.join(' · ')}</p>}
-        {terms !== undefined && <TermsLine send={terms} />}
+        {terms !== undefined && !(canEdit && !terms && slot.user_id) && <TermsLine send={terms} />}
       </div>
 
       <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
