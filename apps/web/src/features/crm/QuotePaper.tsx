@@ -49,7 +49,27 @@ export function QuotePaper({ data }: { data: QuotePaperData }) {
       {data.title && <h2 className="paper-block mt-6 text-lg font-semibold">{data.title}</h2>}
 
       <section className="q-section paper-block mt-6">
-        <div className="quotation-table overflow-x-auto rounded-lg border border-border">
+        {/* On a phone each line is a short card, so the amount never hides off
+            the right edge; a wider screen and the printed paper keep the table. */}
+        <ul className="divide-y divide-border rounded-lg border border-border text-sm sm:hidden print:hidden">
+          {data.items.length === 0 ? (
+            <li className="px-3 py-4 text-center text-muted-foreground">Details will be shared separately.</li>
+          ) : (
+            data.items.map((i, n) => (
+              <li key={n} className="px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 font-medium">{i.description}</p>
+                  <p className="shrink-0 font-semibold tabular-nums">{formatINR(i.amount)}</p>
+                </div>
+                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                  {lineMeasure(i)} × {formatINR(i.rate)}
+                  {rateUnit(i) ? ` ${rateUnit(i)}` : ''}
+                </p>
+              </li>
+            ))
+          )}
+        </ul>
+        <div className="quotation-table hidden overflow-x-auto rounded-lg border border-border sm:block print:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>

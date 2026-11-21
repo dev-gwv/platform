@@ -110,3 +110,23 @@ export function expectedLine(expected: string | null, today: string, fmt: (d: st
 export function absolutePortalUrl(url: string, origin: string): string {
   return url.startsWith('/') ? `${origin.replace(/\/+$/, '')}${url}` : url
 }
+
+/**
+ * The client's money card. The project's value is the package before GST, but
+ * an invoice carries GST on top, so its balance can be larger than "package
+ * minus paid" -- the card once read "Balance due ₹1,85,000 · Next: ₹2,36,300",
+ * two numbers a couple cannot square. When the open invoices ask for more than
+ * that balance, the card counts what the invoices ask for and says GST is in it.
+ */
+export function moneyCard(money: NonNullable<PublicClientPortal['money']>): {
+  total: number
+  received: number
+  balance: number
+  withGst: boolean
+} {
+  const openInvoices = money.invoices.reduce((s, i) => s + Math.max(0, i.balance_due), 0)
+  if (openInvoices > money.balance) {
+    return { total: money.received + openInvoices, received: money.received, balance: openInvoices, withGst: true }
+  }
+  return { total: money.total, received: money.received, balance: money.balance, withGst: false }
+}
