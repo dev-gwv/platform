@@ -25,6 +25,7 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail } from '../../lib/email'
+import { claimStudioEmail } from '../../lib/email-cap'
 import { currentStudioBrand } from '../../lib/studio-brand'
 import { serve } from '../files/router'
 
@@ -127,6 +128,7 @@ export const documentsRouter = new Hono<AppEnv>()
     )
     if (!info) fail(404, 'That quotation was not found.')
     const to = parsed.data.to_email ?? info.client_email
+    if (to) await claimStudioEmail(c)
     // Always mint a fresh link for the email so rotation is explicit.
     const token = await attempt(c, 'documents.quotation_email_token', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
@@ -141,7 +143,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const intro = parsed.data.message
       ? escapeHtml(parsed.data.message).replace(/\r?\n/g, '<br>')
       : `${info.company_name ?? 'The studio'} has shared a quotation${info.project_name ? ` for ${info.project_name}` : ''}. Open the link to view and respond.`
-    const result = await sendClientDocEmail(c.env, to, subject, link, intro, await currentStudioBrand(c))
+    const result = await sendClientDocEmail(c.env, to, subject, link, intro, await currentStudioBrand(c), c.get('auth').companyId)
     try {
       await withUser(c.env, c.get('auth').userId, async (sql) => {
         await sql`insert into quotation_email_logs (company_id, quotation_id, to_email, status, error, created_by)
@@ -213,6 +215,8 @@ export const documentsRouter = new Hono<AppEnv>()
       .filter(Boolean)
     const toList = recipients.length > 0 ? [...new Set(recipients)] : (info.client_email ? [info.client_email] : [])
     if (toList.length === 0) fail(422, 'Client email not found. Add an email to send the receipt.')
+    // Every address counts against the studio's daily ceiling, claimed before any goes.
+    for (let i = 0; i < toList.length; i++) await claimStudioEmail(c)
     const tokenRows = await attempt(c, 'documents.receipt_email_token', () =>
       withUser(c.env, c.get('auth').userId, async (sql) => {
         const rows = await sql<{ token: string }[]>`
@@ -229,7 +233,7 @@ export const documentsRouter = new Hono<AppEnv>()
     let lastError: string | null = null
     const brand = await currentStudioBrand(c)
     for (const to of toList) {
-      const result = await sendClientDocEmail(c.env, to, subject, link, bodyText, brand)
+      const result = await sendClientDocEmail(c.env, to, subject, link, bodyText, brand, c.get('auth').companyId)
       try {
         await withUser(c.env, c.get('auth').userId, async (sql) => {
           await sql`insert into receipt_email_logs (company_id, payment_id, to_email, status, error, created_by)

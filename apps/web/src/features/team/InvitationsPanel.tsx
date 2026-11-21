@@ -124,8 +124,12 @@ export function InvitationsPanel() {
                       onClick={() =>
                         resend.mutate(i.id, {
                           onSuccess: (res) => {
-                            void navigator.clipboard.writeText(res.invite_link)
-                            toast.success('New link sent and copied to your clipboard')
+                            if (res.invite_link) {
+                              void navigator.clipboard.writeText(res.invite_link)
+                              toast.success('New link sent and copied to your clipboard')
+                            } else {
+                              toast.success('We emailed the invitation again.')
+                            }
                           },
                         })
                       }

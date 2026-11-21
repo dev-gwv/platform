@@ -359,7 +359,7 @@ export const memberRoutes = new Hono<AppEnv>()
     if (targetId === auth.userId) fail(409, 'Change your own password from My profile.')
     await guardTarget(c, targetId, 'Change your own password from My profile.')
     const parsed = setMemberSignInRequest.safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success) fail(422, 'Use a real-looking email and a password of at least 6 characters.')
+    if (!parsed.success) fail(422, 'Use a real-looking email and a password of at least 8 characters.')
     const pwHash = await hashPassword(parsed.data.password)
     const companyId = auth.companyId
 

@@ -12,6 +12,7 @@ import { audit } from '../../lib/audit'
 import { requireStudioWork } from '../../lib/scope'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendClientDocEmail, sendTermsAgreedEmail } from '../../lib/email'
+import { claimStudioEmail } from '../../lib/email-cap'
 import { currentStudioBrand } from '../../lib/studio-brand'
 
 const issueTermsRequest = z.object({
@@ -216,6 +217,7 @@ async function emailTerms(
   const project = info?.project_name ? ` for ${escapeHtml(info.project_name)}` : ''
   const subject =
     words.subject || `Terms & conditions${info?.project_name ? ` for ${info.project_name}` : ''} — ${info?.company_name ?? 'Studio'}`
+  if (to) await claimStudioEmail(c)
   const brand = await currentStudioBrand(c)
   const result = await sendClientDocEmail(
     c.env,
@@ -229,6 +231,7 @@ async function emailTerms(
           `Please open the link, read them, and tap "I agree" at the end of the page.` +
           (brand?.replyTo ? `<br><br>Questions? Just reply to this email.` : ''),
     brand,
+    c.get('auth').companyId,
   )
   try {
     await withUser(c.env, c.get('auth').userId, async (sql) => {

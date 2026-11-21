@@ -4,17 +4,36 @@ import type { AppEnv } from '../../context'
 import { rateLimit } from '../../middleware/security'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
-import { withUser } from '../../lib/db'
+import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { newRawToken, sha256Hex } from '../../lib/auth-token'
 import { sendInvitationEmail } from '../../lib/email'
+import { shareableInviteLink } from '../../lib/invite-safety'
 import { duplicateCode, teamGate, mayGrant, mayTouchPay, inviteScope, asCaller } from './shared'
 
 const INVITE_DAYS = 7
 
 const inviteLink = (env: AppEnv['Bindings'], raw: string) =>
   `${env.APP_URL}/accept-invite?token=${raw}`
+
+/**
+ * Whether this email already belongs to a login (any studio, or none). Then
+ * the link goes to the mailbox only, never back to the studio. An outage
+ * counts as yes: the email still carries the link.
+ */
+async function emailHasLogin(c: Context<AppEnv>, email: string): Promise<boolean> {
+  const rows = await attempt(c, 'team.invite_login_lookup', () =>
+    withService(
+      c.env,
+      (sql) => sql<{ one: number }[]>`
+        select 1 as one from auth.users
+         where lower(email) = lower(${email}) and identity_id is null
+         limit 1`,
+    ),
+  )
+  return rows ? rows.length > 0 : true
+}
 
 /** The studio's display name for the invitation email; never fails the send. */
 async function companyName(c: Context<AppEnv>): Promise<string> {
@@ -108,10 +127,8 @@ export const invitationRoutes = new Hono<AppEnv>()
     await sendInvitationEmail(c.env, v.email, inviteLink(c.env, raw), await companyName(c))
     await audit(c, { action: 'invitation.create', entityType: 'user_invitation', entityId: result.id, after: { email: v.email, role: v.role } })
 
-    return c.json(
-      invitationLink.parse({ id: result.id, invite_link: inviteLink(c.env, raw), expires_at: result.expires_at }),
-      201,
-    )
+    const link = shareableInviteLink(inviteLink(c.env, raw), await emailHasLogin(c, v.email))
+    return c.json(invitationLink.parse({ id: result.id, invite_link: link, expires_at: result.expires_at }), 201)
   })
 
   // Resending rotates the token, so the previous link dies here rather than
@@ -142,9 +159,8 @@ export const invitationRoutes = new Hono<AppEnv>()
     await sendInvitationEmail(c.env, rows[0]!.email, inviteLink(c.env, raw), await companyName(c))
     await audit(c, { action: 'invitation.resend', entityType: 'user_invitation', entityId: id })
 
-    return c.json(
-      invitationLink.parse({ id, invite_link: inviteLink(c.env, raw), expires_at: rows[0]!.expires_at }),
-    )
+    const link = shareableInviteLink(inviteLink(c.env, raw), await emailHasLogin(c, rows[0]!.email))
+    return c.json(invitationLink.parse({ id, invite_link: link, expires_at: rows[0]!.expires_at }))
   })
 
   .patch('/invitations/:id', teamGate('create'), async (c) => {

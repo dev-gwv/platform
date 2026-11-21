@@ -43,6 +43,7 @@ export function InviteDialog() {
   const [roleIds, setRoleIds] = useState<string[]>([])
   const [errors, setErrors] = useState<FieldErrors<Field>>({})
   const [link, setLink] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
   const [copied, setCopied] = useState(false)
   // What was typed survives a refresh or a closed tab until it is saved.
   const draft = useFormDraft(
@@ -77,6 +78,7 @@ export function InviteDialog() {
     setRoleIds([])
     setErrors({})
     setLink(null)
+    setSent(false)
     setCopied(false)
   }
 
@@ -101,6 +103,7 @@ export function InviteDialog() {
       onSuccess: (res) => {
         draft.clear()
         setLink(res.invite_link)
+        setSent(true)
       },
     })
   }
@@ -122,7 +125,19 @@ export function InviteDialog() {
         title="Invite a team member"
         description="They set their own password from the link. It expires in 7 days."
       >
-        {link ? (
+        {sent && !link ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              We emailed the invitation to <span className="font-medium">{email}</span>. This email
+              already has a login, so they open the link from their own inbox.
+            </p>
+            <div className="flex justify-end">
+              <DialogClose asChild>
+                <Button>Done</Button>
+              </DialogClose>
+            </div>
+          </div>
+        ) : link ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm">
               Invitation sent to <span className="font-medium">{email}</span>. You can also send them

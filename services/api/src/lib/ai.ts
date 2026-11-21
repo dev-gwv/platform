@@ -13,7 +13,7 @@ import { ASSISTANT_DEFAULT_BASE_URL, ASSISTANT_DEFAULT_MODEL, assistantFallbacks
  * both the message and the tool-call shape -- gets its own small driver next to
  * `openAiCompatible`, exporting the same `ChatProvider`. Nothing above has to
  * change for that. We have not written one yet because nothing needs it; the
- * existing Anthropic call (lib/diamond-check.ts) reads images and is a different
+ * existing Anthropic call (the old Diamond screenshot check, removed 21 Nov) reads images and is a different
  * job from holding a conversation.
  *
  * No SDK and no framework on purpose. This is one HTTP POST with a JSON body;
@@ -212,7 +212,7 @@ interface WireReply {
 /**
  * One driver for every provider that speaks chat-completions.
  *
- * `fetchImpl` is the test seam, the way lib/diamond-check.ts takes a `client`:
+ * `fetchImpl` is the test seam, the way the old Diamond screenshot check took a `client`:
  * a test hands in a function and never touches the network.
  */
 export function openAiCompatible(cfg: {

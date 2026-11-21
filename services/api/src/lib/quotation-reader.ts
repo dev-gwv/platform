@@ -4,8 +4,8 @@ import { quotationReading, type QuotationReading } from '@ipc/contracts'
 /**
  * Read a studio's own quotation -- a Canva PDF, a scanned page, a photo of a
  * printout -- into what a project needs (owner, 18 Nov; 0311). Claude reads
- * the document itself (text and pictures), the same engine and call shape as
- * the Diamond screenshot check (`lib/diamond-check.ts`), and answers to a
+ * the document itself (text and pictures), the same engine and call shape the
+ * old Diamond screenshot check used (removed 21 Nov), and answers to a
  * JSON schema; we parse it with the contract, so a strange answer is refused
  * rather than half-saved.
  *

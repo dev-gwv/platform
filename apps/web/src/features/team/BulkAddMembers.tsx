@@ -115,8 +115,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   }
 
   function applySharedPassword() {
-    if (sharedPassword.length < 6) {
-      toast.error('Use at least 6 characters.')
+    if (sharedPassword.length < 8) {
+      toast.error('Use at least 8 characters.')
       return
     }
     setRows((prev) => prev.map((r) => (r.status === 'added' ? r : { ...r, password: sharedPassword })))
