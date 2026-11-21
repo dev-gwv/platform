@@ -174,7 +174,6 @@ latest body of any SQL function is in the highest-numbered migration that define
 
 | Area | Session | Notes |
 | --- | --- | --- |
-| Leads read a page at a time (board columns, list, due board; no 2,000 cap) | Claude (cloud session) | No migration. `/crm/leads/page`, `/columns`, `/counts`. |
 
 If you are about to work in an area listed above that is not yours, pull
 first and check the recent log for that path before assuming it is free.
