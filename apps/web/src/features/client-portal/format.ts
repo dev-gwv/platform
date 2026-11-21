@@ -123,6 +123,11 @@ export function absolutePortalUrl(url: string, origin: string): string {
  * minus paid" -- the card once read "Balance due ₹1,85,000 · Next: ₹2,36,300",
  * two numbers a couple cannot square. When the open invoices ask for more than
  * that balance, the card counts what the invoices ask for and says GST is in it.
+ *
+ * Since 0315 the server's balance is the one owed-money rule, which already
+ * carries the GST of open invoices -- so "package minus paid" can fall short of
+ * it on its own. Whenever paid + balance is more than the package, the card's
+ * total is paid + balance and says GST is in it, so the three figures add up.
  */
 export function moneyCard(money: NonNullable<PublicClientPortal['money']>): {
   total: number
@@ -131,8 +136,10 @@ export function moneyCard(money: NonNullable<PublicClientPortal['money']>): {
   withGst: boolean
 } {
   const openInvoices = money.invoices.reduce((s, i) => s + Math.max(0, i.balance_due), 0)
-  if (openInvoices > money.balance) {
-    return { total: money.received + openInvoices, received: money.received, balance: openInvoices, withGst: true }
+  const balance = Math.max(money.balance, openInvoices)
+  // Half a rupee of slack: the server rounds to paise, the package may not.
+  if (balance > 0 && money.received + balance > money.total + 0.5) {
+    return { total: money.received + balance, received: money.received, balance, withGst: true }
   }
   return { total: money.total, received: money.received, balance: money.balance, withGst: false }
 }
