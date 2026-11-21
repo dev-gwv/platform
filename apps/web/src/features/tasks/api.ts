@@ -13,6 +13,7 @@ import {
   taskBundle,
   taskDonePage,
   taskListItem,
+  taskOpenPage,
   taskSubmissionItem,
   updateTaskRequest,
   z,
@@ -33,6 +34,7 @@ import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
 import { todayInIndia } from '@/shared/ui/days-left'
+import { openTasksPath, type OpenTaskQuery } from './open-pages'
 
 const tasksList = taskListItem.array()
 const bundlesList = taskBundle.array()
@@ -63,6 +65,64 @@ export function useTasks(enabled = true) {
     queryKey: ['tasks', 'all', since],
     queryFn: () => callApi(`/tasks?done_since=${since}`, { responseSchema: tasksList }),
     enabled: enabled && !!session && access.hasModule('tasks'),
+    staleTime: 15_000,
+  })
+}
+
+/**
+ * Open tasks a page at a time, late first then by due date, with the toolbar
+ * applied on the server (GET /tasks/open): a studio with 1,158 open tasks
+ * downloaded 0.99 MB on every open of Tasks. The first page carries the
+ * counts. Someone who cannot see the studio's tasks gets their own.
+ */
+export function useOpenTasks(query: OpenTaskQuery, enabled = true) {
+  const { session } = useAuth()
+  const q = useInfiniteQuery({
+    queryKey: ['tasks', 'open', query],
+    queryFn: ({ pageParam }) => callApi(openTasksPath(query, pageParam), { responseSchema: taskOpenPage }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled: enabled && !!session,
+    staleTime: 15_000,
+    // A new search or filter keeps the old rows up until its answer lands.
+    placeholderData: (prev) => prev,
+  })
+  const rows = useMemo(() => {
+    const seen = new Set<string>()
+    const out: TaskListItem[] = []
+    for (const page of q.data?.pages ?? []) {
+      for (const t of page.items) {
+        if (seen.has(t.id)) continue
+        seen.add(t.id)
+        out.push(t)
+      }
+    }
+    return out
+  }, [q.data])
+  return {
+    rows,
+    summary: q.data?.pages[0]?.summary ?? null,
+    isLoading: q.isLoading,
+    isError: q.isError,
+    refetch: q.refetch,
+    hasMore: !!q.hasNextPage,
+    loadingMore: q.isFetchingNextPage,
+    more: () => void q.fetchNextPage(),
+  }
+}
+
+/**
+ * Only the finished tasks of the 30-day window (the open ones come a page at
+ * a time from useOpenTasks). `scope` 'my' is the caller's own.
+ */
+export function useDoneWindow(scope: 'studio' | 'my', enabled = true) {
+  const { session } = useAuth()
+  const since = taskWindowStart()
+  const base = scope === 'my' ? '/tasks/my' : '/tasks'
+  return useQuery({
+    queryKey: ['tasks', 'done', scope, since],
+    queryFn: () => callApi(`${base}?done_since=${since}&done_only=1`, { responseSchema: tasksList }),
+    enabled: enabled && !!session,
     staleTime: 15_000,
   })
 }

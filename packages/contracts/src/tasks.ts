@@ -118,6 +118,40 @@ export const taskDonePage = z.object({
 })
 export type TaskDonePage = z.infer<typeof taskDonePage>
 
+/**
+ * The counts beside an open-task page (GET /tasks/open, first page only):
+ * the List's tabs, the tiles and each person's column, without the rows.
+ */
+export const taskOpenSummary = z.object({
+  /** Open tasks the toolbar (whose, due date, search) matches, whatever the tab. */
+  open: z.number().int().default(0),
+  /** Of those, what the tab matches: the "of N" in "Showing 100 of N". */
+  matching: z.number().int().default(0),
+  to_do: z.number().int().default(0),
+  in_progress: z.number().int().default(0),
+  review: z.number().int().default(0),
+  blocked: z.number().int().default(0),
+  overdue: z.number().int().default(0),
+  high_priority: z.number().int().default(0),
+  due_today: z.number().int().default(0),
+  /** Per person (null = nobody on it): their open tasks and how many are late. */
+  people: z
+    .object({ user_id: uuid.nullable(), open: z.number().int(), late: z.number().int() })
+    .array()
+    .default([]),
+})
+export type TaskOpenSummary = z.infer<typeof taskOpenSummary>
+
+/** One page of open tasks, late first then by due date (GET /tasks/open). */
+export const taskOpenPage = z.object({
+  items: taskListItem.array(),
+  /** Pass back as `cursor` for the next page; null on the last one. */
+  next_cursor: z.string().nullable().default(null),
+  /** On the first page only. */
+  summary: taskOpenSummary.nullable().default(null),
+})
+export type TaskOpenPage = z.infer<typeof taskOpenPage>
+
 export const createTaskRequest = z.object({
   project_id: uuid.nullable().default(null),
   deliverable_id: uuid.nullable().default(null),

@@ -26,6 +26,8 @@ import type { AppEnv } from '../../context'
 import { requireAuth } from '../../middleware/auth'
 import { requireAction } from '../../middleware/permissions'
 import { routineRoutes } from './routes-routines'
+import { openRoutes } from './routes-open'
+import { readDoneBefore, readDoneSince, readLimit, selectTasks, type RawTask } from './task-query'
 import { fail } from '../../middleware/errors'
 import { textParam, uuidParam, uuidQuery } from '../../lib/params'
 import { withUser } from '../../lib/db'
@@ -33,36 +35,10 @@ import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import type { TransactionSql } from 'postgres'
 
+export { readDoneBefore, readDoneSince, readLimit, selectTasks, type TaskFilter } from './task-query'
+
 const list = taskListItem.array()
 
-interface RawTask {
-  id: string
-  title: string
-  description: string | null
-  status: string
-  priority: string
-  due_date: string | null
-  project_id: string | null
-  project_name: string | null
-  custom_priority_code: string | null
-  custom_priority_label: string | null
-  custom_priority_tone: string | null
-  custom_status_code: string | null
-  custom_status_label: string | null
-  deliverable_id: string | null
-  parent_task_id: string | null
-  voice_note_url: string | null
-  assignee_names: string[]
-  assignee_ids: string[]
-  tag: string
-  blocked_reason: string | null
-  created_by: string | null
-  created_by_name: string | null
-  latest_submission: { id: string; link: string | null; status: string; submitted_at: string } | null
-  updated_at: string | null
-  description_truncated?: boolean
-  routine_id: string | null
-}
 
 /**
  * A database check with a message meant for people (0192's "Say what is
@@ -78,132 +54,6 @@ function toItems(rows: RawTask[], order: Map<string, number>) {
   return rows.map((r) => ({ ...r, sort_order: order.get(r.id) ?? 0 }))
 }
 
-// Flat select with the project name joined in (was PostgREST `projects(name)`).
-// `assignee` narrows to tasks assigned to one person, for an admin previewing
-// what a specific team member's board looks like. `project` narrows to one
-// project, for its detail page's own Tasks tab. `deliverable` narrows to one
-// deliverable (per-deliverable tasks UI). `id` is one task (the detail dialog).
-// Each row carries who gave it and the newest work handed in against it, so a
-// card can say "by AO" and "Submitted · Open submission" without a second trip.
-//
-// A busy studio holds thousands of finished tasks, so the pages ask for a
-// window (speed audit, 12 Nov): `since` is every open task plus what was done
-// or cancelled since then; `before` pages back through the older done ones,
-// newest first. Both send a description cut to 200 characters (the drawer and
-// the edit dialog read the whole task by id).
-export interface TaskFilter {
-  assignee?: string | undefined
-  project?: string | undefined
-  deliverable?: string | undefined
-  id?: string | undefined
-  parent?: string | undefined
-  /** Title search for pickers. */
-  q?: string | undefined
-  /** Open tasks only (not completed or cancelled). */
-  openOnly?: boolean | undefined
-  /** Open tasks, and finished ones changed at or after this moment (ISO). */
-  since?: string | undefined
-  /** Only finished tasks changed before this moment, then before this id at the same moment. */
-  before?: DoneCursor | undefined
-  limit?: number | undefined
-}
-
-export interface DoneCursor {
-  ts: string
-  id: string | null
-}
-
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
-const MOMENT_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}(:?\d{2})?)$/
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/** The start of an India day, as a moment: `2026-10-13` → `2026-10-13T00:00:00+05:30`. */
-const indiaMidnight = (day: string) => `${day}T00:00:00+05:30`
-
-/** `done_since=YYYY-MM-DD` → the moment that India day began, null when absent, 'bad' when malformed. */
-export function readDoneSince(raw: string | undefined): string | null | 'bad' {
-  if (!raw) return null
-  if (!DAY_RE.test(raw) || Number.isNaN(Date.parse(raw))) return 'bad'
-  return indiaMidnight(raw)
-}
-
-/**
- * `done_before` is a day (the window's edge, for the first page), a moment,
- * or `<moment>|<task id>` (the `next_cursor` a page hands back, so tasks
- * finished in the same instant are never skipped).
- */
-export function readDoneBefore(raw: string | undefined): DoneCursor | null | 'bad' {
-  if (!raw) return null
-  const [ts, id, ...rest] = raw.split('|')
-  if (!ts || rest.length) return 'bad'
-  if (id !== undefined && !UUID_RE.test(id)) return 'bad'
-  if (DAY_RE.test(ts)) return Number.isNaN(Date.parse(ts)) ? 'bad' : { ts: indiaMidnight(ts), id: id ?? null }
-  // Postgres hands back microseconds, which not every Date.parse reads: check
-  // the shape here and let the database read the moment itself.
-  if (!MOMENT_RE.test(ts)) return 'bad'
-  return { ts, id: id ?? null }
-}
-
-/** `limit` within 1..max, else the fallback. */
-export function readLimit(raw: string | undefined, fallback: number, max: number): number {
-  const n = Number(raw ?? fallback)
-  return Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 1), max) : fallback
-}
-
-/** A title search: `%` and `_` are what they say, not wildcards. */
-const likeOf = (q: string) => `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
-
-export const selectTasks = (sql: TransactionSql, f: TaskFilter = {}) => {
-  const windowed = !!(f.since || f.before)
-  return sql<RawTask[]>`
-  select t.id, t.title,
-         ${windowed ? sql`left(t.description, 200)` : sql`t.description`} as description,
-         ${windowed ? sql`coalesce(char_length(t.description) > 200, false)` : sql`false`} as description_truncated,
-         t.status, t.priority, t.due_date, t.project_id,
-         p.name as project_name,
-         cp.code as custom_priority_code, cp.label as custom_priority_label, cp.tone as custom_priority_tone,
-         t.custom_status_code, cs.label as custom_status_label,
-         t.deliverable_id, t.parent_task_id, t.voice_note_url,
-         t.tag, t.blocked_reason, t.created_by, t.updated_at, t.routine_id,
-         (select cu.name from users cu where cu.user_id = t.created_by) as created_by_name,
-         (select json_build_object('id', s.id, 'link', s.submission_link, 'status', s.status, 'submitted_at', s.created_at)
-            from team_work_submissions s
-           where s.task_id = t.id
-           order by s.created_at desc
-           limit 1) as latest_submission,
-         coalesce(
-           array_agg(u.name order by u.name) filter (where u.user_id is not null),
-           '{}'::text[]
-         ) as assignee_names,
-         coalesce(
-           array_agg(u.user_id order by u.name) filter (where u.user_id is not null),
-           '{}'::uuid[]
-         ) as assignee_ids
-  from tasks t
-  left join projects p on p.id = t.project_id
-  left join task_assignees a on a.task_id = t.id
-  left join users u on u.user_id = a.user_id
-  left join company_task_priorities cp on cp.company_id = t.company_id and cp.code = t.custom_priority_code
-  left join company_deliverable_statuses cs on cs.company_id = t.company_id and cs.code = t.custom_status_code
-  where ${f.assignee ? sql`exists (select 1 from task_assignees a2 where a2.task_id = t.id and a2.user_id = ${f.assignee})` : sql`true`}
-    and ${f.project ? sql`t.project_id = ${f.project}` : sql`true`}
-    and ${f.deliverable ? sql`t.deliverable_id = ${f.deliverable}` : sql`true`}
-    and ${f.id ? sql`t.id = ${f.id}` : sql`true`}
-    and ${f.parent ? sql`t.parent_task_id = ${f.parent}` : sql`true`}
-    and ${f.q ? sql`t.title ilike ${likeOf(f.q)}` : sql`true`}
-    and ${f.openOnly ? sql`t.status::text not in ('completed', 'cancelled')` : sql`true`}
-    and ${f.since ? sql`(t.status::text not in ('completed', 'cancelled') or t.updated_at >= ${f.since}::timestamptz)` : sql`true`}
-    and ${
-      f.before
-        ? f.before.id
-          ? sql`t.status::text in ('completed', 'cancelled') and (t.updated_at, t.id) < (${f.before.ts}::timestamptz, ${f.before.id}::uuid)`
-          : sql`t.status::text in ('completed', 'cancelled') and t.updated_at < ${f.before.ts}::timestamptz`
-        : sql`true`
-    }
-  group by t.id, p.name, cp.code, cp.label, cp.tone, cs.label
-  ${f.before ? sql`order by t.updated_at desc, t.id desc` : sql`order by t.created_at desc`}
-  ${f.limit ? sql`limit ${f.limit}` : sql``}`
-}
 
 /** The query string's window, shared by GET /tasks, /tasks/my and /tasks/board. */
 function windowOf(c: { req: { query: (k: string) => string | undefined } }) {
@@ -260,6 +110,8 @@ export const tasksRouter = new Hono<AppEnv>()
   .use('*', requireAuth)
   // Daily tasks (0305): before every '/:id'-shaped route.
   .route('/', routineRoutes)
+  // Open tasks a page at a time (GET /tasks/open), before '/:id' too.
+  .route('/', openRoutes)
 
   // ── Custom priority catalogue ────────────────────────────────
   // Declared before '/:id'-shaped routes so "priorities" is never read as one.
@@ -342,11 +194,14 @@ export const tasksRouter = new Hono<AppEnv>()
     const me = c.get('auth').userId
     const project = uuidQuery(c, 'project_id') ?? undefined
     const openOnly = c.req.query('open') === '1'
+    // ?done_only=1 with ?done_since: only the window's finished tasks (the
+    // Tasks page pages its open ones through GET /tasks/open).
+    const doneOnly = c.req.query('done_only') === '1'
     const { since, before } = windowOf(c)
     const limit = before ? readLimit(c.req.query('limit'), 50, 100) : undefined
     const rows = await attempt(c, 'tasks.my', () =>
       withUser(c.env, me, (sql) =>
-        selectTasks(sql, { assignee: me, project, openOnly, since, before, limit: limit === undefined ? undefined : limit + 1 }),
+        selectTasks(sql, { assignee: me, project, openOnly, doneOnly, since, before, limit: limit === undefined ? undefined : limit + 1 }),
       ),
     )
     if (!rows) fail(400, 'We could not load your tasks.')
@@ -487,6 +342,7 @@ export const tasksRouter = new Hono<AppEnv>()
     const deliverable = uuidQuery(c, 'deliverable_id') ?? undefined
     const parent = uuidQuery(c, 'parent_id') ?? undefined
     const { since, before } = windowOf(c)
+    const doneOnly = c.req.query('done_only') === '1'
     // ?q= searches titles for a picker: twenty at most, never the whole studio.
     // An empty ?q= is the newest twenty, the picker's first look.
     const rawQ = c.req.query('q')
@@ -494,7 +350,7 @@ export const tasksRouter = new Hono<AppEnv>()
     const limit = before ? readLimit(c.req.query('limit'), 50, 100) : rawQ !== undefined ? readLimit(c.req.query('limit'), 20, 20) : undefined
     const rows = await attempt(c, 'tasks.list', () =>
       withUser(c.env, c.get('auth').userId, (sql) =>
-        selectTasks(sql, { assignee, project, deliverable, parent, q, since, before, limit: before && limit ? limit + 1 : limit }),
+        selectTasks(sql, { assignee, project, deliverable, parent, q, doneOnly, since, before, limit: before && limit ? limit + 1 : limit }),
       ),
     )
     if (!rows) fail(400, 'We could not load tasks.')

@@ -731,9 +731,50 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
   if (method === 'GET' && (path === '/tasks/board' || path.startsWith('/tasks/board')))
     return atStage(boardTasks, 'full')
   if (method === 'POST' && path === '/tasks/generate') return { created: 2 }
+  // Open tasks a page at a time: every open fixture task on one page, late
+  // first then by due date, with the counts beside them.
+  if (method === 'GET' && path.startsWith('/tasks/open')) {
+    const qs = new URLSearchParams(path.split('?')[1] ?? '')
+    const today = qs.get('today') ?? '2026-06-15'
+    const open = atStage(boardTasks, 'full')
+      .filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
+      .sort((a, b) => (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31') || a.title.localeCompare(b.title))
+    const tab = qs.get('tab')
+    const items = open.filter((t) => (tab === 'overdue' ? !!t.due_date && t.due_date < today : !tab || t.status === tab))
+    const by = (f: (t: (typeof open)[number]) => boolean) => open.filter(f).length
+    const people = new Map<string | null, { user_id: string | null; open: number; late: number }>()
+    for (const t of open) {
+      const ids = (t as { assignee_ids?: string[] }).assignee_ids ?? []
+      for (const id of ids.length ? ids : [null]) {
+        const p = people.get(id) ?? { user_id: id, open: 0, late: 0 }
+        p.open++
+        if (t.due_date && t.due_date < today) p.late++
+        people.set(id, p)
+      }
+    }
+    return {
+      items,
+      next_cursor: null,
+      summary: qs.has('cursor')
+        ? null
+        : {
+            open: open.length,
+            matching: items.length,
+            to_do: by((t) => t.status === 'to_do'),
+            in_progress: by((t) => t.status === 'in_progress'),
+            review: by((t) => t.status === 'review'),
+            blocked: by((t) => t.status === 'blocked'),
+            overdue: by((t) => !!t.due_date && t.due_date < today),
+            high_priority: by((t) => t.priority === 'high' || t.priority === 'urgent'),
+            due_today: by((t) => t.due_date === today),
+            people: [...people.values()],
+          },
+    }
+  }
   if (method === 'GET' && (path === '/tasks' || path.startsWith('/tasks?') || path === '/tasks/my' || path.startsWith('/tasks/my?'))) {
     const qs = new URLSearchParams(path.split('?')[1] ?? '')
     const rows = atStage(boardTasks, 'full')
+    if (qs.get('done_only') === '1') return rows.filter((t) => t.status === 'completed' || t.status === 'cancelled')
     // Older done tasks a page at a time: one page, then nothing more.
     if (qs.has('done_before'))
       return {
