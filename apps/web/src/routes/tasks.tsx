@@ -38,6 +38,7 @@ import {
   useDeleteTask,
   useDoneWindow,
   useOlderDoneTasks,
+  useOpenSummary,
   useOpenTasks,
   useSetTaskStatus,
   useTaskPriorities,
@@ -140,7 +141,10 @@ function Tasks({ managed }: { managed: boolean }) {
   // tab's, cached) for the counts.
   const openTab: TaskTab = view === 'list' && tab !== 'completed' ? tab : 'all'
   const open = useOpenTasks({ mine, member: scopeMember, due, tab: openTab, q: typed, today }, listing)
-  const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing)
+  // The Board's tiles need the counts too: the summary alone (one row), and
+  // the finished window for "Done this week" (audit, 21 Nov: they read 0).
+  const boardSummary = useOpenSummary({ mine, member: scopeMember, due, tab: 'all', q: typed, today }, view === 'board')
+  const doneQ = useDoneWindow(managed ? 'studio' : 'my', listing || view === 'board')
   // The board reads its lanes a page at a time with the same toolbar on the
   // server (GET /tasks/columns); someone who sees only their own gets theirs.
   const boardQuery = useMemo<BoardQuery>(
@@ -171,7 +175,7 @@ function Tasks({ managed }: { managed: boolean }) {
     [mine, me, scopeMember, due, today, needle],
   )
   const doneRows = useMemo(() => (withOlder(doneQ.data, older.rows) ?? []).filter(keep), [doneQ.data, older.rows, keep])
-  const counts = useMemo(() => pageCounts(open.summary, doneRows, today), [open.summary, doneRows, today])
+  const counts = useMemo(() => pageCounts(view === 'board' ? boardSummary : open.summary, doneRows, today), [view, boardSummary, open.summary, doneRows, today])
   const stats = counts.stats
   const people = useMemo(() => peopleCounts(open.summary), [open.summary])
   // The People view is about work in hand: open tasks, and what was finished

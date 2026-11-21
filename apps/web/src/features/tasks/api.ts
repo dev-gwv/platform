@@ -112,6 +112,23 @@ export function useOpenTasks(query: OpenTaskQuery, enabled = true) {
 }
 
 /**
+ * Only the open-work summary (tile and tab counts), for the Board view, which
+ * reads its cards from GET /tasks/columns: one row of /tasks/open carries the
+ * same summary the List reads. Shares the tasks key, so a save refreshes it.
+ */
+export function useOpenSummary(query: OpenTaskQuery, enabled = true) {
+  const { session } = useAuth()
+  const q = useQuery({
+    queryKey: ['tasks', 'open-summary', query],
+    queryFn: () => callApi(openTasksPath(query, null, 1), { responseSchema: taskOpenPage }),
+    enabled: enabled && !!session,
+    staleTime: 15_000,
+    placeholderData: (prev) => prev,
+  })
+  return q.data?.summary ?? null
+}
+
+/**
  * Only the finished tasks of the 30-day window (the open ones come a page at
  * a time from useOpenTasks). `scope` 'my' is the caller's own.
  */
