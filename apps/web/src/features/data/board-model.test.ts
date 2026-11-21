@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DataBoardRow, DataRecord } from '@ipc/contracts'
-import { bulkIds, chaseMessage, deleteBlock, figures, inFocus, laneOf, levelOf, matches, mostPending, nextAction, waNumber } from './board-model'
+import { bulkIds, chaseMessage, deleteBlock, figures, inFocus, laneOf, levelOf, matches, mostPending, nextAction } from './board-model'
 
 const PRIYA = '00000000-0000-4000-8000-000000000001'
 const AMAN = '00000000-0000-4000-8000-000000000002'
@@ -76,13 +76,10 @@ describe('the figures and who to chase', () => {
     ])
   })
 
-  it('writes the nudge and a WhatsApp number', () => {
+  it('writes the nudge', () => {
     expect(chaseMessage({ name: 'Priya Nair', count: 2, oldest: 8 })).toBe(
       'Hi Priya, please hand over the cards from 2 shoots to the studio today -- the oldest is 8 days old. Thank you!',
     )
-    expect(waNumber('98765 43210')).toBe('919876543210')
-    expect(waNumber('+44 20 7946 0958')).toBe('442079460958')
-    expect(waNumber('123')).toBeNull()
   })
 })
 

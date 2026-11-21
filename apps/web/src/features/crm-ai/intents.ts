@@ -45,11 +45,3 @@ export function looksLike(text: string | null | undefined): AiLang | null {
   if (/[ऀ-ॿ]/.test(text)) return 'hi'
   return (text.match(HINGLISH)?.length ?? 0) >= 2 ? 'hinglish' : null
 }
-
-/** wa.me with the text in: digits with the country code, a bare Indian number gets 91. */
-export function waWithText(phone: string, text: string): string | null {
-  const d = phone.replace(/\D/g, '').replace(/^0+/, '')
-  if (d.length < 10) return null
-  const n = d.length === 10 ? `91${d}` : d
-  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`
-}

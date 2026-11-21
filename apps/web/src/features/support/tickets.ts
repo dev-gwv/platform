@@ -130,7 +130,6 @@ export const useTicketMissed = (id: string) =>
   )
 
 /** A WhatsApp chat with the message written; with no number, WhatsApp asks who to send it to. */
-export const waLink = (phone: string | null, text: string) => `https://wa.me/${(phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`
 
 // ── WhatsApp chat (0304) ─────────────────────────────────────────────────────
 

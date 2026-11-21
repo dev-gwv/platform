@@ -1,4 +1,5 @@
 import { ReplyWithAiButton } from '@/features/crm-ai/ReplySheet'
+import { waLink } from '@ipc/domain'
 import { useMemo, useState } from 'react'
 import { AlarmClock, Check, MessageCircle, Moon, Phone, Search, StickyNote } from 'lucide-react'
 import type { MyLead, MyLeadDetail } from '@ipc/contracts'
@@ -28,10 +29,6 @@ export function MyLeadsPage() {
   )
 }
 
-const waLink = (phone: string) => {
-  const d = phone.replace(/\D/g, '')
-  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`
-}
 const telLink = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`
 const fmtDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -144,7 +141,7 @@ function LeadRow({ lead: l, now, onOpen }: { lead: MyLead; now: Date; onOpen: ()
             </a>
           </Button>
           <Button size="sm" variant="outline" asChild>
-            <a href={waLink(l.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${l.name ?? ''}`}>
+            <a href={waLink(l.phone) ?? undefined} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${l.name ?? ''}`}>
               <MessageCircle />
             </a>
           </Button>
@@ -198,7 +195,7 @@ function LeadBody({ lead: l }: { lead: MyLeadDetail }) {
             </a>
           </Button>
           <Button variant="outline" className="text-tone-green" asChild>
-            <a href={waLink(l.phone)} target="_blank" rel="noreferrer">
+            <a href={waLink(l.phone) ?? undefined} target="_blank" rel="noreferrer">
               <MessageCircle /> WhatsApp
             </a>
           </Button>

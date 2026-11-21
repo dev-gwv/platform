@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { waShare } from '@ipc/domain'
 import { useMemo, useState } from 'react'
 import { Copy, Download, ExternalLink, Images, KeyRound, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -261,7 +262,7 @@ function GalleryReady({
                   </Button>
                 )}
                 <Button variant="outline" size="sm" asChild>
-                  <a href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer noopener" onClick={() => void used()}>
+                  <a href={waShare(message)} target="_blank" rel="noreferrer noopener" onClick={() => void used()}>
                     <MessageCircle /> Send on WhatsApp
                   </a>
                 </Button>

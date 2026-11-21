@@ -62,6 +62,7 @@
       "name": "@ipc/contracts",
       "version": "0.0.0",
       "dependencies": {
+        "@ipc/domain": "workspace:*",
         "zod": "^3.24.2",
       },
     },

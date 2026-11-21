@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { waShare } from '@ipc/domain'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -573,7 +574,7 @@ function ScriptCard({
           {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy'}
         </Button>
         <Button size="sm" className="bg-[#25D366] text-white hover:bg-[#1ebe5b]" asChild>
-          <a href={`https://wa.me/?text=${encodeURIComponent(full)}`} target="_blank" rel="noopener noreferrer">
+          <a href={waShare(full)} target="_blank" rel="noopener noreferrer">
             <MessageCircle /> Send on WhatsApp
           </a>
         </Button>

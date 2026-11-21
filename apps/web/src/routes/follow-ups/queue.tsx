@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Link } from '@tanstack/react-router'
 import { MessageCircle } from 'lucide-react'
-import { CALL_OUTCOMES } from '@ipc/domain'
+import { CALL_OUTCOMES, waLink } from '@ipc/domain'
 import type { CallQueueItem, CallQueueScope, CrmActivity } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -31,10 +31,6 @@ export function CallQueuePage() {
 const SEES_ALL = new Set(['super_admin', 'admin', 'manager', 'platform_admin'])
 
 /** wa.me wants digits with the country code; a bare Indian number gets 91. */
-const waLink = (phone: string) => {
-  const d = phone.replace(/\D/g, '')
-  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`
-}
 
 const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -150,7 +146,7 @@ function Row({ lead, task, showAssignee }: { lead: CallQueueItem; task?: CrmActi
         <CallButton lead={lead} variant="default" />
         <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone}>
           {lead.phone ? (
-            <a href={waLink(lead.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${lead.name ?? ''}`.trim()}>
+            <a href={waLink(lead.phone) ?? undefined} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${lead.name ?? ''}`.trim()}>
               <MessageCircle />
               <span className="hidden sm:inline">WhatsApp</span>
             </a>

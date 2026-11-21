@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { waShare } from '@ipc/domain'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -174,7 +175,7 @@ function GalleryCard({ g }: { g: GalleryListItem }) {
             {open.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />} Open gallery
           </Button>
           <Button size="sm" className="bg-[#25D366] text-white hover:bg-[#1ebe5b]" asChild>
-            <a href={`https://wa.me/?text=${encodeURIComponent(shareText(g))}`} target="_blank" rel="noopener noreferrer" onClick={() => void used()}>
+            <a href={waShare(shareText(g))} target="_blank" rel="noopener noreferrer" onClick={() => void used()}>
               <MessageCircle /> WhatsApp
             </a>
           </Button>

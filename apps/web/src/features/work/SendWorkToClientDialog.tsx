@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { waLinkOrShare } from '@ipc/domain'
 import { toast } from 'sonner'
 import { Check, Copy, Mail, MessageCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
@@ -91,11 +92,7 @@ export function SendWorkToClientDialog({
   }
 
   function whatsapp() {
-    const digits = phone.replace(/\D/g, '')
-    const url = digits
-      ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`
-    window.open(url, '_blank', 'noopener')
+    window.open(waLinkOrShare(phone, message), '_blank', 'noopener')
     recordSend('whatsapp')
   }
 

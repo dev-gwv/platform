@@ -1,4 +1,5 @@
 import { memo, useState, type CSSProperties } from 'react'
+import { waLink } from '@ipc/domain'
 import { PartnerChip } from './PartnerChip'
 import { useDraggable } from '@dnd-kit/core'
 import { Check, Flame, MessageCircle, NotebookPen, Phone } from 'lucide-react'
@@ -32,12 +33,6 @@ import { prettyWord, useLookupColor } from './fields'
  * list instead.
  */
 const shootDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })
-
-/** A number WhatsApp will accept: ten digits get the country code. */
-const waNumber = (phone: string) => {
-  const digits = phone.replace(/\D/g, '')
-  return digits.length === 10 ? `91${digits}` : digits
-}
 
 /** Drawn again only when its own props change: a board can hold hundreds. */
 export const DealCard = memo(function DealCard({
@@ -245,7 +240,7 @@ export const DealCard = memo(function DealCard({
             <span className="sr-only">Call {lead.name ?? 'this lead'}</span>
           </a>
           <a
-            href={`https://wa.me/${waNumber(lead.phone)}`}
+            href={waLink(lead.phone) ?? undefined}
             target="_blank"
             rel="noreferrer"
             onPointerDown={(e) => e.stopPropagation()}
