@@ -85,8 +85,25 @@ export const POPUP_QUIET_DAYS = 3
  * never once the required steps are done, and never again within 4 hours of
  * being put away ("Later") or before a snooze ends.
  */
+/**
+ * Pages the pop-up never opens over: the videos themselves, a step being done,
+ * full-screen tools, and a project's quotation -- where a studio lands the
+ * moment its first project is made, so the pop-up there was always stale
+ * ("1 of 6 done · Step 2: Add your team" beside "Your studio is set up").
+ */
+const POPUP_NOT_ON = ['/start', '/help', '/learn', '/login', '/projects/new', '/platform', '/ai/designer/']
+const QUOTATION_PAGE = /^\/projects\/[^/]+\/quotation(\/|$)/
+
+export function popupBlockedOn(pathname: string, fromSetup = false): boolean {
+  if (fromSetup) return true
+  if (QUOTATION_PAGE.test(pathname)) return true
+  return POPUP_NOT_ON.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`))
+}
+
 export function popupDue(input: {
   steps: readonly SetupProgressStep[]
+  /** The page it would open over; a blocked page is never due. */
+  pathname?: string
   projects: number
   lastWorkAt: string | null
   startedAt: string
@@ -95,6 +112,7 @@ export function popupDue(input: {
   now?: Date
 }): boolean {
   const now = (input.now ?? new Date()).getTime()
+  if (input.pathname !== undefined && popupBlockedOn(input.pathname)) return false
   if (!input.steps.some((s) => !s.done && !s.step.optional)) return false
   if (input.quietUntil && now < input.quietUntil) return false
   if (input.projects === 0) return true

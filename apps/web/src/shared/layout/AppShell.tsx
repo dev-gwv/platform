@@ -278,8 +278,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <NewMenu />
             <DueChip />
-            <TrialChip />
-            <SuggestFeatureButton className="hidden md:inline-flex" />
+            {/* The sidebar's plan card says the days left while it is open; the
+                bar carries them only when it is folded (or on a phone's menu). */}
+            <TrialChip besidePlanCard={!railCollapsed} />
+            {/* Suggest a feature rides in the account menu on every width
+                (audit, 20 Nov: thirteen things in the bar on day one). */}
             <HeaderBookCall />
 
             <div className="flex shrink-0 items-center gap-1">

@@ -23,7 +23,8 @@ describe('top bar', () => {
     // Audit, 17 Nov: from 375px to about 1000px the bell and the account menu
     // were pushed off the right edge. These keep the narrow forms in place.
     const shell = src('shared/layout/AppShell.tsx')
-    expect(shell).toMatch(/<SuggestFeatureButton className="hidden md:inline-flex" \/>/)
+    // Suggest a feature lives in the account menu on every width now (audit, 20 Nov).
+    expect(shell).not.toMatch(/<SuggestFeatureButton className=/)
     expect(shell).toMatch(/<HideAmountsButton className="hidden lg:inline-flex" \/>/)
     expect(shell).toMatch(/<RefreshButton className="hidden sm:inline-flex" \/>/)
     expect(shell).not.toMatch(/sm:w-64/)

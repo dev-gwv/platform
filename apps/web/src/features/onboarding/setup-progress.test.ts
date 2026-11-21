@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSetupStep, popupDue, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
+import { nextSetupStep, popupBlockedOn, popupDue, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
 
 const none = { teammates: 0, clients: 0, projects: 0, quotation: false, logo: false }
 const now = new Date('2026-11-12T10:00:00Z')
@@ -71,5 +71,18 @@ describe('popupDue', () => {
   it('never once the required steps are done', () => {
     const done = setupProgress({ teammates: 1, clients: 1, projects: 1, quotation: true, logo: false })
     expect(popupDue({ ...base, steps: done, projects: 1, lastWorkAt: '2026-10-01T00:00:00Z' })).toBe(false)
+  })
+  it('never on a quotation page (where a new project lands) or a step being done', () => {
+    expect(popupDue({ ...base, pathname: '/projects/abc-123/quotation' })).toBe(false)
+    expect(popupDue({ ...base, pathname: '/projects/new' })).toBe(false)
+    expect(popupDue({ ...base, pathname: '/start' })).toBe(false)
+    expect(popupDue({ ...base, pathname: '/dashboard' })).toBe(true)
+    expect(popupBlockedOn('/team', true)).toBe(true)
+    expect(popupBlockedOn('/projects/abc-123')).toBe(false)
+    expect(popupBlockedOn('/ai/designer/x')).toBe(true)
+  })
+  it('a project just made (fresh counts) is not due', () => {
+    const one = setupProgress({ ...none, teammates: 1, clients: 1, projects: 1 })
+    expect(popupDue({ ...base, steps: one, projects: 1, lastWorkAt: now.toISOString(), pathname: '/dashboard' })).toBe(false)
   })
 })

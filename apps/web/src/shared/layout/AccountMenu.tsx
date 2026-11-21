@@ -135,7 +135,7 @@ export function AccountMenu({ onSignOut }: { onSignOut: () => void }) {
               {amounts.hidden ? <Eye className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <EyeOff className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
               {amounts.hidden ? 'Show amounts' : 'Hide amounts'}
             </button>
-            <button type="button" role="menuitem" onClick={() => { setOpen(false); setSuggesting(true) }} className={cn(MENU_LINE, 'md:hidden')}>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setSuggesting(true) }} className={MENU_LINE}>
               <Lightbulb className="size-4 shrink-0 text-tone-amber" aria-hidden />
               <span>Suggest a feature <span className="text-muted-foreground">· सुझाव दें</span></span>
             </button>

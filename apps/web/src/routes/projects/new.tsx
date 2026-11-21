@@ -110,12 +110,16 @@ function NewProject() {
   const remembered = useRequirementsChoice()
   const [laterThisTime, setLaterThisTime] = useState(false)
   const [asking, setAsking] = useState<string[] | null>(null)
+  const [askReq, setAskReq] = useState<{ index: number; n: number } | null>(null)
+  /** The step's how-to card is up, so the header's Watch how steps aside. */
+  const [learnShown, setLearnShown] = useState(false)
   const opts = { requirementsLater: laterThisTime || remembered === 'later' }
   const errors = stepErrors(draft, opts)
   const totals = draftTotals(draft)
   const stepError = errors[step]
   const ready = stepReady(draft, step, opts)
   const submittable = canSubmit(draft, opts)
+  const moneyShown = stepIndex(step) >= stepIndex('billing')
 
   // The platform points at the next thing to press: when an edit finishes a
   // step, Next turns green, names where it goes, and rings three times. Only
@@ -333,9 +337,15 @@ function NewProject() {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: 'Home', to: '/dashboard' }, { label: 'Projects', to: '/projects' }, { label: 'New' }]} />
+      {/* In setup the first field comes first: no breadcrumb, Discard, Back
+          or "Step 1 of 5" above it (the stepper says where they are). */}
+      {!fromSetup && (
+        <Breadcrumbs items={[{ label: 'Home', to: '/dashboard' }, { label: 'Projects', to: '/projects' }, { label: 'New' }]} />
+      )}
       <PageHeader
         title="Create project"
+        // One video link: the step's own card while it shows, else the header's.
+        watch={!learnShown}
         actions={
           <>
             {/* The draft is quiet: one chip that says it is safe, not a banner. */}
@@ -346,14 +356,16 @@ function NewProject() {
                   ? `Draft restored ${prettyTime(restored)}`
                   : 'Not saved yet'}
             </StatusBadge>
-            {isDirty(draft) && (
+            {!fromSetup && isDirty(draft) && (
               <Button variant="ghost" size="sm" onClick={() => void onDiscard()}>
                 <RotateCcw /> Discard
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/projects' })}>
-              <ArrowLeft /> Back to projects
-            </Button>
+            {!fromSetup && (
+              <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/projects' })}>
+                <ArrowLeft /> Back to projects
+              </Button>
+            )}
           </>
         }
       />
@@ -366,26 +378,32 @@ function NewProject() {
           invalid={invalid}
           onJump={goTo}
         />
-        <StatusBadge tone="info">
-          Step {stepIndex(step) + 1} of {WIZARD_STEPS.length}
-        </StatusBadge>
+        {!fromSetup && (
+          <StatusBadge tone="info">
+            Step {stepIndex(step) + 1} of {WIZARD_STEPS.length}
+          </StatusBadge>
+        )}
       </div>
 
       {/* Tall enough that the Next bar sits at the foot of the screen on a short
           step, never halfway up it (audit, 5 Nov). */}
       <div ref={sectionRef} className="mt-3 min-h-[calc(100dvh-17rem)] scroll-mt-4">
         <Section title={STEP_LABELS[step]} hint={STEP_HINTS[step]}>
-          <StepLearn key={step} step={step} into={learn} />
+          <StepLearn key={step} step={step} into={learn} onShown={setLearnShown} />
           {step === 'client' && <ClientStep draft={draft} patch={patch} onSendForm={busy ? undefined : () => void sendForm()} />}
-          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} refused={refused} />}
+          {step === 'shoots' && <ShootsStep draft={draft} patch={patch} refused={refused} askRequirements={askReq} />}
           {step === 'shoots' && remembered && <RememberedChoiceLine choice={remembered} />}
           {asking && (
             <RequirementsChoiceDialog
               names={asking}
               onClose={() => setAsking(null)}
               onNow={() => {
+                // Open the first bare day's picker, not a red error about it.
+                const first = asking[0]
+                const index = draft.shoots.findIndex((s) => s.name.trim() === first)
                 setAsking(null)
-                refuse()
+                if (index < 0) return refuse()
+                setAskReq((a) => ({ index, n: (a?.n ?? 0) + 1 }))
               }}
               onLater={() => {
                 setAsking(null)
@@ -402,7 +420,7 @@ function NewProject() {
           {step === 'review' && <ReviewStep draft={draft} totals={totals} errors={errors} onJump={goTo} />}
 
           {ready && !showErrors && !error && (
-            <StepDoneBar step={step} onNext={onNext}>
+            <StepDoneBar step={step}>
               {step === 'shoots' && (
                 <AddShootMenu
                   variant="ghost"
@@ -431,12 +449,17 @@ function NewProject() {
           pushes the page into a sideways scroll. */}
       <div data-sticky-actions className="sticky bottom-0 z-30 -mx-3 -mb-3 mt-4 border-t border-border bg-card md:-mx-4 md:-mb-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-3 md:px-4">
-          <Money label="Package" value={totals.packageCost} />
-          <Money label="Add-ons" value={totals.addOns} />
-          <Money label="Total" value={totals.total} strong />
-          {totals.received > 0 && <Money label="Received" value={totals.received} />}
-          {totals.promised > 0 && <Money label="Promised" value={totals.promised} />}
-          {totals.received + totals.promised > 0 && <Money label="Still to collect" value={totals.balance} />}
+          {/* Money shows once there is money to show: from the Price step on. */}
+          {moneyShown && (
+            <>
+              <Money label="Package" value={totals.packageCost} />
+              <Money label="Add-ons" value={totals.addOns} />
+              <Money label="Total" value={totals.total} strong />
+              {totals.received > 0 && <Money label="Received" value={totals.received} />}
+              {totals.promised > 0 && <Money label="Promised" value={totals.promised} />}
+              {totals.received + totals.promised > 0 && <Money label="Still to collect" value={totals.balance} />}
+            </>
+          )}
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             {/* Why Next did not go on, beside the button that was pressed. */}
@@ -515,7 +538,7 @@ function Section({ title, hint, children }: { title: string; hint: string; child
  * The green line under a finished step: what just got done and where to go
  * next, in words, beside the button that goes there.
  */
-function StepDoneBar({ step, onNext, children }: { step: WizardStep; onNext: () => void; children?: ReactNode }) {
+function StepDoneBar({ step, children }: { step: WizardStep; children?: ReactNode }) {
   return (
     <div
       role="status"
@@ -524,11 +547,6 @@ function StepDoneBar({ step, onNext, children }: { step: WizardStep; onNext: () 
       <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />
       <span className="min-w-0 flex-1">{STEP_DONE[step]}</span>
       {children}
-      {step !== 'review' && (
-        <Button variant="link" size="sm" onClick={onNext}>
-          Go to {STEP_LABELS[nextStep(step)]} <ArrowRight />
-        </Button>
-      )}
     </div>
   )
 }
@@ -543,8 +561,20 @@ const STEP_VIDEO: Record<WizardStep, string> = {
 }
 
 /** The step's how-to card, at the top of the step; gone once they know the way. */
-function StepLearn({ step, into }: { step: WizardStep; into: MutableRefObject<Learn | null> }) {
+function StepLearn({
+  step,
+  into,
+  onShown,
+}: {
+  step: WizardStep
+  into: MutableRefObject<Learn | null>
+  onShown: (shown: boolean) => void
+}) {
   const learn = useLearn(STEP_VIDEO[step])
   into.current = learn
+  const shown = !!learn.card
+  useEffect(() => {
+    onShown(shown)
+  }, [shown, onShown])
   return learn.card ? <div className="mb-4">{learn.card}</div> : null
 }
