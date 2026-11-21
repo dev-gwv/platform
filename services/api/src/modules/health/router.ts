@@ -40,15 +40,19 @@ export const healthRouter = new Hono<AppEnv>().get('/', async (c) => {
       log.warn({ ...describeError(e), path: '/health' }, 'health probe failed')
     }
   }
+  // In production a missing database is as broken as an unreachable one: the
+  // API answers nothing useful without it, so Docker's healthcheck and the
+  // deploy's --wait must see it fail rather than a green "not_configured".
+  const ok = db === 'ok' || (db === 'not_configured' && c.env.ENVIRONMENT !== 'production')
   const body: HealthBody = {
-    ok: db !== 'unreachable',
+    ok,
     service: 'ipc-api',
     version: c.env.APP_VERSION || 'dev',
     uptime_s: Math.round((Date.now() - STARTED_AT) / 1000),
     db,
     db_latency_ms: latency,
   }
-  return c.json(body, db === 'unreachable' ? 503 : 200)
+  return c.json(body, ok ? 200 : 503)
 })
 
 /**

@@ -13,6 +13,13 @@ describe('api app', () => {
     expect(res.headers.get('X-Frame-Options')).toBe('DENY')
   })
 
+  it('GET /health fails (503) in production when no database is configured', async () => {
+    const res = await app.request('/health', {}, { ENVIRONMENT: 'production', APP_VERSION: '1.2.3' })
+    expect(res.status).toBe(503)
+    const body = healthBody.parse(await res.json())
+    expect(body).toMatchObject({ ok: false, db: 'not_configured' })
+  })
+
   it('unknown route 404s cleanly', async () => {
     const res = await app.request('/nope', {}, { ENVIRONMENT: 'test' })
     expect(res.status).toBe(404)
