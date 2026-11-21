@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { waLinkOrShare } from '@ipc/domain'
 import { Link, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, Bug, CheckCircle2, Copy, ExternalLink, Eye, Keyboard, MessageCircle, PhoneMissed, RefreshCw, Send, Sparkles, Undo2 } from 'lucide-react'
@@ -33,7 +34,6 @@ import {
   useTicketNote,
   useTicketVoice,
   useUpdateTicket,
-  waLink,
 } from '@/features/support/tickets'
 import { ChatCard } from '@/features/support/ChatCard'
 
@@ -225,7 +225,7 @@ function MissedCard({ t }: { t: SupportTicket }) {
         {byHand && t.missed_text && (
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <a href={waLink(t.contact_phone, t.missed_text)} target="_blank" rel="noreferrer">
+              <a href={waLinkOrShare(t.contact_phone, t.missed_text)} target="_blank" rel="noreferrer">
                 <MessageCircle /> Send on WhatsApp
               </a>
             </Button>
@@ -338,7 +338,7 @@ function FollowupCard({ t }: { t: SupportTicket }) {
                 className={cn(!(t.official_ready && t.contact_phone) && 'bg-green-600 text-white hover:bg-green-700')}
                 disabled={send.isPending || text.trim().length < 5}
                 onClick={() => {
-                  window.open(waLink(t.contact_phone, text), '_blank', 'noopener')
+                  window.open(waLinkOrShare(t.contact_phone, text), '_blank', 'noopener')
                   send.mutate({ text, via: 'whatsapp_link' })
                 }}
               >

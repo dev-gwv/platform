@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { CircleCheck, Copy, ExternalLink, Link2, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryAfterSubmit, EnquiryForm, EnquiryPartner } from '@ipc/contracts'
-import { formatIndianPhone, waDigits, whatsappPreview } from '@ipc/domain'
+import { formatIndianPhone, waLink, waNumber, whatsappPreview } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Textarea } from '@/shared/ui/input'
@@ -188,7 +188,7 @@ function AfterSendEditor({
   const [error, setError] = useState<{ field: string; text: string } | null>(null)
   const changed = JSON.stringify(v) !== JSON.stringify(start)
   const defaultPhone = fallbackPhone
-  const chatNumber = waDigits(v.phone) ?? waDigits(defaultPhone)
+  const chatNumber = waNumber(v.phone) ?? waNumber(defaultPhone)
   const choices: { key: Choice; title: string; line: string; icon: ReactNode; best?: boolean }[] = sameLine
     ? [{ key: 'same', title: 'Same as your main form', line: sameLine, icon: <Copy className="size-4" aria-hidden /> }, ...CHOICES.map((c) => ({ ...c, best: false }))]
     : CHOICES
@@ -292,7 +292,7 @@ function AfterSendEditor({
               <p className="whitespace-pre-line rounded-2xl bg-[#E7F8E1] p-4 text-sm text-[#112B1A]">{whatsappPreview(studio, v.text || fallbackText || '')}</p>
               {chatNumber && (
                 <a
-                  href={`https://wa.me/${chatNumber}`}
+                  href={waLink(chatNumber) ?? undefined}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex w-fit items-center gap-1 text-sm font-bold text-primary hover:underline"

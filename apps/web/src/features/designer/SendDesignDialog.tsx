@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { waShare } from '@ipc/domain'
 import { Copy, ExternalLink, Eye, Link2, Loader2, MessageCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/shared/ui/dialog'
@@ -87,7 +88,7 @@ export function SendDesignDialog({
                 className="bg-[#25D366] text-white hover:bg-[#1fb757]"
                 onClick={() =>
                   window.open(
-                    `https://wa.me/?text=${encodeURIComponent(sendText(url, client, studio, title))}`,
+                    waShare(sendText(url, client, studio, title)),
                     '_blank',
                   )
                 }

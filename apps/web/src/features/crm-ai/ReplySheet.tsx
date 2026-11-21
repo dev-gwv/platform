@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { waLink } from '@ipc/domain'
 import { toast } from 'sonner'
 import { Copy, Loader2, MessageCircle, RefreshCw, Send, Sparkles } from 'lucide-react'
 import { AI_LANGS, AI_TONES, LEAD_REPLY_INTENTS, type AiLang, type AiTone, type LeadReplyIntent } from '@ipc/contracts'
@@ -7,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/ui/cn'
 import { NewBadge } from '@/shared/ui/new-badge'
 import { useReplySendDirect, useReplySent, useWriteReply } from './api'
-import { INTENT_NAMES, LANG_NAMES, TONE_NAMES, defaultIntent, looksLike, waWithText } from './intents'
+import { INTENT_NAMES, LANG_NAMES, TONE_NAMES, defaultIntent, looksLike } from './intents'
 
 const LANG_KEY = 'ai-reply-lang'
 const readLang = (): AiLang | null => {
@@ -103,7 +104,7 @@ export function ReplySheet({
   }
 
   function openWhatsApp() {
-    const url = phone ? waWithText(phone, text) : null
+    const url = waLink(phone, text)
     if (!url) return
     window.open(url, '_blank', 'noopener')
     sent.mutate({ text, via: 'whatsapp_link' })

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { LEAD_QUALITY_DEFAULTS, LEAD_SOURCE_DEFAULTS, type CrmLead, type CrmQuote } from '@ipc/contracts'
-import { REQUIRED_FIELD_LABEL, missingForStage, sortStages } from '@ipc/domain'
+import { REQUIRED_FIELD_LABEL, missingForStage, sortStages, waLink } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { CallButton } from '@/features/crm-calls/CallButton'
 import { LeadSequencePanel } from '@/features/crm-sequences/LeadSequencePanel'
@@ -83,20 +83,6 @@ const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', 
  * when it continues. Everything saves on the spot — this is opened between
  * phone calls, not filled in like a form.
  */
-/**
- * wa.me opens the chat with this person in whichever WhatsApp they have.
- *
- * Privyr's whole product rests on this: the message goes from the studio's own
- * number, in a normal chat, with no Business API account and no per-message
- * fee. Digits only -- wa.me rejects spaces, plus signs and dashes -- and a bare
- * ten-digit Indian number needs its country code.
- */
-function waLink(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  const withCode = digits.length === 10 ? `91${digits}` : digits
-  return `https://wa.me/${withCode}`
-}
-
 const LEAD_TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'info', label: 'Info' },
@@ -394,7 +380,7 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 its word; the disabled versions are plain buttons now. */}
             {lead.phone ? (
               <Button variant="outline" size="sm" asChild className="text-tone-green">
-                <a href={waLink(lead.phone)} target="_blank" rel="noreferrer">
+                <a href={waLink(lead.phone) ?? undefined} target="_blank" rel="noreferrer">
                   <MessageCircle /> WhatsApp
                 </a>
               </Button>

@@ -54,14 +54,3 @@ export function fillSequenceText(body: string, lead: SequenceLead, studio: { nam
     .trim()
 }
 
-/** The number wa.me wants: digits with the country code; a bare Indian number gets 91. */
-function waNumber(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  return d.length === 10 ? `91${d}` : d.replace(/^0+/, '')
-}
-
-/** A link that opens WhatsApp on this device with the message typed in. */
-export function waLink(phone: string, text?: string): string {
-  const base = `https://wa.me/${waNumber(phone)}`
-  return text ? `${base}?text=${encodeURIComponent(text)}` : base
-}

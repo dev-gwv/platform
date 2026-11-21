@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { agoWords, formatIndianPhone, joinKinds, partnerCounts, partnerLine, partnerPageText, partnerQrText, splitKinds, toIndianMobile, topPartnerId, waDigits, whatsappUrl } from './enquiry-share'
+import { agoWords, formatIndianPhone, joinKinds, partnerCounts, partnerLine, partnerPageText, partnerQrText, splitKinds, toIndianMobile, topPartnerId } from './enquiry-share'
 
 describe('enquiry share', () => {
-  it('turns any way of writing a number into wa.me digits', () => {
-    expect(waDigits('+91 98769 21126')).toBe('919876921126')
-    expect(waDigits('09876921126')).toBe('919876921126')
-    expect(waDigits('9876921126')).toBe('919876921126')
-    expect(waDigits('123')).toBeNull()
-    expect(whatsappUrl('9876921126', 'Hi there!\n\nName: A')).toBe('https://wa.me/919876921126?text=Hi%20there!%0A%0AName%3A%20A')
-  })
-
   it('formats and stores Indian mobiles', () => {
     expect(formatIndianPhone('+919876921126')).toBe('+91 98769 21126')
     expect(toIndianMobile('098769 21126')).toBe('+919876921126')

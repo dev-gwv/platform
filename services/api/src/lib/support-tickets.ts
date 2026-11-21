@@ -251,12 +251,6 @@ export function followupText(message: string, tutorials: readonly TutorialPick[]
   return [message.trim(), ...(links.length ? ['', ...links] : [])].join('\n')
 }
 
-/** A WhatsApp chat with the message written, for the owner to press Send. */
-export function waLink(phone: string | null, text: string): string {
-  const to = (phone ?? '').replace(/\D/g, '')
-  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`
-}
-
 /**
  * A new GitHub issue, filled in from a bug ticket. Never the studio's phone
  * or email: an issue is read by whoever works on the code.

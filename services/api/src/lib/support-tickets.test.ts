@@ -12,7 +12,6 @@ import {
   readNoteReply,
   speechModelFor,
   ticketsLine,
-  waLink,
   weeklyText,
   type StudioFacts,
 } from './support-tickets'
@@ -148,10 +147,6 @@ describe('step 2: follow-ups, issues, the Monday post', () => {
     const text = followupText(r.message, r.tutorials, 'https://studioautopilot.in/')
     expect(text).toContain('▶️ Make an invoice: https://studioautopilot.in/help?play=invoices')
     expect(readFollowupReply('{"message":""}', tutorials)).toBeNull()
-  })
-
-  it('opens a WhatsApp chat with the message written', () => {
-    expect(waLink('919876543210', 'Hi & bye')).toBe('https://wa.me/919876543210?text=Hi%20%26%20bye')
   })
 
   it("never puts a phone or email in the GitHub issue", () => {

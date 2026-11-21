@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultIntent, looksLike, waWithText } from './intents'
+import { defaultIntent, looksLike } from './intents'
 
 describe('Reply with AI: the screen', () => {
   it('starts on the reply that fits where the lead is', () => {
@@ -14,11 +14,5 @@ describe('Reply with AI: the screen', () => {
     expect(looksLike('शादी की फोटो का पैकेज क्या है?')).toBe('hi')
     expect(looksLike('Bhai package kitna hai? shaadi feb mein hai')).toBe('hinglish')
     expect(looksLike('What is your price for a wedding?')).toBeNull()
-  })
-
-  it('opens WhatsApp with the text, adding India to a bare number', () => {
-    expect(waWithText('98765 43210', 'Hi Priya')).toBe('https://wa.me/919876543210?text=Hi%20Priya')
-    expect(waWithText('+1 415 555 0101', 'x')).toBe('https://wa.me/14155550101?text=x')
-    expect(waWithText('123', 'x')).toBeNull()
   })
 })

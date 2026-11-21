@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { waLinkOrShare } from '@ipc/domain'
 import { AlertTriangle, Bot, MessageCircle, Send } from 'lucide-react'
 import type { SupportTicket, SupportTicketMessage } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
-import { callWhen, chatWindowOpen, useChatReply, useTicketMessages, waLink } from './tickets'
+import { callWhen, chatWindowOpen, useChatReply, useTicketMessages } from './tickets'
 
 /**
  * A WhatsApp ticket's conversation (0304): what the studio wrote, what the
@@ -69,7 +70,7 @@ export function ChatCard({ t }: { t: SupportTicket }) {
               </Button>
             ) : (
               <Button asChild disabled={!text.trim()}>
-                <a href={waLink(t.contact_phone, text)} target="_blank" rel="noreferrer">
+                <a href={waLinkOrShare(t.contact_phone, text)} target="_blank" rel="noreferrer">
                   <Send /> Open in your WhatsApp
                 </a>
               </Button>

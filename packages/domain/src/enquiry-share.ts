@@ -4,20 +4,6 @@
  * place, so the API, the hub and the public page say the same thing.
  */
 
-/** wa.me wants the number as digits with the country code: 919876543210. */
-export function waDigits(phone: string | null | undefined): string | null {
-  const d = (phone ?? '').replace(/\D/g, '')
-  if (d.length === 10) return `91${d}`
-  if (d.length === 11 && d.startsWith('0')) return `91${d.slice(1)}`
-  return d.length >= 11 && d.length <= 15 ? d : null
-}
-
-/** A chat with that number, the text typed in. No number: WhatsApp asks whom to send it to. */
-export function whatsappUrl(phone: string | null | undefined, text: string): string {
-  const d = waDigits(phone)
-  return `https://wa.me/${d ?? ''}?text=${encodeURIComponent(text)}`
-}
-
 /** +91 98769 21126 */
 export function formatIndianPhone(phone: string | null | undefined): string {
   const d = (phone ?? '').replace(/\D/g, '')
