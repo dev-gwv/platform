@@ -16,6 +16,7 @@ import { CommandPalette, openCommandPalette, paletteShortcutHint } from './Comma
 import { QuickLinks } from './QuickLinks'
 import { AssistantButton } from '@/features/assistant/AssistantButton'
 import { HeaderBookCall } from '@/features/help/BookCall'
+import { HeaderSetupVideos } from '@/features/onboarding/SetupVideosLink'
 import { NotificationBell } from './NotificationBell'
 import { SuggestFeatureButton } from '@/features/feedback/SuggestFeature'
 import { DueChip } from './DueChip'
@@ -278,8 +279,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <NewMenu />
             <DueChip />
-            <TrialChip />
-            <SuggestFeatureButton className="hidden md:inline-flex" />
+            {/* The sidebar's plan card says the days left while it is open; the
+                bar carries them only when it is folded (or on a phone's menu). */}
+            <TrialChip besidePlanCard={!railCollapsed} />
+            <HeaderSetupVideos />
+            {/* Suggest a feature rides in the account menu on every width
+                (audit, 20 Nov: thirteen things in the bar on day one). */}
             <HeaderBookCall />
 
             <div className="flex shrink-0 items-center gap-1">
@@ -303,12 +308,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CommandPalette />
 
         {/* The scroller stays put and is never transformed; only the page
-            inside it animates in, keyed so each navigation replays it. */}
+            inside it animates in, keyed so each navigation replays it. The
+            hub's tab row sits outside the key, so moving between a hub's tabs
+            does not rebuild it (speed audit, 21 Nov); the setup bar keeps its
+            own per-page key, as before, so a video it plays ends with the page. */}
         <main className="relative min-w-0 flex-1 overflow-y-auto p-3 md:p-4 print:static print:overflow-visible">
+          <ConfirmEmailBanner />
+          <SetupGuideBar key={pathname} />
+          <HubTabs />
           <div key={pathname} className="page-enter">
-            <ConfirmEmailBanner />
-            <SetupGuideBar />
-            <HubTabs />
             {settingsItemFor(pathname) ? <SettingsFrame>{children}</SettingsFrame> : children}
           </div>
         </main>

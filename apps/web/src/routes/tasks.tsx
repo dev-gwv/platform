@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, Package, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, Package, Pencil, Plus, Repeat, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { TASK_TAGS, type DirectoryMember, type TaskListItem, type TaskPriority, type TaskStatus } from '@ipc/contracts'
 import { ModuleRouteGuard } from '@/shared/auth/ModuleRouteGuard'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -117,6 +117,8 @@ function Tasks({ managed }: { managed: boolean }) {
   }, [linkedOpen, setOpenId])
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<TaskTab>('all')
+  const [filtering, setFiltering] = useState(false)
+  const narrowed = !!member || due !== 'all'
 
   const { me, canManage, canAssign } = useTaskViewer()
   const mine = !managed || mineParam === '1'
@@ -212,24 +214,6 @@ function Tasks({ managed }: { managed: boolean }) {
             { value: 'all', label: 'All tasks', disabled: !managed },
           ]}
         />
-        {managed && !mine && (
-          <Select value={member} onChange={(e) => setMember(e.target.value)} aria-label="Person" className="h-9 w-44">
-            <option value="">Everyone</option>
-            <option value="none">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-        )}
-        <Select value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="h-9 w-40">
-          {DUE_FILTERS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </Select>
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -237,7 +221,39 @@ function Tasks({ managed }: { managed: boolean }) {
           aria-label="Search tasks"
           className="h-9 w-full sm:w-56"
         />
+        {/* Person and due date wait behind Filter (minimal first). */}
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn('h-9', narrowed && 'border-primary/50 bg-primary/10 text-primary')}
+          onClick={() => setFiltering((v) => !v)}
+          aria-expanded={filtering || narrowed}
+        >
+          <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+        </Button>
       </div>
+      {(filtering || narrowed) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {managed && !mine && (
+            <Select value={member} onChange={(e) => setMember(e.target.value)} aria-label="Person" className="h-9 w-44">
+              <option value="">Everyone</option>
+              <option value="none">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          <Select value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="h-9 w-40">
+            {DUE_FILTERS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="mt-4">
         {view === 'board' ? (

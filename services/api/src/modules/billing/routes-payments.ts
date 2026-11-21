@@ -16,6 +16,19 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 
+/**
+ * The database refuses money on a draft or cancelled invoice (0314,
+ * `received_payments_invoice_open`, 23514). This reads which, so the answer
+ * is a sentence and a 409, never a bare 400.
+ */
+export function invoiceClosedRefusal(code: string, err: unknown): 'draft_invoice' | 'cancelled_invoice' | undefined {
+  if (code !== '23514') return undefined
+  const msg = String((err as Error)?.message ?? '')
+  if (msg.includes('invoice is still a draft')) return 'draft_invoice'
+  if (msg.includes('invoice is cancelled')) return 'cancelled_invoice'
+  return undefined
+}
+
 export const receivedPaymentRoutes = new Hono<AppEnv>()
   // ── Standalone received_payments module (Lovable billing parity) ──
   // Project-linked cash in/out, independent of GST invoices. List supports
@@ -312,7 +325,10 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
           returning id`
         return made[0] ?? null
       }),
+      { onCode: invoiceClosedRefusal },
     )
+    if (row === 'draft_invoice') fail(409, 'That invoice is still a draft. Mark it as sent first, then record the payment on it.')
+    if (row === 'cancelled_invoice') fail(409, 'That invoice is cancelled. Reopen it first, then record the payment on it.')
     if (row === 'bad_project') fail(422, 'Selected project does not belong to this studio.')
     if (row === 'bad_invoice') fail(422, 'Selected invoice does not belong to this studio.')
     if (row === 'bad_client') fail(422, 'Selected client does not belong to this studio.')
@@ -385,7 +401,9 @@ export const receivedPaymentRoutes = new Hono<AppEnv>()
           where id = ${id} and company_id = ${auth.companyId}`
         return 'ok' as const
       }),
+      { onCode: invoiceClosedRefusal },
     )
+    if (outcome === 'draft_invoice') fail(409, 'That invoice is still a draft. Mark it as sent first, then move the payment onto it.')
     if (outcome === 'missing') fail(404, 'That payment was not found.')
     if (outcome === 'bad_project') fail(422, 'Selected project does not belong to this studio.')
     if (outcome === 'bad_client') fail(422, 'Selected client does not belong to this studio.')

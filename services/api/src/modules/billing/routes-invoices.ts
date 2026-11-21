@@ -40,8 +40,11 @@ async function writeInvoiceExtras(
   },
   gstNumber: string,
 ): Promise<'bad_file' | true> {
+  // Only draft <-> sent is the form's to choose. Paid, part paid and
+  // cancelled follow the money (update_invoice recomputes them), so an edit
+  // of a part-paid invoice must not knock it back to 'sent'.
   await sql`update invoices set
-      status = ${req.status},
+      status = case when status in ('draft', 'sent') then ${req.status} else status end,
       gst_number = ${gstNumber || null},
       intra_state = ${req.intra_state},
       subject = ${req.subject?.trim() || null},
@@ -64,6 +67,23 @@ async function writeInvoiceExtras(
     }
   }
   return true
+}
+
+/** A refusal raised inside the invoice transaction, so everything before it rolls back. */
+class InvoiceRefusal extends Error {
+  constructor(readonly kind: 'bad_file') {
+    super(kind)
+  }
+}
+
+/** Run the invoice transaction; a refusal comes back as its kind, anything else is thrown on. */
+async function refusalOf<T>(work: Promise<T>): Promise<T | 'bad_file'> {
+  try {
+    return await work
+  } catch (e) {
+    if (e instanceof InvoiceRefusal) return e.kind
+    throw e
+  }
 }
 
 export const invoiceRoutes = new Hono<AppEnv>()
@@ -220,80 +240,84 @@ export const invoiceRoutes = new Hono<AppEnv>()
       igst: l.igst,
     }))
 
-    const row = await attempt(
-      c,
-      'billing.invoice_create',
-      () =>
-        withUser(c.env, c.get('auth').userId, async (sql) => {
-          const rows = await sql<{ id: string; invoice_number: string }[]>`
-          select * from create_invoice(
-            p_client_id => ${req.client_id},
-            p_project_id => ${req.project_id},
-            p_place_of_supply => ${req.place_of_supply?.trim() || null},
-            p_invoice_date => ${req.invoice_date ?? null},
-            p_due_date => ${req.due_date ?? null},
-            p_subtotal => ${totals.subtotal},
-            p_discount => ${totals.discount},
-            p_taxable => ${totals.taxable},
-            p_tax => ${totals.tax},
-            p_total => ${totals.total},
-            p_items => ${sql.json(items)},
-            p_notes => ${req.notes ?? null},
-            p_template_id => ${req.template_id ?? null},
-            p_invoice_number => ${req.invoice_number ?? null},
-            p_discount_type => ${req.discount_type},
-            p_bank_details => ${req.bank_details ?? null},
-            p_terms => ${req.terms ?? null}
-          )`
-          return rows[0] ?? null
-        }),
-      { onCode: (code) => (code === '23505' ? 'taken' : code === '23514' ? 'needs_number' : undefined) },
-    )
-    if (row === 'taken') fail(409, 'An invoice with this number already exists.')
-    if (row === 'needs_number') fail(422, 'Your studio types its own invoice numbers. Type a number for this invoice.')
-    if (!row) fail(400, 'We could not create the invoice.')
     // Money already received goes on the invoice as it is made, so it is
     // never a draft: a draft cannot be paid.
     const attachIds = req.attach_payment_ids ?? []
     const status = req.payment || attachIds.length > 0 ? 'sent' : req.status
-    const extras = await attempt(c, 'billing.invoice_extras', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, row.id, { ...req, status }, gstNumber)),
+    // One transaction: the invoice, its extras, the advance it takes and the
+    // payment recorded with it land together or not at all, so a failure
+    // never leaves an orphan invoice holding a number and a plan slot.
+    let stage = 'create' as 'create' | 'extras' | 'attach' | 'pay'
+    const row = await attempt(
+      c,
+      'billing.invoice_create',
+      () =>
+        refusalOf(
+          withUser(c.env, c.get('auth').userId, async (sql) => {
+            const rows = await sql<{ id: string; invoice_number: string }[]>`
+            select * from create_invoice(
+              p_client_id => ${req.client_id},
+              p_project_id => ${req.project_id},
+              p_place_of_supply => ${req.place_of_supply?.trim() || null},
+              p_invoice_date => ${req.invoice_date ?? null},
+              p_due_date => ${req.due_date ?? null},
+              p_subtotal => ${totals.subtotal},
+              p_discount => ${totals.discount},
+              p_taxable => ${totals.taxable},
+              p_tax => ${totals.tax},
+              p_total => ${totals.total},
+              p_items => ${sql.json(items)},
+              p_notes => ${req.notes ?? null},
+              p_template_id => ${req.template_id ?? null},
+              p_invoice_number => ${req.invoice_number ?? null},
+              p_discount_type => ${req.discount_type},
+              p_bank_details => ${req.bank_details ?? null},
+              p_terms => ${req.terms ?? null}
+            )`
+            const made = rows[0]
+            if (!made) return null
+            stage = 'extras'
+            const extras = await writeInvoiceExtras(sql, made.id, { ...req, status }, gstNumber)
+            if (extras === 'bad_file') throw new InvoiceRefusal('bad_file')
+            // The project's advance counts against this invoice: the same
+            // ledger rows, now linked, so the invoice reads partly paid and the
+            // project's received total does not move. The trigger on
+            // received_payments recomputes the invoice's paid and balance.
+            if (attachIds.length > 0 && req.project_id) {
+              stage = 'attach'
+              await sql`
+                update received_payments set invoice_id = ${made.id}
+                 where id = any(${attachIds}::uuid[])
+                   and project_id = ${req.project_id}
+                   and invoice_id is null
+                   and status = 'paid'`
+            }
+            if (req.payment) {
+              stage = 'pay'
+              const pay = req.payment
+              await sql`select record_invoice_payment(
+                p_invoice_id => ${made.id},
+                p_amount => ${pay.amount},
+                p_paid_on => ${pay.paid_on ?? null},
+                p_mode => ${pay.mode ?? null},
+                p_reference => ${pay.reference ?? null},
+                p_notes => ${null})`
+            }
+            return made
+          }),
+        ),
+      {
+        onCode: (code) =>
+          stage === 'create' && code === '23505' ? 'taken' : stage === 'create' && code === '23514' ? 'needs_number' : undefined,
+      },
     )
-    if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
-    // The project's advance counts against this invoice: the same ledger
-    // rows, now linked, so the invoice reads partly paid and the project's
-    // received total does not move. The trigger on received_payments
-    // recomputes the invoice's paid and balance.
-    if (attachIds.length > 0 && req.project_id) {
-      const attached = await attempt(c, 'billing.invoice_attach_payments', () =>
-        withUser(c.env, c.get('auth').userId, async (sql) => {
-          const rows = await sql<{ id: string }[]>`
-            update received_payments set invoice_id = ${row.id}
-             where id = any(${attachIds}::uuid[])
-               and project_id = ${req.project_id}
-               and invoice_id is null
-               and status = 'paid'
-             returning id`
-          return rows.length
-        }),
-      )
-      if (attached == null) fail(400, `Invoice ${row.invoice_number} was created, but the advance could not be applied to it. Record it from the invoice.`)
-    }
-    if (req.payment) {
-      const pay = req.payment
-      const paid = await attempt(c, 'billing.invoice_create_payment', () =>
-        withUser(c.env, c.get('auth').userId, async (sql) => {
-          await sql`select record_invoice_payment(
-            p_invoice_id => ${row.id},
-            p_amount => ${pay.amount},
-            p_paid_on => ${pay.paid_on ?? null},
-            p_mode => ${pay.mode ?? null},
-            p_reference => ${pay.reference ?? null},
-            p_notes => ${null})`
-          return true
-        }),
-      )
-      if (!paid) fail(400, `Invoice ${row.invoice_number} was created, but the payment could not be recorded. Record it from the invoice.`)
+    if (row === 'taken') fail(409, 'An invoice with this number already exists.')
+    if (row === 'needs_number') fail(422, 'Your studio types its own invoice numbers. Type a number for this invoice.')
+    if (row === 'bad_file') fail(422, 'One of the attached files was not found.')
+    if (!row) {
+      if (stage === 'attach') fail(400, 'The advance could not be applied, so the invoice was not saved. Please try again.')
+      if (stage === 'pay') fail(400, 'The payment could not be recorded, so the invoice was not saved. Check the amount and try again.')
+      fail(400, 'We could not create the invoice.')
     }
     await audit(c, {
       action: 'invoice.create',
@@ -398,57 +422,64 @@ export const invoiceRoutes = new Hono<AppEnv>()
       igst: l.igst,
     }))
 
+    // One transaction: the totals, the extras and a new number land together,
+    // so a refused number or a missing file never leaves half an edit behind.
+    const number = req.invoice_number?.trim()
+    let editStage = 'update' as 'update' | 'extras' | 'renumber'
     const ok = await attempt(
       c,
       'billing.invoice_update',
       () =>
-        withUser(c.env, c.get('auth').userId, async (sql) => {
-          await sql`select update_invoice(
-            p_invoice_id => ${id},
-            p_client_id => ${req.client_id},
-            p_project_id => ${req.project_id},
-            p_place_of_supply => ${req.place_of_supply?.trim() || null},
-            p_intra_state => ${req.intra_state},
-            p_invoice_date => ${req.invoice_date ?? null},
-            p_due_date => ${req.due_date ?? null},
-            p_subtotal => ${totals.subtotal},
-            p_discount => ${totals.discount},
-            p_taxable => ${totals.taxable},
-            p_tax => ${totals.tax},
-            p_total => ${totals.total},
-            p_items => ${sql.json(items)},
-            p_notes => ${req.notes ?? null},
-            p_template_id => ${req.template_id ?? null},
-            p_discount_type => ${req.discount_type},
-            p_bank_details => ${req.bank_details ?? null},
-            p_terms => ${req.terms ?? null}
-          )`
-          return true
-        }),
-      { onCode: (code, err) => (code === '23514' ? (String((err as Error)?.message ?? '').includes('cancelled') ? 'cancelled' : 'below_paid') : undefined) },
+        refusalOf(
+          withUser(c.env, c.get('auth').userId, async (sql) => {
+            await sql`select update_invoice(
+              p_invoice_id => ${id},
+              p_client_id => ${req.client_id},
+              p_project_id => ${req.project_id},
+              p_place_of_supply => ${req.place_of_supply?.trim() || null},
+              p_intra_state => ${req.intra_state},
+              p_invoice_date => ${req.invoice_date ?? null},
+              p_due_date => ${req.due_date ?? null},
+              p_subtotal => ${totals.subtotal},
+              p_discount => ${totals.discount},
+              p_taxable => ${totals.taxable},
+              p_tax => ${totals.tax},
+              p_total => ${totals.total},
+              p_items => ${sql.json(items)},
+              p_notes => ${req.notes ?? null},
+              p_template_id => ${req.template_id ?? null},
+              p_discount_type => ${req.discount_type},
+              p_bank_details => ${req.bank_details ?? null},
+              p_terms => ${req.terms ?? null}
+            )`
+            // Preserve the extras from creation: status transitions (draft<->sent),
+            // the GSTIN snapshot, subject, terms, HSN/SAC and attachments.
+            editStage = 'extras'
+            const extras = await writeInvoiceExtras(sql, id, req, patchGstNumber)
+            if (extras === 'bad_file') throw new InvoiceRefusal('bad_file')
+            // A new number, if one was typed (unique per studio).
+            if (number) {
+              editStage = 'renumber'
+              await sql`update invoices set invoice_number = ${number} where id = ${id} and invoice_number <> ${number}`
+            }
+            return true as const
+          }),
+        ),
+      {
+        onCode: (code, err) => {
+          if (editStage === 'renumber' && code === '23505') return 'taken'
+          if (editStage === 'update' && code === '23514') {
+            return String((err as Error)?.message ?? '').includes('cancelled') ? 'cancelled' : 'below_paid'
+          }
+          return undefined
+        },
+      },
     )
     if (ok === 'cancelled') fail(409, 'This invoice is cancelled. Reopen it first, then edit it.')
     if (ok === 'below_paid') fail(409, 'The new total is less than the money already received on this invoice. Move or delete a payment first, then lower it.')
+    if (ok === 'taken') fail(409, `Another invoice is already numbered ${number}. Pick a different number.`)
+    if (ok === 'bad_file') fail(422, 'One of the attached files was not found.')
     if (!ok) fail(400, 'We could not update this invoice.')
-    // Preserve the extras from creation: status transitions (draft↔sent),
-    // the GSTIN snapshot, subject, terms, HSN/SAC and attachments.
-    const extras = await attempt(c, 'billing.invoice_extras_update', () =>
-      withUser(c.env, c.get('auth').userId, (sql) => writeInvoiceExtras(sql, id, req, patchGstNumber)),
-    )
-    if (extras === 'bad_file') fail(422, 'One of the attached files was not found.')
-    // A new number, if one was typed (unique per studio).
-    const number = req.invoice_number?.trim()
-    if (number) {
-      const renamed = await attempt(
-        c,
-        'billing.invoice_renumber',
-        () =>
-          withUser(c.env, c.get('auth').userId, (sql) => sql`
-            update invoices set invoice_number = ${number} where id = ${id} and invoice_number <> ${number}`),
-        { onCode: (code) => (code === '23505' ? 'taken' : undefined) },
-      )
-      if (renamed === 'taken') fail(409, `Another invoice is already numbered ${number}. Pick a different number.`)
-    }
     await audit(c, { action: 'invoice.update', entityType: 'invoice', entityId: id, after: { total: totals.total, client_id: req.client_id } })
     return c.json({ ok: true })
   })

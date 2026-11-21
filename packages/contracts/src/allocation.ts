@@ -78,6 +78,9 @@ export const slotListQuery = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),
   user_id: uuid.optional(),
+  /** One project's bookings (its page), or one shoot's. */
+  project_id: uuid.optional(),
+  shoot_id: uuid.optional(),
 })
 export type SlotListQuery = z.infer<typeof slotListQuery>
 

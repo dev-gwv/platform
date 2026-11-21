@@ -6,28 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { fileURLToPath } from 'node:url'
-import { createHash } from 'node:crypto'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
-
-/**
- * A fingerprint of the shapes the API sends (packages/contracts). The data a
- * device keeps between visits (shared/api/persist-cache.ts) is thrown away
- * when it changes, so an old shape never reaches new code; a deploy that does
- * not touch the contracts keeps everyone's pages instant.
- */
-const contractsHash = (() => {
-  try {
-    const dir = path.resolve(dirname, '../../packages/contracts/src')
-    const hash = createHash('sha1')
-    for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts')).sort()) {
-      hash.update(f).update(fs.readFileSync(path.join(dir, f)))
-    }
-    return hash.digest('hex').slice(0, 12)
-  } catch {
-    return 'dev'
-  }
-})()
 
 /**
  * Source maps are uploaded to Sentry, then deleted from the build output.
@@ -111,6 +91,13 @@ function previewHeaders(): Plugin {
   }
 }
 
+/**
+ * Libraries that change only when a package is bumped. lucide-react is left
+ * out on purpose: its icons tree-shake per page, and one chunk of them would
+ * put every icon the app uses into the first download.
+ */
+const VENDOR = /node_modules\/(@radix-ui|@floating-ui|sonner|tailwind-merge|clsx|class-variance-authority|aria-hidden|react-remove-scroll[^/]*|use-callback-ref|use-sidecar|get-nonce|detect-node-es|tslib)\//
+
 export default defineConfig({
   plugins: [
     react(),
@@ -133,7 +120,6 @@ export default defineConfig({
   // build environment's commit there when nobody set the variable by hand.
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(release),
-    __CONTRACTS_HASH__: JSON.stringify(contractsHash),
   },
   build: {
     sourcemap: uploadMaps ? 'hidden' : false,
@@ -151,6 +137,13 @@ export default defineConfig({
           if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react'
           if (id.includes('node_modules/@tanstack')) return 'tanstack'
           if (id.includes('node_modules/zod')) return 'zod'
+          // The month grid and its date library: only the date box's popover
+          // asks for them, lazily (shared/ui/date-field.tsx), so they must not
+          // ride in 'vendor', which the shell loads on every page.
+          if (/node_modules\/(react-day-picker|date-fns|@date-fns)\//.test(id)) return 'calendar'
+          // The shell's other stable libraries (dialogs, popovers, toasts, class
+          // helpers): out of the entry so a deploy does not re-download them.
+          if (VENDOR.test(id)) return 'vendor'
           return undefined
         },
       },

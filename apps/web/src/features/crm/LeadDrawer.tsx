@@ -390,17 +390,19 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
           {/* The four ways to reach them, and a note, always in the same place. */}
           <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-2 border-b border-border bg-card px-1 pb-3">
             <CallButton lead={lead} />
-            <Button variant="outline" size="sm" disabled={!lead.phone} asChild={!!lead.phone} className="text-tone-green">
-              {lead.phone ? (
+            {/* An icon wrapped in a span inside a button drew the icon above
+                its word; the disabled versions are plain buttons now. */}
+            {lead.phone ? (
+              <Button variant="outline" size="sm" asChild className="text-tone-green">
                 <a href={waLink(lead.phone)} target="_blank" rel="noreferrer">
                   <MessageCircle /> WhatsApp
                 </a>
-              ) : (
-                <span>
-                  <MessageCircle /> WhatsApp
-                </span>
-              )}
-            </Button>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled className="text-tone-green">
+                <MessageCircle /> WhatsApp
+              </Button>
+            )}
             <ReplyWithAiButton
               leadId={lead.id}
               name={lead.name}
@@ -409,17 +411,17 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
               contactedStatus={lead.contacted_status}
               className="h-8"
             />
-            <Button variant="outline" size="sm" disabled={!lead.email} asChild={!!lead.email}>
-              {lead.email ? (
+            {lead.email ? (
+              <Button variant="outline" size="sm" asChild>
                 <a href={`mailto:${lead.email}`}>
                   <Mail /> Email
                 </a>
-              ) : (
-                <span>
-                  <Mail /> Email
-                </span>
-              )}
-            </Button>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled title="No email for this lead yet">
+                <Mail /> Email
+              </Button>
+            )}
             {canEdit && (
               <Popover open={noteOpen} onOpenChange={setNoteOpen}>
                 <PopoverTrigger asChild>
@@ -431,16 +433,6 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                   <NoteComposer leadId={lead.id} autoFocus onSaved={() => setNoteOpen(false)} />
                 </PopoverContent>
               </Popover>
-            )}
-            {canEdit && (
-              <Button
-                variant={lead.is_hot ? 'default' : 'outline'}
-                size="sm"
-                className={cn('ml-auto', lead.is_hot && 'bg-tone-rose text-card hover:bg-tone-rose/90')}
-                onClick={() => patch(lead.is_hot ? { is_hot: false, ...(lead.quality === 'hot' ? { quality: 'warm' } : {}) } : { is_hot: true })}
-              >
-                <Flame /> {lead.is_hot ? 'Hot' : 'Mark hot'}
-              </Button>
             )}
           </div>
 
@@ -468,12 +460,20 @@ export function LeadDrawer({ lead, onClose }: { lead: CrmLead; onClose: () => vo
                 patch(
                   // Warm and cold switch Hot off; a studio's own word ("Super
                   // hot") leaves the Hot flag -- which ranks calls -- as it was.
+                  // One Hot control (audit, 21 Nov): picking "hot" here is
+                  // what marks the lead hot for the call queue.
                   v === 'warm' || v === 'cold'
                     ? { quality: v, ...(lead.is_hot ? { is_hot: false } : {}) }
-                    : { quality: v },
+                    : v === 'hot'
+                      ? { quality: v, is_hot: true }
+                      : { quality: v },
                 )
               }
             />
+            {/* Hot set elsewhere (a card's flame, an import) while the
+                quality says another word: a flame says so; it is not a
+                second control. */}
+            {lead.is_hot && lead.quality !== 'hot' && <Flame className="size-4 text-tone-rose" aria-label="Hot" />}
             <LookupChip
               category="lead_source"
               noun="source"

@@ -325,14 +325,14 @@ export function PipelineTab({
           </Select>
         )}
         <p className="text-sm text-muted-foreground">
-          {dealCount} deal{dealCount === 1 ? '' : 's'} · {inr(total)} in {current.name}
+          {dealCount} lead{dealCount === 1 ? '' : 's'} · {inr(total)} quoted
         </p>
       </div>
 
       {unplaced.length > 0 && (
         <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
           <p className="font-medium">
-            {unplaced.length} deal{unplaced.length === 1 ? '' : 's'} not in a column
+            {unplaced.length} lead{unplaced.length === 1 ? '' : 's'} not in a column
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             They sit in another pipeline, or have no stage yet. The totals above count them.
@@ -568,7 +568,6 @@ function DroppableStage({
             asks of a pipeline before it asks anything else. */}
         <p className="mt-0.5 text-[0.7rem] tabular-nums text-muted-foreground">
           {inr(value)}
-          {stage.kind === 'open' ? ` · ${stage.probability_default}%` : ''}
         </p>
         {gate && (
           <p className="mt-0.5 truncate text-[0.65rem] text-muted-foreground" title={gate}>

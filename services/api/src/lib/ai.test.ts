@@ -4,7 +4,7 @@ import { firstOf, openAiCompatible, refusalSentence } from './ai'
 
 /**
  * The AI engine (0247). Every test injects `fetchImpl`, so nothing here reaches
- * a provider -- the seam lib/diamond-check.ts established with its `client`
+ * a provider -- the seam the old Diamond screenshot check established with its `client`
  * parameter, for the same reason: a test that needs a key is a test nobody runs.
  */
 

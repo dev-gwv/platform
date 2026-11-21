@@ -31,6 +31,9 @@ import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { rpcJson } from '../../lib/rpc'
 import { audit } from '../../lib/audit'
+import { PROJECT_LIFE, PROJECT_MARGIN_SQL } from './project-margin'
+
+const projectPnl = profitAndLoss.shape.projects.element
 
 const expenses = expense.array()
 const financials = projectFinancials.array()
@@ -736,6 +739,24 @@ export const financialsRouter = new Hono<AppEnv>()
     )
     if (!row?.data) fail(400, 'We could not work out the profit and loss.')
     return c.json(profitAndLoss.parse(row.data))
+  })
+
+  /**
+   * One project's booked profit over its whole life: the Overview's Margin box
+   * and the Billing tab's profit card. The same figure as `/pnl?project_id=`
+   * gives in `projects[0]`, without working out the whole studio's statement
+   * first (see project-margin.ts). `null` for a project the caller cannot see.
+   */
+  .get('/project/:id/margin', requireModule('financials'), async (c) => {
+    const id = uuidParam(c)
+    const row = await attempt(c, 'financials.project_margin', () =>
+      withUser(c.env, c.get('auth').userId, async (sql) => {
+        const rows = await sql.unsafe<{ r: unknown }[]>(PROJECT_MARGIN_SQL, [id, ...PROJECT_LIFE])
+        return { data: rpcJson(rows[0]?.r, null) }
+      }),
+    )
+    if (!row) fail(400, 'We could not work out this project’s profit.')
+    return c.json(projectPnl.nullable().parse(row.data))
   })
 
   // ── Project profitability report (financials module) ───────

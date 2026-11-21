@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, ChevronLeft, ChevronRight, Download, Search, UserPlus, X } from 'lucide-react'
+import { CalendarClock, CalendarPlus, ChevronLeft, ChevronRight, Download, Search, UserPlus, X } from 'lucide-react'
 import type { ShootListItem } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { CalendarLinkButton } from '@/features/booking/CalendarLinkButton'
+import { RowMenu } from '@/shared/ui/row-menu'
 import { FilterTabs } from '@/shared/layout/filter-tabs'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
@@ -64,6 +65,8 @@ function TeamBooking({ initialView }: { initialView: View }) {
   const [assign, setAssign] = useState<{ shoot: ShootListItem; role?: string | undefined } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [blockOpen, setBlockOpen] = useState(false)
+  const [calOpen, setCalOpen] = useState(false)
+  const [showEarlier, setShowEarlier] = useState(false)
   const actions = useSlotActions({ canPlan, members: members.data ?? [] })
 
   const monthSlots = useMemo(() => (slots.data ?? []).filter((s) => s.status !== 'cancelled'), [slots.data])
@@ -87,11 +90,18 @@ function TeamBooking({ initialView }: { initialView: View }) {
     const crew = monthSlots.filter((x) => x.shoot_id === s.id).map((x) => x.user_name ?? '')
     return `${s.name} ${s.project_name ?? ''} ${s.client_name ?? ''} ${s.location ?? ''} ${crew.join(' ')}`.toLowerCase().includes(needle)
   })
-  const byDay = useMemo(() => {
+  const allDays = useMemo(() => {
     const m = new Map<string, ShootListItem[]>()
     for (const s of shown) m.set(s.shoot_date!, [...(m.get(s.shoot_date!) ?? []), s])
     return [...m.entries()]
   }, [shown])
+  // This month opens at today, not on the 1st: the days already gone fold
+  // into one line above (a search or "short-staffed" shows everything).
+  const today = todayLocal()
+  const foldPast = month === today.slice(0, 7) && !needle && focus !== 'short' && !showEarlier
+  const earlier = foldPast ? allDays.filter(([d]) => d < today) : []
+  const byDay = foldPast ? allDays.filter(([d]) => d >= today) : allDays
+  const earlierCount = earlier.reduce((n, [, l]) => n + l.length, 0)
 
   const monthLabel = new Date(`${from}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
@@ -125,19 +135,27 @@ function TeamBooking({ initialView }: { initialView: View }) {
         title="Shoots"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthSlots.length}>
-              <Download /> Export CSV
-            </Button>
+            {/* One primary (Bulk assign); the rest one tap away under More. */}
+            <RowMenu
+              label="More"
+              variant="outline"
+              items={[
+                { label: 'Export CSV', icon: <Download className="size-4" />, onSelect: exportCsv, disabled: !monthSlots.length },
+                ...(canPlan
+                  ? [
+                      { label: 'Shoots in Google Calendar', icon: <CalendarPlus className="size-4" />, onSelect: () => setCalOpen(true) },
+                      { label: 'Block time', icon: <CalendarClock className="size-4" />, onSelect: () => setBlockOpen(true) },
+                    ]
+                  : []),
+              ]}
+            >
+              More
+            </RowMenu>
+            {canPlan && <CalendarLinkButton scope="studio" opened={calOpen} onOpenChange={setCalOpen} />}
             {canPlan && (
-              <>
-                <CalendarLinkButton scope="studio" />
-                <Button variant="outline" size="sm" onClick={() => setBlockOpen(true)}>
-                  <CalendarClock /> Block time
-                </Button>
-                <Button size="sm" onClick={() => setBulkOpen(true)}>
-                  <UserPlus /> Bulk assign
-                </Button>
-              </>
+              <Button size="sm" onClick={() => setBulkOpen(true)}>
+                <UserPlus /> Bulk assign
+              </Button>
             )}
           </div>
         }
@@ -229,7 +247,7 @@ function TeamBooking({ initialView }: { initialView: View }) {
           <PeopleGrid month={month} members={members.data ?? []} slots={monthSlots} q={q} menuFor={actions.menuFor} />
         ) : view === 'conflicts' ? (
           <ConflictsView items={conflicts} canPlan={canPlan} menuFor={actions.menuFor} onFix={actions.edit} />
-        ) : byDay.length === 0 ? (
+        ) : byDay.length === 0 && earlierCount === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-10 text-center">
             <p className="font-semibold">{inMonth.length ? 'Nothing matches' : `No shoots in ${monthLabel}`}</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -238,6 +256,16 @@ function TeamBooking({ initialView }: { initialView: View }) {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            {earlierCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowEarlier(true)}
+                className="self-start rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary"
+              >
+                Show {earlierCount} earlier shoot{earlierCount === 1 ? '' : 's'} this month
+              </button>
+            )}
+            {byDay.length === 0 && <p className="text-sm text-muted-foreground">Nothing more this month.</p>}
             {byDay.map(([day, list]) => (
               <section key={day} aria-label={dayHeading(day)}>
                 <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">

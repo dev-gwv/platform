@@ -15,8 +15,7 @@ import { toneVar } from '@/shared/ui/tones'
 import { cn } from '@/shared/ui/cn'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { CallButton } from '@/features/crm-calls/CallButton'
-import { useActivities } from '@/features/crm/api'
-import { FollowUpActions, FollowUpTag } from '@/features/crm/FollowUpOnRow'
+import { FollowUpActions, FollowUpTag, SEES_ALL_FOLLOW_UPS, boardScopeFor, useBoardFollowUps } from '@/features/crm/FollowUpOnRow'
 import { useLookupOptions } from '@/features/crm/fields'
 import { useAddLookupWord } from '@/features/settings/quick-words'
 import {
@@ -40,7 +39,6 @@ export function FollowUpBoardPage() {
   )
 }
 
-const SEES_ALL = new Set(['super_admin', 'admin', 'manager', 'platform_admin'])
 
 const waLink = (phone: string) => {
   const d = phone.replace(/\D/g, '')
@@ -62,11 +60,11 @@ const HEAD: Partial<Record<BoardColumnKey, string>> = {
  */
 function FollowUpBoard() {
   const { session } = useAuth()
-  const canSeeAll = SEES_ALL.has(session?.role ?? '')
-  const [scope, setScope] = useState<'mine' | 'all'>(canSeeAll ? 'all' : 'mine')
+  const canSeeAll = SEES_ALL_FOLLOW_UPS.has(session?.role ?? '')
+  const [scope, setScope] = useState<'mine' | 'all'>(boardScopeFor(session?.role))
   const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
-  const q = useActivities({ openTasks: true, mine: scope === 'mine', live: true, limit: 1000 })
+  const q = useBoardFollowUps(scope)
   const now = useMemo(() => new Date(), [q.dataUpdatedAt])
   const all = q.data ?? []
   const shown = useMemo(() => filterFollowUps(all, filters), [all, filters])

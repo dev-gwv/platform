@@ -17,6 +17,8 @@ export function SavePresetButton({
   payload,
   disabled,
   disabledHint,
+  opened,
+  onDone,
 }: {
   kind: ShootPresetKind
   defaultName: string
@@ -25,8 +27,22 @@ export function SavePresetButton({
   /** Overrides the "nothing to save" rule: a shoot preset is worth saving by name alone. */
   disabled?: boolean
   disabledHint?: string
+  /**
+   * Opened from somewhere else (a card's ⋯ menu): no button of its own, just
+   * the name box while `opened` is true.
+   */
+  opened?: boolean
+  onDone?: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const controlled = opened !== undefined
+  const open = controlled ? opened : ownOpen
+  const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    const v = typeof next === 'function' ? next(open) : next
+    if (controlled) {
+      if (!v) onDone?.()
+    } else setOwnOpen(v)
+  }
   const [name, setName] = useState(defaultName)
   const save = useSaveShootPreset()
   const empty = disabled ?? (payload.requirements.length === 0 && payload.internal_work.length === 0)
@@ -38,6 +54,7 @@ export function SavePresetButton({
 
   return (
     <div className="relative">
+      {!controlled && (
       <Button
         size="sm"
         variant="outline"
@@ -51,6 +68,7 @@ export function SavePresetButton({
       >
         <Bookmark /> <span className="hidden sm:inline">{label}</span>
       </Button>
+      )}
       {open && (
         <div className="ipc-menu absolute right-0 top-full z-40 mt-2 flex w-64 items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-lg">
           <Input

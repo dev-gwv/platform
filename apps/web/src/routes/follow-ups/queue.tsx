@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { Link } from '@tanstack/react-router'
 import { MessageCircle } from 'lucide-react'
 import { CALL_OUTCOMES } from '@ipc/domain'
@@ -45,7 +46,10 @@ const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-
 function CallQueue() {
   const { session } = useAuth()
   const canSeeAll = SEES_ALL.has(session?.role ?? '')
-  const [scope, setScope] = useState<CallQueueScope>('mine')
+  // Home's "Leads to call" counts the whole studio for whoever runs it and
+  // opens here with ?scope=all, so the page shows the same people it counted.
+  const [scopeParam, setScope] = useUrlParam('scope', 'mine')
+  const scope: CallQueueScope = canSeeAll && scopeParam === 'all' ? 'all' : 'mine'
   const q = useCallQueue(scope)
   const items = q.data?.items ?? []
   const toSend = useSendNow().data?.items.length ?? 0

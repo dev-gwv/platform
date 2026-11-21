@@ -64,9 +64,11 @@ describe('0284 edit and undo: money', () => {
 
   it('keeps a cancelled invoice cancelled, and reopens it on purpose', async () => {
     const inv = await makeInvoice(5000)
+    await pay(inv.id, 1000)
     await q(`update invoices set status = 'cancelled', balance_due = 0 where id = $1`, [inv.id])
     await expect(update(inv.id, 6000)).rejects.toThrow(/reopen/)
-    await pay(inv.id, 1000)
+    // 0314: no new money lands on a cancelled invoice at all.
+    await expect(pay(inv.id, 500)).rejects.toThrow(/invoice is cancelled/)
     expect((await one<{ status: string }>(`select status from invoices where id = $1`, [inv.id])).status).toBe('cancelled')
     expect((await one<{ s: string }>(`select reopen_invoice($1) as s`, [inv.id])).s).toBe('partial')
   })

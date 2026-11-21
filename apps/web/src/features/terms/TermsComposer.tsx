@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Textarea } from '@/shared/ui/input'
 import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
+import { parseAmount } from '@/shared/money/parse-amount'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useCompanyProfile } from '@/features/settings/api'
@@ -300,7 +301,7 @@ export function TermsComposer({
                       aria-label={`Part ${i + 1} percent`}
                       inputMode="decimal"
                       value={String(p.value)}
-                      onChange={(e) => setPart(i, { value: Number(e.target.value) || 0, mode: 'percent' })}
+                      onChange={(e) => setPart(i, { value: parseAmount(e.target.value), mode: 'percent' })}
                       className="pr-6"
                     />
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>

@@ -1,4 +1,5 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { allowedOrigins, isProduction } from './lib/allowed-origins'
 import type { AppEnv } from './context'
@@ -115,6 +116,38 @@ app.use('*', (c, next) => {
   })(c, next)
 })
 
+// ── Body size ─────────────────────────────────────────────────
+// A request body is read whole into memory, so an unbounded one is a cheap way
+// to exhaust the box. About 1 MB for everything; the routes that take a file
+// or a big document get their own ceiling, a little over what they check
+// themselves (multipart adds its own overhead).
+const MB = 1024 * 1024
+const tooLarge = (c: Context<AppEnv>) =>
+  c.json({ error: 'That is too large to send. Make the file smaller and try again.' }, 413)
+const BODY_LIMITS: ReadonlyArray<[RegExp, ReturnType<typeof bodyLimit>]> = [
+  // The studio's own quotation PDF or photo (QUOTE_MAX_BYTES, 20 MB).
+  [/^\/projects\/quotation\/read$/, bodyLimit({ maxSize: 21 * MB, onError: tooLarge })],
+  // The owner's voice note on a support ticket (MAX_VOICE_BYTES, 20 MB).
+  [/^\/platform\/support-calls\/tickets\/[^/]+\/voice$/, bodyLimit({ maxSize: 21 * MB, onError: tooLarge })],
+  // Uploads: logos, photos, bills, voice notes (MAX_FILE_BYTES, 10 MB).
+  [/^\/files\/?$/, bodyLimit({ maxSize: 11 * MB, onError: tooLarge })],
+  // The old app's Studio Access export, up to 5,000 rows.
+  [/^\/platform\/legacy\/import$/, bodyLimit({ maxSize: 8 * MB, onError: tooLarge })],
+  // ID documents (ID_DOCUMENT_MAX_BYTES, 5 MB).
+  [/^\/settings\/profile\/documents$/, bodyLimit({ maxSize: 6 * MB, onError: tooLarge })],
+  // A designed quotation is one JSON document of up to 30 pages.
+  [/^\/designs(\/|$)/, bodyLimit({ maxSize: 4 * MB, onError: tooLarge })],
+  // A pasted lead list (up to 500,000 characters, escaped as JSON).
+  [/^\/crm\/imports\//, bodyLimit({ maxSize: 2 * MB, onError: tooLarge })],
+]
+const defaultBodyLimit = bodyLimit({ maxSize: 1 * MB, onError: tooLarge })
+app.use('*', async (c, next) => {
+  if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.req.method === 'OPTIONS') return next()
+  const path = c.req.path
+  const limit = BODY_LIMITS.find(([re]) => re.test(path))?.[1] ?? defaultBodyLimit
+  return limit(c, next)
+})
+
 // ── Rate limits ───────────────────────────────────────────────
 // The credential surfaces share ONE tight bucket per address: a password
 // guesser gains nothing by alternating login and reset. Session upkeep
@@ -153,7 +186,14 @@ app.use('/assistant/ask', async (c, next) => (c.req.method === 'POST' ? assistan
 // A thumb costs nothing to serve, but it is the only quality signal the feature
 // has, and an unlimited endpoint that flips it is an unlimited way to poison it.
 app.use('/assistant/feedback', rateLimit({ windowMs: 60_000, limit: 30 }))
-app.use('/public/*', rateLimit({ windowMs: 60_000, limit: 30 }))
+// Buckets are per address and route pattern ('/public/quote/:token'), so
+// guessing tokens is limited. A public file is named by a random uuid and one
+// designed quotation shows dozens of them, so files get a roomier bucket.
+const publicLimiter = rateLimit({ windowMs: 60_000, limit: 30 })
+const publicFileLimiter = rateLimit({ windowMs: 60_000, limit: 600 })
+app.use('/public/*', async (c, next) =>
+  c.req.method === 'GET' && c.req.path.startsWith('/public/files/') ? publicFileLimiter(c, next) : publicLimiter(c, next),
+)
 const enquiryLimiter = rateLimit({ windowMs: 60_000, limit: 10 })
 // A client note on a deliverable notifies the studio: a much lower ceiling
 // than reading, per address and link (the database also caps a link a day).

@@ -91,15 +91,15 @@ function StudioCommandCenter() {
 
   // Only the count is needed, so ask the server for it, not every project.
   const projects = useProjectsPage({ page: 1, page_size: 1 })
-  const clients = useClients()
+  const clients = useClients({ page_size: 1 })
   const members = useMembers()
 
   // The dashboard's operational half runs off the same tracking pass the
   // Project Tracking screen uses, so the two can never disagree about which
   // job is on fire.
   const trackingRows = useQuery({
-    queryKey: ['projects', 'tracking'],
-    queryFn: () => callApi('/projects/tracking', { responseSchema: projectTrackingRow.array() }),
+    queryKey: ['projects', 'tracking', 'open'],
+    queryFn: () => callApi('/projects/tracking?open=1', { responseSchema: projectTrackingRow.array() }),
     enabled: !!session && access.hasModule('projects'),
     staleTime: 30_000,
   })
@@ -110,14 +110,14 @@ function StudioCommandCenter() {
     staleTime: 30_000,
   })
   const tracked = track(trackingRows.data ?? [], today)
-  const clientCount = Array.isArray(clients.data) ? clients.data.length : 0
+  const clientCount = Array.isArray(clients.data) ? clients.data.length : (clients.data?.total ?? 0)
   const startShowing = useGettingStartedShowing()
 
   // The three tiles' data: today's calls, the bookings against the week's
   // shoots, and what is due by the Payments received rule.
   const canCrm = access.hasModule('crm')
   const queue = useCallQueue(access.hasAction('crm', 'edit') ? 'all' : 'mine')
-  const slots = useSlots()
+  const slots = useSlots({ from: today, to: shootsWeekEnd(today) })
   const due = useBillingDue({ from: `${today.slice(0, 8)}01`, to: today })
   const booked = (slots.data ?? []).filter((x) => x.status === 'booked')
   const week = shootsTile(
@@ -140,6 +140,7 @@ function StudioCommandCenter() {
         hint={queue.data ? leadsTileLine(queue.data.items) : undefined}
         tone={queue.data?.items.length ? 'warning' : 'success'}
         to="/follow-ups/queue"
+        {...(access.hasAction('crm', 'edit') ? { search: { scope: 'all' } } : {})}
       />
     ),
     access.hasModule('projects') && (

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Hono } from 'hono'
 import type { AppEnv } from '../context'
-import { HitStore, rateLimit, securityHeaders, slidingWindow } from './security'
+import { HitStore, addressKey, rateLimit, securityHeaders, slidingWindow } from './security'
 import { resolveClientIp } from '../lib/client-ip'
 
 describe('slidingWindow rate limit', () => {
@@ -46,6 +46,30 @@ describe('HitStore stays bounded', () => {
     // b was evicted; a, c, d remain and their windows survive.
     expect(store.hit('b', 6, 100, 1).allowed).toBe(true) // fresh key, fresh window
     expect(store.hit('a', 7, 100, 2).allowed).toBe(false) // a already has 2 hits
+  })
+  it("keeps each bucket for its own window: a short limiter's sweep never wipes an hour-long bucket", () => {
+    const store = new HitStore(1000, 2)
+    const HOUR = 3_600_000
+    store.hit('form', 0, HOUR, 1)
+    // A one-minute limiter runs the sweep ten minutes on.
+    store.hit('other', 600_000, 60_000, 30)
+    expect(store.hit('form', 600_001, HOUR, 1).allowed).toBe(false)
+  })
+})
+
+describe('addressKey', () => {
+  it('keeps IPv4 whole and unwraps IPv4-mapped IPv6', () => {
+    expect(addressKey('203.0.113.9')).toBe('203.0.113.9')
+    expect(addressKey('::ffff:203.0.113.9')).toBe('203.0.113.9')
+  })
+  it('folds IPv6 to its /64, however it is written', () => {
+    expect(addressKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64')
+    expect(addressKey('2001:0db8:0001:0002::1')).toBe('2001:db8:1:2::/64')
+    expect(addressKey('[2001:db8:1:2::9]')).toBe('2001:db8:1:2::/64')
+    expect(addressKey('2001:db8::1')).toBe('2001:db8:0:0::/64')
+  })
+  it('leaves the shared fallback alone', () => {
+    expect(addressKey('unknown')).toBe('unknown')
   })
 })
 
@@ -98,6 +122,23 @@ describe('rateLimit middleware', () => {
     expect((await app.request('/auth/a', from('10.0.0.1'), env)).status).toBe(200)
     expect((await app.request('/auth/a', from('10.0.0.1'), env)).status).toBe(429)
     expect((await app.request('/auth/b', from('10.0.0.1'), env)).status).toBe(200)
+  })
+  it('every token under one route pattern shares a bucket, so guessing links is limited', async () => {
+    const app = new Hono<AppEnv>()
+    app.use('/public/*', rateLimit({ windowMs: 60_000, limit: 2, store: new HitStore() }))
+    app.get('/public/quote/:token', (c) => c.json({ ok: true }))
+    app.get('/public/plans', (c) => c.json({ ok: true }))
+    expect((await app.request('/public/quote/aaa', from('10.0.0.1'), env)).status).toBe(200)
+    expect((await app.request('/public/quote/bbb', from('10.0.0.1'), env)).status).toBe(200)
+    expect((await app.request('/public/quote/ccc', from('10.0.0.1'), env)).status).toBe(429)
+    expect((await app.request('/public/plans', from('10.0.0.1'), env)).status).toBe(200)
+  })
+
+  it('one IPv6 /64 is one client', async () => {
+    const app = build('ip')
+    expect((await app.request('/auth/a', from('2001:db8:1:2::1'), env)).status).toBe(200)
+    expect((await app.request('/auth/a', from('2001:db8:1:2::2'), env)).status).toBe(200)
+    expect((await app.request('/auth/a', from('2001:db8:1:2::3'), env)).status).toBe(429)
   })
 })
 

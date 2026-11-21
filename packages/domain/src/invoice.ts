@@ -52,9 +52,10 @@ export function computeInvoice(
   const discount = Math.min(Math.max(0, flatDiscount), subtotal)
   const ratio = subtotal > 0 ? (subtotal - discount) / subtotal : 1
 
+  const taxables = spreadTaxable(amounts, ratio, subtotal - discount)
   const computed: InvoiceLine[] = lines.map((l, i) => {
     const amount = amounts[i] ?? 0
-    const taxable = roundINR(amount * ratio)
+    const taxable = taxables[i] ?? 0
     const g = computeGst(taxable, l.gst_rate, { intraState: opts.intraState })
     return { ...l, amount, taxable, cgst: g.cgst, sgst: g.sgst, igst: g.igst }
   })
@@ -62,6 +63,26 @@ export function computeInvoice(
   const taxable = sumINR(computed.map((l) => l.taxable))
   const tax = sumINR(computed.map((l) => l.cgst + l.sgst + l.igst))
   return { lines: computed, subtotal, discount, taxable, tax, total: roundINR(taxable + tax) }
+}
+
+/**
+ * Each line's discounted taxable, in paise, so the lines add up to exactly
+ * subtotal − discount. Rounding each line on its own drifts (three lines of
+ * ₹10,000 less ₹10,000 gave ₹6,666.67 × 3 = ₹20,000.01); the paise left over
+ * go to the largest line, the one where a paisa matters least.
+ */
+function spreadTaxable(amounts: ReadonlyArray<number>, ratio: number, target: number): number[] {
+  const paise = amounts.map((a) => Math.round((a * ratio + Number.EPSILON) * 100))
+  if (ratio === 1 || paise.length === 0) return paise.map((p) => p / 100)
+  const remainder = Math.round((target + Number.EPSILON) * 100) - paise.reduce((x, y) => x + y, 0)
+  if (remainder !== 0) {
+    let largest = 0
+    amounts.forEach((a, i) => {
+      if (a > (amounts[largest] ?? 0)) largest = i
+    })
+    paise[largest] = (paise[largest] ?? 0) + remainder
+  }
+  return paise.map((p) => p / 100)
 }
 
 /** quantity × rate × days (days empty or 0 counts as 1), rounded to the rupee's paise. */

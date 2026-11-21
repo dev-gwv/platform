@@ -2,6 +2,7 @@ import { SavePresetButton } from '@/features/shoots/SavePresetButton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Bookmark,
   Check,
   Clock,
   Database,
@@ -30,7 +31,7 @@ import {
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
-import { useTeamTermsSends } from '@/features/team-terms/api'
+import { useProjectTeamTermsSends } from '@/features/team-terms/api'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Input, Label, Select } from '@/shared/ui/input'
@@ -40,12 +41,13 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
+import { RowMenu } from '@/shared/ui/row-menu'
 import { humanize } from '@/shared/ui/format'
 import { useConfirm } from '@/shared/ui/confirm'
 import { useFormDraft } from '@/shared/hooks/use-form-draft'
 import { useShootTypes } from '@/features/projects/api'
 import { useDeleteShoot, useServices, useShootPresets, useUpdateShoot } from '@/features/shoots/api'
-import { useReleaseSlot, useSlots } from '@/features/allocation/api'
+import { useReleaseSlot, useSlots, useSlotsOnDays } from '@/features/allocation/api'
 import { AssignTeamDialog } from '@/features/shoots/AssignTeamDialog'
 import { AssignmentRow } from '@/features/shoots/AssignmentRow'
 import { dataCounts, dataHandIn, dataHandInLine, optedOut, recordForSlot } from '@/features/data/stage'
@@ -119,7 +121,7 @@ export function ShootsTab({
   const qc = useQueryClient()
   const shootTypes = useShootTypes()
   const presets = useShootPresets('shoot')
-  const slots = useSlots()
+  const slots = useSlots({ project_id: projectId })
   const dataRecords = useProjectDataRecords(projectId)
   const [customOpen, setCustomOpen] = useState(false)
   // The event chips are the empty state; once a day exists they fold behind
@@ -135,6 +137,7 @@ export function ShootsTab({
     enabled: !!session && !!projectId,
     staleTime: 15_000,
   })
+  const daySlots = useSlotsOnDays(data, slots.data)
 
   const create = useMutation({
     mutationFn: (input: {
@@ -318,7 +321,7 @@ export function ShootsTab({
               onFocused={onFocused}
               canEdit={canEdit}
               slots={(slots.data ?? []).filter((x) => x.shoot_id === s.id)}
-              allSlots={slots.data ?? []}
+              allSlots={daySlots}
               records={(dataRecords.data ?? []).filter((d) => d.shoot_id === s.id)}
             />
           ))}
@@ -367,6 +370,7 @@ function ShootPlanner({
   /** Open the assign desk; a requirement name focuses it on that role. */
   const [assign, setAssign] = useState<{ requirement?: string } | null>(null)
   const [editing, setEditing] = useState(false)
+  const [savingPreset, setSavingPreset] = useState(false)
   const [addingReq, setAddingReq] = useState(false)
   const [crewData, setCrewData] = useState(false)
 
@@ -375,7 +379,7 @@ function ShootPlanner({
   const planAccess = useAccess()
   const usesTerms = canEdit && planAccess.hasModule('team_terms')
   const seesMoney = planAccess.hasModule('billing') || planAccess.hasModule('money')
-  const termSends = useTeamTermsSends(usesTerms && live.length > 0 ? shoot.id : null)
+  const termSends = useProjectTeamTermsSends(usesTerms && live.length > 0 ? shoot.project_id : null, shoot.id)
   const termsFor = (userId: string | null): TeamTermsSend | null | undefined => {
     if (!usesTerms || !termSends.data) return undefined
     return termSends.data.find((t) => t.user_id === userId) ?? null
@@ -543,15 +547,14 @@ function ShootPlanner({
               {/* Cards only exist once the day has been shot. One line says
                   how many are in and how many of those are backed up; a tap
                   records the ones still out. */}
+              {/* While cards are out the line is amber; the amber Record cards
+                  button beside the card's name opens them, so it is not a
+                  second button here. */}
               {dayPassed && dataLine &&
                 (canEdit && owing.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setCrewData(true)}
-                    className="flex items-center gap-1 rounded-full border border-tone-amber/60 bg-tone-amber-soft px-2 py-0.5 font-medium text-tone-amber hover:border-tone-amber"
-                  >
+                  <span className="flex items-center gap-1 font-medium text-tone-amber">
                     <Database className="size-3" /> {dataLine}
-                  </button>
+                  </span>
                 ) : (
                   <span className="flex items-center gap-1">
                     <Database className="size-3" /> {dataLine}
@@ -561,49 +564,78 @@ function ShootPlanner({
           </div>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-1.5">
-              {/* Solid, first: the owner could not see it as an outline. It
-                  pulses when the journey ("Book the team") brought them here. */}
-              {/* Full size (owner, 5 Nov: "the Assign Team button has to be bigger"). */}
+              {/* Once the day has passed and cards are still out, recording
+                  them is the one next thing (amber); the staffed day's Assign
+                  team steps back to an outline. */}
+              {dayPassed && owing.length > 0 && (
+                <Button
+                  className="bg-warning px-5 text-card hover:bg-warning/90"
+                  onClick={() => setCrewData(true)}
+                >
+                  <Database /> Record cards
+                </Button>
+              )}
+              {/* Solid and full size while the day still needs people (owner,
+                  5 Nov: "the Assign Team button has to be bigger"); it pulses
+                  when the journey ("Book the team") brought them here. */}
               <Button
-                className={cn('px-5', marked && shoot.requirements.length > 0 && 'ipc-nudge')}
+                variant={staffed ? 'outline' : 'default'}
+                className={cn(!staffed && 'px-5', marked && !staffed && shoot.requirements.length > 0 && 'ipc-nudge')}
+                size={staffed ? 'sm' : 'default'}
                 onClick={() => setAssign({})}
                 disabled={shoot.requirements.length === 0}
               >
-                <UserPlus /> Assign team
+                <UserPlus /> {staffed ? 'Manage team' : 'Assign team'}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
-                <Plus /> Add who this day needs
-              </Button>
+              {shoot.requirements.length === 0 && (
+                <Button size="sm" variant="outline" onClick={() => setAddingReq(true)}>
+                  <Plus /> Add who this day needs
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => setEditing(true)} aria-label={`Edit ${shoot.name}`}>
                 <Pencil /> Edit
               </Button>
               {/* Save this day's shape (who it needs, how long) for the next
-                  wedding; it appears under "Add a set of functions…". */}
+                  wedding -- it appears under "Add a set of functions…" -- and
+                  delete it, both one tap away under ⋯. */}
               <SavePresetButton
                 kind="shoot"
                 defaultName={shoot.name}
                 label="Save as preset"
-                disabled={shoot.requirements.length === 0}
-                disabledHint="Add who this day needs first"
+                opened={savingPreset}
+                onDone={() => setSavingPreset(false)}
                 payload={{ requirements: asInput(), internal_work: [], duration_hours: hours || null }}
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground hover:text-destructive"
-                aria-label={`Delete ${shoot.name}`}
-                onClick={async () => {
-                  const yes = await confirm({
-                    title: `Delete ${shoot.name}?`,
-                    description: 'Anyone booked on it is released. This cannot be undone.',
-                    destructive: true,
-                    confirmLabel: 'Delete',
-                  })
-                  if (yes) del.mutate(shoot.id)
-                }}
-              >
-                <Trash2 />
-              </Button>
+              <RowMenu
+                label={`More for ${shoot.name}`}
+                variant="outline"
+                items={[
+                  ...(shoot.requirements.length > 0
+                    ? [{ label: 'Add who this day needs', icon: <Plus className="size-4" />, onSelect: () => setAddingReq(true) }]
+                    : []),
+                  {
+                    label: 'Save as preset',
+                    icon: <Bookmark className="size-4" />,
+                    disabled: shoot.requirements.length === 0,
+                    onSelect: () => setSavingPreset(true),
+                  },
+                  {
+                    label: 'Delete this day',
+                    icon: <Trash2 className="size-4" />,
+                    danger: true,
+                    divider: true,
+                    onSelect: async () => {
+                      const yes = await confirm({
+                        title: `Delete ${shoot.name}?`,
+                        description: 'Anyone booked on it is released. This cannot be undone.',
+                        destructive: true,
+                        confirmLabel: 'Delete',
+                      })
+                      if (yes) del.mutate(shoot.id)
+                    },
+                  },
+                ]}
+              />
             </div>
           )}
         </div>
@@ -715,14 +747,18 @@ function ShootPlanner({
                               setRequirements(asInput().map((x) => (x.name === r.name ? { ...x, quantity: q } : x)))
                             }
                           />
-                          <Button
-                            size="sm"
-                            variant={full ? 'outline' : 'default'}
-                            className={cn(!full && 'bg-warning text-card hover:bg-warning/90')}
-                            onClick={() => setAssign({ requirement: r.name })}
-                          >
-                            <UserPlus /> {full ? 'Manage team' : 'Assign team'}
-                          </Button>
+                          {/* A filled role on a staffed day needs no button of
+                              its own: the card's Manage team opens the same. */}
+                          {!(full && staffed) && (
+                            <Button
+                              size="sm"
+                              variant={full ? 'outline' : 'default'}
+                              className={cn(!full && 'bg-warning text-card hover:bg-warning/90')}
+                              onClick={() => setAssign({ requirement: r.name })}
+                            >
+                              <UserPlus /> {full ? 'Manage team' : 'Assign team'}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

@@ -15,7 +15,7 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeletePayment, useProjectBilling, useUpdatePayment, useUpdateQuotation } from '@/features/projects/api'
-import { useProfitAndLoss } from '@/features/financials/api'
+import { useProjectProfit } from '@/features/financials/api'
 import { issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/features/billing/receiptShare'
 import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/RecordPaymentDialog'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
@@ -60,12 +60,23 @@ const firstName = (name: string | null | undefined) => (name ?? '').trim().split
 function MoneyStory({
   project,
   onRecord,
+  openInvoices = [],
 }: {
   project: ProjectDetail
   onRecord?: (() => void) | undefined
+  /** Sent invoices with money still due, to explain when they add up to more than "left to collect". */
+  openInvoices?: ReadonlyArray<Pick<BillingInvoice, 'invoice_number' | 'balance_due' | 'total' | 'taxable'>>
 }) {
   const inr = useINR()
   const m = projectMoney(project)
+  // An invoice carries GST on top of the project's value, so its unpaid total
+  // can be more than "left to collect": say why in one sentence.
+  const unpaid = openInvoices.reduce((n, i) => n + i.balance_due, 0)
+  const gst = openInvoices.reduce((n, i) => n + Math.max(0, i.total - i.taxable), 0)
+  const gstLine =
+    unpaid > m.due + 1 && gst > 0
+      ? `${inr(unpaid)} unpaid on ${openInvoices.map((i) => i.invoice_number).join(', ')} includes ${inr(Math.min(gst, unpaid))} GST on top of the project value.`
+      : null
   const who = firstName(project.client_name)
   const pct = (n: number) => `${m.total > 0 ? Math.min(100, (n / m.total) * 100) : 0}%`
   const remind =
@@ -95,6 +106,7 @@ function MoneyStory({
                 <span className="font-semibold text-tone-amber">{inr(m.due)}</span> left to collect.
               </>
             )}
+            {gstLine && <span className="mt-1 block text-sm text-muted-foreground">{gstLine}</span>}
           </p>
           <div className="flex shrink-0 flex-wrap gap-2">
             {remind && (
@@ -126,9 +138,12 @@ function MoneyStory({
           />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <Legend className="bg-tone-green" label={`Paid ${inr(m.received)}`} />
+          {/* The sentence above has the paid and to-collect figures; the
+              legend only names the bar's colours (and the promise, said
+              nowhere else). */}
+          <Legend className="bg-tone-green" label="Paid" />
           {m.promised > 0 && <Legend className="bg-tone-amber/60" label={`Promised ${inr(m.promised)}`} />}
-          {m.due > 0 && <Legend className="bg-muted-foreground/30" label={`To collect ${inr(m.due)}`} />}
+          {m.due > 0 && <Legend className="bg-muted-foreground/30" label="To collect" />}
           <span>
             Package {inr(project.package_cost)}
             {project.additional_deliverables_cost > 0 ? ` + extras ${inr(project.additional_deliverables_cost)}` : ''}
@@ -156,12 +171,10 @@ function NeedsALook({
   project,
   checks,
   canEdit,
-  onRecord,
 }: {
   project: ProjectDetail
   checks: MoneyCheck[]
   canEdit: boolean
-  onRecord: (invoiceId: string, amount: number) => void
 }) {
   const inr = useINR()
   const attach = useUpdatePayment(project.id)
@@ -198,10 +211,6 @@ function NeedsALook({
                   onClick={() => attach.mutate({ paymentId: c.paymentId, patch: { invoice_id: c.invoiceId } })}
                 >
                   <Link2 /> Attach it
-                </Button>
-              ) : c.kind === 'overdue' && canEdit ? (
-                <Button size="sm" onClick={() => onRecord(c.invoiceId, c.balance)}>
-                  <IndianRupee /> Record payment
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" asChild>
@@ -312,9 +321,11 @@ export function BillingTab({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
-      <MoneyStory project={project} onRecord={canEdit ? () => setEditing({}) : undefined} />
+      <MoneyStory project={project} onRecord={canEdit ? () => setEditing({}) : undefined} openInvoices={canBill ? live.filter((i) => i.balance_due > 0) : []} />
 
-      <NeedsALook project={project} checks={checks} canEdit={canEdit} onRecord={(invoiceId, amount) => setEditing({ invoiceId, amount })} />
+      {/* An overdue invoice's fix is the Record on its own row below; this
+          card only says what is wrong, so Record payment is not here twice. */}
+      <NeedsALook project={project} checks={checks} canEdit={canEdit} />
 
       <PlanCard
         project={project}
@@ -342,11 +353,6 @@ export function BillingTab({
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-6 text-center">
               <IconTile icon={IndianRupee} tone="green" size="lg" />
               <p className="text-sm text-muted-foreground">Nothing yet. Record the advance when it comes in.</p>
-              {canEdit && (
-                <Button size="sm" onClick={() => setEditing({})}>
-                  <Plus /> Record payment
-                </Button>
-              )}
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
@@ -684,9 +690,9 @@ function PaymentItem({
 function ProfitCard({ project }: { project: ProjectDetail }) {
   const inr = useINR()
   const canSee = useAccess().hasModule('financials')
-  const { data } = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: project.id }, canSee)
+  const { data } = useProjectProfit(project.id, canSee)
   if (!canSee) return null
-  const f = data?.projects[0]
+  const f = data
   if (!f) return null
   return (
     <Card>

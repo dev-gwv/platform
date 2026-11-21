@@ -129,7 +129,7 @@ export const addMemberRequest = z
     phone: z.string().trim().min(6).max(20),
     email: z.string().trim().toLowerCase().email().optional(),
     alternate_phone: z.string().trim().max(20).optional(),
-    password: z.string().min(6).max(72).optional(),
+    password: z.string().min(8).max(72).optional(),
     role: assignableRole.default('employee'),
     role_ids: z.array(uuid).max(20).default([]),
     salary: money.optional(),
@@ -192,7 +192,7 @@ export type AddMemberResponse = z.infer<typeof addMemberResponse>
  */
 export const setMemberSignInRequest = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
-  password: z.string().min(6).max(72),
+  password: z.string().min(8).max(72),
 })
 export type SetMemberSignInRequest = z.infer<typeof setMemberSignInRequest>
 
@@ -274,11 +274,13 @@ export type UpdateInvitationRequest = z.infer<typeof updateInvitationRequest>
 
 /**
  * The link is returned so the owner can pass it on directly — WhatsApp is how
- * this actually reaches most crew, and the email may never be opened.
+ * this actually reaches most crew, and the email may never be opened. It is
+ * null when the invited email already belongs to a login: then only the
+ * mailbox gets the link, so the studio can never open it as that person.
  */
 export const invitationLink = z.object({
   id: uuid,
-  invite_link: z.string(),
+  invite_link: z.string().nullable(),
   expires_at: isoDateTime,
 })
 export type InvitationLink = z.infer<typeof invitationLink>

@@ -15,14 +15,21 @@ import { dehydrate, hydrate, type DehydratedState, type Query, type QueryClient 
  * Kept safe:
  * - per person and studio: a different login, or Switch studio, never sees
  *   another's rows (`setCacheScope`); signing out deletes it (`forgetCache`);
- * - the shape guard: it is thrown away when the contracts the app reads
- *   change (`__CONTRACTS_HASH__`, set at build time), so an old shape never
- *   reaches new code;
+ * - kept across releases (speed audit, 21 Nov: it used to be thrown away
+ *   whenever packages/contracts changed, which was most deploys, so the
+ *   first open after each release was slow again). Every restored answer is
+ *   stale and asked for again at once, so an older shape is on screen only
+ *   until the page's own request lands. Bump `CACHE_FORMAT` by hand when a
+ *   change would make an old copy crash a page before that;
+ * - the safety net: a screen that breaks in the first seconds after a
+ *   restore forgets the copy and reloads the tab, once
+ *   (`forgetCacheAfterCrash`, called by the error screens);
  * - a week at most, only answers that succeeded, never sign-in, tokens or
  *   the assistant's thread, and nothing over ~10 MB.
  */
 
-declare const __CONTRACTS_HASH__: string
+/** Bump to throw away every device's copy, e.g. after a shape change old copies would crash on. */
+export const CACHE_FORMAT = 'v2'
 
 const DB = 'sa-cache'
 const STORE = 'queries'
@@ -36,7 +43,11 @@ const NEVER = new Set(['auth', 'session', 'assistant', 'calendar', 'token', 'tok
 
 type Stored = { buster: string; savedAt: number; state: DehydratedState }
 
-const buster = () => (typeof __CONTRACTS_HASH__ === 'string' ? __CONTRACTS_HASH__ : 'dev')
+const CRASH_KEY = 'sa-cache-crash-reload'
+/** How long after a restore a crash is blamed on the restored copy. */
+const CRASH_WINDOW = 15_000
+
+const buster = () => CACHE_FORMAT
 
 /** May this query be kept on the device? Pure, tested. */
 export function keepQuery(q: Pick<Query, 'queryKey' | 'state'>): boolean {
@@ -101,29 +112,80 @@ function writeScope(scope: string | null) {
 
 let scope: string | null = null
 let timer: ReturnType<typeof setTimeout> | null = null
+let restoredAt = 0
+
+/** Put a saved copy into the cache, every restored answer marked stale. */
+function putBack(qc: QueryClient, stored: Stored) {
+  try {
+    const keys = new Set(stored.state.queries.map((q) => q.queryHash))
+    hydrate(qc, stored.state)
+    restoredAt = Date.now()
+    // A restored answer is shown, never trusted: mark each one stale so the
+    // page that draws it also asks again. One saved under 30 s ago would
+    // otherwise count as fresh, and a refresh pressed to see someone else's
+    // change showed the old copy. Only the restored ones: an answer fetched
+    // while a late copy was still being read stays fresh (hydrate never
+    // overwrites a newer answer with an older one).
+    void qc.invalidateQueries({
+      predicate: (q) => keys.has(q.queryHash) && q.state.dataUpdatedAt <= stored.savedAt,
+      refetchType: 'none',
+    })
+  } catch {
+    /* a bad copy is simply not used */
+  }
+}
 
 /**
  * Put back what the last person on this device had, before the first render.
- * Waits at most `budgetMs` so a slow disk never holds the app back.
+ * Waits at most `budgetMs` so a slow disk never holds the app back; a copy
+ * that arrives later is still put back, for the queries that have not been
+ * answered by then, unless the session has moved to someone else meanwhile.
  */
 export async function restoreCache(qc: QueryClient, budgetMs = 400): Promise<void> {
   scope = readScope()
   if (!scope) return
   const key = scope
-  const read = idb<Stored>('readonly', (s) => s.get(key))
-  const stored = await Promise.race([read, new Promise<null>((r) => setTimeout(() => r(null), budgetMs))])
-  if (usable(stored, Date.now(), buster())) {
-    try {
-      hydrate(qc, stored.state)
-      // A restored answer is shown, never trusted: mark every one stale so the
-      // page that draws it also asks again. One saved under 30 s ago would
-      // otherwise count as fresh, and a refresh pressed to see someone else's
-      // change showed the old copy.
-      void qc.invalidateQueries({ refetchType: 'none' })
-    } catch {
-      /* a bad copy is simply not used */
-    }
+  let late = false
+  const read = idb<Stored>('readonly', (s) => s.get(key)).then((stored) => {
+    if (late && scope === key && usable(stored, Date.now(), buster())) putBack(qc, stored)
+    return stored
+  })
+  const stored = await Promise.race([read, new Promise<undefined>((r) => setTimeout(() => r(undefined), budgetMs))])
+  if (stored === undefined) {
+    late = true
+    return
   }
+  if (usable(stored, Date.now(), buster())) putBack(qc, stored)
+}
+
+/** Did a crash at `now` come soon enough after a restore at `at` to blame the copy? Pure, tested. */
+export function crashAfterRestore(now: number, at: number): boolean {
+  return at > 0 && now - at >= 0 && now - at < CRASH_WINDOW
+}
+
+/**
+ * Called by the error screens. If a screen broke within seconds of a restore,
+ * the restored copy may be the cause (an older shape): forget it and reload
+ * the tab, at most once per tab. Answers whether a reload is on its way.
+ */
+export function forgetCacheAfterCrash(): boolean {
+  if (!crashAfterRestore(Date.now(), restoredAt)) return false
+  restoredAt = 0
+  const old = scope ?? readScope()
+  let reload = false
+  try {
+    if (!sessionStorage.getItem(CRASH_KEY)) {
+      sessionStorage.setItem(CRASH_KEY, String(Date.now()))
+      reload = true
+    }
+  } catch {
+    /* storage blocked: forget the copy, but never risk a reload loop */
+  }
+  if (timer) clearTimeout(timer)
+  timer = null
+  const gone = old ? idb('readwrite', (s) => s.delete(old)) : Promise.resolve(null)
+  if (reload) void gone.finally(() => window.location.reload())
+  return reload
 }
 
 /**
@@ -150,6 +212,15 @@ export function forgetCache() {
   if (old) void idb('readwrite', (s) => s.delete(old))
 }
 
+/** Is this query refreshed on a timer by any screen showing it? */
+function isPoll(q: Query): boolean {
+  try {
+    return q.observers.some((o) => !!o.options.refetchInterval)
+  } catch {
+    return false
+  }
+}
+
 /** Save the cache a moment after it changes, at most every two seconds. */
 export function persistCache(qc: QueryClient): () => void {
   const save = () => {
@@ -169,6 +240,10 @@ export function persistCache(qc: QueryClient): () => void {
   }
   const unsub = qc.getQueryCache().subscribe((e) => {
     if (e.type !== 'updated' || e.action.type !== 'success') return
+    // A poll (the bell's count, reminders, the due chip: every minute) does
+    // not by itself rewrite the whole copy; it rides along with the next save
+    // something else causes, or the one when the tab is hidden.
+    if (isPoll(e.query)) return
     if (!timer) timer = setTimeout(save, WRITE_EVERY)
   })
   const onHide = () => {

@@ -12,7 +12,6 @@ import { ErrorState } from '@/shared/ui/states'
 import { SEARCH_MIN, useLeadCards, useLeadSearch, useSavedViews } from '@/features/crm/api'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawerById } from '@/features/crm/LeadDrawerById'
-import { GettingStarted } from '@/features/crm/GettingStarted'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
 import { closedOutcomeFor, inView, openingView, viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery, toSavedQuery } from '@/features/crm/views'
@@ -22,7 +21,7 @@ import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { DownloadButtons } from '@/features/enquiry-forms/parts'
-import { useOpenFollowUps } from '@/features/crm/FollowUpOnRow'
+import { boardScopeFor, useBoardFollowUps } from '@/features/crm/FollowUpOnRow'
 import { followUpBucket } from '@/features/crm/follow-ups'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
@@ -407,10 +406,6 @@ function Crm() {
           <SkeletonList rows={5} columns={4} />
         ) : active.isError ? (
           <ErrorState error={active.error} onRetry={() => void active.refetch()} />
-        ) : isEmptyStudio ? (
-          /* The checklist a studio needs once, on the only screen where it is
-             the most useful thing present: an empty one. */
-          <GettingStarted leads={allOpen} />
         ) : mode === 'pipeline' ? (
           <PipelineTab leads={rows} onOpen={setOpenLead} serverCounts={serverCounts} />
         ) : mode === 'board' ? (
@@ -644,9 +639,12 @@ function MoreLeadTools({ count }: { count: number }) {
  * (amber: the next thing to do).
  */
 function FollowUpsButton() {
-  const mine = useOpenFollowUps('mine')
-  const now = useMemo(() => new Date(), [mine.dataUpdatedAt])
-  const late = (mine.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
+  const { session } = useAuth()
+  // The same list, in the same scope, as the board this opens -- so "5 late"
+  // here is the board's Overdue column.
+  const list = useBoardFollowUps(boardScopeFor(session?.role))
+  const now = useMemo(() => new Date(), [list.dataUpdatedAt])
+  const late = (list.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
   return (
     <Link to="/follow-ups/board" className="inline-flex items-center gap-1.5 px-3 text-sm font-medium hover:bg-muted">
       <AlarmClock className="size-4" aria-hidden /> Follow-ups

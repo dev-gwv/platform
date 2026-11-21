@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bookmark, Check, Wallet } from 'lucide-react'
+import { Bookmark, Check, ChevronDown, Wallet } from 'lucide-react'
 import { cn } from '@/shared/ui/cn'
 import { Button } from '@/shared/ui/button'
 import { Input, Select } from '@/shared/ui/input'
@@ -28,6 +28,12 @@ export function BillingStep({
 }) {
   const inr = useINR()
   const patchPayment = (p: PaymentDraft) => patch({ payments: [p] })
+  // Amount, date, mode and reference are the advance; the rest waits under
+  // "More details" -- open from the start when a restored draft filled it.
+  const first = draft.payments[0]
+  const [more, setMore] = useState(
+    () => !!first && (first.status === 'pending' || first.is_gst || !!first.notes.trim() || !!first.description.trim()),
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,30 +96,45 @@ export function BillingStep({
                 <Field label="Reference">
                   <Input value={p.reference} onChange={(e) => set({ reference: e.target.value })} placeholder="UTR / cheque no." />
                 </Field>
-                <Field label="Status">
-                  <Select value={p.status} onChange={(e) => set({ status: e.target.value as 'paid' | 'pending' })}>
-                    <option value="paid">Paid</option>
-                    <option value="pending">Pending</option>
-                  </Select>
-                </Field>
-                <Field label="Description">
-                  <Input value={p.description} onChange={(e) => set({ description: e.target.value })} placeholder="Advance / booking amount" />
-                </Field>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={p.is_gst} onChange={(e) => set({ is_gst: e.target.checked })} />
-                  GST receipt
-                </label>
-                {p.is_gst && (
-                  <Field label="GST number">
-                    <Input value={p.gst_number} onChange={(e) => set({ gst_number: e.target.value })} placeholder="GSTIN" />
-                  </Field>
-                )}
               </div>
-              <div className="mt-3">
-                <Field label="Notes">
-                  <Input value={p.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Optional note" />
-                </Field>
-              </div>
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                aria-expanded={more}
+                onClick={() => setMore((v) => !v)}
+              >
+                More details
+                <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} aria-hidden />
+              </button>
+              {more && (
+                <>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Field label="Status">
+                      <Select value={p.status} onChange={(e) => set({ status: e.target.value as 'paid' | 'pending' })}>
+                        <option value="paid">Paid</option>
+                        <option value="pending">Pending</option>
+                      </Select>
+                    </Field>
+                    <Field label="Description">
+                      <Input value={p.description} onChange={(e) => set({ description: e.target.value })} placeholder="Advance / booking amount" />
+                    </Field>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={p.is_gst} onChange={(e) => set({ is_gst: e.target.checked })} />
+                      GST receipt
+                    </label>
+                    {p.is_gst && (
+                      <Field label="GST number">
+                        <Input value={p.gst_number} onChange={(e) => set({ gst_number: e.target.value })} placeholder="GSTIN" />
+                      </Field>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <Field label="Notes">
+                      <Input value={p.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Optional note" />
+                    </Field>
+                  </div>
+                </>
+              )}
             </div>
           )
         })()}

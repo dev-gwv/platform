@@ -1,9 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { Check, ClipboardPaste, Eye, EyeOff, Loader2, Plus, X } from 'lucide-react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useLocation } from '@tanstack/react-router'
+import { Check, ChevronDown, ClipboardPaste, Eye, EyeOff, Loader2, Plus, X } from 'lucide-react'
 import type { ProductionStage } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { useLearn } from '@/features/help/LearnCard'
 import { useFormDraft, DraftRestoredBanner } from '@/shared/hooks/use-form-draft'
+import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Select, Textarea } from '@/shared/ui/input'
@@ -52,6 +54,14 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   const { data: library } = useRoleLibrary()
   const calls = useBulkTeamCalls()
   const learn = useLearn('team-bulk', { countClose: true })
+  // In setup the table is only who they are: access and in-house/freelance
+  // keep their defaults, and the extras wait behind "More options".
+  const { search } = useLocation()
+  const setup = (search as Record<string, unknown>).from === 'setup'
+  const onPhone = useIsMobile()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const showExtras = !setup || moreOpen
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const [rows, setRows] = useState<BulkRow[]>(() => Array.from({ length: START_ROWS }, newRow))
   const [showErrors, setShowErrors] = useState(false)
@@ -69,8 +79,11 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   // which can hold them): those are typed again.
   const typedRows = rows
     .filter((r) => r.status !== 'added' && !isBlankRow(r))
-    .map(({ name, phone, email, role, engagement, roleKeys }) => ({ name, phone, email, role, engagement, roleKeys }))
-  const draft = useFormDraft('team-bulk-add', typedRows, (v) => setRows(v.map((r) => ({ ...newRow(), ...r }))))
+    .map(({ name, phone, login, email, role, engagement, roleKeys }) => ({ name, phone, login, email, role, engagement, roleKeys }))
+  // A draft from before the tick existed: an email meant a login then.
+  const draft = useFormDraft('team-bulk-add', typedRows, (v) =>
+    setRows(v.map((r) => ({ ...newRow(), ...r, login: (r as { login?: boolean }).login ?? !!r.email.trim() }))),
+  )
 
   // Library roles the studio has not added yet would be created on send --
   // which only the owner may do, so anyone else picks from the studio's own.
@@ -115,8 +128,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   }
 
   function applySharedPassword() {
-    if (sharedPassword.length < 6) {
-      toast.error('Use at least 6 characters.')
+    if (sharedPassword.length < 8) {
+      toast.error('Use at least 8 characters.')
       return
     }
     setRows((prev) => prev.map((r) => (r.status === 'added' ? r : { ...r, password: sharedPassword })))
@@ -132,7 +145,14 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
     if (errors.size > 0) {
       setShowErrors(true)
       learn.refused()
-      toast.error(`${plural(errors.size, 'row')} need${errors.size === 1 ? 's' : ''} fixing first — see the red fields.`)
+      toast.error(`${plural(errors.size, 'person needs', 'people need')} fixing first — the first one is picked for you.`)
+      // Take them to the first field to fix, so a phone never hides it.
+      requestAnimationFrame(() => {
+        const bad = tableRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+        if (!bad) return
+        bad.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        bad.focus({ preventScroll: true })
+      })
       return
     }
 
@@ -213,6 +233,17 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   }
 
   const pickingRow = rows.find((r) => r.key === picking) ?? null
+  const rowProps = (r: BulkRow, i: number): RowProps => ({
+    index: i,
+    row: r,
+    errors: showErrors ? errors.get(r.key) : undefined,
+    locked: running || r.status === 'added',
+    showPasswords,
+    roleByKey,
+    onEdit: (next: Partial<BulkRow>) => edit(r.key, next),
+    onPickRoles: () => setPicking(r.key),
+    onRemove: () => removeRow(r.key),
+  })
 
   return (
     <div className="mx-auto w-full max-w-7xl">
@@ -220,7 +251,8 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Bulk add team</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            One row per person. Leave email blank for anyone who won&apos;t sign in — they can still be booked on shoots. Any email works — it is just their username.
+            One {onPhone ? 'card' : 'row'} per person. Tick <strong className="font-medium text-foreground">Give a login</strong> only for
+            whoever will sign in — everyone can still be booked on shoots.
           </p>
         </div>
         <Button variant="ghost" onClick={onCancel} disabled={running}>
@@ -244,35 +276,49 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setPasteOpen((v) => !v)} disabled={running}>
-          <ClipboardPaste /> Paste from a spreadsheet
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setShowPasswords((v) => !v)}>
-          {showPasswords ? <EyeOff /> : <Eye />}
-          {showPasswords ? 'Hide passwords' : 'Show passwords'}
-        </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <label htmlFor="bulk-shared-password" className="text-sm text-muted-foreground">
-            Same password for everyone
-          </label>
-          <Input
-            id="bulk-shared-password"
-            type={showPasswords ? 'text' : 'password'}
-            autoComplete="new-password"
-            value={sharedPassword}
-            onChange={(e) => setSharedPassword(e.target.value)}
-            placeholder="6+ characters"
-            className="h-8 w-40"
-            disabled={running}
-          />
-          <Button variant="outline" size="sm" onClick={applySharedPassword} disabled={running || !sharedPassword}>
-            Apply
-          </Button>
-        </div>
-      </div>
+      {setup && (
+        <button
+          type="button"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((v) => !v)}
+        >
+          More options
+          <ChevronDown className={cn('size-4 transition-transform', moreOpen && 'rotate-180')} aria-hidden />
+        </button>
+      )}
 
-      {pasteOpen && (
+      {showExtras && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPasteOpen((v) => !v)} disabled={running}>
+            <ClipboardPaste /> Paste from a spreadsheet
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowPasswords((v) => !v)}>
+            {showPasswords ? <EyeOff /> : <Eye />}
+            {showPasswords ? 'Hide passwords' : 'Show passwords'}
+          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <label htmlFor="bulk-shared-password" className="text-sm text-muted-foreground">
+              Same password for everyone
+            </label>
+            <Input
+              id="bulk-shared-password"
+              type={showPasswords ? 'text' : 'password'}
+              autoComplete="new-password"
+              value={sharedPassword}
+              onChange={(e) => setSharedPassword(e.target.value)}
+              placeholder="8+ characters"
+              className="h-8 w-40"
+              disabled={running}
+            />
+            <Button variant="outline" size="sm" onClick={applySharedPassword} disabled={running || !sharedPassword}>
+              Apply
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {pasteOpen && showExtras && (
         <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
           <p className="text-sm font-medium">Copy the rows out of Excel or Google Sheets and paste them here.</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -309,54 +355,59 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
         </p>
       )}
 
-      <div className="table-wrap mt-3 overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
-            <tr>
-              <th className="w-8 px-2 py-2 text-center font-medium">#</th>
-              <th className="min-w-40 px-2 py-2 font-medium">Name *</th>
-              <th className="min-w-36 px-2 py-2 font-medium">Phone *</th>
-              <th className="min-w-48 px-2 py-2 font-medium">Email</th>
-              <th className="min-w-36 px-2 py-2 font-medium">Password</th>
-              <th className="min-w-40 px-2 py-2 font-medium">Job roles</th>
-              <th className="min-w-32 px-2 py-2 font-medium">Can see</th>
-              <th className="min-w-28 px-2 py-2 font-medium">Works as</th>
-              <th className="w-20 px-2 py-2">
-                <span className="sr-only">Row status</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+      <div ref={tableRef}>
+        {onPhone ? (
+          <ol className="mt-3 flex flex-col gap-3">
             {rows.map((r, i) => (
-              <Row
-                key={r.key}
-                index={i}
-                row={r}
-                errors={showErrors ? errors.get(r.key) : undefined}
-                locked={running || r.status === 'added'}
-                showPasswords={showPasswords}
-                roleByKey={roleByKey}
-                onEdit={(next) => edit(r.key, next)}
-                onPickRoles={() => setPicking(r.key)}
-                onRemove={() => removeRow(r.key)}
-              />
+              <PersonCard key={r.key} {...rowProps(r, i)} />
             ))}
-          </tbody>
-        </table>
+          </ol>
+        ) : (
+          <div className="table-wrap mt-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-left text-muted-foreground">
+                <tr>
+                  <th className="w-8 px-2 py-2 text-center font-medium">#</th>
+                  <th className="min-w-40 px-2 py-2 font-medium">Name *</th>
+                  <th className="min-w-36 px-2 py-2 font-medium">Mobile *</th>
+                  <th className="min-w-56 px-2 py-2 font-medium">Give a login?</th>
+                  <th className="min-w-40 px-2 py-2 font-medium">Job roles</th>
+                  {!setup && <th className="min-w-32 px-2 py-2 font-medium">Can see</th>}
+                  {!setup && <th className="min-w-28 px-2 py-2 font-medium">Works as</th>}
+                  <th className="w-20 px-2 py-2">
+                    <span className="sr-only">Row status</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <Row key={r.key} {...rowProps(r, i)} simple={setup} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      <div className="mt-3">
         <Button variant="outline" size="sm" onClick={() => setRows((prev) => [...prev, newRow()])} disabled={running}>
-          <Plus /> Add row
+          <Plus /> {onPhone ? 'Add another person' : 'Add row'}
         </Button>
-        <p className="ml-auto text-sm text-muted-foreground" aria-live="polite">
+      </div>
+
+      {/* Sticky, so the button is in reach on a phone; the help bubble keeps its lane clear of it. */}
+      <div
+        data-sticky-actions
+        className="sticky bottom-0 z-20 mt-3 flex flex-wrap items-center gap-3 border-t border-border bg-background/95 py-3 pl-1 backdrop-blur"
+      >
+        <p className="text-sm text-muted-foreground" aria-live="polite">
           {running
             ? `Adding ${progress} of ${todo.length}…`
             : todo.length === 0
               ? 'Nobody typed in yet'
               : `${plural(todo.length, 'person', 'people')} ready`}
         </p>
-        <Button onClick={() => void submit()} disabled={running || todo.length === 0}>
+        <Button className="ml-auto" onClick={() => void submit()} disabled={running || todo.length === 0}>
           {running ? <Loader2 className="animate-spin" /> : <Check />}
           {retrying ? `Retry ${plural(todo.length, 'person', 'people')}` : `Add ${plural(todo.length, 'person', 'people')}`}
         </Button>
@@ -384,17 +435,7 @@ export function BulkAddMembers({ onDone, onCancel }: { onDone: (added: number) =
   )
 }
 
-function Row({
-  index,
-  row,
-  errors,
-  locked,
-  showPasswords,
-  roleByKey,
-  onEdit,
-  onPickRoles,
-  onRemove,
-}: {
+interface RowProps {
   index: number
   row: BulkRow
   errors: Partial<Record<RowField, string>> | undefined
@@ -404,17 +445,192 @@ function Row({
   onEdit: (next: Partial<BulkRow>) => void
   onPickRoles: () => void
   onRemove: () => void
-}) {
-  const powers = useTeamPowers()
-  const noLogin = !row.email.trim()
-  const picked = row.roleKeys.map((k) => roleByKey.get(k)).filter((r): r is PickableRole => !!r)
+}
 
-  const cell = (field: RowField, input: ReactNode) => (
-    <td className="px-2 py-1.5 align-top">
-      {input}
-      {errors?.[field] && <p className="mt-0.5 text-xs text-destructive">{errors[field]}</p>}
-    </td>
+const FieldError = ({ msg }: { msg: string | undefined }) => (msg ? <p className="mt-0.5 text-xs text-destructive">{msg}</p> : null)
+
+/**
+ * "Give a login?" then, only when ticked, the email (their username) and the
+ * password -- so typing an email is never a surprise "password needed".
+ */
+function LoginFields({ index, row, errors, locked, showPasswords, onEdit }: RowProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="inline-flex min-h-8 cursor-pointer flex-wrap items-center gap-x-2 text-sm">
+        <input
+          type="checkbox"
+          className="size-4 accent-primary"
+          checked={row.login}
+          onChange={(e) => onEdit({ login: e.target.checked })}
+          disabled={locked}
+          aria-label={`Row ${index + 1} give a login`}
+        />
+        Give a login
+        {!row.login && <span className="text-xs text-muted-foreground">· no sign-in, still bookable</span>}
+      </label>
+      {row.login && (
+        <>
+          <div>
+            <Input
+              className="h-8"
+              type="email"
+              value={row.email}
+              onChange={(e) => onEdit({ email: e.target.value })}
+              placeholder="Email (their username)"
+              aria-label={`Row ${index + 1} email`}
+              aria-invalid={!!errors?.email}
+              disabled={locked}
+            />
+            <FieldError msg={errors?.email} />
+          </div>
+          <div>
+            <Input
+              className="h-8"
+              type={showPasswords ? 'text' : 'password'}
+              autoComplete="new-password"
+              value={row.password}
+              onChange={(e) => onEdit({ password: e.target.value })}
+              placeholder="Password, 8+ characters"
+              aria-label={`Row ${index + 1} password`}
+              aria-invalid={!!errors?.password}
+              disabled={locked}
+            />
+            <FieldError msg={errors?.password} />
+          </div>
+        </>
+      )}
+    </div>
   )
+}
+
+function JobRolesButton({ index, row, locked, roleByKey, onPickRoles }: RowProps) {
+  const picked = row.roleKeys.map((k) => roleByKey.get(k)).filter((r): r is PickableRole => !!r)
+  return (
+    /* A box you can see: amber and dashed until a role is picked, then the role in its stage colour. */
+    <button
+      type="button"
+      onClick={onPickRoles}
+      disabled={locked}
+      className={cn(
+        'flex h-8 w-full items-center gap-1 overflow-hidden rounded-md border px-1.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        picked.length === 0
+          ? 'border-dashed border-tone-amber/70 bg-tone-amber-soft/40 font-medium text-tone-amber hover:border-tone-amber'
+          : 'border-input bg-card hover:border-primary/40',
+      )}
+      aria-label={`Row ${index + 1} job roles`}
+    >
+      {picked.length === 0 ? (
+        <span className="flex items-center gap-1 px-1">
+          <Plus className="size-3.5" aria-hidden /> Job roles
+        </span>
+      ) : (
+        <>
+          <span className={cn('min-w-0 truncate rounded-full border px-2 py-0.5 text-xs font-medium', TONE_CHIP_STATIC[STAGE_TONE[picked[0]!.stage]])}>
+            {picked[0]!.type_name}
+          </span>
+          {picked.length > 1 && (
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">+{picked.length - 1}</span>
+          )}
+        </>
+      )}
+    </button>
+  )
+}
+
+function RowStatus({ index, row, locked, onRemove }: RowProps) {
+  if (row.status === 'added') {
+    return (
+      <span className="inline-flex h-8 items-center gap-1 text-xs font-medium text-success">
+        <Check className="size-3.5" /> Added
+      </span>
+    )
+  }
+  if (row.status === 'saving') {
+    return (
+      <span className="inline-flex h-8 items-center">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="sr-only">Adding</span>
+      </span>
+    )
+  }
+  return (
+    <Button size="sm" variant="ghost" onClick={onRemove} disabled={locked} title="Remove this person">
+      <X />
+      <span className="sr-only">Remove row {index + 1}</span>
+    </Button>
+  )
+}
+
+function NameInput({ index, row, errors, locked, onEdit }: RowProps) {
+  return (
+    <>
+      <Input
+        className="h-8"
+        value={row.name}
+        onChange={(e) => onEdit({ name: e.target.value })}
+        placeholder="Full name"
+        aria-label={`Row ${index + 1} name`}
+        aria-invalid={!!errors?.name}
+        disabled={locked}
+      />
+      <FieldError msg={errors?.name} />
+    </>
+  )
+}
+
+function PhoneInput({ index, row, errors, locked, onEdit }: RowProps) {
+  return (
+    <>
+      <Input
+        className="h-8"
+        inputMode="tel"
+        value={row.phone}
+        onChange={(e) => onEdit({ phone: e.target.value })}
+        placeholder="Mobile"
+        aria-label={`Row ${index + 1} phone`}
+        aria-invalid={!!errors?.phone}
+        disabled={locked}
+      />
+      <FieldError msg={errors?.phone} />
+    </>
+  )
+}
+
+/** A phone: one card per person instead of a table that scrolls sideways. */
+function PersonCard(props: RowProps) {
+  const { index, row } = props
+  return (
+    <li
+      className={cn(
+        'rounded-xl border border-border bg-card p-3',
+        row.status === 'added' && 'border-success/40 bg-success/5',
+        row.status === 'failed' && 'border-destructive/40 bg-destructive/5',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-muted-foreground">Person {index + 1}</span>
+        <RowStatus {...props} />
+      </div>
+      <div className="mt-1 flex flex-col gap-2">
+        <div>
+          <NameInput {...props} />
+        </div>
+        <div>
+          <PhoneInput {...props} />
+        </div>
+        <JobRolesButton {...props} />
+        <LoginFields {...props} />
+      </div>
+      {row.status === 'failed' && row.error && <p className="mt-2 text-xs text-destructive">{row.error}</p>}
+    </li>
+  )
+}
+
+function Row(props: RowProps & { simple: boolean }) {
+  const { index, row, locked, onEdit, simple } = props
+  const powers = useTeamPowers()
+
+  const cell = (input: ReactNode) => <td className="px-2 py-1.5 align-top">{input}</td>
 
   return (
     <>
@@ -426,152 +642,49 @@ function Row({
         )}
       >
         <td className="px-2 py-1.5 text-center align-top text-xs leading-8 text-muted-foreground">{index + 1}</td>
-        {cell(
-          'name',
-          <Input
-            className="h-8"
-            value={row.name}
-            onChange={(e) => onEdit({ name: e.target.value })}
-            placeholder="Full name"
-            aria-label={`Row ${index + 1} name`}
-            aria-invalid={!!errors?.name}
-            disabled={locked}
-          />,
-        )}
-        {cell(
-          'phone',
-          <Input
-            className="h-8"
-            inputMode="tel"
-            value={row.phone}
-            onChange={(e) => onEdit({ phone: e.target.value })}
-            placeholder="Mobile"
-            aria-label={`Row ${index + 1} phone`}
-            aria-invalid={!!errors?.phone}
-            disabled={locked}
-          />,
-        )}
-        {cell(
-          'email',
-          <Input
-            className="h-8"
-            type="email"
-            value={row.email}
-            onChange={(e) => onEdit({ email: e.target.value })}
-            placeholder="Blank = no login"
-            aria-label={`Row ${index + 1} email`}
-            aria-invalid={!!errors?.email}
-            disabled={locked}
-          />,
-        )}
-        {cell(
-          'password',
-          <Input
-            className="h-8"
-            type={showPasswords ? 'text' : 'password'}
-            autoComplete="new-password"
-            value={noLogin ? '' : row.password}
-            onChange={(e) => onEdit({ password: e.target.value })}
-            placeholder={noLogin ? 'Not needed' : '6+ characters'}
-            aria-label={`Row ${index + 1} password`}
-            aria-invalid={!!errors?.password}
-            disabled={locked || noLogin}
-          />,
-        )}
-        <td className="px-2 py-1.5 align-top">
-          {/* A box you can see: amber and dashed until a role is picked, then the role in its stage colour. */}
-          <button
-            type="button"
-            onClick={onPickRoles}
-            disabled={locked}
-            className={cn(
-              'flex h-8 w-full items-center gap-1 overflow-hidden rounded-md border px-1.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-              picked.length === 0
-                ? 'border-dashed border-tone-amber/70 bg-tone-amber-soft/40 font-medium text-tone-amber hover:border-tone-amber'
-                : 'border-input bg-card hover:border-primary/40',
-            )}
-            aria-label={`Row ${index + 1} job roles`}
-          >
-            {picked.length === 0 ? (
-              <span className="flex items-center gap-1 px-1">
-                <Plus className="size-3.5" aria-hidden /> Job roles
-              </span>
-            ) : (
-              <>
-                <span
-                  className={cn(
-                    'min-w-0 truncate rounded-full border px-2 py-0.5 text-xs font-medium',
-                    TONE_CHIP_STATIC[STAGE_TONE[picked[0]!.stage]],
-                  )}
-                >
-                  {picked[0]!.type_name}
-                </span>
-                {picked.length > 1 && (
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                    +{picked.length - 1}
-                  </span>
-                )}
-              </>
-            )}
-          </button>
-        </td>
-        <td className="px-2 py-1.5 align-top">
-          <Select
-            className="h-8"
-            value={row.role}
-            onChange={(e) => onEdit({ role: e.target.value as BulkRow['role'] })}
-            aria-label={`Row ${index + 1} can see`}
-            disabled={locked}
-          >
-            {(['employee', 'manager', 'admin'] as const)
-              .filter((r) => powers.mayGrant(r) || r === row.role)
-              .map((r) => (
-                <option key={r} value={r} disabled={!powers.mayGrant(r)}>
-                  {CAN_SEE_LABEL[r]}
-                </option>
-              ))}
-          </Select>
-        </td>
-        <td className="px-2 py-1.5 align-top">
-          <Select
-            className="h-8"
-            value={row.engagement}
-            onChange={(e) => onEdit({ engagement: e.target.value as BulkRow['engagement'] })}
-            aria-label={`Row ${index + 1} works as`}
-            disabled={locked}
-          >
-            <option value="in_house">{WORKS_AS_LABEL.in_house}</option>
-            <option value="freelancer">{WORKS_AS_LABEL.freelancer}</option>
-          </Select>
-        </td>
-        <td className="px-2 py-1.5 text-right align-top">
-          {row.status === 'added' ? (
-            <span className="inline-flex h-8 items-center gap-1 text-xs font-medium text-success">
-              <Check className="size-3.5" /> Added
-            </span>
-          ) : row.status === 'saving' ? (
-            <span className="inline-flex h-8 items-center">
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              <span className="sr-only">Adding</span>
-            </span>
-          ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onRemove}
+        {cell(<NameInput {...props} />)}
+        {cell(<PhoneInput {...props} />)}
+        {cell(<LoginFields {...props} />)}
+        {cell(<JobRolesButton {...props} />)}
+        {!simple &&
+          cell(
+            <Select
+              className="h-8"
+              value={row.role}
+              onChange={(e) => onEdit({ role: e.target.value as BulkRow['role'] })}
+              aria-label={`Row ${index + 1} can see`}
               disabled={locked}
-              title="Remove this row"
             >
-              <X />
-              <span className="sr-only">Remove row {index + 1}</span>
-            </Button>
+              {(['employee', 'manager', 'admin'] as const)
+                .filter((r) => powers.mayGrant(r) || r === row.role)
+                .map((r) => (
+                  <option key={r} value={r} disabled={!powers.mayGrant(r)}>
+                    {CAN_SEE_LABEL[r]}
+                  </option>
+                ))}
+            </Select>,
           )}
+        {!simple &&
+          cell(
+            <Select
+              className="h-8"
+              value={row.engagement}
+              onChange={(e) => onEdit({ engagement: e.target.value as BulkRow['engagement'] })}
+              aria-label={`Row ${index + 1} works as`}
+              disabled={locked}
+            >
+              <option value="in_house">{WORKS_AS_LABEL.in_house}</option>
+              <option value="freelancer">{WORKS_AS_LABEL.freelancer}</option>
+            </Select>,
+          )}
+        <td className="px-2 py-1.5 text-right align-top">
+          <RowStatus {...props} />
         </td>
       </tr>
       {row.status === 'failed' && row.error && (
         <tr className="bg-destructive/5">
           <td />
-          <td colSpan={8} className="px-2 pb-2 text-xs text-destructive">
+          <td colSpan={simple ? 5 : 7} className="px-2 pb-2 text-xs text-destructive">
             {row.error}
           </td>
         </tr>

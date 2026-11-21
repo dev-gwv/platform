@@ -22,9 +22,9 @@ function expiryLabel(iso: string, expired: boolean): string {
 }
 
 /**
- * Invitations that have been sent and not yet accepted. Owner-only, and shown
- * even when empty: a studio that just invited someone should see where that
- * went, and an empty panel is the answer to "did it send?".
+ * Invitations that have been sent and not yet accepted. Owner-only, and only
+ * while there is one (owner, 20 Nov: an empty "Pending invitations" card was
+ * clutter); a sent invite shows here at once, which still answers "did it send?".
  */
 export function InvitationsPanel() {
   const powers = useTeamPowers()
@@ -34,6 +34,8 @@ export function InvitationsPanel() {
   const update = useUpdateInvitation()
   const confirm = useConfirm()
   const [editing, setEditing] = useState<{ id: string; name: string; role: AssignableRole } | null>(null)
+
+  if (isLoading || !data || data.length === 0) return null
 
   async function onRevoke(id: string, email: string) {
     const yes = await confirm({
@@ -124,8 +126,12 @@ export function InvitationsPanel() {
                       onClick={() =>
                         resend.mutate(i.id, {
                           onSuccess: (res) => {
-                            void navigator.clipboard.writeText(res.invite_link)
-                            toast.success('New link sent and copied to your clipboard')
+                            if (res.invite_link) {
+                              void navigator.clipboard.writeText(res.invite_link)
+                              toast.success('New link sent and copied to your clipboard')
+                            } else {
+                              toast.success('We emailed the invitation again.')
+                            }
                           },
                         })
                       }

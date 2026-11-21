@@ -31,7 +31,7 @@ import { Button } from '@/shared/ui/button'
 import { Select } from '@/shared/ui/input'
 import { humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
-import { useProfitAndLoss } from '@/features/financials/api'
+import { useProjectProfit } from '@/features/financials/api'
 import { collectedLine, marginOf, toCollectLine } from '@/features/projects/money-lines'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { useDeleteProject, useProject, useUpdateProject } from '@/features/projects/api'
@@ -57,7 +57,7 @@ import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { ProjectWeddingQrLine } from '@/features/enquiry-forms/WeddingQr'
 import { WishesTab } from '@/features/wishes/WishesTab'
 import { WatchHow } from '@/features/help/WatchHow'
-import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
+import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, groupOf, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
 import type { JourneyKey } from '@/features/projects/journey'
@@ -127,7 +127,7 @@ function ProjectDetail() {
   // the project is not enough (a Project Manager is "no money").
   const seesMoney = access.hasModule('billing') || access.hasModule('money')
   const seesProfit = seesMoney && access.hasModule('financials')
-  const pnl = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: id }, seesProfit)
+  const profit = useProjectProfit(id, seesProfit)
   // Hand-ins waiting for a decision, counted on the "Work to review" chip.
   const handIns = useProjectWorkSubmissions(canReviewWork ? id : '')
   const waiting = (handIns.data ?? []).filter((s) => s.status === 'submitted').length
@@ -225,7 +225,7 @@ function ProjectDetail() {
   const balance = money.due
   // The same booked profit as the Finance tab's card and Billing > Profit &
   // Loss, so the page never shows two different margins.
-  const margin = seesProfit ? marginOf(pnl.data?.projects[0]) : null
+  const margin = seesProfit ? marginOf(profit.data) : null
   const StatusIcon = STATUS_ICON[data.status]
 
   async function onDelete() {
@@ -375,7 +375,9 @@ function ProjectDetail() {
         )}
       </div>
 
-      {seesMoney && (
+      {/* The money boxes belong to the Overview and Finance: on Shoots or
+          Work they pushed the day's work below the fold (audit, 21 Nov). */}
+      {seesMoney && (groupOf(tab) === 'overview' || groupOf(tab) === 'finance') && (
         <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3')}>
           {/* Two to a row on a phone (the value across the top when there is no
               margin box): three stacked boxes pushed the tabs below the fold
@@ -389,7 +391,8 @@ function ProjectDetail() {
             sub={toCollectLine(money)}
             tone={balance > 0 ? 'warning' : 'success'}
             action={
-              canEdit && balance > 0 ? (
+              // Billing has its own Record payment: one button per screen.
+              canEdit && balance > 0 && tab !== 'billing' ? (
                 <button
                   type="button"
                   onClick={recordPayment}

@@ -33,6 +33,7 @@ import { PageBackdrop } from '@/shared/brand/PageBackdrop'
 import { DesignerCredit } from '@/shared/ui/designer-credit'
 import { SetupVideosLink } from '@/features/onboarding/SetupVideosLink'
 import { Wordmark } from '@/shared/ui/wordmark'
+import { safeRedirect } from '@/shared/auth/safe-redirect'
 
 type Mode = 'signin' | 'register' | 'forgot'
 const ok = z.object({ ok: z.boolean() })
@@ -41,7 +42,7 @@ const ok = z.object({ ok: z.boolean() })
 type FieldName = 'company_name' | 'admin_name' | 'email' | 'phone' | 'password' | 'confirm_password'
 
 const LABELS: Record<FieldName, string> = {
-  company_name: 'Company name',
+  company_name: 'Studio name',
   admin_name: 'Your name',
   email: 'Email',
   phone: 'Phone',
@@ -178,8 +179,9 @@ export function LoginPage() {
    * ?redirect=/leads), and a new studio starts at step 1 of setup.
    */
   function goNext(s: SessionState | null = null, fresh = false) {
-    if (!fresh && redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
-      window.location.assign(redirect)
+    const target = fresh ? null : safeRedirect(redirect, window.location.origin)
+    if (target) {
+      window.location.assign(target)
       return
     }
     const landing = setupLanding(s)
@@ -365,7 +367,8 @@ export function LoginPage() {
         * to trust this with their client list, furniture that moves when you
         * approach it reads as a demo rather than as a product.
         */}
-      <div className="relative w-full max-w-[27rem]">
+      {/* Sign-up asks six things, so it is wide (owner, 20 Nov: "it has to be wide"); sign-in stays narrow. */}
+      <div className={`relative w-full ${isRegister && !resetSentTo && !pendingEmail ? 'max-w-[46rem]' : 'max-w-[27rem]'}`}>
         <h1 className="mb-7 text-center text-2xl font-bold tracking-tight">
           {/*
             * The raw brand amber (#f2a618) on a near-white ground fails
@@ -460,7 +463,7 @@ export function LoginPage() {
                     {isForgot
                       ? "Enter your email and we'll send a reset link"
                       : isRegister
-                        ? 'Start your studio workspace'
+                        ? 'Start your free trial'
                         : 'Sign in to your studio workspace'}
                   </p>
                 </div>
@@ -470,7 +473,7 @@ export function LoginPage() {
                 <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
                   {isRegister && (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <Field label="Company name" name="company_name" error={errors.company_name}>
+                      <Field label="Studio name" name="company_name" error={errors.company_name}>
                         {(p) => (
                           <Input
                             {...p}
@@ -497,6 +500,7 @@ export function LoginPage() {
                     </div>
                   )}
 
+                  <div className={isRegister ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : 'flex flex-col gap-4'}>
                   <Field label="Email" name="email" error={errors.email}>
                     {(p) => (
                       <Input
@@ -533,6 +537,7 @@ export function LoginPage() {
                       )}
                     </Field>
                   )}
+                  </div>
 
                   {isRegister ? (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -547,7 +552,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="new-password"
-                            placeholder="••••••••"
+                            placeholder="8+ characters"
                             value={password}
                             onChange={edit('password', setPassword)}
                             onBlur={(e) => validateField('password', e.target.value)}
@@ -565,7 +570,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="new-password"
-                            placeholder="••••••••"
+                            placeholder="Type it again"
                             value={confirmPassword}
                             onChange={edit('confirm_password', setConfirmPassword)}
                             onBlur={() => {
@@ -604,7 +609,7 @@ export function LoginPage() {
                             {...p}
                             type="password"
                             autoComplete="current-password"
-                            placeholder="••••••••"
+                            placeholder="Your password"
                             value={password}
                             onChange={edit('password', setPassword)}
                             required

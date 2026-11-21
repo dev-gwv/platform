@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { routeLabel } from '../lib/route-label'
 import { HTTPException } from 'hono/http-exception'
 import type { AppEnv } from '../context'
 import { describeError, log } from '../lib/log'
@@ -26,18 +27,20 @@ export function errorHandler(err: Error, c: Context<AppEnv>): Response {
   // opaque message + the id (so support can find the log).
   const correlationId = currentRequestId(c)
   const d = describeError(err)
+  // The route pattern, never the raw path: public links carry their token in it.
+  const route = routeLabel(c)
   log.error(
     {
       requestId: correlationId,
       method: c.req.method,
-      path: c.req.path,
+      path: route,
       code: d.code,
       message: d.message,
       stack: d.stack,
     },
     'unhandled error',
   )
-  reportError(c.env, err, { requestId: correlationId, method: c.req.method, path: c.req.path })
+  reportError(c.env, err, { requestId: correlationId, method: c.req.method, path: route })
   c.header('X-Correlation-Id', correlationId)
   return c.json({ error: 'Something went wrong. Please try again.', correlation_id: correlationId }, 500)
 }

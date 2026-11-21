@@ -10,8 +10,12 @@ import { ApiError } from '../api/client'
  * off. When it IS on, the beacon in `report.ts` stands down — see main.tsx —
  * because the two would report the same crash twice.
  */
-/** Default on: a crash you can watch beats a crash you have to reproduce. */
-const REPLAY_ENABLED = (import.meta.env.VITE_SENTRY_REPLAY as string | undefined) !== '0'
+/**
+ * Default off (speed audit, 21 Nov): the recorder took 30-50% of the script
+ * time of every click. Set VITE_SENTRY_REPLAY=1 at build time to bring it back
+ * for a while; anything else leaves it, and its ~40 kB, out of the bundle.
+ */
+const REPLAY_ENABLED = (import.meta.env.VITE_SENTRY_REPLAY as string | undefined) === '1'
 
 export function initSentry(router: unknown): boolean {
   if (!config.sentryDsn) return false
@@ -34,9 +38,10 @@ export function initSentry(router: unknown): boolean {
       //   no DSN at all ....  7 kB  (the SDK tree-shakes away)
       //   DSN, no replay ... 55 kB
       //   DSN + replay ..... 96 kB
-      // so the recorder is ~40 kB. The flag is read from import.meta.env, so
-      // setting VITE_SENTRY_REPLAY=0 does not merely skip the integration —
-      // Vite folds the constant and the recorder leaves the bundle.
+      // so the recorder is ~40 kB, and it observes every DOM change, which
+      // cost 30-50% of the script time of a click. Off unless the build sets
+      // VITE_SENTRY_REPLAY=1; the flag is read from import.meta.env, so Vite
+      // folds the constant and the recorder is not even in the bundle.
       ...(REPLAY_ENABLED
         ? [Sentry.replayIntegration({ maskAllText: true, maskAllInputs: true, blockAllMedia: true })]
         : []),
@@ -48,8 +53,9 @@ export function initSentry(router: unknown): boolean {
     ],
 
     // Slower than the API's default on purpose: a studio's browser makes far
-    // fewer transactions than the API serves requests.
-    tracesSampleRate: config.environment === 'production' ? 0.2 : 1,
+    // fewer transactions than the API serves requests, and each traced page
+    // load costs the browser time too. One in twenty is plenty to rank pages.
+    tracesSampleRate: config.environment === 'production' ? 0.05 : 1,
 
     // Connects the browser transaction to the API's. Scoped to our own API
     // origin so the sentry-trace/baggage headers are never attached to a

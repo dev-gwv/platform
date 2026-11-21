@@ -28,6 +28,7 @@ import { FindLoginDialog } from '@/features/platform/FindLoginDialog'
 import { Segmented } from '@/shared/ui/segmented'
 import { TONE_CHIP } from '@/shared/ui/tones'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { csvCell } from '@/shared/ui/csv'
 
 const STATUS_TONE: Record<AccessStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   active: 'success',
@@ -41,12 +42,8 @@ const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 const fmtIso = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : '')
 
-function csvEscape(v: unknown): string {
-  if (v == null) return ''
-  const s = String(v)
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
-}
+/** Quoted and defused (a cell starting = + - @ stays text), from the one CSV rule. */
+const csvEscape = csvCell
 
 /** The old board's export: one line per studio, new app and old app alike. */
 function downloadAccessCsv(rows: AccessRow[], act: Map<string, StudioActivity>, name = 'studio-access-report') {

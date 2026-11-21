@@ -56,6 +56,7 @@ export async function deliver(env: Env, mail: Outgoing, meta: { kind: string; co
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...mail, from: mail.from ?? env.EMAIL_FROM }),
       })
@@ -322,6 +323,8 @@ export async function sendClientDocEmail(
   link: string,
   intro: string,
   brand?: StudioBrand | null,
+  /** The sending studio, so the send counts against its daily ceiling (email-cap.ts). */
+  companyId?: string | null,
 ): Promise<{ status: 'sent' | 'provider_missing' | 'failed'; error?: string; id?: string; url: string }> {
   if (!env.RESEND_API_KEY) return { status: 'provider_missing', url: link }
   if (!to) return { status: 'failed', error: 'Client email not found for this project.', url: link }
@@ -349,7 +352,7 @@ export async function sendClientDocEmail(
         brand: brand ?? undefined,
       }),
     },
-    { kind: 'client_doc' },
+    { kind: 'client_doc', companyId: companyId ?? null },
   )
   return { ...r, url: link }
 }
@@ -425,6 +428,8 @@ export async function sendTeamTermsEmail(
   to: string,
   link: string,
   about: { companyName: string; shootName: string | null; title: string; mustSign: boolean },
+  /** The sending studio, so the send counts against its daily ceiling (email-cap.ts). */
+  companyId?: string | null,
 ): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false
   const forShoot = about.shootName ? ` for ${about.shootName}` : ''
@@ -444,7 +449,7 @@ export async function sendTeamTermsEmail(
           footer: 'If you were not expecting this, you can ignore this email.',
         }),
     },
-    { kind: 'team_terms' },
+    { kind: 'team_terms', companyId: companyId ?? null },
   )
   return r.status === 'sent'
 }

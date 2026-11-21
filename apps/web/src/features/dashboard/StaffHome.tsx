@@ -114,7 +114,7 @@ export function StaffHome() {
               {day.next.slice(0, 8).map((i) => (
                 <li key={`${i.kind}:${i.id}`} className="flex items-center gap-2 text-sm">
                   <KindIcon item={i} size="sm" />
-                  <span className="min-w-0 flex-1 truncate">{i.title}</span>
+                  <span className="line-clamp-2 min-w-0 flex-1 break-words">{i.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">{i.note}</span>
                 </li>
               ))}
@@ -181,7 +181,8 @@ function TodayRow({ item }: { item: TodayItem }) {
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       <KindIcon item={item} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{item.title}</p>
+        {/* Two lines, then cut: a long edit name was cut to nothing on a phone. */}
+        <p className="line-clamp-2 break-words text-sm font-medium">{item.title}</p>
         <p className={cn('text-xs', item.late ? 'font-medium text-warning' : 'text-muted-foreground')}>
           {item.note}
           {item.kind === 'shoot' && item.slot?.location ? ` · ${item.slot.location}` : ''}

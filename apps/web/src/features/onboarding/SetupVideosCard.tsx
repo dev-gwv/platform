@@ -13,7 +13,6 @@ import { useTutorials } from '@/features/help/api'
 import { useHelpLang } from '@/features/help/lang'
 import { LangSwitch, TutorialPlayer } from '@/features/help/TutorialPlayer'
 import { lengthLabel, type Tutorial } from '@/features/help/tutorials'
-import { BookCallButton, useCallUrl } from '@/features/help/BookCall'
 import type { StudioSignals } from './journey'
 import { nextSetupStep, setupCountLine, setupProgress, setupStepTarget, showSetupProgress } from './setup-progress'
 
@@ -52,9 +51,10 @@ export function SetupVideosCard({ signals }: { signals: StudioSignals }) {
   const hints = useHints()
   const setHint = useSetHint()
   const tutorials = useTutorials()
-  const callUrl = useCallUrl()
   const [lang, setLang] = useHelpLang()
   const [playing, setPlaying] = useState<Tutorial | null>(null)
+  // Only the next step shows (owner, 20 Nov: Home had "a lot of things"); the rest open on a tap.
+  const [all, setAll] = useState(false)
   if (!q.data || !hints.isSuccess) return null
   const steps = setupProgress({ ...signals, ...q.data })
   if (!showSetupProgress(steps, q.data.started_at, !!hints.data.setup_videos?.closed)) return null
@@ -96,7 +96,7 @@ export function SetupVideosCard({ signals }: { signals: StudioSignals }) {
           <div className="h-full rounded-full bg-success transition-all" style={{ width: `${(done / steps.length) * 100}%` }} />
         </div>
         <ol className="mt-3 flex flex-col gap-1.5">
-          {steps.map((s) => {
+          {(all ? steps : steps.filter((s) => s === next)).map((s) => {
             const isNext = s === next
             const video = videoOf(s.step.video)
             const target = setupStepTarget(s.step, setupOpen)
@@ -156,11 +156,13 @@ export function SetupVideosCard({ signals }: { signals: StudioSignals }) {
             )
           })}
         </ol>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm">
-          <Link to="/start" className="font-medium text-primary underline-offset-2 hover:underline">
-            {lang === 'hi' ? 'हर स्टेप लिखा हुआ देखें' : 'Every step, written out'}
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <button type="button" onClick={() => setAll((v) => !v)} className="font-medium text-primary underline-offset-2 hover:underline">
+            {all ? (lang === 'hi' ? 'सिर्फ़ अगला स्टेप' : 'Show only the next step') : lang === 'hi' ? `सभी ${steps.length} स्टेप देखें` : `See all ${steps.length} steps`}
+          </button>
+          <Link to="/start" className="text-muted-foreground underline-offset-2 hover:underline">
+            {lang === 'hi' ? 'हर स्टेप लिखा हुआ' : 'Every step, written out'}
           </Link>
-          {callUrl && <BookCallButton size="sm" label="Book a 15-minute support call" />}
         </div>
       </CardContent>
       <TutorialPlayer tutorial={playing} onClose={() => setPlaying(null)} />

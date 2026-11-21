@@ -7,6 +7,7 @@ import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { invoiceClosedRefusal } from './routes-payments'
 import { explain } from '../messaging/router'
 
 export const invoiceActionRoutes = new Hono<AppEnv>()
@@ -184,9 +185,11 @@ export const invoiceActionRoutes = new Hono<AppEnv>()
           p_notes => ${d.notes ?? null})`
         return true
       }),
+      { onCode: invoiceClosedRefusal },
     )
+    if (ok === 'draft_invoice') fail(409, 'This invoice is still a draft. Mark it as sent first, then record the payment.')
+    if (ok === 'cancelled' || ok === 'cancelled_invoice') fail(409, 'This invoice is cancelled. Reopen it first, then record the payment.')
     if (!ok) fail(400, 'We could not record the payment.')
-    if (ok === 'cancelled') fail(409, 'This invoice is cancelled. Reopen it first, then record the payment.')
     await audit(c, { action: 'invoice.payment', entityType: 'invoice', entityId: id, after: d })
     return c.body(null, 204)
   })

@@ -1,6 +1,10 @@
 name: Deploy
 
-# Push to main -> redeploy the backend (Postgres + API) on the VPS.
+# CI green on main -> redeploy the backend (Postgres + API) on the VPS.
+# It runs after the CI workflow finishes on a push to main, and only when CI
+# passed, so a red build never reaches production. It deploys exactly the
+# commit CI tested (workflow_run.head_sha), not whatever main is by then.
+# workflow_dispatch deploys the head of main by hand.
 # The FRONTEND is deployed by Cloudflare's own Workers Builds (connected repo),
 # so it isn't handled here.
 #
@@ -45,8 +49,10 @@ name: Deploy
 # Arm it with repo variable DEPLOY_ENABLED=true.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -57,7 +63,18 @@ jobs:
   api:
     # Self-hosted when DEPLOY_RUNNER is set, GitHub-hosted otherwise.
     runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # Only a CI run that passed, on a push to main (not a PR whose head branch
+    # happens to be called main), or a deploy by hand.
+    if: >-
+      ${{ vars.DEPLOY_ENABLED == 'true' && (
+        github.event_name == 'workflow_dispatch' || (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push'
+        )
+      ) }}
+    env:
+      # The commit CI tested. Empty on a deploy by hand, which takes main's head.
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       # An SSH timeout says nothing about why. This separates "the box is gone"
       # from "port 22 specifically is unreachable" — different problems with
@@ -96,7 +113,17 @@ jobs:
           set -eu
           cd "$VPS_PATH"
           git fetch origin main
-          git checkout -B main origin/main
+          # Deploy the commit CI passed, and only while it is still main's head:
+          # CI runs finish in any order, and an older green run finishing after
+          # a newer one must never roll production back. The newer commit's own
+          # CI run deploys it (the concurrency group keeps them one at a time).
+          HEAD_SHA=$(git rev-parse origin/main)
+          TARGET=${DEPLOY_SHA:-$HEAD_SHA}
+          if [ "$TARGET" != "$HEAD_SHA" ]; then
+            echo "main has moved past $TARGET (now $HEAD_SHA); its own CI run deploys that. Skipping."
+            exit 0
+          fi
+          git checkout -B main "$TARGET"
           sh deploy/deploy.sh
 
       # ── Over SSH, from a hosted runner ───────────────────────
@@ -112,8 +139,15 @@ jobs:
           command_timeout: 20m
           script: |
             cd "${{ secrets.VPS_PATH }}"
+            DEPLOY_SHA="${{ env.DEPLOY_SHA }}"
             git fetch origin main
-            git checkout -B main origin/main
+            HEAD_SHA=$(git rev-parse origin/main)
+            TARGET=${DEPLOY_SHA:-$HEAD_SHA}
+            if [ "$TARGET" != "$HEAD_SHA" ]; then
+              echo "main has moved past $TARGET (now $HEAD_SHA); its own CI run deploys that. Skipping."
+              exit 0
+            fi
+            git checkout -B main "$TARGET"
             sh deploy/deploy.sh
 
       # A green job is not proof the code is running. /health reports the
@@ -125,12 +159,13 @@ jobs:
           API_DOMAIN: ${{ secrets.API_DOMAIN }}
         run: |
           if [ -z "$API_DOMAIN" ]; then exit 0; fi
-          echo "Deploying: $GITHUB_SHA"
+          DEPLOY_SHA=${DEPLOY_SHA:-$GITHUB_SHA}
+          echo "Deploying: $DEPLOY_SHA"
           RUNNING=$(curl -fsS --max-time 20 "https://$API_DOMAIN/health" || echo '{}')
           echo "Running:   $RUNNING"
           case "$RUNNING" in
-            *"$GITHUB_SHA"*) echo "::notice::The API reports the commit just deployed." ;;
-            *) echo "::warning::/health does not report $GITHUB_SHA. Either the deploy did"
+            *"$DEPLOY_SHA"*) echo "::notice::The API reports the commit just deployed." ;;
+            *) echo "::warning::/health does not report $DEPLOY_SHA. Either the deploy did"
                echo "::warning::not land, or APP_VERSION is not being stamped — check the"
                echo "::warning::deploy step above rather than trusting this job's status." ;;
           esac

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { KeyRound, MessageCircle, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { KeyRound, MessageCircle, Search, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserX } from 'lucide-react'
 import { PROFILE_FIELD_LABEL, buildWhatsAppUrl } from '@ipc/contracts'
 import { useTeamProfileGaps } from '@/features/profile/api'
 import { Link } from '@tanstack/react-router'
@@ -51,17 +51,27 @@ export function DirectoryFiltersBar({
   filters,
   onChange,
   roles,
+  open,
+  onToggle,
+  actions,
 }: {
   filters: DirectoryFilters
   onChange: (next: DirectoryFilters) => void
   roles: readonly EmployeeRole[]
+  /** The type, status, role and sort pickers show only once Filter is pressed (minimal first). */
+  open: boolean
+  onToggle: () => void
+  /** The page's buttons, on the same line as the search. */
+  actions?: ReactNode
 }) {
   const set = <K extends keyof DirectoryFilters>(key: K, value: DirectoryFilters[K]) =>
     onChange({ ...filters, [key]: value })
+  const on = [filters.type, filters.status, filters.role].filter(Boolean).length + (filters.sort !== 'newest' ? 1 : 0)
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
-      <div className="relative sm:col-span-2">
+    <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative min-w-0 flex-1 sm:max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.q}
@@ -71,7 +81,13 @@ export function DirectoryFiltersBar({
           className="pl-9"
         />
       </div>
-
+      <Button variant="outline" onClick={onToggle} aria-expanded={open}>
+        <SlidersHorizontal /> Filter{on > 0 && ` · ${on}`}
+      </Button>
+      {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+    {open && (
+    <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-4">
       <Select value={filters.type} onChange={(e) => set('type', e.target.value)} aria-label="Engagement">
         <option value="">All types</option>
         <option value="in_house">In-house staff</option>
@@ -115,6 +131,8 @@ export function DirectoryFiltersBar({
         <option value="salary_low">Salary (low to high)</option>
       </Select>
     </div>
+    )}
+    </div>
   )
 }
 
@@ -125,20 +143,21 @@ export function DirectoryFiltersBar({
 function ContactBadges({ member }: { member: DirectoryMember }) {
   // Owner only (the query is off for everyone else): how complete their profile is.
   const gap = useTeamProfileGaps().data?.find((g) => g.user_id === member.user_id)
-  return (
-    <span className="mt-1 flex flex-wrap gap-1">
-      {gap && gap.missing.length > 0 && (
-        <StatusBadge tone={gap.percent < 50 ? 'danger' : 'warning'} title={`Needs ${gap.missing.map((m) => PROFILE_FIELD_LABEL[m].toLowerCase()).join(', ')}`}>
-          Profile {gap.percent}%
-        </StatusBadge>
-      )}
-      {!member.login_enabled && <StatusBadge>No login</StatusBadge>}
-      {member.login_enabled && !member.last_seen_at && member.role !== 'super_admin' && <StatusBadge>Never logged in</StatusBadge>}
-      {!member.email && !member.phone && <StatusBadge tone="danger">Contact missing</StatusBadge>}
-      {!member.email && member.phone && <StatusBadge> Email missing</StatusBadge>}
-      {!member.phone && member.email && <StatusBadge>Phone missing</StatusBadge>}
-    </span>
-  )
+  // One chip at most, the one that matters most: three under every name
+  // made the list read as a wall of warnings (audit, 21 Nov).
+  const chip = !member.login_enabled ? (
+    <StatusBadge>No login</StatusBadge>
+  ) : gap && gap.missing.length > 0 ? (
+    <StatusBadge tone={gap.percent < 50 ? 'danger' : 'warning'} title={`Needs ${gap.missing.map((m) => PROFILE_FIELD_LABEL[m].toLowerCase()).join(', ')}`}>
+      Profile {gap.percent}%
+    </StatusBadge>
+  ) : !member.email && !member.phone ? (
+    <StatusBadge tone="danger">Contact missing</StatusBadge>
+  ) : !member.last_seen_at && member.role !== 'super_admin' ? (
+    <StatusBadge>Never logged in</StatusBadge>
+  ) : null
+  if (!chip) return null
+  return <span className="mt-1 flex flex-wrap gap-1">{chip}</span>
 }
 
 export function DirectoryTable({
@@ -370,8 +389,7 @@ function RowActions({
     return <span className="px-2 text-xs text-muted-foreground" title="Only the owner can change this member">Owner only</span>
   }
 
-  // Edit and Delete are what people look for on a team list, so they are the
-  // two named buttons. The rest are real but occasional, and live in the menu.
+  // Edit is the named button; the rest are real but occasional, in the menu.
   const more: RowMenuItem[] = [
     ...(onManageAccess && member.login_enabled
       ? [{ label: 'Manage access', icon: <ShieldCheck />, onSelect: () => onManageAccess(member) }]
@@ -417,25 +435,19 @@ function RowActions({
     },
   ]
 
+  // Delete sits at the foot of the ⋯ menu, red: a red Delete on every row
+  // was the loudest thing on the page (audit, 21 Nov).
+  const items: RowMenuItem[] = [
+    ...(allowed.edit ? more : []),
+    ...(allowed.remove
+      ? [{ label: 'Delete from the team', icon: <Trash2 />, danger: true, divider: allowed.edit, disabled: remove.isPending, onSelect: () => void onRemove() }]
+      : []),
+  ]
   return (
     <div className="row-actions flex items-center justify-end gap-0.5">
       {allowed.edit && <EditMemberDialog member={member} />}
-      {allowed.edit && <RowMenu items={more} label={`More actions for ${member.name}`} />}
+      {items.length > 0 && <RowMenu items={items} label={`More actions for ${member.name}`} />}
       {powers.canSetSignIn && <SignInDetailsDialog member={member} open={signIn} onOpenChange={setSignIn} />}
-      {allowed.remove && (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={remove.isPending}
-          title={`Delete ${member.name} from the team`}
-          className="text-destructive hover:text-destructive"
-          onClick={() => void onRemove()}
-        >
-          <Trash2 />
-          Delete
-          <span className="sr-only"> {member.name}</span>
-        </Button>
-      )}
     </div>
   )
 }

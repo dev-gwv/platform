@@ -45,7 +45,7 @@ export function SignInDetailsDialog({
   }, [open, member.email])
 
   const emailOk = EMAIL.test(email.trim())
-  const passwordOk = password.length >= 6
+  const passwordOk = password.length >= 8
   const first = member.name.split(' ')[0] || member.name
 
   function onSubmit(e: FormEvent) {
@@ -105,7 +105,7 @@ export function SignInDetailsDialog({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setShow(true)}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 autoComplete="new-password"
                 aria-invalid={tried && !passwordOk}
                 className={cn('min-w-0 flex-1', !passwordOk ? 'border-warning/60 bg-warning/5' : 'border-success/50')}
@@ -124,7 +124,7 @@ export function SignInDetailsDialog({
             </div>
             <p className={cn('text-xs', tried && !passwordOk ? 'text-destructive' : 'text-muted-foreground')}>
               {tried && !passwordOk
-                ? 'Use at least 6 characters.'
+                ? 'Use at least 8 characters.'
                 : `${first} is signed out everywhere and uses this from now on.`}
             </p>
           </div>

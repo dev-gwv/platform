@@ -28,7 +28,7 @@ export function AddShootMenu({
   onAdd: (name: string) => void
   /** This studio's own saved shoot names, merged into the common list. */
   extraNames?: readonly string[]
-  variant?: 'default' | 'ghost'
+  variant?: 'default' | 'outline' | 'ghost'
   label?: string
 }) {
   const [open, setOpen] = useState(false)

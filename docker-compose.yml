@@ -9,11 +9,39 @@
 # migrations (tracked in schema_migrations). The API connects as the
 # `authenticator` role and SET ROLEs per request, so RLS is enforced exactly as
 # it was on Supabase.
+#
+# Every service keeps at most 3 x 10 MB of logs (Docker's default json-file
+# log grows until the disk is full), and every service but db has a memory
+# ceiling so one runaway container cannot starve Postgres or the other
+# projects on this shared box.
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# The three curl tickers: tiny, killed at once on a deploy (a sleeping shell
+# ignores SIGTERM, so the default 10 s grace was 10 s of waiting per ticker),
+# and started only once the API answers its healthcheck.
+x-ticker: &ticker
+  image: curlimages/curl:8.10.1
+  restart: unless-stopped
+  stop_grace_period: 1s
+  mem_limit: 64m
+  depends_on:
+    api:
+      condition: service_healthy
+  env_file: [.env]
+  entrypoint: ["sh", "-c"]
+  <<: *logging
 
 services:
   db:
     image: postgres:16
     restart: unless-stopped
+    <<: *logging
     # Stock Postgres keeps 128 MB of pages in memory and plans for a spinning
     # disk. The VPS is a Hostinger KVM 4 (Mumbai): 4 cores, 16 GB of RAM and an
     # SSD, shared with the other Coolify projects on it (speed audit, 11-12 Nov).
@@ -57,6 +85,7 @@ services:
   migrate:
     image: postgres:16
     restart: "no"
+    <<: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -74,6 +103,8 @@ services:
       context: .
       dockerfile: services/api/Dockerfile
     restart: unless-stopped
+    mem_limit: 2g
+    <<: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +115,10 @@ services:
       PORT: 8787
       # Built from the db credentials — the API is the `authenticator` role.
       DATABASE_URL: postgres://authenticator:${DB_AUTHENTICATOR_PASSWORD}@db:5432/${POSTGRES_DB:-ipc}
+      # The commit being run, for /health and Sentry. deploy/deploy.sh passes
+      # it in the environment for this service alone, so a new commit id does
+      # not recreate backup, migrate and the tickers on every deploy.
+      APP_VERSION: ${APP_VERSION:-}
     expose:
       - "8787"
     healthcheck:
@@ -108,6 +143,8 @@ services:
     build:
       context: deploy/backup
     restart: unless-stopped
+    mem_limit: 1g
+    <<: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -118,6 +155,8 @@ services:
     env_file: [.env]
     environment:
       PGHOST: db
+      # ENVIRONMENT arrives through env_file (.env): backup.sh health reports
+      # unhealthy in production while there is no off-box copy (BACKUP_S3_BUCKET).
     volumes:
       - db_backups:/backups
     healthcheck:
@@ -132,6 +171,7 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    <<: *logging
     depends_on:
       - api
     ports:
@@ -146,16 +186,12 @@ services:
   # Replaces the Workers cron trigger: POST /cron/reminders every hour with the
   # shared secret. Idempotent server-side, so an occasional double-fire is safe.
   cron:
-    image: curlimages/curl:8.10.1
-    restart: unless-stopped
-    depends_on:
-      - api
-    env_file: [.env]
-    entrypoint: ["sh", "-c"]
+    <<: *ticker
     command:
       - |
         while true; do
           curl -fsS -X POST "http://api:8787/cron/reminders" \
+            --retry 10 --retry-connrefused --retry-delay 3 \
             -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1 || true
           sleep 3600
         done
@@ -165,16 +201,12 @@ services:
   # failure. Its own ticker because an hour is too long for "your leave was
   # approved" to reach a phone.
   cron-messages:
-    image: curlimages/curl:8.10.1
-    restart: unless-stopped
-    depends_on:
-      - api
-    env_file: [.env]
-    entrypoint: ["sh", "-c"]
+    <<: *ticker
     command:
       - |
         while true; do
           curl -fsS -X POST "http://api:8787/cron/messages" \
+            --retry 10 --retry-connrefused --retry-delay 3 \
             -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1 || true
           sleep 300
         done
@@ -190,12 +222,7 @@ services:
   # UTC date changes, so a restart late in the evening still catches the day
   # up exactly once. The job itself is idempotent regardless.
   cron-attendance:
-    image: curlimages/curl:8.10.1
-    restart: unless-stopped
-    depends_on:
-      - api
-    env_file: [.env]
-    entrypoint: ["sh", "-c"]
+    <<: *ticker
     command:
       - |
         last=""
@@ -205,6 +232,7 @@ services:
           hm=$$((10#$$(date -u +%H%M)))
           if [ "$$hm" -ge 1830 ] && [ "$$last" != "$$today" ]; then
             if curl -fsS -X POST "http://api:8787/cron/attendance" \
+                 --retry 10 --retry-connrefused --retry-delay 3 \
                  -H "x-cron-secret: $${CRON_SECRET}" >/dev/null 2>&1; then
               last="$$today"
             fi
@@ -222,6 +250,8 @@ services:
     build:
       context: deploy/wa-bot
     restart: unless-stopped
+    mem_limit: 512m
+    <<: *logging
     environment:
       WA_BOT_SECRET: ${WA_BOT_SECRET:-}
       WA_BOT_HOURLY_CAP: ${WA_BOT_HOURLY_CAP:-30}

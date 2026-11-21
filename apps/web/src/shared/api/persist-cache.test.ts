@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { keepQuery, usable } from './persist-cache'
+import { CACHE_FORMAT, crashAfterRestore, keepQuery, usable } from './persist-cache'
 
 const q = (queryKey: unknown[], status = 'success', data: unknown = [1]) =>
   ({ queryKey, state: { status, data } }) as unknown as Parameters<typeof keepQuery>[0]
@@ -22,5 +22,19 @@ describe('pages kept on the device', () => {
     expect(usable(stored, now, 'def')).toBe(false)
     expect(usable({ ...stored, savedAt: now - 8 * 24 * 3600_000 }, now, 'abc')).toBe(false)
     expect(usable(null, now, 'abc')).toBe(false)
+  })
+
+  it('keeps the copy across releases until the format is bumped by hand', () => {
+    const now = Date.parse('2026-11-21T10:00:00Z')
+    const stored = { buster: CACHE_FORMAT, savedAt: now - 60_000, state: { queries: [], mutations: [] } }
+    expect(usable(stored, now, CACHE_FORMAT)).toBe(true)
+    expect(usable({ ...stored, buster: 'v1' }, now, CACHE_FORMAT)).toBe(false)
+  })
+
+  it('blames a crash on the restored copy only in the first seconds', () => {
+    const at = Date.parse('2026-11-21T10:00:00Z')
+    expect(crashAfterRestore(at + 2_000, at)).toBe(true)
+    expect(crashAfterRestore(at + 20_000, at)).toBe(false)
+    expect(crashAfterRestore(at + 2_000, 0)).toBe(false)
   })
 })

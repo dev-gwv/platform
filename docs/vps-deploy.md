@@ -102,7 +102,8 @@ pass through Actions.
 
 Adding a variable means: add it to `deploy/.env.example` (documentation), add it
 to `services/api/src/context.ts` (`Env`), then set it in the VPS `.env` and
-`docker compose up -d api` (or let the next deploy restart it). Every variable
+`sh deploy/deploy.sh` (or let the next deploy restart it; never a bare
+`docker compose up`, which drops the Coolify overlay's Traefik labels). Every variable
 added in the 2026-09 audit is optional with a safe default, so a deploy before
 the `.env` is updated still works.
 

@@ -37,9 +37,11 @@ export interface FramelinePerson {
   auth: Pick<AuthContext, 'userId' | 'companyId' | 'isOwner' | 'displayName' | 'email'>
   companyName: string
   /**
-   * Only when this login has confirmed its email. Team logins may carry any
-   * email at all, so Frameline matches by email only on this word, and gives
-   * everyone else a placeholder address instead.
+   * Only when this login's inbox is proven (`auth.users.email_proven_at`:
+   * the confirmation link, a password reset or Google), never from
+   * `email_verified`, which a studio sets on any team login it makes. Team
+   * logins may carry any email at all, so Frameline matches by email only on
+   * this word, and gives everyone else a placeholder address instead.
    */
   emailVerified: boolean
   /**

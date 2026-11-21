@@ -9,10 +9,10 @@ await t.titleCard()
 const start = p.getByRole('link', { name: /Start your .*free trial/ }).first()
 await t.step('Tap “Start your free trial”', start, { hold: 900 })
 await h.click(start, { after: 300 }); await h.unspot()
-await p.getByLabel('Company name').waitFor({ timeout: 15000 }); await sleep(900)
+await p.getByLabel('Studio name').waitFor({ timeout: 15000 }); await sleep(900)
 
-await t.step('Your studio’s name and your name', p.getByLabel('Company name'), { hold: 300 })
-await h.type(p.getByLabel('Company name'), 'Mehta Studios')
+await t.step('Your studio’s name and your name', p.getByLabel('Studio name'), { hold: 300 })
+await h.type(p.getByLabel('Studio name'), 'Mehta Studios')
 await h.type(p.getByLabel('Your name'), 'Asha Mehta')
 await sleep(300)
 
