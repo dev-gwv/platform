@@ -32,14 +32,30 @@ const WORDS: Record<CalendarScope, { button: string; title: string; what: string
  * link is a secret -- anyone holding it can see these shoots -- so "Make a
  * new link" ends the old one.
  */
-export function CalendarLinkButton({ scope, size = 'sm' }: { scope: CalendarScope; size?: 'sm' | 'default' }) {
-  const [open, setOpen] = useState(false)
+export function CalendarLinkButton({
+  scope,
+  size = 'sm',
+  opened,
+  onOpenChange,
+}: {
+  scope: CalendarScope
+  size?: 'sm' | 'default'
+  /** Opened from a menu (the page's More): no button of its own. */
+  opened?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
+  const [ownOpen, setOwnOpen] = useState(false)
+  const controlled = opened !== undefined
+  const open = controlled ? opened : ownOpen
+  const setOpen = (v: boolean) => (controlled ? onOpenChange?.(v) : setOwnOpen(v))
   const words = WORDS[scope]
   return (
     <>
-      <Button variant="outline" size={size} onClick={() => setOpen(true)}>
-        <CalendarPlus /> {words.button}
-      </Button>
+      {!controlled && (
+        <Button variant="outline" size={size} onClick={() => setOpen(true)}>
+          <CalendarPlus /> {words.button}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent title={words.title} className="sm:max-w-md">
           {open && <LinkBody scope={scope} />}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { AlertTriangle, Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Mail, MessageCircle, Receipt, Printer, CalendarCheck, Hourglass, CheckCircle2, Clock } from 'lucide-react'
+import { AlertTriangle, Plus, Download, ChevronLeft, ChevronRight, Eye, Pencil, Trash2, Mail, MessageCircle, Receipt, Printer, CalendarCheck, Hourglass, CheckCircle2, Clock, SlidersHorizontal } from 'lucide-react'
 import type { ReceivedPayment } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -110,6 +110,9 @@ function PaymentsSection() {
 
   const anyFilter = !!search || status !== 'all' || !!clientId || !!projectId || period.choice !== 'this_month' || !!mode
 
+  const [filtering, setFiltering] = useState(false)
+  const narrowed = status !== 'all' || !!clientId || !!projectId || !!mode
+
   function resetFilters() {
     setSearchInput('')
     setSearch('')
@@ -207,6 +210,24 @@ function PaymentsSection() {
         <PeriodSwitch p={period} onChange={() => setPage(1)} />
         <div className="flex flex-wrap items-center gap-2">
           <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search receipt no., client, project, reference…" className="w-full sm:w-64" aria-label="Search payments" />
+          {/* The period stays in view (shared with the money pages); the rest
+              waits behind Filter (minimal first). */}
+          <Button
+            variant="outline"
+            onClick={() => setFiltering((v) => !v)}
+            aria-expanded={filtering}
+            className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}
+          >
+            <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+          </Button>
+          {anyFilter && (
+            <Button variant="ghost" size="sm" onClick={resetFilters}>
+              Clear
+            </Button>
+          )}
+        </div>
+        {filtering && (
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={status} onChange={(e) => { setStatus(e.target.value as PaymentStatusFilter); setPage(1) }} className="w-full sm:w-40" aria-label="Received or promised">
             <option value="all">Received & promised</option>
             <option value="paid">Received</option>
@@ -233,12 +254,8 @@ function PaymentsSection() {
               <option key={m} value={m}>{m}</option>
             ))}
           </Select>
-          {anyFilter && (
-            <Button variant="ghost" size="sm" onClick={resetFilters}>
-              Clear
-            </Button>
-          )}
         </div>
+        )}
       </div>
 
       {isLoading ? (

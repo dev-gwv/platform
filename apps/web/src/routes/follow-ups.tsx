@@ -22,7 +22,7 @@ import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { DownloadButtons } from '@/features/enquiry-forms/parts'
-import { useOpenFollowUps } from '@/features/crm/FollowUpOnRow'
+import { boardScopeFor, useBoardFollowUps } from '@/features/crm/FollowUpOnRow'
 import { followUpBucket } from '@/features/crm/follow-ups'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
@@ -644,9 +644,12 @@ function MoreLeadTools({ count }: { count: number }) {
  * (amber: the next thing to do).
  */
 function FollowUpsButton() {
-  const mine = useOpenFollowUps('mine')
-  const now = useMemo(() => new Date(), [mine.dataUpdatedAt])
-  const late = (mine.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
+  const { session } = useAuth()
+  // The same list, in the same scope, as the board this opens -- so "5 late"
+  // here is the board's Overdue column.
+  const list = useBoardFollowUps(boardScopeFor(session?.role))
+  const now = useMemo(() => new Date(), [list.dataUpdatedAt])
+  const late = (list.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
   return (
     <Link to="/follow-ups/board" className="inline-flex items-center gap-1.5 px-3 text-sm font-medium hover:bg-muted">
       <AlarmClock className="size-4" aria-hidden /> Follow-ups

@@ -140,6 +140,7 @@ function StudioCommandCenter() {
         hint={queue.data ? leadsTileLine(queue.data.items) : undefined}
         tone={queue.data?.items.length ? 'warning' : 'success'}
         to="/follow-ups/queue"
+        {...(access.hasAction('crm', 'edit') ? { search: { scope: 'all' } } : {})}
       />
     ),
     access.hasModule('projects') && (

@@ -82,6 +82,15 @@ export function TodayAttendanceCard() {
     if (canArrive(d.shoot_today)) {
       sub = 'Tap it when you get to the venue.'
       action = <ArrivedButton slotId={d.shoot_today.slot_id} className="ipc-nudge" />
+    } else if (Date.parse(d.shoot_today.end_at) <= Date.now()) {
+      // The shoot is already over: the "opens before the start" line would
+      // promise a button that never comes.
+      sub = `This shoot ended at ${clock(d.shoot_today.end_at)}.`
+      action = (
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/shoots/my">My shoots</Link>
+        </Button>
+      )
     } else {
       sub = "I've reached opens 3 hours before the start."
       action = (

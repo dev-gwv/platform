@@ -123,7 +123,8 @@ export function CardFace({
       {showStage && step !== 'cancelled' && (
         <span className={cn('inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold', tone.soft, tone.text)}>
           <span className={cn('size-1.5 rounded-full', tone.solid)} aria-hidden />
-          {stageName(d, stages)}
+          {/* The stage itself ("Editing"), so the chip agrees with the card's next-step button. */}
+          {stageName({ ...d, started_at: undefined }, stages)}
         </span>
       )}
 

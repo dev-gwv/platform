@@ -57,7 +57,7 @@ import { ReferralsTab } from '@/features/projects/tabs/ReferralsTab'
 import { ProjectWeddingQrLine } from '@/features/enquiry-forms/WeddingQr'
 import { WishesTab } from '@/features/wishes/WishesTab'
 import { WatchHow } from '@/features/help/WatchHow'
-import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, type ProjectTab } from '@/features/projects/ProjectTabs'
+import { PROJECT_TABS, ProjectSubTabs, ProjectTabStrip, groupOf, type ProjectTab } from '@/features/projects/ProjectTabs'
 import { ProjectJourney } from '@/features/projects/ProjectJourney'
 import { useProjectWorkSubmissions } from '@/features/work/api'
 import type { JourneyKey } from '@/features/projects/journey'
@@ -375,7 +375,9 @@ function ProjectDetail() {
         )}
       </div>
 
-      {seesMoney && (
+      {/* The money boxes belong to the Overview and Finance: on Shoots or
+          Work they pushed the day's work below the fold (audit, 21 Nov). */}
+      {seesMoney && (groupOf(tab) === 'overview' || groupOf(tab) === 'finance') && (
         <div className={cn('mt-4 grid gap-2 sm:gap-3', margin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3')}>
           {/* Two to a row on a phone (the value across the top when there is no
               margin box): three stacked boxes pushed the tabs below the fold
@@ -389,7 +391,8 @@ function ProjectDetail() {
             sub={toCollectLine(money)}
             tone={balance > 0 ? 'warning' : 'success'}
             action={
-              canEdit && balance > 0 ? (
+              // Billing has its own Record payment: one button per screen.
+              canEdit && balance > 0 && tab !== 'billing' ? (
                 <button
                   type="button"
                   onClick={recordPayment}

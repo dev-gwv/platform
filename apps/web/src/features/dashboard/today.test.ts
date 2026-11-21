@@ -118,6 +118,19 @@ describe("a team member's day", () => {
     expect(next.map((i) => i.note)).toEqual(['Start Mon, 26 Oct', '6 days left · Thu, 29 Oct'])
   })
 
+  it('counts an unstarted edit late from its due date, as My work does', () => {
+    const { today } = myDay({
+      ...base,
+      now: NOW,
+      edits: [
+        edit('Album', { start_by: '2026-10-16', estimated_date: '2026-10-21' }),
+        edit('Teaser', { start_by: '2026-10-20', estimated_date: '2026-10-27' }),
+      ],
+    })
+    expect(today.map((i) => i.note)).toEqual(['Start · 2 days late', 'Start · 4 days left'])
+    expect(today[0]!.late).toBe(true)
+  })
+
   it('puts a note waiting to be heard at the top, saying who sent it and when', () => {
     const { today } = myDay({
       ...base,

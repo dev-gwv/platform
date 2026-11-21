@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Check, Download, Eye, Search, Trash2, Users, X } from 'lucide-react'
+import { Check, Download, Eye, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
@@ -72,6 +72,8 @@ function ClientsList() {
   const [relation, setRelation] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [filtering, setFiltering] = useState(false)
+  const narrowed = sort !== 'recent' || !!relation || !!from || !!to
   const [page, setPage] = useState(1)
   const pageSize = 25
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -192,8 +194,9 @@ function ClientsList() {
         onDone={() => setJustAdded(false)}
       />
 
-      <div className="mt-4 grid grid-cols-1 gap-2 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <label className="relative lg:col-span-2">
+      {/* Search stays; sort, relation and dates wait behind Filter (minimal first). */}
+      <div className="mt-4 flex items-center gap-2">
+        <label className="relative flex-1 sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             value={search}
@@ -203,24 +206,45 @@ function ClientsList() {
             className="pl-9"
           />
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="sr-only">Sort</span>
-          <Select value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); resetPage() }} aria-label="Sort clients" className="w-full">
-            {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </Select>
-        </label>
-        <Input value={relation} onChange={(e) => { setRelation(e.target.value); resetPage() }} placeholder="Relation: referral, repeat…" aria-label="Filter by relation" />
-        <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetPage() }} aria-label="Added from" />
-        <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); resetPage() }} aria-label="Added to" />
-        <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-6">
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setRelation(''); setFrom(''); setTo(''); setSort('recent'); setSelected(new Set()); resetPage() }}>
-            <X /> Clear filters
-          </Button>
-          {selected.size > 0 && (
-            <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+        <Button
+          variant="outline"
+          onClick={() => setFiltering((v) => !v)}
+          aria-expanded={filtering}
+          className={cn(narrowed && 'border-primary/50 bg-primary/10 text-primary')}
+        >
+          <SlidersHorizontal /> Filter{narrowed ? ' · on' : ''}
+        </Button>
+        {selected.size > 0 && <span className="text-xs text-muted-foreground">{selected.size} selected</span>}
+      </div>
+      {filtering && (
+        <div className="mt-3 grid grid-cols-1 gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Sort by
+            <Select value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); resetPage() }} aria-label="Sort clients" className="w-full">
+              {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Relation
+            <Input value={relation} onChange={(e) => { setRelation(e.target.value); resetPage() }} placeholder="Referral, repeat…" aria-label="Filter by relation" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Added from
+            <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetPage() }} aria-label="Added from" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Added to
+            <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); resetPage() }} aria-label="Added to" />
+          </label>
+          {narrowed && (
+            <div className="sm:col-span-2 lg:col-span-4">
+              <Button variant="ghost" size="sm" onClick={() => { setRelation(''); setFrom(''); setTo(''); setSort('recent'); resetPage() }}>
+                <X /> Clear filters
+              </Button>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
       <div className="mt-4">
         {isLoading ? (
