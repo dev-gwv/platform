@@ -40,7 +40,6 @@ const ALLOWED = new Set([
   'routes/public-invoice.tsx',
   'routes/receipt.tsx',
   'routes/quotation.tsx',
-  'routes/invoice-detail.tsx',
   'routes/billing/payment-receipt.tsx',
   'routes/subscription.tsx',
   // Studio AutoPilot's own prices, never a studio's money.

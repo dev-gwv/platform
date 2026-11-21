@@ -1,4 +1,5 @@
 import type { Env } from '../context'
+import { waLinkOrShare } from '@ipc/domain'
 
 /**
  * WhatsApp Cloud API (Meta). With a phone number id and access token
@@ -50,8 +51,7 @@ export async function sendWhatsAppText(
 }
 
 /** The wa.me link that opens the chat with the message filled in. */
-export const whatsappLink = (to: string, body: string): string =>
-  `https://wa.me/${to}?text=${encodeURIComponent(body)}`
+export const whatsappLink = (to: string, body: string): string => waLinkOrShare(to, body)
 
 /**
  * Send an approved template. `params` fill the body's {{1}}..{{n}} in order;

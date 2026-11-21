@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Sparkles, Type, Palette, Ruler } from 'lucide-react'
+import { Check, Type, Palette, Ruler } from 'lucide-react'
 import { toast } from 'sonner'
 import { companyTheme, type CompanyTheme, type ThemeFontKey } from '@ipc/contracts'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -195,7 +195,7 @@ function Appearance() {
   if (isLoading) {
     return (
       <>
-        <PageHeader title="Theme & Branding" />
+        <PageHeader title="Theme & branding" />
         <SkeletonCards count={3} />
       </>
     )
@@ -203,17 +203,10 @@ function Appearance() {
 
   return (
     <>
-      <PageHeader title="Theme & Branding" />
+      <PageHeader title="Theme & branding" />
 
-      <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4 text-sm">
-        <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
-        <p className="text-muted-foreground">
-          Each theme includes a matching font. You can apply the theme directly, or use{' '}
-          <span className="font-medium text-foreground">Customize Font</span> to change typography
-          before saving.
-          {!isOwner && ' Only the studio owner can change this.'}
-        </p>
-      </div>
+      {/* No guide box: each card already shows its font and its buttons. */}
+      {!isOwner && <p className="text-sm text-muted-foreground">Only the studio owner can change the theme.</p>}
 
       {preview && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -344,10 +337,11 @@ function ThemeCard({
   return (
     // A theme swatch is a showcase object, not something you read a row out
     // of, so it is one of the few places a tilt belongs.
-    <TiltCard className="flex">
+    // min-w-0: without it a card grew to its font line and spilled under the next one.
+    <TiltCard className="flex min-w-0">
       <Card
         className={cn(
-          'flex flex-1 flex-col',
+          'flex min-w-0 flex-1 flex-col',
           applied && 'border-primary ring-1 ring-primary/30',
         )}
       >
@@ -366,8 +360,8 @@ function ThemeCard({
         <Swatches tokens={tokens} />
 
         <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <span className="shrink-0 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Font
             </span>
             <span className="truncate text-xs text-muted-foreground">{font.hint}</span>
@@ -383,7 +377,7 @@ function ThemeCard({
             onClick={onCustomizeFont}
             className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
-            <Type className="size-3.5" /> Customize Font →
+            <Type className="size-3.5" /> Change font →
           </button>
         </div>
 
@@ -392,13 +386,10 @@ function ThemeCard({
             Preview
           </Button>
           <Button onClick={onApply} disabled={!canEdit || applied || busy}>
-            {applied ? 'Applied' : 'Apply Theme'}
+            {applied ? 'In use' : 'Use this'}
           </Button>
         </div>
 
-        <p className="mt-3 text-xs text-muted-foreground">
-          Font can be changed anytime from Customize → Typography.
-        </p>
       </CardContent>
       </Card>
     </TiltCard>

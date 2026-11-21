@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { waShare } from '@ipc/domain'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -296,7 +297,7 @@ function CaptionCard({ n, caption, platform }: { n: number; caption: Caption; pl
           </Button>
           {platform === 'whatsapp_status' && (
             <Button size="sm" className="bg-[#25D366] text-white hover:bg-[#1ebe5b]" asChild>
-              <a href={`https://wa.me/?text=${encodeURIComponent(full)}`} target="_blank" rel="noopener noreferrer">
+              <a href={waShare(full)} target="_blank" rel="noopener noreferrer">
                 <MessageCircle /> WhatsApp
               </a>
             </Button>

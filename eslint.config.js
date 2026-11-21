@@ -4,6 +4,35 @@ import tseslint from 'typescript-eslint'
 import prettier from 'eslint-config-prettier'
 import reactHooks from 'eslint-plugin-react-hooks'
 
+/**
+ * A WhatsApp link is built in one place: `waLink` / `waShare` /
+ * `waLinkOrShare` in packages/domain/src/whatsapp.ts. Hand-built ones drifted
+ * into six rules -- a ten-digit number with no country code opened a chat
+ * with nobody, and none took a typed leading 0. `wa.me/message/…` (a
+ * business's own short link, typed by the studio) is not a number and stays
+ * allowed. (`\x2F` is "/": esquery's regex cannot hold a bare slash.)
+ */
+const WA_PATTERN = '/(wa\\.me\\x2F(?!message)|api\\.whatsapp\\.com\\x2Fsend)/'
+const WA_MESSAGE = 'Build WhatsApp links with waLink / waShare / waLinkOrShare from @ipc/domain (packages/domain/src/whatsapp.ts), never by hand.'
+const noHandBuiltWhatsApp = [
+  { selector: `Literal[value=${WA_PATTERN}]`, message: WA_MESSAGE },
+  { selector: `TemplateElement[value.raw=${WA_PATTERN}]`, message: WA_MESSAGE },
+]
+const WA_ALLOWED = ['packages/domain/src/whatsapp.ts', '**/*.test.{ts,tsx}']
+
+/**
+ * An effect written `useEffect(() => el.scrollIntoView(), …)` returns
+ * whatever the call returns, and React keeps it as the cleanup. Chrome 150
+ * made scrollIntoView return a Promise, so the next re-run "called" it and
+ * the deliverable panel crashed ("He is not a function"). An effect's body
+ * is a block, always.
+ */
+const effectBlockBody = {
+  selector:
+    "CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression[expression=true]:not([body.type='ArrowFunctionExpression']):not([body.type='Identifier'])",
+  message: 'Give the effect a block body: `useEffect(() => { … }, deps)`. An expression body returns its value as the cleanup.',
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -82,22 +111,20 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
-      /**
-       * An effect written `useEffect(() => el.scrollIntoView(), …)` returns
-       * whatever the call returns, and React keeps it as the cleanup. Chrome
-       * 150 made scrollIntoView return a Promise, so the next re-run "called"
-       * it and the deliverable panel crashed ("He is not a function"). An
-       * effect's body is a block, always.
-       */
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression[expression=true]:not([body.type='ArrowFunctionExpression']):not([body.type='Identifier'])",
-          message: 'Give the effect a block body: `useEffect(() => { … }, deps)`. An expression body returns its value as the cleanup.',
-        },
-      ],
+      'no-restricted-syntax': ['error', effectBlockBody],
     },
+  },
+  {
+    // The WhatsApp rule. A later no-restricted-syntax replaces an earlier one
+    // instead of adding to it, so the web app's code carries the effect rule again.
+    files: ['apps/web/**/*.{ts,tsx}'],
+    ignores: WA_ALLOWED,
+    rules: { 'no-restricted-syntax': ['error', effectBlockBody, ...noHandBuiltWhatsApp] },
+  },
+  {
+    files: ['services/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+    ignores: WA_ALLOWED,
+    rules: { 'no-restricted-syntax': ['error', ...noHandBuiltWhatsApp] },
   },
   {
     rules: {

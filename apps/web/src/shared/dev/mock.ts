@@ -1,4 +1,5 @@
 import type { DesignDoc, ProjectDetail, ProjectListItem, SessionState } from '@ipc/contracts'
+import { waLink } from '@ipc/domain'
 import type { Client } from '@ipc/contracts'
 import { deriveStage } from '@/features/data/stage'
 
@@ -413,7 +414,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
       ? { ...publicEnquiryFx, partner: 'Riya Boutique', occasion: enquiryPartnersFx[0]!.occasion, questions: enquiryPartnersFx[0]!.questions }
       : { ...publicEnquiryFx, partner: null }
   if (method === 'POST' && path.startsWith('/public/forms/'))
-    return { received: true, redirect_url: 'https://wa.me/919876921126?text=Hi%20Asha%20Studio!' }
+    return { received: true, redirect_url: waLink('919876921126', 'Hi Asha Studio!') }
   if (method === 'GET' && path.startsWith('/public/enquiry-view/')) return publicPartnerFx
   if (method === 'GET' && path === '/me/follow-ups')
     return [{ id: uid(0xf1), lead_id: uid(0xf2), lead_name: 'Mehta family', lead_phone: '+919800000000', subject: null, due_at: new Date(Date.now() + 3 * 3600_000).toISOString(), priority: 'high' }]
@@ -1330,7 +1331,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
     return lead
   }
   if (method === 'POST' && /^\/crm\/leads\/[^/]+\/send-template$/.test(path))
-    return { url: 'https://wa.me/919876543210?text=Hi', rendered: 'Hi', delivery: 'link' }
+    return { url: waLink('919876543210', 'Hi'), rendered: 'Hi', delivery: 'link' }
   if (method === 'POST' && path === '/crm/leads/bulk') return { updated: 0, previous: [] }
   if (method === 'POST' && path === '/crm/leads/bulk/undo') return { restored: 0 }
   if (method === 'POST' && path === '/crm/leads/merge') return { merged: 1 }

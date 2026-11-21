@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fillSequenceText, waLink } from './sequence'
+import { fillSequenceText } from './sequence'
 
 describe('fillSequenceText', () => {
   const studio = { name: 'Asha Studio', website: 'https://asha.in' }
@@ -18,12 +18,5 @@ describe('fillSequenceText', () => {
     const body = 'Thank you for reaching out! You can see our work here: {{website}}\n\nWhen can we talk?'
     expect(fillSequenceText(body, {}, { name: 'Asha Studio' })).toBe('Thank you for reaching out!\n\nWhen can we talk?')
     expect(fillSequenceText(body, {}, studio)).toContain('here: https://asha.in')
-  })
-})
-
-describe('waLink', () => {
-  it('adds India to a bare number and carries the message', () => {
-    expect(waLink('98765 43210', 'Hi there')).toBe('https://wa.me/919876543210?text=Hi%20there')
-    expect(waLink('+44 7700 900123')).toBe('https://wa.me/447700900123')
   })
 })

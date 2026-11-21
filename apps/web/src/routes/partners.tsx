@@ -3,7 +3,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { Archive, ArchiveRestore, ArrowLeft, Copy, Eye, Handshake, Link2Off, MessageCircle, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryHub, EnquiryPartner } from '@ipc/contracts'
-import { firstWord, formatIndianPhone, partnerPageText, partnerQrText, splitKinds, topPartnerId, whatsappUrl } from '@ipc/domain'
+import { firstWord, formatIndianPhone, partnerPageText, partnerQrText, splitKinds, topPartnerId, waLinkOrShare } from '@ipc/domain'
 import { PageHeader } from '@/shared/layout/page-header'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
@@ -224,7 +224,7 @@ function PartnerDetail({ partner: p, studio, formOn, hub }: { partner: EnquiryPa
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="min-w-0 flex-1 basis-56 break-all rounded-xl bg-muted/60 px-3 py-2 text-xs font-bold">{p.form_url}</p>
                     <Button size="sm" variant="outline" asChild>
-                      <a href={whatsappUrl(p.phone, partnerQrText(p.name, studio, p.form_url))} target="_blank" rel="noreferrer">
+                      <a href={waLinkOrShare(p.phone, partnerQrText(p.name, studio, p.form_url))} target="_blank" rel="noreferrer">
                         <MessageCircle /> Send on WhatsApp
                       </a>
                     </Button>
@@ -352,7 +352,7 @@ function TheirPageCard({ partner: p, studio }: { partner: EnquiryPartner; studio
             <p className="break-all rounded-xl bg-muted/60 px-3 py-2 text-sm font-bold">{p.page_url}</p>
             <div className="flex flex-wrap gap-2">
               <Button asChild>
-                <a href={whatsappUrl(p.phone, partnerPageText(p.name, studio, p.page_url))} target="_blank" rel="noreferrer">
+                <a href={waLinkOrShare(p.phone, partnerPageText(p.name, studio, p.page_url))} target="_blank" rel="noreferrer">
                   <MessageCircle /> Send on WhatsApp
                 </a>
               </Button>

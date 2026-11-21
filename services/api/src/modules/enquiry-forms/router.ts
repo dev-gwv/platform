@@ -24,7 +24,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { newRawToken } from '../../lib/auth-token'
-import { enquiryEmbedCode, toIndianMobile, whatsappUrl } from '@ipc/domain'
+import { enquiryEmbedCode, toIndianMobile, waLinkOrShare } from '@ipc/domain'
 import { canManageLeads, mainFormRow } from './shared'
 
 /**
@@ -427,6 +427,6 @@ export const publicEnquiryFormsRouter = new Hono<AppEnv>()
     if (!rows?.[0]) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     const doc = rows[0].doc
     if (doc.errors) return c.json({ error: 'Please check the form.', fields: doc.errors }, 400)
-    const redirect = doc.wa_phone && doc.wa_text ? whatsappUrl(doc.wa_phone, doc.wa_text) : (doc.redirect_url ?? null)
+    const redirect = doc.wa_phone && doc.wa_text ? waLinkOrShare(doc.wa_phone, doc.wa_text) : (doc.redirect_url ?? null)
     return c.json({ received: true, redirect_url: redirect }, 201)
   })

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { waLink } from '@ipc/domain'
 import { Link } from '@tanstack/react-router'
 import { ArrowLeft, Flag, MessageCircle, Search, SlidersHorizontal, Tag, User } from 'lucide-react'
 import type { CrmActivity } from '@ipc/contracts'
@@ -40,10 +41,6 @@ export function FollowUpBoardPage() {
 }
 
 
-const waLink = (phone: string) => {
-  const d = phone.replace(/\D/g, '')
-  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`
-}
 
 /** Overdue reads red (a promise broken), today amber (the next thing), the rest calm. */
 const HEAD: Partial<Record<BoardColumnKey, string>> = {
@@ -199,7 +196,7 @@ function FollowUpCardOnBoard({ task: t, showWho }: { task: CrmActivity; showWho:
         {t.lead_id && t.lead_phone && <CallButton lead={{ id: t.lead_id, phone: t.lead_phone, name: t.lead_name }} />}
         {t.lead_phone && (
           <Button size="sm" variant="outline" asChild>
-            <a href={waLink(t.lead_phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.lead_name ?? 'them'}`}>
+            <a href={waLink(t.lead_phone) ?? undefined} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.lead_name ?? 'them'}`}>
               <MessageCircle />
             </a>
           </Button>

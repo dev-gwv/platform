@@ -99,14 +99,18 @@ export function AiTile({
 /** The right side before anything is written: what will appear there. */
 export function AiWaiting({ icon: Icon, title, lines }: { icon: LucideIcon; title: string; lines: string[] }) {
   return (
-    <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 via-background to-amber-50/60 p-8 text-center dark:border-violet-900 dark:from-violet-950/30 dark:to-background">
-      <span className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg">
-        <Icon className="size-8" aria-hidden />
+    // On a phone it sits under the questions, so it says only what appears
+    // and its first line: a tall empty box there was a screen of scrolling.
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 via-background to-amber-50/60 p-5 text-center lg:min-h-[420px] lg:gap-4 lg:p-8 dark:border-violet-900 dark:from-violet-950/30 dark:to-background">
+      <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg lg:size-16">
+        <Icon className="size-5 lg:size-8" aria-hidden />
       </span>
-      <p className="text-lg font-semibold">{title}</p>
+      <p className="text-base font-semibold lg:text-lg">{title}</p>
       <ul className="flex max-w-sm flex-col gap-1.5 text-sm text-muted-foreground">
-        {lines.map((l) => (
-          <li key={l}>{l}</li>
+        {lines.map((l, i) => (
+          <li key={l} className={i > 0 ? 'hidden lg:list-item' : undefined}>
+            {l}
+          </li>
         ))}
       </ul>
     </div>

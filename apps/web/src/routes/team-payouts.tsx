@@ -1,6 +1,6 @@
 import { parseAmount } from '@/shared/money/parse-amount'
 import { useMemo, useState, type FormEvent } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SectionTabs } from '@/shared/layout/section-tabs'
@@ -48,6 +48,9 @@ const emptyForm = (): CreateTeamPayoutRequest => ({
 })
 
 function TeamPayoutsContent() {
+  // The same page is Money's "Crew payouts" tab and Team → Pay's "Team payouts":
+  // its heading says the name of the tab it was opened from.
+  const underMoney = useRouterState({ select: (st) => st.location.pathname.startsWith('/money/') })
   const [tab, setTab] = useState<'manual' | 'shoots'>('shoots')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -119,7 +122,7 @@ function TeamPayoutsContent() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Team Payouts"
+        title={underMoney ? 'Crew payouts' : 'Team payouts'}
         actions={
           tab === 'manual' && (
             <Button onClick={openCreate} size="sm">
@@ -384,7 +387,20 @@ function ShootPayoutsTracker() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      {/* A phone reads the three figures as one sentence instead of three tall cards. */}
+      <p className="rounded-lg border border-border bg-card p-3 text-sm sm:hidden">
+        <b className="tabular-nums"><Money value={q.data.owed_now} /></b> is owed now for shoots already done.{' '}
+        {q.data.upcoming > 0 && (
+          <>
+            <span className="tabular-nums"><Money value={q.data.upcoming} /></span> more is promised for shoots still to come.{' '}
+          </>
+        )}
+        <span className="text-muted-foreground">
+          Paid so far: <Money value={q.data.paid} />
+          {q.data.paid_ahead > 0 ? ` (${inr(q.data.paid_ahead)} of it in advance)` : ''}.
+        </span>
+      </p>
+      <div className="hidden gap-3 sm:grid sm:grid-cols-3">
         <StatCard
           label="Owed now"
           value={<Money value={q.data.owed_now} />}
@@ -573,8 +589,9 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
   const settled = row.amount > 0 && left <= 0.001
 
   return (
-    <div className={cn('flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3', settled && 'bg-success/[0.06]')}>
-      <div className="min-w-0 flex-1">
+    <div className={cn('flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border bg-card p-3', settled && 'bg-success/[0.06]')}>
+      {/* On a phone the shoot takes the full line and the money sits under it. */}
+      <div className="w-full min-w-0 sm:w-auto sm:flex-1">
         <p className="font-medium">{[row.project_name, row.shoot_name].filter(Boolean).join(' · ') || 'A shoot'}</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {[dayLabel(row.shoot_date), row.role].filter(Boolean).join(' · ')}
@@ -585,9 +602,12 @@ function CrewPayoutLine({ row, today, entries }: { row: CrewPayoutRow; today: st
         {crewRowLine(row, today)}
       </p>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="h-8 w-8" title="History" onClick={() => setHistoryOpen(true)} disabled={mine.length === 0}>
-          <History className="h-4 w-4" />
-        </Button>
+        {/* Only once there is something in it: a greyed icon on every row said nothing. */}
+        {mine.length > 0 && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="Payment history" aria-label="Payment history" onClick={() => setHistoryOpen(true)}>
+            <History className="h-4 w-4" />
+          </Button>
+        )}
         {row.stands && row.amount > 0 && left > 0.001 && (
           <MarkPaidDialog slotId={row.slot_id} userId={row.user_id} pending={left} solid={past} />
         )}
@@ -693,18 +713,19 @@ function MarkPaidDialog({ slotId, userId, pending, solid }: { slotId: string; us
       draft.clear()
       setOpen(false)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'We could not record this settlement.')
+      setError(err instanceof ApiError ? err.message : 'We could not record this payment.')
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant={solid ? 'default' : 'outline'}>
+        {/* Bordered, never solid: a list of six solid Pay buttons was six "main" buttons. */}
+        <Button size="sm" variant="outline" className={cn(solid && 'border-primary/60 text-primary')}>
           <Wallet className="mr-1 h-4 w-4" /> Pay
         </Button>
       </DialogTrigger>
-      <DialogContent title="Record a settlement" description={`Outstanding: ${inr(pending)}`}>
+      <DialogContent title="Record a payment" description={`Still to pay: ${inr(pending)}`}>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {open && <PayToCard userId={userId} />}
           <div className="grid grid-cols-2 gap-3">

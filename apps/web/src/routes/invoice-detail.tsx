@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Paperclip, Pencil, Printer, RotateCcw, Trash2, Undo2 } from 'lucide-react'
+import { ArrowLeft, Ban, Copy, FolderOpen, IndianRupee, Link2Off, Mail, MessageCircle, Paperclip, Pencil, RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import { companyProfile, type InvoiceDetail } from '@ipc/contracts'
 import { callApi, downloadFile } from '@/shared/api/client'
 import { toast } from 'sonner'
@@ -15,7 +15,7 @@ import { StatusBadge } from '@/shared/ui/status-badge'
 import { ErrorState } from '@/shared/ui/states'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useConfirm } from '@/shared/ui/confirm'
-import { formatINR } from '@/shared/ui/format'
+import { useINR } from '@/shared/money/MoneyMask'
 import {
   useCancelInvoice,
   useInvoiceToDraft,
@@ -131,19 +131,14 @@ function InvoiceDoc({ edit }: { edit?: boolean | undefined }) {
                 <Button size="sm" variant="outline" onClick={() => void whatsappInvoice(data, late)}>
                   <MessageCircle /> {late ? 'WhatsApp reminder' : 'WhatsApp'}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void emailInvoice(data, late)}>
-                  <Mail /> Email
-                </Button>
                 <Button size="sm" variant="outline" onClick={() => void copyInvoiceLink(data.id)}>
                   <Copy /> Client link
                 </Button>
               </>
             )}
-            <DownloadDocumentButton name={`Invoice ${data.invoice_number}${data.client_name ? ` ${data.client_name}` : ''}`} label="PDF" />
-            <Button size="sm" variant="outline" onClick={() => window.print()}>
-              <Printer /> Print
-            </Button>
-            <MoreActions invoice={data} />
+            {/* Print and Save as PDF are the same browser dialog: one button. */}
+            <DownloadDocumentButton name={`Invoice ${data.invoice_number}${data.client_name ? ` ${data.client_name}` : ''}`} label="Print or PDF" />
+            <MoreActions invoice={data} late={late} />
           </div>
         </div>
         {isDraft && (
@@ -260,8 +255,8 @@ function ReopenButton({ invoiceId }: { invoiceId: string }) {
   )
 }
 
-/** Delete (only while nothing is paid), back to draft, stop the link, cancel and reopen -- out of the way of the everyday buttons. */
-function MoreActions({ invoice }: { invoice: InvoiceDetail }) {
+/** Email, then delete (only while nothing is paid), back to draft, stop the link, cancel and reopen -- out of the way of the everyday buttons. */
+function MoreActions({ invoice, late }: { invoice: InvoiceDetail; late: boolean }) {
   const access = useAccess()
   const del = useDeleteInvoice()
   const cancel = useCancelInvoice()
@@ -273,7 +268,10 @@ function MoreActions({ invoice }: { invoice: InvoiceDetail }) {
   const cancelled = invoice.status === 'cancelled'
   const items: RowMenuItem[] = []
   if (!cancelled && invoice.status !== 'draft') {
+    // Email waits here: WhatsApp and the client link are the everyday ways.
+    items.push({ label: late ? 'Email a reminder' : 'Send by email', icon: <Mail className="size-4" />, onSelect: () => void emailInvoice(invoice, late) })
     items.push({
+      divider: true,
       label: 'Stop the client link',
       icon: <Link2Off className="size-4" />,
       onSelect: () =>
@@ -334,7 +332,7 @@ function MoreActions({ invoice }: { invoice: InvoiceDetail }) {
   }
   return (
     <>
-      {items.length > 0 && <RowMenu label="More for this invoice" items={items} />}
+      {items.length > 0 && <RowMenu label="More for this invoice" variant="outline" items={items} />}
     </>
   )
 }
@@ -344,6 +342,8 @@ function MoreActions({ invoice }: { invoice: InvoiceDetail }) {
  * payments are shown for what they are: they do not reduce the balance.
  */
 function InvoicePayments({ invoice }: { invoice: InvoiceDetail }) {
+  // A studio screen, not the paper: amounts follow the eye in the top bar.
+  const inr = useINR()
   const canEdit = useAccess().hasAction('billing', 'edit')
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -358,15 +358,18 @@ function InvoicePayments({ invoice }: { invoice: InvoiceDetail }) {
           {invoice.payments.map((p) => {
             const promised = (p.status ?? 'paid') === 'pending'
             return (
-              <li key={p.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
-                <span className="font-semibold tabular-nums">{formatINR(p.amount)}</span>
-                <span className="text-xs text-muted-foreground">{[shortDate(p.paid_on), p.mode, p.reference].filter(Boolean).join(' · ')}</span>
-                <StatusBadge tone={promised ? 'warning' : 'success'} className="ml-auto">
+              <li key={p.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  <span className="mr-2 font-semibold tabular-nums">{inr(p.amount)}</span>
+                  <span className="text-xs text-muted-foreground">{[shortDate(p.paid_on), p.mode, p.reference].filter(Boolean).join(' · ')}</span>
+                </span>
+                <StatusBadge tone={promised ? 'warning' : 'success'} className="shrink-0">
                   {promised ? 'Promised' : 'Received'}
                 </StatusBadge>
                 {canEdit && (
                   <RowMenu
-                    label={`More for the ${formatINR(p.amount)} payment`}
+                    label={`More for the ${inr(p.amount)} payment`}
+                    variant="outline"
                     items={[
                       { label: 'Change…', icon: <Pencil className="size-4" />, onSelect: () => setEditId(p.id) },
                       { label: 'Delete', icon: <Trash2 className="size-4" />, onSelect: () => setDeleteId(p.id) },

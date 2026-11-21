@@ -1,4 +1,5 @@
 import { Copy, Gift, MessageCircle, Store } from 'lucide-react'
+import { waShare } from '@ipc/domain'
 import { toast } from 'sonner'
 import { useMyStudioReferrals } from '@/features/studio-referrals/api'
 import { referralState, summaryLine, termsLine } from '@/features/studio-referrals/model'
@@ -59,7 +60,7 @@ function ReferAStudio() {
             <div className="flex items-start gap-3">
               <IconTile icon={Gift} tone="amber" size="lg" />
               <div>
-                <p className="text-lg font-semibold">Know a studio that should run on AutoPilot?</p>
+                <p className="text-lg font-semibold">Know a studio that should run on Studio AutoPilot?</p>
                 <p className="text-sm text-muted-foreground">{termsLine(terms)}</p>
               </div>
             </div>
@@ -72,7 +73,7 @@ function ReferAStudio() {
                   <Copy /> Copy link
                 </Button>
                 <Button asChild className="bg-[#25D366] text-white hover:bg-[#1ebe5b]">
-                  <a href={`https://wa.me/?text=${encodeURIComponent(shareText(studio, link))}`} target="_blank" rel="noreferrer">
+                  <a href={waShare(shareText(studio, link))} target="_blank" rel="noreferrer">
                     <MessageCircle /> Share
                   </a>
                 </Button>

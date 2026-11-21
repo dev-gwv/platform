@@ -2,21 +2,20 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { PLAN_SOURCE_LABEL } from '@ipc/domain'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Palette } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   companyProfile,
-  companyTheme,
   myProfile,
   subscriptionStatus,
   type CompanyProfile,
   type UpdateCompanyRequest,
   type UpdateMyProfileRequest,
 } from '@ipc/contracts'
-import { presetFor } from '@/shared/theme/presets'
-import { fontOr } from '@/shared/theme/fonts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
+import { useAccess } from '@/shared/auth/useAccess'
+import { isLifetime, planLine } from '@/features/billing/plan-line'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -50,7 +49,7 @@ function Settings() {
     <>
       <PageHeader title="Company profile" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <ProfileCard className="lg:col-span-2" canEditCompany={isOwner} />
         <AccountStatusCard />
       </div>
@@ -59,9 +58,11 @@ function Settings() {
       <EmailBrandingCard readOnly={!isOwner && session?.role !== 'admin'} />
 
 
+      {/* Theme & branding is the tab at the top of this page, so no card for it here. */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <ThemeSummaryCard readOnly={!isOwner} className="lg:col-span-2" />
-        <SecurityCard />
+        <div className="lg:col-span-2">
+          <SecurityCard />
+        </div>
       </div>
     </>
   )
@@ -237,8 +238,7 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
     <Card className={className}>
       <CardContent className="p-4 sm:p-4">
         <h3 className="font-semibold tracking-tight">Profile</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">Editable fields are saved together.</p>
-
+        
         <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
           <DraftRestoredBanner
             at={draft.restoredAt}
@@ -325,59 +325,52 @@ function ProfileCard({ className, canEditCompany }: { className?: string; canEdi
 }
 
 /** Read-only facts about this account — role, status, and where the plan stands. */
+/**
+ * Your role and your plan in two plain lines, the way the sidebar's plan card
+ * says it. It listed seven rows before ("Grandfathered", "Plan source",
+ * "Plan expiry —") that disagreed with the "7 days left" beside them.
+ */
 function AccountStatusCard() {
   const { session } = useAuth()
-  const profile = useQuery({
-    queryKey: ['settings', 'profile'],
-    queryFn: () => callApi('/settings/profile', { responseSchema: myProfile }),
-  })
-  // The gate alone cannot tell a trial from a paid year.
+  const access = useAccess()
+  const canSeePlan = access.hasModule('settings_subscription')
   const sub = useQuery({
     queryKey: ['subscription', 'status'],
     queryFn: () => callApi('/subscription/status', { responseSchema: subscriptionStatus }),
+    enabled: canSeePlan,
   })
-
-  const expiry = session?.plan_expiry ? new Date(session.plan_expiry) : null
-  const daysLeft = expiry ? Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / 86_400_000)) : null
-  const gate = session?.plan_gate ?? 'expired'
-  const active = gate === 'active' || gate === 'grandfathered'
+  const s = sub.data
+  const left = s?.days_left ?? null
+  const plan = !s
+    ? null
+    : s.plan_source === 'trial'
+      ? 'Free trial'
+      : isLifetime(left)
+        ? 'Studio AutoPilot'
+        : (s.plan_name ?? PLAN_SOURCE_LABEL[s.plan_source])
 
   return (
     <Card>
       <CardContent className="p-4 sm:p-4">
-        <h3 className="font-semibold tracking-tight">Account status</h3>
+        <h3 className="font-semibold tracking-tight">Your account</h3>
         <dl className="mt-4 flex flex-col gap-3 text-sm">
           <Row label="Your role">
             <StatusBadge tone="info">{humanize(session?.role ?? 'none')}</StatusBadge>
           </Row>
-          <Row label="Status">
-            <StatusBadge tone={profile.data?.status === 'active' ? 'success' : 'neutral'}>
-              {humanize(profile.data?.status ?? 'active')}
-            </StatusBadge>
-          </Row>
-          <Row label="Plan">
-            <span className="font-medium">{humanize(gate)}</span>
-          </Row>
-          <Row label="Plan source">
-            <span className="font-medium">
-              {sub.data ? PLAN_SOURCE_LABEL[sub.data.plan_source] : '—'}
-            </span>
-          </Row>
-          <Row label="Plan expiry">
-            <span className="font-medium">{expiry ? expiry.toLocaleDateString('en-IN') : '—'}</span>
-          </Row>
-          <Row label="Days remaining">
-            <span className="font-medium tabular-nums">{daysLeft ?? '—'}</span>
-          </Row>
-          <Row label="Plan active">
-            <StatusBadge tone={active ? 'success' : 'danger'}>
-              {active ? 'Active' : 'Expired'}
-            </StatusBadge>
-          </Row>
+          {canSeePlan && (
+            <Row label="Plan">
+              <span className="text-right">
+                <span className="block font-medium">{plan ?? '—'}</span>
+                {s && <span className="block text-xs text-muted-foreground">{planLine(left, s.access_until)}</span>}
+              </span>
+            </Row>
+          )}
         </dl>
-        <Button variant="outline" className="mt-4 w-full" asChild>
-          <Link to="/settings/subscription">Manage subscription</Link>
-        </Button>
+        {canSeePlan && (
+          <Button variant="outline" className="mt-4 w-full" asChild>
+            <Link to="/settings/subscription">Plan &amp; billing</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
@@ -694,38 +687,3 @@ function BrandIdentityCard({ readOnly }: { readOnly: boolean }) {
     </Section>
   )
 }
-
-function ThemeSummaryCard({ readOnly, className }: { readOnly: boolean; className?: string }) {
-  const { data } = useQuery({
-    queryKey: ['settings', 'theme'],
-    queryFn: () => callApi('/settings/theme', { responseSchema: companyTheme }),
-  })
-  const preset = presetFor(data?.preset_key)
-  const font = fontOr(data?.font_key, preset.font)
-
-  return (
-    <Card className={className}>
-      <CardContent className="p-4 sm:p-4">
-        <h3 className="font-semibold tracking-tight">Theme &amp; branding</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          The palette and typeface your whole studio sees.
-        </p>
-        <div className="mt-4 flex items-center gap-3">
-          <span className="size-9 shrink-0 rounded-lg" style={{ backgroundColor: preset.swatch }} />
-          <div className="min-w-0">
-            <p className="truncate font-medium">{preset.label}</p>
-            <p className="truncate text-sm text-muted-foreground">
-              {font.family} · {preset.description}
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" className="mt-4" asChild>
-          <Link to="/settings/appearance">
-            <Palette /> {readOnly ? 'View themes' : 'Change theme & font'}
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-

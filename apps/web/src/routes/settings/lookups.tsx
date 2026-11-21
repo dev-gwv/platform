@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Power } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
 import { PageHeader } from '@/shared/layout/page-header'
@@ -7,6 +7,8 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Input, Label } from '@/shared/ui/input'
+import { Select } from '@/shared/ui/select'
+import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Switch } from '@/shared/ui/switch'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { SkeletonCards } from '@/shared/ui/skeleton'
@@ -16,16 +18,20 @@ import { cn } from '@/shared/ui/cn'
 import { TONES, TONE_BG, toneVar, type ToneName } from '@/shared/ui/tones'
 import { useCustomLookups, useCreateCustomLookup, useUpdateCustomLookup, useDeleteCustomLookup } from '@/features/settings/api'
 
+// Every list a studio can grow. Invoice lines and currencies were only on the
+// System tab's old "Custom Lookups" card; they live here now, with the rest.
 const CATEGORIES = [
-  { value: 'lead_source', label: 'Lead Sources' },
-  { value: 'lead_quality', label: 'Lead Quality' },
-  { value: 'follow_up_type', label: 'Follow-up Types' },
-  { value: 'follow_up_priority', label: 'Follow-up Priorities' },
-  { value: 'enquiry_source', label: 'Enquiry Sources' },
-  { value: 'enquiry_status', label: 'Enquiry Statuses' },
-  { value: 'payment_type', label: 'Payment Types' },
-  { value: 'expense_category', label: 'Expense Categories' },
-  { value: 'project_type', label: 'Project Types' },
+  { value: 'lead_source', label: 'Lead sources' },
+  { value: 'lead_quality', label: 'Lead quality' },
+  { value: 'follow_up_type', label: 'Follow-up types' },
+  { value: 'follow_up_priority', label: 'Follow-up priorities' },
+  { value: 'enquiry_source', label: 'Enquiry sources' },
+  { value: 'enquiry_status', label: 'Enquiry statuses' },
+  { value: 'payment_type', label: 'Payment types' },
+  { value: 'expense_category', label: 'Expense categories' },
+  { value: 'project_type', label: 'Project types' },
+  { value: 'invoice_line_preset', label: 'Invoice lines' },
+  { value: 'currency', label: 'Currencies' },
 ] as const
 
 const SEEDS: Record<string, string[]> = {
@@ -38,10 +44,6 @@ const SEEDS: Record<string, string[]> = {
   payment_type: ['UPI', 'Cash', 'Bank Transfer', 'Card'],
   expense_category: ['Travel', 'Food', 'Equipment', 'Salary'],
   project_type: ['Wedding', 'Pre-wedding', 'Maternity', 'Event'],
-}
-
-function slugify(v: string) {
-  return v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60)
 }
 
 export function LookupsPage() {
@@ -67,6 +69,7 @@ function Lookups() {
   const update = useUpdateCustomLookup()
   const del = useDeleteCustomLookup()
   const confirm = useConfirm()
+  const isMobile = useIsMobile()
   const [form, setForm] = useState<{ id: string | null; label: string; color: ToneName | null; sort: number; active: boolean } | null>(null)
 
   const rows = useMemo(() => {
@@ -86,7 +89,7 @@ function Lookups() {
         // Already exists (conflict) — skip.
       }
     }
-    toast.success(made > 0 ? `Seeded ${made} default${made === 1 ? '' : 's'}.` : 'Defaults already exist.')
+    toast.success(made > 0 ? `Added ${made} usual word${made === 1 ? '' : 's'}.` : 'The usual words are already on this list.')
   }
 
   async function toggleActive(id: string, isActive: boolean, label: string) {
@@ -102,7 +105,7 @@ function Lookups() {
   async function hardDelete(id: string, label: string) {
     const yes = await confirm({
       title: `Permanently delete "${label}"?`,
-      description: 'Prefer deactivation — deleting can break old records that point at this value. This cannot be undone.',
+      description: 'Old records that use it may lose it. To keep them, press Hide instead. This cannot be undone.',
       confirmLabel: 'Delete permanently',
       destructive: true,
     })
@@ -111,7 +114,7 @@ function Lookups() {
 
   async function submit() {
     if (!form || !form.label.trim()) {
-      toast.error('Label is required.')
+      toast.error('Type a name first.')
       return
     }
     try {
@@ -133,20 +136,43 @@ function Lookups() {
     <>
       <PageHeader
         title="Lists"
-        actions={<Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>}
+        actions={
+          <Button size="sm" onClick={() => setForm({ id: null, label: '', color: null, sort: rows.length, active: true })}>
+            <Plus /> Add
+          </Button>
+        }
       />
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1.5">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c.value}
-            type="button"
-            onClick={() => setCategory(c.value)}
-            className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${category === c.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      {/* Eleven lists: a wrapping row of chips on a wide screen, one picker on
+          a phone (the strip that scrolled sideways hid most of them). */}
+      {isMobile ? (
+        <Select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Which list" className="mb-4 w-full">
+          {CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </Select>
+      ) : (
+        <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Which list">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              role="tab"
+              aria-selected={category === c.value}
+              onClick={() => setCategory(c.value)}
+              className={cn(
+                'whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors',
+                category === c.value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {q.isLoading ? (
         <SkeletonCards count={3} />
@@ -155,23 +181,17 @@ function Lookups() {
       ) : rows.length === 0 ? (
         <Card>
           <CardContent className="p-4">
-            <EmptyState title="No values yet" description="Seed the defaults or add your first value." />
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => void seed()}>Seed defaults</Button>
-              <Button size="sm" onClick={() => setForm({ id: null, label: '', color: null, sort: rows.length, active: true })}>
-                <Plus /> Add value
-              </Button>
-            </div>
+            <EmptyState title="Nothing on this list yet" description="Start with the usual words, or press Add for your own." />
+            {(SEEDS[category]?.length ?? 0) > 0 && (
+              <div className="mt-3 flex justify-center">
+                <Button size="sm" variant="outline" onClick={() => void seed()}>Add the usual words</Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="p-4">
-            <div className="mb-3 flex justify-end">
-              <Button size="sm" onClick={() => setForm({ id: null, label: '', color: null, sort: rows.length, active: true })}>
-                <Plus /> Add
-              </Button>
-            </div>
             <ul className="flex flex-col gap-2">
               {rows.map((r) => (
                 <li key={r.id} className={`flex items-center gap-3 rounded-lg border border-border p-3 ${r.is_active ? '' : 'opacity-60'}`}>
@@ -179,41 +199,32 @@ function Lookups() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium">{r.value}</p>
-                      {!r.is_active && <StatusBadge tone="neutral">Inactive</StatusBadge>}
+                      {!r.is_active && <StatusBadge tone="neutral">Hidden</StatusBadge>}
                     </div>
-                    <p className="truncate font-mono text-xs text-muted-foreground">{slugify(r.value)} · sort {r.sort_order}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setForm({ id: r.id, label: r.value, color: (TONES as readonly string[]).includes(r.color ?? '') ? (r.color as ToneName) : null, sort: r.sort_order, active: r.is_active })}>
+                  <Button variant="ghost" size="sm" aria-label={`Edit ${r.value}`} title="Edit" onClick={() => setForm({ id: r.id, label: r.value, color: (TONES as readonly string[]).includes(r.color ?? '') ? (r.color as ToneName) : null, sort: r.sort_order, active: r.is_active })}>
                     <Pencil />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive(r.id, r.is_active, r.value)} title={r.is_active ? 'Deactivate (soft-delete)' : 'Activate'}>
-                    <Power />
+                  <Button variant="outline" size="sm" onClick={() => toggleActive(r.id, r.is_active, r.value)} title={r.is_active ? 'Hide it from new pickers; old records keep it' : 'Show it in pickers again'}>
+                    {r.is_active ? 'Hide' : 'Show'}
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void hardDelete(r.id, r.value)} title="Delete permanently">
-                    Delete
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${r.value}`} title="Delete" onClick={() => void hardDelete(r.id, r.value)}>
+                    <Trash2 />
                   </Button>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Deactivation is the safe default — values stay on old records but disappear from new
-              pickers.
-            </p>
           </CardContent>
         </Card>
       )}
 
       {form && (
         <Dialog open onOpenChange={(o) => { if (!o) setForm(null) }}>
-          <DialogContent title={form.id ? 'Edit option' : 'Add option'} description="Label is the value stored. Code is derived and cannot be edited separately.">
+          <DialogContent title={form.id ? 'Edit' : `Add to ${CATEGORIES.find((c) => c.value === category)?.label.toLowerCase() ?? 'this list'}`}>
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Label</Label>
+                <Label>Name</Label>
                 <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Walk-in" autoFocus />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Code (auto)</Label>
-                <Input value={slugify(form.label) || ''} disabled placeholder="walk_in" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -238,17 +249,17 @@ function Lookups() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Sort order</Label>
+                  <Label>Place in the list</Label>
                   <Input type="number" value={form.sort} onChange={(e) => setForm({ ...form, sort: Number(e.target.value) || 0 })} />
                 </div>
               </div>
               <div className="rounded-lg border border-border p-3">
-                <Switch checked={form.active} onChange={(v) => setForm({ ...form, active: v })} label="Active" description="Inactive options stay on old records but hide from new pickers." />
+                <Switch checked={form.active} onChange={(v) => setForm({ ...form, active: v })} label="Show in pickers" description="Off hides it from new picks; old records keep it." />
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setForm(null)}>Cancel</Button>
                 <Button onClick={() => void submit()} disabled={create.isPending || update.isPending}>
-                  {form.id ? 'Save' : 'Create'}
+                  {form.id ? 'Save' : 'Add'}
                 </Button>
               </div>
             </div>

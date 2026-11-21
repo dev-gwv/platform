@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { waLinkOrShare, waNumber } from '@ipc/domain'
 import { uuid, isoDate, isoDateTime, money } from './shared/primitives'
 
 /**
@@ -136,24 +137,15 @@ export function parseQuotationTerms(raw: string | null | undefined): string[] {
   return text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0)
 }
 
-/** Client-side share helpers (mailto:/wa.me fallbacks mirror Lovable receiptShare.ts). */
+/**
+ * WhatsApp numbers and links come from `@ipc/domain` (whatsapp.ts), the one
+ * rule for every screen and the API. These two names stay for their callers.
+ */
 export function normalizePhoneForWhatsApp(v: string | null | undefined): string {
-  const raw = (v ?? '').trim()
-  if (!raw) return ''
-  const hadPlus = raw.startsWith('+')
-  const digits = raw.replace(/[^\d]/g, '')
-  if (!digits) return ''
-  if (hadPlus) return digits
-  if (digits.length === 12 && digits.startsWith('91')) return digits
-  if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`
-  if (digits.length === 10) return `91${digits}`
-  return digits
+  return waNumber(v) ?? ''
 }
-export function buildWhatsAppUrl(phone: string | null | undefined, text: string): string {
-  const to = normalizePhoneForWhatsApp(phone)
-  const encoded = encodeURIComponent(text)
-  return to ? `https://wa.me/${to}?text=${encoded}` : `https://wa.me/?text=${encoded}`
-}
+/** A chat with the number when it is one, else WhatsApp asks whom to send it to. */
+export const buildWhatsAppUrl = (phone: string | null | undefined, text: string): string => waLinkOrShare(phone, text)
 export function buildMailtoUrl(to: string | null | undefined, subject: string, body: string): string {
   return `mailto:${encodeURIComponent(to ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

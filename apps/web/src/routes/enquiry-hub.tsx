@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ChevronRight, Code2, Copy, ExternalLink, Handshake, Heart, ListChecks, MessageCircle, Pencil, Plus, QrCode, Send, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryForm, EnquiryHub } from '@ipc/contracts'
-import { formShareText, partnerCounts, topPartnerId, whatsappUrl } from '@ipc/domain'
+import { formShareText, partnerCounts, topPartnerId, waLinkOrShare } from '@ipc/domain'
 import { PageHeader } from '@/shared/layout/page-header'
 import { SectionTabs } from '@/shared/layout/section-tabs'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
@@ -203,7 +203,7 @@ function YourQrCard({ hub }: { hub: EnquiryHub }) {
             <p className="break-all rounded-xl bg-muted/60 px-3 py-2 text-sm font-bold">{url}</p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" asChild>
-                <a href={whatsappUrl(null, formShareText(url))} target="_blank" rel="noreferrer">
+                <a href={waLinkOrShare(null, formShareText(url))} target="_blank" rel="noreferrer">
                   <MessageCircle /> WhatsApp
                 </a>
               </Button>

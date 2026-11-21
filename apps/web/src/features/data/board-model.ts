@@ -189,13 +189,6 @@ export function chaseMessage(h: Pick<Holder, 'name' | 'count' | 'oldest'>): stri
   return `Hi ${first}, please hand over ${cards} to the studio today${h.oldest >= LATE_DAYS ? ` -- the oldest is ${h.oldest} days old` : ''}. Thank you!`
 }
 
-/** Digits only, with India's code when a 10-digit number has none. */
-export function waNumber(phone: string | null | undefined): string | null {
-  const d = (phone ?? '').replace(/\D/g, '')
-  if (d.length === 10) return `91${d}`
-  return d.length >= 11 ? d : null
-}
-
 /**
  * Why a record cannot be deleted, or null when it can. The API deletes only a
  * record with no copy confirmed (0173 keeps the custody trail), so the menu

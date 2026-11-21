@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronRight, Download, FileSpreadsheet, MessageCircle, Pencil, QrCode, Sheet } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EnquiryFormLead, EnquiryPartner } from '@ipc/contracts'
-import { partnerLine, partnerPageText, slugify, splitKinds, whatsappUrl } from '@ipc/domain'
+import { partnerLine, partnerPageText, slugify, splitKinds, waLinkOrShare } from '@ipc/domain'
 import { Button } from '@/shared/ui/button'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { cn } from '@/shared/ui/cn'
@@ -306,7 +306,7 @@ export function PartnerRow({ partner, studio, top = false }: { partner: EnquiryP
       {partner.page_url && !partner.archived_at && (
         <Button size="icon" variant="outline" asChild>
           <a
-            href={whatsappUrl(partner.phone, partnerPageText(partner.name, studio, partner.page_url))}
+            href={waLinkOrShare(partner.phone, partnerPageText(partner.name, studio, partner.page_url))}
             target="_blank"
             rel="noreferrer"
             aria-label={`Send ${partner.name} their page on WhatsApp`}

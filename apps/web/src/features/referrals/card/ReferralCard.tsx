@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { waShare } from '@ipc/domain'
 import { toast } from 'sonner'
 import { Copy, Download, Eye, Gift, Link2, Loader2, MessageCircle, Pencil, Users } from 'lucide-react'
 import type { FriendRewardType, ReferralCampaign } from '@ipc/contracts'
@@ -167,7 +168,7 @@ export function ReferralCard({
       const text = shareText(data)
       const how = await shareCard(blob, name, text)
       if (how === 'saved') {
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+        window.open(waShare(text), '_blank', 'noopener')
         toast.success('Card saved. Attach it in the WhatsApp chat that just opened.')
       }
     } catch (e) {

@@ -5,7 +5,6 @@ import { paymentReminderQuote, paymentReminderResult, type InvoiceDetail, type P
 import { emailQuote, formatPaise } from '@ipc/domain'
 import { callApi } from '@/shared/api/client'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent } from '@/shared/ui/card'
 
 const day = (iso: string) =>
   new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })
@@ -64,23 +63,22 @@ export function PaymentReminderCard({ invoice, canSend }: { invoice: InvoiceDeta
   const send = useSendPaymentReminder(invoice.id)
   if (!due || !q.data) return null
   const cost = reminderCostLine(q.data)
+  // One quiet line above the sheet, not a card of its own: it was the third
+  // "remind" on this page and took a block of the screen to say so.
   return (
-    <Card className="paper-toolbar mx-auto mb-4 w-full max-w-4xl">
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">Payment reminder</p>
-          <p className="text-sm text-muted-foreground">
-            {q.data.last_sent_at ? `Last reminder sent ${day(q.data.last_sent_at)}` : 'No reminder sent yet'}
-            {q.data.auto_on ? ' · automatic reminders are on' : ''}
-          </p>
-          {canSend && <p className="text-xs text-muted-foreground">{cost.text}</p>}
-        </div>
-        {canSend && (
-          <Button size="sm" variant="outline" disabled={cost.blocked || send.isPending} onClick={() => send.mutate()}>
-            <BellRing /> Send payment reminder
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+    <div className="paper-toolbar mx-auto mb-4 flex w-full max-w-4xl flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-4 py-2.5">
+      <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">Reminder email</span>
+        {' · '}
+        {q.data.last_sent_at ? `last sent ${day(q.data.last_sent_at)}` : 'none sent yet'}
+        {q.data.auto_on ? ' · automatic reminders are on' : ''}
+        {canSend && <span className="block text-xs sm:inline"> · {cost.text}</span>}
+      </p>
+      {canSend && (
+        <Button size="sm" variant="outline" disabled={cost.blocked || send.isPending} onClick={() => send.mutate()}>
+          <BellRing /> Send reminder email
+        </Button>
+      )}
+    </div>
   )
 }

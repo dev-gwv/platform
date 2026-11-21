@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { waLink } from '@ipc/domain'
 import { todayInIndia } from '@/shared/ui/days-left'
 import { Download, ExternalLink, MessageCircle, Pencil, Phone, Search, X } from 'lucide-react'
 import type { BulkDataAction, DataBoardRow } from '@ipc/contracts'
@@ -24,7 +25,6 @@ import {
   matches,
   mostPending,
   nextAction,
-  waNumber,
   type Focus,
   type Level,
 } from './board-model'
@@ -306,7 +306,7 @@ function ChaseStrip({ holders }: { holders: ReturnType<typeof mostPending> }) {
         Chase first
       </p>
       {holders.map((h) => {
-        const wa = waNumber(h.phone)
+        const wa = waLink(h.phone, chaseMessage(h))
         return (
           <div
             key={h.user_id}
@@ -328,7 +328,7 @@ function ChaseStrip({ holders }: { holders: ReturnType<typeof mostPending> }) {
             )}
             {wa && (
               <a
-                href={`https://wa.me/${wa}?text=${encodeURIComponent(chaseMessage(h))}`}
+                href={wa}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`WhatsApp ${h.name}`}

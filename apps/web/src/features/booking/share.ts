@@ -1,4 +1,4 @@
-import { buildIcs } from '@ipc/domain'
+import { buildIcs, waLinkOrShare } from '@ipc/domain'
 import type { TeamSlot } from '@ipc/contracts'
 import { bookingMessage } from './booking-model'
 
@@ -28,8 +28,5 @@ export function downloadIcs(slot: TeamSlot) {
 
 /** Open WhatsApp with the booking details, to the person's number when known. */
 export function shareOnWhatsApp(slot: TeamSlot, phone?: string | null) {
-  const digits = (phone ?? '').replace(/\D/g, '')
-  const to = digits.length === 10 ? `91${digits}` : digits
-  const text = encodeURIComponent(bookingMessage(slot))
-  window.open(to ? `https://wa.me/${to}?text=${text}` : `https://wa.me/?text=${text}`, '_blank', 'noopener')
+  window.open(waLinkOrShare(phone, bookingMessage(slot)), '_blank', 'noopener')
 }

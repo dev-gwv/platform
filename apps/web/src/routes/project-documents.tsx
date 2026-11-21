@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { waLinkOrShare } from '@ipc/domain'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, CheckCircle2, CircleDashed, Clock, Eye, Hourglass, MessageCircle, Search } from 'lucide-react'
 import { AuthedPage } from '@/shared/layout/AuthedPage'
@@ -13,7 +14,6 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/ui/cn'
 import { useTermsDocuments, type TermsDocument } from '@/features/terms/api'
 import { useProjects } from '@/features/projects/api'
-import { waNumber } from '@/features/data/board-model'
 import { TermsDocumentViewer } from '@/features/terms/TermsDocumentViewer'
 
 const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -203,7 +203,6 @@ function sub(r: Row): string | null {
 
 /** A WhatsApp nudge in the studio's words; the link itself is in the message they already have. */
 function remindHref(r: Row): string {
-  const to = waNumber(r.doc?.client_phone) ?? ''
   const text = `Hello${r.client ? ` ${r.client}` : ''}, a gentle reminder to read and agree to the terms for ${r.project}. The link is in the message we sent you. Thank you!`
-  return `https://wa.me/${to}?text=${encodeURIComponent(text)}`
+  return waLinkOrShare(r.doc?.client_phone, text)
 }

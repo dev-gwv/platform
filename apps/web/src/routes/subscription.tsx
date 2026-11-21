@@ -90,7 +90,7 @@ function Subscription() {
       <PageHeader
         title="Plan & billing"
         actions={
-          session && (
+          session && !status.data?.access_until && (
             <StatusBadge tone={gateTone[session.plan_gate]}>
               {status.data ? PLAN_SOURCE_LABEL[status.data.plan_source] : humanize(session.plan_gate)}
             </StatusBadge>
@@ -145,6 +145,7 @@ function Subscription() {
           </CardContent>
         </Card>
       )}
+      <UsageCard className="mb-4" />
       {/* Open for life: nothing to buy, so the prices fold behind one button
           (audit, 5 Nov: a lifetime studio was still offered plans). */}
       {lifetime && !showPlans ? (
@@ -211,7 +212,6 @@ function Subscription() {
         <Link to="/terms-and-conditions" className="text-primary hover:underline">Terms</Link> and the{' '}
         <Link to="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
       </p>
-      <UsageCard className="mt-6" />
 
       {status.data?.history && status.data.history.length > 0 && (
         <Card className="mt-6">
