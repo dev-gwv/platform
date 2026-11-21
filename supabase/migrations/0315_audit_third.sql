@@ -14,6 +14,7 @@
 --    the max(0, value - received, open invoice balances) Home and Payments
 --    used since 6 Nov, and it is never below it. get_client_portal's
 --    money.balance uses it (copied from 0252, only that line changed), and
+--    so does get_quotation_for_token's balance_due (copied from 0190), and
 --    receipt_balance_for_token() gives a receipt link its balance line.
 --    project_financials has no balance column, so it is left alone.
 --
@@ -279,6 +280,141 @@ begin
      where id = v_link.id;
   end if;
   return v_out;
+end;
+$$;
+
+-- get_quotation_for_token: copied from 0190_quotation_visibility.sql; only balance_due changed.
+create or replace function get_quotation_for_token(p_raw text)
+returns table (
+  snapshot jsonb, notes text, accepted_at timestamptz, accepted_by_name text,
+  declined_at timestamptz, client_name text, company_name text,
+  logo_url text, company_phone text, company_email text, company_address text, gstin text,
+  shoots_schedule jsonb, terms_text text, display_prefs jsonb,
+  show_quotation boolean, expires_at timestamptz, revoked boolean, access_count int,
+  -- document extras
+  company_legal_name text, company_website text, document_footer_note text,
+  client_phone text, client_email text, client_address text,
+  project_name text, project_status text,
+  quotation_number text, issued_at timestamptz, quotation_id uuid,
+  deliverables jsonb, deliverables_2 jsonb,
+  total_received numeric, balance_due numeric,
+  brand_color text
+)
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_hash text := encode(sha256(convert_to(p_raw, 'UTF8')), 'hex');
+  v_quote uuid;
+  v_visible boolean;
+  v_studio text;
+begin
+  select at.subject_id into v_quote from access_tokens at
+   where at.purpose = 'quotation'
+     and at.token_hash = v_hash
+     and (at.expires_at is null or at.expires_at > now())
+     and at.revoked_at is null
+   limit 1;
+  if v_quote is null then
+    return;
+  end if;
+
+  update access_tokens at set access_count = coalesce(at.access_count, 0) + 1
+   where at.purpose = 'quotation' and at.token_hash = v_hash;
+  update project_quotations q set access_count = coalesce(q.access_count, 0) + 1
+   where q.id = v_quote;
+
+  select coalesce(q.show_quotation, true) and p.show_quotation,
+         coalesce(co.display_name, co.name)
+    into v_visible, v_studio
+    from project_quotations q
+    join projects p on p.id = q.project_id
+    left join companies co on co.id = q.company_id
+   where q.id = v_quote
+     and q.revoked_at is null
+     and (q.expires_at is null or q.expires_at > now());
+  if not found then
+    return;
+  end if;
+
+  -- Hidden by the studio: say so, and nothing else.
+  if not v_visible then
+    return query
+    select jsonb_build_object('items', '[]'::jsonb, 'package_cost', 0, 'add_ons', 0,
+                              'total', 0, 'project_name', ''),
+           null::text, null::timestamptz, null::text, null::timestamptz,
+           null::text, v_studio,
+           null::text, null::text, null::text, null::text, null::text,
+           '[]'::jsonb, null::text, '{}'::jsonb,
+           false, null::timestamptz, false, 0,
+           null::text, null::text, null::text,
+           null::text, null::text, null::text,
+           null::text, null::text,
+           null::text, null::timestamptz, null::uuid,
+           '[]'::jsonb, '[]'::jsonb,
+           0::numeric, 0::numeric,
+           null::text;
+    return;
+  end if;
+
+  return query
+  select q.snapshot, q.notes, q.accepted_at, q.accepted_by_name, q.declined_at,
+         cl.name, coalesce(co.display_name, co.name),
+         coalesce(co.invoice_logo_url, co.avatar_url),
+         co.invoice_phone, co.invoice_email, co.invoice_address, co.invoice_gst_number,
+         coalesce(q.shoots_schedule, '[]'::jsonb),
+         -- The terms and choices sent with the link; the project's own when
+         -- the link was issued without any.
+         coalesce(nullif(btrim(q.terms_text), ''), nullif(btrim(p.quotation_terms), '')),
+         case when q.display_prefs is null or q.display_prefs = '{}'::jsonb
+              then coalesce(p.quotation_display_prefs, '{}'::jsonb)
+              else q.display_prefs end,
+         true, q.expires_at,
+         (q.revoked_at is not null),
+         coalesce(q.access_count, 0),
+         co.legal_name, co.website, co.document_footer_note,
+         cl.phone, cl.email, cl.address,
+         p.name, p.status::text,
+         -- The project's number, as the studio's page shows it.
+         coalesce(nullif(rtrim(btrim(co.quote_number_prefix), '-'), ''), 'Q')
+           || '-' || upper(substring(p.id::text, 1, 8)),
+         q.created_at, q.id,
+         -- The real rows, so the document can show estimated dates and which
+         -- items carry an extra charge rather than a flat "Included".
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', d.id, 'title', d.title,
+                    'estimated_date', d.estimated_date,
+                    'is_additional_charge', d.is_additional_charge,
+                    'additional_charge_amount', coalesce(d.additional_charge_amount, 0))
+                  order by d.created_at)
+             from deliverables d
+            where d.project_id = p.id and d.list_key = 'primary'
+              and coalesce(d.show_on_quotation, true)
+              and d.visibility_scope = 'client' and d.status <> 'cancelled'), '[]'::jsonb),
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', d.id, 'title', d.title,
+                    'estimated_date', d.estimated_date,
+                    'is_additional_charge', d.is_additional_charge,
+                    'additional_charge_amount', coalesce(d.additional_charge_amount, 0))
+                  order by d.created_at)
+             from deliverables d
+            where d.project_id = p.id and d.list_key <> 'primary'
+              and coalesce(d.show_on_quotation, true)
+              and d.visibility_scope = 'client' and d.status <> 'cancelled'), '[]'::jsonb),
+         coalesce((select sum(x.amount) from received_payments x where x.project_id = p.id and x.status = 'paid'), 0),
+         -- 0315: the one rule (project_outstanding), GST paid on invoices not counted against the value.
+         project_outstanding(p.id),
+         case when th.is_custom_theme then coalesce(th.primary_color, th.custom_color) end
+    from project_quotations q
+    join projects p on p.id = q.project_id
+    left join clients cl on cl.id = p.client_id
+    left join companies co on co.id = q.company_id
+    left join company_theme_settings th on th.company_id = q.company_id
+   where q.id = v_quote;
 end;
 $$;
 
