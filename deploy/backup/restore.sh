@@ -2,10 +2,13 @@
 # Restore the database from a dump taken by backup.sh. DESTRUCTIVE: it drops and
 # recreates the database, so the API must be stopped first.
 #
-#   docker compose run --rm backup restore list
-#   docker compose stop api cron
-#   docker compose run --rm -e RESTORE_CONFIRM=yes backup restore latest
-#   docker compose up -d migrate api cron
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm backup restore list
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml stop api cron cron-messages cron-attendance
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml run --rm -e RESTORE_CONFIRM=yes backup restore latest
+#   sh deploy/deploy.sh
+#
+# Bring it back with deploy.sh, never a bare `docker compose up`: on the
+# Coolify host that drops the Traefik labels and the API answers 503.
 #
 # The name argument may be a local file in /backups, a bare dump filename (it is
 # fetched from off-box storage if it isn't local), or "latest".
@@ -101,4 +104,4 @@ log "restoring (this can take a while)"
 # idempotent bootstrap that creates the roles) and restore again.
 pg_restore -h "$HOST" -U "$USER" -d "$DB" --no-owner --exit-on-error "$FILE"
 
-log "done. Bring it back up: docker compose up -d migrate api cron"
+log "done. Bring it back up from the checkout root: sh deploy/deploy.sh"

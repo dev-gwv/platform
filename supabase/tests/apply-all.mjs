@@ -51,11 +51,26 @@ const numbers = files.map((f) => f.slice(0, 4))
 const dupes = [...new Set(numbers.filter((n, i) => numbers.indexOf(n) !== i))]
 if (dupes.length) failures.push(`duplicate migration numbers: ${dupes.join(', ')}`)
 
+// Contiguous: every number from the first to the last is present, except the
+// gaps listed here on purpose (0199 was claimed, then dropped unpushed when its
+// work moved to 0204; see CLAUDE.md). A new gap usually means a claim that was
+// renumbered half-way.
+const KNOWN_GAPS = new Set(['0199'])
+const present = new Set(numbers)
+const first = Number(numbers[0])
+const last = Number(numbers[numbers.length - 1])
+const gaps = []
+for (let n = first; n <= last; n++) {
+  const key = String(n).padStart(4, '0')
+  if (!present.has(key) && !KNOWN_GAPS.has(key)) gaps.push(key)
+}
+if (gaps.length) failures.push(`missing migration numbers (a gap): ${gaps.join(', ')}`)
+
 if (failures.length) {
   console.error(`apply-all: ${failures.length} problem(s)\n  ${failures.join('\n  ')}`)
   process.exit(1)
 }
-console.log(`apply-all: ${files.length} migrations applied cleanly, numbering contiguous`)
+console.log(`apply-all: ${files.length} migrations applied cleanly, numbering unique and contiguous`)
 // Explicit: pglite's WASM teardown otherwise leaves a non-zero exit code behind
 // and the whole check reads as a failure in CI.
 process.exit(0)
